@@ -56,13 +56,27 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         () if spec["processing_only"] else tuple(spec["identity_fields"]),
         (RAW,),
-        policy_version="legislative-documents/1",
+        policy_version="legislative-documents/2" if dataset in {"native_legal_references", "native_legal_reference_reads"} else "legislative-documents/1",
         receipt_only=spec["processing_only"],
     )
 
 
+def input_policy(dataset: str, subjects: Sequence[Path]) -> DatasetPolicy:
+    """Read only an exact current or declared earlier subject shape.
+
+    An earlier native read scope had no subject files. Its unchanged observed
+    receipts remain readable, then the next writer creates a main scope row.
+    """
+    from spicy_regs.etl_receipts import selected_subject_policy
+
+    current = policy(dataset)
+    return selected_subject_policy(current, subjects)
+
+
 def _processor(dataset: str) -> str:
-    # The field policy stays /1: columns and receipt ownership are unchanged.
+    if dataset in {"native_legal_references", "native_legal_reference_reads"}:
+        return "legislative-documents/3"
+    # The remaining field policies stay /1: receipt ownership is unchanged.
     # Version the changed court-key mapping separately in each new attempt.
     return "legislative-documents/2" if dataset == "document_citations" else "legislative-documents/1"
 
@@ -307,11 +321,13 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
     with TemporaryDirectory(prefix=".receipt-select-", dir=destination) as temp:
         selected = Path(temp)
         receipts = bundle / manifest["receipt_file"]
+        selected_policies = {n: input_policy(n, [bundle / p for p in manifest["subjects"][n]])
+                             for n in manifest["datasets"]}
         validate_receipt_bundle(
             {n: [bundle / p for p in paths] for n, paths in
              (manifest["subjects"] | manifest.get("outcome_subjects", {})).items()} | {FILE_STATES: []},
             [receipts],
-            [policy(n) for n in manifest["datasets"]] + [FILE_POLICY] +
+            list(selected_policies.values()) + [FILE_POLICY] +
             [OUTCOME_POLICIES[n] for n in manifest.get("outcome_subjects", {})],
             generation_id=generation,
         )
@@ -319,7 +335,7 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
         file_states = [r["file_state"] for r in _processing_rows(file_receipts, FILE_POLICY, generation)]
         outputs = {}
         for dataset in manifest["datasets"]:
-            dataset_policy = policy(dataset)
+            dataset_policy = selected_policies[dataset]
             dataset_receipts = select_receipts(receipts, selected / f"{dataset}.parquet", dataset=dataset)
             states = [s for s in file_states if s["dataset"] == dataset]
             if not states or len({s["relative_path"] for s in states}) != len(states):

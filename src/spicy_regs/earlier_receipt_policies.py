@@ -14,6 +14,17 @@ EARLIER_COLUMNS = {
 
 def earlier_policies(policy):
     from spicy_regs.etl_receipts import DatasetPolicy
+    if policy.policy_version == "legislative-documents/2" and policy.dataset in {
+        "native_legal_references", "native_legal_reference_reads",
+    }:
+        history = json.loads(files("spicy_regs").joinpath("native_legal_policy_history.json").read_text())
+        earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
+        if earlier.dataset != policy.dataset or earlier.policy_version != "legislative-documents/1":
+            raise ValueError("Native legal history differs from its declared policy")
+        if not earlier.receipt_only and earlier.identity_fields != policy.identity_fields:
+            raise ValueError("Native legal migration changes a historical observation identity")
+        return (earlier,)
+
     history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
     if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2"}:
         earlier = DatasetPolicy.from_descriptor(history[policy.dataset])

@@ -66,9 +66,10 @@ def test_retained_native_occurrences_and_generation(tmp_path):
     artifact = build_generation(
         tmp_path / "candidate",
         family="native-legal-references",
-        files=[bundle / "native_legal_references.parquet"],
-        expected_keys=["native_legal_references.parquet"],
-        schemas={subject_policy.dataset: described_schema(subject_policy.subject_schema)},
+        files=[bundle / "native_legal_references.parquet", bundle / "native_legal_reference_reads.parquet"],
+        expected_keys=list(OUTPUTS),
+        schemas={name: described_schema(policy(name).subject_schema) for name in (
+            "native_legal_references", "native_legal_reference_reads")},
         inputs=evidence.inputs(),
         receipt_path=bundle / "etl_receipts.parquet",
         receipt_policies=[subject_policy, policy("native_legal_reference_reads"), FILE_POLICY],

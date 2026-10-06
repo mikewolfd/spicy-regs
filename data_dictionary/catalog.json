@@ -2815,9 +2815,11 @@
       },
       {
         "dataset": "native_legal_reference_reads",
-        "receipt_only": true,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "legislative-documents/2",
+        "identity_columns": [
+          "scope_id"
+        ],
         "processing_fields": [
           "raw_source_row"
         ]
@@ -2825,7 +2827,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/1",
+        "policy_version": "legislative-documents/2",
         "identity_columns": [
           "scope_id",
           "body_version_id",
@@ -8073,8 +8075,8 @@
     {
       "table": "native_legal_references",
       "label": "Native legal-reference observations",
-      "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. spicy-docs shapes each row and reads the targets it names; this repository pins the inputs and looks each typed target up in the target tables its manifest selects. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
-      "coverage": "Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Rows read before spicy-docs 0.52.0 name native-legal-reference/002, the reading this repository ran; the next build names /003, which re-spells target_candidates that held a non-ASCII character and re-versions the text candidates citation rules 004 read, and moves no other value. Receipt: native-legal-full-2026-09-27/resolved-verification.json.",
+      "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held classification rows, not Code text.",
+      "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
       "kind": "sampled",
       "measured_on": "2026-09-27",
       "data_quality": null,
@@ -8084,17 +8086,49 @@
         "source_record_key",
         "edition",
         "body_version_id",
+        "source_locator",
         "occurrence_index",
+        "source_path",
+        "element_tag",
         "observation_kind",
         "href",
         "text",
         "text_runs",
         "cfr_title",
         "cfr_part",
+        "interpretation_status",
         "target_candidates",
+        "rule_version",
         "native_element_id",
         "native_idref",
         "native_class"
+      ]
+    },
+    {
+      "table": "native_legal_reference_reads",
+      "label": "Legal reference read scopes",
+      "row_unit": "source reads",
+      "category": "processing_evidence",
+      "summary": "Each input's latest completed read, including reads that found no observations. Shows exact source scope, edition, XML and selection-manifest digests, byte and observation counts, forms checked and forms left out. Failed or incomplete inputs cannot replace prior results.",
+      "coverage": "Not a range. Completed reads of selected retained XML inputs; absent scopes remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "scope_id",
+        "source_family",
+        "source_record_key",
+        "edition",
+        "input_sha256",
+        "source_locator",
+        "source_bytes",
+        "occurrence_count",
+        "read_status",
+        "selected_shapes",
+        "unsupported_shapes",
+        "manifest_sha256",
+        "rule_version",
+        "body_version_id"
       ]
     },
     {

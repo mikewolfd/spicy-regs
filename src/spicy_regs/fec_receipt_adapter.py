@@ -91,7 +91,7 @@ class ReceiptAdapter:
         """Read one dataset's exact native subjects and verified processing values."""
         from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts, selected_subject_policy
         from .subject_catalog import descriptors
-        from .sources.publication import receipt_members, receipt_key_members, table_members
+        from .sources.publication import receipt_members, receipt_key_members, table_members, table_owner
 
         self.require_selected((table,))
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
@@ -106,6 +106,10 @@ class ReceiptAdapter:
                 shared = directory / "shared.parquet"
                 self._fetch(receipt_members(self.index, dataset=table)[0], shared)
                 subjects = []
+                if not policy.receipt_only and table_owner(self.index, table + ".parquet") is None:
+                    policy = selected_subject_policy(policy, ())
+                    if not policy.receipt_only:
+                        raise ValueError(f"{table}: selected main subject table is missing")
                 if not policy.receipt_only:
                     for ordinal, member in enumerate(table_members(self.index, table + ".parquet")):
                         path = directory / f"subject-{ordinal}.parquet"
@@ -132,11 +136,12 @@ class ReceiptAdapter:
                              {"sha256": identity["sha256"], "byteSize": identity["bytes"],
                               "rows": pq.ParquetFile(shared).metadata.num_rows})
             receipt = select_receipts(shared, directory / "receipt.parquet", dataset=table)
+            policy = selected_subject_policy(policy, subjects)
             if policy.receipt_only:
                 yield from (row["processing_fields"] for row in read_attempts(
                     [receipt], policy, generation_id=generation, outcomes=frozenset({"observed"})))
             else:
-                yield from read_with_receipts(subjects, [receipt], selected_subject_policy(policy, subjects),
+                yield from read_with_receipts(subjects, [receipt], policy,
                                              generation_id=generation)
 
     def restore_originals(self, table, schema, original, *, prefix):

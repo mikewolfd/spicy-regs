@@ -32,6 +32,7 @@ from spicy_regs.legislative_receipts import (
     FILE_STATES,
     write_legislative_outputs,
     policy as legislative_policy,
+    input_policy as legislative_input_policy,
     restore_prior,
 )
 from spicy_regs.native_types import described_schema
@@ -85,6 +86,8 @@ class SelectedPriors:
             self.restored[dataset] = None
             return None
         subjects, receipt_path, generation = list(selection.subjects), selection.receipts, selection.generation_id
+        if dataset in field_registry():
+            selected_policy = legislative_input_policy(dataset, subjects)
         directory = self.directory / dataset
         directory.mkdir()
         scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)

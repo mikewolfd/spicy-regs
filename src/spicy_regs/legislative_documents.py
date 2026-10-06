@@ -63,21 +63,61 @@ _struct_list(
 TYPES["list<list<struct<amount:decimal128(38,2),text:string>>>"] = pa.list_(
     pa.list_(pa.struct([("amount", MONEY), ("text", S)]))
 )
-_struct_list(
-    "list<struct<cite_kind:string,normalized_key:string,matched_text:string,span_start:int64,span_end:int64,target_kind:string,target_key:string,target_grain:string>>",
-    [(n, INT if n in {"span_start", "span_end"} else S) for n in (
-        "cite_kind", "normalized_key", "matched_text", "span_start", "span_end", "target_kind", "target_key", "target_grain"
-    )],
+# Recorded target identity components follow the maintained resolver's routes.
+# Values remain literal strings; complete identities and unresolved results both
+# remain visible. The ordinals name positions in the retained ordered arrays.
+NATIVE_TARGET_KEY_FIELDS = (
+    "bill_id", "congress", "law_type", "number", "session", "seq", "package_id", "granule_id",
+    "document_number", "publication_date", "rin", "agenda_edition", "report_id", "docket_id",
+    "system_code", "cluster_id",
 )
+NATIVE_TARGET_KEYS = pa.list_(pa.struct(
+    [("target_key_ordinal", INT), *((name, S) for name in NATIVE_TARGET_KEY_FIELDS)]
+))
+NATIVE_TARGET_SNAPSHOT = pa.struct([(name, S) for name in (
+    "status", "sha256", "family", "artifact_digest", "generation_id", "receipt_sha256",
+)])
+NATIVE_CANDIDATE_FIELDS = [
+    (name, INT if name in {"candidate_ordinal", "span_start", "span_end", "match_count"}
+     else pa.bool_() if name == "target_resolved"
+     else NATIVE_TARGET_KEYS if name == "candidate_keys"
+     else NATIVE_TARGET_SNAPSHOT if name == "target_snapshot" else S)
+    for name in (
+        "candidate_ordinal", "cite_kind", "normalized_key", "matched_text", "span_start", "span_end",
+        "target_kind", "target_key", "target_grain", "candidate_keys", "derivation_rule", "derivation_version",
+        "document_key", "document_kind", "expected_cardinality", "match_count", "occurrence_key", "reason",
+        "resolution_rule", "source_record_key", "source_status", "target_resolved", "target_snapshot",
+        "target_status", "target_table_selected", "text_sha256", "match_basis", "error_type",
+    )
+]
+# The registry uses this reviewed type name; Arrow carries the complete nested schema.
+NATIVE_CANDIDATE_TYPE = "list<native-legal-target/2>"
+_struct_list(NATIVE_CANDIDATE_TYPE, NATIVE_CANDIDATE_FIELDS)
 
-# Lookup diagnostics are retained inside the original receipt input. Only the
-# candidate's legal target and literal occurrence enter the subject list.
-CANDIDATE_RECEIPT_FIELDS = frozenset({
-    "candidate_keys", "derivation_rule", "derivation_version", "document_key", "document_kind",
-    "expected_cardinality", "match_count", "occurrence_key", "reason", "resolution_rule",
-    "source_record_key", "source_status", "target_resolved", "target_snapshot", "target_status",
-    "target_table_selected", "text_sha256",
-})
+
+def _native_candidates(value: Any) -> Any:
+    if value is None:
+        return None
+    if not isinstance(value, list) or any(v is not None and not isinstance(v, dict) for v in value):
+        raise LegislativeShapeError("target_candidates_json: expected list of objects")
+    result = []
+    for ordinal, candidate in enumerate(value):
+        if candidate is None:
+            result.append(None)
+            continue
+        if "candidate_ordinal" in candidate:
+            raise LegislativeShapeError("target_candidates_json: source supplied a derived ordinal")
+        candidate = dict(candidate, candidate_ordinal=ordinal)
+        if candidate.get("candidate_keys") is not None:
+            keys = candidate["candidate_keys"]
+            if not isinstance(keys, list) or any(k is not None and not isinstance(k, dict) for k in keys):
+                raise LegislativeShapeError("candidate_keys: expected list of identity objects")
+            if any(k is not None and "target_key_ordinal" in k for k in keys):
+                raise LegislativeShapeError("candidate_keys: source supplied a derived ordinal")
+            candidate["candidate_keys"] = [None if k is None else dict(k, target_key_ordinal=i)
+                                           for i, k in enumerate(keys)]
+        result.append(candidate)
+    return result
 
 
 @cache
@@ -267,11 +307,12 @@ def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:
                 if not isinstance(value, list) or any(not isinstance(v, dict) for v in value):
                     raise LegislativeShapeError("hierarchy_json: expected list of ancestor objects")
                 value = [{k: x for k, x in v.items() if k != "native_path"} for v in value]
-            if name in {"target_candidates_json", "restatements_json"} and value is not None:
-                excluded = CANDIDATE_RECEIPT_FIELDS if name == "target_candidates_json" else {"url"}
+            if name == "target_candidates_json":
+                value = _native_candidates(value)
+            elif name == "restatements_json" and value is not None:
                 if not isinstance(value, list) or any(v is not None and not isinstance(v, dict) for v in value):
                     raise LegislativeShapeError(f"{name}: expected list of objects")
-                value = [None if v is None else {k: x for k, x in v.items() if k not in excluded} for v in value]
+                value = [None if v is None else {k: x for k, x in v.items() if k != "url"} for v in value]
         subject[target] = _typed(value, TYPES[field["target_type"]], name)
     if dataset == "document_citations":
         subject["document_key"] = native_document_key(row.get("document_kind"), row.get("document_key"))
@@ -296,6 +337,14 @@ def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:
     return subject
 
 
+@cache
+def _earlier_native_schema() -> pa.Schema:
+    from spicy_regs.etl_receipts import DatasetPolicy
+
+    history = json.loads(files("spicy_regs").joinpath("native_legal_policy_history.json").read_text())
+    return DatasetPolicy.from_descriptor(history["native_legal_references"]).subject_schema
+
+
 def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any] | None:
     """Map a receipt's source row in the exact key spelling its selected subject used.
 
@@ -305,6 +354,21 @@ def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str,
     Neither the selected public subject nor its original receipt is rewritten.
     """
     mapped = map_subject(dataset, raw)
+    if mapped is not None and dataset == "native_legal_references":
+        # Earlier native observations omitted these recorded main fields and
+        # nested diagnostics. Verify against that exact reviewed shape, while
+        # preserving the original receipt and selected public values unchanged.
+        earlier = _earlier_native_schema()
+        if set(subject) - {"raw_source_row"} == set(earlier.names):
+            def historical(value, dtype):
+                if value is None:
+                    return None
+                if pa.types.is_list(dtype):
+                    return [historical(item, dtype.value_type) for item in value]
+                if pa.types.is_struct(dtype):
+                    return {f.name: historical(value.get(f.name), f.type) for f in dtype}
+                return value
+            mapped = {f.name: historical(mapped.get(f.name), f.type) for f in earlier}
     if (mapped is not None and dataset == "document_citations"
             and raw.get("document_kind") == "court_opinion_derived_pdf"
             and subject.get("document_key") == raw.get("document_key")):

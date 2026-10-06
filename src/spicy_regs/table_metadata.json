@@ -17442,8 +17442,8 @@
   "native_legal_references": {
     "table": "native_legal_references",
     "label": "Native legal-reference observations",
-    "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. spicy-docs shapes each row and reads the targets it names; this repository pins the inputs and looks each typed target up in the target tables its manifest selects. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
-    "coverage": "Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Rows read before spicy-docs 0.52.0 name native-legal-reference/002, the reading this repository ran; the next build names /003, which re-spells target_candidates that held a non-ASCII character and re-versions the text candidates citation rules 004 read, and moves no other value. Receipt: native-legal-full-2026-09-27/resolved-verification.json.",
+    "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held classification rows, not Code text.",
+    "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
     "kind": "sampled",
     "measured_on": "2026-09-27",
     "data_quality": null,
@@ -17471,12 +17471,27 @@
       {
         "column_name": "body_version_id",
         "column_type": "VARCHAR",
-        "description": "`sha256:` digest of the exact retained XML bytes the scanner read."
+        "description": "Exact retained XML content identity, body:sha256:<digest>; equal across the observation and its completed read scope."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Where the caller retained the input from, literally; not proof of acquisition time or edition."
       },
       {
         "column_name": "occurrence_index",
         "column_type": "BIGINT",
         "description": "The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset."
+      },
+      {
+        "column_name": "element_tag",
+        "column_type": "VARCHAR",
+        "description": "The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one."
       },
       {
         "column_name": "observation_kind",
@@ -17509,9 +17524,19 @@
         "description": "The `N` of the nearest enclosing DIV5 part on an eCFR note; NULL when no part encloses it, and on U.S. Code rows."
       },
       {
+        "column_name": "interpretation_status",
+        "column_type": "VARCHAR",
+        "description": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction."
+      },
+      {
         "column_name": "target_candidates",
-        "column_type": "STRUCT(cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR)[]",
-        "description": "The typed targets the reading found, as a Native list in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "column_type": "STRUCT(candidate_ordinal BIGINT, cite_kind VARCHAR, normalized_key VARCHAR, matched_text VARCHAR, span_start BIGINT, span_end BIGINT, target_kind VARCHAR, target_key VARCHAR, target_grain VARCHAR, candidate_keys STRUCT(target_key_ordinal BIGINT, bill_id VARCHAR, congress VARCHAR, law_type VARCHAR, number VARCHAR, \"session\" VARCHAR, seq VARCHAR, package_id VARCHAR, granule_id VARCHAR, document_number VARCHAR, publication_date VARCHAR, rin VARCHAR, agenda_edition VARCHAR, report_id VARCHAR, docket_id VARCHAR, system_code VARCHAR, cluster_id VARCHAR)[], derivation_rule VARCHAR, derivation_version VARCHAR, document_key VARCHAR, document_kind VARCHAR, expected_cardinality VARCHAR, match_count BIGINT, occurrence_key VARCHAR, reason VARCHAR, resolution_rule VARCHAR, source_record_key VARCHAR, source_status VARCHAR, target_resolved BOOLEAN, target_snapshot STRUCT(status VARCHAR, sha256 VARCHAR, \"family\" VARCHAR, artifact_digest VARCHAR, generation_id VARCHAR, receipt_sha256 VARCHAR), target_status VARCHAR, target_table_selected VARCHAR, text_sha256 VARCHAR, match_basis VARCHAR, error_type VARCHAR)[]",
+        "description": "Every retained candidate in source order, with candidate_ordinal, typed complete candidate_keys and target_key_ordinal, recorded target status, rule, reason, match count and exact target snapshot. Found, missing, ambiguous, unsupported and not_checked remain distinct. This stored result does not perform a new lookup."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only."
       },
       {
         "column_name": "native_element_id",
@@ -17535,6 +17560,94 @@
       "scope_id",
       "body_version_id",
       "occurrence_index"
+    ]
+  },
+  "native_legal_reference_reads": {
+    "table": "native_legal_reference_reads",
+    "label": "Legal reference read scopes",
+    "row_unit": "source reads",
+    "category": "processing_evidence",
+    "summary": "Each input's latest completed read, including reads that found no observations. Shows exact source scope, edition, XML and selection-manifest digests, byte and observation counts, forms checked and forms left out. Failed or incomplete inputs cannot replace prior results.",
+    "coverage": "Not a range. Completed reads of selected retained XML inputs; absent scopes remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-09-27",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced."
+      },
+      {
+        "column_name": "source_family",
+        "column_type": "VARCHAR",
+        "description": "The scanner family that read the input: `uscode` or `ecfr`."
+      },
+      {
+        "column_name": "source_record_key",
+        "column_type": "VARCHAR",
+        "description": "The caller's record identity for the input, retained literally."
+      },
+      {
+        "column_name": "edition",
+        "column_type": "VARCHAR",
+        "description": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "`sha256:` digest of the exact XML bytes this read took."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "Where the caller retained the input from, literally; not proof of acquisition time or edition."
+      },
+      {
+        "column_name": "source_bytes",
+        "column_type": "BIGINT",
+        "description": "Exact retained XML byte count."
+      },
+      {
+        "column_name": "occurrence_count",
+        "column_type": "BIGINT",
+        "description": "Number of observations produced by this completed selected-shape read, including zero."
+      },
+      {
+        "column_name": "read_status",
+        "column_type": "VARCHAR",
+        "description": "`complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read."
+      },
+      {
+        "column_name": "selected_shapes",
+        "column_type": "VARCHAR[]",
+        "description": "XML shapes this read selected, in recorded order; does not imply all reference forms were read."
+      },
+      {
+        "column_name": "unsupported_shapes",
+        "column_type": "VARCHAR[]",
+        "description": "XML forms this read explicitly left out; empty differs from unknown."
+      },
+      {
+        "column_name": "manifest_sha256",
+        "column_type": "VARCHAR",
+        "description": "`sha256:` digest of the selection manifest that named this input and any target pins."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only."
+      },
+      {
+        "column_name": "body_version_id",
+        "column_type": "VARCHAR",
+        "description": "Exact retained XML content identity, body:sha256:<digest>; equal across the observation and its completed read scope."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One row per input scope: its latest complete read of the selected shapes, including a read that found none.",
+    "identity_columns": [
+      "scope_id"
     ]
   },
   "gao_recommendations": {
@@ -21562,9 +21675,11 @@
       },
       {
         "dataset": "native_legal_reference_reads",
-        "receipt_only": true,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "legislative-documents/2",
+        "identity_columns": [
+          "scope_id"
+        ],
         "processing_fields": [
           "raw_source_row"
         ]
@@ -21572,7 +21687,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/1",
+        "policy_version": "legislative-documents/2",
         "identity_columns": [
           "scope_id",
           "body_version_id",

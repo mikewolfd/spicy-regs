@@ -2219,6 +2219,24 @@
       }
     },
     {
+      "child": "native_legal_references",
+      "child_columns": [
+        "scope_id"
+      ],
+      "parent": "native_legal_reference_reads",
+      "parent_columns": [
+        "scope_id"
+      ],
+      "kind": "complete",
+      "reason": "",
+      "measured_via": null,
+      "baseline_keys": 2,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "scorecards",
       "child_columns": [
         "publisher_id"
@@ -6324,24 +6342,6 @@
       "measurement": null
     },
     {
-      "child": "native_legal_references",
-      "child_columns": [
-        "scope_id"
-      ],
-      "parent": "native_legal_reference_reads",
-      "parent_columns": [
-        "scope_id"
-      ],
-      "kind": "complete",
-      "reason": "",
-      "measured_via": null,
-      "baseline_keys": 2,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "unspecified",
-      "measurement": null
-    },
-    {
       "child": "scorecards",
       "child_columns": [
         "snapshot_id"
@@ -9553,6 +9553,17 @@
         "parent_table": "lobbying_filings",
         "parent_columns": [
           "filing_uuid"
+        ]
+      }
+    ],
+    "native_legal_references": [
+      {
+        "child_columns": [
+          "scope_id"
+        ],
+        "parent_table": "native_legal_reference_reads",
+        "parent_columns": [
+          "scope_id"
         ]
       }
     ],

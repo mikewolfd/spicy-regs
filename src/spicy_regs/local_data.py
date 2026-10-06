@@ -169,7 +169,7 @@ def _native_selection(root: Path) -> LocalSelection:
             policy = selected_subject_policy(policies[name], selected.subjects)
             validate_receipt_bundle({name: selected.subjects}, [scoped], [policy],
                                     generation_id=selected.generation_id)
-            if not policies[name].receipt_only:
+            if not policy.receipt_only:
                 # Empty multipart tables have no invented member or partition.
                 visible[name] = (selected.subjects[0] if selected.subjects else root, "native-selected")
                 parts[name] = selected.subjects

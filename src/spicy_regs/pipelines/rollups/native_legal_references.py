@@ -16,7 +16,6 @@ class NativeLegalReferencesRollup(LegislativeReceiptRollup):
         "native_legal_references.parquet",
         "native_legal_reference_reads.parquet",
     )
-    receipt_only_tables = ("native_legal_reference_reads.parquet",)
     receipt_policies = family_policies("native_legal_references", "native_legal_reference_reads")
     retain_source_evidence: ClassVar[bool] = True
 

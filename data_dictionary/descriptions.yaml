@@ -4237,24 +4237,16 @@ tables:
     label: "Native legal-reference observations"
     subject: reference
     coverage: >-
-      Sampled. Observations from the complete retained eCFR Title 1, requested
-      as of 2026-08-10, and USC Title 1 release 119-103. Selected public target
-      tables resolve some occurrences; missing, unsupported and unqueried
-      targets remain explicit. Rows read before spicy-docs 0.52.0 name
-      native-legal-reference/002, the reading this repository ran; the next
-      build names /003, which re-spells target_candidates that held a
-      non-ASCII character and re-versions the text candidates citation rules
-      004 read, and moves no other value. Receipt:
-      native-legal-full-2026-09-27/resolved-verification.json.
+      Sampled. Selected retained U.S. Code and eCFR XML inputs only.
+      Read scopes state the edition, input digest and forms checked;
+      they do not establish source-wide completeness.
     summary: >-
-      Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
-      retaining source XML paths and digests. spicy-docs shapes each row and reads the
-      targets it names; this repository pins the inputs and looks each typed target up
-      in the target tables its manifest selects. Complete reads replace the selected
-      source/edition scope, including successful empty corrections. Candidate target
-      matches concern held classification rows, not independently acquired legal text.
-      Unparsed prose and unsupported forms remain visible; no universal extraction or
-      historical completeness is implied.
+      Original legal references and source passages with recorded target matches.
+      Inspect every candidate's complete keys, target pin, match count and reason.
+      Found, missing, ambiguous, unsupported and not-checked remain separate.
+      Source paths and interpretation rules stay visible. A complete read replaces
+      its selected source/edition scope, including a successful empty correction.
+      U.S. Code section matches identify held classification rows, not Code text.
     columns_from: spicy_docs
 
   court_opinion_pdf_extractions:
@@ -4294,16 +4286,14 @@ tables:
     category: processing_evidence
     row_unit: "source reads"
     measured_on: "2026-09-27"
-    label: "Legal reference extraction status"
+    label: "Legal reference read scopes"
     subject: reference
-    coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
+    coverage: "Not a range. Completed reads of selected retained XML inputs; absent scopes remain unknown."
     summary: >-
-      Records successful bounded source reads even when they produce no observations.
-      Failed or incomplete inputs cannot replace prior output. Existing generation and
-      source-evidence artifacts retain earlier captures; the current row represents the
-      latest complete selected-shape read for its scope. Unsupported XML forms and
-      unknown editions remain explicit. spicy-docs shapes the row from the read this
-      repository ran.
+      Each input's latest completed read, including reads that found no observations.
+      Shows exact source scope, edition, XML and selection-manifest digests,
+      byte and observation counts, forms checked and forms left out.
+      Failed or incomplete inputs cannot replace prior results.
     columns_from: spicy_docs
 
   # Retained typed FEC observation tables. Schema support is separate from publication.

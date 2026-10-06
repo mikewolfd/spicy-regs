@@ -986,7 +986,7 @@ def test_split_support_still_refuses_unlisted_physical_tables(tmp_path, monkeypa
     ("committee-reports", "committee_report_reads"),
     ("native-legal-references", "native_legal_reference_reads"),
 ])
-def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
+def test_checkpoint_source_rows_convert_and_restore_in_their_declared_main_shape(
         tmp_path, monkeypatch, bucket, family, read_dataset):
     """The complete family includes checkpoint reads even when no subject row was produced."""
     from spicy_regs import etl_policy_registry
@@ -999,9 +999,10 @@ def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
     cls = conversion._rollup_class(family)
     reads_key = read_dataset + ".parquet"
     assert reads_key in cls.source_outputs
-    assert reads_key not in cls.outputs
-    assert reads_key in cls.receipt_only_tables
-    assert next(p for p in cls.receipt_policies if p.dataset == read_dataset).receipt_only
+    processing_only = read_dataset == "committee_report_reads"
+    assert (reads_key not in cls.outputs) == processing_only
+    assert (reads_key in cls.receipt_only_tables) == processing_only
+    assert next(p for p in cls.receipt_policies if p.dataset == read_dataset).receipt_only == processing_only
     reads = (row(read_dataset, package_id="CRPT-119hrpt1", outcome="complete", rule_version="r1")
              if read_dataset == "committee_report_reads" else row(
                  read_dataset, scope_id="scope", source_family="uscode", source_record_key="record",
@@ -1030,7 +1031,7 @@ def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
                                 expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
     current = publication.current_index(BASE)
     entry = current["families"][family]
-    assert reads_key not in entry["tables"]
+    assert (reads_key not in entry["tables"]) == processing_only
     assert read_dataset in entry["etlReceipts"]["datasets"]
     restored = SelectedPriors(tmp_path / "anonymous", index=current, public_url=BASE).get(read_dataset)
     assert pq.read_table(restored).to_pylist() == source_reads

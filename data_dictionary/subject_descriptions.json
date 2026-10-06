@@ -24,7 +24,7 @@
     "columns": {
       "agency_code": "Agency short code.",
       "year": "Year of the documents, extracted from `posted_date`.",
-      "month": "Month (1–12) of the documents, extracted from `posted_date`.",
+      "month": "Month (1\u201312) of the documents, extracted from `posted_date`.",
       "document_type": "Document category counted in this bucket (e.g. `Rule`, `Notice`).",
       "document_count": "Number of documents the agency posted of that type in that month."
     }
@@ -288,10 +288,10 @@
       "granule_id": "GovInfo granule identifier. Primary key / dedup key, including non-section structural units.",
       "part_granule": "`'true'` on the granule that is a part itself (an id ending `-part200`, or `-part60-id334` in Title 41), `'false'` on every other row. A part's subparts, subject groups, appendices and table of contents share its `cfr_ref` and read `'false'`, so `part_granule = 'true'` picks the part out of them; a part citation's lookup does exactly that. Read from the granule id alone by SpicyDocs' grammar, never from the heading. A part held in two annual editions has one such row per edition, and a part printed across volumes one per volume (40 CFR part 60 spans volumes 7 to 9 of the 2025 edition).",
       "package_id": "GovInfo package identifier for the enclosing annual CFR title and volume.",
-      "cfr_ref": "Join key to Federal Register `cfr_references`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no structural row here once the generation carries Title 41's compound parts (see the summary): match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `§§` (`§§ 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, of which the part's own granule has `part_granule` `'true'`, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry.",
+      "cfr_ref": "Join key to Federal Register `cfr_references`. For a section, the title and its printed citation (e.g. `43-1601.0-1`, `41-50-201.1`); Title 43 keeps its subpart-numbered spelling while `part` names the enclosing part. The Federal Register side cuts every Title 41 compound part at the hyphen (`41 CFR 60-1.4` reads `41-60`), so a Title 41 reference there names a chapter, not a part, and matches no structural row here once the generation carries Title 41's compound parts (see the summary): match it at chapter level (`title = '41' AND part LIKE '60-%'`). NULL for ranges, publisher typos, unprefixed numbers (`Sec. 1-1`), parenthesized citations (`1.401(k)-1`), sections outside a numbered PART and section tokens the volume does not hold; 12 single sections printed with `\u00a7\u00a7` (`\u00a7\u00a7 2.188`) are read as ranges until spicy-docs 0.31.0. For other granules, composed from the part and the identifier's tokens (e.g. `48-700`, `15-746.10-app1`); NULL without a part. A part-level reference (`40-60`) equals `cfr_ref` only on a part's structural rows, of which the part's own granule has `part_granule` `'true'`, and a part held only as sections has none (50 CFR 622 among 12 on 2026-10-03): match a part on `title` and `part`, which section rows carry.",
       "title": "CFR title number from the package or granule identifier (e.g. `40`).",
       "part": "For a section, the number in the enclosing PART heading of the package's annual volume XML (e.g. `1600`, `50-201`, `241`); NULL outside a numbered PART or when the volume does not hold the section. For a section's appendix or TOC (`sec746-10-app1`), its host section's part when the volume holds the host, else its token's leading number. For other granules, the identifier's part token including letter suffixes (e.g. `1203a`); in Title 41, whose identifiers cut a compound part at the hyphen, the compound part its part granule's heading states (`60-2`).",
-      "section": "For a section, the printed number less its `{part}.` prefix (e.g. `1` for § 50-201.1, `19-8.1` in Part 241, `1601.0-1` in Part 1600, `401(k)-1`). For a section's appendix or TOC, the rest of its token after the leading number (`10-app1`); for a section token the volume does not hold, the whole token. NULL for other granules.",
+      "section": "For a section, the printed number less its `{part}.` prefix (e.g. `1` for \u00a7 50-201.1, `19-8.1` in Part 241, `1601.0-1` in Part 1600, `401(k)-1`). For a section's appendix or TOC, the rest of its token after the leading number (`10-app1`); for a section token the volume does not hold, the whole token. NULL for other granules.",
       "heading": "Granule heading / caption text from GovInfo's list-level `title` field.",
       "structure_level": "GovInfo granule class / structural level (e.g. `CONTENT`, `NODE`, `TOC`, `APPENDIX`).",
       "edition_year": "Annual edition year from the package or granule identifier, falling back to the year in `dateIssued`. This is not necessarily the printed body revision year or proof of a substantive edition.",
@@ -307,8 +307,8 @@
       "country": "The submitter's country, spelled as stated (United States, US, ...).",
       "display_properties": "The agency's labels for this record's fields: a Native list of {label, name, tooltip}, name being the attribute it labels; json_column spelling. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "doc_abstract": "A summary the agency recorded for the comment; rarely stated.",
-      "field1": "An agency-defined field; its meaning is the record's display_properties label (“10-Digit HTSUS Item Number for Product of Concern”, “XRIN”, “RTID”, …).",
-      "field2": "An agency-defined field; its meaning is the record's display_properties label (“File Date”, “Verbal Description for Product of Concern”, …).",
+      "field1": "An agency-defined field; its meaning is the record's display_properties label (\u201c10-Digit HTSUS Item Number for Product of Concern\u201d, \u201cXRIN\u201d, \u201cRTID\u201d, \u2026).",
+      "field2": "An agency-defined field; its meaning is the record's display_properties label (\u201cFile Date\u201d, \u201cVerbal Description for Product of Concern\u201d, \u2026).",
       "file_formats": "Renditions of the comment's own content file, rarely stated: a Native list of {fileUrl, format, size}; json_column spelling. Attached files are in the thin table's attachments. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "gov_agency": "The government body that submitted the comment.",
       "gov_agency_type": "That body's level: Federal, State, Local, Tribal and others.",
@@ -347,13 +347,13 @@
     "columns": {
       "comment_id": "Unique comment identifier. Primary key / dedup key.",
       "docket_id": "Source-supplied docket identifier for joining to `dockets.docket_id`. Null when the source does not identify a docket; mirror directory names and comment ID prefixes do not fill this field.",
-      "comment_on_document_id": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. The comment re-read filled it: on receipt sha256:77a08369… (2026-10-03) it is set on 26,388,456 of 26,415,400 rows, on at least 98.97% of each of the 12 largest agencies' rows, and below 95% only at MSHA (1,892 of 1,993) and TRAIN (1 of 114). NULL means the record states none or the row was not read; `comment_reference_values_json` tells the two apart. NULL does not mean the comment names no document.",
+      "comment_on_document_id": "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. The comment re-read filled it: on receipt sha256:77a08369\u2026 (2026-10-03) it is set on 26,388,456 of 26,415,400 rows, on at least 98.97% of each of the 12 largest agencies' rows, and below 95% only at MSHA (1,892 of 1,993) and TRAIN (1 of 114). NULL means the record states none or the row was not read; `comment_reference_values_json` tells the two apart. NULL does not mean the comment names no document.",
       "comment_on_object_id": "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key.",
       "original_document_id": "Literal originalDocumentId, retained as an unresolved legacy source reference.",
       "agency_code": "Receiving agency's short code.",
       "first_name": "Commenter's first name, where the row's read carried it. NULL where the publisher's record states none or where the row's read did not carry the field; `count(first_name)` by `agency_code` is the measure.",
       "last_name": "Commenter's last name, where the row's read carried it. NULL where the publisher's record states none or where the row's read did not carry the field; `count(last_name)` by `agency_code` is the measure.",
-      "organization": "The organization the commenter stated, where the row's read carried it. NULL where the publisher's record states none (FDA and EPA state none; EPA classifies submitters in `subtype` instead) and where the row's read did not carry the field. A campaign record carries it where the publisher states it: on receipt sha256:77a08369… (2026-10-03) FWS states it on 340 of its 408 `Mass Mail Campaign` and 10 of its 13 `Late Mass Mail Campaign` records, EPA on none of 7,842. `count(organization)` by `agency_code` is the measure.",
+      "organization": "The organization the commenter stated, where the row's read carried it. NULL where the publisher's record states none (FDA and EPA state none; EPA classifies submitters in `subtype` instead) and where the row's read did not carry the field. A campaign record carries it where the publisher states it: on receipt sha256:77a08369\u2026 (2026-10-03) FWS states it on 340 of its 408 `Mass Mail Campaign` and 10 of its 13 `Late Mass Mail Campaign` records, EPA on none of 7,842. `count(organization)` by `agency_code` is the measure.",
       "category": "Submitter category as regulations.gov states it, where the row's read carried it (FDA's records state one, such as `Individual Consumer` or `Private Industry - C0003`). NULL where the publisher's record states none (EPA states none: it classifies submitters in `subtype` and counts campaigns in `duplicate_comments`) or where the row's read did not carry the field; NULL across a whole agency does not mean the agency does not classify. `count(category)` by `agency_code` is the measure.",
       "title": "Comment title / subject line, as the publisher serves it; a few carry HTML entities (`&#39;`, `&amp;`).",
       "comment": "The comment body as regulations.gov serves it: an HTML fragment, not plain text. Line breaks are `<br/>` tags and many characters are HTML entities (`&#39;`, `&quot;`, `&amp;`, `&rsquo;`) on many rows of every agency, so a pattern with a plain apostrophe or quotation mark misses them: replace the entities before grouping or quoting. Filled for nearly every comment. Text of attached files is in `text_content`, which is filled only where an attachment was extracted. The largest field in the dataset.",
@@ -361,10 +361,10 @@
       "posted_date": "When the comment was posted, as the publisher stamps it (ISO 8601 string): a date at Eastern midnight written in UTC (`T04:00:00Z` or `T05:00:00Z`) on most records, a bare date label at `T00:00:00Z` on others. Read the date part as the publisher's date; converting a `T00:00:00Z` label to Eastern moves it a day early.",
       "modify_date": "Timestamp the comment was last modified (ISO 8601 string).",
       "receive_date": "The agency's stated receipt date, stamped as `posted_date` is (ISO 8601 string). It can follow `posted_date` (late or mailed submissions), so compare on the date part.",
-      "attachments": "Native list of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "attachments": "Native list of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369\u2026 (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "text_content": "Plain text of the comment's attachment(s). Filled inline during the ETL from Mirrulations' own extraction (the bucket's `derived-data` prefix): one extraction tool per comment, its attachments in number order, each stripped and separated by a blank line; when that tool's objects are all blank there is no derived text. Attachments Mirrulations has not extracted are backfilled by the on-demand PDF text-extraction step. Null when neither has produced text; see `text_extraction_status`.",
-      "subtype": "The agency's own class for the submission (regulations.gov `subtype`), spelled as stated. It is agency-specific. EPA classifies the submitter: `Public Comment` (an individual), `Company/Organization Comment`, `Government Local`, `Government State`, `Government Federal`, `Government Tribal`, `Member of Congress`, `Mass Mail Campaign`, `Late Comment`. Most other agencies that state it put one generic label on every record (`Comment(s)`, `Public Comment`, FDA's `Electronic Regulation from Form`), and many state none. EPA's submitter classes also appear at other agencies in small numbers, and `Mass Mail Campaign` (and `Late Mass Mail Campaign`) at several, FWS among them; which agencies state which labels is a query (`SELECT agency_code, subtype, count(*) … GROUP BY ALL`), not a fixed list. Split organizations from individuals only within an agency that classifies, and not by `organization`: all 1,629 records of EPA-HQ-OW-2022-0114 leave `organization`, `category` and `first_name` NULL, 219 of them `Company/Organization Comment`. NULL where the record states none or the row predates reading this field.",
-      "duplicate_comments": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum counts the submissions the agency says its posted records stand for, each record at least itself: its posted accounting, not its official total. On the comments export of receipt sha256:77a08369… (2026-10-03), EPA-HQ-OW-2022-0114's 1,629 records sum to 53,692, 52,086 of them on its 23 `Mass Mail Campaign` records, while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero.",
+      "subtype": "The agency's own class for the submission (regulations.gov `subtype`), spelled as stated. It is agency-specific. EPA classifies the submitter: `Public Comment` (an individual), `Company/Organization Comment`, `Government Local`, `Government State`, `Government Federal`, `Government Tribal`, `Member of Congress`, `Mass Mail Campaign`, `Late Comment`. Most other agencies that state it put one generic label on every record (`Comment(s)`, `Public Comment`, FDA's `Electronic Regulation from Form`), and many state none. EPA's submitter classes also appear at other agencies in small numbers, and `Mass Mail Campaign` (and `Late Mass Mail Campaign`) at several, FWS among them; which agencies state which labels is a query (`SELECT agency_code, subtype, count(*) \u2026 GROUP BY ALL`), not a fixed list. Split organizations from individuals only within an agency that classifies, and not by `organization`: all 1,629 records of EPA-HQ-OW-2022-0114 leave `organization`, `category` and `first_name` NULL, 219 of them `Company/Organization Comment`. NULL where the record states none or the row predates reading this field.",
+      "duplicate_comments": "How many received submissions the agency says this posted record stands for (regulations.gov `duplicateComments`), as stated. Agencies that count (EPA and FWS among them) state 1 for a single comment and the campaign's size on a `Mass Mail Campaign` record (15,851 on EPA-HQ-OW-2022-0114-1811, National Wildlife Federation Action Fund); agencies that do not count state 0 on every record. Rows are posted records. To estimate submissions, sum `GREATEST(duplicate_comments, 1)`, each posted record standing for at least itself, and first count the NULL rows: GREATEST reads NULL as 1. The sum counts the submissions the agency says its posted records stand for, each record at least itself: its posted accounting, not its official total. On the comments export of receipt sha256:77a08369\u2026 (2026-10-03), EPA-HQ-OW-2022-0114's 1,629 records sum to 53,692, 52,086 of them on its 23 `Mass Mail Campaign` records, while EPA's response to comments reports about 122,200 received. The 2026-09-28 sample found it stated on every record: 0 on 5,281, 1 on 660, more than 1 on 4. NULL where the row predates reading this field; 0 is a stated zero.",
       "comment_text": "`comment` read as plain text, derived from it each time the mirror is exported and never stored in the catalog. The publisher serves `comment` as an HTML fragment (`I&#39;m`, `<br/>`); this column decodes each character reference once, makes `<br>` and the end of a block element a newline and a no-break space a space, drops every other tag and trims the ends. Search and quote this column; `comment` keeps the publisher's bytes. The projection loses link targets, list bullets and table layout. One decode only: a body the publisher escaped twice keeps one level (`&amp;#39;` reads `&#39;`), and markup a commenter typed as text (`&lt;br&gt;`) reads as that text. NULL exactly where `comment` is NULL."
     }
   },
@@ -373,7 +373,7 @@
       "agency_code": "Agency code of the counted comments.",
       "docket_id": "Source docket identifier, or NULL when the source gives none.",
       "year": "Year from `posted_date`. NULL when the source posted date is unknown.",
-      "month": "Month (1–12) from `posted_date`. NULL together with year when the source posted date is unknown.",
+      "month": "Month (1\u201312) from `posted_date`. NULL together with year when the source posted date is unknown.",
       "row_count": "Number of posted comment records in the group. These are posted comment records, not comments received: an agency posts one record for a mass-mail campaign that can stand for thousands of submissions (EPA-HQ-OW-2022-0114 has 1,629 posted records for about 122,200 comments EPA received). To estimate submissions received, sum `comments.duplicate_comments` as its description says; this table does not carry it."
     }
   },
@@ -564,7 +564,7 @@
       "parties": "Native list of party names on the docket (plaintiffs and defendants, including the defendant agency). `[]` when the publisher names none; NULL when the docket came from the bulk edition and its names have not been read yet. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "attorneys": "Native list of attorney names appearing on the docket. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "firms": "Native list of law-firm / legal-organization names appearing on the docket. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "pacer_case_id": "PACER case id for the docket in its court's CM/ECF system, as CourtListener states it. Not always the court's own number for the case: CourtListener writes 10–15-digit values on some dockets (73 rows, mostly txwd and nysd, measured 2026-10-03) and keeps an older docket object's id when it reuses that object for a new case (`16` on three objects created 2020-12-22 for cases filed 2024 and 2025); some rows have none.",
+      "pacer_case_id": "PACER case id for the docket in its court's CM/ECF system, as CourtListener states it. Not always the court's own number for the case: CourtListener writes 10\u201315-digit values on some dockets (73 rows, mostly txwd and nysd, measured 2026-10-03) and keeps an older docket object's id when it reuses that object for a new case (`16` on three objects created 2020-12-22 for cases filed 2024 and 2025); some rows have none.",
       "case_type": "Case-type code parsed from a district-court `docket_number` (`1:26-cv-02460` is `cv`, civil; also `cr` criminal, `mj` magistrate, `po` petty offense, `mc` miscellaneous). NULL when the number carries none, as appellate numbers do. The publisher codes non-civil dockets 899 too; they are kept, so filter on this for civil litigation.",
       "blocked": "Whether the source marks the court docket blocked.",
       "date_blocked": "Source-stated date when the docket was blocked."
@@ -666,26 +666,26 @@
     "columns": {
       "agency_code": "Agency short code.",
       "recent_30d": "Documents the agency posted in the trailing 30 days.",
-      "baseline": "Prior-year monthly mean document count (months 2–13 back).",
-      "ratio": "`recent_30d` divided by `baseline` — the spike multiple."
+      "baseline": "Prior-year monthly mean document count (months 2\u201313 back).",
+      "ratio": "`recent_30d` divided by `baseline` \u2014 the spike multiple."
     }
   },
   "docket_attributes": {
     "columns": {
       "docket_id": "The docket's id; its API record is https://api.regulations.gov/v4/dockets/{docket_id}.",
-      "category": "The docket's status (labelled “Disposition”): Pending, Closed and others.",
+      "category": "The docket's status (labelled \u201cDisposition\u201d): Pending, Closed and others.",
       "display_properties": "The agency's labels for this docket's fields: a Native list of {label, name, tooltip}; [] when none; json_column spelling. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "effective_date": "Mostly the docket's close date (usually labelled “Docket Close Date”), a UTC instant.",
-      "field1": "An agency-defined field (“Related Docket's RIN”, “Related To”, …); see display_properties.",
-      "field2": "An agency-defined field (usually “Docket Status”); see display_properties.",
-      "generic": "An agency program code (“Docket Item Code”, “Location”, “Program Area”).",
+      "effective_date": "Mostly the docket's close date (usually labelled \u201cDocket Close Date\u201d), a UTC instant.",
+      "field1": "An agency-defined field (\u201cRelated Docket's RIN\u201d, \u201cRelated To\u201d, \u2026); see display_properties.",
+      "field2": "An agency-defined field (usually \u201cDocket Status\u201d); see display_properties.",
+      "generic": "An agency program code (\u201cDocket Item Code\u201d, \u201cLocation\u201d, \u201cProgram Area\u201d).",
       "keywords": "The docket's keywords, in the publisher's order. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "legacy_id": "The docket's id in a predecessor system.",
       "object_id": "The publisher's internal object handle.",
-      "organization": "Labelled “Pre-EDOCKET ID” or “Organization”; see display_properties.",
+      "organization": "Labelled \u201cPre-EDOCKET ID\u201d or \u201cOrganization\u201d; see display_properties.",
       "petition_nbr": "A petition number.",
-      "program": "The program office (usually labelled “Center”).",
-      "short_title": "A short title (sometimes labelled “Action Office”).",
+      "program": "The program office (usually labelled \u201cCenter\u201d).",
+      "short_title": "A short title (sometimes labelled \u201cAction Office\u201d).",
       "sub_type": "The agency's docket subtype.",
       "sub_type2": "A second docket subtype level."
     }
@@ -707,7 +707,7 @@
       "address1": "The submitter's street address, first line, as stated.",
       "address2": "The submitter's street address, second line, as stated.",
       "allow_late_comments": "Whether the agency accepts comments after the period closes, as the publisher stated it on the record's latest version; the comment window's state comes from its dates.",
-      "author_date": "When the document was written (labelled “Author/ Document Date”), a UTC instant.",
+      "author_date": "When the document was written (labelled \u201cAuthor/ Document Date\u201d), a UTC instant.",
       "authors": "The document's authors, people or organizations, in the publisher's order; almost all on Supporting & Related Material. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "category": "The submitter's sector category the agency assigns.",
       "cfr_part": "The CFR parts the document affects, free text as stated.",
@@ -720,25 +720,25 @@
       "exhibit_location": "Where a physical exhibit is held.",
       "exhibit_type": "The exhibit's type.",
       "fax": "The submitter's fax number.",
-      "field1": "An agency-defined field; its meaning is the record's display_properties label (“Answer Date”, “XRIN”, “RTID”, …).",
-      "field2": "An agency-defined field; its meaning is the record's display_properties label (labelled “File Date”).",
+      "field1": "An agency-defined field; its meaning is the record's display_properties label (\u201cAnswer Date\u201d, \u201cXRIN\u201d, \u201cRTID\u201d, \u2026).",
+      "field2": "An agency-defined field; its meaning is the record's display_properties label (labelled \u201cFile Date\u201d).",
       "first_name": "The submitter's given name.",
       "fr_vol_num": "The Federal Register volume or citation, free text as stated.",
       "gov_agency": "The government body that submitted the document.",
       "gov_agency_type": "That body's level: Federal, State, Local, Tribal, Regional, U.S. House of Representatives or U.S. Senate.",
       "implementation_date": "The implementation or service date, a UTC instant.",
       "last_name": "The submitter's family name.",
-      "legacy_id": "The record's id in a predecessor system (“Document Legacy ID”, “Legacy Exhibit Number”, …).",
-      "media": "How the document arrived: Electronic, Paper, … (spellings vary).",
+      "legacy_id": "The record's id in a predecessor system (\u201cDocument Legacy ID\u201d, \u201cLegacy Exhibit Number\u201d, \u2026).",
+      "media": "How the document arrived: Electronic, Paper, \u2026 (spellings vary).",
       "object_id": "The publisher's internal object handle.",
       "omb_approval": "An OMB control number, as stated.",
       "open_for_comment": "Whether the document was open for comment, an observation as the publisher stated it on the record's latest version rather than a live status; the comment window's state comes from its dates.",
       "organization": "The organization the author or submitter names.",
       "original_document_id": "The id of the document this one derives from; sometimes the empty string.",
       "page_count": "Pages in the content file.",
-      "postmark_date": "The postmark date (often labelled “Answer Date”), a UTC instant.",
+      "postmark_date": "The postmark date (often labelled \u201cAnswer Date\u201d), a UTC instant.",
       "receive_date": "When the agency received the document, a UTC instant.",
-      "reg_writer_instruction": "Agency notes (often labelled “Old Submitter”).",
+      "reg_writer_instruction": "Agency notes (often labelled \u201cOld Submitter\u201d).",
       "restrict_reason": "Why access is restricted, free text.",
       "restrict_reason_type": "The restriction's kind: Copyrighted, Confidential Business Information, Personally Identifiable Information or Other.",
       "source_citation": "The source publication's citation.",
@@ -806,7 +806,7 @@
       "authors": "Native list of author names on the filing, when distinct from the filers. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "lawfirms": "Native list of law-firm names on the filing. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "bureaus": "Native list of FCC bureau names the filing was routed to. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "text_data": "The filing's inline text — for express comments this is the full comment text. Null for document-only filings.",
+      "text_data": "The filing's inline text \u2014 for express comments this is the full comment text. Null for document-only filings.",
       "total_page_count": "Total page count across the filing's attached documents, as a numeric string.",
       "documents": "Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "generation_id": "Selected main filing generation. Binds retained result observations to this filing version; it is not the original attempt time.",
@@ -2788,7 +2788,7 @@
       "committee_id_status": "State or syntax check of the reported committee ID; a valid shape is not a resolved identity.",
       "lobbyist_status": "Mapping state of the source lobbyist flag, including unsupported or absent values.",
       "image_body_status": "Explicit processing/availability state of the linked registration image body.",
-      "filed_date_status": "How `filed_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `filed_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `filed_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test.",
+      "filed_date_status": "How `filed_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `filed_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `filed_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6\u2026` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test.",
       "source_cycle": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
     }
   },
@@ -2951,7 +2951,7 @@
       "source_pointer": "Exact pointer within the provider-owned native record to the mapped value or metadata object.",
       "committee_id_status": "State or syntax check of the reported committee ID; a valid shape is not a resolved identity.",
       "exclusion_status": "Explicit statement that a quality notice does not automatically exclude transactions without a supported inclusion policy.",
-      "first_receipt_date_status": "How `first_receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `first_receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `first_receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test.",
+      "first_receipt_date_status": "How `first_receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `first_receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `first_receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6\u2026` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test.",
       "source_cycle": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year."
     }
   },
@@ -3128,7 +3128,7 @@
       "committee_id_status": "State or syntax check of the reported committee ID; a valid shape is not a resolved identity.",
       "candidate_id_status": "State or syntax check of the reported candidate ID; a valid shape is not a resolved identity.",
       "affiliation_status": "Whether the affiliation is represented by a supported source identifier or only a literal name.",
-      "receipt_date_status": "How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`, or on a Form 2 row its `report_year`; a Form 2 date in another year reads `outside_selected_year_bounds`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every Form 1 receipt date in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test.",
+      "receipt_date_status": "How `receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `receipt_date`, or on a Form 2 row its `report_year`; a Form 2 date in another year reads `outside_selected_year_bounds`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every Form 1 receipt date in the fec-query generation `81453ac6\u2026` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test.",
       "source_cycle": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year.",
       "election_year_status": "Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause.",
       "report_year_status": "Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported."
@@ -3483,7 +3483,7 @@
       "signing_date": "Signing date, for presidential documents.",
       "agency_slugs": "Federal Register agency slugs for the issuing agencies. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "docket_ids": "The full original docket-ID array, retained so consumers can see the other IDs this FR document links to. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "regulation_id_numbers": "RINs (Native list) claimed by the FR document — the RIN-side join key for a rulemaking. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "regulation_id_numbers": "RINs (Native list) claimed by the FR document \u2014 the RIN-side join key for a rulemaking. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "executive_order_number": "Executive order number, for presidential documents.",
       "link_source": "Which of the Register's statements carries the pair: `printed` (the document's printed docket labels), `regulations_dot_gov_info` (the Register's regulations.gov link, read from `regulations_dot_gov_docket_id` alone, never off a document id) or `both`, where a printed label is that docket id or SpicyDocs' normalizer reads it from the label. Every printed occurrence that carries the pair reads `both`, and the link then adds no row. The current builder writes one of these labels; retained historical rows without a label keep NULL."
     }
@@ -3763,18 +3763,18 @@
   "lobbying_filings": {
     "columns": {
       "filing_uuid": "LDA filing UUID (e.g. `7866327b-c892-4430-b9f0-1f0f679c58c6`). Primary key / dedup key.",
-      "filing_type": "The LDA filing-type code as the API states it: `RR` registration; `Q1`–`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`–`4A` and `MA` amendments; `1T`–`4T` and `MT` terminations; `1@`–`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report. To total amounts, drop registrations (`RR`, `RA`), which carry a `filing_period` too, then keep the latest filing per registrant, `client_id` and period: with registrations kept, a later one displaced a quarterly report in 103 groups of 2025 (measured 2026-10-03). For issues or activities, choose filing types first: a termination chain (`1T`, then a no-activity `1@Y`) shares the period, and the latest filing can be the no-activity one.",
+      "filing_type": "The LDA filing-type code as the API states it: `RR` registration; `Q1`\u2013`Q4` quarterly reports and `MM` the pre-2008 mid-year report; `1A`\u2013`4A` and `MA` amendments; `1T`\u2013`4T` and `MT` terminations; `1@`\u2013`4@` and `M@` termination amendments; a trailing `Y` marks a no-activity report (`Q1Y`, `1@Y`). The LDA constants endpoint (`/api/v1/constants/filing/filingtypes/`) is the authority. An amendment is a separate filing that restates its quarter's report. To total amounts, drop registrations (`RR`, `RA`), which carry a `filing_period` too, then keep the latest filing per registrant, `client_id` and period: with registrations kept, a later one displaced a quarterly report in 103 groups of 2025 (measured 2026-10-03). For issues or activities, choose filing types first: a termination chain (`1T`, then a no-activity `1@Y`) shares the period, and the latest filing can be the no-activity one.",
       "filing_year": "Calendar year the filing reports on.",
       "filing_period": "Reporting period within the year (e.g. `first_quarter`, `year_end`).",
       "dt_posted": "Timestamp the filing was posted to the LDA system (ISO 8601 string with timezone). Sort key.",
       "registrant_name": "Name of the registrant (the lobbying firm or self-filing organization).",
       "registrant_id": "LDA registrant id. Stable join key across a registrant's filings.",
-      "client_name": "The client's name as the registrant filed it; a name, not an identity. A self-filing organization is both registrant and client, often under a spelling other registrants do not use for it (McKesson files as `MCKESSON CORPORATION & AFFILIATES …`). `registrant_id` keys the registrant across its filings and `client_id` keys a client only within one registrant (see `client_id`); a match to `comments.organization` or `sam_entities.legal_business_name` is a name match.",
+      "client_name": "The client's name as the registrant filed it; a name, not an identity. A self-filing organization is both registrant and client, often under a spelling other registrants do not use for it (McKesson files as `MCKESSON CORPORATION & AFFILIATES \u2026`). `registrant_id` keys the registrant across its filings and `client_id` keys a client only within one registrant (see `client_id`); a match to `comments.organization` or `sam_entities.legal_business_name` is a name match.",
       "client_id": "LDA's `client.id`: one registrant's record of one client, stable across that registrant's filings, not an organization identity. No id is shared between registrants (129,434 ids for 129,434 registrant-client pairs, measured 2026-10-03), so an organization hired by several firms has one id per firm (AT&T Services, Inc.: 21 ids under 21 registrants in 2025).",
-      "income": "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`).",
-      "expenses": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`–`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`). A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two.",
-      "lobbying_activities": "Native list of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "government_entities": "Native list of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      "income": "Lobbying income reported by a lobbying firm for the period, in USD. Null for self-filers (who report `expenses`). An amended report (`filing_type` `1A`\u2013`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`).",
+      "expenses": "Lobbying expenses reported by a self-filing organization for the period, in USD. Null for firms (who report `income`). An amended report (`filing_type` `1A`\u2013`4A`) restates its quarter's amount, often unchanged, so summing over every filing counts that quarter twice; drop registrations (`RR`, `RA`) and keep the latest filing per registrant, `client_id` and quarter (see `filing_type`). A self-filing organization's expenses already include what it pays outside lobbying firms, whose `income` for that client is reported separately; do not add the two.",
+      "lobbying_activities": "Native list of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` \u2014 the issue areas lobbied and their free-text descriptions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "government_entities": "Native list of the distinct government entities lobbied (`{id, name}`) \u2014 the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
   },
   "member_party_affiliations": {
@@ -3861,7 +3861,7 @@
       "source_family": "The scanner family that read the input: `uscode` or `ecfr`, fixed by the shaper.",
       "source_record_key": "The caller's record identity for the input, retained literally.",
       "edition": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename.",
-      "body_version_id": "`sha256:` digest of the exact retained XML bytes the scanner read.",
+      "body_version_id": "Exact retained XML content identity, body:sha256:<digest>; equal across the observation and its completed read scope.",
       "occurrence_index": "The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text.",
       "observation_kind": "`native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note.",
       "href": "The element's href exactly as stated, an empty string when stated empty; NULL when absent, and on every source credit and note.",
@@ -3869,10 +3869,15 @@
       "text_runs": "An eCFR note's text split at element boundaries, as a Native list whose strings join to text; NULL on U.S. Code rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "cfr_title": "The CFR title the caller's checked capture metadata states, on an eCFR note; NULL when it states none, never inferred from a fragment.",
       "cfr_part": "The `N` of the nearest enclosing DIV5 part on an eCFR note; NULL when no part encloses it, and on U.S. Code rows.",
-      "target_candidates": "The typed targets the reading found, as a Native list in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "target_candidates": "Every retained candidate in source order, with candidate_ordinal, typed complete candidate_keys and target_key_ordinal, recorded target status, rule, reason, match count and exact target snapshot. Found, missing, ambiguous, unsupported and not_checked remain distinct. This stored result does not perform a new lookup.",
       "native_element_id": "Publisher element identifier attached to this legal reference.",
       "native_idref": "Publisher identifier reference attached to this legal reference.",
-      "native_class": "Publisher classification attached to this legal reference."
+      "native_class": "Publisher classification attached to this legal reference.",
+      "source_locator": "Where the caller retained the input from, literally; not proof of acquisition time or edition.",
+      "source_path": "The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset.",
+      "element_tag": "The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one.",
+      "interpretation_status": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction.",
+      "rule_version": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only."
     }
   },
   "nominations": {
@@ -3906,7 +3911,7 @@
       "match_method": "How the pair matched: `exact` (full normalized names equal), `core` (decoration-stripped cores equal), or `prefix` (committee core starts with the whole organization core on a token boundary).",
       "confidence": "`high` for `exact`/`core`; for `prefix`, `medium` when `committee_match_count` <= 5 and `low` above that. Grades the name match alone: it ignores whether the committee still files and the sponsor FEC states (`sponsor_name_match`). Filter on this to pick a precision bar.",
       "committee_match_count": "How many FEC committees this organization name matched in total, counting the candidate committees and leadership PACs whose links are left out, so it can exceed this string's rows here. A high count does not establish an affiliate network; inspect source evidence alongside the matching rule.",
-      "comment_count": "Comments filed under this exact organization string in every agency and year the comments table holds (deduplicated on `comment_id`, newest `modify_date` wins — matching the MCP `comments` view). The same value repeats on each committee row of the string; do not sum it across rows.",
+      "comment_count": "Comments filed under this exact organization string in every agency and year the comments table holds (deduplicated on `comment_id`, newest `modify_date` wins \u2014 matching the MCP `comments` view). The same value repeats on each committee row of the string; do not sum it across rows.",
       "docket_count": "Distinct dockets this organization string commented on, across every agency and year. Repeats on each committee row of the string.",
       "first_comment_date": "Earliest `posted_date` across this organization's comments in every agency and year (ISO 8601 string).",
       "last_comment_date": "Latest `posted_date` across this organization's comments in every agency and year (ISO 8601 string).",
@@ -4364,7 +4369,7 @@
   "table3_records": {
     "columns": {
       "act_key": "The act key: a public law number, or a pre-1957 session-law chapter.",
-      "stated_key": "The act number as Table III states it: `119-4` in the bulk file, `119–4` (en dash) on a page.",
+      "stated_key": "The act number as Table III states it: `119-4` in the bulk file, `119\u20134` (en dash) on a page.",
       "seq": "Zero-based position of this record in its act, in the source's own order.",
       "congress": "The Congress Table III states for the act: `119` in the bulk file, `119th Cong.` on a page.",
       "act_date": "The act's date as Table III states it: `2025-03-15` in the bulk file, `Mar. 15, 2025` on a page.",
@@ -4427,7 +4432,7 @@
   },
   "usaspending_recipients": {
     "columns": {
-      "recipient_id": "USASpending recipient hash + level suffix (e.g. `7fe0d08f-...-R`). Primary key / dedup key — unique per recipient_level.",
+      "recipient_id": "USASpending recipient hash + level suffix (e.g. `7fe0d08f-...-R`). Primary key / dedup key \u2014 unique per recipient_level.",
       "uei": "Unique Entity Identifier (SAM.gov UEI, e.g. `JE73CDQUAPA7`). The org-resolution join key to SAM and other UEI-keyed sources. May be null for older records.",
       "duns": "Legacy DUNS number, when present. Superseded by UEI; often null for newer records.",
       "name": "Recipient name as recorded by USASpending (e.g. `LOCKHEED MARTIN CORP`). The name-resolution key.",
@@ -4662,6 +4667,24 @@
       "source_url": "Recorded source URL associated with the observation; this is evidence provenance, not a live availability check.",
       "observed_at": "Provider observation time when available, distinct from dates reported inside the source record.",
       "source_locator_json": "JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected source header or HTML field dictionary; complete dictionary cells appear in the parent collection's tableFieldDefinitions."
+    }
+  },
+  "native_legal_reference_reads": {
+    "columns": {
+      "scope_id": "The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced.",
+      "source_family": "The scanner family that read the input: `uscode` or `ecfr`.",
+      "source_record_key": "The caller's record identity for the input, retained literally.",
+      "edition": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename.",
+      "input_sha256": "`sha256:` digest of the exact XML bytes this read took.",
+      "source_locator": "Where the caller retained the input from, literally; not proof of acquisition time or edition.",
+      "source_bytes": "Exact retained XML byte count.",
+      "occurrence_count": "Number of observations produced by this completed selected-shape read, including zero.",
+      "read_status": "`complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read.",
+      "selected_shapes": "XML shapes this read selected, in recorded order; does not imply all reference forms were read.",
+      "unsupported_shapes": "XML forms this read explicitly left out; empty differs from unknown.",
+      "manifest_sha256": "`sha256:` digest of the selection manifest that named this input and any target pins.",
+      "rule_version": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",
+      "body_version_id": "Exact retained XML content identity, body:sha256:<digest>; equal across the observation and its completed read scope."
     }
   }
 }

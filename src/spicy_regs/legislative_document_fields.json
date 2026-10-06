@@ -3598,126 +3598,132 @@
     "identity_fields": [
       "scope_id"
     ],
-    "processing_only": true,
+    "processing_only": false,
     "fields": [
       {
         "name": "scope_id",
         "source_type": "VARCHAR",
         "meaning": "The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "scope_id",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "source_family",
         "source_type": "VARCHAR",
         "meaning": "The scanner family that read the input: `uscode` or `ecfr`.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "source_family",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "source_record_key",
         "source_type": "VARCHAR",
         "meaning": "The caller's record identity for the input, retained literally.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "source_record_key",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "edition",
         "source_type": "VARCHAR",
         "meaning": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "edition",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "input_sha256",
         "source_type": "VARCHAR",
         "meaning": "`sha256:` digest of the exact XML bytes this read took.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "input_sha256",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "source_locator",
         "source_type": "VARCHAR",
         "meaning": "Where the caller retained the input from, literally; not proof of acquisition time or edition.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "source_locator",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "source_bytes",
         "source_type": "VARCHAR",
         "meaning": "The input's length in bytes, as decimal text.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "flatten",
+        "target": "source_bytes",
+        "target_type": "int64",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "occurrence_count",
         "source_type": "VARCHAR",
         "meaning": "How many observation rows this read produced, as decimal text, zero included.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "flatten",
+        "target": "occurrence_count",
+        "target_type": "int64",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "read_status",
         "source_type": "VARCHAR",
         "meaning": "`complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "read_status",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "selected_shapes_json",
         "source_type": "VARCHAR",
         "meaning": "The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "native-list",
+        "target": "selected_shapes",
+        "target_type": "list<string>",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "unsupported_shapes_json",
         "source_type": "VARCHAR",
         "meaning": "The shapes this read knowingly left out, as a JSON array (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "native-list",
+        "target": "unsupported_shapes",
+        "target_type": "list<string>",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "manifest_sha256",
         "source_type": "VARCHAR",
         "meaning": "`sha256:` digest of the selection manifest that named this input and any target pins.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "manifest_sha256",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       },
       {
         "name": "rule_version",
         "source_type": "VARCHAR",
         "meaning": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "rule_version",
+        "target_type": "string",
+        "reason": "Recorded read scope and outcome; publish the original value so observations can navigate to their exact completed read."
       }
-    ]
+    ],
+    "derived_fields": {
+      "body_version_id": {
+        "type": "string",
+        "from": "input_sha256"
+      }
+    }
   },
   "native_legal_references": {
     "identity_fields": [
@@ -3776,10 +3782,10 @@
         "name": "source_locator",
         "source_type": "VARCHAR",
         "meaning": "Where the caller retained the input from, literally; not proof of acquisition time or edition.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "source_locator",
+        "target_type": "string",
+        "reason": "Source coordinates and recorded interpretation are needed to inspect the legal reference without consulting a receipt."
       },
       {
         "name": "occurrence_index",
@@ -3794,19 +3800,19 @@
         "name": "source_path",
         "source_type": "VARCHAR",
         "meaning": "The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "source_path",
+        "target_type": "string",
+        "reason": "Source coordinates and recorded interpretation are needed to inspect the legal reference without consulting a receipt."
       },
       {
         "name": "element_tag",
         "source_type": "VARCHAR",
         "meaning": "The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "element_tag",
+        "target_type": "string",
+        "reason": "Source coordinates and recorded interpretation are needed to inspect the legal reference without consulting a receipt."
       },
       {
         "name": "attributes_json",
@@ -3884,10 +3890,10 @@
         "name": "interpretation_status",
         "source_type": "VARCHAR",
         "meaning": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "interpretation_status",
+        "target_type": "string",
+        "reason": "Source coordinates and recorded interpretation are needed to inspect the legal reference without consulting a receipt."
       },
       {
         "name": "target_candidates_json",
@@ -3895,17 +3901,17 @@
         "meaning": "The typed targets the reading found, as a JSON array in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none.",
         "decision": "native-list",
         "target": "target_candidates",
-        "target_type": "list<struct<cite_kind:string,normalized_key:string,matched_text:string,span_start:int64,span_end:int64,target_kind:string,target_key:string,target_grain:string>>",
-        "reason": "Ordered repeated domain values. Preserve duplicates, empty list, null list, and null elements; retain the original representation in the receipt."
+        "target_type": "list<native-legal-target/2>",
+        "reason": "Keep every retained candidate key, rule, recorded lookup outcome and target pin in source order; derive only zero-based array positions."
       },
       {
         "name": "rule_version",
         "source_type": "VARCHAR",
         "meaning": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "rule_version",
+        "target_type": "string",
+        "reason": "Source coordinates and recorded interpretation are needed to inspect the legal reference without consulting a receipt."
       }
     ],
     "derived_fields": {

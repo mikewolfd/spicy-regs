@@ -2,4 +2,30 @@
 
 # `native_legal_reference_reads`
 
-`native_legal_reference_reads` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'native_legal_reference_reads'`.
+**Legal reference read scopes**
+
+Each input's latest completed read, including reads that found no observations. Shows exact source scope, edition, XML and selection-manifest digests, byte and observation counts, forms checked and forms left out. Failed or incomplete inputs cannot replace prior results.
+
+**Coverage.** Not a range. Completed reads of selected retained XML inputs; absent scopes remain unknown. *(measured 2026-09-27)*
+
+- **Parquet file:** `native_legal_reference_reads.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `scope_id` | `VARCHAR` | The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced. |
+| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode` or `ecfr`. |
+| `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
+| `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
+| `input_sha256` | `VARCHAR` | `sha256:` digest of the exact XML bytes this read took. |
+| `source_locator` | `VARCHAR` | Where the caller retained the input from, literally; not proof of acquisition time or edition. |
+| `source_bytes` | `BIGINT` | Exact retained XML byte count. |
+| `occurrence_count` | `BIGINT` | Number of observations produced by this completed selected-shape read, including zero. |
+| `read_status` | `VARCHAR` | `complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read. |
+| `selected_shapes` | `VARCHAR[]` | XML shapes this read selected, in recorded order; does not imply all reference forms were read. |
+| `unsupported_shapes` | `VARCHAR[]` | XML forms this read explicitly left out; empty differs from unknown. |
+| `manifest_sha256` | `VARCHAR` | `sha256:` digest of the selection manifest that named this input and any target pins. |
+| `rule_version` | `VARCHAR` | `native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only. |
+| `body_version_id` | `VARCHAR` | Exact retained XML content identity, body:sha256:<digest>; equal across the observation and its completed read scope. |

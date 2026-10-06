@@ -152,7 +152,7 @@ def test_domain_status_and_publisher_absence_words_survive():
     assert report["report_states_estimate"] is False
 
 
-def test_native_candidates_keep_occurrences_without_lookup_diagnostics():
+def test_native_candidates_keep_occurrences_and_recorded_lookup_diagnostics():
     candidate = {"cite_kind": "usc_section", "normalized_key": "5-552", "target_key": "5-552",
                  "span_start": 1, "span_end": 9, "target_status": "missing", "candidate_keys": []}
     source = row("native_legal_references", scope_id="scope", input_sha256="a" * 64, occurrence_index="0",
@@ -162,7 +162,9 @@ def test_native_candidates_keep_occurrences_without_lookup_diagnostics():
     assert subject["href"] == "" and subject["text_runs"] == []
     assert subject["native_element_id"] == "section-a"
     assert len(subject["target_candidates"]) == 2
-    assert "target_status" not in subject["target_candidates"][0]
+    assert [c["candidate_ordinal"] for c in subject["target_candidates"]] == [0, 1]
+    assert subject["target_candidates"][0]["target_status"] == "missing"
+    assert subject["target_candidates"][0]["candidate_keys"] == []
 
 
 def test_extra_top_level_and_nested_fields_require_an_audit():
@@ -172,7 +174,7 @@ def test_extra_top_level_and_nested_fields_require_an_audit():
         required_subject("budget_volumes", row("budget_volumes", package_id="x", associated_bills_json='[{"extra":"x"}]'))
 
 
-@pytest.mark.parametrize("dataset", ["committee_report_reads", "native_legal_reference_reads"])
+@pytest.mark.parametrize("dataset", ["committee_report_reads"])
 def test_processing_checkpoints_never_create_subject_rows(dataset):
     assert optional_subject(dataset, row(dataset, **{k: "scope" for k in field_registry()[dataset]["identity_fields"]})) is None
 

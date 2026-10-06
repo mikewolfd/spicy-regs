@@ -554,6 +554,15 @@ def selected_subject_policy(policy: DatasetPolicy, paths: Sequence[ParquetInput]
     New generation admission remains strict against its declared policy. Only
     readers of already selected inputs use this explicit earlier-policy choice.
     """
+    if (not paths and policy.dataset == "native_legal_reference_reads"
+            and policy.policy_version == "legislative-documents/2"):
+        # Native scopes always write one main file, even for a successful
+        # empty table. No files therefore names the exact earlier receipt-only
+        # shape, never an invented empty current subject.
+        earlier = [p for p in receipt_policies(policy) if p.receipt_only]
+        if len(earlier) != 1:
+            raise ValueError("Native legal scope has no exact earlier receipt-only policy")
+        return earlier[0]
     selected = None
     for path in paths:
         with _parquet(path) as parquet:

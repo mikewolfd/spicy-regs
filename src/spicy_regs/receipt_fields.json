@@ -4621,6 +4621,33 @@
     "roster": "Which file this record came from: current or historical."
    }
   },
+  "native_legal_reference_reads": {
+   "containers": {
+    "raw_source_row": [
+     "scope_id",
+     "source_family",
+     "source_record_key",
+     "edition",
+     "input_sha256",
+     "source_locator",
+     "source_bytes",
+     "occurrence_count",
+     "read_status",
+     "selected_shapes_json",
+     "unsupported_shapes_json",
+     "manifest_sha256",
+     "rule_version"
+    ]
+   },
+   "renamed": {
+    "selected_shapes_json": "selected_shapes",
+    "unsupported_shapes_json": "unsupported_shapes"
+   },
+   "meanings": {
+    "selected_shapes_json": "The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code.",
+    "unsupported_shapes_json": "The shapes this read knowingly left out, as a JSON array (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read."
+   }
+  },
   "native_legal_references": {
    "containers": {
     "raw_source_row": [
@@ -4653,12 +4680,7 @@
    "meanings": {
     "ancestors_json": "The observed element's ancestors from the root to its parent, each a JSON object of its attributes, positional XPath and tag.",
     "attributes_json": "Every attribute of the observed element, as a JSON object keyed by expanded name.",
-    "element_tag": "The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one.",
     "input_sha256": "`sha256:` digest of the exact retained XML bytes the scanner read.",
-    "interpretation_status": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction.",
-    "rule_version": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
-    "source_locator": "Where the caller retained the input from, literally; not proof of acquisition time or edition.",
-    "source_path": "The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset.",
     "target_candidates_json": "The typed targets the reading found, as a JSON array in reading order, each with the outcome of the host's lookup in the target tables it selected; several targets in one note stay one row, and an unsupported href has none.",
     "text_runs_json": "An eCFR note's text split at element boundaries, as a JSON array whose strings join to text; NULL on U.S. Code rows."
    }
