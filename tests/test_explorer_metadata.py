@@ -90,6 +90,7 @@ def test_still_published_processing_tables_use_the_canonical_dictionary(monkeypa
     monkeypatch.setattr(explorer_metadata, "read_json", lambda _: deepcopy(known))
     def load_descriptions():
         return {"brand_new": {"label": "Saved collection log", "summary": "Records the requests made.",
+                              "category": "processing_evidence",
                               "coverage": "Only saved requests.", "columns": {"id": "Request ID."}},
                 "unpublished": {"label": "Not published"}}
     monkeypatch.setattr(data_dictionary, "load_curated_descriptions", load_descriptions)
@@ -97,9 +98,20 @@ def test_still_published_processing_tables_use_the_canonical_dictionary(monkeypa
     table = result["tables"]["brand_new"]
     assert table["metadataStatus"] == "documented"
     assert table["label"] == "Saved collection log"
+    assert table["category"] == "processing_evidence"
     assert table["columns"] == [{"column_name": "id", "column_type": "VARCHAR", "description": "Request ID."}]
     assert "unpublished" not in result["tables"]
     assert len(result["joins"]) == 1
+
+
+def test_bill_collection_checkpoints_have_an_explicit_evidence_category():
+    from spicy_regs.data_dictionary import load_curated_descriptions
+
+    descriptions = load_curated_descriptions()
+    for name in ("bill_family_archives", "bill_family_backfills", "bill_family_backfill_walks"):
+        assert descriptions[name]["category"] == "processing_evidence"
+    # Campaign-finance receipts are substantive financial observations.
+    assert descriptions["fec_receipts"].get("category") != "processing_evidence"
 
 
 @pytest.mark.parametrize("change", [

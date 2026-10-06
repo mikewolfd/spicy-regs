@@ -3043,8 +3043,9 @@ tables:
     columns_from: spicy_docs
 
   bill_family_archives:
+    category: processing_evidence
     identity_columns: [congress, bill_type]
-    label: "Bill-family archive listings"
+    label: "Bulk archive checkpoints"
     subject: congress
     coverage: >-
       Not a range. The bill family's processing state: one row per GovInfo
@@ -3058,23 +3059,13 @@ tables:
       and `modified_at` and `size`, which must match for the zip to be skipped.
       The other six the publisher's listing states are deliberately absent rather
       than filled with guesses. All columns are stored as VARCHAR.
+      Reuse also requires recorded scope completion under the current reader;
+      matching listing fields alone do not qualify it. Generation metadata retains
+      per-bill reader versions and refusals with their archive stamps. A settled
+      refusal waits until its archive changes or a different reader runs.
     summary: >-
-      One row per BILLSTATUS bulk folder a `bill-family` run read, holding the
-      listing entry it read; the next run compares against it before downloading
-      that folder's zip only when the generation's metadata lists the folder as
-      complete (every member parsed and every rebuilt bill shaped), so a row
-      records what was read, never that the folder may be skipped. Printing
-      bodies are read apart from status, by each printing's own state; the same
-      metadata names the BILLS bulk printings a zip refused, with the zip entry
-      they were read at, so an unchanged zip is not read again for them. It
-      also records, per bill, the reader that last read its status (this
-      rollup's status rule and the SpicyDocs code): an unchanged bill is
-      skipped only while that reader is the running one. And it records each
-      status read that settled nothing, with the zip it read and its reader: a
-      document the reader refused, a bill whose rows leave its status in doubt,
-      and a bill its folder's zip no longer holds; none of them reopens its
-      folder until the zip moves or another reader runs. A folder with such a
-      record is complete. All columns are stored as VARCHAR.
+      Saved bulk archive listings used to detect changes and resume bill collection.
+      A checkpoint alone does not prove that every member was processed.
     columns:
       name: "The zip's own file name in the folder listing, as the publisher spells it."
       link: "The publisher's path to that zip; it must rebuild this folder's own locator or the skip is refused."
@@ -3126,8 +3117,9 @@ tables:
       full_action_name: "The guide's seventh field, absent on every entry measured; NULL where the publisher sends none."
       observed_at: "When the bill-family run that read this entry captured the BILLSTATUS document."
   bill_family_backfills:
+    category: processing_evidence
     identity_columns: [congress, bill_type, number]
-    label: "Bill-family backfill state"
+    label: "Bill fetch attempts"
     subject: congress
     coverage: >-
       Empty until a run reaches the bill family's pre-108th API backfill; then
@@ -3147,11 +3139,8 @@ tables:
       comparison is exact. `refusal` is the error's class name only, never its
       message. All columns are stored as VARCHAR.
     summary: >-
-      One row per bill the pre-BILLSTATUS backfill has attempted, carrying the
-      list stamp it was attempted under and whether it was filled or refused —
-      the retained state that lets the next run retry every refusal and skip
-      every filled bill for one comparison apiece. All columns are stored as
-      VARCHAR.
+      Recorded attempts to fetch older bills through the API, including success or
+      refusal. Collected bill records are published in congress_bills.
     columns:
       congress: "The numbered Congress whose backfill walk attempted this bill."
       bill_type: "The publisher's lowercase bill type (hr, s, hjres, sjres, hconres, sconres, hres, sres)."
@@ -3161,8 +3150,9 @@ tables:
       observed_at: "When the detail request that filled the bill was captured, or when the refusal was recorded."
 
   bill_family_backfill_walks:
+    category: processing_evidence
     identity_columns: [congress, bill_type]
-    label: "Bill-family backfill walks"
+    label: "Bill listing progress"
     subject: congress
     coverage: >-
       Empty until a run reaches the bill family's pre-108th API backfill; then
@@ -3188,9 +3178,9 @@ tables:
       `congress-bills` list writer (decision 31) nothing else refreshes their
       ten-column prefix. All columns are stored as VARCHAR.
     summary: >-
-      One row per (Congress, bill type) the pre-BILLSTATUS backfill walked,
-      recording the route's declared total against what the walk reached and
-      filled. All columns are stored as VARCHAR.
+      Progress through an API bill listing: expected records, records and pages
+      visited, and whether the walk finished. Counts describe the recorded walk,
+      not complete bill coverage.
     columns:
       congress: "The numbered Congress this walk record describes."
       bill_type: "The publisher's lowercase bill type the walk was addressed at; with `congress`, the unit's identity."
@@ -8823,7 +8813,7 @@ tables:
         election year and agency fiscal year.
       first_receipt_date: "The first receipt date the quality notice states. A two-digit year (FEC's false and fictitious filings list writes `31-DEC-76`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`76` is 1976, not 2076; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `first_receipt_date_raw` keeps the date as filed. NULL has its reason in `first_receipt_date_status`; capture time is never substituted."
   fec_receipts:
-    label: Reported receipt observations
+    label: Campaign money received
     subject: campaign_finance
     grain: One reported receipt record version or physical source observation.
     identity_columns:

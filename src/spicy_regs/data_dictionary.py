@@ -1521,6 +1521,7 @@ def build_catalog(descriptions: dict, schemas: dict[str, list[tuple[str, str]]])
             {
                 "table": table,
                 "label": coverage[table]["label"],
+                **({"category": descriptions[table]["category"]} if descriptions[table].get("category") else {}),
                 **({"category": table_category(table)} if table_category(table) else {}),
                 "summary": coverage[table]["summary"],
                 "coverage": coverage[table]["coverage"],

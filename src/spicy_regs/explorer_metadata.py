@@ -83,7 +83,7 @@ def publication_descriptions(live: dict) -> dict:
         curated = load_curated_descriptions()
         for name in sorted(missing & set(curated)):
             entry = curated[name]
-            descriptions[name] = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "data_quality")
+            descriptions[name] = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "category", "data_quality")
                                   if key in entry}
             descriptions[name]["columns"] = [
                 {"column_name": column, "column_type": typ,

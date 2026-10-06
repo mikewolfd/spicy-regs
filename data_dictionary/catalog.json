@@ -5564,7 +5564,7 @@
     },
     {
       "table": "fec_receipts",
-      "label": "Reported receipt observations",
+      "label": "Campaign money received",
       "category": "query_data",
       "summary": "One reported receipt record version or physical source observation. Preserves contributor, amount, date, transaction type, memo, source role and evidence. Main/date partitions, amendments and correction streams remain distinct observations; select proved representation membership and a named financial rule before totals. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.",
       "coverage": "Sampled by collection, whole within one. Which FEC collections are retained is an explicit selection (fec_collections, fec_collection_selection) of individual-contribution bulk files, original-filing receipt schedules and supported receipt APIs. A retained individual-contribution bulk file is held whole, every record, so its rows here equal its fec_collections.record_count, while a retained original filing contributes only its receipt records. Cycles, filings and API scopes outside the selection are absent; this declaration does not establish complete FEC history or current publication.",
