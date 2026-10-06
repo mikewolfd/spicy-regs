@@ -9,10 +9,78 @@ name: Integration (live data)
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      court_qualification:
+        description: Run the sealed court bridge qualification without publication
+        type: boolean
+        default: false
   schedule:
     - cron: '0 12 * * 1'  # Mondays 12:00 UTC
 
 jobs:
+  court-qualification:
+    if: github.event_name == 'workflow_dispatch' && inputs.court_qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 07915382a7a76c284cd50f70d3e8f3a0d2ea8c4f
+          path: reader
+      - uses: actions/checkout@v4
+        with:
+          repository: mikewolfd/spicygov
+          ref: 6ea9dec7cd26c2b5c2b19c80df5d53a48e2ad1ce
+          path: website
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install the exact deployed reader runtime
+        working-directory: reader
+        run: uv sync --frozen --no-default-groups --group source-readers
+      - name: Inventory the fresh hosted environment
+        run: |
+          mkdir -p output
+          df -B1 . > output/filesystem-before.txt
+          free -b > output/memory-before.txt
+          git rev-parse HEAD > output/diagnostic-revision.txt
+          git -C reader rev-parse HEAD > output/reader-revision.txt
+          git -C website rev-parse HEAD > output/website-revision.txt
+      - name: Fetch only missing sealed court members outside the bridge timer
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        working-directory: reader
+        run: |
+          uv run --frozen --no-default-groups --group source-readers --with fsspec==2026.9.0 --with aiohttp==3.11.14 \
+            python ../experiments/website-court-hosted/download_court_handoff.py \
+            ../experiments/website-court-hosted/court-handoff.json ../output/handoff \
+            > ../output/download.log 2>&1
+      - name: Run one changed complete bridge with stage timings and the actual 900-second allowance
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          /usr/bin/time -v -o output/runner-resources.txt \
+            reader/.venv/bin/python experiments/website-court-hosted/qualify_bridge.py \
+            reader website output/handoff output/full-bridge \
+            > output/runner.log 2>&1
+      - name: Retain small qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-court-changed-900-qualification
+          path: |
+            output/*.txt
+            output/*.log
+            output/full-bridge/
+            output/handoff/*.json
+            experiments/website-court-hosted/
+          if-no-files-found: error
+
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20
