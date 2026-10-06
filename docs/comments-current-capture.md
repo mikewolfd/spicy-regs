@@ -1,8 +1,8 @@
 # Capture original selected comments
 
 Install `uv sync --frozen --extra comments-reader`, then use
-`scripts/capture_comments_current.py EXPECTED.json OUTPUT --namespace default
---expected-runtime RUNTIME.json`. `EXPECTED.json` selects the complete nullable
+`uv run --frozen --extra comments-reader python -m scripts.capture_comments_current
+EXPECTED.json OUTPUT --namespace default --expected-runtime RUNTIME.json`. `EXPECTED.json` selects the complete nullable
 string schema and exact table UUID, snapshot ID and schema ID. Generate the
 runtime pins with `scripts.capture_comments_current.reader_runtime()`.
 
