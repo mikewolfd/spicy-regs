@@ -1,0 +1,14 @@
+{
+  "dataset": "committee_report_read_outcomes",
+  "policy_version": "navigation-read-outcomes/1",
+  "subject_schema": "/////3ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAAAIAQAAyAAAAJQAAABoAAAANAAAAAQAAAAg////AAABBRAAAAAcAAAABAAAAAAAAAALAAAAb2JzZXJ2ZWRfYXQADP///0z///8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABydWxlX3ZlcnNpb24AAAAAPP///3z///8AAAEFEAAAABgAAAAEAAAAAAAAAAcAAABvdXRjb21lAGT///+k////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAbGFzdF9tb2RpZmllZAAAAJT////U////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAcGFja2FnZV9pZAAAwP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAkAAAABAAAAAAAAAANAAAAZ2VuZXJhdGlvbl9pZAAAAAQABAAEAAAAAAAAAA==",
+  "identity_fields": [
+    "generation_id",
+    "package_id"
+  ],
+  "receipt_fields": [
+    "recorded_event"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

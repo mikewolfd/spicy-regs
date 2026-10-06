@@ -96,7 +96,11 @@ class HeldCitationsRollup(SubjectReceiptRollup):
             )
 
         def builder(work, *, download_prior):
-            for key in self.outputs:
+            # Derived read/file outcomes are rebuilt from the selected source
+            # inputs; they are not source-owner working files.
+            for key in self.source_outputs:
+                if key in self.receipt_only_tables:
+                    continue
                 if not download_prior(key, work / key):
                     raise ValueError("Held citations require a complete selected print-citations receipt generation")
             with duckdb.connect(config={"memory_limit": "1GB", "threads": 2}) as con:

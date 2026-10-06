@@ -508,7 +508,8 @@ def _walk(
 
 
 def _detail(
-    reader: ListingSource, spec: IndexSpec, entry: _Listed, query: Mapping[str, Any], identity: tuple[str, ...]
+    reader: ListingSource, spec: IndexSpec, entry: _Listed, query: Mapping[str, Any], identity: tuple[str, ...],
+    *, record_read=None,
 ) -> Mapping[str, Any]:
     """The one detail record for ``entry``, proven to name the same identity the list row did.
 
@@ -534,8 +535,17 @@ def _detail(
         for route_name, field in spec.related_routes:
             route = LIST_ROUTES[route_name]
             related_url = list_route_url(route, **query)
-            detail[field] = [record for related_page in reader.records(route, related_url)
-                             for record in related_page.records]
+            read_field = {"committee_records": "committees_json", "hearing_records": "hearings_json"}.get(field, field)
+            try:
+                detail[field] = [record for related_page in reader.records(route, related_url)
+                                 for record in related_page.records]
+            except _REFUSALS as error:
+                if record_read is not None:
+                    record_read(entry, "failed", error, source_url=related_url, read_field=read_field)
+                raise
+            if record_read is not None:
+                record_read(entry, "read", source_url=related_url, read_field=read_field,
+                            field_states={read_field: "stated" if detail[field] else "stated-empty"})
     return detail
 
 
@@ -591,19 +601,24 @@ def build_index_table(
     queue: list[tuple[_Listed, Mapping[str, Any], bool]] = []
     outcomes: Counter[str] = Counter()
 
-    def detail_result(entry: _Listed, outcome: str, error: Exception | None = None) -> None:
+    def detail_result(entry: _Listed, outcome: str, error: Exception | None = None,
+                      *, source_url=None, read_field="detail", field_states=None) -> None:
         """Keep each attempt's complete identity in the existing acquisition receipts."""
         if evidence is not None:
             evidence.event("congress-detail-result", table=spec.table,
-                           **dict(zip(identity, entry.key, strict=True)), read_outcome=outcome,
+                           **{column: entry.row[column] for column in identity}, read_outcome=outcome,
+                           source_identity={column: entry.row.get(column) for column in
+                                            (*identity, "number", "part_number") if column in entry.row},
+                           source_url=source_url, read_field=read_field,
+                           field_states=field_states, shape_version=spec.shape_version,
                            error_type=type(error).__name__ if error else None)
 
-    def refuse(entry: _Listed, state: _Held | None, error: Exception) -> None:
+    def refuse(entry: _Listed, state: _Held | None, error: Exception, *, source_url=None) -> None:
         """One row's refusal: counted, logged scrubbed, and a new record still indexed list-only."""
         outcomes["refused"] += 1
         if evidence is not None:
             evidence.refusal(error, stage=f"{spec.table}-detail")
-        detail_result(entry, "failed", error)
+        detail_result(entry, "failed", error, source_url=source_url)
         logger.warning("{}: {} refused: {}", spec.table, "-".join(entry.key), scrub_credential(str(error), ""))
         if state is None:
             rows.append(entry.row)
@@ -658,14 +673,19 @@ def build_index_table(
                 outcomes["unevidenced" if reread else "stale"] += 1
             continue
         try:
-            detail = _detail(reader, spec, entry, query, identity)
+            detail = _detail(reader, spec, entry, query, identity, record_read=detail_result)
         except CredentialRefusedError:
             raise
         except _REFUSALS as error:
-            refuse(entry, state, error)
+            refuse(entry, state, error, source_url=list_route_url(spec.detail_route, limit=1, **query))
             continue
         rows.append(spec.shape(entry.record, detail))
-        detail_result(entry, "read")
+        shaped = rows[-1]
+        states = {name: "source-not-stated" if shaped.get(name) is None else
+                  "stated-empty" if shaped[name] == "[]" else "stated"
+                  for name in contract.columns if name.endswith("_json")}
+        detail_result(entry, "read", source_url=list_route_url(spec.detail_route, limit=1, **query),
+                      field_states=states)
         outcomes["reread" if reread else "read"] += 1
         unevidenced.discard(entry.key)
 

@@ -122,13 +122,15 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
             date = row.get("congressional_record_date")
             if not date:
                 evidence.event("house-record-result", congress=row["congress"], communication_type="ec",
-                               number=row["number"], outcome="unread", reason="API states no Record date")
+                               communication_id=row.get("communication_id"), number=row["number"],
+                               rule_version=RULE, outcome="unread", reason="API states no Record date")
                 continue
             try:
                 day = _calendar_day(date)
             except ValueError:
                 evidence.event("house-record-result", congress=row["congress"], communication_type="ec",
-                               number=row["number"], outcome="refused", congressional_record_date=date,
+                               communication_id=row.get("communication_id"), number=row["number"], rule_version=RULE,
+                               outcome="refused", congressional_record_date=date,
                                reason="API Record date is not a valid ISO date or datetime")
                 continue
             wanted[(str(row["congress"]), day)].append(position)
@@ -137,12 +139,22 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
     issue_path = output.parent / "record-enrichment-issues.parquet"
     if selected_input is None or not download_prior("record_issues.parquet", issue_path):
         evidence.event("house-record-selection", outcome="unread", reason="No exact selected Record issues")
+        for scope, positions in wanted.items():
+            for position in positions:
+                row = rows[position]
+                evidence.event("house-record-result", communication_id=row.get("communication_id"),
+                    congress=row["congress"], communication_type="ec", number=row["number"], rule_version=RULE,
+                    congressional_record_date=row["congressional_record_date"], record_calendar_day=scope[1],
+                    outcome="unread", complete_scope=False, reason="No exact selected Record issues")
         return
     pin = selected_input("record_issues")
     if (not isinstance(pin, dict) or pin.get("dataset") != "record_issues" or not pin.get("generationId")
             or pin.get("processing", {}).get("byteSize") != issue_path.stat().st_size
             or pin.get("processing", {}).get("sha256") != "sha256:" + hashlib.sha256(issue_path.read_bytes()).hexdigest()):
         raise ValueError("Record issue processing input differs from selected receipts")
+    def package_result(**fields):
+        evidence.event(EVENT, **{"input": pin, "rule": RULE, **fields})
+
     issues, invalid_congresses = defaultdict(list), set()
     for issue in pq.read_table(issue_path).to_pylist():
         congress = str(issue.get("congress"))
@@ -151,7 +163,7 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
         try:
             scope = (congress, _calendar_day(issue.get("issue_date")))
         except ValueError:
-            evidence.event(EVENT, package_id=issue.get("package_id"), outcome="refused",
+            package_result( package_id=issue.get("package_id"), outcome="refused",
                            reason="Selected Record issue date is not a valid ISO date or datetime", issue=issue, input=pin)
             invalid_congresses.add(congress)
             continue
@@ -164,7 +176,7 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
         for issue in issues[scope]:
             package = issue.get("package_id")
             if package in (None, ""):
-                evidence.event(EVENT, package_id=package, outcome="unread",
+                package_result( package_id=package, outcome="unread",
                                reason="Selected Record issue has no package identity", issue=issue, input=pin)
                 complete = False
                 continue
@@ -173,7 +185,7 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                 if stated.collection != "CREC" or stated.issue_date != scope[1]:
                     raise ValueError("Issue/package identity differs")
             except (ValueError, TypeError):
-                evidence.event(EVENT, package_id=package, outcome="refused", reason="Issue/package identity differs", issue=issue, input=pin)
+                package_result( package_id=package, outcome="refused", reason="Issue/package identity differs", issue=issue, input=pin)
                 complete = False
                 continue
             marker = _digest({"rule": RULE, "issue": issue})
@@ -198,11 +210,11 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                     checkpoint["input"] = pin
                     checkpoint["issue"] = issue
                 except (ValueError, OSError) as error:
-                    evidence.event(EVENT, package_id=package, marker=marker, outcome="refused", reason=str(error))
+                    package_result( package_id=package, marker=marker, outcome="refused", reason=str(error))
                     complete = False
                     continue
             elif fetched >= max_packages:
-                evidence.event(EVENT, package_id=package, marker=marker, outcome="unread", reason="Package bound")
+                package_result( package_id=package, marker=marker, outcome="unread", reason="Package bound")
                 complete = False
                 continue
             if checkpoint is None:
@@ -210,7 +222,7 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                 if reader is None or acquirer is None:
                     key = _resolve_api_key()
                     if not key:
-                        evidence.event(EVENT, package_id=package, marker=marker, outcome="unread", reason="No GovInfo credential")
+                        package_result( package_id=package, marker=marker, outcome="unread", reason="No GovInfo credential")
                         complete = False
                         continue
                     reader = reader or RetainedGovInfoDiscoveryReader(evidence=evidence, api_key=key,
@@ -247,10 +259,10 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                     raise
                 except Exception as error:
                     evidence.refusal(error, stage="house-record-enrichment")
-                    evidence.event(EVENT, package_id=package, marker=marker, outcome="failed", error_type=type(error).__name__)
+                    package_result( package_id=package, marker=marker, outcome="failed", error_type=type(error).__name__)
                     complete = False
                     continue
-            evidence.event(EVENT, **checkpoint)
+            package_result( **checkpoint)
             candidates.extend((entry, checkpoint) for entry in checkpoint["entries"])
         for position in positions:
             row = rows[position]
@@ -267,8 +279,11 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                         if not row.get(field):
                             row[field] = value
             evidence.event("house-record-result", congress=row["congress"], communication_type="ec", number=row["number"],
+                           communication_id=row.get("communication_id"), rule_version=RULE,
                            congressional_record_date=row["congressional_record_date"], record_calendar_day=scope[1],
                            outcome=outcome, qualified_occurrences=len(matched), complete_scope=complete,
+                           conflict_status="conflict" if outcome == "ambiguous" else "no-conflict" if complete else "not-checked",
+                           scope_packages=[issue.get("package_id") for issue in issues[scope]],
                            witnesses=[{"entry":entry, "marker":cp["marker"], "input":cp["input"],
                                        "bodies":cp["bodies"]} for entry, cp in matched])
     for field in FIELDS:

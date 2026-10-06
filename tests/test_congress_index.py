@@ -730,10 +730,13 @@ def test_nomination_relationship_reads_are_complete_or_remain_retryable(tmp_path
                 yield SimpleNamespace(records=[],declared_count=0)
     journal=Journal()
     rows,reader=_run(tmp_path,'nominations',reader=NominationReader(),evidence=journal)
-    attempts=[event for event in journal.events if event['event']=='congress-detail-result']
+    attempts=[event for event in journal.events if event['event']=='congress-detail-result' and event.get('read_field') == 'detail']
     assert {(event['congress'],event['citation']) for event in attempts}=={(row['congress'],row['citation']) for row in rows}
     assert {event['read_outcome'] for event in attempts}==({'failed'} if refuse_hearings else {'read'})
     assert {event['error_type'] for event in attempts}==({'PagedJsonSourceError'} if refuse_hearings else {None})
+    related=[event for event in journal.events if event['event']=='congress-detail-result' and event.get('read_field') != 'detail']
+    assert {event['read_outcome'] for event in related if event['read_field']=='committees_json'} == {'read'}
+    assert {event['read_outcome'] for event in related if event['read_field']=='hearings_json'} == ({'failed'} if refuse_hearings else {'read'})
     if refuse_hearings:
         assert all(r['detail_read']=='false' and r['committees_json'] is None and r['hearings_json'] is None for r in rows)
     else:

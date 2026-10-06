@@ -9836,3 +9836,285 @@ tables:
       capture_id: "Source capture identifier carried through from the publisher fact."
       source_url: "Original publisher URL for the source fact."
       source_path: "Location of the source fact or reference within the captured document."
+
+  nominations_detail_reads:
+    label: Nomination source reads
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded nomination detail, committee, and hearing reads. A missing row means no recorded attempt; an empty response is a completed read.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      source_table: "Main table whose source record was read."
+      congress: "Source record Congress as a native integer."
+      citation: "Literal nomination citation, including any partition suffix."
+      number: "Source record number in its original spelling."
+      part_number: "Literal nomination partition; no partition is inferred."
+      chamber: "Source-stated chamber in the complete meeting identity."
+      event_id: "Source-stated event identifier, scoped by Congress and chamber."
+      communication_id: "Original main House communication identity."
+      source_url: "Exact requested source URL recorded for this read, with credentials removed."
+      read_field: "Detail or relationship field read by this attempt."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      error_type: "Recorded failure class; empty after a successful read."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      shape_version: "Recorded source-shaping rule version."
+      field_states: "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      source_witnesses: "Retained response locators and exact body digests for this requested source read."
+
+  committee_meetings_detail_reads:
+    label: Meeting source reads
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded committee-meeting detail reads and the field states the response supports. Cached meetings do not invent attempts.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      source_table: "Main table whose source record was read."
+      congress: "Source record Congress as a native integer."
+      citation: "Literal nomination citation, including any partition suffix."
+      number: "Source record number in its original spelling."
+      part_number: "Literal nomination partition; no partition is inferred."
+      chamber: "Source-stated chamber in the complete meeting identity."
+      event_id: "Source-stated event identifier, scoped by Congress and chamber."
+      communication_id: "Original main House communication identity."
+      source_url: "Exact requested source URL recorded for this read, with credentials removed."
+      read_field: "Detail or relationship field read by this attempt."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      error_type: "Recorded failure class; empty after a successful read."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      shape_version: "Recorded source-shaping rule version."
+      field_states: "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      source_witnesses: "Retained response locators and exact body digests for this requested source read."
+
+  house_communications_detail_reads:
+    label: House communication source reads
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded House communication detail reads, including failed responses. A missing attempt remains unread.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      source_table: "Main table whose source record was read."
+      congress: "Source record Congress as a native integer."
+      citation: "Literal nomination citation, including any partition suffix."
+      number: "Source record number in its original spelling."
+      part_number: "Literal nomination partition; no partition is inferred."
+      chamber: "Source-stated chamber in the complete meeting identity."
+      event_id: "Source-stated event identifier, scoped by Congress and chamber."
+      communication_id: "Original main House communication identity."
+      source_url: "Exact requested source URL recorded for this read, with credentials removed."
+      read_field: "Detail or relationship field read by this attempt."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      error_type: "Recorded failure class; empty after a successful read."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      shape_version: "Recorded source-shaping rule version."
+      field_states: "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      source_witnesses: "Retained response locators and exact body digests for this requested source read."
+
+  house_record_enrichment_results:
+    label: House communication Record matches
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded attempts to match a House communication to an exact Congressional Record passage. Partial issue scopes cannot establish a match.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      communication_id: "Original main House communication identity."
+      congress: "Source record Congress as a native integer."
+      communication_type: "Publisher communication type used in the complete identity."
+      number: "Source record number in its original spelling."
+      congressional_record_date: "Literal Record date stated by the communication source."
+      record_calendar_day: "Strictly parsed calendar day used to select Record issues."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      qualified_occurrences: "Number of qualifying printed entries in the selected scope."
+      complete_scope: "Whether every selected issue and required granule was completely read."
+      conflict_status: "Conflict, no-conflict, or not-checked under the recorded complete-scope result."
+      rule_version: "Exact rule used for the recorded source match."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      reason: "Recorded reason a read or match could not proceed."
+      scope_packages: "Exact issue package IDs selected for this comparison."
+      scope_read_results: "Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry."
+      witnesses: "Each printed match retains package, granule, body digest, marker, and selected input generation."
+
+  committee_report_read_outcomes:
+    label: Committee report read results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded report and hearing package read results. Complete, pending, and refused remain separate.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      package_id: "Exact GovInfo package identity requested by the recorded read."
+      last_modified: "Publisher modification marker retained by the checkpoint."
+      outcome: "Recorded read result; pending and refused do not mean a completed empty read."
+      rule_version: "Exact recorded read rule, including the refused bound where retained."
+      observed_at: "UTC time the checkpoint was recorded."
+
+  document_citation_read_outcomes:
+    label: Document citation read results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Completed reads of specific document bodies. Zero findings means the body was read; a missing row means no recorded checkpoint.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      document_kind: "Maintained source document kind."
+      document_key: "Exact native document key translated by the maintained source-kind rule."
+      body_version_id: "Exact text digest in the native body-version identity."
+      text_sha256: "Retained text digest; this identifies text content, not original file bytes."
+      rule_set_version: "Citation rule set recorded by the completed read."
+      read_at: "Recorded time the citation read completed."
+      citation_rows: "Recorded number of findings; zero is a completed zero-finding read."
+      source_table: "Selected main source table."
+      input_family: "Selected source publication family."
+      input_generation: "Exact source generation read by the checkpoint."
+      input_sha256: "Retained selected input digest."
+
+  bill_family_document_file_outcomes:
+    label: Bill family file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  committee_reports_document_file_outcomes:
+    label: Committee reports file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  print_citations_document_file_outcomes:
+    label: Print citations file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  laws_document_file_outcomes:
+    label: Laws file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  native_legal_references_document_file_outcomes:
+    label: Native legal references file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  senate_expenditures_document_file_outcomes:
+    label: Senate expenditures file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."

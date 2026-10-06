@@ -212,7 +212,9 @@ def test_families_of_one_source_convert_in_turn_and_roll_back_alone(tmp_path, mo
     families = publication.current_index(BASE)["families"]
     for family in receipts:
         entry = families[family]
-        assert entry == receipts[family]["published"]["entry"] and entry["etlReceipts"]["datasets"] == [family]
+        expected_datasets = [family, "nominations_detail_reads"] if family == "nominations" else [family]
+        assert entry == receipts[family]["published"]["entry"]
+        assert entry["etlReceipts"]["datasets"] == expected_datasets
         held = pq.read_table(receipts[family]["generation"]["directory"] + "/etl_receipts.parquet")
         assert set(held["generation_id"].to_pylist()) == {entry["etlReceipts"]["generationId"]}
         assert set(held["dataset"].to_pylist()) == {family, "congress_acquisition"}

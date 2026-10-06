@@ -35,6 +35,9 @@ from spicy_regs.legislative_receipts import (
     restore_prior,
 )
 from spicy_regs.native_types import described_schema
+from spicy_regs.navigation_read_outcomes import (
+    POLICIES as NAVIGATION_OUTCOME_POLICIES, READ_TABLES, FILE_TABLES, family_tables, write_recorded_outcomes,
+)
 from spicy_regs.pipelines.rollups.base import RollupPipeline
 from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS as REGULATIONS
 from spicy_regs.transforms.fec_identity_receipts import dataset_policy as fec_policy
@@ -278,6 +281,13 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             raise ValueError("Receipt rollup requires explicit output names")
         names = tuple(str(key).removesuffix(".parquet") for key in keys)
         policies = [dataset_policy(name) for name in names]
+        outcomes = family_tables(names)
+        outcomes += tuple(READ_TABLES[name] for name in names if name in READ_TABLES)
+        family = getattr(cls, "publication_family", None) or cls.name
+        if any(name in field_registry() for name in names) and family in FILE_TABLES:
+            outcomes += (FILE_TABLES[family],)
+        policies.extend(NAVIGATION_OUTCOME_POLICIES[name] for name in outcomes)
+        cls.added_tables = tuple(dict.fromkeys((*cls.added_tables, *(name + ".parquet" for name in outcomes))))
         if any(name in field_registry() for name in names):
             policies.append(FILE_POLICY)
         if any(name in CONGRESS for name in names):
@@ -286,8 +296,8 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
         cls.receipt_only_tables = tuple(
             p.dataset + ".parquet" for p in policies if p.receipt_only and p.dataset in names
         )
-        visible = tuple(key for key in keys if key not in cls.receipt_only_tables)
-        if cls.outputs:
+        visible = tuple(key for key in keys if key not in cls.receipt_only_tables) + tuple(name + ".parquet" for name in outcomes)
+        if cls.outputs or outcomes:
             cls.outputs = visible
         elif visible:
             cls.output = visible[0]
@@ -353,6 +363,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 bundle,
                 generation_id=self.receipt_generation_id,
                 prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
+                file_outcomes_table=FILE_TABLES.get(getattr(self, "publication_family", None) or self.name),
             )
             if manifest["unowned_outputs"] or any(manifest["refused_rows"].values()):
                 raise ValueError("Legislative output conversion refused")
@@ -367,10 +378,25 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                     target = candidate / (name + ".parquet")
                     shutil.copyfile(bundle / members[0], target)
                 subjects.append(target)
+            for name, members in manifest.get("outcome_subjects", {}).items():
+                target = candidate / (name + ".parquet")
+                shutil.copyfile(bundle / members[0], target)
+                subjects.append(target)
         if any(p.dataset == ACQUISITION_POLICY.dataset for p in self.receipt_policies):
             receipts.append(
                 _build_events(candidate, self.receipt_generation_id, builder.__name__, self.source_evidence)
             )
+        outcome_names = family_tables(tuple(key.removesuffix(".parquet") for key in self.source_outputs))
+        if outcome_names:
+            journal = None if self.source_evidence is None else self.source_evidence.artifact_dir / "journal.jsonl"
+            outcome_subjects, outcome_receipts = write_recorded_outcomes(
+                journal, private / "read-outcomes", generation_id=self.receipt_generation_id, tables=outcome_names,
+                priors={name: prior.selected.select(name) for name in outcome_names})
+            receipts.extend(outcome_receipts)
+            for source in outcome_subjects:
+                target = candidate / source.name
+                shutil.copyfile(source, target)
+                subjects.append(target)
         combined = combine_receipts(receipts, candidate / "etl_receipts.parquet")
         for batch in pq.ParquetFile(combined).iter_batches(columns=["outcome"]):
             if any(value in {"refused", "error"} for value in batch.column(0).to_pylist()):

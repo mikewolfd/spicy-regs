@@ -375,7 +375,7 @@ def test_actual_receipt_build_injects_selected_issue_pin_through_house_wrapper(t
         max_details=3, evidence=pipeline.source_evidence, record_reader=args["reader"], record_acquirer=args["acquirer"])
     restored = SelectedPriors(tmp_path / "verify-restored", root=tmp_path).get("house_communications")
     row = next(row for row in pq.read_table(restored).to_pylist() if row["number"] == "4752")
-    assert output.name == "house_communications.parquet"
+    assert {path.name for path in output} == {"house_communications.parquet", "house_communications_detail_reads.parquet", "house_record_enrichment_results.parquet"}
     assert row["record_package_id"] == package
     assert row["congressional_record_date"] == "2026-09-17"
     package_witness = next(row for row in events(pipeline.source_evidence)

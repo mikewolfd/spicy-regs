@@ -61,6 +61,7 @@ from spicy_regs.transforms.build_bill_family import (
 
 #: The bill family's published outputs that are not contract tables, each with
 #: the column tuple its transform writes.
+from spicy_regs.navigation_read_outcomes import POLICIES as NAVIGATION_OUTCOME_POLICIES
 from spicy_regs.transforms.committee_report_reads import READS_TABLE, READ_COLUMNS
 
 BILL_OWN_TABLES = {
@@ -79,7 +80,8 @@ ETL_TABLES = {"document_attributes", "docket_attributes", "comment_attributes"}
 #: Tables of this repository's own that a hosted rollup publishes beside its contracts: gao-reports' typed product
 #: table, whose schema is the transform's Arrow schema (``build_gao_reports._SCHEMA``), and print-citations' held-field
 #: reads, rebuilt from its citation table's checkpoints (``held_citations.READS_COLUMNS``).
-HOSTED_OWN_TABLES = {"gao_reports", "document_citation_reads"}
+
+HOSTED_OWN_TABLES = {"gao_reports", "document_citation_reads", *NAVIGATION_OUTCOME_POLICIES}
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -572,6 +574,7 @@ def test_member_and_cosponsor_family_growth_is_explicit():
         "bill_cosponsors.parquet",
         "bill_committee_activities.parquet",
         "cbo_feed_items.parquet",
+        "bill_family_document_file_outcomes.parquet",
     )
     for rollup in (MembersRollup, BillFamilyRollup):
         assert set(rollup.added_tables) <= set(rollup.outputs)

@@ -1130,7 +1130,13 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         "anonymous_read_rows": read,
     }
     save()
-    wrong = [key for key, table in entry.get("tables", {}).items() if table["rows"] != old["tables"][key]["rows"]]
+    # Source rows were compared with the captured publication before admission.
+    # Added status tables have no old counterpart: read them back against the
+    # exact admitted generation, rather than indexing an absent old table.
+    expected_tables = artifact["spec"]["tables"]
+    wrong = sorted(set(entry.get("tables", {})) ^ set(expected_tables))
+    wrong += [key for key, table in entry.get("tables", {}).items()
+              if key in expected_tables and table["rows"] != expected_tables[key]["rows"]]
     wrong += [name for name, rows in read.items() if rows != old["tables"][name + ".parquet"]["rows"]]
     if entry.get("artifactDigest") != artifact["artifactDigest"] or "etlReceipts" not in entry or wrong:
         raise ConversionRefused(f"{family} does not read back as converted ({wrong or entry.get('artifactDigest')})",

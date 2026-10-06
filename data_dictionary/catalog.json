@@ -595,6 +595,19 @@
         ]
       },
       {
+        "dataset": "bill_family_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "bill_publisher_summaries",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -829,6 +842,30 @@
         ]
       },
       {
+        "dataset": "committee_meetings_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
+        "dataset": "committee_report_read_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "package_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "committee_report_reads",
         "receipt_only": true,
         "policy_version": "legislative-documents/1",
@@ -847,6 +884,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "committee_reports_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -1105,6 +1155,20 @@
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
+        ]
+      },
+      {
+        "dataset": "document_citation_read_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "document_kind",
+          "document_key",
+          "body_version_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -2533,6 +2597,30 @@
         ]
       },
       {
+        "dataset": "house_communications_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
+        "dataset": "house_record_enrichment_results",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "law_code_sections",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -2568,6 +2656,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "laws_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -2735,6 +2836,19 @@
         ]
       },
       {
+        "dataset": "native_legal_references_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "nominations",
         "receipt_only": false,
         "policy_version": "congress-subjects/2",
@@ -2747,6 +2861,18 @@
           "source_metadata",
           "source_schema",
           "entry_kind"
+        ]
+      },
+      {
+        "dataset": "nominations_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -2779,6 +2905,19 @@
           "source_metadata",
           "source_schema",
           "entry_kind"
+        ]
+      },
+      {
+        "dataset": "print_citations_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -3249,6 +3388,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "senate_expenditures_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -7991,6 +8143,324 @@
         "action_index",
         "date",
         "full_action_name"
+      ]
+    },
+    {
+      "table": "bill_family_document_file_outcomes",
+      "label": "Bill family file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "committee_meetings_detail_reads",
+      "label": "Meeting source reads",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded committee-meeting detail reads and the field states the response supports. Cached meetings do not invent attempts.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "source_table",
+        "congress",
+        "citation",
+        "number",
+        "part_number",
+        "chamber",
+        "event_id",
+        "communication_id",
+        "source_url",
+        "read_field",
+        "outcome",
+        "error_type",
+        "recorded_at",
+        "shape_version",
+        "field_states",
+        "source_witnesses"
+      ]
+    },
+    {
+      "table": "committee_report_read_outcomes",
+      "label": "Committee report read results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded report and hearing package read results. Complete, pending, and refused remain separate.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "package_id",
+        "last_modified",
+        "outcome",
+        "rule_version",
+        "observed_at"
+      ]
+    },
+    {
+      "table": "committee_reports_document_file_outcomes",
+      "label": "Committee reports file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "document_citation_read_outcomes",
+      "label": "Document citation read results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Completed reads of specific document bodies. Zero findings means the body was read; a missing row means no recorded checkpoint.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "document_kind",
+        "document_key",
+        "body_version_id",
+        "text_sha256",
+        "rule_set_version",
+        "read_at",
+        "citation_rows",
+        "source_table",
+        "input_family",
+        "input_generation",
+        "input_sha256"
+      ]
+    },
+    {
+      "table": "house_communications_detail_reads",
+      "label": "House communication source reads",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded House communication detail reads, including failed responses. A missing attempt remains unread.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "source_table",
+        "congress",
+        "citation",
+        "number",
+        "part_number",
+        "chamber",
+        "event_id",
+        "communication_id",
+        "source_url",
+        "read_field",
+        "outcome",
+        "error_type",
+        "recorded_at",
+        "shape_version",
+        "field_states",
+        "source_witnesses"
+      ]
+    },
+    {
+      "table": "house_record_enrichment_results",
+      "label": "House communication Record matches",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded attempts to match a House communication to an exact Congressional Record passage. Partial issue scopes cannot establish a match.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "communication_id",
+        "congress",
+        "communication_type",
+        "number",
+        "congressional_record_date",
+        "record_calendar_day",
+        "outcome",
+        "qualified_occurrences",
+        "complete_scope",
+        "conflict_status",
+        "rule_version",
+        "recorded_at",
+        "reason",
+        "scope_packages",
+        "scope_read_results",
+        "witnesses"
+      ]
+    },
+    {
+      "table": "laws_document_file_outcomes",
+      "label": "Laws file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "native_legal_references_document_file_outcomes",
+      "label": "Native legal references file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "nominations_detail_reads",
+      "label": "Nomination source reads",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded nomination detail, committee, and hearing reads. A missing row means no recorded attempt; an empty response is a completed read.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "source_table",
+        "congress",
+        "citation",
+        "number",
+        "part_number",
+        "chamber",
+        "event_id",
+        "communication_id",
+        "source_url",
+        "read_field",
+        "outcome",
+        "error_type",
+        "recorded_at",
+        "shape_version",
+        "field_states",
+        "source_witnesses"
+      ]
+    },
+    {
+      "table": "print_citations_document_file_outcomes",
+      "label": "Print citations file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "senate_expenditures_document_file_outcomes",
+      "label": "Senate expenditures file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
       ]
     }
   ]

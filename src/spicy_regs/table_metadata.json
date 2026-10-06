@@ -17704,6 +17704,1052 @@
       "action_index"
     ]
   },
+  "bill_family_document_file_outcomes": {
+    "table": "bill_family_document_file_outcomes",
+    "label": "Bill family file conversion results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "source_dataset",
+        "column_type": "VARCHAR",
+        "description": "Original producer dataset whose member was converted."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Original member position within the producer dataset."
+      },
+      {
+        "column_name": "relative_path",
+        "column_type": "VARCHAR",
+        "description": "Original member path relative to its producer dataset; empty partition states have none."
+      },
+      {
+        "column_name": "partitioned",
+        "column_type": "BOOLEAN",
+        "description": "Whether the original producer output was partitioned."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Recorded row count in the original producer member or successful empty state."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Converted member, retained processing member, or successful empty partition."
+      },
+      {
+        "column_name": "original_byte_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original physical member byte digest; empty partition states have none."
+      },
+      {
+        "column_name": "state_witness_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      },
+      {
+        "column_name": "source_schema",
+        "column_type": "STRUCT(\"name\" VARCHAR, \"type\" VARCHAR, nullable BOOLEAN)[]",
+        "description": "Original member column names, types, and nullability."
+      },
+      {
+        "column_name": "source_metadata",
+        "column_type": "STRUCT(key_base64 VARCHAR, value_base64 VARCHAR)[]",
+        "description": "Original footer metadata as lossless base64 key and value pairs."
+      },
+      {
+        "column_name": "native_members",
+        "column_type": "STRUCT(relative_path VARCHAR, sha256 VARCHAR, byte_size BIGINT, row_count BIGINT)[]",
+        "description": "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "source_dataset",
+      "member_ordinal"
+    ]
+  },
+  "committee_meetings_detail_reads": {
+    "table": "committee_meetings_detail_reads",
+    "label": "Meeting source reads",
+    "row_unit": "read attempts",
+    "category": "processing_evidence",
+    "summary": "Recorded committee-meeting detail reads and the field states the response supports. Cached meetings do not invent attempts.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that recorded this attempt; retained attempts keep their original generation."
+      },
+      {
+        "column_name": "attempt_id",
+        "column_type": "VARCHAR",
+        "description": "Recorded journal event identity within its generation."
+      },
+      {
+        "column_name": "source_table",
+        "column_type": "VARCHAR",
+        "description": "Main table whose source record was read."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "BIGINT",
+        "description": "Source record Congress as a native integer."
+      },
+      {
+        "column_name": "citation",
+        "column_type": "VARCHAR",
+        "description": "Literal nomination citation, including any partition suffix."
+      },
+      {
+        "column_name": "number",
+        "column_type": "VARCHAR",
+        "description": "Source record number in its original spelling."
+      },
+      {
+        "column_name": "part_number",
+        "column_type": "VARCHAR",
+        "description": "Literal nomination partition; no partition is inferred."
+      },
+      {
+        "column_name": "chamber",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber in the complete meeting identity."
+      },
+      {
+        "column_name": "event_id",
+        "column_type": "VARCHAR",
+        "description": "Source-stated event identifier, scoped by Congress and chamber."
+      },
+      {
+        "column_name": "communication_id",
+        "column_type": "VARCHAR",
+        "description": "Original main House communication identity."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact requested source URL recorded for this read, with credentials removed."
+      },
+      {
+        "column_name": "read_field",
+        "column_type": "VARCHAR",
+        "description": "Detail or relationship field read by this attempt."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      },
+      {
+        "column_name": "error_type",
+        "column_type": "VARCHAR",
+        "description": "Recorded failure class; empty after a successful read."
+      },
+      {
+        "column_name": "recorded_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the source journal recorded the attempt."
+      },
+      {
+        "column_name": "shape_version",
+        "column_type": "VARCHAR",
+        "description": "Recorded source-shaping rule version."
+      },
+      {
+        "column_name": "field_states",
+        "column_type": "STRUCT(field VARCHAR, state VARCHAR)[]",
+        "description": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      },
+      {
+        "column_name": "source_witnesses",
+        "column_type": "STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]",
+        "description": "Retained response locators and exact body digests for this requested source read."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "attempt_id"
+    ]
+  },
+  "committee_report_read_outcomes": {
+    "table": "committee_report_read_outcomes",
+    "label": "Committee report read results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded report and hearing package read results. Complete, pending, and refused remain separate.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "package_id",
+        "column_type": "VARCHAR",
+        "description": "Exact GovInfo package identity requested by the recorded read."
+      },
+      {
+        "column_name": "last_modified",
+        "column_type": "VARCHAR",
+        "description": "Publisher modification marker retained by the checkpoint."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Recorded read result; pending and refused do not mean a completed empty read."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Exact recorded read rule, including the refused bound where retained."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the checkpoint was recorded."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "package_id"
+    ]
+  },
+  "committee_reports_document_file_outcomes": {
+    "table": "committee_reports_document_file_outcomes",
+    "label": "Committee reports file conversion results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "source_dataset",
+        "column_type": "VARCHAR",
+        "description": "Original producer dataset whose member was converted."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Original member position within the producer dataset."
+      },
+      {
+        "column_name": "relative_path",
+        "column_type": "VARCHAR",
+        "description": "Original member path relative to its producer dataset; empty partition states have none."
+      },
+      {
+        "column_name": "partitioned",
+        "column_type": "BOOLEAN",
+        "description": "Whether the original producer output was partitioned."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Recorded row count in the original producer member or successful empty state."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Converted member, retained processing member, or successful empty partition."
+      },
+      {
+        "column_name": "original_byte_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original physical member byte digest; empty partition states have none."
+      },
+      {
+        "column_name": "state_witness_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      },
+      {
+        "column_name": "source_schema",
+        "column_type": "STRUCT(\"name\" VARCHAR, \"type\" VARCHAR, nullable BOOLEAN)[]",
+        "description": "Original member column names, types, and nullability."
+      },
+      {
+        "column_name": "source_metadata",
+        "column_type": "STRUCT(key_base64 VARCHAR, value_base64 VARCHAR)[]",
+        "description": "Original footer metadata as lossless base64 key and value pairs."
+      },
+      {
+        "column_name": "native_members",
+        "column_type": "STRUCT(relative_path VARCHAR, sha256 VARCHAR, byte_size BIGINT, row_count BIGINT)[]",
+        "description": "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "source_dataset",
+      "member_ordinal"
+    ]
+  },
+  "document_citation_read_outcomes": {
+    "table": "document_citation_read_outcomes",
+    "label": "Document citation read results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Completed reads of specific document bodies. Zero findings means the body was read; a missing row means no recorded checkpoint.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "document_kind",
+        "column_type": "VARCHAR",
+        "description": "Maintained source document kind."
+      },
+      {
+        "column_name": "document_key",
+        "column_type": "VARCHAR",
+        "description": "Exact native document key translated by the maintained source-kind rule."
+      },
+      {
+        "column_name": "body_version_id",
+        "column_type": "VARCHAR",
+        "description": "Exact text digest in the native body-version identity."
+      },
+      {
+        "column_name": "text_sha256",
+        "column_type": "VARCHAR",
+        "description": "Retained text digest; this identifies text content, not original file bytes."
+      },
+      {
+        "column_name": "rule_set_version",
+        "column_type": "VARCHAR",
+        "description": "Citation rule set recorded by the completed read."
+      },
+      {
+        "column_name": "read_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded time the citation read completed."
+      },
+      {
+        "column_name": "citation_rows",
+        "column_type": "BIGINT",
+        "description": "Recorded number of findings; zero is a completed zero-finding read."
+      },
+      {
+        "column_name": "source_table",
+        "column_type": "VARCHAR",
+        "description": "Selected main source table."
+      },
+      {
+        "column_name": "input_family",
+        "column_type": "VARCHAR",
+        "description": "Selected source publication family."
+      },
+      {
+        "column_name": "input_generation",
+        "column_type": "VARCHAR",
+        "description": "Exact source generation read by the checkpoint."
+      },
+      {
+        "column_name": "input_sha256",
+        "column_type": "VARCHAR",
+        "description": "Retained selected input digest."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "document_kind",
+      "document_key",
+      "body_version_id"
+    ]
+  },
+  "house_communications_detail_reads": {
+    "table": "house_communications_detail_reads",
+    "label": "House communication source reads",
+    "row_unit": "read attempts",
+    "category": "processing_evidence",
+    "summary": "Recorded House communication detail reads, including failed responses. A missing attempt remains unread.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that recorded this attempt; retained attempts keep their original generation."
+      },
+      {
+        "column_name": "attempt_id",
+        "column_type": "VARCHAR",
+        "description": "Recorded journal event identity within its generation."
+      },
+      {
+        "column_name": "source_table",
+        "column_type": "VARCHAR",
+        "description": "Main table whose source record was read."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "BIGINT",
+        "description": "Source record Congress as a native integer."
+      },
+      {
+        "column_name": "citation",
+        "column_type": "VARCHAR",
+        "description": "Literal nomination citation, including any partition suffix."
+      },
+      {
+        "column_name": "number",
+        "column_type": "VARCHAR",
+        "description": "Source record number in its original spelling."
+      },
+      {
+        "column_name": "part_number",
+        "column_type": "VARCHAR",
+        "description": "Literal nomination partition; no partition is inferred."
+      },
+      {
+        "column_name": "chamber",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber in the complete meeting identity."
+      },
+      {
+        "column_name": "event_id",
+        "column_type": "VARCHAR",
+        "description": "Source-stated event identifier, scoped by Congress and chamber."
+      },
+      {
+        "column_name": "communication_id",
+        "column_type": "VARCHAR",
+        "description": "Original main House communication identity."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact requested source URL recorded for this read, with credentials removed."
+      },
+      {
+        "column_name": "read_field",
+        "column_type": "VARCHAR",
+        "description": "Detail or relationship field read by this attempt."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      },
+      {
+        "column_name": "error_type",
+        "column_type": "VARCHAR",
+        "description": "Recorded failure class; empty after a successful read."
+      },
+      {
+        "column_name": "recorded_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the source journal recorded the attempt."
+      },
+      {
+        "column_name": "shape_version",
+        "column_type": "VARCHAR",
+        "description": "Recorded source-shaping rule version."
+      },
+      {
+        "column_name": "field_states",
+        "column_type": "STRUCT(field VARCHAR, state VARCHAR)[]",
+        "description": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      },
+      {
+        "column_name": "source_witnesses",
+        "column_type": "STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]",
+        "description": "Retained response locators and exact body digests for this requested source read."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "attempt_id"
+    ]
+  },
+  "house_record_enrichment_results": {
+    "table": "house_record_enrichment_results",
+    "label": "House communication Record matches",
+    "row_unit": "read attempts",
+    "category": "processing_evidence",
+    "summary": "Recorded attempts to match a House communication to an exact Congressional Record passage. Partial issue scopes cannot establish a match.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that recorded this attempt; retained attempts keep their original generation."
+      },
+      {
+        "column_name": "attempt_id",
+        "column_type": "VARCHAR",
+        "description": "Recorded journal event identity within its generation."
+      },
+      {
+        "column_name": "communication_id",
+        "column_type": "VARCHAR",
+        "description": "Original main House communication identity."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "BIGINT",
+        "description": "Source record Congress as a native integer."
+      },
+      {
+        "column_name": "communication_type",
+        "column_type": "VARCHAR",
+        "description": "Publisher communication type used in the complete identity."
+      },
+      {
+        "column_name": "number",
+        "column_type": "VARCHAR",
+        "description": "Source record number in its original spelling."
+      },
+      {
+        "column_name": "congressional_record_date",
+        "column_type": "VARCHAR",
+        "description": "Literal Record date stated by the communication source."
+      },
+      {
+        "column_name": "record_calendar_day",
+        "column_type": "VARCHAR",
+        "description": "Strictly parsed calendar day used to select Record issues."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      },
+      {
+        "column_name": "qualified_occurrences",
+        "column_type": "BIGINT",
+        "description": "Number of qualifying printed entries in the selected scope."
+      },
+      {
+        "column_name": "complete_scope",
+        "column_type": "BOOLEAN",
+        "description": "Whether every selected issue and required granule was completely read."
+      },
+      {
+        "column_name": "conflict_status",
+        "column_type": "VARCHAR",
+        "description": "Conflict, no-conflict, or not-checked under the recorded complete-scope result."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Exact rule used for the recorded source match."
+      },
+      {
+        "column_name": "recorded_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the source journal recorded the attempt."
+      },
+      {
+        "column_name": "reason",
+        "column_type": "VARCHAR",
+        "description": "Recorded reason a read or match could not proceed."
+      },
+      {
+        "column_name": "scope_packages",
+        "column_type": "VARCHAR[]",
+        "description": "Exact issue package IDs selected for this comparison."
+      },
+      {
+        "column_name": "scope_read_results",
+        "column_type": "STRUCT(package_id VARCHAR, outcome VARCHAR, marker VARCHAR, rule_version VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR, body_witnesses STRUCT(granule_id VARCHAR, sha256 VARCHAR, source_url VARCHAR)[])[]",
+        "description": "Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry."
+      },
+      {
+        "column_name": "witnesses",
+        "column_type": "STRUCT(record_package_id VARCHAR, record_granule_id VARCHAR, body_sha256 VARCHAR, body_url VARCHAR, marker VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR)[]",
+        "description": "Each printed match retains package, granule, body digest, marker, and selected input generation."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "attempt_id"
+    ]
+  },
+  "laws_document_file_outcomes": {
+    "table": "laws_document_file_outcomes",
+    "label": "Laws file conversion results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "source_dataset",
+        "column_type": "VARCHAR",
+        "description": "Original producer dataset whose member was converted."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Original member position within the producer dataset."
+      },
+      {
+        "column_name": "relative_path",
+        "column_type": "VARCHAR",
+        "description": "Original member path relative to its producer dataset; empty partition states have none."
+      },
+      {
+        "column_name": "partitioned",
+        "column_type": "BOOLEAN",
+        "description": "Whether the original producer output was partitioned."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Recorded row count in the original producer member or successful empty state."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Converted member, retained processing member, or successful empty partition."
+      },
+      {
+        "column_name": "original_byte_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original physical member byte digest; empty partition states have none."
+      },
+      {
+        "column_name": "state_witness_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      },
+      {
+        "column_name": "source_schema",
+        "column_type": "STRUCT(\"name\" VARCHAR, \"type\" VARCHAR, nullable BOOLEAN)[]",
+        "description": "Original member column names, types, and nullability."
+      },
+      {
+        "column_name": "source_metadata",
+        "column_type": "STRUCT(key_base64 VARCHAR, value_base64 VARCHAR)[]",
+        "description": "Original footer metadata as lossless base64 key and value pairs."
+      },
+      {
+        "column_name": "native_members",
+        "column_type": "STRUCT(relative_path VARCHAR, sha256 VARCHAR, byte_size BIGINT, row_count BIGINT)[]",
+        "description": "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "source_dataset",
+      "member_ordinal"
+    ]
+  },
+  "native_legal_references_document_file_outcomes": {
+    "table": "native_legal_references_document_file_outcomes",
+    "label": "Native legal references file conversion results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "source_dataset",
+        "column_type": "VARCHAR",
+        "description": "Original producer dataset whose member was converted."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Original member position within the producer dataset."
+      },
+      {
+        "column_name": "relative_path",
+        "column_type": "VARCHAR",
+        "description": "Original member path relative to its producer dataset; empty partition states have none."
+      },
+      {
+        "column_name": "partitioned",
+        "column_type": "BOOLEAN",
+        "description": "Whether the original producer output was partitioned."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Recorded row count in the original producer member or successful empty state."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Converted member, retained processing member, or successful empty partition."
+      },
+      {
+        "column_name": "original_byte_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original physical member byte digest; empty partition states have none."
+      },
+      {
+        "column_name": "state_witness_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      },
+      {
+        "column_name": "source_schema",
+        "column_type": "STRUCT(\"name\" VARCHAR, \"type\" VARCHAR, nullable BOOLEAN)[]",
+        "description": "Original member column names, types, and nullability."
+      },
+      {
+        "column_name": "source_metadata",
+        "column_type": "STRUCT(key_base64 VARCHAR, value_base64 VARCHAR)[]",
+        "description": "Original footer metadata as lossless base64 key and value pairs."
+      },
+      {
+        "column_name": "native_members",
+        "column_type": "STRUCT(relative_path VARCHAR, sha256 VARCHAR, byte_size BIGINT, row_count BIGINT)[]",
+        "description": "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "source_dataset",
+      "member_ordinal"
+    ]
+  },
+  "nominations_detail_reads": {
+    "table": "nominations_detail_reads",
+    "label": "Nomination source reads",
+    "row_unit": "read attempts",
+    "category": "processing_evidence",
+    "summary": "Recorded nomination detail, committee, and hearing reads. A missing row means no recorded attempt; an empty response is a completed read.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that recorded this attempt; retained attempts keep their original generation."
+      },
+      {
+        "column_name": "attempt_id",
+        "column_type": "VARCHAR",
+        "description": "Recorded journal event identity within its generation."
+      },
+      {
+        "column_name": "source_table",
+        "column_type": "VARCHAR",
+        "description": "Main table whose source record was read."
+      },
+      {
+        "column_name": "congress",
+        "column_type": "BIGINT",
+        "description": "Source record Congress as a native integer."
+      },
+      {
+        "column_name": "citation",
+        "column_type": "VARCHAR",
+        "description": "Literal nomination citation, including any partition suffix."
+      },
+      {
+        "column_name": "number",
+        "column_type": "VARCHAR",
+        "description": "Source record number in its original spelling."
+      },
+      {
+        "column_name": "part_number",
+        "column_type": "VARCHAR",
+        "description": "Literal nomination partition; no partition is inferred."
+      },
+      {
+        "column_name": "chamber",
+        "column_type": "VARCHAR",
+        "description": "Source-stated chamber in the complete meeting identity."
+      },
+      {
+        "column_name": "event_id",
+        "column_type": "VARCHAR",
+        "description": "Source-stated event identifier, scoped by Congress and chamber."
+      },
+      {
+        "column_name": "communication_id",
+        "column_type": "VARCHAR",
+        "description": "Original main House communication identity."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact requested source URL recorded for this read, with credentials removed."
+      },
+      {
+        "column_name": "read_field",
+        "column_type": "VARCHAR",
+        "description": "Detail or relationship field read by this attempt."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      },
+      {
+        "column_name": "error_type",
+        "column_type": "VARCHAR",
+        "description": "Recorded failure class; empty after a successful read."
+      },
+      {
+        "column_name": "recorded_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time the source journal recorded the attempt."
+      },
+      {
+        "column_name": "shape_version",
+        "column_type": "VARCHAR",
+        "description": "Recorded source-shaping rule version."
+      },
+      {
+        "column_name": "field_states",
+        "column_type": "STRUCT(field VARCHAR, state VARCHAR)[]",
+        "description": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      },
+      {
+        "column_name": "source_witnesses",
+        "column_type": "STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]",
+        "description": "Retained response locators and exact body digests for this requested source read."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "attempt_id"
+    ]
+  },
+  "print_citations_document_file_outcomes": {
+    "table": "print_citations_document_file_outcomes",
+    "label": "Print citations file conversion results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "source_dataset",
+        "column_type": "VARCHAR",
+        "description": "Original producer dataset whose member was converted."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Original member position within the producer dataset."
+      },
+      {
+        "column_name": "relative_path",
+        "column_type": "VARCHAR",
+        "description": "Original member path relative to its producer dataset; empty partition states have none."
+      },
+      {
+        "column_name": "partitioned",
+        "column_type": "BOOLEAN",
+        "description": "Whether the original producer output was partitioned."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Recorded row count in the original producer member or successful empty state."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Converted member, retained processing member, or successful empty partition."
+      },
+      {
+        "column_name": "original_byte_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original physical member byte digest; empty partition states have none."
+      },
+      {
+        "column_name": "state_witness_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      },
+      {
+        "column_name": "source_schema",
+        "column_type": "STRUCT(\"name\" VARCHAR, \"type\" VARCHAR, nullable BOOLEAN)[]",
+        "description": "Original member column names, types, and nullability."
+      },
+      {
+        "column_name": "source_metadata",
+        "column_type": "STRUCT(key_base64 VARCHAR, value_base64 VARCHAR)[]",
+        "description": "Original footer metadata as lossless base64 key and value pairs."
+      },
+      {
+        "column_name": "native_members",
+        "column_type": "STRUCT(relative_path VARCHAR, sha256 VARCHAR, byte_size BIGINT, row_count BIGINT)[]",
+        "description": "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "source_dataset",
+      "member_ordinal"
+    ]
+  },
+  "senate_expenditures_document_file_outcomes": {
+    "table": "senate_expenditures_document_file_outcomes",
+    "label": "Senate expenditures file conversion results",
+    "row_unit": "recorded results",
+    "category": "processing_evidence",
+    "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+    "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-06",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "generation_id",
+        "column_type": "VARCHAR",
+        "description": "Generation that converted the retained producer outputs."
+      },
+      {
+        "column_name": "source_dataset",
+        "column_type": "VARCHAR",
+        "description": "Original producer dataset whose member was converted."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Original member position within the producer dataset."
+      },
+      {
+        "column_name": "relative_path",
+        "column_type": "VARCHAR",
+        "description": "Original member path relative to its producer dataset; empty partition states have none."
+      },
+      {
+        "column_name": "partitioned",
+        "column_type": "BOOLEAN",
+        "description": "Whether the original producer output was partitioned."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Recorded row count in the original producer member or successful empty state."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Converted member, retained processing member, or successful empty partition."
+      },
+      {
+        "column_name": "original_byte_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original physical member byte digest; empty partition states have none."
+      },
+      {
+        "column_name": "state_witness_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      },
+      {
+        "column_name": "source_schema",
+        "column_type": "STRUCT(\"name\" VARCHAR, \"type\" VARCHAR, nullable BOOLEAN)[]",
+        "description": "Original member column names, types, and nullability."
+      },
+      {
+        "column_name": "source_metadata",
+        "column_type": "STRUCT(key_base64 VARCHAR, value_base64 VARCHAR)[]",
+        "description": "Original footer metadata as lossless base64 key and value pairs."
+      },
+      {
+        "column_name": "native_members",
+        "column_type": "STRUCT(relative_path VARCHAR, sha256 VARCHAR, byte_size BIGINT, row_count BIGINT)[]",
+        "description": "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "generation_id",
+      "source_dataset",
+      "member_ordinal"
+    ]
+  },
   "fec_filing_report_measures": {
     "table": "fec_filing_report_measures",
     "label": "fec filing report measures",
@@ -18296,6 +19342,19 @@
         ]
       },
       {
+        "dataset": "bill_family_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "bill_publisher_summaries",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -18530,6 +19589,30 @@
         ]
       },
       {
+        "dataset": "committee_meetings_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
+        "dataset": "committee_report_read_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "package_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "committee_report_reads",
         "receipt_only": true,
         "policy_version": "legislative-documents/1",
@@ -18548,6 +19631,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "committee_reports_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -18806,6 +19902,20 @@
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
+        ]
+      },
+      {
+        "dataset": "document_citation_read_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "document_kind",
+          "document_key",
+          "body_version_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -20234,6 +21344,30 @@
         ]
       },
       {
+        "dataset": "house_communications_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
+        "dataset": "house_record_enrichment_results",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "law_code_sections",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -20269,6 +21403,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "laws_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -20436,6 +21583,19 @@
         ]
       },
       {
+        "dataset": "native_legal_references_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "nominations",
         "receipt_only": false,
         "policy_version": "congress-subjects/2",
@@ -20448,6 +21608,18 @@
           "source_metadata",
           "source_schema",
           "entry_kind"
+        ]
+      },
+      {
+        "dataset": "nominations_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -20480,6 +21652,19 @@
           "source_metadata",
           "source_schema",
           "entry_kind"
+        ]
+      },
+      {
+        "dataset": "print_citations_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -20950,6 +22135,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "senate_expenditures_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {

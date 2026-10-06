@@ -251,6 +251,7 @@
     "sponsorship_withdrawn_date_status": "Calendar spelling status, not confirmation of a withdrawal event."
    }
   },
+  "bill_family_document_file_outcomes": {},
   "bill_publisher_summaries": {
    "containers": {
     "raw_source_row": [
@@ -824,6 +825,8 @@
     }
    ]
   },
+  "committee_meetings_detail_reads": {},
+  "committee_report_read_outcomes": {},
   "committee_reports": {
    "containers": {
     "raw_source_row": [
@@ -885,6 +888,7 @@
     "text_sha256": "Digest of the extracted text, so a re-extraction that changed nothing is visible as such."
    }
   },
+  "committee_reports_document_file_outcomes": {},
   "committees": {
    "containers": {
     "source_fields": [
@@ -1248,6 +1252,7 @@
     "display_properties_json": "The agency's labels for this record's fields: a JSON array of {label, name, tooltip}, name being the attribute it labels; json_column spelling."
    }
   },
+  "document_citation_read_outcomes": {},
   "document_citations": {
    "containers": {
     "raw_source_row": [
@@ -4269,6 +4274,8 @@
     }
    ]
   },
+  "house_communications_detail_reads": {},
+  "house_record_enrichment_results": {},
   "law_code_sections": {
    "containers": {
     "raw_source_row": [
@@ -4390,6 +4397,7 @@
     "uslm_sha256": "Digest of the captured PLAW USLM bytes, so the citation is traceable to one file."
    }
   },
+  "laws_document_file_outcomes": {},
   "lifecycle_events": {
    "containers": {
     "raw_conversion_inputs": [
@@ -4655,6 +4663,7 @@
     "text_runs_json": "An eCFR note's text split at element boundaries, as a JSON array whose strings join to text; NULL on U.S. Code rows."
    }
   },
+  "native_legal_references_document_file_outcomes": {},
   "nominations": {
    "containers": {
     "source_fields": [
@@ -4698,6 +4707,7 @@
     }
    ]
   },
+  "nominations_detail_reads": {},
   "org_committee_links": {
    "containers": {
     "conversion_inputs": [
@@ -4777,6 +4787,7 @@
     "observed_at": "When the feed was captured; the merge prefers the larger value."
    }
   },
+  "print_citations_document_file_outcomes": {},
   "proceedings": {
    "containers": {
     "raw_conversion_inputs": [
@@ -5515,6 +5526,7 @@
     "text_sha256": "Digest of the page text this row's context was read from, and part of the identity. A page, table and row ordinal mean nothing without it: a re-extraction that finds one more ruled band moves every ordinal after it, and keying on the digest is what stops two extractions of one page from colliding on one identity and silently merging. It pins the text, not the table finder, so a change in the table finder alone is not visible here."
    }
   },
+  "senate_expenditures_document_file_outcomes": {},
   "table3_records": {
    "containers": {
     "raw_source_row": [

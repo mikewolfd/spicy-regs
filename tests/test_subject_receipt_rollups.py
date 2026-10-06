@@ -185,6 +185,7 @@ def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoin
     output = tmp_path / "output"
     output.mkdir()
     from spicy_regs.selected_generations import remember_selection, SelectedDataset
+    from spicy_regs.navigation_read_outcomes import POLICIES as OUTCOME_POLICIES
 
     remember_selection(
         output,
@@ -196,6 +197,7 @@ def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoin
                 "before",
             )
             for p in pipeline.receipt_policies
+            if p.dataset not in OUTCOME_POLICIES
         ],
     )
     paths = pipeline.build(output)
