@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 
 import pyarrow as pa
@@ -26,6 +27,9 @@ from spicy_regs.transforms.html_text import register_html_text
 from spicy_regs.transforms.regulations_shape import COMMENT_ATTACHMENTS, SOURCE_COLUMNS, TYPES, _native, _validate
 
 _BATCH = 10_000
+# Bound the original strings before repeated SQL receipt encoding. This only
+# selects the existing row writer; it never limits the retained source values.
+_BULK_ROW_BYTES = 64 * 1024
 _ATTACHMENT_RESULT = pa.struct([('native', pa.string()), ('reference', pa.bool_())])
 
 
@@ -52,6 +56,38 @@ def _attachments(values):
     return pa.array(rows, type=_ATTACHMENT_RESULT)
 
 
+@contextmanager
+def _source_row_reader(source: Path):
+    """Read increasing file ordinals without holding Python copies of a group."""
+    with pq.ParquetFile(source) as original:
+        batches = original.iter_batches(batch_size=128)
+        held, start, previous = None, 0, -1
+        def row_at(ordinal):
+            nonlocal held, start, previous
+            if not previous < ordinal < original.metadata.num_rows:
+                raise RuntimeError('comments: original source ordinal is missing or out of order')
+            while held is None or ordinal >= start + held.num_rows:
+                if held is not None:
+                    start += held.num_rows
+                held = next(batches)
+            previous = ordinal
+            return held.slice(ordinal - start, 1).to_pylist()[0]
+        yield row_at
+
+
+def _segments(table: pa.Table):
+    """Keep each oversized reference attempt out of the batch's insertions."""
+    start = 0
+    for index, large in enumerate(table['_large'].to_pylist()):
+        if large:
+            if start < index:
+                yield table.slice(start, index - start)
+            yield table.slice(index, 1)
+            start = index + 1
+    if start < len(table):
+        yield table.slice(start)
+
+
 def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: DatasetPolicy,
                  generation_id: str, source_label: str,
                  row_attempt: Callable[[Mapping, int], tuple[dict | None, dict]]) -> int:
@@ -65,6 +101,10 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
     if not eligible(schema):
         raise etl_bulk.NotBulkEligible('Comments bulk writer requires declared text/integer source columns')
     raw = etl_bulk.record_json_sql((field.name, field.type) for field in schema)
+    string_bytes = ' + '.join(f'coalesce(strlen("{field.name}"), 0)'
+                              for field in schema if pa.types.is_string(field.type)) or '0'
+    bounded_columns = ', '.join(f'CASE WHEN _large THEN NULL ELSE "{field.name}" END AS "{field.name}"'
+                                for field in schema)
     columns = []
     for name, typename in SOURCE_COLUMNS['comments']:
         expression = '"' + name + '"' if name in schema.names else 'NULL'
@@ -94,14 +134,16 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
     witness = "[{\"source_id\": " + _text(source_label) + ", 'source_uri': NULL::VARCHAR, 'sha256': sha256(_raw), " + \
               "'locator': 'receipt.values.raw_source_record (canonical exact_json)', 'body_version': " + _text(generation_id) + '}]'
     query = f'''
-    WITH read AS (SELECT *, file_row_number AS _ordinal, {raw} AS _raw, {count_raw} AS _count_raw
-                  FROM read_parquet({_text(str(source.resolve()))}, file_row_number=true)),
-    normalized AS (SELECT {', '.join(columns)}, _ordinal, _raw, _count_raw FROM read),
+    WITH sized AS (SELECT *, file_row_number AS _ordinal, ({string_bytes}) > {_BULK_ROW_BYTES} AS _large
+                   FROM read_parquet({_text(str(source.resolve()))}, file_row_number=true)),
+    bounded AS (SELECT {bounded_columns}, _ordinal, _large FROM sized),
+    read AS (SELECT *, {raw} AS _raw, {count_raw} AS _count_raw FROM bounded),
+    normalized AS (SELECT {', '.join(columns)}, _ordinal, _large, _raw, _count_raw FROM read),
     shaped AS (SELECT *, {normalized} AS _normalized, comments_attachments(attachments_json) AS _attachment,
                html_text(comment) AS comment_text FROM normalized),
     subjects AS (SELECT *, CAST(CAST(_attachment.native AS JSON) AS {attachment_type}) AS attachments FROM shaped),
-    receipt AS (SELECT {fields}, _ordinal, _raw,
-               (_attachment.reference OR {integer_bad} OR comment_id IS NULL OR NOT comments_identity(comment_id)
+    receipt AS (SELECT {fields}, _ordinal, _large, _raw,
+               (_large OR _attachment.reference OR {integer_bad} OR comment_id IS NULL OR NOT comments_identity(comment_id)
                 OR {etl_bulk.needs_reference_sql("_raw")} OR {etl_bulk.needs_reference_sql(subject_text)}) AS _reference,
                {record_id} AS record_id, {version} AS subject_version, {identity} AS identity_json,
                {payload} AS processing_json, {_text(policy.dataset)} AS dataset,
@@ -111,7 +153,10 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
     SELECT * EXCLUDE (_reference), (_reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _reference,
            {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id FROM receipt'''
     expected, seen, routed = pq.ParquetFile(source).metadata.num_rows, 0, 0
-    with etl_bulk.bulk_connection() as (con, work):
+    with _source_row_reader(source) as original_row, etl_bulk.bulk_connection() as (con, work):
+        # Wide comment receipts multiply each worker's live strings. Keep this
+        # ordered writer within the connection's memory target with one worker.
+        con.execute('SET threads = 1')
         register_html_text(con)
         con.create_function('comments_attachments', _attachments, ['VARCHAR'], 'STRUCT(native VARCHAR, reference BOOLEAN)',
                             type='arrow', null_handling='special')
@@ -129,32 +174,43 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
                 if ordinals != list(range(seen, seen + len(ordinals))):
                     raise RuntimeError('comments: source rows did not arrive in file order')
                 seen += len(ordinals)
-                flags = table['_reference'].to_pylist()
-                mask = [not flag for flag in flags]
-                kept_subjects = table.filter(pa.array(mask)).select(policy.subject_schema.names).cast(policy.subject_schema)
-                kept_receipts = table.filter(pa.array(mask)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
-                added_subjects, added_receipts, refused = {}, {}, []
-                if any(flags):
-                    raw_texts = table['_raw'].to_pylist()
-                    from spicy_regs.etl_receipts import _unpack
-                    for index, flag in enumerate(flags):
-                        if flag:
-                            subject, receipt = row_attempt(_unpack(json.loads(raw_texts[index])), ordinals[index])
-                            added_subjects[index] = subject
-                            if receipt["outcome"] == "accepted":
-                                added_receipts[index] = receipt
-                            else:
-                                refused.append(receipt)
-                            routed += 1
-                if refused:
-                    fw.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
-                sw.write_table(_with_insertions(kept_subjects, mask, added_subjects))
-                rw.write_table(_with_insertions(kept_receipts, mask, added_receipts))
+                for table in _segments(table):
+                    routed += _write_segment(table, sw, rw, fw, policy, row_attempt, original_row)
             fw.close()
-            for batch in pq.ParquetFile(refused_path).iter_batches(batch_size=_BATCH):
+            # Refused oversized originals need the same one-row flush bound.
+            for batch in pq.ParquetFile(refused_path).iter_batches(batch_size=1):
                 rw.write_batch(batch)
     if seen != expected:
         raise RuntimeError(f'comments: read {seen} of the source file\'s {expected} rows')
+    return routed
+
+
+def _write_segment(table, sw, rw, fw, policy, row_attempt, original_row):
+    ordinals = table['_ordinal'].to_pylist()
+    large = table['_large'].to_pylist()
+    routed = 0
+    flags = table['_reference'].to_pylist()
+    mask = [not flag for flag in flags]
+    kept_subjects = table.filter(pa.array(mask)).select(policy.subject_schema.names).cast(policy.subject_schema)
+    kept_receipts = table.filter(pa.array(mask)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
+    added_subjects, added_receipts, refused = {}, {}, []
+    if any(flags):
+        raw_texts = table['_raw'].to_pylist()
+        from spicy_regs.etl_receipts import _unpack
+        for index, flag in enumerate(flags):
+            if flag:
+                raw = original_row(ordinals[index]) if large[index] else _unpack(json.loads(raw_texts[index]))
+                subject, receipt = row_attempt(raw, ordinals[index])
+                added_subjects[index] = subject
+                if receipt["outcome"] == "accepted":
+                    added_receipts[index] = receipt
+                else:
+                    refused.append(receipt)
+                routed += 1
+    if refused:
+        fw.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
+    sw.write_table(_with_insertions(kept_subjects, mask, added_subjects))
+    rw.write_table(_with_insertions(kept_receipts, mask, added_receipts))
     return routed
 
 
