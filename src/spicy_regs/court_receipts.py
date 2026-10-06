@@ -189,6 +189,9 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
     """Reconstruct the mapper's private merge columns, preserving exact raw literals."""
     from spicy_regs.transforms.parquet_rows import write_rows
 
+    names = tuple(schema.names)
+    string_fields = tuple(field.name for field in schema if pa.types.is_string(field.type))
+
     def restored():
         for row in read_court_rows(path, dataset=dataset, receipt_path=receipt_path,
                                    generation_id=generation_id):
@@ -201,11 +204,11 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
             if dataset == 'court_opinion_clusters':
                 value = row.get('attorneys')
                 row['attorneys'] = [value] if isinstance(value, str) else value
-            for field in schema:
-                value = row.get(field.name)
-                if value is not None and pa.types.is_string(field.type) and not isinstance(value, str):
-                    row[field.name] = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
-            yield {field.name: row.get(field.name) for field in schema}
+            for name in string_fields:
+                value = row.get(name)
+                if value is not None and not isinstance(value, str):
+                    row[name] = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+            yield {name: row.get(name) for name in names}
     return write_rows(restored(), destination, schema)
 
 
