@@ -27,6 +27,10 @@ not nest prior receipt bodies. `resolve_receipt_witness` verifies and resolves
 removals use `retire_receipt` to preserve evidence without an orphan accepted
 subject join. Original source files and capture evidence remain retained.
 
+See [receipt writer adoption](receipt-writer-adoption.md) for the distinction
+between included helpers and maintained writer activation, optional key indexes,
+and replacement of the earlier receipt drafts.
+
 Native subjects are authoritative for domain readers. Maintained source builders
 may read their exact original source fields and processing checkpoints after the
 shared reader validates subject identity, version and receipt membership. The
