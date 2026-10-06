@@ -106,7 +106,8 @@ def publication_descriptions(live: dict) -> dict:
 def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dict | None = None,
                  join_record: dict | None = None, audit: dict | None = None,
                  scorecard_publishers: list[dict] | None = None, source_revision: str = "unknown",
-                 generated_at: str | None = None, extra_tables: dict | None = None) -> dict:
+                 generated_at: str | None = None, extra_tables: dict | None = None,
+                 measurements: list[dict] | None = None) -> dict:
     """Pure construction and validation; reads committed dictionaries by default."""
     live = published_tables(index)
     extra_tables = {name: entry for name, entry in (extra_tables or {}).items() if name not in live}
@@ -227,6 +228,33 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
                                       {name: entry["schema"] for name, entry in live.items()},
                                       {name: table.get("recordIdentity", {}).get("columns", [])
                                        for name, table in tables.items()})
+    if measurements:
+        from spicy_regs.navigation_measurements import attached_directions, scalar_navigation
+        proofs = {}
+        for proof in measurements:
+            if not isinstance(proof, dict) or not isinstance(proof.get("route"), dict):
+                continue
+            route = proof["route"]
+            if (not isinstance(route.get("id"), str) or not isinstance(route.get("targetIndex"), int)
+                    or isinstance(route.get("targetIndex"), bool)):
+                continue
+            identity = route["id"], route["targetIndex"]
+            if identity in proofs and proofs[identity] != proof:
+                proofs[identity] = None  # Conflicting evidence never selects an arbitrary winner.
+            else:
+                proofs[identity] = proof
+        for spec in navigation:
+            for i, target in enumerate(spec["targets"]):
+                proof = proofs.get((spec["id"], i))
+                qualified = attached_directions(index, spec, i, proof, extra_tables) if proof else None
+                if qualified:
+                    target["directions"] = qualified
+        for join in joins:
+            spec = scalar_navigation(join)
+            proof = proofs.get((spec["id"], 0))
+            qualified = attached_directions(index, spec, 0, proof, extra_tables) if proof else None
+            if qualified:
+                join["directions"] = qualified
     receipt_fields = read_json("receipt_fields.json").get("tables", {})
     for name, table in tables.items():
         table["receiptIdentity"] = table.get("identity_columns", [])

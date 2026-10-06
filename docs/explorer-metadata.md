@@ -194,3 +194,33 @@ bundled old join dictionary.
 Coverage text is documented scope, not an inferred date range. A missing or
 invalid table publication date stays unavailable; it must not be replaced by
 `generatedAt`, the source modification date or a backfill time.
+
+## Reusing navigation measurements
+
+`scripts/measure_source_navigation.py` measures named routes from the canonical
+registry using an explicit saved publication and a JSON map of its member paths
+to retained local files. It reads main data only and writes derived cache files
+and a measurement receipt. It does not refresh data or alter join baselines.
+
+Every member must pass SHA-256, byte-size, footer-row and exact-schema checks;
+member rows must sum to the selected table population. Unchanged local file
+signatures reuse prior byte admission while every footer is still checked.
+A changed member rebuilds that member's projected keys and guarded occurrences.
+Unchanged member projections remain reusable. Aggregate proofs bind every
+member, schema, generation, recipe and relevant implementation; changed rules
+reuse unaffected target populations. Partial or damaged cache outputs are misses.
+
+Counts distinguish occurrences, repeated references, physical source rows,
+qualified distinct source records and target-key multiplicity. Missing, null,
+duplicate or unsupported source identities prevent distinct-record claims.
+Complete target-key populations qualify uniqueness; reference-only observations
+do not. Native scalar joins refuse text/numeric coercion.
+
+The publisher accepts an optional `--measurements <receipt.json>`. It attaches
+counts only when the receipt reconciles and matches the current complete source
+and target bindings and unchanged recipe. Separate publications retain their
+exact file identities, including mutable ETags. Missing, stale, conflicting or
+partial measurements leave each direction unknown. Public lookup capabilities
+remain exact scans; measurement caches are neither browser row locators nor
+receipt indexes. Producing and supplying these measurements is explicit; the
+existing scheduled publisher does not start corpus scans.
