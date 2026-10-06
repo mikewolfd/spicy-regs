@@ -56,7 +56,7 @@ _MEMBER = r'\["([^"\\\x00-\x1f]*)",\x01\]'
 _DEPTH = 8
 #: ``ReceiptContext``'s rule for a witness digest.
 _WITNESS_SHA256 = r"(?:sha256:)?[0-9a-f]{64}"
-_BATCH = 10_000
+_BATCH = 2_000
 
 
 class NotBulkEligible(Exception):

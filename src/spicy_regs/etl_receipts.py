@@ -647,6 +647,42 @@ def _validate_receipt_bundle_rows(
             pass
 
 
+def visit_receipt_bundle(
+    subjects: Mapping[str, Sequence[ParquetInput]],
+    receipt_paths: Sequence[ParquetInput],
+    policies: Sequence[DatasetPolicy],
+    *,
+    visit: Callable[[str, dict], None],
+    generation_id: str,
+    processing_outcomes: Mapping[str, frozenset[str]] | None = None,
+) -> dict[str, int]:
+    """Check a complete family while visiting reconstructed rows without retaining them.
+
+    Visits are provisional until this function returns: a later join can refuse
+    the entire family. Visitors must perform internal checks only, with no public
+    side effects. Every receipt, including omitted failed attempts, is validated.
+    """
+    registered = _bundle_policies(subjects, receipt_paths, policies)
+    outcomes = processing_outcomes or {}
+    if set(outcomes) - set(registered) or any(
+        not selected <= OUTCOMES - {"accepted"} for selected in outcomes.values()
+    ):
+        raise ValueError("Unknown dataset or nonaccepted processing outcome")
+    counts = dict.fromkeys(subjects, 0)
+    with TemporaryDirectory(prefix="etl-bundle-read-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
+        _load_receipts(con, receipt_paths, registered, generation_id)
+        for dataset, subject, processing in _joined_subjects(con, subjects, registered):
+            visit(dataset, subject | processing)
+            counts[dataset] += 1
+        for dataset, outcome, processing in con.execute(
+            "SELECT dataset, outcome, processing FROM receipts WHERE outcome<>'accepted' ORDER BY rowid"
+        ):
+            if outcome in outcomes.get(dataset, ()):
+                visit(dataset, _index_processing(processing))
+                counts[dataset] += 1
+    return counts
+
+
 def read_receipt_bundle(
     subjects: Mapping[str, Sequence[ParquetInput]],
     receipt_paths: Sequence[ParquetInput],
@@ -655,29 +691,13 @@ def read_receipt_bundle(
     generation_id: str,
     processing_outcomes: Mapping[str, frozenset[str]] | None = None,
 ) -> dict[str, list[dict]]:
-    """Reconstruct a complete family after one receipt load and subject join.
-
-    Materialize all rows internally so a late join failure returns no partial
-    result. Every receipt, including omitted failed attempts, is validated.
-    Callers explicitly select nonaccepted processing outcomes for internal replay;
-    accepted subjects always retain their exact processing fields.
-    """
-    registered = _bundle_policies(subjects, receipt_paths, policies)
-    outcomes = processing_outcomes or {}
-    if set(outcomes) - set(registered) or any(
-        not selected <= OUTCOMES - {"accepted"} for selected in outcomes.values()
-    ):
-        raise ValueError("Unknown dataset or nonaccepted processing outcome")
+    """Return all reconstructed rows only after complete family admission."""
     result = {name: [] for name in subjects}
-    with TemporaryDirectory(prefix="etl-bundle-read-") as temp, sqlite3.connect(str(Path(temp) / "joins.db")) as con:
-        _load_receipts(con, receipt_paths, registered, generation_id)
-        for dataset, subject, processing in _joined_subjects(con, subjects, registered):
-            result[dataset].append(subject | processing)
-        for dataset, outcome, processing in con.execute(
-            "SELECT dataset, outcome, processing FROM receipts WHERE outcome<>'accepted' ORDER BY rowid"
-        ):
-            if outcome in outcomes.get(dataset, ()):
-                result[dataset].append(_index_processing(processing))
+    visit_receipt_bundle(
+        subjects, receipt_paths, policies,
+        visit=lambda dataset, row: result[dataset].append(row),
+        generation_id=generation_id, processing_outcomes=processing_outcomes,
+    )
     return result
 
 

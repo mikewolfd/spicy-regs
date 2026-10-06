@@ -24,7 +24,7 @@ from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, Scorecard
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.scorecards.etl import (
-    read_family,
+    verify_family_readback,
     read_indexed_family,
     write_family,
     verified_receipt_download,
@@ -497,10 +497,9 @@ def build_scorecards(
         attempt_failures=attempt_receipts,
         prior_receipts=prior_receipts,
     )
-    readback = read_family(output_dir, TABLE_NAMES)
-    provider.validate(readback)
+    verify_family_readback(output_dir, merged)
     if validate_readback is not None:
-        validate_readback(prior_rows, readback)
+        validate_readback(prior_rows, merged)
     evidence.event(
         "scorecard-refresh",
         accepted_scopes=sorted(accepted),

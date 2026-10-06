@@ -58,6 +58,23 @@ observations and resolver refusals for internal replay. Exact decimals, nested
 values, witnesses, generation identities and one-to-one joins use the same shared
 validation rules as individual-dataset reads.
 
+After writing a refresh, `verify_family_readback` uses the shared
+`visit_receipt_bundle` reader to compare each persisted row with the validated
+source rows already held by the build. Identity indexes reference those rows;
+the check does not construct another complete source family. It compares every
+literal source and evidence field, accepts reordered rows, and refuses missing,
+extra, duplicated or changed rows. Processing-only snapshots receive the same
+check. Earlier visits remain provisional until all receipt and subject joins
+finish, so preservation callbacks and success events run only after complete
+readback admission.
+
+Unselected scopes use the same source identities and exact per-row comparison
+for preservation. Prior and merged source rows still scale with corpus size;
+these checks remove duplicate source populations and retained full-row JSON
+sets rather than establishing a fixed memory bound for the whole build.
+Member hashes stream from files, and Parquet verification and receipt selection
+use bounded batches. Full-job resource qualification remains a separate gate.
+
 The bounded LCV replay comparison and its original input hashes are retained in
 `receipts/scorecards-expansion-20261004/receipt-read-optimization-benchmark/`.
 Its baseline and candidate reports agree on the exact reconstructed row digest;
