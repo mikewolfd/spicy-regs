@@ -23,7 +23,18 @@ def test_partitioned_meeting_keys_are_indivisible_and_missing_part_is_unknown():
 def test_nomination_hearing_uses_the_hearing_citation_congress_not_nomination_context():
     t=recipe('nomination_hearings')['targets'][0]
     assert target_keys(t,{'citation':'S.Hrg. 116-38','chamber':'Senate','jacketNumber':42444},{'congress':'119'}) == ['116','senate','42444']
+    assert target_keys(t,{'citation':'S.Hrg.119-136','chamber':'Senate','jacketNumber':61323},{'congress':'118'}) == ['119','senate','61323']
     assert target_keys(t,{'chamber':'Senate','jacketNumber':42444},{'congress':'119'}) is None
+
+
+def test_nomination_hearing_sql_uses_stated_citation_and_jacket_for_both_spellings():
+    s=next(s for s in array_sql_relationships() if s.name=='nomination_hearings')
+    with duckdb.connect() as c:
+        c.execute('CREATE TABLE source(congress VARCHAR, refs JSON)')
+        refs=[{'citation':citation,'chamber':'Senate','jacketNumber':61323}
+              for citation in ('S.Hrg.119-136','S.Hrg. 119-136','prefix S.Hrg.119-136','S.Hrg.119-136 suffix')]
+        c.execute('INSERT INTO source VALUES (?,?)',['118',json.dumps(refs)])
+        assert c.execute(f'SELECT {s.target_expression} FROM source s,json_each(s.refs) e WHERE {s.valid_expression}').fetchall()==[('119:senate:61323',),('119:senate:61323',)]
 
 
 def test_fcc_proceedings_require_name_and_native_id_and_document_urls_are_offers():
