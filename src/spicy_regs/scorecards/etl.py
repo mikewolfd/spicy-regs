@@ -22,6 +22,7 @@ from spicy_regs.etl_receipts import (
     combine_receipts,
     failure_receipt,
     read_receipt_bundle,
+    visit_receipt_bundle,
     carry_receipt_history,
     read_with_receipts,
     select_receipts,
@@ -39,6 +40,7 @@ from spicy_regs.scorecards.subject_shapes import (
     SOURCE_COLUMNS,
     map_source_row,
     restore_source_row,
+    source_row_index,
     subject_schema,
 )
 
@@ -232,7 +234,7 @@ def write_family(
     return tuple(paths)
 
 
-def read_family(
+def _family_read_arguments(
     directory: Path,
     names,
     *,
@@ -240,7 +242,6 @@ def read_family(
     generation_id: str | None = None,
     policies: Mapping[str, DatasetPolicy] | None = None,
 ) -> dict:
-    """Reconstruct provider rows only after validating the entire selected native family."""
     receipt_path = receipt_path or directory / RECEIPT_KEY
     if generation_id is None:
         generation_id = generation_options(directory, names)["receipt_generation_id"]
@@ -252,19 +253,72 @@ def read_family(
         else admitted_read_policies(names, descriptors=[p.descriptor() for p in policies.values()])
     )
     subjects = {n: [] if selected[n].receipt_only else [directory / (n + ".parquet")] for n in names}
-    joined = read_receipt_bundle(
-        subjects,
-        [receipt_path],
-        [selected[n] for n in names],
+    return dict(
+        subjects=subjects,
+        receipt_paths=[receipt_path],
+        policies=[selected[n] for n in names],
         generation_id=generation_id,
         processing_outcomes={
             name: frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"}) for name in names
         },
     )
+
+
+def read_family(
+    directory: Path,
+    names,
+    *,
+    receipt_path: Path | None = None,
+    generation_id: str | None = None,
+    policies: Mapping[str, DatasetPolicy] | None = None,
+) -> dict:
+    """Reconstruct provider rows only after validating the entire selected native family."""
+    joined = read_receipt_bundle(**_family_read_arguments(
+        directory, names, receipt_path=receipt_path, generation_id=generation_id, policies=policies,
+    ))
     for name, rows in joined.items():
         for index, row in enumerate(rows):
             rows[index] = restore_source_row(name, row)
     return joined
+
+
+def verify_family_readback(
+    directory: Path,
+    expected: Mapping,
+    *,
+    receipt_path: Path | None = None,
+    generation_id: str | None = None,
+    policies: Mapping[str, DatasetPolicy] | None = None,
+) -> dict[str, int]:
+    """Prove exact persisted source rows without constructing a second raw family.
+
+    Only identity indexes referencing existing rows are retained. Each dataset's
+    index is built when first visited and emptied as its persisted rows arrive;
+    reordered native rows remain valid. Counts escape only after every receipt,
+    join and literal source value has passed.
+    """
+    remaining = {}
+
+    def visit(name, native):
+        if name not in remaining:
+            remaining[name] = source_row_index(name, expected[name])
+        row = restore_source_row(name, native)
+        key = tuple(row[field] for field in IDENTITIES[name])
+        before = remaining[name].pop(key, None)
+        if before is None or json.dumps(before, sort_keys=True) != json.dumps(row, sort_keys=True):
+            raise ValueError("Persisted scorecard source row differs: " + name)
+        if not remaining[name]:
+            remaining[name].clear()  # Free the exhausted index's bucket storage; keep its visited marker.
+
+    counts = visit_receipt_bundle(
+        **_family_read_arguments(
+            directory, tuple(expected), receipt_path=receipt_path, generation_id=generation_id, policies=policies,
+        ),
+        visit=visit,
+    )
+    if counts != {name: len(rows) for name, rows in expected.items()} or any(remaining.values()):
+        raise ValueError("Persisted scorecard source family is incomplete")
+    return counts
 
 
 def read_indexed_family(directory: Path, names, family: Mapping, *, receipt_path: Path | None = None) -> dict:
@@ -306,10 +360,9 @@ def verified_receipt_download(index, target: Path, *, public_url: str | None, da
     if not target.is_file():
         if not public_url or not publication.fetch_member(public_url, member, target, RECEIPT_KEY):
             raise ValueError("Pinned scorecard receipt is unavailable")
-    if (
-        target.stat().st_size != member.byte_size
-        or "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest() != member.sha256
-    ):
+    with target.open("rb") as stream:
+        digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+    if target.stat().st_size != member.byte_size or digest != member.sha256:
         raise ValueError("Pinned scorecard receipt changed")
     return target
 

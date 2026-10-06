@@ -5,7 +5,7 @@ counts and immutable copies of the corresponding source qualifications.
 """
 
 import argparse
-from hashlib import sha256
+from hashlib import file_digest, sha256
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,7 +14,7 @@ import duckdb
 import pyarrow.parquet as pq
 
 from build_scorecard_integrations import read_receipt
-from spicy_regs.etl_receipts import read_attempts
+from spicy_regs.etl_receipts import read_attempts, select_receipts
 from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES
 from spicy_regs.scorecards.subject_shapes import restore_source_row
 
@@ -80,9 +80,11 @@ def publication_proof(readback_root):
         path = readback_root / "members" / (name + ".parquet")
         member = members[path.name]
         declared = family["etlReceipts"] if name == "etl_receipts" else family["tables"][path.name]
+        with path.open("rb") as stream:
+            digest = "sha256:" + file_digest(stream, "sha256").hexdigest()
         if (
             path.stat().st_size != member["bytes"]
-            or "sha256:" + sha256(path.read_bytes()).hexdigest() != member["sha256"]
+            or digest != member["sha256"]
             or declared["sha256"] != member["sha256"]
             or declared["byteSize"] != member["bytes"]
             or declared["rows"] != member["rows"]
@@ -104,10 +106,7 @@ def publication_proof(readback_root):
         raise ValueError("Published editions repeat their source identity")
     with TemporaryDirectory(prefix="scorecard-publication-proof-") as temporary:
         selected = Path(temporary) / "snapshots.parquet"
-        pq.write_table(
-            pq.read_table(readback_root / "members/etl_receipts.parquet", filters=[("dataset", "=", "scorecard_snapshots")]),
-            selected,
-        )
+        select_receipts(readback_root / "members/etl_receipts.parquet", selected, dataset="scorecard_snapshots")
         for attempt in read_attempts(
             [selected], POLICIES["scorecard_snapshots"], generation_id=family["etlReceipts"]["generationId"]
         ):

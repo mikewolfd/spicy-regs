@@ -188,16 +188,55 @@ def test_named_inputs_cannot_replace_private_retention_callback(tmp_path):
 def test_unselected_rows_require_full_evidence_identity_preservation():
     prior = {
         "scorecard_publishers": [{"publisher_id": "hrc", "capture_id": "old"}],
-        "ratings": [{"scorecard_id": "hrc:118", "capture_id": "old", "value_text": "N/A"}],
+        "scorecard_member_ratings": [{"scorecard_id": "hrc:118", "metric_id": "annual", "publisher_member_key": "member", "capture_id": "old", "value_text": "N/A"}],
     }
     current = json.loads(json.dumps(prior))
     assert retained.check_preserved(prior, current, scorecard_ids={"lcv:2025"}, publisher_ids={"lcv"}) == {
         "scorecard_publishers": 1,
-        "ratings": 1,
+        "scorecard_member_ratings": 1,
     }
-    current["ratings"][0]["capture_id"] = "new"
+    current["scorecard_member_ratings"][0]["capture_id"] = "new"
     with pytest.raises(ScorecardReplayError, match="Unselected"):
         retained.check_preserved(prior, current, scorecard_ids={"lcv:2025"}, publisher_ids={"lcv"})
+
+
+@pytest.mark.parametrize("change", ["missing", "additional", "duplicate", "prior-duplicate", "type", "null"])
+def test_preservation_refuses_missing_extra_duplicate_and_exact_value_changes(change):
+    prior = {"scorecard_member_ratings": [dict(scorecard_id="hrc:118", metric_id="annual",
+                                              publisher_member_key="member", value_text="N/A", value_number=None)]}
+    current = json.loads(json.dumps(prior))
+    rows = current["scorecard_member_ratings"]
+    if change == "missing":
+        rows.clear()
+    elif change == "additional":
+        rows.append(dict(prior["scorecard_member_ratings"][0], publisher_member_key="extra"))
+    elif change == "duplicate":
+        rows.append(dict(rows[0]))
+    elif change == "prior-duplicate":
+        prior["scorecard_member_ratings"].append(dict(prior["scorecard_member_ratings"][0]))
+    elif change == "type":
+        rows[0]["value_text"] = 0
+    else:
+        rows[0]["value_number"] = ""
+    with pytest.raises(ScorecardReplayError, match="Unselected"):
+        retained.check_preserved(prior, current, scorecard_ids=set(), publisher_ids=set())
+
+
+def test_wide_literal_preservation_checks_each_row_without_retaining_full_json_populations():
+    import tracemalloc
+
+    rows = [dict(scorecard_id="hrc:118", metric_id="annual", publisher_member_key=str(index),
+                 value_text="A" * 8192, capture_id="literal-source-capture") for index in range(2000)]
+    prior = {"scorecard_member_ratings": rows}
+    current = {"scorecard_member_ratings": [dict(row) for row in reversed(rows)]}
+    tracemalloc.start()
+    try:
+        assert retained.check_preserved(prior, current, scorecard_ids=set(), publisher_ids=set()) == {
+            "scorecard_member_ratings": 2000}
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 4 * 1024**2  # Two retained full-JSON populations alone would exceed 32 MiB.
 
 
 def test_observation_locator_normalization_preserves_literal_grade():

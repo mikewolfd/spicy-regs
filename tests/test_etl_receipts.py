@@ -148,6 +148,16 @@ def test_complete_bundle_read_preserves_exact_values_and_explicit_attempts(tmp_p
         processing_outcomes={"payments": frozenset({"refused"}), "parser_reads": frozenset({"observed"})},
     )
     assert result == {"payments": [row, row], "parser_reads": [{"checkpoint": [None, "", 0]}]}
+    from spicy_regs.etl_receipts import visit_receipt_bundle
+
+    visited = {name: [] for name in subjects}
+    counts = visit_receipt_bundle(
+        subjects, [shared], policies, generation_id="build-1",
+        processing_outcomes={"payments": frozenset({"refused"}), "parser_reads": frozenset({"observed"})},
+        visit=lambda name, value: visited[name].append(value),
+    )
+    assert visited == result
+    assert counts == {name: len(values) for name, values in result.items()}
 
 
 @pytest.mark.parametrize("fault", ["late-subject", "orphan", "duplicate", "publisher", "receipt", "schema"])
@@ -177,6 +187,14 @@ def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, polic
         pq.write_table(pq.read_table(second).append_column("extra", pa.array(["x"])), second)
     with pytest.raises(ValueError):
         read_receipt_bundle(subjects, [shared], [policy, other], generation_id=selected_generation)
+    from spicy_regs.etl_receipts import visit_receipt_bundle
+
+    visited = []
+    with pytest.raises(ValueError):
+        visit_receipt_bundle(subjects, [shared], [policy, other], generation_id=selected_generation,
+                             visit=lambda name, value: visited.append((name, value)))
+    if fault in {"late-subject", "orphan"}:
+        assert visited == [("payments", row)]  # Earlier visits are provisional; no counts return.
 
 
 @pytest.mark.parametrize("outcomes", [{"missing": frozenset({"observed"})}, {"payments": frozenset({"accepted"})}, {"payments": frozenset({"unknown"})}])
@@ -196,6 +214,11 @@ def test_complete_bundle_read_checks_unselected_failed_receipts(tmp_path, policy
     pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), receipt)
     with pytest.raises(ValueError, match="digest"):
         read_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1")
+    from spicy_regs.etl_receipts import visit_receipt_bundle
+
+    with pytest.raises(ValueError, match="digest"):
+        visit_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1",
+                             visit=lambda *args: pytest.fail("Invalid receipts must refuse before visits"))
 
 
 @pytest.mark.parametrize(
