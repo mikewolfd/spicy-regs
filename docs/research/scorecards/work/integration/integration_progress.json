@@ -1,11 +1,11 @@
 {
   "dataset": "scorecard_integration_progress",
   "schema_version": "1",
-  "observed_at": "2026-10-05T23:43:48+00:00",
+  "observed_at": "2026-10-06T00:48:52.594006+00:00",
   "input_pins": {
     "adapter_inventory.json": "db63275cd20d42ae545cca6e454f9add4d264c32a69f683c1bc63ce87c930336",
     "publisher_api_inventory.json": "0de8402dc8e649f2af58ca61f2420be4da0353df6b13bb0977f6550c4149879d",
-    "integration_qualifications.json": "bf9491164bb680d93c71ecb61bf3dd7abbf9b2f6f18349a2bb6cc49b44fa3c60",
+    "integration_qualifications.json": "b8d75eb6f55e4697f58ff0eb1fbb7d07bf45f165a82a6837a5d242aafd9932be",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
     "publisher_recovery_20261005.json": "725dd0268775cfeb070a31cf0105de4cad1ed62b0a2aa7482890d9f273ff51f7",
@@ -3239,6 +3239,13 @@
           "state": "published",
           "receipt": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/6350d531021401a2d4cc3fdde6d51547340babea7d35fb1d91f15581b5648ac9.json",
           "receipt_sha256": "ee7adfb02b766a34bb79c627d437386ad270ed90f089b4bf47f03b1674a3ce91"
+        },
+        {
+          "publisher_id": "new_american",
+          "scorecard_id": "new_american:freedom-index-110-4-print",
+          "state": "qualified",
+          "receipt": "qualifications/new_american--freedom-index-110-4-print.json",
+          "receipt_sha256": "3f68037efe3442e2c05c0659b98fd2342da2b0998df7f6fbdc1daeef612bc26b"
         }
       ],
       "verified_api_endpoints": [],

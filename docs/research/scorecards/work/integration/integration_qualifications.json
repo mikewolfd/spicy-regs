@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "observed_at": "2026-10-05T23:43:48+00:00",
+  "observed_at": "2026-10-06T00:48:52.594006+00:00",
   "input_plan_sha256": "8474f8724146a343f672e35e0e0a78e6cfc35d3bd60c244b0dcdf7a5c1cb1163",
   "readers": {
     "common_cause": "common_cause",
@@ -3112,6 +3112,13 @@
       "state": "qualified",
       "receipt": "qualifications/american_security_council_foundation--named-2010-senate-original.json",
       "receipt_sha256": "60fe2306d19425854b7cbace83d9a209248cc774806ae2f57a0e361a31bbda37"
+    },
+    {
+      "publisher_id": "new_american",
+      "scorecard_id": "new_american:freedom-index-110-4-print",
+      "state": "qualified",
+      "receipt": "qualifications/new_american--freedom-index-110-4-print.json",
+      "receipt_sha256": "3f68037efe3442e2c05c0659b98fd2342da2b0998df7f6fbdc1daeef612bc26b"
     }
   ],
   "api_observations": [
@@ -3158,6 +3165,11 @@
       "plan": "modern_reader_plan_20261005.json",
       "sha256": "0871fc3f9a8cb62d719783cd2107d81e9d1c20dcbf8f43b4b950de590d148942",
       "boundary": "Only three independently reviewed named scopes; original ledger records and source proofs remain unchanged"
+    },
+    {
+      "plan": "new_american_print_2008_plan_20261005.json",
+      "sha256": "6573d71ddafe7d8a176e16a0f1123b5ff56fefd509f3437d54bf5c1c4b7501f6",
+      "boundary": "Only the independently reviewed printed 2008 installment; all prior ledger records, reader defaults and source proofs remain unchanged"
     }
   ]
 }

@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "new_american",
+  "scorecard_id": "new_american:freedom-index-110-4-print",
+  "source_url": "https://thenewamerican.com/assets/sites/2/pdf/Freedom_Index_110-4.pdf",
+  "parser_version": "new-american-named-printed-freedom-index/2",
+  "reader_sha256": "cd4bc962b6befb0de916baf848f47303e87320ace9b8570119af01c8e3609844",
+  "capture_manifest_sha256": "f142000384241856f2ceb4ccbd0d2f2660557a194e2df81ff985baeed308cb05",
+  "native_reference_sha256": "ef6addea50728e859eed2ad6ee9de92c478cff8b7deda9c8b1e3b0f7818746dd",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "3de021780e08b3556cf99bfedec2acc791e0da0d5df98c863b847d2734db3778",
+  "completeness_rule": "Complete named print scope: all native state/member rows, both score columns and ten results per row; every action narrative and source context retained. Matching magazine corroborates all ten index pages and source-time imprint; original reread remains byte-identical. Cumulative scores remain published values; votes 1-30 are outside this grid.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 85,
+    "scorecard_metrics": 4,
+    "scorecard_items": 20,
+    "scorecard_metric_items": 20,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 534,
+    "scorecard_member_ratings": 1068,
+    "scorecard_member_item_results": 5340
+  },
+  "capture_count": 3,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "549c86c8aa6860e01a1889c361d68b982e6573b90399ea2a80cb4973c3bf883b"
+}

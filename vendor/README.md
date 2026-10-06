@@ -5,6 +5,22 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.61.0`: tagged source `v0.61.0` at merge commit
+  `76ec8628f608b1ed2080b8ef2a4a8c920af72c4f`. Its full tree equals the final
+  CI-passed candidate `ceb3b7644f3d9af8ebf2d3f4c457873b15bb3e0f`.
+  The exact qualified wheel was built at `9aac355e7fb9efc24d2a0717faef031e73377212`;
+  the final guide-index repair changes no packaged runtime bytes, and the
+  final rebuild matches that wheel. Independent source and installed-wheel
+  reviews passed. The wheel has SHA-256
+  `081cfb339b63d3ea6b396cea68f1ae3a2a5e339a10355325c64e07e295ae74ea`;
+  see `spicy_docs-0.61.0.json` and the
+  [adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_new_american_print_20261005.json).
+  This adds only the named printed 2008 Freedom Index fourth installment.
+  The existing New American registry stays disabled with `hash_only`,
+  unreviewed rights and no historical backfill. Deployment and data publication
+  remain separate. Prior wheels and proofs remain retained; no PyPI upload is
+  claimed.
+
 - `spicy_docs-0.60.0`: tagged source `v0.60.0` at merge commit
   `ec18a2665e2e7764e624cf17a4e718ab4217ae3a`. Its full tree equals the
   independently reviewed candidate `2d62f887ae9e4972d7abaa6e821387fa3504fc70`.
