@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from copy import deepcopy
+from functools import lru_cache
 
 
 def part(path: str, *, row: bool = False, transform: str | None = None) -> dict:
@@ -54,7 +55,7 @@ TREATY = route("treaties", ("congress_received", "number", "suffix"), (
 
 
 def declarations(processing_joins: tuple = ()) -> list[dict]:
-    """Explicit source relationships plus formerly receipt-only keys with selected receipt fallbacks."""
+    """Explicit source relationships; receipt fields retain inspection context only."""
     specs = [
         array("meeting_nominations", "committee_meetings", ("nomination_references_json",), (NOMINATION,),
               meaning="Nominations explicitly listed for this meeting; nomination partitions stay distinct."),
@@ -255,31 +256,117 @@ def target_keys(target, element, row):
     return values
 
 
-def published_navigation(specs, schemas):
-    """Resolve field aliases against this publication, retaining missing-target explanations."""
+def _recipes(target):
+    """Include equality guard dependencies as well as transformed key parts."""
+    return [*target["guards"],
+            *(g["sameAs"] for g in target["guards"] if "sameAs" in g),
+            *(p for k in target["keys"] for p in k["parts"])]
+
+
+@lru_cache(maxsize=256)
+def _struct_fields(typ):
+    """Reuse DuckDB's native type parser, without Arrow or reading source rows."""
+    from duckdb import InvalidInputException, sqltype
+
+    try:
+        parsed = sqltype(typ)
+    except InvalidInputException:
+        return None
+    return {name: str(dtype) for name, dtype in parsed.children} if parsed.id == "struct" else None
+
+
+def _path_status(typ, path):
+    """Typed paths are schema checked; JSON paths are checked on each occurrence."""
+    for name in path:
+        if typ.upper() in {"VARCHAR", "JSON"}:
+            return "runtime_checked"
+        fields = _struct_fields(typ)
+        if fields is None or name not in fields:
+            return "missing"
+        typ = fields[name]
+    return "published"
+
+
+def _dependencies(target, fields, selected_field, mode):
+    main, nested = {}, {}
+    if mode == "array":
+        main[selected_field or "<reference array>"] = (
+            "published" if selected_field else "missing")
+    for recipe in _recipes(target):
+        if "literal" in recipe:
+            continue
+        path = recipe["path"]
+        if recipe["from"] == "row":
+            name = ".".join(path)
+            main[name] = (_path_status(fields[path[0]], path[1:])
+                          if path and path[0] in fields else "missing")
+        elif mode == "array":
+            typ = fields.get(selected_field, "")
+            if typ.endswith("[]"):
+                status = _path_status(typ[:-2], path)
+            elif typ.upper() in {"VARCHAR", "JSON"}:
+                status = "runtime_checked"
+            else:
+                status = "missing"
+            nested[".".join(path) or "<element>"] = status
+    return ([{"path": name, "status": status} for name, status in sorted(main.items())],
+            [{"path": name, "status": status} for name, status in sorted(nested.items())])
+
+
+def directions(available, *, external=False):
+    """A declaration or historical baseline never proves current target uniqueness."""
+    return {direction: {
+        "available": available and not (external and direction == "reverse"),
+        "measurement": {"status": "unknown", "scope": "unknown"},
+        "lookup": {"status": ("external" if external else "scan")
+                   if available and not (external and direction == "reverse") else "unsupported",
+                   "scope": "selected_publication" if not external else "external_url",
+                   "requiresExactMatch": True},
+    } for direction in ("forward", "reverse")}
+
+
+def published_navigation(specs, schemas, identities=None):
+    """Admit only main-field routes and retain dispositions for unpublished sources.
+
+    Receipt fields describe separately inspectable evidence. They never recover
+    operational keys or make a source route available. Native nested fields bind
+    against selected schemas; JSON paths remain guarded per source occurrence.
+    """
+    identities = identities or {}
     result = []
     for original in specs:
-        if original["source"] not in schemas:
-            continue
         spec = deepcopy(original)
-        fields = {name for name, _ in schemas[spec["source"]]}
+        fields = dict(schemas.get(spec["source"], []))
         spec["field"] = next((name for name in spec["fields"] if name in fields), None)
-        row_fields = {p["path"][0] for t in spec["targets"] for p in
-                      [*t["guards"], *(p for k in t["keys"] for p in k["parts"])]
-                      if p["from"] == "row" and p["path"]}
-        spec["available"] = ((spec["mode"] == "row" and row_fields <= fields)
-                             or spec["field"] is not None or bool(spec["receiptFields"]))
-        if not spec["available"] and not spec["receiptFields"]:
-            spec["unavailableReason"] = "These source references have not been published yet."
         for target in spec["targets"]:
             if target["table"].startswith("@receipt:"):
                 dataset = target["table"].removeprefix("@receipt:")
-                if set(target["columns"]) <= {c[0] for c in schemas.get(dataset, [])}:
-                    # Older publications can still expose the exact declared evidence table.
+                if set(target["columns"]) <= set(dict(schemas.get(dataset, []))):
                     target["table"] = dataset
-            target["available"] = target["table"].startswith("@") or set(target["columns"]) <= {c[0] for c in schemas.get(target["table"], [])}
+            main, nested = _dependencies(target, fields, spec["field"], spec["mode"])
+            target["requiredMainFields"], target["requiredElementFields"] = main, nested
+            target["sourceAvailable"] = spec["source"] in schemas and all(
+                item["status"] != "missing" for item in [*main, *nested])
+            external = target["table"] == "@url"
+            target["requiredTargetFields"] = [
+                {"path": column, "status": "published" if external or column in
+                 dict(schemas.get(target["table"], [])) else "missing"}
+                for column in target["columns"]]
+            target["available"] = external or (target["table"] in schemas and all(
+                item["status"] == "published" for item in target["requiredTargetFields"]))
+            target["completeKey"] = bool(identities.get(target["table"])) and (
+                set(target["columns"]) == set(identities[target["table"]]))
+            target["directions"] = directions(target["available"] and target["sourceAvailable"], external=external)
+            if not target["sourceAvailable"]:
+                missing = [item["path"] for item in [*main, *nested] if item["status"] == "missing"]
+                target["sourceUnavailableReason"] = (
+                    "Required main source fields are not published: " + ", ".join(missing)
+                    if spec["source"] in schemas else "The source table is not published.")
             if not target["available"]:
                 target["unavailableReason"] = "The target table or its complete key is not published."
+        spec["available"] = any(t["sourceAvailable"] for t in spec["targets"])
+        if not spec["available"]:
+            spec["unavailableReason"] = "Required main source references are not published."
         result.append(spec)
     return result
 

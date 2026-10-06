@@ -208,7 +208,7 @@ def test_new_current_key_can_be_declared_without_borrowing_old_fields():
     changed["families"]["example"]["tables"]["parent.parquet"]["columns"][0][0] = "new_id"
     options["join_record"]["joins"][0]["parent_columns"][0] = "new_id"
     result = build_bundle(changed, **options)
-    assert result["joins"] == options["join_record"]["joins"]
+    assert all(result["joins"][0][k] == v for k, v in options["join_record"]["joins"][0].items())
     assert result["omittedJoins"] == []
 
 
@@ -401,3 +401,40 @@ def test_invalid_prior_metadata_is_replaced_after_validated_build(previous):
     assert script.publish_bundle(client, "test", bundle) == "published"
     assert client.writes == 1
     assert client.data == script.canonical_bytes(bundle)
+
+
+def test_declared_record_identity_and_directional_scope_do_not_infer_uniqueness():
+    options = args()
+    options['descriptions']['parent']['identity_columns'] = ['id', 'edition']
+    options['descriptions']['child']['identity_columns'] = ['parent_id', 'edition', 'row_index']
+    result = build_bundle(index(), **options)
+    assert result['tables']['parent']['recordIdentity'] == {
+        'columns': ['id', 'edition'], 'basis': 'declared_main_key', 'uniqueness': 'unknown'}
+    assert 'recordIdentity' not in result['tables']['child']
+    declared = result['joins'][0]
+    assert declared['completeKey'] == {'child': False, 'parent': True}
+    assert declared['directions']['forward']['measurement']['status'] == 'unknown'
+    # expected_cardinality is a declared CI policy, not a current measurement.
+    assert declared['expected_cardinality'] == 'one'
+
+
+def test_retired_relationships_remain_accounted_without_reappearing_as_joins():
+    options = args()
+    options['join_record']['processing_joins'] = [join()]
+    result = build_bundle(index(), **options)
+    retired = result['retiredJoins'][0]
+    assert retired['status'] == 'retired_processing_relationship'
+    assert not retired['directions']['forward']['available']
+    assert not retired['directions']['reverse']['available']
+    assert len(result['joins']) == 1
+
+
+def test_main_policy_identity_is_admitted_but_receipt_identity_never_is(monkeypatch):
+    from spicy_regs import subject_catalog
+    monkeypatch.setattr(subject_catalog, 'descriptors', lambda: {
+        'parent': {'identity_fields':['id','edition'], 'receipt_only':False},
+        'child': {'identity_fields':['parent_id','edition'], 'receipt_only':True}})
+    result = build_bundle(index(), **args())
+    assert result['tables']['parent']['recordIdentity']['columns'] == ['id','edition']
+    assert 'recordIdentity' not in result['tables']['child']
+    assert result['joins'][0]['completeKey'] == {'child': False, 'parent': True}

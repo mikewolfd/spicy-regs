@@ -193,3 +193,67 @@ def test_fec_source_row_retains_collection_and_source_content_identity():
     row = {'collection_id':'filings-f13-selected','source_record_id':'1010420180036115817','source_sha256':'sha256:'+'a'*64}
     assert target_keys(target,row,row) == list(row.values())
     assert target_keys(target,row,{**row,'source_sha256':None}) is None
+
+
+def test_main_array_cannot_borrow_missing_row_context_or_receipt_fields():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('vote_amendments')
+    spec['receiptFields'] = ['congress', 'chamber', 'vote_id']
+    schemas = {'roll_call_votes': [('amendments', 'STRUCT(number VARCHAR)[]'),
+                                  ('congress', 'INTEGER'), ('chamber', 'VARCHAR')],
+               'amendments': [('amendment_id', 'VARCHAR')]}
+    published = published_navigation([spec], schemas)[0]
+    target = published['targets'][0]
+    assert published['available'] is False
+    assert target['sourceAvailable'] is False
+    assert target['available'] is True  # Target exists; the source route is disabled.
+    assert {p['path'] for p in target['requiredMainFields'] if p['status'] == 'missing'} == {'vote_id'}
+    assert not target['directions']['forward']['available']
+
+
+def test_nested_typed_dependency_disables_only_the_affected_route():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('vote_documents')
+    schemas = {'roll_call_votes': [('documents', 'STRUCT(type VARCHAR, congress INTEGER, number VARCHAR)[]')],
+               'congress_bills': [('bill_id', 'VARCHAR')],
+               'nominations': [('congress', 'INTEGER'), ('citation', 'VARCHAR')],
+               'treaties': [('treaty_id', 'VARCHAR')]}
+    assert all(t['sourceAvailable'] for t in published_navigation([spec], schemas)[0]['targets'])
+    schemas['roll_call_votes'] = [('documents', 'STRUCT(type VARCHAR, number VARCHAR)[]')]
+    result = published_navigation([spec], schemas)[0]
+    assert result['available'] is True
+    assert [t['sourceAvailable'] for t in result['targets']] == [False, False, True]
+    assert [t['directions']['forward']['available'] for t in result['targets']] == [False, False, True]
+
+
+def test_json_nested_dependencies_remain_explicit_runtime_guards():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('meeting_nominations')
+    schemas = {'committee_meetings': [('nomination_references_json', 'VARCHAR')],
+               'nominations': [('congress', 'INTEGER'), ('citation', 'VARCHAR')]}
+    result = published_navigation([spec], schemas,
+                                  {'nominations': ['congress', 'citation']})[0]
+    target = result['targets'][0]
+    assert result['available'] is True
+    assert target['completeKey'] is True
+    assert {p['status'] for p in target['requiredElementFields']} == {'runtime_checked'}
+    assert target['directions']['forward']['measurement'] == {'status': 'unknown', 'scope': 'unknown'}
+    assert target_keys(target, {'congress':119, 'number':14}, {}) is None
+
+
+def test_missing_source_and_private_receipt_target_have_explicit_dispositions():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('native_legal_read')
+    result = published_navigation([spec], {})[0]
+    assert result['available'] is False
+    assert result['targets'][0]['available'] is False
+    assert result['targets'][0]['table'] == '@receipt:native_legal_reference_reads'
+    assert result['targets'][0]['directions']['forward']['lookup']['status'] == 'unsupported'
+
+
+def test_struct_schema_parser_handles_quoted_and_nested_fields():
+    from spicy_regs.explorer_navigation import _path_status
+    typ = 'STRUCT("native key" STRUCT(id UBIGINT, "two, words" VARCHAR), other DECIMAL(18, 2))'
+    assert _path_status(typ, ['native key', 'id']) == 'published'
+    assert _path_status(typ, ['native key', 'two, words']) == 'published'
+    assert _path_status(typ, ['native key', 'missing']) == 'missing'

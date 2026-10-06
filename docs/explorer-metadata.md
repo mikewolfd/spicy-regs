@@ -116,6 +116,30 @@ descriptions still refresh. Malformed or never-documented keys fail validation.
 Valid joins with an unpublished endpoint are retained in
 `omittedJoins` with an explanation, and are excluded from actionable navigation.
 
+## Main-field navigation availability
+
+Each table may expose `recordIdentity`, the complete declared main row key from
+its dictionary or subject policy. `uniqueness: unknown` means this declaration
+has not proved that the selected target population is unique. Receipt-only
+policies do not supply main record identities.
+
+Navigation targets expose `requiredMainFields`, `requiredElementFields` and
+`requiredTargetFields`, with each path marked `published`, `runtime_checked` or
+`missing`. Native nested fields are checked against the selected STRUCT schema.
+JSON paths are checked by the shared key recipes for each occurrence. Missing
+row context, nested keys or target columns disable only the affected target.
+`receiptFields` remain inspection context and never make operational keys
+available. Unpublished sources and targets retain explicit dispositions.
+
+`directions.forward` and `.reverse` describe each route's availability,
+measurement scope and lookup capability. Unknown measurements stay unknown;
+a declared cardinality or a historical reference-only proof does not establish
+current complete-key uniqueness. Available ordinary routes use exact scans.
+`completeKey` only says the destination columns form its declared main identity;
+opening one record still requires an exact current lookup with one result.
+`retiredJoins` accounts for processing relationships excluded from operational
+navigation, alongside `omittedJoins` for currently unavailable scalar routes.
+
 ## Refresh and deployment
 
 The `Publish explorer metadata` workflow runs after dictionary changes on
