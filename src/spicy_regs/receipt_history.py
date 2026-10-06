@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from collections.abc import Sequence
+from bisect import bisect_right
+from contextlib import ExitStack
 
 
 def _processing_key(column: str) -> str:
@@ -12,12 +14,40 @@ def _processing_key(column: str) -> str:
     return f"unhex(sha256({column}))"
 
 
+def _take_prior_rows(priors, file_ends, group_ends, ordinals, schema):
+    """Gather one output batch, reading each required prior row group once."""
+    import pyarrow as pa
+
+    requests = {}
+    for position, ordinal in enumerate(ordinals):
+        if ordinal is None:
+            continue
+        file = bisect_right(file_ends, ordinal)
+        if ordinal < 0 or file == len(priors):
+            raise ValueError("Receipt history selected an invalid prior ordinal")
+        local = ordinal - (file_ends[file - 1] if file else 0)
+        group = bisect_right(group_ends[file], local)
+        row = local - (group_ends[file][group - 1] if group else 0)
+        requests.setdefault((file, group), []).append((position, row))
+    chunks, positions = [], []
+    for (file, group), rows in requests.items():
+        source = priors[file].read_row_group(group, columns=schema.names, use_threads=False)
+        chunks.append(source.take(pa.array([row for _, row in rows], type=pa.int64())))
+        del source
+        positions.extend(position for position, _ in rows)
+    if not chunks:
+        return pa.Table.from_batches([], schema=schema), []
+    order = sorted(range(len(positions)), key=positions.__getitem__)
+    return pa.concat_tables(chunks).take(pa.array(order, type=pa.int64())), sorted(positions)
+
+
 def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path) -> Path:
     """Keep identical attempts exactly; reference only the direct accepted predecessor on change.
 
     Inputs are fresh current receipts and an already validated selected prior bundle.
     Unmatched old records disappear. Duplicate nonaccepted occurrences match FIFO.
-    The complete join spills to private disk; Python only decodes bounded output batches.
+    Narrow matching keys spill to private disk. Full prior rows are gathered by
+    Parquet ordinal in output batches; Python only decodes changed predecessors.
     """
     import duckdb
     import pyarrow as pa
@@ -25,17 +55,24 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
     import pyarrow.compute as pc
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, decode_exact_json, exact_json
 
+    def compute(name, *args):
+        # Arrow generates these kernels at import time; use its typed entry point.
+        return pc.call_function(name, list(args))
+
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with (
         TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary,
         duckdb.connect(str(Path(temporary) / "history.duckdb")) as con,
+        ExitStack() as files,
     ):
-        con.execute("SET threads=4")
+        con.execute("SET threads=1")
         con.execute("SET memory_limit='1GB'")
         con.execute("SET max_temp_directory_size='32GB'")
         con.execute("SET temp_directory=?", [str(Path(temporary) / "spill")])
-        con.execute("SET preserve_insertion_order=true")
+        # Ordinals define occurrence and final output order explicitly. Avoid
+        # extra import/export buffers while the wide history spills to disk.
+        con.execute("SET preserve_insertion_order=false")
 
         def quoted(path):
             return "'" + str(path).replace("'", "''") + "'"
@@ -44,15 +81,22 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
             "CREATE VIEW current AS SELECT * EXCLUDE(file_row_number), file_row_number AS ordinal "
             f"FROM read_parquet({quoted(current_path)}, file_row_number=true, hive_partitioning=false)"
         )
-        offset, parts = 0, []
+        offset, parts, priors, file_ends, group_ends = 0, [], [], [], []
         for path in prior_paths:
-            with pq.ParquetFile(path) as parquet:
-                count = parquet.metadata.num_rows
+            parquet = files.enter_context(pq.ParquetFile(path))
+            priors.append(parquet)
+            count = parquet.metadata.num_rows
+            ends, total = [], 0
+            for group in range(parquet.metadata.num_row_groups):
+                total += parquet.metadata.row_group(group).num_rows
+                ends.append(total)
+            group_ends.append(ends)
             parts.append(
                 f"SELECT * EXCLUDE(file_row_number), file_row_number+{offset} AS ordinal "
                 f"FROM read_parquet({quoted(path)}, file_row_number=true, hive_partitioning=false)"
             )
             offset += count
+            file_ends.append(offset)
         con.execute(
             "CREATE VIEW prior AS " + (" UNION ALL ".join(parts) if parts else "SELECT * FROM current WHERE false")
         )
@@ -90,54 +134,83 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
             AND c.diagnostic_key=p.diagnostic_key
             LEFT JOIN prior_keys predecessor ON c.dataset=predecessor.dataset AND c.record_id=predecessor.record_id
             AND predecessor.outcome='accepted'""")
-        # Hashes reduce rank/join working sets, never authorize a raw-value
-        # substitution. A collision that misaligns a FIFO pair must refuse.
-        mismatch = con.execute("""SELECT EXISTS(SELECT 1 FROM matches m
-            JOIN current c ON c.ordinal=m.current_ordinal JOIN prior p ON p.ordinal=m.prior_ordinal
-            WHERE c.processing_json IS DISTINCT FROM p.processing_json
-            OR (c.outcome<>'accepted' AND c.diagnostic_json IS DISTINCT FROM p.diagnostic_json))""").fetchone()
-        assert mismatch is not None
-        if mismatch[0]:
-            raise ValueError("Receipt history candidate keys differ from exact values")
-        con.execute("""CREATE TABLE predecessors AS SELECT m.current_ordinal,p.receipt_id,p.generation_id,p.processing_json
-            FROM prior p JOIN matches m ON p.ordinal=m.predecessor_ordinal""")
-        fields = ",".join(f'p."{n}"' for n in RECEIPT_SCHEMA.names)
-        fresh = ",".join(f'c."{n}"' for n in RECEIPT_SCHEMA.names)
-        query = f"""SELECT * FROM (
-            SELECT {fields},m.current_ordinal,NULL::VARCHAR AS predecessor_id,
-                NULL::VARCHAR AS predecessor_generation,NULL::VARCHAR AS predecessor_processing
-            FROM prior p JOIN matches m ON p.ordinal=m.prior_ordinal
-            UNION ALL
-            SELECT {fresh},m.current_ordinal,predecessor.receipt_id AS predecessor_id,
-                predecessor.generation_id AS predecessor_generation,predecessor.processing_json AS predecessor_processing
-            FROM current c JOIN matches m ON c.ordinal=m.current_ordinal AND m.prior_ordinal IS NULL
-            LEFT JOIN predecessors predecessor ON m.current_ordinal=predecessor.current_ordinal
-            )"""
-        # Finish full-row joins before sorting. The private database stores this
-        # intermediate as well as narrow keys; its disk use is additional to spill.
-        con.execute("CREATE TABLE output_rows AS " + query)
-        # No statements may run while this Arrow result is open.
-        reader = con.execute("SELECT * FROM output_rows ORDER BY current_ordinal").to_arrow_reader(batch_size=2000)
+        for name in ("current_ranked", "prior_ranked", "current_keys", "prior_keys"):
+            con.execute(f"DROP TABLE {name}")
+        # Only ordinals are sorted. Joining/sorting literal JSON and full rows
+        # can exhaust the connection's memory even with spilling enabled.
+        reader = con.execute("SELECT * FROM matches ORDER BY current_ordinal").to_arrow_reader(batch_size=2000)
         target = Path(temporary) / "receipts.parquet"
-        with pq.ParquetWriter(target, RECEIPT_SCHEMA, compression="zstd") as writer:
-            expected_count = pq.ParquetFile(current_path).metadata.num_rows
+        with (
+            pq.ParquetFile(current_path) as current,
+            pq.ParquetWriter(target, RECEIPT_SCHEMA, compression="zstd") as writer,
+        ):
+            expected_count = current.metadata.num_rows
             written = 0
-            for batch in reader:
+            for batch in current.iter_batches(batch_size=2000, columns=RECEIPT_SCHEMA.names, use_threads=False):
+                try:
+                    mapping = reader.read_next_batch()
+                except StopIteration as error:
+                    raise ValueError("Receipt history changed current receipt count") from error
+                if mapping.num_rows != batch.num_rows:
+                    raise ValueError("Receipt history changed current receipt count")
                 expected_order = pa.array(range(written, written + batch.num_rows), type=pa.int64())
                 if not pc.call_function(
-                    "all", [pc.call_function("equal", [batch.column("current_ordinal"), expected_order])]
+                    "all", [pc.call_function("equal", [mapping.column("current_ordinal"), expected_order])]
                 ).as_py():
                     raise ValueError("Receipt history changed current receipt order")
                 table = pa.Table.from_batches([batch])
-                changed = pc.call_function("indices_nonzero", [pc.call_function("is_valid", [table["predecessor_id"]])])
-                if len(changed):
-                    updates = table.take(changed).to_pylist()
+                ordinals = compute("coalesce", mapping.column("prior_ordinal"), mapping.column("predecessor_ordinal"))
+                prior, positions = _take_prior_rows(priors, file_ends, group_ends, ordinals.to_pylist(), RECEIPT_SCHEMA)
+                if positions:
+                    selected = table.take(pa.array(positions, type=pa.int64()))
+                    retained = pc.take(
+                        compute("is_valid", mapping.column("prior_ordinal")), pa.array(positions, type=pa.int64())
+                    )
+
+                    def distinct(left, right):
+                        equal = pc.fill_null(compute("equal", left, right), False)
+                        return compute(
+                            "invert",
+                            compute("or", equal, compute("and", compute("is_null", left), compute("is_null", right))),
+                        )
+
+                    mismatch = compute(
+                        "and",
+                        retained,
+                        compute(
+                            "or",
+                            distinct(selected["processing_json"], prior["processing_json"]),
+                            compute(
+                                "and",
+                                pc.fill_null(compute("not_equal", selected["outcome"], "accepted"), False),
+                                distinct(selected["diagnostic_json"], prior["diagnostic_json"]),
+                            ),
+                        ),
+                    )
+                    if compute("any", mismatch).as_py():
+                        raise ValueError("Receipt history candidate keys differ from exact values")
+                    indices = list(range(batch.num_rows))
+                    for i, position in enumerate(positions):
+                        if retained[i].as_py():
+                            indices[position] = batch.num_rows + i
+                    table = pa.concat_tables([table, prior]).take(pa.array(indices, type=pa.int64()))
+                changed = [
+                    position for position in positions if mapping.column("predecessor_ordinal")[position].is_valid
+                ]
+                if changed:
+                    updates = table.take(pa.array(changed, type=pa.int64())).to_pylist()
+                    predecessors = prior.filter(
+                        pc.take(
+                            compute("is_valid", mapping.column("predecessor_ordinal")),
+                            pa.array(positions, type=pa.int64()),
+                        )
+                    )
                     diagnostics, identities = [], []
-                    for row in updates:
-                        predecessor = row.pop("predecessor_id")
-                        generation = row.pop("predecessor_generation")
-                        processing = row.pop("predecessor_processing")
-                        row.pop("current_ordinal")
+                    for row, predecessor in zip(
+                        updates,
+                        predecessors.select(["receipt_id", "generation_id", "processing_json"]).to_pylist(),
+                        strict=True,
+                    ):
                         values = decode_exact_json(row["diagnostic_json"])
                         values = {
                             k: v
@@ -145,29 +218,30 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
                             if k not in {"prior_receipts", "retained_processing", "prior_receipt"}
                         }
                         values["prior_receipt"] = {
-                            "receipt_id": predecessor,
-                            "generation_id": generation,
-                            "processing_sha256": _digest(decode_exact_json(processing)),
+                            "receipt_id": predecessor["receipt_id"],
+                            "generation_id": predecessor["generation_id"],
+                            "processing_sha256": _digest(decode_exact_json(predecessor["processing_json"])),
                         }
                         row["diagnostic_json"] = exact_json(values)
                         diagnostics.append(row["diagnostic_json"])
                         identities.append(_digest({k: v for k, v in row.items() if k != "receipt_id"}))
                     # Replace only changed accepted rows. Every unchanged row stays Arrow, with no Python decoding.
-                    positions = changed.to_pylist()
                     for name, values in (("diagnostic_json", diagnostics), ("receipt_id", identities)):
-                        by_position = dict(zip(positions, values))
+                        by_position = dict(zip(changed, values))
                         replacements = pa.array([by_position.get(i) for i in range(batch.num_rows)], type=pa.string())
                         table = table.set_column(
                             table.schema.get_field_index(name),
                             name,
                             pc.call_function(
                                 "if_else",
-                                [pc.call_function("is_valid", [table["predecessor_id"]]), replacements, table[name]],
+                                [compute("is_valid", mapping.column("predecessor_ordinal")), replacements, table[name]],
                             ),
                         )
                 writer.write_table(table.select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA))
                 written += batch.num_rows
             if written != expected_count:
+                raise ValueError("Receipt history changed current receipt count")
+            if next(reader, None) is not None:
                 raise ValueError("Receipt history changed current receipt count")
         target.replace(destination)
     return destination
