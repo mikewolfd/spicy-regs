@@ -10125,7 +10125,7 @@
                 "part"
               ],
               "from": "element",
-              "pattern": "00|[1-9][0-9]*"
+              "pattern": "00|0*[1-9][0-9]*"
             }
           ]
         }
@@ -10210,7 +10210,8 @@
                 "part"
               ],
               "from": "element",
-              "pattern": "00|[1-9][0-9]*"
+              "transform": "partition-value",
+              "pattern": "[0-9]*"
             }
           ]
         }
