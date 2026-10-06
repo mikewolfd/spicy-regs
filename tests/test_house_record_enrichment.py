@@ -100,6 +100,48 @@ def test_wrong_congress_is_not_inferred_from_date_or_number(tmp_path):
     assert pq.read_table(output)["record_package_id"].to_pylist() == [None]
 
 
+@pytest.mark.parametrize("value,day", [("2025-01-06", "2025-01-06"), ("2025-01-06T04:00:00Z", "2025-01-06"),
+    ("2025-01-06T23:30:00-05:00", "2025-01-06"), ("2025-01-06T04:00:00.123+00:00", "2025-01-06")])
+def test_scope_calendar_day_validates_date_and_datetime_without_timezone_shift(value, day):
+    from spicy_regs.transforms.house_record_enrichment import _calendar_day
+    assert _calendar_day(value) == day
+
+
+@pytest.mark.parametrize("value", ["2025-01-06junk", "2025-01-06T04:00:00Zjunk", "2025-02-29",
+    "2025-02-29T04:00:00Z", "2025-01-06T25:00:00Z", "2025-01-06T04:00:00+25:00",
+    "2025-01-06T04:00:00+01:99", "20250106", 20250106])
+def test_scope_calendar_day_refuses_invalid_full_source_values(value):
+    from spicy_regs.transforms.house_record_enrichment import _calendar_day
+    with pytest.raises(ValueError):
+        _calendar_day(value)
+
+
+@pytest.mark.parametrize("invalid", ["issue-junk", "api-junk", "package-other-day"])
+def test_invalid_or_conflicting_source_dates_cannot_qualify_record_locator(tmp_path, invalid):
+    output, _, args, pin = fixture(tmp_path)
+    issue = tmp_path / "issue-source.parquet"
+    values = pq.read_table(issue).to_pylist()
+    if invalid == "issue-junk":
+        values.append(values[0] | {"issue_date":"2025-01-06T04:00:00Zjunk"})
+    elif invalid == "package-other-day":
+        values[0]["issue_date"] = "2025-01-06T04:00:00Z"
+        values[0]["package_id"] = "CREC-2025-01-07"
+    else:
+        rows = pq.read_table(output).to_pylist()
+        rows[0]["congressional_record_date"] = "2025-01-06T04:00:00Zjunk"
+        pq.write_table(pa.Table.from_pylist(rows, schema=pq.read_schema(output)), output)
+    pq.write_table(pa.Table.from_pylist(values), issue)
+    pin["processing"] = {"sha256":"sha256:" + hashlib.sha256(issue.read_bytes()).hexdigest(), "byteSize":issue.stat().st_size}
+    enrich_house_record(output, **args)
+    assert pq.read_table(output)["record_package_id"].to_pylist() == [None]
+    journal = events(args["evidence"])
+    assert any(row.get("outcome") == "refused" for row in journal)
+    if invalid != "api-junk":
+        refused = next(row for row in journal if row.get("event") == "house-record-package" and row.get("outcome") == "refused")
+        assert refused["issue"] in values and refused["input"] == pin
+        assert next(row for row in journal if row.get("event") == "house-record-result")["complete_scope"] is False
+
+
 @pytest.mark.parametrize("entries", [None, {"a":"EC-1. " + SENTENCE + "\nEC-1. " + SENTENCE},
                                        {"a":"EC-1. " + SENTENCE, "b":"EC-1. " + SENTENCE.replace("a report", "another report")}])
 def test_repeated_printed_occurrences_are_ambiguous_without_deduplication(tmp_path, entries):
@@ -186,11 +228,15 @@ def test_resume_checks_declared_retained_body_and_never_recaptures(tmp_path, cha
 
 
 def test_locator_prose_describes_api_enrichment(tmp_path):
-    from spicy_regs.data_dictionary import contract_column_prose
+    from spicy_regs.data_dictionary import contract_column_prose, load_descriptions
 
     descriptions = contract_column_prose("house_communications")
     assert "API row" in descriptions["record_package_id"]
     assert "original abstract" in descriptions["record_entry_text"]
+    published = load_descriptions()["house_communications"]
+    for field in ("record_package_id", "record_granule_id", "record_entry_text"):
+        assert published["columns"][field] == descriptions[field]
+    assert "Bounded reads of selected Congressional Record issues" in published["data_quality"]
 
 
 def test_existing_index_builder_invokes_enrichment_after_api_shaping(tmp_path):
@@ -317,7 +363,7 @@ def test_actual_receipt_build_injects_selected_issue_pin_through_house_wrapper(t
     issue = tmp_path / "selected-record-issue.parquet"
     schema = pa.schema([(name, pa.string()) for name in TABLE_CONTRACTS["record_issues"].columns])
     value = dict.fromkeys(schema.names) | {"volume":"172", "issue":"147", "congress":"119", "session":"2",
-        "issue_date":"2026-09-17", "package_id":package, "update_date":"2026-09-17T00:00:00Z", "detail_read":"true"}
+        "issue_date":"2026-09-17T04:00:00Z", "package_id":package, "update_date":"2026-09-17T00:00:00Z", "detail_read":"true"}
     pq.write_table(pa.Table.from_pylist([value], schema=schema), issue)
     subject, receipts = write_congress_dataset(issue, tmp_path / "selected-native-issues", dataset="record_issues", generation_id="record-pinned")
     remember_selection(tmp_path, [SelectedDataset("record_issues", (subject,), receipts, "record-pinned")])
@@ -329,7 +375,13 @@ def test_actual_receipt_build_injects_selected_issue_pin_through_house_wrapper(t
     row = next(row for row in pq.read_table(restored).to_pylist() if row["number"] == "4752")
     assert output.name == "house_communications.parquet"
     assert row["record_package_id"] == package
+    assert row["congressional_record_date"] == "2026-09-17"
+    package_witness = next(row for row in events(pipeline.source_evidence)
+                           if row.get("event") == "house-record-package" and row.get("outcome") == "read")
+    assert package_witness["issue"]["issue_date"] == "2026-09-17T04:00:00Z"
     matched = next(row for row in events(pipeline.source_evidence)
                    if row.get("event") == "house-record-result" and row.get("outcome") == "matched")
     assert matched["witnesses"][0]["input"]["generationId"] == "record-pinned"
+    assert matched["congressional_record_date"] == "2026-09-17"
+    assert matched["record_calendar_day"] == "2026-09-17"
     assert matched["witnesses"][0]["input"]["processing"]["sha256"].startswith("sha256:")
