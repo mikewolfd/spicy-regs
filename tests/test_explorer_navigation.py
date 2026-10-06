@@ -67,3 +67,22 @@ def test_generation_rejects_incomplete_composite_keys():
     bad['targets'][0]['keys'].pop()
     with pytest.raises(ValueError,match='every component'):
         validate_navigation([bad])
+
+
+def test_invalid_equality_guard_is_refused_before_publication():
+    bad = recipe('vote_amendments')
+    bad['targets'][0]['guards'][2]['sameAs']['transform'] = 'guess'
+    with pytest.raises(ValueError, match='Unknown navigation transform'):
+        validate_navigation([bad])
+
+
+def test_receipt_only_targets_use_a_published_legacy_table_when_its_key_exists():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('native_legal_read')
+    schemas = {'native_legal_references': [('scope_id', 'VARCHAR')],
+               'native_legal_reference_reads': [('scope_id', 'VARCHAR')]}
+    target = published_navigation([spec], schemas)[0]['targets'][0]
+    assert target['table'] == 'native_legal_reference_reads'
+    assert target['available'] is True
+    del schemas['native_legal_reference_reads']
+    assert published_navigation([spec], schemas)[0]['targets'][0]['table'] == '@receipt:native_legal_reference_reads'
