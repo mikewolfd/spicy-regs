@@ -1027,6 +1027,10 @@ _PROCESSING_JOIN_FIELDS = {
 
 
 def _processing_join(join):
+    # Main read scopes use the maintained native_legal_read recipe. Keep the
+    # historical scalar baseline as lineage instead of publishing a second route.
+    if join.child == 'native_legal_references' and join.parent == 'native_legal_reference_reads':
+        return True
     # Resolver outputs require the recorded resolution status, not bare equality.
     # The same declarations supply guarded main-row navigation recipes.
     if join.child in {'scorecard_member_links', 'scorecard_item_links'} and join.parent in {

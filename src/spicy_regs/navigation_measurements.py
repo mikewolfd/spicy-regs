@@ -225,6 +225,8 @@ class MeasurementCache:
               groups AS (SELECT {names},count(*) n FROM rows WHERE {nonnull} GROUP BY ALL)
               SELECT (SELECT count(*) FROM rows),(SELECT count(*) FROM rows WHERE {nonnull}),count(*),
               count(*) FILTER(WHERE n>1),coalesce(max(n),0) FROM groups''', [paths]).fetchone()
+        if counts is None:
+            raise ValueError('Population query returned no result')
         if counts[0] != binding['rows']:
             raise ValueError('Projected population is incomplete')
         self.work['population_aggregations'] += 1
@@ -360,6 +362,8 @@ class MeasurementCache:
                 SELECT coalesce(sum(t.n) FILTER(WHERE s.n IS NOT NULL),0),
                 coalesce(sum(t.n) FILTER(WHERE s.n IS NULL),0),coalesce(max(s.n),0),
                 coalesce(max(s.source_keys),0),coalesce(max(s.source_rows),0) FROM target_keys t LEFT JOIN sources s USING(key_json)''').fetchone()
+        if counts is None or reverse is None:
+            raise ValueError('Relationship query returned no result')
         identity_qualified = bool(identity_population and not identity_population['nullKeyRows'] and not identity_population['duplicateKeys']
                                        and not sum(p['unusableSourceIdentityRows'] for p in source_artifacts))
         result = {'format': VERSION, 'status': 'complete', 'binding': dependency,

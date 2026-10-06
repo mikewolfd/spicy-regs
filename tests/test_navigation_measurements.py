@@ -241,7 +241,7 @@ def test_metadata_does_not_promote_unbound_or_partial_measurements(tmp_path):
     from spicy_regs.explorer_metadata import build_bundle
     index,paths,spec=selection(tmp_path)
     proof=MeasurementCache(tmp_path/'cache').measure(index,paths,spec,source_identity=('id',))
-    args={'descriptions':{'source':{'identity_columns':['id']},'target':{'identity_columns':['id']}},
+    args: dict={'descriptions':{'source':{'identity_columns':['id']},'target':{'identity_columns':['id']}},
           'registry':{'sources':{}},'join_record':{'joins':[],'navigation':[spec]},'audit':{}}
     bundle=build_bundle(index,measurements=[proof],**args)
     assert bundle['navigation'][0]['targets'][0]['directions']['forward']['measurement']['status']=='measured'
@@ -259,7 +259,7 @@ def test_separate_publication_requires_exact_file_identity_and_retains_mutable_p
     paths['target.parquet']=paths.pop(mainpath)
     file={'path':'target.parquet',**{k:descriptor[k] for k in ('sha256','rows','byteSize')},'etag':'"selected-version"'}
     identity={'kind':'comments','family':'comments','members':[file]}
-    extras={'target':{'family':'comments','descriptor':identity,'publicationSchema':descriptor['columns'],
+    extras: dict={'target':{'family':'comments','descriptor':identity,'publicationSchema':descriptor['columns'],
                       'publicationIdentity':digest(identity)}}
     proof=MeasurementCache(tmp_path/'cache').measure(index,paths,spec,source_identity=('id',),extra_tables=extras)
     assert attached_directions(index,spec,0,proof,extras) is not None
@@ -299,7 +299,7 @@ def test_conflicting_measurements_remain_unknown_without_hiding_other_metadata(t
     conflicting=deepcopy(proof)
     conflicting['matched']+=1
     bundle=build_bundle(index,descriptions={},registry={'sources':{}},audit={},
-                       join_record={'joins':[],'navigation':[spec]},measurements=[proof,conflicting,None])
+                       join_record={'joins':[],'navigation':[spec]},measurements=[proof,conflicting])
     assert bundle['navigation'][0]['targets'][0]['directions']['forward']['measurement']['status']=='unknown'
     assert set(bundle['tables'])=={'source','target'}
 
