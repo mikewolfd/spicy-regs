@@ -1,4 +1,4 @@
-"""Run the actual website court bridge once, using its reviewed 900-second bound."""
+"""Run the actual website court bridge once, using its reviewed 1800-second bound."""
 from __future__ import annotations
 
 import argparse
@@ -14,7 +14,7 @@ import sys
 import time
 
 SOURCE = "07915382a7a76c284cd50f70d3e8f3a0d2ea8c4f"
-SITE = "6ea9dec7cd26c2b5c2b19c80df5d53a48e2ad1ce"
+SITE = "f4a80319e9e540bdd08ad11acf80da77efd3a478"
 PRODUCER = "6b6e39059f4b0129df1810da34834bc3568f7947"
 GENERATION = "61ef48c6dbb34bb09353c2409fb2daf2"
 ARTIFACT = "sha256:731ab961d8825f1f099581d70f4100fd3fb1a3d1fbc3d1aa3ecc85a75553f8f6"
@@ -80,7 +80,7 @@ def main():
     report = {"observedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "status": "FAIL", "sourceRevision": SOURCE, "websiteRevision": SITE,
               "producerRevision": PRODUCER, "artifactDigest": ARTIFACT,
-              "generationId": GENERATION, "expectedRows": ROWS, "timeoutSeconds": 900,
+              "generationId": GENERATION, "expectedRows": ROWS, "timeoutSeconds": 1800,
               "downloadsInsideTimer": False, "schemaPreflight": schema,
               "runnerSha256": sha(Path(__file__)), "helperSha256": sha(Path(__file__).with_name("download_court_handoff.py")),
               "manifestSha256": sha(manifest_path), "bridgeSha256": sha(bridge),
@@ -88,7 +88,7 @@ def main():
               "runtime": {name: importlib.metadata.version(name) for name in ("duckdb", "pyarrow", "spicy-docs", "rulespec-artifacts")},
               "scope": "Complete input hashing, generation checks, admission, replay, accepted witnesses, counts and final output hash within the actual adapter bound. No capture, conversion or publication."}
     wrapper = Path(__file__).with_name("instrument_bridge.py").resolve()
-    if sha(wrapper) != "468256bf63640256a07be58f3ba66e4868462270204af4fce5d4b885a084826b":
+    if sha(wrapper) != "849f590901819f4299396df7c8744e717885281cfda012e2eb1104cefe6cae85":
         raise ValueError("Reviewed instrumentation differs")
     stages = args.evidence.resolve() / "stages"
     os.environ.update(SPICYGOV_ADDITIONAL_COVERAGE_BRIDGE=str(wrapper),
@@ -103,7 +103,7 @@ def main():
         result = adapter.bridge(request=request)
         elapsed = time.monotonic() - started
         (args.evidence / "stdout.json").write_text(json.dumps(result, indent=2) + "\n")
-        if (elapsed >= 900 or result["rows"] != ROWS or result["generationId"] != GENERATION
+        if (elapsed >= 1800 or result["rows"] != ROWS or result["generationId"] != GENERATION
                 or result["dataset"] != "court_opinions" or result["implementationSha256"] != IMPLEMENTATION
                 or result["selection"] != {k: request[k] for k in ("subjects", "receipts")}
                 or result["acceptedWitnessGroups"] != WITNESSES

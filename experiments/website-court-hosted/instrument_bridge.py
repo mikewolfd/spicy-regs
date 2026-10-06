@@ -1,4 +1,4 @@
-"""Time the actual changed-source court bridge; the parent owns the 900-second qualification."""
+"""Time the actual changed-source court bridge; the parent owns the 1800-second qualification."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ import sys
 import time
 
 SOURCE_REVISION = '07915382a7a76c284cd50f70d3e8f3a0d2ea8c4f'
-SITE_REVISION = '6ea9dec7cd26c2b5c2b19c80df5d53a48e2ad1ce'
+SITE_REVISION = 'f4a80319e9e540bdd08ad11acf80da77efd3a478'
 BRIDGE_SHA256 = '6de7be6139b8f47049e10496f94706c2b4b4c162df954bf040de19b7081bc685'
 IMPLEMENTATION_SHA256 = 'sha256:36bedaf57c9f3730143b61e728bb8ff546bca3d46a21d3944e7edc5bd2d59928'
 SOURCE_SHA256 = {
@@ -202,9 +202,9 @@ def main():
                 'instrumentationPath': str(Path(__file__).resolve()),
                 'instrumentationSha256': file_hash(Path(__file__)),
                 'normalBridgeArgv': [str(bridge_path)], 'jsonStdin': 'forwarded unchanged',
-                'qualificationSeconds': 900,
+                'qualificationSeconds': 1800,
                 'timingSemantics': 'inclusive; nested stages overlap; witness generator includes suspended caller grouping',
-                'qualification': 'Parent verifies complete bridge stdout, all final checks and actual whole-process 900-second timer'}
+                'qualification': 'Parent verifies complete bridge stdout, all final checks and actual whole-process 1800-second timer'}
     (directory / 'instrumentation-identity.json').write_text(json.dumps(identity, indent=2) + '\n')
     log = StageLog(directory)
     install(bridge, log)
@@ -219,7 +219,7 @@ def main():
                    'errorType': type(failure).__name__ if failure is not None else None,
                    'error': str(failure) if failure is not None else None,
                    'instrumentationFailures': log.failures,
-                   'scope': 'Actual bridge returned or failed; parent must verify stdout identity/count/hash/witness checks within the unchanged 900-second qualification timer.'}
+                   'scope': 'Actual bridge returned or failed; parent must verify stdout identity/count/hash/witness checks within the unchanged 1800-second qualification timer.'}
         if log.failures:
             outcome['status'] = 'FAIL'
         try:

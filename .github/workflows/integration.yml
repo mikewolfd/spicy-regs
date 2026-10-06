@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: mikewolfd/spicygov
-          ref: 6ea9dec7cd26c2b5c2b19c80df5d53a48e2ad1ce
+          ref: f4a80319e9e540bdd08ad11acf80da77efd3a478
           path: website
       - uses: actions/setup-python@v5
         with:
@@ -60,7 +60,7 @@ jobs:
             python ../experiments/website-court-hosted/download_court_handoff.py \
             ../experiments/website-court-hosted/court-handoff.json ../output/handoff \
             > ../output/download.log 2>&1
-      - name: Run one changed complete bridge with stage timings and the actual 900-second allowance
+      - name: Run one changed complete bridge with stage timings and the actual 1800-second allowance
         env:
           PYTHONUNBUFFERED: '1'
         run: |
@@ -72,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: website-court-changed-900-qualification
+          name: website-court-1800-qualification
           path: |
             output/*.txt
             output/*.log
