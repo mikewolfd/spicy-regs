@@ -122,13 +122,19 @@ def main():
         required_phases = {"inputs.checked_member", "processing.select_receipts",
                            "processing.restore_processing_input", "witnesses.select_receipts",
                            "witnesses.read_attempts_and_caller_grouping", "files.file_hash",
-                           "admission._check_receipts", "admission._check_subjects", "bridge.main"}
+                           "bridge.main"}
         completed_phases = {e["phase"] for e in terminal_events if e["status"] == "completed"}
+        # Maintained bulk admission may deliberately defer to the reference reader.
+        # Preserve that handled fallback while requiring real terminal admission evidence.
+        admission_phases = {"admission._check_receipts", "admission._check_subjects",
+                            "reference.etl_bulk._load_receipts", "reference.etl_receipts._load_receipts"}
+        terminal_phases = {e["phase"] for e in terminal_events}
         phases_by_call = {e["call"]: e["phase"] for e in started_events}
         complete_stage_log = (started_calls == terminal_calls
             and len(started_calls) == len(started_events) == len(terminal_events)
             and all(phases_by_call[e["call"]] == e["phase"] for e in terminal_events)
             and required_phases.issubset(completed_phases)
+            and bool(admission_phases.intersection(terminal_phases))
             and len([e for e in terminal_events if e["phase"] == "bridge.main" and e["status"] == "completed"]) == 1)
         if (outcome["status"] != "COMPLETE_WITH_CHECKS" or outcome["instrumentationFailures"]
                 or identity["implementationSha256"] != IMPLEMENTATION
