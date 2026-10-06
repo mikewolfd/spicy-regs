@@ -754,13 +754,15 @@ def select_receipts(path: Path, destination: Path, *, dataset: str) -> Path:
             with TemporaryDirectory(dir=destination.parent) as scratch:
                 temporary = Path(scratch) / "rows.parquet"
                 with _parquet(path) as parquet:
-                    if parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                    shared = parquet.schema_arrow.equals(RECEIPT_SCHEMA)
+                    if shared:
                         with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
                             for batch in parquet.iter_batches(batch_size=2000):
                                 batch.validate(full=True)
                                 writer.write_batch(batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)])))
-                        temporary.replace(destination)
-                        return destination
+                if shared:
+                    temporary.replace(destination)
+                    return destination
         except (ValueError, TypeError, pa.ArrowException):
             pass
     return write_rows((row for row in _rows(path) if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)

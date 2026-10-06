@@ -136,3 +136,25 @@ def test_later_excluded_invalid_utf8_preserves_previous_complete_output(tmp_path
     destination.write_bytes(b'previous complete selection')
     assert observed(lambda:select_receipts(source,destination,dataset='things'))==expected
     assert destination.read_bytes()==b'previous complete selection'
+
+
+def test_callable_close_failure_preserves_reference_error_and_existing_destination(tmp_path):
+    bundle = build(tmp_path, rows=2)
+    _, paths, _ = bundle.write(tmp_path/'bundle')
+
+    @contextmanager
+    def source():
+        with paths[0].open('rb') as stream:
+            yield stream
+        raise ValueError('retained source close failure')
+
+    expected_path = tmp_path/'reference.parquet'
+    actual_path = tmp_path/'actual.parquet'
+    expected_path.write_bytes(b'previous complete selection')
+    actual_path.write_bytes(b'previous complete selection')
+    expected = observed(lambda: reference(source, expected_path, 'things'))
+    assert expected[1] == (ValueError, 'retained source close failure')
+    actual = observed(lambda: select_receipts(source, actual_path, dataset='things'))
+    assert actual == expected
+    assert expected_path.read_bytes() == actual_path.read_bytes() == b'previous complete selection'
+    assert not any(path.is_dir() and path.name.startswith('tmp') for path in tmp_path.iterdir())
