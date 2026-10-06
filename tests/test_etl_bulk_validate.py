@@ -2,6 +2,7 @@
 
 import copy
 import random
+from decimal import Decimal
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -127,6 +128,36 @@ def outcome(validate, *args, **kwargs):
     except Exception as error:
         return type(error).__name__, str(error)
     return None
+
+
+@pytest.mark.parametrize("damage", [None, "changed_amount", "duplicate_subject", "duplicate_receipt", "receipt_digest"])
+def test_decimal_bundle_keeps_reference_acceptance_and_refusals(tmp_path, damage):
+    dtype = pa.decimal128(38, 2)
+    policy = DatasetPolicy("amounts", pa.schema([("id", pa.string()), ("amount", dtype),
+                           ("amounts", pa.list_(dtype))]), ("id",), ("raw",))
+    empty = DatasetPolicy("empty_amounts", pa.schema([("id", pa.string()), ("amount", dtype)]), ("id",), ())
+    rows = [{"id": "a", "amount": Decimal("-0.01"), "amounts": [None, Decimal("1.20")], "raw": {"source": "a"}},
+            {"id": "b", "amount": None, "amounts": [], "raw": {"source": "b"}}]
+    subject, receipts = write_dataset(((row, ReceiptContext("g", f"a{i}", "test/1", [WITNESS]))
+                                      for i, row in enumerate(rows)), tmp_path / "written", policy)
+    empty_subject, empty_receipts = write_dataset([], tmp_path / "empty", empty)
+    assert subject is not None and empty_subject is not None
+    subjects = pq.read_table(subject).to_pylist()
+    evidence = pq.read_table(receipts).to_pylist()
+    if damage == "changed_amount":
+        subjects[0]["amount"] = Decimal("0.01")
+    elif damage == "duplicate_subject":
+        subjects.append(subjects[0])
+    elif damage == "duplicate_receipt":
+        evidence.append(evidence[0])
+    elif damage == "receipt_digest":
+        evidence[0]["receipt_id"] = "sha256:" + "0" * 64
+    pq.write_table(pa.Table.from_pylist(subjects, schema=policy.subject_schema), subject)
+    pq.write_table(pa.Table.from_pylist(evidence, schema=RECEIPT_SCHEMA), receipts)
+    args = ({policy.dataset: [subject], empty.dataset: [empty_subject]}, [receipts, empty_receipts], [policy, empty])
+    reference = outcome(validate_receipt_bundle, *args, generation_id="g")
+    assert outcome(etl_bulk.validate_bundle, *args, generation_id="g") == reference
+    assert (reference is None) == (damage is None)
 
 
 @pytest.fixture(autouse=True)

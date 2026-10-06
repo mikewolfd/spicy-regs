@@ -94,7 +94,8 @@ def _literal(text: str) -> str:
 def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     """SQL text equal to ``exact_json`` of ``expression``'s value: the tagged encoding with keys in sorted order.
 
-    Covers the types whose DuckDB text equals Python's: strings, integers, booleans, and structs and lists of them.
+    Covers strings, integers, booleans, fixed-point decimal128 scales 0 through 6,
+    and structs and lists of them whose DuckDB text equals Python's.
     Any other type refuses, so its table stays with the row writer until a test here proves its spelling.
     """
     if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
@@ -103,6 +104,14 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
         body = f"'[\"int\",' || CAST({expression} AS VARCHAR) || ']'"
     elif pa.types.is_boolean(dtype):
         body = f"'[\"bool\",' || CASE WHEN {expression} THEN 'true' ELSE 'false' END || ']'"
+    elif pa.types.is_decimal128(dtype) and 0 <= dtype.scale <= 6:
+        # Arrow's Decimal and DuckDB both retain fixed-point spelling at these
+        # scales. Higher scales can use Python's exponent spelling and remain
+        # with the reference validator until their exact encoding is proven.
+        # Widen precision without changing scale: DECIMAL(1,1) otherwise writes
+        # '.0' in DuckDB while Arrow's Decimal spells it '0.0'.
+        text = f"CAST(CAST({expression} AS DECIMAL(38,{dtype.scale})) AS VARCHAR)"
+        body = f"'[\"decimal\",' || CAST(to_json({text}) AS VARCHAR) || ']'"
     elif pa.types.is_struct(dtype):
         body = record_json_sql(((field.name, field.type) for field in dtype), qualifier=expression + ".")
     elif pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
