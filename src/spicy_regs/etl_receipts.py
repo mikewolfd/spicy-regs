@@ -740,7 +740,7 @@ def _read_with_receipts_rows(subject_paths, receipt_paths, policy, *, generation
             yield subject | processing
 
 
-def select_receipts(path: Path, destination: Path, *, dataset: str) -> Path:
+def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> Path:
     """Select all outcomes in source order; receipt admission remains a separate check.
 
     Exact shared-schema batches preserve every cell without converting rows to
