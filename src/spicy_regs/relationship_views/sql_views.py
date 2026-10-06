@@ -76,6 +76,55 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
     return result
 
 
+def compatible_sql_variant(connection, available_tables, specs, publication=None):
+    """Select a maintained variant by schema binding, without reading any rows.
+
+    Native variants precede legacy variants. Missing nested STRUCT members are
+    schema incompatibilities too. Syntax/programming errors still raise.
+    """
+    from duckdb import BinderException
+
+    available, failures = set(available_tables), []
+    for spec in specs:
+        missing_tables = sorted(set(spec.required) - available)
+        if missing_tables:
+            failures.append(spec.rule_version + ": missing tables " + ", ".join(missing_tables))
+            continue
+        missing = []
+        for table, columns in spec.required.items():
+            present = {row[0] for row in connection.execute(f'DESCRIBE {quoted(table)}').fetchall()}
+            missing.extend(table + "." + c for c in columns if c not in present)
+        if missing:
+            failures.append(spec.rule_version + ": missing columns " + ", ".join(missing))
+            continue
+        try:
+            connection.execute("DESCRIBE " + spec.query(publication or {})).fetchall()
+        except BinderException as error:
+            failures.append(spec.rule_version + ": incompatible source types: " + str(error).split("\n")[0])
+            continue
+        return spec, failures
+    return None, failures
+
+
+def install_sql_variants(connection, available_tables, groups, publication=None):
+    """Install one compatible definition per view; never overwrite a valid one."""
+    available, result = set(available_tables), {}
+    for variants in groups:
+        selected, failures = compatible_sql_variant(connection, available, variants, publication)
+        if selected is not None:
+            result.update(install_sql_views(connection, available, [selected], publication))
+            result[selected.name]["metadata"]["schema_variant"] = selected.rule_version
+            continue
+        # The first variant supplies documentation only; unsupported means no
+        # empty view is fabricated and no previously installed view is replaced.
+        spec = variants[0]
+        documented = install_sql_views(connection, (), [spec], publication)[spec.name]
+        documented.update(status="unsupported" if any(set(v.required) <= available for v in variants)
+                          else "unavailable", reason="No compatible schema variant: " + "; ".join(failures))
+        result[spec.name] = documented
+    return result
+
+
 _COLUMN_DESCRIPTIONS = {
     'source_ordinal': 'Zero-based position in the held source array; repeated elements remain distinct.',
     'source_pointer': 'Location in the retained source field; see source_field and the source key.',

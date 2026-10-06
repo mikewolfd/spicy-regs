@@ -17,12 +17,14 @@ from .diffs import DIFF_VIEWS as LEGACY_DIFF_VIEWS
 from .entities import ENTITY_VIEWS
 from .fec import FEC_VIEWS
 from .fec_native_document_query import FEC_NATIVE_DOCUMENT_QUERY_VIEWS
+from .fec_document_query import FEC_DOCUMENT_QUERY_VIEWS
 from .fcc_native import FCC_NATIVE_VIEWS
 from .lobbying_native import LOBBYING_NATIVE_VIEWS
 from .regulations_native import ARRAYS as NATIVE_REGULATORY_ARRAYS, install_native_regulations_views
 from .lifecycle_dates import LIFECYCLE_DATE_VIEWS
 from .identity_candidates import IDENTITY_VIEWS, NATIVE_IDENTITY_VIEWS
-from .sql_views import annotate_views, install_sql_views, view_columns
+from .sql_views import (annotate_views, compatible_sql_variant, install_sql_variants,
+                        install_sql_views, view_columns)
 from .comments import install_comment_references
 from .congress import CONGRESS_RELATIONSHIPS, NATIVE_CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS
 from .core import ArrayRelationship, install_arrays
@@ -63,17 +65,23 @@ def install_relationship_views(
     native = {table for table in available if table in declared and not declared[table]["receipt_only"]
               and {column["column_name"] for column in metadata[table]["columns"]} <=
               {row[0] for row in connection.execute(f'DESCRIBE "{table}"').fetchall()}}
+    lobbying_variants = tuple(spec for spec in LOBBYING_NATIVE_VIEWS
+                              if compatible_sql_variant(connection, available, [spec], publication)[0] is not None)
+    lobbying_replacements = {spec.name for spec in lobbying_variants}
     congress = tuple(spec for spec in CONGRESS_RELATIONSHIPS if spec.source_table not in native)
     congress += tuple(spec for spec in NATIVE_CONGRESS_RELATIONSHIPS if spec.source_table in native)
     native_arrays = tuple(spec for spec in (NATIVE_COMMUNICATION_RINS, NATIVE_BILL_SUBJECTS)
                           if spec.source_table in native)
     replacements = {spec.name for spec in native_arrays}
     arrays = tuple(spec for spec in (*congress, *REGULATORY_RELATIONSHIPS, *ARTIFACT_TOPIC_RELATIONSHIPS)
-                   if spec.name not in replacements and not (spec.source_table in native and spec.source_table in {"fcc_filings", "lobbying_activities"}))
+                   if spec.name not in replacements
+                   and not any(name in lobbying_replacements for name in spec.names)
+                   and not (spec.source_table in native and spec.source_table == "fcc_filings"))
     arrays += native_arrays
     results = install_arrays(connection, available, arrays, publication)
     results.update(install_comment_references(connection, available, publication))
-    sql = tuple(spec for spec in SQL_RELATIONSHIP_VIEWS if spec not in DIFF_VIEWS)
+    sql = tuple(spec for spec in SQL_RELATIONSHIP_VIEWS
+                if spec not in (*DIFF_VIEWS, *LOBBYING_NATIVE_VIEWS)) + lobbying_variants
     native_sql = tuple(spec for spec in (*NATIVE_IDENTITY_VIEWS, *NATIVE_AFFILIATION_VIEWS)
                        if set(spec.required) <= native)
     replaced = {spec.name for spec in native_sql}
@@ -81,7 +89,21 @@ def install_relationship_views(
     sql += tuple(spec for spec in DIFF_VIEWS if set(spec.required) <= native)
     sql += tuple(spec for spec in LEGACY_DIFF_VIEWS if not set(spec.required) <= native)
     results.update(install_sql_views(connection, available, sql, publication))
-    results.update(install_sql_views(connection, available, FEC_QUERY_VIEWS, publication))
+    legal_names = {"fec_legal_citations", "fec_legal_subjects"}
+    results.update(install_sql_views(connection, available,
+                                   [spec for spec in FEC_QUERY_VIEWS if spec.name not in legal_names], publication))
+    legal_variants = [(next(s for s in FEC_QUERY_VIEWS if s.name == name),
+                       replace(next(s for s in FEC_DOCUMENT_QUERY_VIEWS if s.name == name),
+                               role="child_query", category="query_data"))
+                      for name in sorted(legal_names)]
+    results.update(install_sql_variants(connection, available, legal_variants, publication))
+    # Legacy array installation already reports incompatible columns. If no
+    # lobbying variant binds, keep that explicit disposition rather than hiding it.
+    if not lobbying_variants:
+        for variants in ([spec] for spec in LOBBYING_NATIVE_VIEWS):
+            name = variants[0].name
+            if results[name]["status"] != "available":
+                results.update(install_sql_variants(connection, available, [variants], publication))
     # Field-read states and lifecycle processing evidence live in shared receipts.
     removed = {base + "_field_states" for base, table, *_ in NATIVE_REGULATORY_ARRAYS if table in native}
     if "comments" in native:
