@@ -72,6 +72,52 @@ def test_comments_unknown_source_columns_refuse_bulk(tmp_path):
                                    generation_id='g', source_label='source', row_attempt=lambda r, i: (None, {}))
 
 
+@pytest.mark.parametrize('integer_count', [False, True])
+@pytest.mark.parametrize('prefix', [0, 127, 255])
+def test_large_rows_keep_exact_values_order_and_individual_output(tmp_path, monkeypatch, integer_count, prefix):
+    rows = [
+        {'comment_id': 'b', 'comment': 'x' * 63},  # Exactly 64 UTF-8 bytes.
+        {'comment_id': 'u', 'comment': 'é' * 32},  # More bytes than characters.
+        {'comment_id': 'sum', 'comment': 'x' * 31, 'text_content': 'y' * 31},
+        {'comment_id': 'control', 'comment': '\x1bordinary'},
+        {'comment_id': 'large', 'comment': '😀' * 100, 'duplicate_comments': 7 if integer_count else '007'},
+        {'comment_id': 'refused', 'text_content': 'x' * 100, 'attachments_json': '{bad'},
+        {'comment_id': 'last', 'comment': None},
+    ]
+    rows = [{'comment_id': f'p{i}'} for i in range(prefix)] + rows
+    schema = pa.schema([(name, pa.int64() if name == 'duplicate_comments' and integer_count else pa.string())
+                        for name in sorted(set().union(*(row.keys() for row in rows)))])
+    source = tmp_path / 'source.parquet'
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), source, row_group_size=3)
+    rows = pq.read_table(source).to_pylist()
+    def project(row):
+        return normalize_source_record('comments', row)
+    reference = write_records('comments', [(row, context(row, i)) for i, row in enumerate(rows)],
+                              tmp_path / 'reference', project=project)
+    routed = []
+    def attempt(raw, ordinal):
+        assert raw == rows[ordinal]
+        routed.append(ordinal)
+        return map_regulations_attempt('comments', raw, context(raw, ordinal), project=project)
+    segments = []
+    real_segment = comments_bulk._write_segment
+    def checked_segment(table, *args):
+        if any(table['_large'].to_pylist()):
+            assert len(table) == 1
+            segments.extend(table['_ordinal'].to_pylist())
+        return real_segment(table, *args)
+    monkeypatch.setattr(comments_bulk, '_BULK_ROW_BYTES', 64)
+    monkeypatch.setattr(comments_bulk, '_write_segment', checked_segment)
+    actual = tmp_path / 'subjects.parquet', tmp_path / 'receipts.parquet'
+    assert comments_bulk.write_bundle(source, *actual, policy=policy('comments'), generation_id='g',
+                                      source_label='source', row_attempt=attempt) == 5
+    assert routed == [prefix + i for i in (1, 2, 3, 4, 5)]
+    assert segments == [prefix + i for i in (1, 2, 4, 5)]
+    for expected, got in zip(reference, actual):
+        assert pq.read_table(expected).equals(pq.read_table(got))
+    validate_receipt_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g', bulk=False)
+
+
 def test_restore_failure_keeps_existing_destination(tmp_path, monkeypatch):
     raw = {'comment_id': 'c', 'comment': '<p>literal</p>'}
     pair = write_records('comments', [(raw, context(raw, 0))], tmp_path / 'pair',
@@ -120,6 +166,7 @@ def test_fresh_deep_attachment_uses_reference_order_and_error(tmp_path, monkeypa
         outcomes.append(result[1]['outcome'])
         return result
     monkeypatch.setattr(comments_bulk, '_BATCH', batch_size)
+    monkeypatch.setattr(comments_bulk, '_BULK_ROW_BYTES', 64)
     with pytest.raises(RecursionError) as actual:
         comments_bulk.write_bundle(source, tmp_path / 'subjects.parquet', tmp_path / 'receipts.parquet',
                                    policy=policy('comments'), generation_id='g', source_label='source',
