@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from urllib.parse import urlsplit
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from typing import Any, Mapping
@@ -289,6 +290,13 @@ FCC_LEGACY_ARRAYS = {
     "bureaus_json": "bureaus",
     "documents_json": "documents",
 }
+FCC_EXTRACTION_TYPE = pa.list_(pa.struct([
+    ("attempt_ordinal", pa.int64()), ("url", pa.string()),
+    ("offered_ordinals", pa.list_(pa.int64())), ("url_status", pa.string()),
+    ("source_sha256", pa.string()), ("digest_status", pa.string()),
+    ("status", pa.string()), ("page_count", pa.int64()), ("error", pa.string()),
+    ("capture_status", pa.string()), ("text_access_status", pa.string()),
+]))
 STRUCT_ARRAYS = {
     "government_entities_json": ("id", "name"),
     "lobbying_activities_json": ("general_issue_code", "general_issue_code_display", "description"),
@@ -304,7 +312,7 @@ def _list_type(fields: tuple[str, ...]) -> pa.DataType:
 
 
 def subject_schema(dataset: str) -> pa.Schema:
-    """The family-owned declaration; no parser status or source locator is a subject column."""
+    """The family-owned main fields, including selected FCC result observations."""
     fields = []
     for name in LEGACY_COLUMNS[dataset]:
         if dataset == "gao_decisions" and name == "decision_date":
@@ -334,6 +342,8 @@ def subject_schema(dataset: str) -> pa.Schema:
         elif name in TIMESTAMP_FIELDS.get(dataset, ()):
             dtype = pa.timestamp("us", tz="UTC")
         fields.append((target, dtype))
+    if dataset == "fcc_filings":
+        fields.extend([("generation_id", pa.string()), ("extraction_results", FCC_EXTRACTION_TYPE)])
     return pa.schema(fields, metadata={b"government_etl_policy": b"1"})
 
 
@@ -440,7 +450,51 @@ def _fcc_arrays(row: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any]:
+def _fcc_extractions(row: Mapping[str, Any], documents: list | None) -> list | None:
+    """Retain the latest recorded result order, without inventing capture or text custody.
+
+    A repeated offered URL supplies several offered positions, not several
+    extraction attempts. The attempt ordinal is its position in the retained
+    result array, not a lifetime attempt count or an acquisition timestamp.
+    """
+    results = _json(row.get("pdf_extraction_results_json"), list)
+    if results is None:
+        return None
+    offered: dict[str, list[int]] = {}
+    for ordinal, document in enumerate(documents or []):
+        if document is not None and document.get("src") is not None:
+            offered.setdefault(document["src"], []).append(ordinal)
+    mapped = []
+    for ordinal, result in enumerate(results):
+        if result is None:
+            mapped.append(None)
+            continue
+        if not isinstance(result, dict):
+            raise GovernmentShapeError("FCC extraction result must be an object or null")
+        url = _text(result.get("url"))
+        try:
+            parts = urlsplit(url) if url else None
+            usable = bool(parts and parts.scheme == "https" and parts.hostname
+                          and not parts.username and not parts.password
+                          and not re.search(r"\s", url))
+        except ValueError:
+            usable = False
+        digest = _text(result.get("source_sha256"))
+        valid_digest = bool(digest and re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest))
+        mapped.append({
+            "attempt_ordinal": ordinal, "url": url, "offered_ordinals": offered.get(url, []),
+            "url_status": "usable" if usable else "missing" if url is None else "invalid",
+            "source_sha256": digest,
+            "digest_status": "recorded" if valid_digest else "missing" if digest is None else "invalid",
+            "status": _text(result.get("status")), "page_count": _integer(result.get("page_count")),
+            "error": _text(result.get("error")),
+            "capture_status": "unverified" if digest is not None else "not_recorded",
+            "text_access_status": "unverified",
+        })
+    return mapped
+
+
+def map_subject(dataset: str, row: Mapping[str, Any], *, generation_id: str | None = None) -> dict[str, Any]:
     """Map one declared legacy row, refusing unclassified top-level fields and lossy coercions.
 
     The caller retains the entire original row as a receipt input before invoking
@@ -458,6 +512,8 @@ def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any]:
         if row.get("released_date") is None:
             row["released_date"] = row.get("decision_date")
     fcc = _fcc_arrays(row) if dataset == "fcc_filings" else {}
+    if dataset == "fcc_filings":
+        fcc.update(generation_id=generation_id, extraction_results=_fcc_extractions(row, fcc.get("documents")))
     subject: dict[str, Any] = {}
     for field in SUBJECT_SCHEMAS[dataset]:
         name = field.name

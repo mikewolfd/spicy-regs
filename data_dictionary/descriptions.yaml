@@ -2250,6 +2250,8 @@ tables:
       native_fields_json: "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
       native_fields_sha256: "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
       pdf_extraction_results_json: "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
+      generation_id: "Selected main filing generation. Binds retained result observations to this filing version; it is not the original attempt time."
+      extraction_results: "Latest retained extraction results in source order: URL, status, body digest, page count, error and matching offered document positions. Null means no result was recorded; an empty list means the retained result list was empty. Repeated offers keep every position. Capture custody and extracted-text access remain unverified."
 
   # ---------------------------------------------------------------------------
   # Tables hosted from spicy-docs' table contracts.

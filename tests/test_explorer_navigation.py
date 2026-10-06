@@ -128,8 +128,8 @@ def test_fcc_proceedings_require_name_and_native_id_and_document_urls_are_offers
     assert target_keys(t,{'name':'26-189','id_proceeding':'1784669453334'}, {}) == ['26-189','1784669453334']
     assert target_keys(t,{'name':'26-189','id_proceeding':None}, {}) is None
     document_recipe=recipe('fcc_filing_documents')
-    assert document_recipe['receiptFields'] == ['native_fields_json', 'pdf_extraction_results_json']
-    assert document_recipe['elementPath'] == ['documents']
+    assert document_recipe['receiptFields'] == []
+    assert document_recipe['fields'] == ['documents']
     d=document_recipe['targets'][0]
     assert target_keys(d,{'src':'javascript:alert(1)'},{}) is None
     assert target_keys(d,{'src':'https://example.test/a.pdf'},{}) == ['https://example.test/a.pdf']

@@ -3,7 +3,7 @@
 from .sql_views import SQLView, pin
 
 _REQUIRED = {"fcc_filings": ("id_submission", "proceedings", "filers", "authors", "lawfirms", "bureaus", "documents")}
-_RULE = "fcc-native-domain/2"
+_RULE = "fcc-native-domain/3"
 _NATIVE_COLUMNS = {
     'observation_kind': 'fcc_proceeding for the proceedings field, offered_artifact for documents, participant_role '
                         'for filers, authors, lawfirms and bureaus.',
@@ -31,6 +31,7 @@ def observations(p):
         native_id = "v.id_proceeding" if field == "proceedings" else "NULL::VARCHAR"
         filename = "v.filename" if field == "documents" else "NULL::VARCHAR"
         description = "v.description" if field in ("proceedings", "documents") else "NULL::VARCHAR"
+        offered_url = "v.src" if field == "documents" else "NULL::VARCHAR"
         kind = (
             "fcc_proceeding"
             if field == "proceedings"
@@ -42,7 +43,7 @@ def observations(p):
             ordinality - 1 AS source_ordinal, '{kind}' AS observation_kind,
             {role} AS participant_role, {name} AS observed_name,
             {native_id} AS native_proceeding_id, {filename} AS filename,
-            {description} AS description
+            {description} AS description, {offered_url} AS offered_url
             FROM fcc_filings s, UNNEST(s.{field}) WITH ORDINALITY AS entries(v, ordinality)""")
     return " UNION ALL ".join(parts)
 
@@ -66,8 +67,21 @@ def memberships(p):
 
 
 def artifacts(p):
-    return """SELECT s.id_submission, ordinality - 1 AS source_ordinal, v.filename, v.description
+    return """SELECT s.id_submission, ordinality - 1 AS source_ordinal, v.filename, v.description,
+        v.src AS offered_url, 'not_checked' AS acquisition_status
         FROM fcc_filings s, UNNEST(s.documents) WITH ORDINALITY AS entries(v, ordinality)"""
+
+
+def extraction_results(p):
+    return """SELECT s.generation_id, s.id_submission, ordinality - 1 AS attempt_ordinal,
+        offered_ordinal, s.documents[offered_ordinal + 1].filename AS filename,
+        s.documents[offered_ordinal + 1].description AS description,
+        result.url, result.url_status, result.source_sha256, result.digest_status,
+        result.status AS extraction_status, result.page_count, result.error,
+        result.capture_status, result.text_access_status
+        FROM fcc_filings s,
+        UNNEST(s.extraction_results) WITH ORDINALITY AS attempts(result, ordinality)
+        LEFT JOIN UNNEST(result.offered_ordinals) AS offered(offered_ordinal) ON TRUE"""
 
 
 FCC_NATIVE_VIEWS = (
@@ -80,6 +94,24 @@ FCC_NATIVE_VIEWS = (
         "see etl_receipts.",
         ("id_submission", "source_field", "source_ordinal"),
         rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS,
+    ),
+    SQLView(
+        "fcc_document_extraction_results",
+        {"fcc_filings": ("generation_id", "id_submission", "documents", "extraction_results")},
+        extraction_results,
+        "Latest retained extraction observations. Each matching offered URL position remains visible; unmatched "
+        "results have no offered ordinal. Attempt ordinal is the retained array position, not a lifetime count. "
+        "Recorded status and digest do not establish captured-byte custody or accessible extracted text.",
+        ("generation_id", "id_submission", "attempt_ordinal", "offered_ordinal"),
+        rule_version=_RULE,
+        column_descriptions={
+            "generation_id": "Selected main filing generation; not the original acquisition time.",
+            "attempt_ordinal": "Zero-based position in the retained latest result array.",
+            "offered_ordinal": "Zero-based document position whose exact src matches the result URL, or NULL.",
+            "extraction_status": "Recorded outcome, unchanged from the selected producer input.",
+            "capture_status": "Unverified when a digest is recorded; otherwise not_recorded.",
+            "text_access_status": "Unverified: these observations contain no qualified public text witness.",
+        },
     ),
     SQLView(
         "fcc_native_proceeding_links",
@@ -113,8 +145,8 @@ FCC_NATIVE_VIEWS = (
         "fcc_filing_artifacts",
         {"fcc_filings": ("id_submission", "documents")},
         artifacts,
-        "Document filenames and descriptions as offered. Each document's address on fcc.gov is kept in the filing's "
-        "receipt; see etl_receipts.",
+        "Each offered document's URL, filename and description in source order, including repeated and null elements. "
+        "An offered URL does not establish capture or extraction.",
         ("id_submission", "source_ordinal"),
         rule_version=_RULE, column_descriptions=_NATIVE_COLUMNS,
     ),
