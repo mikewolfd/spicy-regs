@@ -76,6 +76,16 @@ FEC views disabled. Verify the returned release identities and refusal behavior
 against the running service before declaring delivery complete; see the
 [FEC release checks](../../docs/fec-delivery-plan.md#compatible-release-and-deployment-checkpoint).
 
+The manual **Build MCP reader image** Actions workflow builds this Dockerfile
+on a hosted runner. Supply the dispatched ref's full commit as
+`expected_source_sha`. Its artifact retains the image archive, source commit
+and tree, build log, installed runtime identity and archive checksum. The
+Dockerfile runs its native reader fixtures and locked package checks during
+the build. Download and load that same archive before pushing it to the
+registry; measure the registry digest before binding the release receipt.
+The workflow performs no publication or deployment. Actual prepared datasets
+and the running service still need their reader checks.
+
 For a new consumer release, build from the repository root with
 `docker build --platform linux/amd64 --provenance=false -f deploy/cloudflare/Dockerfile -t spicy-regs-fec:RELEASE_TAG .`,
 then push that tag using the project-local `wrangler containers push` from this

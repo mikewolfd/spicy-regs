@@ -1,0 +1,135 @@
+name: Convert one retained family to native (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      family:
+        description: 'One complete retained family; its owner coordinates reader checks and publication'
+        required: true
+        type: choice
+        options: [dockets, documents, court-opinions, roll-call-votes, member-vote-terms, bill-family]
+      expected_entry_sha256:
+        description: 'sha256: digest of the complete prior family entry (canonical sorted JSON, compact separators)'
+        required: true
+        type: string
+      publish:
+        description: 'Publish the same prepared artifact; leave false until its reader checks are complete'
+        default: false
+        type: boolean
+      source_run_id:
+        description: 'Optional earlier preparation run to publish without rebuilding; main and runtime must still match'
+        default: ''
+        type: string
+      expected_bucket:
+        description: 'Explicit expected bucket, required for publication'
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: native-family-conversion-${{ inputs.family }}
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FAMILY: ${{ inputs.family }}
+      ENTRY_SHA256: ${{ inputs.expected_entry_sha256 }}
+      PUBLISH: ${{ inputs.publish }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      EXPECTED_BUCKET: ${{ inputs.expected_bucket }}
+      R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+      SPICY_REGS_DISK_FLOOR_GIB: '4'
+      PYTHONUNBUFFERED: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      OMP_NUM_THREADS: '4'
+      OPENBLAS_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+      ARROW_IO_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install the pinned runtime
+        run: uv sync --frozen
+      - name: Check and retain the complete selected prior
+        run: |
+          set -euo pipefail
+          ARGS=(--family "$FAMILY" --entry-sha256 "$ENTRY_SHA256" --output output/invocation)
+          if [ "$PUBLISH" = true ]; then ARGS+=(--publish); fi
+          if [ -n "$SOURCE_RUN_ID" ]; then ARGS+=(--source-run-id "$SOURCE_RUN_ID"); fi
+          if [ -n "$EXPECTED_BUCKET" ]; then ARGS+=(--expect-bucket "$EXPECTED_BUCKET"); fi
+          uv run --frozen python scripts/native_conversion_invocation.py "${ARGS[@]}"
+          df -B1 . > output/invocation/filesystem-before.txt
+      - name: Download the same earlier prepared artifact
+        if: inputs.source_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source_run_id }}
+          name: native-family-${{ inputs.family }}
+          path: output/native
+      - name: Prepare the complete family through its maintained writer
+        if: inputs.source_run_id == ''
+        run: |
+          set -euo pipefail
+          mkdir -p output/logs
+          WHEEL=$(uv run --frozen python -c 'from importlib.metadata import version; print(version("spicy-docs"))')
+          # Leave time for publication and artifact retention before the job deadline.
+          /usr/bin/time -v -o output/logs/prepare-resources.txt \
+            timeout --signal=TERM --kill-after=30s 45m \
+            uv run --frozen python scripts/convert_family_to_native.py "$FAMILY" \
+              --allow "$FAMILY" --work "$GITHUB_WORKSPACE/output/native/$FAMILY" \
+              --expect-main "$GITHUB_SHA" --expect-spicy-docs "$WHEEL" --remote origin \
+              2>&1 | tee output/logs/prepare.log
+      - name: Check the prepared artifact captured the exact requested prior
+        run: |
+          set -euo pipefail
+          uv run --frozen python scripts/native_conversion_invocation.py \
+            --family "$FAMILY" --entry-sha256 "$ENTRY_SHA256" --output output/invocation \
+            --prepared-receipt "$GITHUB_WORKSPACE/output/native/$FAMILY/conversion.json"
+      - name: Publish those same prepared bytes and read them back anonymously
+        if: inputs.publish
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p output/logs
+          WHEEL=$(uv run --frozen python -c 'from importlib.metadata import version; print(version("spicy-docs"))')
+          /usr/bin/time -v -o output/logs/publish-resources.txt \
+            timeout --signal=TERM --kill-after=30s 10m \
+            uv run --frozen python scripts/convert_family_to_native.py \
+              --publish-prepared "$GITHUB_WORKSPACE/output/native/$FAMILY/conversion.json" \
+              --allow "$FAMILY" --expect-main "$GITHUB_SHA" --expect-spicy-docs "$WHEEL" \
+              --remote origin --expect-bucket "$EXPECTED_BUCKET" \
+              2>&1 | tee output/logs/publish.log
+      - name: Retain prepared bytes, including interrupted and refused outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-family-${{ inputs.family }}
+          path: output/native/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Retain invocation, logs and observed resources
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-family-${{ inputs.family }}-evidence
+          path: |
+            output/invocation/
+            output/logs/
+          if-no-files-found: ignore
+          retention-days: 14

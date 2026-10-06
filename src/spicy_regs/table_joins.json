@@ -10275,6 +10275,209 @@
       "ruleVersion": "source-navigation/1"
     },
     {
+      "id": "nominations_detail_attempts",
+      "source": "nominations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:congress_acquisition",
+          "columns": [
+            "event",
+            "congress",
+            "citation"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "literal": "congress-detail-result"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "congress"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "citation"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "committee_meetings_detail_attempts",
+      "source": "committee_meetings",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:congress_acquisition",
+          "columns": [
+            "event",
+            "congress",
+            "chamber",
+            "event_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "literal": "congress-detail-result"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "congress"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "chamber"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "event_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "house_communications_detail_attempts",
+      "source": "house_communications",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:congress_acquisition",
+          "columns": [
+            "event",
+            "congress",
+            "communication_type",
+            "number"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "literal": "congress-detail-result"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "congress"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "communication_type"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "number"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
       "id": "bill_related_bills",
       "source": "congress_bills",
       "fields": [

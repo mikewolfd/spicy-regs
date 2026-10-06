@@ -728,7 +728,12 @@ def test_nomination_relationship_reads_are_complete_or_remain_retryable(tmp_path
                 raise PagedJsonSourceError('synthetic incomplete hearing route')
             else:
                 yield SimpleNamespace(records=[],declared_count=0)
-    rows,reader=_run(tmp_path,'nominations',reader=NominationReader())
+    journal=Journal()
+    rows,reader=_run(tmp_path,'nominations',reader=NominationReader(),evidence=journal)
+    attempts=[event for event in journal.events if event['event']=='congress-detail-result']
+    assert {(event['congress'],event['citation']) for event in attempts}=={(row['congress'],row['citation']) for row in rows}
+    assert {event['read_outcome'] for event in attempts}==({'failed'} if refuse_hearings else {'read'})
+    assert {event['error_type'] for event in attempts}==({'PagedJsonSourceError'} if refuse_hearings else {None})
     if refuse_hearings:
         assert all(r['detail_read']=='false' and r['committees_json'] is None and r['hearings_json'] is None for r in rows)
     else:
@@ -737,3 +742,11 @@ def test_nomination_relationship_reads_are_complete_or_remain_retryable(tmp_path
         held=NominationReader()
         again,_=_run(tmp_path,'nominations',reader=held)
         assert again==rows and held.details==[]
+
+
+def test_deferred_nomination_details_have_no_fabricated_attempt(tmp_path):
+    journal=Journal()
+    rows,reader=_run(tmp_path,'nominations',max_details=0,evidence=journal)
+    assert rows and not reader.details
+    assert all(row['detail_read']=='false' for row in rows)
+    assert not any(event['event']=='congress-detail-result' for event in journal.events)
