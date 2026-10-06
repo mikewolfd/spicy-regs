@@ -75,7 +75,9 @@ def validate_join(join: dict, schemas: dict[str, list]) -> tuple:
 
 
 def publication_descriptions(live: dict) -> dict:
-    """Include dictionary prose for processing tables that are still published."""
+    """Include canonical prose and roles for every published table."""
+    from .fec_query_catalog import table_category
+
     descriptions = read_json("table_metadata.json")
     missing = set(live) - set(descriptions)
     if missing:
@@ -83,7 +85,7 @@ def publication_descriptions(live: dict) -> dict:
         curated = load_curated_descriptions()
         for name in sorted(missing & set(curated)):
             entry = curated[name]
-            descriptions[name] = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "category", "data_quality")
+            descriptions[name] = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "category", "row_unit", "data_quality")
                                   if key in entry}
             descriptions[name]["columns"] = [
                 {"column_name": column, "column_type": typ,
@@ -93,6 +95,10 @@ def publication_descriptions(live: dict) -> dict:
                 for column, typ in {**dict.fromkeys(entry.get("columns", {}), ""),
                                     **dict(live[name]["schema"])}.items()
             ]
+    for name in live.keys() & descriptions.keys():
+        category = table_category(name)
+        if category:
+            descriptions[name]["category"] = category
     return descriptions
 
 

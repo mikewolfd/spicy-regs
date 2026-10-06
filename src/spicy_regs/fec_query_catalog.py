@@ -1,10 +1,14 @@
 """Explicit FEC dataset roles and meanings shared by discovery and documentation."""
 
 FEC_SOURCE_CATEGORIES = {
-    "fec_collections": "source_evidence",
-    "fec_source_catalog": "source_evidence",
-    "fec_collection_selection": "source_evidence",
+    "fec_collections": "processing_evidence",
+    "fec_source_catalog": "reference_data",
+    "fec_collection_selection": "processing_evidence",
     "fec_filing_definition_evidence": "source_evidence",
+    "fec_filing_definitions": "reference_data",
+    "fec_filing_header_associations": "source_evidence",
+    "fec_source_records": "source_data",
+    "fec_agency_mapping_dispositions": "diagnostics",
     "fec_api_response_controls": "diagnostics",
     "fec_research_context_dispositions": "diagnostics",
     "fec_research_response_outcomes": "diagnostics",
@@ -21,7 +25,7 @@ def table_category(name: str) -> str | None:
     if name.startswith("fec_"):
         return (
             "source_evidence"
-            if name in {"fec_source_records", "fec_record_evidence", "fec_filing_definitions"}
+            if name == "fec_record_evidence"
             else "query_data"
         )
     return None

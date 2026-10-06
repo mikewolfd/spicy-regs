@@ -114,6 +114,47 @@ def test_bill_collection_checkpoints_have_an_explicit_evidence_category():
     assert descriptions["fec_receipts"].get("category") != "processing_evidence"
 
 
+def test_published_fec_roles_and_count_units_survive_dictionary_fallback(monkeypatch):
+    from spicy_regs import explorer_metadata
+
+    # These published outputs are absent from the installed schema metadata.
+    monkeypatch.setattr(explorer_metadata, "read_json", lambda _: {})
+    expected = {
+        "fec_api_response_controls": ("diagnostics", "response fields"),
+        "fec_agency_mapping_dispositions": ("diagnostics", "mapping results"),
+        "fec_research_context_dispositions": ("diagnostics", "processing results"),
+        "fec_research_response_outcomes": ("diagnostics", "response outcomes"),
+        "fec_collections": ("processing_evidence", "collections"),
+        "fec_collection_selection": ("processing_evidence", "selection decisions"),
+        "fec_record_evidence": ("source_evidence", "evidence links"),
+        "fec_filing_header_associations": ("source_evidence", "association decisions"),
+        "fec_filing_definition_evidence": ("source_evidence", "source references"),
+        "fec_filing_definitions": ("reference_data", "filing layouts"),
+        "fec_source_catalog": ("reference_data", "sources"),
+        "fec_source_records": ("source_data", "source records"),
+    }
+    live = {name: {"schema": [["record_id", "VARCHAR"]]} for name in expected}
+    result = explorer_metadata.publication_descriptions(live)
+    for name, (category, unit) in expected.items():
+        assert result[name]["category"] == category
+        assert result[name]["row_unit"] == unit
+        assert "record_id" in {column["column_name"] for column in result[name]["columns"]}
+    assert "committee_report_reads" not in result  # Documentation cannot invent publication.
+
+
+def test_packaged_fec_metadata_uses_the_same_roles_as_the_fallback(monkeypatch):
+    from spicy_regs import explorer_metadata
+
+    monkeypatch.setattr(explorer_metadata, "read_json", lambda _: {
+        "fec_api_response_controls": {"label": "Known table", "category": "query_data"},
+        "fec_receipts": {"category": "query_data"},
+    })
+    live = {name: {"schema": []} for name in ("fec_api_response_controls", "fec_receipts")}
+    result = explorer_metadata.publication_descriptions(live)
+    assert result["fec_api_response_controls"]["category"] == "diagnostics"
+    assert result["fec_receipts"]["category"] == "query_data"
+
+
 @pytest.mark.parametrize("change", [
     {"child_columns": ["missing"]}, {"child_columns": ["parent_id"]},
     {"child_columns": []}, {"child_columns": ["parent_id", "parent_id"]},
