@@ -17,7 +17,7 @@ import pyarrow.parquet as pq
 
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import (
-    RECEIPT_SCHEMA, WITNESS_TYPE, ReceiptContext, carry_receipt_history,
+    RECEIPT_SCHEMA, WITNESS_TYPE, ReceiptContext,
     decode_exact_json, exact_json, observation_receipt, select_receipts, validate_receipt_bundle,
 )
 from spicy_regs.native_types import described_schema
@@ -71,6 +71,8 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
     from spicy_regs.transforms.regulations_receipts import map_regulations_attempt, policy
     from rulespec_artifacts import publish_directory_no_replace
 
+    if len(prior_receipts) > 1:
+        raise etl_bulk.NotBulkEligible("Ordered multiple regulatory prior bundles require the original row writer")
     schema = pq.read_schema(source)
     if not eligible(dataset, schema):
         raise etl_bulk.NotBulkEligible('Regulatory base bulk requires declared string input columns')
@@ -200,21 +202,29 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
         if seen != expected:
             raise RuntimeError(f'{dataset}: source population changed')
         if prior_receipts:
-            carry_receipt_history(receipt_path, prior_receipts, receipt_path)
+            from spicy_regs.current_receipt_history import inherit_current_receipts
+            try:
+                inherited = inherit_current_receipts(
+                    receipt_path, prior_receipts, stage / "inherited.parquet",
+                    inherit_observations=False, require_unique_prior=True,
+                )
+            except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
+                raise etl_bulk.NotBulkEligible("Regulatory prior inheritance requires the original row writer") from error
+            inherited.replace(receipt_path)
         validate_receipt_bundle({dataset: [subject_path]}, [receipt_path], [declared], generation_id=generation_id)
         publish_directory_no_replace(stage, destination)
     return destination/subject_path.name, destination/receipt_path.name
 
 
-def materialize_internal(selected, destination):
+def materialize_internal(selected, destination, *, source_schema=None):
     if selected.dataset not in DATASETS or len(selected.subjects) != 1:
         raise etl_bulk.NotBulkEligible('Regulatory base restore requires one selected member')
     with TemporaryDirectory(prefix='regulatory-base-selected-') as temporary:
         scoped = select_receipts(selected.receipts, Path(temporary)/'receipts.parquet', dataset=selected.dataset)
-        return _materialize_selected(replace(selected, receipts=scoped), destination)
+        return _materialize_selected(replace(selected, receipts=scoped), destination, source_schema=source_schema)
 
 
-def _materialize_selected(selected, destination):
+def _materialize_selected(selected, destination, *, source_schema=None):
     from spicy_regs.transforms.regulations_receipts import policy
     from spicy_regs.transforms.regulations_shape import shape_record
 
@@ -231,7 +241,8 @@ def _materialize_selected(selected, destination):
         WHERE r.dataset={_text(selected.dataset)} AND r.outcome='accepted' ORDER BY n.file_row_number'''
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS[selected.dataset]])
+    schema = (source_schema.remove_metadata() if source_schema is not None else
+              pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS[selected.dataset]]))
     metadata, seen = None, 0
     try:
         with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(prefix='.regulatory-restore-', dir=destination.parent) as temporary:
@@ -252,6 +263,8 @@ def _materialize_selected(selected, destination):
                     raw = [values.get('raw_conversion_inputs') for values in held]
                     if any(not isinstance(value, Mapping) for value in raw):
                         raise etl_bulk.NotBulkEligible('Regulatory base exact processor input is required')
+                    if source_schema is not None and any(set(value) != set(source_schema.names) for value in raw):
+                        raise etl_bulk.NotBulkEligible("Exact regulatory source field presence differs from retained input")
                     shaped = [shape_record(selected.dataset, value) for value in raw]
                     reproduced = pa.Table.from_pylist(shaped, schema=declared.subject_schema)
                     if not reproduced.equals(table.select(declared.subject_schema.names).cast(declared.subject_schema)):

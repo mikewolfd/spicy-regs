@@ -27,8 +27,15 @@ def rows(dataset):
 
 
 @pytest.mark.parametrize("dataset", ["dockets", "documents"])
-def test_regulatory_preparation_batches_and_publishes_exact_artifact_once(tmp_path, monkeypatch, bucket, dataset):
+@pytest.mark.parametrize("source_shape", ["current", "retained", "reordered"])
+def test_regulatory_preparation_batches_and_publishes_exact_artifact_once(tmp_path, monkeypatch, bucket, dataset, source_shape):
     original_rows = rows(dataset)
+    if source_shape == "retained" and dataset == "documents":
+        original_rows = [{key: value for key, value in row.items()
+                          if key not in {"publisher_status", "removed_observed_at"}} for row in original_rows]
+    elif source_shape == "reordered":
+        identity = "docket_id" if dataset == "dockets" else "document_id"
+        original_rows = [{key: row[key] for key in ("title", identity)} for row in original_rows]
     old = publish_old(bucket, monkeypatch, tmp_path, dataset, {dataset: original_rows})
     calls = []
     writer = regulations_bulk.write_held_dataset

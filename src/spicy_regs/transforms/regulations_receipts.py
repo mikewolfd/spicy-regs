@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
+from contextlib import ExitStack
 from hashlib import file_digest, sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -19,6 +20,7 @@ import pyarrow.parquet as pq
 from spicy_regs.etl_receipts import (
     DatasetPolicy,
     ReceiptContext,
+    ReceiptLineage,
     RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
@@ -114,7 +116,8 @@ def read_internal(selected: ReceiptInput) -> Iterable[dict]:
         yield _processor_input(selected.dataset, row)
 
 
-def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = False) -> Path:
+def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = False,
+                         source_schema: pa.Schema | None = None) -> Path:
     """Bounded exact retained processor inputs, with qualified file metadata.
 
     File-level placement/aggregation metadata is restored only when every row's
@@ -124,10 +127,16 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     ``bulk=False`` retains the complete row reader as the reference authority.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
+    if source_schema is not None:
+        known = dict(SOURCE_COLUMNS[selected.dataset])
+        if (selected.dataset not in {"dockets", "documents"}
+                or len(set(source_schema.names)) != len(source_schema.names)
+                or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
+            raise ValueError("Exact regulatory source schema differs from the declared input fields")
     if bulk and selected.dataset in {'dockets', 'documents'}:
         from spicy_regs import etl_bulk, regulations_bulk
         try:
-            return regulations_bulk.materialize_internal(selected, destination)
+            return regulations_bulk.materialize_internal(selected, destination, source_schema=source_schema)
         except etl_bulk.NotBulkEligible:
             pass
 
@@ -153,17 +162,24 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
             if held and any(value != held[0] for value in held):
                 raise ValueError("Empty input metadata differs across selected receipts")
             metadata = held[0] if held else {}
-    schema = pa.schema([(name, TYPES[t]) for name, t in SOURCE_COLUMNS[selected.dataset]])
+    schema = (source_schema.remove_metadata() if source_schema is not None else
+              pa.schema([(name, TYPES[t]) for name, t in SOURCE_COLUMNS[selected.dataset]]))
     if metadata:
         schema = schema.with_metadata(metadata)
 
+    def original(row):
+        raw = _processor_input(selected.dataset, row)
+        if source_schema is not None and set(raw) != set(source_schema.names):
+            raise ValueError("Exact regulatory source field presence differs from retained input")
+        return raw
+
     def restored():
         if first is not None:
-            yield _processor_input(selected.dataset, first)
+            yield original(first)
         for row in rows:
             if row.get("input_metadata", {}) != metadata:
                 raise ValueError("Input metadata differs across selected receipts")
-            yield _processor_input(selected.dataset, row)
+            yield original(row)
 
     return write_rows(restored(), destination, schema)
 
@@ -215,7 +231,8 @@ def write_records(
     rows require a stable subject identity and exactly one matching receipt.
     """
     declared = policy(dataset)
-    with TemporaryDirectory(prefix="regulations-refusals-") as temp:
+    with TemporaryDirectory(prefix="regulations-refusals-") as temp, ExitStack() as stack:
+        lineages = [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts]
         refusal_path = Path(temp) / "refused.parquet"
         writer = pq.ParquetWriter(refusal_path, RECEIPT_SCHEMA, compression="zstd")
         refused = []
@@ -235,6 +252,8 @@ def write_records(
                         if len(refused) >= 2000:
                             flush()
                         continue
+                    for lineage in lineages:
+                        context = lineage.inherit(context, declared, shaped)
                     yield shaped, context
             finally:
                 flush()
@@ -249,7 +268,7 @@ def write_records(
                 yield from batch.to_pylist()
 
         try:
-            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures(), prior_receipts=prior_receipts)
+            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures())
         finally:
             writer.close()
         assert subject is not None
