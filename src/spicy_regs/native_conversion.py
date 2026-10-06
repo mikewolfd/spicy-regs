@@ -148,6 +148,78 @@ def _refuse_moved(state: Mapping, *, main: str, spicy_docs: str) -> None:
         raise ConversionRefused("Main or the pinned wheel moved: " + "; ".join(problems))
 
 
+def _historical_producer(root: Path, revision: str, publisher: str) -> tuple[str, Mapping]:
+    """Read retained Git blobs, with the same path ordering and bytes as generations.source_digest."""
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ConversionRefused("--expect-producer requires a full lowercase Git commit")
+
+    def git(*arguments: str) -> bytes:
+        try:
+            return subprocess.run(["git", "-C", str(root), *arguments], check=True, capture_output=True,
+                                  env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"}).stdout
+        except subprocess.CalledProcessError as failure:
+            raise ConversionRefused(f"Prepared producer history cannot be verified ({arguments[0]}): "
+                                    + failure.stderr.decode(errors="replace").strip()[:300]) from failure
+
+    if git("cat-file", "-t", revision).strip() != b"commit":
+        raise ConversionRefused("Prepared producer pin is not a commit in this repository")
+    git("merge-base", "--is-ancestor", revision, publisher)
+    historical_lock = git("show", f"{revision}:uv.lock")
+    if historical_lock != git("show", f"{publisher}:uv.lock"):
+        raise ConversionRefused("Prepared producer and publisher require the same locked runtime")
+    locked = next((package for package in tomllib.loads(historical_lock.decode())["package"]
+                   if package["name"] == "spicy-docs"), None)
+    if locked is None:
+        raise ConversionRefused("Prepared producer has no locked SpicyDocs runtime")
+    wheels = locked.get("wheels", [])
+    if len(wheels) != 1 or not locked.get("source", {}).get("path"):
+        raise ConversionRefused("Prepared producer has no single locked vendored SpicyDocs wheel")
+    wheel = git("show", f"{revision}:{locked['source']['path']}")
+    if "sha256:" + hashlib.sha256(wheel).hexdigest() != wheels[0]["hash"]:
+        raise ConversionRefused("Prepared producer wheel bytes differ from its lock")
+    digest = hashlib.sha256()
+    prefix = "src/spicy_regs/"
+    files = []
+    for entry in git("ls-tree", "-r", "-z", revision, "--", prefix).split(b"\0"):
+        if not entry:
+            continue
+        properties, name = entry.split(b"\t", 1)
+        path = Path(name.decode().removeprefix(prefix))
+        if path.suffix != ".py" or "__pycache__" in path.parts:
+            continue
+        if properties.split()[0] not in (b"100644", b"100755"):
+            raise ConversionRefused("Prepared producer Python source is not a regular Git blob")
+        files.append(path)
+    if not files:
+        raise ConversionRefused("Prepared producer Python source is unavailable")
+    for path in sorted(files):
+        digest.update(path.as_posix().encode() + b"\0")
+        digest.update(git("show", f"{revision}:{prefix}{path.as_posix()}"))
+    return "urn:spicy-regs:implementation:sha256:" + digest.hexdigest(), locked
+
+
+def _prepared_implementation(source: Mapping, publisher: Mapping, expected_producer: str | None) -> str:
+    """Keep the sealed producer distinct from the current publisher, within the same locked runtime."""
+    from spicy_regs.generations import implementation_id
+
+    # Preserve same-revision callers. Reusing an earlier producer always needs an explicit full pin and Git proof.
+    if expected_producer is None:
+        if source != publisher:
+            raise ConversionRefused("An earlier prepared producer requires --expect-producer")
+        return implementation_id()
+    if (source["checkout"] != expected_producer or source["main"] != expected_producer
+            or source["remote"] != publisher["remote"]):
+        raise ConversionRefused("Prepared producer pin or repository differs from its sealed source")
+    _refuse_moved(source, main=expected_producer, spicy_docs=publisher["spicy_docs"])
+    identity, locked = _historical_producer(Path(__file__).resolve().parents[2], expected_producer,
+                                          publisher["checkout"])
+    if (locked["version"] != source["pinned_spicy_docs"]
+            or locked["wheels"][0]["hash"] != source["spicy_docs_wheel"]["locked_sha256"]
+            or source["spicy_docs_wheel"] != publisher["spicy_docs_wheel"]):
+        raise ConversionRefused("Prepared producer runtime differs from the current installed locked wheel")
+    return identity
+
+
 @dataclass(frozen=True)
 class _Built:
     """One verified local generation and the two reads that prove it: restored locally, then from what is published."""
@@ -661,7 +733,8 @@ def _retained_inputs(captured: Mapping, old: Mapping, work: Path) -> dict[str, P
 
 
 def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
-                     expect_bucket: str, remote: str = "origin", state: Callable[[str], dict] | None = None) -> dict:
+                     expect_bucket: str, remote: str = "origin", state: Callable[[str], dict] | None = None,
+                     expected_producer: str | None = None) -> dict:
     """Publish one completed official dry run after rechecking its bytes and restoring its exact inputs again.
 
     The source writer never runs here. Separate field, server and coverage qualifications in the release package
@@ -684,8 +757,7 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         family, base = receipt["family"], receipt["public_url"]
         if family not in allowed:
             raise ConversionRefused(f"{family} is not in this run's allow-list")
-        if now != receipt["source"]:
-            raise ConversionRefused("Prepared source or runtime differs from current clean main")
+        producer_implementation = _prepared_implementation(receipt["source"], now, expected_producer)
         if base != (os.getenv("R2_PUBLIC_URL") or "").rstrip("/"):
             raise ConversionRefused("Prepared public URL differs from R2_PUBLIC_URL")
         capture_path = _prepared_path(work, "captured-publication.v2.json")
@@ -699,7 +771,7 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         if publication.stored_family(r2.get_r2_client(), target["bucket"], family) != old:
             raise ConversionRefused("Prepared family's complete captured entry changed; nothing was uploaded")
         retained = _retained_inputs(captured, old, work)
-        from spicy_regs.generations import implementation_id, verify_generation
+        from spicy_regs.generations import verify_generation
 
         generation = _prepared_path(work, receipt["generation"]["directory"])
         artifact = verify_generation(generation)
@@ -709,7 +781,8 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
                 or spec["family"] != family or spec["publicationStatus"] != "complete-family"
                 or spec["readSnapshot"] != captured
                 or spec["etlReceipts"]["generationId"] != receipt["generation"]["receiptGenerationId"]
-                or artifact.root["producer"]["implementationId"] != implementation_id()
+                or artifact.root["producer"]["implementationId"] != producer_implementation
+                or artifact.root["producer"]["verifierImplementationId"] != producer_implementation
                 or any(version(name) != value for name, value in spec["packages"].items())):
             raise ConversionRefused("Prepared generation, captured inputs, or implementation differs")
         evidence = tuple(_prepared_path(work, value) for value in sealed["evidenceDirectories"])
@@ -767,7 +840,8 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
                                 state=_prepared_refusal_state(receipt_path)) from failure
     receipt["target"] = target
     return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
-                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state, exact_prior=True)
+                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state, exact_prior=True,
+                               publisher_source=now)
 
 
 def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: str, expected_spicy_docs: str,
@@ -949,8 +1023,9 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
 
 def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: Path, *,
                         expected_main: str, expected_spicy_docs: str, remote: str, state: Callable[[str], dict],
-                        exact_prior: bool = False) -> dict:
-    family, base, target, started = (receipt[name] for name in ("family", "public_url", "target", "source"))
+                        exact_prior: bool = False, publisher_source: Mapping | None = None) -> dict:
+    family, base, target = (receipt[name] for name in ("family", "public_url", "target"))
+    started = publisher_source if publisher_source is not None else receipt["source"]
     old, tables = receipt["captured"]["entry"], receipt["tables"]
     artifact = json.loads((built.generation / "artifact.json").read_bytes())
 
@@ -968,7 +1043,10 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
             raise ConversionRefused(str(failure), state=_prepared_refusal_state(work / RECEIPT)) from failure
         raise
     # The rollback file exists before the pointer can move: it names the captured entry and the generation intended.
-    attempt: dict = {"at": _now(), "outcome": "attempted", "error": None}
+    from spicy_regs.generations import implementation_id
+
+    attempt: dict = {"at": _now(), "outcome": "attempted", "error": None,
+                     "publisher": {"source": now, "implementationId": implementation_id()}}
     receipt |= {"published": None, "publish_attempt": attempt}
     save()
     try:
@@ -1133,6 +1211,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--publish", action="store_true", help="Move the family's pointer; without it nothing is uploaded")
     parser.add_argument("--publish-prepared", type=Path, metavar="CONVERSION_JSON",
                         help="Recheck and publish one completed official dry run without rerunning its writer")
+    parser.add_argument("--expect-producer", help="Full retained producer commit for a prepared publication")
     parser.add_argument("--expect-bucket", help="The bucket --publish or --rollback may write to; any other is refused")
     parser.add_argument("--rollback", type=Path, metavar="RECEIPT", help="Restore the entry a conversion receipt captured")
     parser.add_argument("--discard-newer", action="store_true",
@@ -1140,8 +1219,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--env-file", type=Path, help="Read R2_* settings from this file; nothing is loaded implicitly")
     args = parser.parse_args(argv)
     if args.rollback and (args.family or args.allow or args.work or args.expect_main or args.expect_spicy_docs or args.publish_prepared
-                          or args.publish or args.remote != "origin"):
+                          or args.expect_producer or args.publish or args.remote != "origin"):
         parser.error("--rollback takes only --expect-bucket, --env-file and --discard-newer")
+    if args.expect_producer and not args.publish_prepared:
+        parser.error("--expect-producer belongs to --publish-prepared")
     if args.publish_prepared and (args.family or args.work or args.publish):
         parser.error("--publish-prepared cannot rebuild a family; omit FAMILY, --work and --publish")
     if (args.publish or args.publish_prepared or args.rollback) and not args.expect_bucket:
@@ -1172,7 +1253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             done = publish_prepared(
                 args.publish_prepared, allowed=[name for value in args.allow for name in value.split(",") if name],
                 expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs,
-                remote=args.remote, expect_bucket=args.expect_bucket)
+                remote=args.remote, expect_bucket=args.expect_bucket, expected_producer=args.expect_producer)
         elif not (args.family and args.work and args.expect_main and args.expect_spicy_docs):
             parser.error("a conversion needs FAMILY, --allow, --work, --expect-main and --expect-spicy-docs")
         else:
