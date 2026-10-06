@@ -34,7 +34,8 @@ class DeleteManifestWriter(ManifestWriterV2):
         return {**super()._meta, 'content': 'deletes'}
 
 
-def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, rows_count=12, delete_sequence=2, evolved=False):
+def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, rows_count=12,
+                 delete_sequence=2, evolved=False, empty_first=False):
     root.mkdir()
     io = PyArrowFileIO()
     names = ['comment_id', 'docket_id', 'agency_code', 'first_name', 'last_name', 'organization',
@@ -63,6 +64,8 @@ def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, ro
     # Same-file positions, duplicated entry, and a second file: position 1 is deleted once.
     targets = [(files[0].file_path, 1), (files[0].file_path, 1), (files[0].file_path, 3),
                (files[1].file_path, 0)]
+    if empty_first:
+        targets = [(files[0].file_path, index) for index in range(rows_count // 2)] + [(files[1].file_path, 0)]
     path = root / 'delete.parquet'
     if delete_type == DataFileContent.POSITION_DELETES:
         delete_schema = pa.schema([pa.field('file_path', pa.string(), metadata={'PARQUET:field_id': '2147483546'}),
@@ -101,7 +104,8 @@ def make_fixture(root: Path, *, delete_type=DataFileContent.POSITION_DELETES, ro
     meta_path = root / 'v2.metadata.json'
     meta_path.write_text(metadata.model_dump_json(by_alias=True))
     table = StaticTable.from_metadata(str(meta_path))
-    surviving = [row for i, row in enumerate(rows) if delete_sequence < 1 or i not in {1, 3, rows_count // 2}]
+    deleted = set(range(rows_count // 2)) | {rows_count // 2} if empty_first else {1, 3, rows_count // 2}
+    surviving = [row for i, row in enumerate(rows) if delete_sequence < 1 or i not in deleted]
     return table, rows, surviving
 
 
@@ -158,8 +162,11 @@ def test_fresh_end_change_refuses_preserving_partial_output(tmp_path, change):
     with pytest.raises(RuntimeError, match='fresh-end-metadata'):
         capture.capture(expected, tmp_path / 'out', namespace='default',
                         expected_runtime=capture.reader_runtime(), loader=loader)
-    assert (tmp_path / 'out/comments.parquet').exists()
-    assert (tmp_path / 'out/comments.parquet').stat().st_mode & 0o222
+    report = json.loads((tmp_path / 'out/RESULT.json').read_text())
+    partial = Path(report['partialSource'])
+    assert partial.exists()
+    assert partial.stat().st_mode & 0o222
+    assert not (tmp_path / 'out/comments.parquet').exists()
 
 
 def test_loader_credentials_do_not_escape(tmp_path):
@@ -263,3 +270,261 @@ def test_same_schema_id_changed_field_definition_refuses(tmp_path):
         capture.capture(expected, tmp_path / 'out', namespace='default',
                         expected_runtime=capture.reader_runtime(), loader=lambda _: table)
     assert not (tmp_path / 'out/comments.parquet').exists()
+
+
+def test_checkpoint_bound_resumes_only_unfinished_task_and_preserves_all_fields(tmp_path, monkeypatch):
+    table, _, after = make_fixture(tmp_path / 'fixture')
+    expected = capture.selection(table)
+    runtime = capture.reader_runtime()
+    out = tmp_path / 'out'
+    calls = []
+    original = capture.task_batches
+    def observed(table, scan, task, schema):
+        calls.append(task.file.file_path)
+        yield from original(table, scan, task, schema)
+    monkeypatch.setattr(capture, 'task_batches', observed)
+    first = capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, max_tasks=1)
+    assert first['status'] == 'checkpointed'
+    assert first['completedTasks'] == first['remainingTasks'] == 1
+    assert not (out / 'comments.parquet').exists()
+    retained = (out / 'attempts' / first['attempt'] / 'RESULT.json').read_bytes()
+    final = capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, resume=True, max_tasks=1)
+    assert final['status'] == 'captured'
+    assert final['newTasks'] == final['reusedTasks'] == 1
+    assert len(calls) == len(set(calls)) == 2
+    assert pq.read_table(out / 'comments.parquet').to_pylist() == after
+    assert final['readerFields'] == final['readbackFields']
+    assert (out / 'attempts' / first['attempt'] / 'RESULT.json').read_bytes() == retained
+    planning = json.loads((out / 'attempts' / first['attempt'] / 'PLANNING.json').read_text())
+    assert planning['dataTasks'] == 2 and planning['sharedDeleteFiles'] == 1
+    assert set(planning['deleteFileTaskUseCounts'].values()) == {2}
+
+
+def test_interrupted_reader_keeps_completed_receipt_and_unadmitted_partial(tmp_path, monkeypatch):
+    table, _, after = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    original = capture.task_batches
+    calls = []
+    def interrupted(table, scan, task, schema):
+        calls.append(task.file.file_path)
+        if len(calls) == 2:
+            raise ValueError('unretained-private-error')
+        yield from original(table, scan, task, schema)
+    monkeypatch.setattr(capture, 'task_batches', interrupted)
+    with pytest.raises(RuntimeError, match='logical-stream'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime, loader=lambda _: table)
+    assert (out / 'parts/000000.json').exists() and not (out / 'parts/000001.json').exists()
+    partials = {p: p.read_bytes() for p in (out / 'parts').glob('*.pending')}
+    assert partials
+    second_task = calls[1]
+    calls.clear()
+    def observed(table, scan, task, schema):
+        calls.append(task.file.file_path)
+        yield from original(table, scan, task, schema)
+    monkeypatch.setattr(capture, 'task_batches', observed)
+    final = capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, resume=True)
+    assert calls == [second_task]
+    assert final['status'] == 'captured'
+    assert all(p.read_bytes() == raw for p, raw in partials.items())
+    assert pq.read_table(out / 'comments.parquet').to_pylist() == after
+
+
+def test_empty_task_is_closed_admitted_and_not_reread(tmp_path, monkeypatch):
+    table, _, after = make_fixture(tmp_path / 'fixture', empty_first=True)
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                    loader=lambda _: table, max_tasks=1)
+    # Refuse at fresh end after both parts are durable; the first task is empty.
+    calls = 0
+    def loader(_):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise ValueError('end-refusal')
+        return table
+    with pytest.raises(RuntimeError, match='fresh-end-metadata'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=loader, resume=True)
+    receipts = [json.loads(p.read_text()) for p in (out / 'parts').glob('*.json')]
+    assert sorted(r['readerFields']['rows'] for r in receipts) == [0, len(after)]
+    monkeypatch.setattr(capture, 'task_batches', lambda *args: pytest.fail('completed task reread'))
+    final = capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, resume=True)
+    assert final['newTasks'] == 0 and final['reusedTasks'] == 2
+    assert pq.read_table(out / 'comments.parquet').to_pylist() == after
+
+
+@pytest.mark.parametrize('corruption', ['bytes', 'field_hash', 'binding', 'locator', 'missing'])
+def test_corrupt_part_or_receipt_refuses_before_new_body_read(tmp_path, monkeypatch, corruption):
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                    loader=lambda _: table, max_tasks=1)
+    path = out / 'parts/000000.json'
+    receipt = json.loads(path.read_text())
+    part = out / 'parts' / receipt['part']
+    if corruption == 'bytes':
+        part.chmod(0o644)
+        with part.open('ab') as stream:
+            stream.write(b'changed')
+    elif corruption == 'missing':
+        part.unlink()
+    elif corruption == 'field_hash':
+        receipt['readerFields']['columns']['comment_id'] = 'wrong'
+    elif corruption == 'binding':
+        receipt['checkpointSha256'] = 'wrong'
+    else:
+        receipt['part'] = '../outside.parquet'
+    if corruption not in ('bytes', 'missing'):
+        path.write_text(json.dumps(receipt))
+    monkeypatch.setattr(capture, 'task_batches', lambda *args: pytest.fail('new body read'))
+    with pytest.raises(RuntimeError, match='checkpoint-readback'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=lambda _: table, resume=True)
+    assert json.loads((out / 'RESULT.json').read_text())['status'] == 'refused'
+
+
+@pytest.mark.parametrize('change', ['snapshot', 'field', 'runtime', 'code', 'task'])
+def test_stale_checkpoint_pins_refuse_before_body_read(tmp_path, monkeypatch, change):
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                    loader=lambda _: table, max_tasks=1)
+    checkpoint_path = out / 'CHECKPOINT.json'
+    checkpoint = json.loads(checkpoint_path.read_text())
+    if change == 'task':
+        checkpoint['tasks'][0]['deletes'][0]['record_count'] += 1
+    elif change == 'code':
+        checkpoint['binding']['captureCodeSha256'] = 'wrong'
+    elif change == 'runtime':
+        checkpoint['binding']['runtime'] = {}
+    elif change == 'field':
+        checkpoint['binding']['fields'][0]['id'] = 999
+    else:
+        checkpoint['binding']['identity']['snapshotId'] = 11
+    checkpoint_path.write_text(json.dumps(checkpoint))
+    monkeypatch.setattr(capture, 'task_batches', lambda *args: pytest.fail('body read'))
+    with pytest.raises(RuntimeError, match='checkpoint-task-pins' if change == 'task' else 'checkpoint-binding'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=lambda _: table, resume=True)
+
+
+@pytest.mark.parametrize('timing', ['resume', 'fresh-end'])
+def test_name_mapping_drift_refuses_before_mixing_parts(tmp_path, monkeypatch, timing):
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    original = table.metadata
+    def changed():
+        table.metadata = original.model_copy(update={'properties': {
+            'schema.name-mapping.default': '[{"field-id":999,"names":["comment_id"]}]'}})
+    if timing == 'resume':
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=lambda _: table, max_tasks=1)
+        changed()
+        monkeypatch.setattr(capture, 'task_batches', lambda *args: pytest.fail('body read'))
+        def loader(_):
+            return table
+    else:
+        calls = 0
+        def loader(_):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                changed()
+            return table
+    with pytest.raises(RuntimeError, match='checkpoint-read-semantics' if timing == 'resume' else 'fresh-end-metadata'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=loader, resume=timing == 'resume')
+
+
+def test_captured_output_resume_preserves_qualification_without_mutation(tmp_path):
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    capture.capture(expected, out, namespace='default', expected_runtime=runtime, loader=lambda _: table)
+    before = {str(p.relative_to(out)): p.read_bytes() for p in out.rglob('*') if p.is_file()}
+    with pytest.raises(ValueError, match='already qualified'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=lambda _: pytest.fail('loaded source'), resume=True)
+    assert {str(p.relative_to(out)): p.read_bytes() for p in out.rglob('*') if p.is_file()} == before
+
+
+def test_unqualified_monolith_has_no_admitted_task_boundaries(tmp_path):
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    out = tmp_path / 'legacy'
+    out.mkdir()
+    partial = out / 'comments.parquet'
+    partial.write_bytes(b'PAR1-unfinished-original')
+    with pytest.raises(RuntimeError, match='checkpoint-binding'):
+        capture.capture(capture.selection(table), out, namespace='default', expected_runtime=capture.reader_runtime(),
+                        loader=lambda _: pytest.fail('loaded source'), resume=True)
+    assert partial.read_bytes() == b'PAR1-unfinished-original'
+    assert not list((out / 'parts').glob('*.json'))
+
+
+def test_final_publication_interruption_resumes_from_parts_without_source_replay(tmp_path, monkeypatch):
+    table, _, after = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    original = capture.os.replace
+    def interrupted(src, dst):
+        if Path(dst) == out / 'agency-populations.parquet':
+            raise ValueError('publication-interrupted')
+        original(src, dst)
+    monkeypatch.setattr(capture.os, 'replace', interrupted)
+    with pytest.raises(RuntimeError):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime, loader=lambda _: table)
+    assert (out / 'comments.parquet').exists()
+    retained_bytes = (out / 'comments.parquet').read_bytes()
+    monkeypatch.setattr(capture.os, 'replace', original)
+    monkeypatch.setattr(capture, 'task_batches', lambda *args: pytest.fail('source replay'))
+    final = capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                            loader=lambda _: table, resume=True)
+    assert final['status'] == 'captured' and final['newTasks'] == 0
+    assert (out / 'attempts' / final['attempt'] / 'retained-comments.parquet').read_bytes() == retained_bytes
+    assert pq.read_table(out / 'comments.parquet').to_pylist() == after
+
+
+def test_interruption_before_receipt_preserves_orphan_and_rereads_only_unadmitted_task(tmp_path, monkeypatch):
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    original = capture.atomic_json
+    def interrupted(path, value):
+        if path == out / 'parts/000000.json':
+            raise ValueError('receipt-interrupted')
+        original(path, value)
+    monkeypatch.setattr(capture, 'atomic_json', interrupted)
+    with pytest.raises(RuntimeError, match='logical-stream'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime, loader=lambda _: table)
+    orphans = {p: p.read_bytes() for p in (out / 'parts').glob('*.parquet')}
+    assert len(orphans) == 1 and not list((out / 'parts').glob('*.json'))
+    monkeypatch.setattr(capture, 'atomic_json', original)
+    result = capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                             loader=lambda _: table, resume=True, max_tasks=1)
+    assert result['status'] == 'checkpointed' and result['reusedTasks'] == 0
+    assert all(p.read_bytes() == raw for p, raw in orphans.items())
+
+
+def test_changed_partition_definition_refuses_before_part_reuse(tmp_path, monkeypatch):
+    from pyiceberg.partitioning import PartitionField
+    from pyiceberg.transforms import IdentityTransform
+    table, _, _ = make_fixture(tmp_path / 'fixture')
+    expected, runtime = capture.selection(table), capture.reader_runtime()
+    out = tmp_path / 'out'
+    capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                    loader=lambda _: table, max_tasks=1)
+    table.metadata = table.metadata.model_copy(update={'partition_specs': [PartitionSpec(
+        PartitionField(source_id=3, field_id=1000, transform=IdentityTransform(), name='agency'), spec_id=0)]})
+    monkeypatch.setattr(capture, 'task_batches', lambda *args: pytest.fail('body read'))
+    with pytest.raises(RuntimeError, match='checkpoint-read-semantics'):
+        capture.capture(expected, out, namespace='default', expected_runtime=runtime,
+                        loader=lambda _: table, resume=True)

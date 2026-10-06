@@ -33,3 +33,33 @@ resource result, qualifies the local input. This does not publish or convert it.
 See `tests/test_capture_comments_current.py` for actual pre/post Iceberg fixtures,
 position-delete duplicates and sequencing, evolved nullable fields, exact original
 values, file lifetimes and retained refusal behavior.
+
+Each planned task now writes a separate part under `OUTPUT/parts/`. A task is
+complete only after its reader and writer close and full local readback matches
+the original schema, row count and field hashes. An atomic receipt pins the
+part bytes to the selected snapshot, runtime, capture code, name mapping,
+partition definitions and exact data/delete association. A fully deleted task
+has a verified zero-row part and a completion receipt too.
+
+Use `--max-tasks N` to bound newly read tasks in an admitted attempt. A result
+of `checkpointed` records progress and leaves the full input unqualified. Resume
+that same output with `--resume`, the same expected metadata and runtime, and
+an appropriate new resource grant. Resume verifies every completed part, restores
+the original pinned task order, and reads only unfinished tasks. Corrupted parts,
+changed source identity or read settings, and changed task associations refuse
+before reuse. Existing captured outputs are preserved; unfinished files without
+task receipts cannot skip source work.
+Use one owned executor per output directory; the coordinator grants each attempt.
+
+`PROGRESS.json` and `attempts/*/progress.jsonl` retain task phases, elapsed time,
+logical rows and output bytes. `attempts/*/PLANNING.json` measures compressed
+file sizes and shared delete-file associations from metadata. Declared input
+bytes are not observed network traffic. Shared-delete I/O costs remain a
+hypothesis until a supervised run measures them.
+
+When all tasks are complete, the reader streams local parts into the final
+`comments.parquet` and performs the complete existing validation. All parts and
+interrupted attempts remain within the caller's disk budget. A killed final
+write can be rebuilt from verified parts; an already qualified local captured
+result is not overwritten by resume. The separately supervised actual-source
+delete oracle remains required by the full qualification driver.
