@@ -176,6 +176,12 @@ def _rollup_class(family: str, base: type | None = None):
     return None
 
 
+def _regulatory_base_class(family: str):
+    from spicy_regs.pipelines.rollups.regulatory_base import DocketsFamily, DocumentsFamily
+
+    return {cls.name: cls for cls in (DocketsFamily, DocumentsFamily)}.get(family)
+
+
 def _handed_on(base: str, replaced_root: Mapping) -> list[dict]:
     """The replaced generation's journal events that its next run would have read back (:data:`INHERITED_EVENTS`)."""
     from spicy_regs.source_evidence import INPUT_ROLE
@@ -282,8 +288,18 @@ def _rollup_built(cls, generation: Path, retained: Mapping[str, Path], base: str
                   evidence: tuple[Path, ...], selection_root: Path | None = None) -> _Built:
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
+    def exact(dataset: str, restored: Path) -> Path:
+        if cls.name in {"roll-call-votes", "member-vote-terms"}:
+            _check_processing_restore(retained[dataset + ".parquet"], restored, label="Congress")
+        return restored
+
+    def restore(dataset: str) -> Path:
+        restored = SelectedPriors(work / "restored" / uuid4().hex,
+                                  root=selection_root or work / "build", public_url="").get(dataset)
+        return exact(dataset, restored)
+
     def read_published(dataset: str, index: Mapping) -> int:
-        restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
+        restored = exact(dataset, SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset))
         original = retained[dataset + ".parquet"]
         if original.is_dir() and _has_differences(_table_differences(restored, original)):
             raise ValueError(f"{dataset}: published native readback changed retained members")
@@ -292,7 +308,7 @@ def _rollup_built(cls, generation: Path, retained: Mapping[str, Path], base: str
     return _Built(
         generation,
         {policy.dataset: policy.policy_version for policy in cls.receipt_policies},
-        lambda dataset: SelectedPriors(work / "restored" / uuid4().hex, root=selection_root or work / "build", public_url="").get(dataset),
+        restore,
         read_published,
         evidence,
         frozenset(cls.added_tables),
@@ -338,6 +354,88 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
 
     return _court_built(generation, subjects, retained, base, work, generation_id,
                         (evidence.artifact_dir,) if evidence else ())
+
+
+def _convert_regulatory_base(cls, captured: Mapping, retained: Mapping[str, Path], base: str,
+                             work: Path, handed_on: Sequence[Mapping], retain_evidence: bool) -> _Built:
+    from spicy_regs.generations import build_generation
+    from spicy_regs.transforms.regulations_receipts import policy, write_held_dataset
+
+    dataset = cls.output.removesuffix(".parquet")
+    generation_id = uuid4().hex
+    evidence = None
+    if retain_evidence:
+        from spicy_regs.source_evidence import CaptureEvidence
+
+        (work / "build").mkdir(parents=True, exist_ok=True)
+        evidence = CaptureEvidence(work / "build", cls.name)
+        evidence.inherit(dict(captured), public_url=base)
+        _journal(evidence, handed_on)
+    try:
+        (member,) = publication.table_members(captured, cls.output)
+        witness = {"source_id": member.path, "source_uri": None, "sha256": member.sha256,
+                   "locator": None, "body_version": None}
+        subject, receipts = write_held_dataset(
+            dataset, retained[cls.output], work / "regulatory-native", generation_id=generation_id,
+            witnesses=[witness], bulk=True,
+        )
+        owner = cls.__new__(cls)
+        owner.validate_native_output(subject)
+        generation = work / "build" / "generation"
+        build_generation(
+            generation, family=cls.name, files=[subject], expected_keys=[cls.output],
+            schemas=owner.generation_schemas(), read_snapshot=captured,
+            inputs=evidence.inputs() if evidence else (), receipt_path=receipts,
+            receipt_policies=[policy(dataset)], receipt_generation_id=generation_id,
+        )
+    except BaseException as error:
+        if evidence:
+            evidence.finish(error)
+        raise
+    if evidence:
+        evidence.finish()
+    return _regulatory_base_built(cls, generation, retained, base, work, generation_id,
+                                  (evidence.artifact_dir,) if evidence else ())
+
+
+def _check_processing_restore(original: Path, restored: Path, *, label: str) -> Path:
+    """Refuse any change in complete processing schema, metadata, ordered values or repetitions."""
+    from itertools import zip_longest
+
+    expected, actual = pq.ParquetFile(original), pq.ParquetFile(restored)
+    if not expected.schema_arrow.equals(actual.schema_arrow, check_metadata=True):
+        raise ValueError(f"{label} processing schema or metadata changed")
+    for before, after in zip_longest(expected.iter_batches(batch_size=1000), actual.iter_batches(batch_size=1000)):
+        if before is None or after is None or not before.equals(after):
+            raise ValueError(f"{label} processing values, order or repetitions changed")
+    return restored
+
+
+def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], base: str, work: Path,
+                           generation_id: str, evidence: tuple[Path, ...]) -> _Built:
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal, policy
+
+    dataset = cls.output.removesuffix(".parquet")
+
+    def exact(restored: Path) -> Path:
+        return _check_processing_restore(retained[cls.output], restored, label="Regulatory")
+
+    def restore(name: str) -> Path:
+        if name != dataset:
+            raise ValueError("Regulatory prepared dataset differs from its maintained family")
+        return exact(materialize_internal(
+            ReceiptInput(dataset, (generation / cls.output,), generation / "etl_receipts.parquet", generation_id),
+            work / "restored" / uuid4().hex / cls.output, bulk=True,
+        ))
+
+    def read_published(name: str, index: Mapping) -> int:
+        if name != dataset:
+            raise ValueError("Regulatory published dataset differs from its maintained family")
+        restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
+        return _table_rows(exact(restored))
+
+    return _Built(generation, {dataset: policy(dataset).policy_version}, restore, read_published, evidence)
 
 
 def _court_built(generation: Path, subjects: Mapping[str, Path], retained: Mapping[str, Path], base: str,
@@ -612,7 +710,14 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         from spicy_regs.court_receipts import POLICIES as court_policies
         from spicy_regs.pipelines.rollups.base import RollupPipeline
 
-        if all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
+        regulatory = _regulatory_base_class(family)
+        if regulatory is not None and (set(old["tables"]) != {regulatory.output}
+                                       or "members" in old["tables"][regulatory.output]):
+            raise ConversionRefused("Prepared regulatory family membership differs")
+        if regulatory is not None:
+            built = _regulatory_base_built(regulatory, generation, retained, base, work,
+                                          spec["etlReceipts"]["generationId"], evidence)
+        elif all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
             subjects = {key.removesuffix(".parquet"): generation / key for key in old["tables"]}
             built = _court_built(generation, subjects, retained, base, work, spec["etlReceipts"]["generationId"], evidence)
         elif (cls := _rollup_class(family)) is not None:
@@ -687,7 +792,15 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         from spicy_regs.pipelines.rollups.base import RollupPipeline
 
         cls = None
-        if all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
+        regulatory = _regulatory_base_class(family)
+        if regulatory is not None and (set(old["tables"]) != {regulatory.output}
+                                       or "members" in old["tables"][regulatory.output]):
+            raise ConversionRefused("Regulatory family must contain its one maintained unsplit output")
+        if regulatory is not None:
+            from spicy_regs.transforms.regulations_receipts import policy
+
+            claimed = {policy(regulatory.output.removesuffix(".parquet")).dataset}
+        elif all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
             if any(path.is_dir() for path in retained.values()):
                 raise ConversionRefused(f"{family}: the court converter has no split-table writer")
             claimed = {key.removesuffix(".parquet") for key in old["tables"]}
@@ -717,8 +830,11 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         handed_on = _handed_on(base, replaced)
         elapsed = time.monotonic()
         try:
-            built = (_convert_court(family, old, captured, retained, base, work, handed_on, retains) if cls is None
-                     else _convert_rollup(cls, old, retained, base, work, handed_on))
+            if regulatory is not None:
+                built = _convert_regulatory_base(regulatory, captured, retained, base, work, handed_on, retains)
+            else:
+                built = (_convert_court(family, old, captured, retained, base, work, handed_on, retains) if cls is None
+                         else _convert_rollup(cls, old, retained, base, work, handed_on))
         except ValueError as refusal:  # how the writers refuse a row or a family they cannot classify
             raise ConversionRefused(f"{family}: {refusal}") from refusal
         receipt["convert_seconds"] = round(time.monotonic() - elapsed, 1)

@@ -7,7 +7,6 @@ shared receipt member together. It never updates a remote pointer or catalog.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from contextlib import ExitStack
 from dataclasses import dataclass
 from functools import cache
 from hashlib import file_digest, sha256
@@ -20,7 +19,6 @@ import pyarrow.parquet as pq
 from spicy_regs.etl_receipts import (
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     RECEIPT_SCHEMA,
     combine_receipts,
     failure_receipt,
@@ -116,14 +114,22 @@ def read_internal(selected: ReceiptInput) -> Iterable[dict]:
         yield _processor_input(selected.dataset, row)
 
 
-def materialize_internal(selected: ReceiptInput, destination: Path) -> Path:
+def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = False) -> Path:
     """Bounded exact retained processor inputs, with qualified file metadata.
 
     File-level placement/aggregation metadata is restored only when every row's
     receipt agrees. This keeps CFR incremental placement from becoming a blind
     full re-read after the split, and never promotes one row's marker to a file.
+    Dockets and documents use a private batch proof before exposing the file;
+    ``bulk=False`` retains the complete row reader as the reference authority.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
+    if bulk and selected.dataset in {'dockets', 'documents'}:
+        from spicy_regs import etl_bulk, regulations_bulk
+        try:
+            return regulations_bulk.materialize_internal(selected, destination)
+        except etl_bulk.NotBulkEligible:
+            pass
 
     rows = iter(_qualified_rows(selected))
     first = next(rows, None)
@@ -162,6 +168,36 @@ def materialize_internal(selected: ReceiptInput, destination: Path) -> Path:
     return write_rows(restored(), destination, schema)
 
 
+def _shape_regulations_attempt(dataset: str, row: Mapping, context: ReceiptContext, *,
+                            project: Callable[[Mapping], Mapping] | None = None,
+                            input_metadata: Mapping | None = None):
+    """Shape one exact source attempt using the row writer's refusal and diagnostic rules."""
+    declared = policy(dataset)
+    try:
+        shaped = shape_record(dataset, project(row) if project is not None else row)
+        if project is not None:
+            shaped["raw_source_record"] = dict(row)
+        if any(shaped.get(key) is None for key in declared.identity_fields
+               if key not in declared.nullable_identity_fields):
+            raise ValueError(f"{dataset}: missing required subject identity")
+    except (ValueError, TypeError, pa.ArrowException) as error:
+        failed = ReceiptContext(context.generation_id, context.attempt_id, context.processor, context.witnesses,
+                                {**context.diagnostics, "error_type": type(error).__name__, "error": str(error)})
+        return None, failure_receipt(declared, failed, outcome="refused", raw_fields={
+            "raw_conversion_inputs": dict(row), "input_metadata": dict(input_metadata or {})})
+    shaped["input_metadata"] = dict(input_metadata or {})
+    return shaped, None
+
+
+def map_regulations_attempt(dataset: str, row: Mapping, context: ReceiptContext, *,
+                            project: Callable[[Mapping], Mapping] | None = None,
+                            input_metadata: Mapping | None = None):
+    """One row attempt for bounded bulk fallbacks, with the exact writer classification."""
+    from spicy_regs.etl_receipts import split_record
+    shaped, failure = _shape_regulations_attempt(dataset, row, context, project=project, input_metadata=input_metadata)
+    return (None, failure) if shaped is None else split_record(policy(dataset), shaped, context)
+
+
 def write_records(
     dataset: str,
     records: Iterable[tuple[Mapping, ReceiptContext]],
@@ -179,8 +215,7 @@ def write_records(
     rows require a stable subject identity and exactly one matching receipt.
     """
     declared = policy(dataset)
-    with TemporaryDirectory(prefix="regulations-refusals-") as temp, ExitStack() as stack:
-        lineages = [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts]
+    with TemporaryDirectory(prefix="regulations-refusals-") as temp:
         refusal_path = Path(temp) / "refused.parquet"
         writer = pq.ParquetWriter(refusal_path, RECEIPT_SCHEMA, compression="zstd")
         refused = []
@@ -193,41 +228,13 @@ def write_records(
         def mapped():
             try:
                 for row, context in records:
-                    try:
-                        shaped = shape_record(dataset, project(row) if project is not None else row)
-                        if project is not None:
-                            shaped["raw_source_record"] = dict(row)
-                        if any(
-                            shaped.get(key) is None
-                            for key in declared.identity_fields
-                            if key not in declared.nullable_identity_fields
-                        ):
-                            raise ValueError(f"{dataset}: missing required subject identity")
-                    except (ValueError, TypeError, pa.ArrowException) as error:
-                        failed = ReceiptContext(
-                            context.generation_id,
-                            context.attempt_id,
-                            context.processor,
-                            context.witnesses,
-                            {**context.diagnostics, "error_type": type(error).__name__, "error": str(error)},
-                        )
-                        refused.append(
-                            failure_receipt(
-                                declared,
-                                failed,
-                                outcome="refused",
-                                raw_fields={
-                                    "raw_conversion_inputs": dict(row),
-                                    "input_metadata": dict(input_metadata or {}),
-                                },
-                            )
-                        )
+                    shaped, receipt = _shape_regulations_attempt(dataset, row, context, project=project,
+                                                               input_metadata=input_metadata)
+                    if shaped is None:
+                        refused.append(receipt)
                         if len(refused) >= 2000:
                             flush()
                         continue
-                    shaped["input_metadata"] = dict(input_metadata or {})
-                    for lineage in lineages:
-                        context = lineage.inherit(context, declared, shaped)
                     yield shaped, context
             finally:
                 flush()
@@ -242,7 +249,7 @@ def write_records(
                 yield from batch.to_pylist()
 
         try:
-            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures())
+            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures(), prior_receipts=prior_receipts)
         finally:
             writer.close()
         assert subject is not None
@@ -259,12 +266,24 @@ def write_held_dataset(
     witnesses: Sequence[Mapping] = (),
     include_source_witness: bool = True,
     prior_receipts: Sequence[Path] = (),
+    bulk: bool = False,
 ) -> tuple[Path, Path]:
     """Convert retained rows with witnesses to their exact receipt-held input.
 
     Existing source metadata (placement rules, omitted dates, evaluation clock)
     goes into each receipt. Neither source bytes nor their metadata are deleted.
+    Dockets and documents can batch declared text inputs; ``bulk=False`` uses
+    the reference writer. Unsupported batch values retain its exact decisions.
     """
+    if bulk and dataset in {'dockets', 'documents'}:
+        from spicy_regs import etl_bulk, regulations_bulk
+        try:
+            return regulations_bulk.write_held_dataset(
+                dataset, source, destination, generation_id=generation_id, processor=processor,
+                witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
+            )
+        except etl_bulk.NotBulkEligible:
+            pass
     parquet = pq.ParquetFile(source)
     metadata = dict(parquet.schema_arrow.metadata or {})
     # The exact input metadata is receipt data, including byte-valued keys.
@@ -602,5 +621,5 @@ def merge_native_staging(
             family=dataset,
             witnesses=pins,
             include_source_witness=False,
-            prior_receipts={dataset: [i.receipts for i in [*staged, *([prior] if prior is not None else [])]]},
+            prior_receipts={dataset: [prior.receipts] if prior is not None else []},
         )

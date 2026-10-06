@@ -59,6 +59,7 @@ class _BaseTableFamily(RollupPipeline):
             subject, rewritten_receipts = write_held_dataset(
                 dataset, source, output_dir / ".annotated-native", generation_id=self.receipt_generation_id,
                 witnesses=witnesses, prior_receipts=[scoped],
+                bulk=dataset in {"dockets", "documents"},
             )
             shutil.copyfile(subject, path)
             shutil.copyfile(rewritten_receipts, output_dir / "etl_receipts.parquet")
@@ -73,7 +74,12 @@ class _BaseTableFamily(RollupPipeline):
                 output_dir / "etl_receipts.parquet",
                 RECEIPT_SCHEMA,
             )
-        type(self).receipt_policies = (policy(dataset),)
+        self.validate_native_output(path)
+        return path
+
+    def validate_native_output(self, path: Path) -> None:
+        """Apply the maintained base-family identity and row-group admission checks."""
+        type(self).receipt_policies = (policy(self.output.removesuffix(".parquet")),)
         key = self.key()
         rows, distinct, missing = (
             duckdb.connect()
@@ -87,7 +93,6 @@ class _BaseTableFamily(RollupPipeline):
         largest = max((metadata.row_group(i).total_byte_size for i in range(metadata.num_row_groups)), default=0)
         if largest > MAX_ROW_GROUP_BYTES:
             raise RuntimeError(f"{self.output}: a {largest / 2**20:.1f} MiB row group exceeds the admission bound")
-        return path
 
     def annotate(self, path: Path) -> tuple[dict, ...]:
         """Read extra source observations before native subjects and receipts are sealed."""

@@ -90,7 +90,10 @@ class SelectedPriors:
         output = directory / "processing" / (dataset + ".parquet")
         if dataset in CONGRESS:
             output.parent.mkdir(parents=True, exist_ok=True)
-            restore_processing_input(tuple(subjects), receipt_path, output, dataset=dataset, generation_id=generation)
+            restore_processing_input(
+                tuple(subjects), receipt_path, output, dataset=dataset, generation_id=generation,
+                bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
+            )
         elif dataset in field_registry():
             files = select_receipts(receipt_path, directory / "file-receipts.parquet", dataset=FILE_STATES)
             bundle = directory / "legislative"
@@ -141,7 +144,10 @@ class SelectedPriors:
             raise ValueError(f"No processing reconstruction declared for {dataset}")
         else:
             output.parent.mkdir(parents=True, exist_ok=True)
-            materialize_internal(ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output)
+            materialize_internal(
+                ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output,
+                bulk=dataset in {"dockets", "documents"},
+            )
         self.restored[dataset] = output
         return output
 
@@ -294,7 +300,8 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 selection = prior.selections.get(dataset)
                 held = None if selection is None else CongressInput(tuple(selection[0]), selection[1], selection[2])
                 subject, receipt = write_congress_dataset(
-                    path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held
+                    path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held,
+                    bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
                 )
             else:
                 subject, receipt = write_held_dataset(

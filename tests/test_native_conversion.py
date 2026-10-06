@@ -175,12 +175,12 @@ def test_main_moving_during_the_conversion_refuses_the_publication(tmp_path, mon
 
 def test_only_a_named_old_shape_family_with_a_writer_converts(tmp_path, monkeypatch, bucket):
     publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
-    publish_old(bucket, monkeypatch, tmp_path, "dockets", {"dockets": [{"docket_id": "D-1", "agency_code": "A"}]})
+    publish_old(bucket, monkeypatch, tmp_path, "comment-attributes", {"comment_attributes": [{"comment_id": "C-1"}]})
     written = list(bucket.writes)
     for family, options, message in [
         ("cfr-sections", {"allowed": ["amendments", "treaties"]}, "not in this run's allow-list"),
         ("nominations", {}, "nominations is not a published family"),
-        ("dockets", {}, "no subject/receipt rollup or court writer"),
+        ("comment-attributes", {}, "no subject/receipt rollup or court writer"),
     ]:
         with pytest.raises(conversion.ConversionRefused, match=message):
             convert(family, tmp_path / family, publish=True, **options)

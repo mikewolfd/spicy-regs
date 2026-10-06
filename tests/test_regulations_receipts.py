@@ -146,12 +146,18 @@ def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
     assert byid["1"]["text_extraction_status"] == "ok"
     assert byid["2"]["text_extraction_status"] is None
     assert len(restored) == 4
-    from spicy_regs.etl_receipts import resolve_receipt_witness
+    original_byid = {r['record_id']: r for r in pq.read_table(selected.receipts).to_pylist()
+                     if r['outcome'] == 'accepted'}
     for receipt in pq.read_table(receipts).to_pylist():
         if receipt['outcome'] == 'accepted':
-            inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
-            assert inherited and all(resolve_receipt_witness(receipt, w) for w in inherited)
-    assert "text_extraction_status" not in pq.read_schema(subject).names
+            prior = original_byid[receipt['record_id']]
+            if (receipt['subject_version'], receipt['processing_json']) == (prior['subject_version'], prior['processing_json']):
+                assert receipt == prior
+            else:
+                from spicy_regs.etl_receipts import decode_exact_json
+                reference = decode_exact_json(receipt['diagnostic_json'])['prior_receipt']
+                assert reference['receipt_id'] == prior['receipt_id']
+                assert reference['generation_id'] == prior['generation_id']
 
 
 def test_pdf_requires_receipt_validation_before_fetch(tmp_path):
@@ -211,11 +217,15 @@ def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
         '[{"status":"ok"}]',
     )
     assert "pdf_extraction_results_json" not in pq.read_schema(subject).names
-    from spicy_regs.etl_receipts import resolve_receipt_witness
+    from spicy_regs.etl_receipts import decode_exact_json
     [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
-    inherited = [w for w in receipt['witnesses'] if (w['source_uri'] or '').startswith('receipt-processing:')]
-    assert len(inherited) == 2
-    assert all(resolve_receipt_witness(receipt, w) for w in inherited)
+    [prior_receipt] = [r for r in pq.read_table(prior.receipts).to_pylist() if r['outcome'] == 'accepted']
+    reference = decode_exact_json(receipt['diagnostic_json'])['prior_receipt']
+    assert reference['receipt_id'] == prior_receipt['receipt_id']
+    assert reference['generation_id'] == prior.generation_id
+    receipt_sources = {w['source_uri'] for w in receipt['witnesses']}
+    assert str(prior.receipts) in receipt_sources
+    assert str(fresh.receipts) in receipt_sources
 
 
 def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tmp_path):
