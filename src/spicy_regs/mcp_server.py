@@ -2068,9 +2068,9 @@ def _tools() -> list[Tool]:
 
     @tool
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
-        """Return columns, meanings, row identity, coverage caveats and joins.
+        """Return columns, meanings, identity, coverage and joins.
 
-        Coverage means supported output, not population or freshness. columns
+        Coverage is supported output, not population or freshness. columns
         gives loaded fields and dictionary meanings (declared fields if unavailable);
         schema_differences compares them. publication pins rows and coverage;
         published_at is a pointer move, not a source read. last_object_write
@@ -2085,7 +2085,7 @@ def _tools() -> list[Tool]:
         ledger's publisher. not_in_ledger means absent, not unevidenced.
         joins gives outgoing/incoming declarations. detail=true adds outgoing
         measurements and ledger statements; incoming measurements link to the
-        child, retaining baselines. incoming_parent names the shared parent;
+        child, retaining baselines. incoming_parent names the parent;
         incoming_parent_columns gives its complete key, otherwise parent_columns
         appears per entry. Missing reason means empty; floor_pct, no measured
         floor; expected_cardinality, unspecified; measured_via, measure the child.
@@ -2096,7 +2096,7 @@ def _tools() -> list[Tool]:
         detail=false retains pins, reasons, dependency generations and receipt
         count. compatible means captured data, interpretation and consumer match
         the selected release, not current/net money or completeness. Financial
-        eligibility applies only to its named purpose.
+        eligibility applies to its named purpose.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
