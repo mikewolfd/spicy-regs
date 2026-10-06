@@ -78,7 +78,7 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
         array("fcc_filing_documents", "fcc_filings", ("documents",),
               (route("@url", ("url",), (key(part("src"), pattern=r"https://[^\s]+"),)),),
               meaning="Document URLs offered by the FCC; offering a URL does not establish capture or extraction.",
-              receipt_fields=("native_fields_json",), element_path=("documents",)),
+              receipt_fields=("native_fields_json", "pdf_extraction_results_json"), element_path=("documents",)),
         array("house_communication_record", "house_communications", (),
               (route("record_issues", ("package_id",), (key(part("record_package_id", row=True)),)),),
               meaning="The exact Congressional Record package that supplied this communication.",
