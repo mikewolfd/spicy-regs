@@ -25,10 +25,12 @@ def test_guarded_endpoint_equality_preserves_full_rows_and_uses_hash_join(spec):
         con.execute('CREATE VIEW candidate AS ' + candidate)
         assert con.execute('''SELECT count(*) FROM (
             (SELECT * FROM baseline EXCEPT ALL SELECT * FROM candidate)
-            UNION ALL (SELECT * FROM candidate EXCEPT ALL SELECT * FROM baseline))''').fetchone()[0] == 0
+            UNION ALL (SELECT * FROM candidate EXCEPT ALL SELECT * FROM baseline))''').fetchone() == (0,)
         roles = 2 if spec.name in ('court_opinion_citation_endpoints', 'court_parenthetical_endpoints') else 1
         assert dict(con.execute('SELECT target_status,count(*) FROM candidate GROUP BY 1').fetchall()) == {
             'found': 2 * roles, 'ambiguous': roles, 'missing': roles, 'unsupported': 3 * roles}
-        plan = con.execute('EXPLAIN SELECT * FROM candidate').fetchone()[1]
+        planned = con.execute('EXPLAIN SELECT * FROM candidate').fetchone()
+        assert planned is not None
+        plan = planned[1]
         assert 'HASH_JOIN' in plan
         assert 'BLOCKWISE_NL_JOIN' not in plan

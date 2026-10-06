@@ -438,3 +438,11 @@ def test_main_policy_identity_is_admitted_but_receipt_identity_never_is(monkeypa
     assert result['tables']['parent']['recordIdentity']['columns'] == ['id','edition']
     assert 'recordIdentity' not in result['tables']['child']
     assert result['joins'][0]['completeKey'] == {'child': False, 'parent': True}
+
+
+@pytest.mark.parametrize('identity', ['id', ['id', 'id'], ['id', None]])
+def test_malformed_declared_record_identity_cannot_enable_detail_navigation(identity):
+    options = args()
+    options['descriptions']['parent']['identity_columns'] = identity
+    with pytest.raises(ValueError, match='Invalid declared record identity: parent'):
+        build_bundle(index(), **options)

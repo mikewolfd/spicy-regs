@@ -28,7 +28,9 @@ def test_native_occurrences_keep_independent_ordinals_and_pair_keys(definition):
         assert con.execute('SELECT source_ordinal,target_key FROM occurrences ORDER BY source_ordinal').fetchall() == [
             (0, value), (1, value), (2, None), (3, None)]
         assert con.execute('SELECT target_key FROM pairs').fetchall() == [(value,)]
-        assert con.execute('SELECT count(*) FROM occurrences').fetchone()[0] == 4
-        assert con.execute('SELECT count(*) FROM ' + table).fetchone()[0] == 3
-        plan = con.execute('EXPLAIN SELECT * FROM pairs').fetchone()[1]
+        assert con.execute('SELECT count(*) FROM occurrences').fetchone() == (4,)
+        assert con.execute('SELECT count(*) FROM ' + table).fetchone() == (3,)
+        planned = con.execute('EXPLAIN SELECT * FROM pairs').fetchone()
+        assert planned is not None
+        plan = planned[1]
         assert 'DELIM_JOIN' not in plan

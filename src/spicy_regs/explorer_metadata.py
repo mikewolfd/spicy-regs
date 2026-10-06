@@ -136,7 +136,8 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
 
     from spicy_regs.subject_catalog import descriptors
     policies = descriptors()
-    tables = {}
+    tables: dict[str, dict] = {}
+    record_identities: dict[str, list[str]] = {}
     for name, live_table in sorted(live.items()):
         description = deepcopy(known.get(name, {}))
         schema = live_table["schema"]
@@ -147,6 +148,9 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         policy = policies.get(name, {})
         identity = description.get("identity_columns", []) or (
             policy.get("identity_fields", []) if policy.get("receipt_only") is False else [])
+        if (not isinstance(identity, list) or any(not isinstance(key, str) or not key for key in identity)
+                or len(set(identity)) != len(identity)):
+            raise ValueError(f"Invalid declared record identity: {name}")
         missing_identity = sorted(set(identity) - {column for column, _ in schema})
         if missing_identity:
             # A composite identity is indivisible; never advertise a partial key.
@@ -155,6 +159,7 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
                 "columns": identity, "missing_columns": missing_identity,
                 "reason": "Selected published schema does not expose the complete declared identity.",
             }
+        record_identities[name] = identity if not missing_identity else []
         if identity and not missing_identity:
             description["recordIdentity"] = {"columns": identity, "basis": "declared_main_key",
                                              "uniqueness": "unknown"}
@@ -217,8 +222,8 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             for side in ("child", "parent")}
         exposed["directions"] = directions(True)
         exposed["completeKey"] = {
-            side: bool(tables[join[side]].get("recordIdentity")) and
-            set(join[f"{side}_columns"]) == set(tables[join[side]]["recordIdentity"]["columns"])
+            side: bool(record_identities[join[side]]) and
+            set(join[f"{side}_columns"]) == set(record_identities[join[side]])
             for side in ("child", "parent")}
         joins.append(exposed)
     # Availability belongs to this index, while the audit's evidence belongs to
@@ -226,8 +231,7 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
     from spicy_regs.explorer_navigation import published_navigation
     navigation = published_navigation(join_record.get("navigation", []),
                                       {name: entry["schema"] for name, entry in live.items()},
-                                      {name: table.get("recordIdentity", {}).get("columns", [])
-                                       for name, table in tables.items()})
+                                      record_identities)
     if measurements:
         from spicy_regs.navigation_measurements import attached_directions, scalar_navigation
         proofs = {}
