@@ -1,5 +1,6 @@
 """Batch reproduction keeps the row mapper's values, evidence and first refusal."""
 from copy import deepcopy
+from typing import Any
 
 import pytest
 
@@ -12,7 +13,7 @@ from .test_regulations_receipts import write
 @pytest.mark.parametrize('dataset', list(SOURCE_COLUMNS))
 def test_batch_exact_originals_agree_with_complete_row_reference(tmp_path, dataset):
     from datetime import date
-    row = {key: '1' for key in IDENTITIES[dataset] if key not in ('rule_target_id', 'lifecycle_event_id')}
+    row: dict[str, Any] = {key: '1' for key in IDENTITIES[dataset] if key not in ('rule_target_id', 'lifecycle_event_id')}
     row.update({key: 1 for key in row if key in ('year', 'month', 'docket_source_ordinal')})
     if dataset == 'lifecycle_events':
         row.update(proceeding_id='P', document_id='D', stage='proposed', event_date=date(2026, 1, 1))
