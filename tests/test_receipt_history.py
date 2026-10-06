@@ -127,6 +127,43 @@ def test_matching_uses_hash_join_for_mixed_outcomes(tmp_path, policy, context, m
     assert "CROSS_PRODUCT" not in plans[0]
 
 
+def test_wide_accepted_history_spills_without_changing_ignored_diagnostics(tmp_path, policy, context, monkeypatch):
+    """Accepted diagnostics exceeded the raw-check join's memory, despite being ignored."""
+    import duckdb
+
+    original_connect = duckdb.connect
+
+    class LimitedConnection:
+        def __init__(self, *args, **kwargs):
+            self.connection = original_connect(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.connection.close()
+
+        def execute(self, query, *args, **kwargs):
+            if query == "SET memory_limit='1GB'":
+                query = "SET memory_limit='64MB'"
+            elif query == "SET threads=4":
+                query = "SET threads=1"
+            return self.connection.execute(query, *args, **kwargs)
+
+    monkeypatch.setattr(duckdb, "connect", LimitedConnection)
+    rows = [accepted(policy, context, str(i)) for i in range(32768)]
+    for i, row in enumerate(rows):
+        row["diagnostic_json"] = exact_json({"legacy": f"{i}:" + "0123456789abcdef" * 256})
+        row["receipt_id"] = _digest({k: v for k, v in row.items() if k != "receipt_id"})
+    prior = tmp_path / "prior.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA), prior, row_group_size=128)
+    current = tmp_path / "current.parquet"
+    fresh = [dict(row, generation_id="new", diagnostic_json="{}") for row in reversed(rows)]
+    pq.write_table(pa.Table.from_pylist(fresh, schema=RECEIPT_SCHEMA), current, row_group_size=128)
+    result = carry_receipt_history(current, [prior], tmp_path / "result.parquet")
+    assert pq.read_table(result).equals(pa.Table.from_pylist(list(reversed(rows)), schema=RECEIPT_SCHEMA))
+
+
 def test_nonaccepted_identity_is_not_a_matching_key(tmp_path, policy, context):
     old = [
         failure_receipt(
@@ -301,6 +338,79 @@ def test_valid_new_attempts_preserve_fifo_across_prior_files_and_output_batches(
     result = carry_receipt_history(current, prior, current)
     assert pq.read_table(result).to_pylist() == [*reversed(old[:2011]), *old[2011:], fresh[-1]]
     assert current.read_bytes() != before
+    assert not list(tmp_path.glob("receipt-history-*"))
+
+
+def test_sparse_matches_and_predecessors_across_files_and_batches(tmp_path, policy, context):
+    old = [accepted(policy, context, str(i)) for i in range(2053)]
+    prior = [
+        write(tmp_path / "part0.parquet", old[:1003]),
+        write(tmp_path / "empty.parquet", []),
+        write(tmp_path / "part1.parquet", old[1003:]),
+    ]
+    fresh, expected = [], []
+    for i in reversed(range(2053)):
+        identity = "new-" + str(i) if i % 3 == 2 else str(i)
+        row = accepted(
+            policy, replace(context, generation_id="new"), identity, text="changed" if i % 3 == 1 else "same"
+        )
+        fresh.append(row)
+        if i % 3 == 0:
+            expected.append(old[i])
+        elif i % 3 == 1:
+            row = dict(
+                row,
+                diagnostic_json=exact_json(
+                    {
+                        "prior_receipt": {
+                            "receipt_id": old[i]["receipt_id"],
+                            "generation_id": old[i]["generation_id"],
+                            "processing_sha256": _digest(decode_exact_json(old[i]["processing_json"])),
+                        }
+                    }
+                ),
+            )
+            row["receipt_id"] = _digest({k: v for k, v in row.items() if k != "receipt_id"})
+            expected.append(row)
+        else:
+            expected.append(row)
+    result = carry_receipt_history(write(tmp_path / "current.parquet", fresh), prior, tmp_path / "result.parquet")
+    assert pq.read_table(result).to_pylist() == expected
+
+
+def test_collision_after_first_output_batch_preserves_destination(tmp_path, policy, context, monkeypatch):
+    from spicy_regs import receipt_history
+
+    old = [accepted(policy, context, str(i)) for i in range(2003)]
+    fresh = [dict(row, generation_id="new") for row in old]
+    fresh[-1]["processing_json"] = exact_json({"raw": "different"})
+    prior = write(tmp_path / "prior.parquet", old)
+    current = write(tmp_path / "current.parquet", fresh)
+    destination = write(tmp_path / "destination.parquet", old)
+    before = destination.read_bytes()
+    original_writer = pq.ParquetWriter
+    written = []
+
+    class RecordingWriter:
+        def __init__(self, *args, **kwargs):
+            self.writer = original_writer(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.writer.close()
+
+        def write_table(self, table):
+            self.writer.write_table(table)
+            written.append(table.num_rows)
+
+    monkeypatch.setattr(pq, "ParquetWriter", RecordingWriter)
+    monkeypatch.setattr(receipt_history, "_processing_key", lambda column: "unhex('00')")
+    with pytest.raises(ValueError, match="candidate keys differ from exact values"):
+        carry_receipt_history(current, [prior], destination)
+    assert written == [2000]
+    assert destination.read_bytes() == before
     assert not list(tmp_path.glob("receipt-history-*"))
 
 
