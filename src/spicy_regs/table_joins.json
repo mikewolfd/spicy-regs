@@ -1509,6 +1509,255 @@
       "measurement": null
     },
     {
+      "child": "fec_agency_report_documents",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "fec_agency_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "complete",
+      "reason": "Report edition explicitly named by this document reference. Repeated links remain separate observations; a link does not establish that its body was captured or extracted.",
+      "measured_via": null,
+      "baseline_keys": 98,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "fec_agency_report_documents.report_id -> fec_agency_reports.report_id",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 98,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 98,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 121,
+        "child_nonnull_rows": 121,
+        "parent_input_rows": 124,
+        "parent_distinct_keys": 124,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 121,
+        "left_join_nonnull_rows": 121,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_report_documents.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"report_id\" FROM read_parquet(['https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_report_documents.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"report_id\" FROM read_parquet(['https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"report_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"report_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"report_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"report_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-06",
+        "measured_expected_cardinality": "one",
+        "receipt": "src/spicy_regs/join_measurements.json",
+        "selected_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+        "reason": "Report edition explicitly named by this document reference. Repeated links remain separate observations; a link does not establish that its body was captured or extracted.",
+        "child_repeated_key_rows": 23,
+        "selected_inputs": {
+          "child": {
+            "id": "fec_agency_report_documents",
+            "family": "fec-query",
+            "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+            "publicationIdentity": null,
+            "members": [
+              {
+                "url": "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_report_documents.parquet",
+                "rows": 121,
+                "byteSize": 37284,
+                "sha256": "sha256:d2a719a212d626dc6eeca3cfcddc3cc6a837a08aa442b79a0721e36a7217aabc"
+              }
+            ]
+          },
+          "parent": {
+            "id": "fec_agency_reports",
+            "family": "fec-query",
+            "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+            "publicationIdentity": null,
+            "members": [
+              {
+                "url": "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet",
+                "rows": 124,
+                "byteSize": 66500,
+                "sha256": "sha256:21460ffc573a98395e54018e5d9819bebd00f4f4d79d55bf28d6df876579f707"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "child": "fec_agency_report_text",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "fec_agency_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "complete",
+      "reason": "Report edition explicitly named by this text observation. Each retained passage keeps its source location; report titles do not merge editions.",
+      "measured_via": null,
+      "baseline_keys": 60,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "fec_agency_report_text.report_id -> fec_agency_reports.report_id",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 60,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 60,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 811,
+        "child_nonnull_rows": 811,
+        "parent_input_rows": 124,
+        "parent_distinct_keys": 124,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 811,
+        "left_join_nonnull_rows": 811,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_report_text.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"report_id\" FROM read_parquet(['https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_report_text.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"report_id\" FROM read_parquet(['https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"report_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"report_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"report_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"report_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-06",
+        "measured_expected_cardinality": "one",
+        "receipt": "src/spicy_regs/join_measurements.json",
+        "selected_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+        "reason": "Report edition explicitly named by this text observation. Each retained passage keeps its source location; report titles do not merge editions.",
+        "child_repeated_key_rows": 751,
+        "selected_inputs": {
+          "child": {
+            "id": "fec_agency_report_text",
+            "family": "fec-query",
+            "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+            "publicationIdentity": null,
+            "members": [
+              {
+                "url": "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_report_text.parquet",
+                "rows": 811,
+                "byteSize": 77465,
+                "sha256": "sha256:323d8b3819d2c44b2c8fb56ae3defcc4da09199ea0ef50546003706598354549"
+              }
+            ]
+          },
+          "parent": {
+            "id": "fec_agency_reports",
+            "family": "fec-query",
+            "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+            "publicationIdentity": null,
+            "members": [
+              {
+                "url": "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet",
+                "rows": 124,
+                "byteSize": 66500,
+                "sha256": "sha256:21460ffc573a98395e54018e5d9819bebd00f4f4d79d55bf28d6df876579f707"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "child": "fec_report_metrics",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "fec_agency_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "complete",
+      "reason": "Report edition explicitly named by this metric observation. The relationship supplies report context; it does not combine metric values or qualify financial totals.",
+      "measured_via": null,
+      "baseline_keys": 107,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "fec_report_metrics.report_id -> fec_agency_reports.report_id",
+        "kind": "complete",
+        "status": "OK",
+        "keys": 107,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "floor_pct": 100.0,
+        "baseline_keys": 107,
+        "baseline_missing": 0,
+        "examples": [],
+        "child_input_rows": 3287,
+        "child_nonnull_rows": 3287,
+        "parent_input_rows": 124,
+        "parent_distinct_keys": 124,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 3287,
+        "left_join_nonnull_rows": 3287,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_report_metrics.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"report_id\" FROM read_parquet(['https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_report_metrics.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"report_id\" FROM read_parquet(['https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"report_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"report_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"report_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"report_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "one",
+        "measured_on": "2026-10-06",
+        "measured_expected_cardinality": "one",
+        "receipt": "src/spicy_regs/join_measurements.json",
+        "selected_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+        "reason": "Report edition explicitly named by this metric observation. The relationship supplies report context; it does not combine metric values or qualify financial totals.",
+        "child_repeated_key_rows": 3180,
+        "selected_inputs": {
+          "child": {
+            "id": "fec_report_metrics",
+            "family": "fec-query",
+            "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+            "publicationIdentity": null,
+            "members": [
+              {
+                "url": "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_report_metrics.parquet",
+                "rows": 3287,
+                "byteSize": 347541,
+                "sha256": "sha256:cdecf502136d0565453b2c8687ccf51788e0dcfd8d0303575e44ceaecebdbd12"
+              }
+            ]
+          },
+          "parent": {
+            "id": "fec_agency_reports",
+            "family": "fec-query",
+            "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+            "publicationIdentity": null,
+            "members": [
+              {
+                "url": "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_agency_reports.parquet",
+                "rows": 124,
+                "byteSize": 66500,
+                "sha256": "sha256:21460ffc573a98395e54018e5d9819bebd00f4f4d79d55bf28d6df876579f707"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "child": "fec_reported_financial_summaries",
       "child_columns": [
         "committee_native_id"
@@ -9119,6 +9368,39 @@
         "parent_table": "fec_committees",
         "parent_columns": [
           "committee_id"
+        ]
+      }
+    ],
+    "fec_agency_report_documents": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "fec_agency_reports",
+        "parent_columns": [
+          "report_id"
+        ]
+      }
+    ],
+    "fec_agency_report_text": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "fec_agency_reports",
+        "parent_columns": [
+          "report_id"
+        ]
+      }
+    ],
+    "fec_report_metrics": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "fec_agency_reports",
+        "parent_columns": [
+          "report_id"
         ]
       }
     ],
