@@ -12331,8 +12331,8 @@
         "category": "catalog_or_source_discovery",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "The original 2010 and 2000 Reporter indexes are recovered. Complete July–August and September–October 2000 issues, selected contents lists and the crop-insurance article supply no congressional member observations. The selected 2010 PDF route returned 404; snapshot lookup was rate-limited and its Zyte fallback refused. Those failures do not establish source absence.",
-      "next_action": "Use the recovered Reporter index to try its literal February–March 2010 and December 2009–January 2010 PDF links, newest first. The exact February 2000 contents redirect and May–June Senate article remain unvisited leads. Preserve historical Voting Record continuity as unknown; NFO and NFU remain separate.",
+      "finding": "Recovered the original December 2009/January 2010 Reporter PDF under the National Farmers Organization imprint. Its complete observed seven-page rendition was checked in native text and pixels; no congressional member votes or ratings appear. The February/March 2010 link returned publisher and archive 404 responses. Physical-issue completeness, separate inserts and post-2000 scorecard coverage remain unknown.",
+      "next_action": "Close the two tested 2010 issue routes. Reopen scorecard recovery for a dated original NFO Voting Record or member/action/rating section. The exact February 2000 contents redirect and May–June Senate article remain catalogue leads, not observed voting records. Keep NFO and NFU separate; route failures do not establish retirement.",
       "recovery": {
         "integration_state": "catalog_metadata_only",
         "recovered_scorecard_editions": [],
@@ -12658,9 +12658,9 @@
       "independent_review": [],
       "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
       "followup": {
-        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/march_for_life/modern-recovery-followup-20261005.md",
-        "sha256": "7dfca440a70b17c01363cf32caff1077534673663d31f6e3ae4da80074d6ec26",
-        "byte_size": 12294
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/national_farmers_organization/reporter2010-followup-20261005.json",
+        "sha256": "2de92f0833fc9888cf62b0988503b14d9dbacd6ccb732fc2d6558a5c405ee043",
+        "byte_size": 17778
       }
     },
     {
