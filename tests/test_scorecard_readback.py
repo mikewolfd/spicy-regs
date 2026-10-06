@@ -112,11 +112,15 @@ def test_readback_validator_failure_aborts_before_success(tmp_path):
     assert not any(row["event"] == "scorecard-refresh" for row in journal(e))
 
 
-@pytest.mark.parametrize("corruption", ["subject", "receipt", "generation"])
+@pytest.mark.parametrize("corruption", ["subject", "receipt", "generation", "late-raw"])
 def test_bad_persisted_family_never_reaches_readback_validator(tmp_path, monkeypatch, corruption):
     original_write = transform.write_family
 
     def corrupt(directory, *args, **kwargs):
+        if corruption == "late-raw":
+            changed = deepcopy(args[0])
+            changed["scorecard_snapshots"][0]["observed_at"] = "2040-01-01T00:00:00Z"
+            return original_write(directory, changed, *args[1:], **kwargs)
         result = original_write(directory, *args, **kwargs)
         if corruption == "generation":
             state = directory / "scorecard-etl-build.json"

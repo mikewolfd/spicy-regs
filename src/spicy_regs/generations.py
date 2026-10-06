@@ -34,7 +34,7 @@ def _table_info(path: Path) -> dict:
     # A readable footer does not establish readable data pages. Decode every
     # column in bounded batches before qualifying these bytes for publication.
     with pq.ParquetFile(path) as parquet:
-        rows = sum(batch.num_rows for batch in parquet.iter_batches(batch_size=65536))
+        rows = sum(batch.num_rows for batch in parquet.iter_batches(batch_size=2000))
         if rows != parquet.metadata.num_rows:
             raise ValueError(f"Parquet body/footer row mismatch: {path.name}")
     return {

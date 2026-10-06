@@ -11,7 +11,7 @@ import pytest
 
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA
 from spicy_regs.generations import build_generation, verify_generation
-from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family, write_family
+from spicy_regs.scorecards.etl import SOURCE_NAMES, generation_options, read_family, verify_family_readback, write_family
 from spicy_regs.sources import publication as pub
 from tests.generation_fakes import Store
 from tests.test_scorecard_refresh import edition, tables, provider, evidence, run, combine
@@ -38,6 +38,52 @@ def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tm
     admitted = verify_generation(target)
     assert admitted.pin == artifact.pin
     assert admitted.root["spec"]["etlReceipts"]["rows"] == sum(map(len, before.values()))
+
+
+def test_exact_readback_visits_shuffled_rows_and_observed_snapshots_without_materializing(tmp_path, monkeypatch):
+    from spicy_regs.scorecards import etl
+
+    before = combine(tables(edition("2025")), tables(edition("2024")))
+    directory = tmp_path / "candidate"
+    write_family(directory, {name: list(reversed(rows)) for name, rows in before.items()})
+    monkeypatch.setattr(etl, "read_receipt_bundle", lambda **kwargs: pytest.fail("Second raw family materialized"))
+    counts = verify_family_readback(directory, before)
+    assert counts == {name: len(rows) for name, rows in before.items()}
+    assert counts["scorecard_snapshots"] == 2
+
+
+@pytest.mark.parametrize("change", ["capture", "literal", "null", "type", "missing", "additional", "duplicate"])
+def test_exact_readback_refuses_source_changes_even_when_persisted_receipts_are_valid(tmp_path, change):
+    before = tables(edition("2025"))
+    directory = tmp_path / "candidate"
+    write_family(directory, before)
+    expected = deepcopy(before)
+    rows = expected["scorecard_member_ratings"]
+    if change == "capture":
+        rows[0]["capture_id"] = "a different original capture"
+    elif change == "literal":
+        rows[0]["value_text"] += " "
+    elif change == "null":
+        rows[0]["rank_text"] = "" if rows[0]["rank_text"] is None else None
+    elif change == "type":
+        rows[0]["value_number"] = 80
+    elif change == "missing":
+        rows.pop()
+    elif change == "additional":
+        rows.append(dict(rows[0], publisher_member_key="absent-member"))
+    else:
+        rows.append(deepcopy(rows[0]))
+    with pytest.raises(ValueError):
+        verify_family_readback(directory, expected)
+
+
+def test_exact_readback_refuses_duplicate_processing_only_source_identity(tmp_path):
+    before = tables(edition("2025"))
+    before["scorecard_snapshots"].append(deepcopy(before["scorecard_snapshots"][0]))
+    directory = tmp_path / "candidate"
+    write_family(directory, before)
+    with pytest.raises(ValueError):
+        verify_family_readback(directory, before)
 
 
 @pytest.mark.parametrize("corruption", ["subject", "receipt", "generation", "duplicate", "missing"])

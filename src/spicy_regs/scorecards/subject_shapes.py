@@ -261,6 +261,20 @@ IDENTITIES = {
     "scorecard_item_links": ("scorecard_id", "item_id", "reference_id"),
 }
 
+
+def source_row_index(name, rows):
+    """Index validated source identities while retaining references to existing rows."""
+    if name not in IDENTITIES:
+        raise ValueError("Unknown scorecard source table: " + name)
+    result = {}
+    for row in rows:
+        key = tuple(row[field] for field in IDENTITIES[name])
+        if key in result:
+            raise ValueError("Duplicate scorecard source identity: " + name)
+        result[key] = row
+    return result
+
+
 DOMAIN_COLUMNS = {
     "scorecard_item_links": (
         "scorecard_id",
