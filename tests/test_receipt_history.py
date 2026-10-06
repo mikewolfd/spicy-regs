@@ -83,6 +83,114 @@ def test_all_outcomes_fifo_reorder_delete_and_new_occurrence(tmp_path, policy, c
     assert pq.read_table(current).to_pylist() == fresh
 
 
+def test_matching_uses_hash_join_for_mixed_outcomes(tmp_path, policy, context, monkeypatch):
+    """Exercise the actual query; outcome-dependent ORs caused a pairwise join."""
+    import duckdb
+
+    original_connect = duckdb.connect
+    plans = []
+
+    class PlannedConnection:
+        def __init__(self, *args, **kwargs):
+            self.connection = original_connect(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.connection.close()
+
+        def execute(self, query, *args, **kwargs):
+            if query.startswith("CREATE TABLE matches AS"):
+                explained = self.connection.execute("EXPLAIN " + query).fetchone()
+                assert explained is not None
+                plans.append(explained[1])
+            return self.connection.execute(query, *args, **kwargs)
+
+    monkeypatch.setattr(duckdb, "connect", PlannedConnection)
+    old = [accepted(policy, context, str(i)) for i in range(17)]
+    old += [
+        failure_receipt(policy, context, outcome=outcome, raw_fields={"raw": "same"})
+        for outcome in ("refused", "rejected", "error")
+    ]
+    old.append(observation_receipt(policy, context, processing_fields={"raw": "same"}))
+    fresh = [dict(row, generation_id="new") for row in reversed(old)]
+    result = carry_receipt_history(
+        write(tmp_path / "current.parquet", fresh),
+        [write(tmp_path / "prior.parquet", old)],
+        tmp_path / "result.parquet",
+    )
+    assert pq.read_table(result).to_pylist() == list(reversed(old))
+    assert len(plans) == 1
+    assert "HASH_JOIN" in plans[0]
+    assert "_NL_JOIN" not in plans[0]
+    assert "CROSS_PRODUCT" not in plans[0]
+
+
+def test_nonaccepted_identity_is_not_a_matching_key(tmp_path, policy, context):
+    old = [
+        failure_receipt(
+            policy,
+            replace(context, attempt_id=str(i)),
+            outcome="refused",
+            raw_fields={"raw": "same"},
+            identity={"id": str(i), "sub": None},
+        )
+        for i in range(2)
+    ]
+    fresh = [
+        failure_receipt(
+            policy,
+            replace(context, generation_id="new", attempt_id=str(i)),
+            outcome="refused",
+            raw_fields={"raw": "same"},
+            identity={"id": str(i), "sub": "different"},
+        )
+        for i in range(2, 4)
+    ]
+    result = carry_receipt_history(
+        write(tmp_path / "current.parquet", fresh),
+        [write(tmp_path / "prior.parquet", old)],
+        tmp_path / "result.parquet",
+    )
+    assert pq.read_table(result).to_pylist() == old
+
+
+@pytest.mark.parametrize(
+    ("outcome", "null_field"),
+    [("accepted", "record_id"), ("accepted", "subject_version"), ("refused", "diagnostic_json")],
+)
+def test_null_matching_key_does_not_authorize_prior_substitution(tmp_path, policy, context, outcome, null_field):
+    """The lower-level matcher must not treat missing meaningful keys as equal."""
+    old = (
+        accepted(policy, context)
+        if outcome == "accepted"
+        else failure_receipt(policy, context, outcome=outcome, raw_fields={"raw": "same"})
+    )
+    old[null_field] = None
+    fresh = dict(old, generation_id="new")
+    result = carry_receipt_history(
+        write(tmp_path / "current.parquet", [fresh]),
+        [write(tmp_path / "prior.parquet", [old])],
+        tmp_path / "result.parquet",
+    )
+    expected = dict(fresh)
+    if null_field == "subject_version":
+        # A known record still links to its predecessor, without substituting
+        # the old receipt for the current missing subject-version observation.
+        expected["diagnostic_json"] = exact_json(
+            {
+                "prior_receipt": {
+                    "receipt_id": old["receipt_id"],
+                    "generation_id": old["generation_id"],
+                    "processing_sha256": _digest(decode_exact_json(old["processing_json"])),
+                }
+            }
+        )
+        expected["receipt_id"] = _digest({k: v for k, v in expected.items() if k != "receipt_id"})
+    assert pq.read_table(result).to_pylist() == [expected]
+
+
 def test_changed_row_direct_predecessor_does_not_copy_history_or_witnesses(tmp_path, policy, context):
     first = accepted(policy, context)
     current = write(
