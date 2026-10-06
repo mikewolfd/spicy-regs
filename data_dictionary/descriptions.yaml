@@ -1299,7 +1299,8 @@ tables:
       cycles_json: "JSON array of election-cycle years the committee was active in (e.g. `[2018, 2020, 2022]`)."
       candidate_ids_json: "JSON array of OpenFEC candidate IDs associated with the committee (e.g. `[\"P00008052\"]`). Often `[]`."
   fec_source_catalog:
-    label: "Official FEC source families and access routes"
+    row_unit: "sources"
+    label: "FEC source directory"
     subject: campaign_finance
     grain: "One row per official source family in the SpicyDocs FEC registry."
     identity_columns: [source_family]
@@ -1326,7 +1327,8 @@ tables:
       catalogued_at: "Time this catalogue output was built; not the time source data was acquired or last changed."
       coverage_note: "Explicit scope limitation: catalogue entries describe routes and do not certify underlying data acquisition or publication."
   fec_collections:
-    label: "FEC collection scopes and outcomes"
+    row_unit: "collections"
+    label: "FEC collection runs"
     subject: campaign_finance
     grain: "One row per selected input collection or explicitly declared caller coverage disposition."
     identity_columns: [collection_id]
@@ -1338,12 +1340,7 @@ tables:
       fec_collection_cycles view gives cycles stated by bulk directory URLs.
       This metadata does not establish complete official FEC history.
     measured_on: "2026-09-30"
-    summary: >-
-      Collection-level scope, counts and evidence for fec_source_records.
-      Join collection_id to that table to distinguish observed records from
-      empty results and uncollected populations. Join source_family to
-      fec_source_catalog for the official access routes. Counts are stored as
-      strings; cast explicitly for arithmetic.
+    summary: "Scope, counts and outcomes of saved FEC collections. Links original source records to their collection; collection counts do not prove full source coverage."
     columns:
       collection_id: "Caller-supplied label unique within the selected manifest. Join to fec_source_records.collection_id."
       source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Join to fec_source_catalog.source_family; this classification is not independently inferred from source content."
@@ -1358,7 +1355,8 @@ tables:
       collection_outcome_json: "Complete provider outcome for parsed inputs, including tableFieldMapping and verified tableFieldDefinitions when selected. Optional callerContext holds separately hash-verified source/coverage facts. Metadata-only rows contain receiverDisposition and providerOutcome:null; they make no source parsing claim."
       artifact_sha256: "Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact."
   fec_source_records:
-    label: "FEC source records with native metadata and evidence"
+    row_unit: "source records"
+    label: "Original FEC source records"
     subject: campaign_finance
     grain: "One row per provider source record within a selected collection."
     identity_columns: [collection_id, source_record_id]
@@ -3043,6 +3041,7 @@ tables:
     columns_from: spicy_docs
 
   bill_family_archives:
+    row_unit: "checkpoints"
     category: processing_evidence
     identity_columns: [congress, bill_type]
     label: "Bulk archive checkpoints"
@@ -3117,6 +3116,7 @@ tables:
       full_action_name: "The guide's seventh field, absent on every entry measured; NULL where the publisher sends none."
       observed_at: "When the bill-family run that read this entry captured the BILLSTATUS document."
   bill_family_backfills:
+    row_unit: "checkpoints"
     category: processing_evidence
     identity_columns: [congress, bill_type, number]
     label: "Bill fetch attempts"
@@ -3150,6 +3150,7 @@ tables:
       observed_at: "When the detail request that filled the bill was captured, or when the refusal was recorded."
 
   bill_family_backfill_walks:
+    row_unit: "checkpoints"
     category: processing_evidence
     identity_columns: [congress, bill_type]
     label: "Bill listing progress"
@@ -4175,9 +4176,11 @@ tables:
     columns_from: spicy_docs
 
   committee_report_reads:
+    category: processing_evidence
+    row_unit: "read attempts"
     identity_columns: [package_id]
     measured_on: "2026-09-28"
-    label: "Committee-report acquisition checkpoints"
+    label: "Committee report collection status"
     subject: congress
     coverage: >-
       Not a range. One checkpoint per selected report or hearing package read,
@@ -4194,9 +4197,11 @@ tables:
       observed_at: "UTC time this rollup recorded the checkpoint."
 
   document_citation_reads:
+    category: processing_evidence
+    row_unit: "field reads"
     identity_columns: [document_kind, document_key, text_sha256]
     measured_on: "2026-10-03"
-    label: "Held-field citation reads"
+    label: "Document citation extraction status"
     subject: congress
     coverage: >-
       Not a range. One row per held field (a report section, a comment, a
@@ -4284,8 +4289,10 @@ tables:
       parent_opinion_publication_json: "Exact selected opinion family and its member metadata."
 
   native_legal_reference_reads:
+    category: processing_evidence
+    row_unit: "source reads"
     measured_on: "2026-09-27"
-    label: "Native legal-reference selected-input reads"
+    label: "Legal reference extraction status"
     subject: reference
     coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
     summary: >-
@@ -4485,7 +4492,8 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_agency_mapping_dispositions:
-    label: Agency source-record mapping outcomes
+    row_unit: "mapping results"
+    label: "FEC agency processing results"
     subject: campaign_finance
     grain: One explicit mapping disposition for one native agency source record.
     identity_columns:
@@ -4495,9 +4503,7 @@ tables:
       selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish
       complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One explicit mapping disposition for one native agency source record. Accounts for mapped, structural
-      and unsupported facts, with emitted target keys. Structural Word tokens and XML containers are not invented
-      metrics; a zero emitted count has a stated reason.
+    summary: "Records whether each saved agency source record produced data, contained only structure, or could not be interpreted."
     columns:
       collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
         label alone is not a globally unique source identity.
@@ -5101,7 +5107,8 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_api_response_controls:
-    label: FEC API response controls
+    row_unit: "response fields"
+    label: "FEC API pagination and response status"
     subject: campaign_finance
     grain: One native top-level API response field or result-container observation.
     identity_columns:
@@ -5110,11 +5117,7 @@ tables:
       selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish
       complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One native top-level API response field or result-container observation. Inspect pagination, result containers
-      and source response states without inventing committee/candidate rows. A page's presence does not prove query
-      traversal completed. Resolve collection_id and source_record_id against fec_source_records in the captured source
-      generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched
-      derived evidence routes preserve the same exact source coordinates.
+    summary: "Pagination, reported totals and result counts from saved FEC API responses. A saved response does not prove that every page was collected."
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
@@ -5489,7 +5492,8 @@ tables:
       district_number_raw: "Literal source district number before conversion, including unsupported spellings."
       district_number_status: "Conversion outcome for the district number: distinguishes a parsed value from missing, null, empty or unsupported source input."
   fec_collection_selection:
-    label: FEC representation-selection decisions
+    row_unit: "selection decisions"
+    label: "FEC collection selection decisions"
     subject: campaign_finance
     grain: One source collection/member decision under a named snapshot-selection policy.
     identity_columns:
@@ -5498,9 +5502,7 @@ tables:
       representation selection. The retained selection is explicit in fec_collections and its source-generation evidence;
       this declaration does not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One source collection/member decision under a named snapshot-selection policy. Shows which retained representation
-      is selected once and which shares the proved row-multiplicity population. The policy does not apply daily corrections
-      or qualify a current, net or source-complete money total.
+    summary: "Records which saved files or snapshots a named selection policy chose. Selection alone does not establish current records or financial totals."
     columns:
       record_id: Deterministic identity of this collection/member policy decision, binding the source generation and
         equivalence evidence; not a financial transaction key.
@@ -6554,7 +6556,8 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_filing_definition_evidence:
-    label: FEC filing layout evidence
+    row_unit: "source references"
+    label: "FEC filing layout source links"
     subject: campaign_finance
     grain: One exact association from a normalized filing definition to a source context witness.
     identity_columns:
@@ -6604,7 +6607,8 @@ tables:
       witness_locator_json: Native source coordinates of the witness, including worksheet cells, source row address
         or definition location.
   fec_filing_definitions:
-    label: Pinned source filing layout definitions
+    row_unit: "filing layouts"
+    label: "FEC filing layouts"
     subject: campaign_finance
     grain: One distinct pinned source layout with its literal family, version and form.
     identity_columns:
@@ -6627,7 +6631,8 @@ tables:
       layout_json: Ordered source field definitions with exact worksheet/cell addresses and available rules. This
         defines source layout, not a consumer policy or submission-conformance result.
   fec_filing_header_associations:
-    label: Original-file header to filing associations
+    row_unit: "association decisions"
+    label: "FEC header-to-filing matches"
     subject: campaign_finance
     grain: One evidenced association decision for one retained original-file header observation.
     identity_columns:
@@ -9019,7 +9024,8 @@ tables:
       overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically
       exclude records.
   fec_record_evidence:
-    label: Typed FEC record evidence associations
+    row_unit: "evidence links"
+    label: "FEC record source links"
     subject: campaign_finance
     grain: One explicit target-to-witness association with exact endpoint coordinates.
     identity_columns:
@@ -9313,7 +9319,8 @@ tables:
       measures: 'Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value,
         value_status and unit. Unnest with record_id; never add parent summaries to their itemized details.'
   fec_research_context_dispositions:
-    label: FEC context mapping and coverage outcomes
+    row_unit: "processing results"
+    label: "FEC source processing results"
     subject: campaign_finance
     grain: One explicit mapping disposition for a retained collection context.
     identity_columns:
@@ -9322,9 +9329,7 @@ tables:
       statistical contexts. The retained selection is explicit in fec_collections and its source-generation evidence;
       this declaration does not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One explicit mapping disposition for a retained collection context. Accounts for mapped facts, reference-only
-      inventories/definitions, empty/refused responses and unsupported context with concrete reasons. A reference-only
-      disposition is useful retained evidence, not an invented data row.
+    summary: "Records what processing a saved source file or request produced, including empty, refused and unsupported inputs."
     columns:
       collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
         label alone is not a globally unique source identity.
@@ -9495,7 +9500,8 @@ tables:
       table_ordinal: Zero-based ordinal of the source HTML table containing this observation.
       table_row: Native row address in the retained HTML table; use native_cells_json for exact cell evidence.
   fec_research_response_outcomes:
-    label: FEC OpenFEC response outcomes
+    row_unit: "response outcomes"
+    label: "FEC API request outcomes"
     subject: campaign_finance
     grain: One retained response/context outcome observation.
     identity_columns:
@@ -9504,11 +9510,7 @@ tables:
       The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
       not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One retained response/context outcome observation. Makes source-reader refusals and native response shapes
-      explicit. Empty captured results and errors do not establish successful complete queries; no entity rows are
-      invented for missing data. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer
-      into its retained context. Context witnesses use their own digest and native coordinates; they do not require
-      a fictional source_record_id.
+    summary: "Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected."
     columns:
       record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
         remain distinct from a single economic event.
