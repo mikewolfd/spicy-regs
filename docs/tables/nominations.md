@@ -29,3 +29,5 @@ One row per nomination or part, as the Congress.gov nomination list route states
 | `latest_action_date` | `VARCHAR` | Date of the publisher's latestAction entry. |
 | `latest_action_text` | `VARCHAR` | Text of the publisher's latestAction entry. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |
+| `committees_json` | `VARCHAR` | Every committee returned by the nomination committees route, in source order; NULL when unread, [] on a complete empty response. |
+| `hearings_json` | `VARCHAR` | Every printed hearing returned by the nomination hearings route, including jacket number and chamber; NULL when unread, [] on a complete empty response. |

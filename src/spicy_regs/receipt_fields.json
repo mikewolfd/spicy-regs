@@ -773,7 +773,9 @@
      "videos_json",
      "update_date",
      "url",
-     "detail_read"
+     "detail_read",
+     "nomination_references_json",
+     "treaty_references_json"
     ]
    },
    "renamed": {
@@ -812,6 +814,8 @@
       "witness_documents_json",
       "meeting_documents_json",
       "witnesses_json",
+      "nomination_references_json",
+      "treaty_references_json",
       "videos_json"
      ],
      "where": {},
@@ -4243,13 +4247,9 @@
     "detail_read": "`true` where the Congress.gov detail route was read for this row, `false` where the row holds the list route's record only (a detail not yet reached under a run's cap, or refused). The one test of whether a detail was read: a list column cannot say it, because a read detail omits a list it does not state and the column is then NULL as for an unread one. `false` on a `congressional-record-granule` row, which no detail route serves.",
     "matching_requirements_json": "Every matching requirement the detail lists, as a JSON array of numbers. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one.",
     "reconstruction_rule_version": "The `record-communication-` rule identity that produced the derived fields (`RECORD_COMMUNICATION_RULE_VERSION`); NULL on a publisher-decomposed row.",
-    "record_entry_text": "The sentence the Record printed, GPO's own wording with none of the publisher's normalizations applied, kept beside the derived fields the way `rin_matched_text` is kept beside `rin`, so a bad parse is readable from the row; NULL on a publisher-decomposed row.",
-    "record_granule_id": "The `EXECUTIVE COMMUNICATIONS, ETC.` granule within that package, so the row is replayable the way `committee_reports` replays from `package_id`; NULL on a publisher-decomposed row.",
-    "record_package_id": "The CREC package whose issue printed the entry (`CREC-{congressional_record_date}`); NULL on a publisher-decomposed row.",
     "rin_matched_text": "The exact text the RIN rule matched, the label and the RIN as printed, so a false positive is readable from the row.",
     "rin_occurrences_json": "All interpreted RIN occurrences supplied by the consumer, with exact field spans and digest. NULL means unread; [] means the supplied field was read and contained no RIN. Each occurrence's field_sha256 is spelled sha256: plus the hex digest under the rule report_nature/shared_rin/2; one stored under the earlier report_nature/shared_rin carries the bare hex and is re-read, not reused.",
     "rin_rule": "Which RIN rule fired (`report_nature_rin_label/2`), or `unmatched`; NULL where the rule was not run. Rows read before 0.50.1 name `report_nature_rin_label`, the older pattern.",
-    "source_route": "What produced this row: `congress-gov-detail` where the publisher decomposed the communication itself, `congressional-record-granule` where it was reconstructed from the printed entry.",
     "url": "The publisher's own URL for this communication, which only the list row states. NULL on a `congressional-record-granule` row: the detail route 404s for every pre-114th communication."
    },
    "read_markers": [
@@ -4670,13 +4670,33 @@
      "latest_action_date",
      "latest_action_text",
      "update_date",
-     "url"
+     "url",
+     "committees_json",
+     "hearings_json",
+     "detail_read"
     ]
    },
    "meanings": {
+    "detail_read": "Whether this nomination's detail and both relationship lists were read successfully.",
     "nomination_type_json": "The publisher's nominationType object, as JSON.",
     "url": "The publisher's own URL for this nomination."
-   }
+   },
+   "read_markers": [
+    {
+     "columns": [
+      "detail_read"
+     ],
+     "read_value": "true",
+     "fields": [
+      "nomination_type_json",
+      "committees_json",
+      "hearings_json"
+     ],
+     "where": {},
+     "empty_unread": true,
+     "basis": "detail_read is 'true' on a row whose Congress.gov detail record was read."
+    }
+   ]
   },
   "org_committee_links": {
    "containers": {

@@ -53,6 +53,7 @@ from spicy_regs.transforms.parquet_rows import write_rows
 #: ``b_numbers_truncated``; gao_recommendations ``first_seen`` and ``last_seen``. Columns added on 2026-10-05 (owner
 #: decision 2026-10-04): gao_reports ``major_rule_agency``, ``major_rule_rins`` and ``major_rule_fr_citations``.
 POLICY_VERSIONS = {
+    "fcc_filings": "government-sources/2",
     "gao_decisions": "government-sources/2",
     "gao_recommendations": "government-sources/2",
     "gao_reports": "government-sources/2",
@@ -87,6 +88,9 @@ EARLIER_POLICIES = {
     "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),
     "gao_reports": (_without("gao_reports", "major_rule_agency", "major_rule_rins", "major_rule_fr_citations"),),
 }
+EARLIER_POLICIES["fcc_filings"] = (DatasetPolicy.from_descriptor(
+    json.loads(Path(__file__).parents[1].joinpath("navigation_policy_history.json").read_text())["fcc_filings"]
+),)
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)
 # This is local build metadata for forwarding the shared API's admission arguments,

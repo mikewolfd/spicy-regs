@@ -1,7 +1,7 @@
 name: Rollup — nominations
 on:
   schedule:
-    # 06:20 UTC — the nomination list per Congress, whole; no detail route.
+    # 06:20 UTC — nomination lists plus bounded, resumable committee/hearing details.
     - cron: '20 6 * * *'
   workflow_dispatch:
     inputs:

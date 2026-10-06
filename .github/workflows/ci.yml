@@ -91,6 +91,9 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Check portable source navigation and migration rules
+        run: uv run --frozen pytest tests/test_explorer_navigation.py tests/test_congress_receipts.py tests/test_government_source_shapes.py -q
+
       - name: Check descriptions vs schema
         run: uv run spicy-regs-dict check
 

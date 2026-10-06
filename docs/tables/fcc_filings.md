@@ -31,4 +31,4 @@ One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply co
 | `bureaus` | `STRUCT("name" VARCHAR, code VARCHAR, edocs_bureau_code VARCHAR)[]` | Native list of FCC bureau names the filing was routed to. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `text_data` | `VARCHAR` | The filing's inline text — for express comments this is the full comment text. Null for document-only filings. |
 | `total_page_count` | `BIGINT` | Total page count across the filing's attached documents, as a numeric string. |
-| `documents` | `STRUCT(filename VARCHAR, description VARCHAR)[]` | Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `documents` | `STRUCT(filename VARCHAR, description VARCHAR, src VARCHAR)[]` | Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

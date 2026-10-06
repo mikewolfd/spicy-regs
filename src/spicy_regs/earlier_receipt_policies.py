@@ -13,6 +13,14 @@ EARLIER_COLUMNS = {
 
 
 def earlier_policies(policy):
+    from spicy_regs.etl_receipts import DatasetPolicy
+    history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
+    if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2"}:
+        earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
+        if earlier.identity_fields != policy.identity_fields or earlier.dataset != policy.dataset:
+            raise ValueError("Navigation migration changes a historical identity")
+        return (earlier,)
+
     if policy.dataset == "scorecard_member_ratings" and policy.policy_version in {
         "scorecards-etl-ratings-v3",
         "scorecards-etl-ratings-v2",

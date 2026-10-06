@@ -279,7 +279,7 @@ FCC_ARRAYS = {
     "authors": (("name", "name"),),
     "lawfirms": (("name", "name"),),
     "bureaus": (("name", "name"), ("code", "code"), ("edocs_bureau_code", "edocs_bureau_code")),
-    "documents": (("filename", "filename"), ("description", "description")),
+    "documents": (("filename", "filename"), ("description", "description"), ("src", "src")),
 }
 FCC_LEGACY_ARRAYS = {
     "proceeding_names_json": "proceedings",
