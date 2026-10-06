@@ -10194,7 +10194,8 @@
       "candidates": false,
       "meaning": "Document URLs offered by the FCC; offering a URL does not establish capture or extraction.",
       "receiptFields": [
-        "native_fields_json"
+        "native_fields_json",
+        "pdf_extraction_results_json"
       ],
       "elementPath": [
         "documents"
