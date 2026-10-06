@@ -557,13 +557,14 @@ GROUP = {"cl_docket_id": "1", "parent_cl_docket_id": "2", "confidence_tier": "ex
          "rule_version": "v1", "match_basis": "docket_number", "group_size": "3"}
 
 
-def test_a_court_table_published_with_a_type_the_native_schema_does_not_declare_is_refused(tmp_path, monkeypatch, bucket):
-    """The court restore takes the retained table's own types, so they are held against the declared native ones."""
+def test_declared_native_court_conversion_keeps_original_processing_types(tmp_path, monkeypatch, bucket):
     publish_old(bucket, monkeypatch, tmp_path, "court-docket-groups", {"court_docket_groups": [GROUP]})
-    with pytest.raises(conversion.ConversionRefused, match="court_docket_groups does not restore to its retained table"):
-        convert("court-docket-groups", tmp_path / "work")
-    check = json.loads((tmp_path / "work" / conversion.RECEIPT).read_text())["tables"]["court_docket_groups"]
-    assert check["type_changes"] == {"group_size": ["string", "int64"]} and check["rows_only_in_retained"] == 0
+    receipt = convert("court-docket-groups", tmp_path / "work", publish=True)
+    check = receipt["tables"]["court_docket_groups"]
+    assert check["type_changes"] == {} and check["rows_only_in_retained"] == 0
+    subject = pq.read_table(receipt["generation"]["directory"] + "/court_docket_groups.parquet")
+    assert subject["group_size"].type == pa.int64() and subject["group_size"].to_pylist() == [3]
+    assert receipt["read_back"]["anonymous_read_rows"] == {"court_docket_groups": 1}
 
 
 def test_file_metadata_a_later_run_reads_must_survive(tmp_path, monkeypatch, bucket):

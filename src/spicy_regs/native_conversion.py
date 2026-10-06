@@ -159,7 +159,7 @@ class _Built:
     evidence: tuple[Path, ...] = ()
     added_tables: frozenset[str] = frozenset()
     receipt_only_tables: frozenset[str] = frozenset()
-    #: The declared native schema of a table whose restore cannot show a type change by itself (the court path).
+    #: Validate actual native court subjects separately from original processing input types.
     declared: Callable[[str], pa.Schema] | None = None
 
 
@@ -448,7 +448,7 @@ def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], 
 
 def _court_built(generation: Path, subjects: Mapping[str, Path], retained: Mapping[str, Path], base: str,
                  work: Path, generation_id: str, evidence: tuple[Path, ...]) -> _Built:
-    from spicy_regs.court_receipts import POLICIES, read_court_rows, restore_processing_input
+    from spicy_regs.court_receipts import POLICIES, restore_processing_input
     from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 
     def restore(dataset: str) -> Path:
@@ -456,9 +456,10 @@ def _court_built(generation: Path, subjects: Mapping[str, Path], retained: Mappi
         target.parent.mkdir(parents=True, exist_ok=True)
         # The court restore writes whatever schema it is handed, so this file takes the retained table's columns
         # and types; its file metadata is dropped so that metadata the published table had shows as lost.
-        return restore_processing_input(subjects[dataset], target, dataset=dataset,
-                                        schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata(),
-                                        receipt_path=generation / "etl_receipts.parquet", generation_id=generation_id)
+        restored = restore_processing_input(subjects[dataset], target, dataset=dataset,
+                                            schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata(),
+                                            receipt_path=generation / "etl_receipts.parquet", generation_id=generation_id)
+        return _check_processing_restore(retained[dataset + ".parquet"], restored, label="Court")
 
     def read_published(dataset: str, index: Mapping) -> int:
         target = work / "read-back" / uuid4().hex / f"{dataset}.parquet"
@@ -474,7 +475,12 @@ def _court_built(generation: Path, subjects: Mapping[str, Path], retained: Mappi
         if owner is None:
             raise ConversionRefused(f"{dataset}: no published subject owner")
         selected = owner[1]["etlReceipts"]["generationId"]
-        return sum(1 for _ in read_court_rows(target, dataset=dataset, receipt_path=receipts, generation_id=selected))
+        restored = restore_processing_input(
+            target, target.parent / "processing.parquet", dataset=dataset,
+            schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata(),
+            receipt_path=receipts, generation_id=selected,
+        )
+        return _table_rows(_check_processing_restore(retained[dataset + ".parquet"], restored, label="Court"))
 
     return _Built(generation, {name: POLICIES[name].policy_version for name in subjects}, restore, read_published,
                   evidence, declared=SUBJECT_SCHEMAS.__getitem__)
@@ -884,11 +890,11 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
             problems.append(f"{dataset} does not restore: {unreadable}")
             continue
         if built.declared:
-            # The restored file took the retained table's own types, so hold those against the declared native ones.
-            kept, declared = pq.read_schema(retained[key]), built.declared(dataset)
-            check["type_changes"] |= {name: [str(kept.field(name).type), str(declared.field(name).type)]
-                                      for name in kept.names if name in declared.names
-                                      and kept.field(name).type != declared.field(name).type}
+            # Domain types belong to the native subject. The original processing types are checked by exact restore.
+            declared = built.declared(dataset)
+            if not subject.exists() or any(not pq.read_schema(member).equals(declared)
+                                           for member in _table_files(subject).values()):
+                problems.append(f"{dataset}: actual native subject schema differs from its declared court policy")
         if subject.exists():
             check["subject_rows"] = _table_rows(subject)
             if subject.is_dir():
