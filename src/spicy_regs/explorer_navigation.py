@@ -45,10 +45,11 @@ CONGRESS = key(part("congress"), pattern=NUM)
 BILL_ID = key(part(""), pattern=r"[0-9]+-(hr|s|hres|sres|hjres|sjres|hconres|sconres)-[0-9]+")
 NOMINATION = route("nominations", ("congress", "citation"), (
     CONGRESS, key(part("number", transform="nomination-citation"), part("part", transform="partition"))),
-    guard("number", pattern=NUM), guard("congress", pattern=NUM), guard("part", pattern=r"00|[1-9][0-9]*"))
+    guard("number", pattern=NUM), guard("congress", pattern=NUM), guard("part", pattern=r"00|0*[1-9][0-9]*"))
 TREATY = route("treaties", ("congress_received", "number", "suffix"), (
     CONGRESS, key(part("number"), pattern=NUM), key(part("part", transform="partition-value"), pattern=r"[0-9]*")),
-    guard("number", pattern=NUM), guard("congress", pattern=NUM), guard("part", pattern=r"00|[1-9][0-9]*"))
+    guard("number", pattern=NUM), guard("congress", pattern=NUM),
+    {**part("part", transform="partition-value"), "pattern": r"[0-9]*"})
 
 
 
@@ -185,7 +186,13 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
 
 
 def scalar(value):
-    return str(value) if isinstance(value, (str, int)) and not isinstance(value, bool) else None
+    # DuckDB JSON retains signed/unsigned 64-bit integer tokens exactly.
+    # Larger numeric tokens are doubles there; digit strings stay literal.
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool) and -(2**63) <= value < 2**64:
+        return str(value)
+    return None
 
 
 def at(value, path):
@@ -201,13 +208,16 @@ def word(recipe, element, row):
         return recipe["literal"]
     value = at(row if recipe.get("from") == "row" else element, recipe["path"])
     transform = recipe.get("transform")
-    if transform == "partition":
+    if transform in {"partition", "partition-value"}:
+        if value is not None and scalar(value) is None:
+            return None
         if value in (None, "", "00", 0):
             return ""
         value = scalar(value)
-        return "-" + value if value and re.fullmatch(NUM, value) else None
-    if transform == "partition-value":
-        return "" if value in (None, "", "00", 0) else scalar(value)
+        if transform == "partition":
+            # The publisher retains partNumber "07" beside citation "PN1272-7".
+            return "-" + value.lstrip("0") if value and re.fullmatch(r"0*[1-9][0-9]*", value) else None
+        return value if value and re.fullmatch(r"[0-9]+", value) else None
     value = scalar(value)
     if value is None:
         return None
@@ -312,14 +322,22 @@ def array_sql_relationships():
                 raise ValueError("SQL row navigation requires a scalar field")
             result = 's."' + p["path"][0] + '"'
         else:
-            result = "json_extract_string(e.value, " + literal("$." + ".".join(p["path"])) + ")"
+            path = literal("$." + ".".join(p["path"]))
+            kind = "json_type(e.value, " + path + ")"
+            raw = "json_extract_string(e.value, " + path + ")"
+            result = f"CASE WHEN {kind} IN ('VARCHAR','BIGINT','UBIGINT') THEN {raw} END"
         transform = p.get("transform")
         if transform == "nomination-citation":
             return "'PN' || " + result
         if transform in {"partition", "partition-value"}:
-            empty = "''"
-            prefix = "'-' || " if transform == "partition" else ""
-            return f"CASE WHEN {result} IS NULL OR {result} IN ('','00','0') THEN {empty} ELSE {prefix}{result} END"
+            kind = "json_type(e.value, " + literal("$." + ".".join(p["path"])) + ")"
+            value = (f"CASE WHEN regexp_full_match({result}, '0*[1-9][0-9]*') "
+                     f"THEN '-' || ltrim({result}, '0') END" if transform == "partition" else
+                     f"CASE WHEN regexp_full_match({result}, '[0-9]+') THEN {result} END")
+            return (f"CASE WHEN {kind} IS NULL OR {kind} = 'NULL' THEN '' "
+                    f"WHEN {kind} NOT IN ('VARCHAR','BIGINT','UBIGINT') THEN NULL "
+                    f"WHEN {result} IN ('','00') OR ({kind} IN ('BIGINT','UBIGINT') AND {result} = '0') THEN '' "
+                    f"ELSE {value} END")
         if transform == "lower":
             return f"lower({result})"
         if transform == "hearing-congress":

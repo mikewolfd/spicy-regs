@@ -2,7 +2,7 @@
 import json
 import duckdb
 import pytest
-from spicy_regs.explorer_navigation import declarations, target_keys, array_sql_relationships, validate_navigation
+from spicy_regs.explorer_navigation import declarations, target_keys, array_sql_relationships, validate_navigation, scalar
 from spicy_regs.table_joins import RETIRED_PROCESSING_JOINS
 
 
@@ -18,6 +18,92 @@ def test_partitioned_meeting_keys_are_indivisible_and_missing_part_is_unknown():
     t = recipe('meeting_treaties')['targets'][0]
     assert target_keys(t, {'congress':118,'number':2,'part':'00'}, {}) == ['118','2','']
     assert target_keys(t, {'congress':118,'number':2,'part':'3'}, {}) == ['118','2','3']
+
+
+@pytest.mark.parametrize('part', ['07', '007', '7', 7])
+def test_meeting_nomination_parts_use_the_publisher_citation_spelling(part):
+    reference = {'congress':119, 'number':1272, 'part':part}
+    assert target_keys(recipe('meeting_nominations')['targets'][0], reference,
+                       {'congress':'118'}) == ['119','PN1272-7']
+    assert reference['part'] == part  # Navigation leaves the recorded source untouched.
+
+
+@pytest.mark.parametrize('part', [None, '', '00', 0])
+def test_unpartitioned_treaty_reference_retains_its_own_congress(part):
+    reference = {'congress':112, 'number':8}
+    if part is not None:
+        reference['part'] = part
+    assert target_keys(recipe('meeting_treaties')['targets'][0], reference,
+                       {'congress':'118'}) == ['112','8','']
+
+
+@pytest.mark.parametrize('part', [True, False, 0.0, 7.0, {}, [], '-1', ' 07', '7 ', '7x'])
+def test_meeting_partition_values_refuse_noninteger_and_malformed_shapes(part):
+    for name in ('meeting_nominations', 'meeting_treaties'):
+        assert target_keys(recipe(name)['targets'][0],
+                           {'congress':119,'number':14,'part':part}, {}) is None
+
+
+def test_meeting_partition_sql_matches_portable_keys_and_preserves_occurrence_order():
+    references = [
+        {'congress':119,'number':1272,'part':'07'},
+        {'congress':119,'number':1272,'part':'07'},
+        {'congress':119,'number':1272,'part':'10'},
+        {'congress':112,'number':8},
+        *({'congress':119,'number':14,'part':p} for p in
+          ('00', '', 0, '0', None, False, True, 0.0, 7.0, {}, [], '-1', ' 07', '7x')),
+    ]
+    con = duckdb.connect()
+    con.execute('CREATE TABLE source(congress VARCHAR, chamber VARCHAR, event_id VARCHAR, refs JSON)')
+    con.execute('INSERT INTO source VALUES (?,?,?,?)', ['118','senate','334180',json.dumps(references)])
+    for name in ('meeting_nominations', 'meeting_treaties'):
+        target = recipe(name)['targets'][0]
+        relationship = next(s for s in array_sql_relationships() if s.name == name)
+        expected = [(str(i), ':'.join(keys)) for i, ref in enumerate(references)
+                    if (keys := target_keys(target, ref, {'congress':'118'})) is not None]
+        actual = con.execute(f'SELECT e.key,{relationship.target_expression} FROM source s,json_each(s.refs) e '
+                             f'WHERE {relationship.valid_expression} ORDER BY CAST(e.key AS INTEGER)').fetchall()
+        assert actual == expected
+        expected_prefix = ([('0','119:PN1272-7'),('1','119:PN1272-7'),('2','119:PN1272-10')]
+                           if name == 'meeting_nominations' else
+                           [('0','119:1272:07'),('1','119:1272:07'),('2','119:1272:10')])
+        assert actual[:3] == expected_prefix
+    con.close()
+
+
+@pytest.mark.parametrize('value', [-(2**63), 2**63 - 1, 2**63, 2**64 - 1])
+def test_navigation_numeric_integers_cover_the_json_signed_and_unsigned_range(value):
+    assert scalar(value) == str(value)
+
+
+@pytest.mark.parametrize('value', [-(2**63) - 1, 2**64, 2**80])
+def test_navigation_refuses_out_of_range_numeric_tokens_but_keeps_digit_strings(value):
+    assert scalar(value) is None
+    assert scalar(str(value)) == str(value)
+
+
+@pytest.mark.parametrize('token', ['7.0', '7e0', '0.0', '0e0',
+                                    '18446744073709551615', '18446744073709551616',
+                                    '"18446744073709551616"', '-9223372036854775808',
+                                    '-9223372036854775809'])
+def test_raw_json_numeric_tokens_match_python_and_compiled_meeting_sql(token):
+    con = duckdb.connect()
+    con.execute('CREATE TABLE source(congress VARCHAR, chamber VARCHAR, event_id VARCHAR, refs JSON)')
+    for field in ('congress', 'number', 'part'):
+        fields = {'congress':'119', 'number':'14', 'part':'7'}
+        fields[field] = token
+        raw = '[{' + ','.join(json.dumps(k) + ':' + v for k, v in fields.items()) + '}]'
+        element = json.loads(raw)[0]
+        con.execute('DELETE FROM source')
+        con.execute('INSERT INTO source VALUES (?,?,?,?)', ['118','senate','334180',raw])
+        for name in ('meeting_nominations', 'meeting_treaties'):
+            target = recipe(name)['targets'][0]
+            relationship = next(s for s in array_sql_relationships() if s.name == name)
+            keys = target_keys(target, element, {'congress':'118'})
+            expected = [] if keys is None else [(':'.join(keys),)]
+            assert con.execute(f'SELECT {relationship.target_expression} FROM source s,json_each(s.refs) e '
+                               f'WHERE {relationship.valid_expression}').fetchall() == expected
+    con.close()
 
 
 def test_nomination_hearing_uses_the_hearing_citation_congress_not_nomination_context():
