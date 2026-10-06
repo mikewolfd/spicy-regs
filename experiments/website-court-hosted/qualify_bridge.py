@@ -115,11 +115,26 @@ def main():
         outcome = json.loads((stages / "instrumentation-outcome.json").read_text())
         identity = json.loads((stages / "instrumentation-identity.json").read_text())
         events = [json.loads(line) for line in (stages / "stages.jsonl").read_text().splitlines()]
+        started_events = [e for e in events if e["status"] == "started"]
+        terminal_events = [e for e in events if e["status"] in {"completed", "failed", "closed"}]
+        started_calls = {e["call"] for e in started_events}
+        terminal_calls = {e["call"] for e in terminal_events}
+        required_phases = {"inputs.checked_member", "processing.select_receipts",
+                           "processing.restore_processing_input", "witnesses.select_receipts",
+                           "witnesses.read_attempts_and_caller_grouping", "files.file_hash",
+                           "admission._check_receipts", "admission._check_subjects", "bridge.main"}
+        completed_phases = {e["phase"] for e in terminal_events if e["status"] == "completed"}
+        phases_by_call = {e["call"]: e["phase"] for e in started_events}
+        complete_stage_log = (started_calls == terminal_calls
+            and len(started_calls) == len(started_events) == len(terminal_events)
+            and all(phases_by_call[e["call"]] == e["phase"] for e in terminal_events)
+            and required_phases.issubset(completed_phases)
+            and len([e for e in terminal_events if e["phase"] == "bridge.main" and e["status"] == "completed"]) == 1)
         if (outcome["status"] != "COMPLETE_WITH_CHECKS" or outcome["instrumentationFailures"]
                 or identity["implementationSha256"] != IMPLEMENTATION
                 or identity["instrumentationSha256"] != sha(wrapper)
                 or identity["sourceRevision"] != SOURCE or identity["websiteRevision"] != SITE
-                or not any(e["phase"] == "bridge.main" and e["status"] == "completed" for e in events)):
+                or not complete_stage_log):
             raise ValueError("Complete instrumentation evidence differs")
         report.update(status="PASS", restoration=result, instrumentationOutcome=outcome)
     except Exception as error:
