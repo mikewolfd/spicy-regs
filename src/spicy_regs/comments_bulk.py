@@ -112,6 +112,9 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
            {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id FROM receipt'''
     expected, seen, routed = pq.ParquetFile(source).metadata.num_rows, 0, 0
     with etl_bulk.bulk_connection() as (con, work):
+        # Wide comment receipts multiply each worker's live strings. Keep this
+        # ordered writer within the connection's memory target with one worker.
+        con.execute('SET threads = 1')
         register_html_text(con)
         con.create_function('comments_attachments', _attachments, ['VARCHAR'], 'STRUCT(native VARCHAR, reference BOOLEAN)',
                             type='arrow', null_handling='special')
