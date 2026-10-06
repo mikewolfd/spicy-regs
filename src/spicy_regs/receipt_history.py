@@ -65,23 +65,29 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
         for name in ("current", "prior"):
             con.execute(
                 f"CREATE TABLE {name}_keys AS SELECT ordinal,dataset,outcome,record_id,subject_version, "
+                "CASE WHEN outcome='accepted' THEN record_id ELSE '' END AS accepted_record_id, "
+                "CASE WHEN outcome='accepted' THEN subject_version ELSE '' END AS accepted_subject_version, "
                 f"{_processing_key('processing_json')} AS processing_key, "
-                f"CASE WHEN outcome<>'accepted' THEN {_processing_key('diagnostic_json')} END AS diagnostic_key "
+                f"CASE WHEN outcome='accepted' THEN unhex('') ELSE {_processing_key('diagnostic_json')} "
+                "END AS diagnostic_key "
                 f"FROM {name}"
             )
             con.execute(
                 f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
-                "processing_key, CASE WHEN outcome='accepted' THEN record_id END, "
-                "CASE WHEN outcome='accepted' THEN subject_version END, "
+                "processing_key, accepted_record_id, accepted_subject_version, "
                 "diagnostic_key ORDER BY ordinal) AS occurrence "
                 f"FROM {name}_keys"
             )
+        # Outcome separates the branches, so ignored fields use fixed keys.
+        # Ordinary equality preserves null refusal and admits a hash join
+        # instead of an OR join that compares every current/prior pair.
         con.execute("""CREATE TABLE matches AS SELECT c.ordinal AS current_ordinal,p.ordinal AS prior_ordinal,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.ordinal END AS predecessor_ordinal
             FROM current_ranked c LEFT JOIN prior_ranked p ON c.dataset=p.dataset AND c.outcome=p.outcome
             AND c.processing_key=p.processing_key AND c.occurrence=p.occurrence
-            AND (c.outcome<>'accepted' OR (c.record_id=p.record_id AND c.subject_version=p.subject_version))
-            AND (c.outcome='accepted' OR c.diagnostic_key=p.diagnostic_key)
+            AND c.accepted_record_id=p.accepted_record_id
+            AND c.accepted_subject_version=p.accepted_subject_version
+            AND c.diagnostic_key=p.diagnostic_key
             LEFT JOIN prior_keys predecessor ON c.dataset=predecessor.dataset AND c.record_id=predecessor.record_id
             AND predecessor.outcome='accepted'""")
         # Hashes reduce rank/join working sets, never authorize a raw-value
