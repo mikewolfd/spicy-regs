@@ -226,6 +226,12 @@ def rebuild_record_issues(prior: Path, out: Path) -> dict[str, int]:
     from spicy_docs.schemas.congress_index_tables import shape_record_issue
 
     columns = pq.read_schema(prior).names
+    required = {"entire_issue_json", "package_id", "package_id_rule"}
+    if missing := required - set(columns):
+        raise ValueError(
+            "Record-issue repair requires receipt-restored processing rows or a legacy processing prior; "
+            f"missing columns: {sorted(missing)}. Native subjects require their saved selection and receipts."
+        )
     rows = _rows(prior, columns)
     moved = ruled = 0
     for row in rows:
@@ -299,6 +305,29 @@ def apply_repair(repair: Repair, priors: Path, output_dir: Path,
 
 def repair_rollup(name: str, repair: Repair) -> type[RollupPipeline]:
     """The partial writer that publishes ``repair`` over its family's current generation."""
+
+    if name == "rebuild-record-issues":
+        from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup
+
+        class RecordIssueRepairRollup(SubjectReceiptRollup):
+            publication_family = repair.family
+            output = "record_issues.parquet"
+            retain_source_evidence = True
+
+            def build(self, output_dir: Path) -> tuple[Path, ...]:
+                def builder(work, *, download_prior):
+                    priors = work / ".priors"
+                    priors.mkdir()
+                    counts = apply_repair(repair, priors, work, download_prior)
+                    logger.info("{}: {}", name, json.dumps(counts, sort_keys=True))
+                    if self.source_evidence is not None:
+                        self.source_evidence.event("prior-repair", repair=name, counts=counts)
+                    return work / self.output
+
+                return self.build_receipts(output_dir, builder)
+
+        RecordIssueRepairRollup.name = f"prior-repair-{name}"
+        return RecordIssueRepairRollup
 
     class PriorRepairRollup(RollupPipeline):
         publication_family: ClassVar[str | None] = repair.family
@@ -397,20 +426,35 @@ def missing_bills_rollup(bill_ids: Sequence[str]) -> type[RollupPipeline]:
 
 
 def dry_run(name: str, *, prior_dir: Path | None = None) -> dict[str, dict[str, int]]:
-    """``name``'s counts over the live generation (``R2_PUBLIC_URL``) or ``prior_dir``; nothing is written."""
+    """Count a repair over the live generation or local processing priors without changing the input.
+
+    Record issues also accepts a local saved native selection with its receipts.
+    """
     from spicy_regs.sources import publication, r2
 
     repair = REPAIRS[name]
     with TemporaryDirectory(prefix="prior-repair-") as scratch:
         work = Path(scratch)
         if prior_dir is not None:
+            if name == "rebuild-record-issues" and (prior_dir / ".native-state" / "selection.json").exists():
+                from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+                selected = SelectedPriors(work / "selected", root=prior_dir, public_url="")
+                priors = work / "priors"
+                priors.mkdir()
+                return apply_repair(repair, priors, work, selected.download)
             return apply_repair(repair, prior_dir, work)
         public_url = os.environ.get("R2_PUBLIC_URL")
         if not public_url:
             raise RuntimeError("a dry run reads the live generation through R2_PUBLIC_URL, or --prior-dir")
         priors = work / "priors"
         priors.mkdir()
-        with publication.snapshot(public_url):
+        with publication.snapshot(public_url) as index:
+            if name == "rebuild-record-issues":
+                from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+                selected = SelectedPriors(work / "selected", index=index, public_url=public_url)
+                return apply_repair(repair, priors, work, selected.download)
             return apply_repair(repair, priors, work, r2.download)
 
 

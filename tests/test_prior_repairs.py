@@ -431,3 +431,119 @@ def test_comment_digests_respell_in_the_catalog_keep_the_text_and_restore(tmp_pa
     assert repairs.respell_comment_digests()["comments_respelled"] == 0, "a second pass finds nothing"
     assert repairs.restore_comment_digests(receipts) == {"comments_restored": 1, "comments_since_rewritten": 0}
     assert _comments(connect)["ACF-1"] == (derived, "kept")
+
+
+def _native_record_issue_selection(root):
+    from spicy_regs.congress_receipts import write_congress_dataset
+    from spicy_regs.congress_subjects import INPUT_COLUMNS
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+
+    row: dict[str, str | None] = dict.fromkeys(INPUT_COLUMNS["record_issues"])
+    row.update(
+        volume="171", issue="45", congress="119", issue_date="2025-03-11",
+        entire_issue_json=json.dumps([{"part": "1", "type": "PDF",
+            "url": "https://www.congress.gov/171/crec/2025/03/11/171/45/CREC-2025-03-11.pdf"}]),
+        package_id="CREC-2025-03-11-bk2", package_id_rule="entire_issue_url_stem",
+    )
+    source = _table(root / "source.parquet", [row])
+    subject, receipts = write_congress_dataset(
+        source, root / "native", dataset="record_issues", generation_id="before"
+    )
+    assert subject is not None
+    work = root / "repair"
+    work.mkdir()
+    remember_selection(work, [SelectedDataset("record_issues", (subject,), receipts, "before")])
+    return work, row, receipts
+
+
+def test_record_issue_repair_restores_receipt_held_inputs_and_writes_native(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.sources import r2
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    monkeypatch.setattr(r2, "download", lambda *_: pytest.fail("Repair must use its selected native prior"))
+    work, original, _ = _native_record_issue_selection(tmp_path)
+    rollup = repairs.repair_rollup("rebuild-record-issues", repairs.REPAIRS["rebuild-record-issues"])
+    rollup(output_dir=work, skip_upload=True).run()
+    repaired = pq.read_table(work / "record_issues.parquet").to_pylist()[0]
+    assert repaired["package_id"] == "CREC-2025-03-11"
+    assert "entire_issue" in repaired and "entire_issue_json" not in repaired
+    assert "package_id_rule" not in repaired
+    assert (work / "etl_receipts.parquet").exists()
+    restored = SelectedPriors(tmp_path / "readback", root=work, public_url="").get("record_issues")
+    assert restored is not None
+    row = pq.read_table(restored).to_pylist()[0]
+    assert row == original | {"package_id": "CREC-2025-03-11", "package_id_rule": "entire_issue_url_stem/2"}
+    before = pq.read_table(work / "record_issues.parquet")
+    rollup(output_dir=work, skip_upload=True).run()
+    assert pq.read_table(work / "record_issues.parquet").equals(before)
+
+
+def test_record_issue_repair_refuses_missing_selected_receipts(tmp_path, monkeypatch):
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    work, _, receipts = _native_record_issue_selection(tmp_path)
+    receipts.unlink()
+    rollup = repairs.repair_rollup("rebuild-record-issues", repairs.REPAIRS["rebuild-record-issues"])
+    with pytest.raises((ValueError, OSError)):
+        rollup(output_dir=work, skip_upload=True).run()
+    assert not (work / "record_issues.parquet").exists()
+
+
+def test_record_issue_dry_run_restores_local_native_selection_without_remote_fallback(tmp_path, monkeypatch):
+    from spicy_regs.sources import publication
+
+    work, _, _ = _native_record_issue_selection(tmp_path)
+    selection = work / ".native-state" / "selection.json"
+    before = selection.read_bytes()
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.test")
+    monkeypatch.setattr(publication, "load_index", lambda *_: pytest.fail("Local dry run must not read remotely"))
+    assert repairs.dry_run("rebuild-record-issues", prior_dir=work) == {
+        "record_issues": {"rows": 1, "package_id_moved": 1, "package_id_rule_moved": 1}
+    }
+    assert selection.read_bytes() == before
+    assert not (work / "record_issues.parquet").exists()
+
+
+def test_record_issue_dry_run_refuses_native_subject_without_selected_receipts(tmp_path):
+    from shutil import copyfile
+
+    _native_record_issue_selection(tmp_path)
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    prior = bare / "record_issues.parquet"
+    copyfile(tmp_path / "native" / "record_issues.parquet", prior)
+    before = prior.read_bytes()
+    with pytest.raises(ValueError, match="receipt-restored processing"):
+        repairs.dry_run("rebuild-record-issues", prior_dir=bare)
+    assert prior.read_bytes() == before
+
+
+def test_record_issue_dry_run_uses_the_captured_native_selection(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from spicy_regs.pipelines.rollups import subject_receipts
+    from spicy_regs.sources import publication, r2
+
+    work, _, _ = _native_record_issue_selection(tmp_path)
+    captured = object()
+    seen = []
+    selected_priors = subject_receipts.SelectedPriors
+
+    @contextmanager
+    def snapshot(url):
+        seen.append(url)
+        yield captured
+
+    def selected(directory, *, index, public_url):
+        assert index is captured
+        assert public_url == "https://data.example.test"
+        return selected_priors(directory, root=work, public_url="")
+
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.test")
+    monkeypatch.setattr(publication, "snapshot", snapshot)
+    monkeypatch.setattr(subject_receipts, "SelectedPriors", selected)
+    monkeypatch.setattr(r2, "download", lambda *_: pytest.fail("Dry run must restore selected native input"))
+    assert repairs.dry_run("rebuild-record-issues") == {
+        "record_issues": {"rows": 1, "package_id_moved": 1, "package_id_rule_moved": 1}
+    }
+    assert seen == ["https://data.example.test"]
+    assert not (work / "record_issues.parquet").exists()

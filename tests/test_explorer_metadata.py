@@ -56,6 +56,33 @@ def test_new_table_remains_discoverable_but_never_borrowed_description_or_join()
     assert result["tables"]["parent"]["sourceStatus"] == "unknown"
 
 
+@pytest.mark.parametrize("identity,missing", [
+    (["id", "native_edition"], ["native_edition"]),
+    (["native_id", "edition"], ["native_id"]),
+    (["native_id", "native_edition"], ["native_edition", "native_id"]),
+    (["native_id"], ["native_id"]),
+    (["id", "edition"], []),
+    (["id"], []),
+])
+def test_selected_schema_exposes_a_complete_identity_or_reports_it_unavailable(identity, missing):
+    options = args()
+    options["descriptions"]["parent"]["identity_columns"] = identity
+    before = deepcopy(options)
+    parent = build_bundle(index(), **options)["tables"]["parent"]
+    if missing:
+        assert "identity_columns" not in parent
+        assert parent["unavailableIdentity"] == {
+            "columns": identity,
+            "missing_columns": missing,
+            "reason": "Selected published schema does not expose the complete declared identity.",
+        }
+    else:
+        assert parent["identity_columns"] == identity
+        assert "unavailableIdentity" not in parent
+    assert parent["publicationSchema"] == [["id", "VARCHAR"], ["edition", "VARCHAR"]]
+    assert options == before
+
+
 def test_still_published_processing_tables_use_the_canonical_dictionary(monkeypatch):
     from spicy_regs import data_dictionary, explorer_metadata
     options = args()

@@ -134,6 +134,15 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         # The live index owns field presence/types, including new undocumented fields.
         description["columns"] = [{**documented_columns.get(column, {}), "column_name": column,
                                    "column_type": typ} for column, typ in schema]
+        identity = description.get("identity_columns", [])
+        missing_identity = sorted(set(identity) - {column for column, _ in schema})
+        if missing_identity:
+            # A composite identity is indivisible; never advertise a partial key.
+            description.pop("identity_columns", None)
+            description["unavailableIdentity"] = {
+                "columns": identity, "missing_columns": missing_identity,
+                "reason": "Selected published schema does not expose the complete declared identity.",
+            }
         family = live_table["family"]
         origin = {**registry.get("families", {}).get(family, {}), **registry.get("tables", {}).get(name, {})}
         source_entries = [deepcopy(sources[key]) for key in origin.get("sources", [])]
