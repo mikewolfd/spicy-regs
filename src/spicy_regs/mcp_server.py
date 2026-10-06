@@ -1528,7 +1528,9 @@ def _table_joins(table: str, *, measurements: bool) -> dict:
     Detailed outgoing joins retain complete measurements. Incoming joins retain
     baseline counts and declared cardinality, with an explicit reference to the
     child's detailed description for measurement evidence. Without measurements, every
-    join still states its kind, reason, baseline counts and floor.
+    join keeps its kind and baseline counts. Incoming groups factor the parent
+    and a shared complete parent key; empty reasons and null floors are omitted.
+    Nonempty reasons and measured floors, including zero, remain exact.
     """
     record = _joins()
     incoming = [join for join in record["joins"] if join["parent"] == table]
@@ -1550,7 +1552,7 @@ def _table_joins(table: str, *, measurements: bool) -> dict:
         if shaped.get("floor_pct") is None:
             shaped.pop("floor_pct", None)
         # Missing optional fields retain their defaults; all keys, scope reasons,
-        # baseline counts and floors stay present in both directions.
+        # baseline counts and measured floors stay present in both directions.
         if shaped.get("measured_via") is None:
             shaped.pop("measured_via", None)
         if shaped.get("expected_cardinality") == "unspecified":

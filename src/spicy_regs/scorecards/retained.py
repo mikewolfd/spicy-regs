@@ -11,6 +11,7 @@ from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS, ScorecardEdition, 
 
 from spicy_regs.scorecards.replay import RetainedScorecardSequence, ScorecardReplayError
 from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, validate_limits
+from spicy_regs.scorecards.subject_shapes import IDENTITIES, source_row_index
 
 QUALIFIED_INPUT_MAX_BYTES = 200 * 1024**2
 
@@ -170,11 +171,21 @@ def check_preserved(prior, current, *, scorecard_ids, publisher_ids):
                 scorecard_ids,
             )
         )
-        old = [row for row in prior[name] if row[column] not in replaced]
-        kept = [row for row in current[name] if row[column] not in replaced]
-        if canonical(old) != canonical(kept):
-            raise ScorecardReplayError("Unselected source rows changed: " + name)
-        counts[name] = len(old)
+        try:
+            old = source_row_index(name, (row for row in prior[name] if row[column] not in replaced))
+            counts[name] = len(old)
+            for row in current[name]:
+                if row[column] in replaced:
+                    continue
+                key = tuple(row[field] for field in IDENTITIES[name])
+                expected = old.pop(key, None)
+                if expected is None or canonical([expected]) != canonical([row]):
+                    raise ValueError("Changed, additional or duplicated row")
+            if old:
+                raise ValueError("Missing row")
+            old.clear()
+        except (ValueError, KeyError, TypeError) as error:
+            raise ScorecardReplayError("Unselected source rows changed: " + name) from error
     return counts
 
 

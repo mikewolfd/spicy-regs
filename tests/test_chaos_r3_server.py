@@ -313,6 +313,17 @@ def test_describe_omits_only_measurements_and_ledger_statements_by_default_and_s
     # Incoming compact groups factor shared parent fields and omit empty reasons/null floors.
     # A missing floor means unmeasured, never a zero-percent floor; populated values stay exact.
     assert all(join.get("floor_pct") is None or 0 <= join["floor_pct"] <= 100 for join in joins)
+    declared = server._joins()["joins"]
+    for direction in ("outgoing", "incoming"):
+        key = "child" if direction == "outgoing" else "parent"
+        original = [join for join in declared if join[key] == "bill_versions"]
+        for observed, canonical in zip(compact["joins"][direction], original, strict=True):
+            for field in ("kind", "baseline_keys", "baseline_missing", "child", "child_columns"):
+                assert observed[field] == canonical[field]
+            assert observed.get("reason", "") == canonical["reason"]
+            assert observed.get("floor_pct") == canonical["floor_pct"]
+            assert observed.get("parent", compact["joins"]["incoming_parent"]) == canonical["parent"]
+            assert observed.get("parent_columns", compact["joins"].get("incoming_parent_columns")) == canonical["parent_columns"]
     assert "ledger_statements" not in compact["qualification"]
     assert {"status", "generation", "live_pin", "ledger_pin", "ledger_disposition", "ledger_tasks"} <= set(compact["qualification"])
     # bill_versions has receipts: its receipt fields' meanings are a third key only the detailed reply carries.
@@ -385,3 +396,17 @@ def test_reflected_tool_descriptions_explain_the_new_knobs():
     schema = {tool.name: tool.input_schema for tool in tools}
     assert "max_cell_chars" in schema["query_sql"]["properties"] and "detail" in schema["describe_table"]["properties"]
     assert schema["query_sql"]["required"] == ["sql"] and schema["describe_table"]["required"] == ["table"]
+
+
+def test_incoming_groups_preserve_meaningful_reasons_and_zero_floors(monkeypatch):
+    from copy import deepcopy
+    record = deepcopy(server._joins())
+    incoming = [join for join in record["joins"] if join["parent"] == "bill_versions"]
+    assert incoming
+    incoming[0]["reason"] = "Declared scope remains meaningful."
+    incoming[0]["floor_pct"] = 0.0
+    monkeypatch.setattr(server, "_joins", lambda: record)
+    shaped = server._table_joins("bill_versions", measurements=False)["incoming"][0]
+    assert shaped["reason"] == incoming[0]["reason"]
+    assert shaped["floor_pct"] == 0.0
+    assert "measurement" not in shaped
