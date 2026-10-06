@@ -23,6 +23,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, BinaryIO
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 ParquetInput = Path | Callable[[], AbstractContextManager[BinaryIO]]
@@ -739,10 +740,33 @@ def _read_with_receipts_rows(subject_paths, receipt_paths, policy, *, generation
             yield subject | processing
 
 
-def select_receipts(path: Path, destination: Path, *, dataset: str) -> Path:
-    """Select a dataset's receipt rows without losing failed attempts."""
+def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> Path:
+    """Select all outcomes in source order; receipt admission remains a separate check.
+
+    Exact shared-schema batches preserve every cell without converting rows to
+    Python and back. Decode and validate excluded rows too, as the row selector
+    does. Unproven schemas or decoding errors stay with that row authority.
+    """
     from spicy_regs.parquet_rows import write_rows
 
+    if type(dataset) is str:
+        try:
+            with TemporaryDirectory(dir=destination.parent) as scratch:
+                temporary = Path(scratch) / "rows.parquet"
+                with _parquet(path) as parquet:
+                    shared = parquet.schema_arrow.equals(RECEIPT_SCHEMA)
+                    if shared:
+                        with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
+                            for batch in parquet.iter_batches(batch_size=2000):
+                                batch.validate(full=True)
+                                selected = batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)]))
+                                if selected.num_rows:
+                                    writer.write_table(pa.Table.from_batches([selected], schema=RECEIPT_SCHEMA))
+                if shared:
+                    temporary.replace(destination)
+                    return destination
+        except (ValueError, TypeError, pa.ArrowException):
+            pass
     return write_rows((row for row in _rows(path) if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)
 
 
