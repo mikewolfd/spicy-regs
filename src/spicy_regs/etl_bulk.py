@@ -33,7 +33,9 @@ from spicy_regs.etl_receipts import (
     _bundle_policies,
     _load_receipts,
     _parquet,
+    _rows,
     _subjects,
+    _unpack,
     subject_identity,
     receipt_policies,
     validate_publisher_generation,
@@ -223,7 +225,7 @@ def _by_dataset_sql(policies: Mapping[str, DatasetPolicy], each: Callable[[Datas
     return f"CASE dataset {cases} ELSE {other} END" if cases else other
 
 
-def _receipt_insert_sql(policies: Mapping[str, DatasetPolicy], scoped: bool) -> str:
+def _receipt_insert_sql(policies: Mapping[str, DatasetPolicy], scoped: bool, *, retain_processing: bool = False) -> str:
     """Keep each receipt's join fields and whether SQL proved every check ``_load_receipts`` makes of one row.
 
     The conditions follow that function's order. One that is false or NULL leaves the row unproven; nothing here
@@ -252,7 +254,8 @@ def _receipt_insert_sql(policies: Mapping[str, DatasetPolicy], scoped: bool) -> 
     return (
         "INSERT INTO receipts SELECT n, dataset, generation_id, receipt_id, outcome,"
         " CASE WHEN outcome = 'accepted' THEN record_id END, CASE WHEN outcome = 'accepted' THEN subject_version END,"
-        f" CASE WHEN outcome = 'accepted' THEN identity_json END, ({proven}) IS NOT TRUE FROM (SELECT *,"
+        f" CASE WHEN outcome = 'accepted' THEN identity_json END, ({proven}) IS NOT TRUE"
+        + (", processing_json" if retain_processing else "") + " FROM (SELECT *,"
         f" {receipt_json_sql()} AS body, {mapping_keys_sql('processing_json')} AS fields FROM source{selected})"
     )
 
@@ -264,16 +267,21 @@ def _subject_insert_sql(policy: DatasetPolicy, number: str) -> str:
     leave, which ``subject_identity`` refuses.
     """
     record_id, version, identity = identity_sql(policy)
+    return (
+        f'INSERT INTO subjects SELECT "{number}", {_literal(policy.dataset)}, {record_id}, {version}, {identity},'
+        f" ({_subject_reference_sql(policy)}) IS NOT FALSE FROM source"
+    )
+
+
+def _subject_reference_sql(policy: DatasetPolicy) -> str:
+    """Subjects whose exact encoding or null validation belongs to the row reference."""
     subject = record_json_sql((field.name, field.type) for field in policy.subject_schema)
     missing = " OR ".join(
         '"' + key.replace('"', '""') + '" IS NULL'
         for key in dict.fromkeys([*(field.name for field in policy.subject_schema if not field.nullable),
                                   *(key for key in policy.identity_fields if key not in policy.nullable_identity_fields)])
     )
-    return (
-        f'INSERT INTO subjects SELECT "{number}", {_literal(policy.dataset)}, {record_id}, {version}, {identity},'
-        f" ({needs_reference_sql(subject)} OR {missing or 'false'}) IS NOT FALSE FROM source"
-    )
+    return f"{needs_reference_sql(subject)} OR {missing or 'false'}"
 
 
 def _numbered(
@@ -400,6 +408,8 @@ def _check_receipts(
     policies: Mapping[str, DatasetPolicy],
     generation_id: str | None,
     scoped: bool,
+    *,
+    retain_processing: bool = False,
 ) -> None:
     """``_load_receipts`` over whole columns: raise what it would at the first row, or schema, it refuses."""
     validate_publisher_generation(generation_id)
@@ -408,10 +418,11 @@ def _check_receipts(
         raise NotBulkEligible("select_receipts decides a receipt file that is not the shared schema")
     con.execute(
         "CREATE TABLE receipts (n BIGINT, dataset VARCHAR, generation_id VARCHAR, receipt_id VARCHAR, outcome VARCHAR,"
-        " record_id VARCHAR, subject_version VARCHAR, identity_json VARCHAR, unproven BOOLEAN)"
+        " record_id VARCHAR, subject_version VARCHAR, identity_json VARCHAR, unproven BOOLEAN"
+        + (", processing_json VARCHAR" if retain_processing else "") + ")"
     )
     wanted = frozenset(policies) if scoped else None
-    spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped), wanted=wanted)
+    spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped, retain_processing=retain_processing), wanted=wanted)
 
     repeats = (
         con.execute(_repeated_sql("receipt_id", "true")).fetchall()[0][0],
@@ -532,6 +543,13 @@ def validate_bundle(
     ``scoped`` ignores receipts of datasets with no policy here, as if ``select_receipts`` had first copied each
     policy's dataset out of a shared file; the receipts then keep their order in that file.
     """
+    with _validated_bundle(subjects, receipt_paths, policies, generation_id=generation_id, scoped=scoped):
+        pass
+
+
+@contextmanager
+def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False):
+    """Keep the maintained admission tables alive for replay only after complete admission."""
     registered = _bundle_policies(subjects, receipt_paths, policies)
     if scoped and len(registered) > 1:
         raise NotBulkEligible("Multiple scoped policies require grouped row selection to preserve first-error order")
@@ -546,7 +564,89 @@ def validate_bundle(
     with bulk_connection() as (con, temp):
         try:
             con.execute("SET preserve_insertion_order = false")
-            _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped)
+            _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped,
+                            retain_processing=retain_processing)
             _check_subjects(con, subjects, registered, temp)
         except duckdb.Error as error:
             raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error
+        yield con
+
+
+def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id):
+    """Replay completely admitted subjects in source order, with the exact stored processing JSON.
+
+    Admission uses the same SQL checks and row-reference fallbacks as validate_bundle.
+    Replay never falls back after yielding: any truncated stream or changed input fails
+    the read, so atomic processing writers cannot accept an incomplete population.
+    """
+    if not receipt_paths:
+        raise NotBulkEligible("The row reader decides absent receipt inputs")
+    with _validated_bundle({policy.dataset: subject_paths}, receipt_paths, [policy],
+                           generation_id=generation_id, retain_processing=True) as con:
+        start = 0
+        number = "n"
+        while number in {field.name.casefold() for field in policy.subject_schema}:
+            number += "_"
+        fields = ["\"" + field.name.replace('"', '""') + "\"" for field in policy.subject_schema]
+        subject_sql = "struct_pack(" + ", ".join(f"{name} := source.{name}" for name in fields) + ")"
+        record_id, version, identity = identity_sql(policy)
+        aliases = []
+        occupied = {field.name.casefold() for field in policy.subject_schema} | {number}
+        for name in ("_replay_id", "_replay_version", "_replay_identity", "_replay_reference"):
+            while name in occupied:
+                name += "_"
+            aliases.append(name)
+            occupied.add(name)
+        key_name, version_name, identity_name, reference_name = aliases
+        same = (f'CASE WHEN source."{reference_name}" IS NOT FALSE THEN NULL ELSE'
+                f' source."{key_name}" = s.record_id AND source."{version_name}" = s.version'
+                f' AND source."{identity_name}" = s.identity END')
+        for path in subject_paths:
+            with _parquet(path) as parquet:
+                if not parquet.schema_arrow.equals(policy.subject_schema):
+                    raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
+                read = [0, 0]
+                con.register("source", _numbered(parquet, start, number, None, read))
+                count = 0
+                try:
+                    query = (
+                        f'SELECT {subject_sql}, r.processing_json, {same}, s.record_id, s.version, s.identity'
+                        f' FROM (SELECT *, {record_id} AS "{key_name}", {version} AS "{version_name}",'
+                        f' {identity} AS "{identity_name}", {_subject_reference_sql(policy)} AS "{reference_name}"'
+                        f' FROM source) source JOIN subjects s ON source."{number}" = s.n AND NOT s.unproven'
+                        " JOIN receipts r ON s.dataset = r.dataset AND s.record_id = r.record_id"
+                        " AND s.version = r.subject_version AND s.identity = r.identity_json"
+                        f" AND r.outcome = 'accepted' ORDER BY source.\"{number}\""
+                    )
+                    for batch in con.execute(query).to_arrow_reader(_BATCH):
+                        raw = batch.column(0).to_pylist()
+                        subjects = _subjects(policy, raw)
+                        for subject, processing, matched, key, expected_version, expected_identity in zip(
+                            subjects, *(batch.column(i).to_pylist() for i in range(1, 6))
+                        ):
+                            if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
+                                raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
+                            count += 1
+                            yield subject | _unpack(json.loads(processing))
+                finally:
+                    con.unregister("source")
+                if read != [parquet.metadata.num_rows] * 2 or count != parquet.metadata.num_rows:
+                    raise ValueError("Receipt replay did not reconstruct every subject row")
+                start += count
+
+
+def read_attempts(receipt_paths, policy, *, generation_id, outcomes):
+    """Admit every receipt before replaying its exact fields, without rebuilding the row index."""
+    with bulk_connection() as (con, temp):
+        try:
+            _check_receipts(con, temp, receipt_paths, {policy.dataset: policy}, generation_id, False)
+        except duckdb.Error as error:
+            raise NotBulkEligible(f"DuckDB could not decide the receipts: {error}") from error
+        for path in receipt_paths:
+            for receipt in _rows(path):
+                if outcomes is None or receipt["outcome"] in outcomes:
+                    yield {
+                        **receipt,
+                        "processing_fields": _unpack(json.loads(receipt["processing_json"])),
+                        "diagnostics": _unpack(json.loads(receipt["diagnostic_json"])),
+                    }
