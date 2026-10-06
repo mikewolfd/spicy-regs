@@ -75,6 +75,117 @@ def test_replacement_retires_prior_receipt_and_checks_stale_prior(con):
     assert con.execute(f'SELECT text_content FROM {iceberg._qualified(COMMENT)}').fetchone() == ('second',)
 
 
+def test_scoped_receipts_match_unfiltered_path_with_multiple_generations(con, monkeypatch, tmp_path):
+    import pyarrow.parquet as pq
+
+    first = source(con, text=' literal\u00a0é😀 ')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    second = source(con, identity='c2', text='second observation')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    source(con, identity='unselected', text='unrelated')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    copy = native._copy
+    selected = []
+    def compare(connection, sql, path, **kwargs):
+        copy(connection, sql, path, **kwargs)
+        if path.name == 'selected-receipts.parquet':
+            # This is the previously maintained full-payload SQL selection,
+            # exercised only on the constructed local fixture.
+            original = sql.split(' AND (r.generation_id', 1)[0]
+            reference = tmp_path / 'reference.parquet'
+            copy(connection, original, reference)
+            actual = pq.read_table(path).sort_by('record_id')
+            assert actual.equals(pq.read_table(reference).sort_by('record_id'))
+            selected.append(actual.to_pylist())
+    monkeypatch.setattr(native, '_copy', compare)
+    restored = native.processing_table(con, COMMENT, where="comment_id IN ('c1','c2')")
+    assert con.execute(f'SELECT * FROM {restored} ORDER BY comment_id').to_arrow_table().to_pylist() == [first, second]
+    assert len(selected) == 1 and len(selected[0]) == 2
+    assert len({row['generation_id'] for row in selected[0]}) == 2
+
+
+@pytest.mark.parametrize('damage', ['duplicate', 'null-generation', 'mixed-null', 'blank-generation', 'bad-digest'])
+def test_scoped_receipt_filter_keeps_invalid_selected_evidence(con, monkeypatch, damage):
+    import pyarrow.parquet as pq
+
+    source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    if damage == 'duplicate':
+        con.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'")
+    elif damage == 'mixed-null':
+        con.execute(f"INSERT INTO {native.receipts_table()} SELECT * REPLACE (NULL AS generation_id) "
+                    f"FROM {native.receipts_table()} WHERE outcome='accepted'")
+    else:
+        field, value = ('subject_version', 'wrong') if damage == 'bad-digest' else (
+            'generation_id', None if damage == 'null-generation' else '')
+        con.execute(f"UPDATE {native.receipts_table()} SET {field}=? WHERE outcome='accepted'", [value])
+    expected = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table()
+    copy = native._copy
+    observed = []
+    def observe(connection, sql, path, **kwargs):
+        copy(connection, sql, path, **kwargs)
+        if path.name == 'selected-receipts.parquet':
+            actual = pq.read_table(path)
+            assert actual.equals(expected)
+            observed.append(actual.num_rows)
+    monkeypatch.setattr(native, '_copy', observe)
+    with pytest.raises(ValueError, match='[Dd]uplicate|[Dd]igest'):
+        native.processing_table(con, COMMENT, where="comment_id='c1'")
+    assert observed == [expected.num_rows]
+
+
+def test_scoped_receipt_headers_see_transaction_local_replacements(con):
+    first = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    source(con, identity='c2')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    con.execute('BEGIN')
+    try:
+        second = source(con, text='transaction local')
+        native.replace_native(con, COMMENT, 'source', in_transaction=True)
+        con.execute(f"DELETE FROM {native.qualified(COMMENT)} WHERE comment_id='c2'")
+        from spicy_regs.etl_receipts import subject_identity
+        record_id = subject_identity(native.policy('comments'), {'comment_id': 'c2'})[0]
+        con.execute(f"DELETE FROM {native.receipts_table()} WHERE record_id=? AND outcome='accepted'", [record_id])
+        restored = native.processing_table(con, COMMENT, where="agency_code='EPA'", in_transaction=True)
+        assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [second]
+    finally:
+        con.execute('ROLLBACK')
+    restored = native.processing_table(con, COMMENT, where="comment_id='c1'")
+    assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [first]
+
+
+def test_scoped_receipt_generations_are_bound_and_do_not_replace_id_selection(con):
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import _digest
+
+    first = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    source(con, identity='unselected')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    rows = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()
+    for generation in ["quoted'é😀", 'new-generation']:
+        for row in rows:
+            row['generation_id'] = generation
+            row['receipt_id'] = _digest({k: v for k, v in row.items() if k != 'receipt_id'})
+        con.register('resealed', pa.Table.from_pylist(rows, schema=native.RECEIPT_SCHEMA))
+        con.execute(f"DELETE FROM {native.receipts_table()} WHERE outcome='accepted'")
+        con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM resealed')
+        restored = native.processing_table(con, COMMENT, where="comment_id='c1'")
+        assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [first]
+
+
+def test_scoped_receipt_selection_preserves_empty_and_missing_pair_behavior(con):
+    source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    empty = native.processing_table(con, COMMENT, where="comment_id='absent'")
+    assert con.execute(f'SELECT count(*) FROM {empty}').fetchone() == (0,)
+    assert {row[0] for row in con.execute(f'DESCRIBE {empty}').fetchall()} == set(COMMENT.schema)
+    con.execute(f"DELETE FROM {native.receipts_table()} WHERE outcome='accepted'")
+    with pytest.raises(ValueError, match='receipt|Receipt'):
+        native.processing_table(con, COMMENT, where="comment_id='c1'")
+
+
 def test_bad_receipt_refuses_processing_read(con):
     source(con)
     iceberg.replace_rows(con, COMMENT, 'source')
