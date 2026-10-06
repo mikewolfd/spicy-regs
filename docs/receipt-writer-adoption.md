@@ -33,6 +33,16 @@ Boundary checks are in `tests/test_etl_receipts.py`,
 the regulatory checks resolve original API witnesses after repeated row and
 bounded rewrites and retain ordered evidence from multiple prior inputs.
 
+## Catalog comments batching
+
+Catalog comments use the batch writer only when the selected incoming scope has
+no prior receipts. If prior receipts exist, the entire staged write uses the
+current row writer, preserving all witnesses and retained processing history.
+Processing reads can batch after complete receipt admission and source-to-native
+reproduction; an unsupported proof returns the whole pair to the row reader for
+its exact first error. Batch conversion preserves source order and count, routes
+unsupported rows through the shared mapper, and retains refused attempts.
+
 ## Explicit auxiliary key indexes
 
 `receipt_key_index_writer.build_key_index` builds a separate narrow key file. It
@@ -62,6 +72,20 @@ the inclusion of this documentation.
 Boundary checks are in `tests/test_receipt_key_index_writer.py`,
 `tests/test_qualify_receipt_index.py`, `tests/test_generation_publication.py` and
 `tests/test_remote_generations.py`.
+
+## Receipt-order experiment
+
+The physical-sort proposal is closed without changing receipt admission. The
+hosted FEC reader regression reproduced a derived candidate-list difference
+when identical receipt rows were stored in a different order. The evidence
+view now orders companion digests, with nulls last, while preserving repeated
+and null candidates. Its rule is `fec-companion-location-v3`.
+
+`tests/test_fec_receipt_order.py` exercises the receipt-backed serving path in
+both physical orders. Navigation tests cover repeated and null candidates.
+This makes the derived list deterministic without rewriting source observations
+or adopting the proposed physical receipt sort. The separate key-index utility
+continues to refer to original receipt ordinals.
 
 ## Replacement of the earlier draft stack
 

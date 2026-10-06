@@ -6,7 +6,7 @@ from .sql_views import SQLView, pin
 def evidence(p):
     return f"""WITH companions AS (
         SELECT s.collection_id,s.source_record_id,count(*) AS n,
-            list(struct_pack(source_sha256:=source_sha256)) AS candidates
+            list(struct_pack(source_sha256:=source_sha256) ORDER BY source_sha256 NULLS LAST) AS candidates
         FROM fec_source_records s
         JOIN (
             SELECT DISTINCT
@@ -35,7 +35,7 @@ def evidence(p):
         'not_checked' AS source_bytes_status,
         {pin(p, 'fec_relationships')} AS source_publication_json,
         {pin(p, 'fec_source_records')} AS target_publication_json,
-        'fec-companion-location-v2' AS rule_version
+        'fec-companion-location-v3' AS rule_version
     FROM observations r LEFT JOIN companions c
         ON CASE WHEN r.locator_status='valid' THEN r.collection_id END=c.collection_id
         AND r.source_record_id=c.source_record_id"""
@@ -82,14 +82,14 @@ FEC_VIEWS = (
        'embedded in candidate arrays, allowing serving queries to avoid reading those large columns. '
        'Explicit empty relationship states remain '
        'observations, not edges. Matching recorded digests is not verification of retained bytes.',
-       ('source_locator_json','source_fields_json','relationship_type'), rule_version='fec-companion-location-v2',
+       ('source_locator_json','source_fields_json','relationship_type'), rule_version='fec-companion-location-v3',
        column_descriptions={
            'collection_id': 'The companion collection named in source_locator_json; NULL when the locator is unsupported.',
            'source_record_id': 'The companion record named in source_locator_json; NULL when the locator is unsupported.',
            'locator_status': 'valid when source_locator_json names a non-empty collection_id and source_record_id, '
                              'else unsupported.',
            'companion_candidates_json': 'JSON list of every fec_source_records digest under the locator coordinates; '
-                                        'repeated and null digests retained.',
+                                        'sorted by digest with nulls last; repeated and null digests retained.',
            'recorded_digest_status': 'matches or mismatch of the recorded source_sha256 against the single companion; '
                                      'unavailable when either digest is NULL; not_checked unless exactly one companion.',
            'source_bytes_status': 'Always not_checked: recorded digests are compared, retained bytes never are.',

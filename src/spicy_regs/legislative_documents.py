@@ -192,6 +192,39 @@ def bill_section_document_key(value: Any) -> str:
     return json.dumps([bill, version, printing_id(bill, version, source), seq], ensure_ascii=False, separators=(",", ":"))
 
 
+def court_opinion_document_key(value: Any) -> str:
+    """Translate a legacy held-field key, ``[opinion_id, source_sha256]``, to the native opinion body identity.
+
+    The native extraction table names a body by ``opinion_body_id`` alone, and that is the key the citation tool
+    asks with. One function derives it (``court_subjects.opinion_body_id``); a key already in that form is kept.
+    """
+    from spicy_regs.court_subjects import opinion_body_id
+
+    if isinstance(value, str) and re.fullmatch(r"court-opinion-body:[0-9a-f]{64}", value):
+        return value
+    try:
+        parts = json.loads(value)
+    except (ValueError, TypeError) as error:
+        raise LegislativeShapeError("court-opinion document key must be a JSON key tuple or an opinion body id") from error
+    if not isinstance(parts, list) or len(parts) != 2:
+        raise LegislativeShapeError("court-opinion document key requires the opinion and its captured body digest")
+    try:
+        return opinion_body_id(*parts)
+    except ValueError as error:
+        raise LegislativeShapeError(f"court-opinion document key: {error}") from error
+
+
+#: Held-field kinds whose published key differs from the key their rows were first written under. The citation
+#: table and its read markers must translate the same kinds, so both read this one map.
+HELD_KEY_TRANSLATIONS = {"bill_section": bill_section_document_key, "court_opinion_derived_pdf": court_opinion_document_key}
+
+
+def native_document_key(kind: Any, key: Any) -> Any:
+    """The key a held citation row or read marker is published under: translated for the kinds above, else as written."""
+    translate = HELD_KEY_TRANSLATIONS.get(kind)
+    return key if translate is None else translate(key)
+
+
 def _identity_value(column: str, row: Mapping[str, Any]) -> str | None:
     value = row.get(column)
     if column in {"text_sha256", "input_sha256"}:
@@ -240,8 +273,8 @@ def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:
                     raise LegislativeShapeError(f"{name}: expected list of objects")
                 value = [None if v is None else {k: x for k, x in v.items() if k not in excluded} for v in value]
         subject[target] = _typed(value, TYPES[field["target_type"]], name)
-    if dataset == "document_citations" and row.get("document_kind") == "bill_section":
-        subject["document_key"] = bill_section_document_key(row.get("document_key"))
+    if dataset == "document_citations":
+        subject["document_key"] = native_document_key(row.get("document_kind"), row.get("document_key"))
     for name, derived in spec.get("derived_fields", {}).items():
         value = row.get(derived["from"])
         if "property" in derived:
@@ -261,3 +294,19 @@ def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:
     except (pa.ArrowException, OverflowError) as error:
         raise LegislativeShapeError(f"{dataset}: subject cannot be represented exactly") from error
     return subject
+
+
+def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Map a receipt's source row in the exact key spelling its selected subject used.
+
+    Historical court citations kept the original opinion/digest tuple. New
+    citations use its derived body ID. Admit either spelling only for that same
+    retained tuple; callers still compare every other field with this result.
+    Neither the selected public subject nor its original receipt is rewritten.
+    """
+    mapped = map_subject(dataset, raw)
+    if (mapped is not None and dataset == "document_citations"
+            and raw.get("document_kind") == "court_opinion_derived_pdf"
+            and subject.get("document_key") == raw.get("document_key")):
+        mapped["document_key"] = raw["document_key"]
+    return mapped

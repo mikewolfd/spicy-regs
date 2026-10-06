@@ -286,7 +286,8 @@ def test_fec_navigation_excludes_large_bodies_and_preserves_all_candidates():
     candidates = json.loads(row['companion_candidates_json'])
     assert len(candidates) == 2000
     assert all(set(c) == {'source_sha256'} for c in candidates)
-    assert sum(c['source_sha256'] is None for c in candidates) == 1000
+    assert candidates == ([{'source_sha256': 'sha-one'}] * 1000 + [{'source_sha256': None}] * 1000)
+    assert row['rule_version'] == 'fec-companion-location-v3'
     assert len(row['companion_candidates_json']) < 100000
     assert con.execute('SELECT source_record_json FROM fec_source_records '
                        'WHERE collection_id=? AND source_record_id=? LIMIT 1', ['a', 'x']).fetchone()[0].startswith('body-')
