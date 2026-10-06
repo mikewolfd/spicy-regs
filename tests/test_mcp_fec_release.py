@@ -201,7 +201,7 @@ def test_mcp_cannot_read_private_restored_processing_relations(tmp_path, monkeyp
 
 def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(tmp_path, monkeypatch):
     registry_size = len(server.FEC_QUALIFIED_VIEWS)
-    specs, index, receipt, _, path = configure(tmp_path, monkeypatch, partition_count=40)
+    specs, index, receipt, _, path = configure(tmp_path, monkeypatch, partition_count=32)
     base = specs[0]
     specs = tuple(replace(base, view=replace(base.view, name=f"fec_test_partitioned_{i}"))
                   for i in range(registry_size))
@@ -209,10 +209,9 @@ def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(t
     view_receipt = receipt["views"][base.view.name]
     view_receipt["dependencies"]["fec_receipts"] = release.captured_table(index, "fec_receipts")
     receipt["views"] = {s.view.name: deepcopy(view_receipt) for s in specs}
-    # Written without padding, as fec_release serializes. Every view record here repeats the fec_receipts
-    # descriptor (each column, each of the 40 members), so the padded spelling sat 1,254 bytes under the
-    # receipt limit and the two columns returned to fec_receipts on 2026-10-05 put it 3,378 over: all views
-    # then read disabled for the receipt's size, not for anything this test is about.
+    # Keep this SSE discovery case below the unchanged release-receipt byte bound.
+    # Main qualification fields enlarge each repeated descriptor. The separate
+    # 40-partition control below verifies that oversized release receipts refuse.
     raw = json.dumps(receipt, separators=(",", ":")).encode()
     assert len(raw) <= release.LIMIT
     path.write_bytes(raw)
@@ -233,6 +232,19 @@ def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(t
             assert names.issuperset(s.view.name for s in specs)
             described = call(client, "describe_table", {"table": specs[0].view.name, "detail": True})["structuredContent"]
             assert described["publication"]["release_compatibility"]["dependencies"] == view_receipt["dependencies"]
+
+
+def test_large_partitioned_registry_receipt_keeps_the_existing_byte_refusal(tmp_path):
+    specs, index, receipt, _, _ = native_fixture(tmp_path, partition_count=40)
+    base = specs[0]
+    record = receipt["views"][base.view.name]
+    record["dependencies"]["fec_receipts"] = release.captured_table(index, "fec_receipts")
+    receipt["views"] = {f"fec_test_partitioned_{i}": deepcopy(record)
+                        for i in range(len(server.FEC_QUALIFIED_VIEWS))}
+    raw = json.dumps(receipt, separators=(",", ":")).encode()
+    assert len(raw) > release.LIMIT
+    with pytest.raises(ValueError, match="receipt byte limit"):
+        release.parse_receipt(raw, release.sha256(raw))
 
 
 def test_parent_advancement_refuses_affected_query_but_keeps_old_connection_and_unrelated_views(tmp_path, monkeypatch):

@@ -1,12 +1,14 @@
 {
   "dataset": "fec_filing_definitions",
-  "policy_version": "fec-subject-receipts/1",
-  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-  "identity_fields": [],
+  "policy_version": "fec-subject-receipts/2",
+  "subject_schema": "/////3gBAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAAAUAQAA2AAAAKwAAACAAAAATAAAAAQAAAAU////AAABAhAAAAAsAAAABAAAAAAAAAATAAAAb2JzZXJ2YXRpb25fb3JkaW5hbAAIAAwACAAHAAgAAAAAAAABQAAAAFj///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAAB3b3JrYm9va19zaGEyNTYATP///4j///8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABmb3JtAAAAAHT///+w////AAABBRAAAAAYAAAABAAAAAAAAAAHAAAAdmVyc2lvbgCc////2P///wAAAQUQAAAAGAAAAAQAAAAAAAAABgAAAGZhbWlseQAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
+  "identity_fields": [
+    "observation_ordinal"
+  ],
   "receipt_fields": [
     "fec_conversion_inputs",
     "fec_input_columns"
   ],
-  "receipt_only": true,
+  "receipt_only": false,
   "nullable_identity_fields": []
 }

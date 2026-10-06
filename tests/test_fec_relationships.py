@@ -339,5 +339,6 @@ def test_value_status_is_a_column_of_the_native_table_and_not_a_receipt_field():
     policy = policies()["fec_relationships"]
     assert policy.subject_schema.field("value_status").type == pa.string()
     assert "value_status" not in policy.receipt_fields
-    # The two id-shape statuses were not part of that decision and stay receipt fields.
-    assert {"subject_id_status", "object_id_status"} <= set(policy.receipt_fields)
+    # Endpoint qualification uses the retained ID-shape statuses in the main row.
+    assert {"subject_id_status", "object_id_status"} <= set(policy.subject_schema.names)
+    assert not {"subject_id_status", "object_id_status"} & set(policy.receipt_fields)

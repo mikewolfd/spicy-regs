@@ -26,7 +26,7 @@ def test_every_table_subject_or_processing_roundtrip(tmp_path):
             row = dict.fromkeys(rules["input_fields"])
             for key in rules["identity_fields"]:
                 if key in row:
-                    row[key] = "2024" if key == "cycle" else name + key
+                    row[key] = ("2024" if key == "cycle" else WITNESS["sha256"] if key == "source_sha256" else name + key)
             if name == "fec_research_source_pages":
                 row.update(content_status="body_extracted", text="Public document")
             writer.emit(name, row, input_witness=WITNESS, source_input={"original": None})
@@ -160,7 +160,7 @@ def test_real_mapping_build_and_generation_admission(tmp_path):
     subject = pq.read_table(output / "fec_candidate_api_observations.parquet").to_pylist()[0]
     assert subject["candidate_status"] == "C"
     assert subject["cycles"] == [2024, 2024, None]
-    assert not (output / "fec_api_response_controls.parquet").exists()
+    assert (output / "fec_api_response_controls.parquet").exists()
     seal_identity_context(output, tmp_path / "generation")
     artifact = verify_generation(tmp_path / "generation")
     assert artifact.root["spec"]["etlReceipts"]["generationId"] == "build-g1"
@@ -207,8 +207,8 @@ def test_existing_catalog_producer_has_actual_receipt_writing_entrypoint(tmp_pat
     from spicy_regs.transforms.build_fec_identity_rollup import build_fec_identity_rollup
 
     result = build_fec_identity_rollup("fec_source_catalog", tmp_path / "catalog", generation_id="g1")
-    assert not (result / "fec_source_catalog.parquet").exists()
-    rows = list(read_identity_processing(result, "fec_source_catalog", generation_id="g1"))
+    assert (result / "fec_source_catalog.parquet").exists()
+    rows = list(read_identity_rows(result, "fec_source_catalog", generation_id="g1"))
     assert rows and all(row["source_family"] for row in rows)
     assert all("source_metadata_json" in row for row in rows)
 
@@ -412,7 +412,7 @@ def test_registration_statements_publish_the_source_namespace_that_tells_form_1_
     assert "source_namespace" not in policy.receipt_fields
     # fec_filings is not on the list: every published row there is fec-openfec-file-number, kept in the receipt.
     filings = dataset_policy(identity.FILINGS)
-    assert "source_namespace" in filings.receipt_fields and "source_namespace" not in filings.subject_schema.names
+    assert "source_namespace" not in filings.receipt_fields and "source_namespace" in filings.subject_schema.names
 
     built = []
     for ordinal, mapping in enumerate((identity.FORM1, identity.FORM2)):

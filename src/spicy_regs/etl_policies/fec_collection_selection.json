@@ -1,28 +1,15 @@
 {
   "dataset": "fec_collection_selection",
-  "policy_version": "fec-identity-context-receipts/1",
-  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-  "identity_fields": [],
+  "policy_version": "fec-identity-context-receipts/2",
+  "subject_schema": "/////+gDAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABAAAAB0AwAAMAMAAPwCAADQAgAAnAIAAGACAAAsAgAA9AEAALgBAACAAQAASAEAAAgBAADMAAAAiAAAAEQAAAAEAAAA3Pz//wAAAQIQAAAAJAAAAAQAAAAAAAAAEwAAAHNvdXJjZV9vYnNlcnZhdGlvbnMAzPz//wAAAAFAAAAAGP3//wAAAQIQAAAAKAAAAAQAAAAAAAAAFQAAAHNvdXJjZV9tZW1iZXJfb3JkaW5hbAAAAAz9//8AAAABIAAAAFj9//8AAAEFEAAAADAAAAAEAAAAAAAAAB8AAABjb3JyZWN0aW9uX2FwcGxpY2FiaWxpdHlfc3RhdHVzAJz9//+Y/f//AAABBRAAAAAoAAAABAAAAAAAAAAVAAAAY3VycmVudF9yZWNvcmRfc3RhdHVzAAAA1P3//9D9//8AAAEFEAAAACwAAAAEAAAAAAAAABsAAABlcXVpdmFsZW5jZV9ldmlkZW5jZV9zaGEyNTYAEP7//wz+//8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzZWxlY3Rpb25fcmVhc29uAAAAAET+//9A/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAc2VsZWN0aW9uX3N0YXR1cwAAAAB4/v//dP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFgAAAHNlbGVjdGVkX2NvbGxlY3Rpb25faWQAALD+//+s/v//AAABBRAAAAAkAAAABAAAAAAAAAASAAAAc291cmNlX21lbWJlcl9uYW1lAADk/v//4P7//wAAAQUQAAAAIAAAAAQAAAAAAAAADQAAAHNvdXJjZV9zaGEyNTYAAAAU////EP///wAAAQUQAAAAKAAAAAQAAAAAAAAAFQAAAHNvdXJjZV9nZW5lcmF0aW9uX3BpbgAAAEz///9I////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAHz///94////AAABBRAAAAAYAAAABAAAAAAAAAAHAAAAcHVycG9zZQCk////oP///wAAAQUQAAAAIAAAAAQAAAAAAAAADgAAAHBvbGljeV92ZXJzaW9uAADU////0P///wAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAAEAAUAAgABgAHAAwAAAAQABAAAAAAAAECEAAAACwAAAAEAAAAAAAAABMAAABvYnNlcnZhdGlvbl9vcmRpbmFsAAgADAAIAAcACAAAAAAAAAFAAAAA",
+  "identity_fields": [
+    "observation_ordinal"
+  ],
   "receipt_fields": [
-    "record_id",
-    "policy_version",
-    "purpose",
-    "collection_id",
-    "source_generation_pin",
-    "source_sha256",
-    "source_member_name",
-    "selected_collection_id",
-    "selection_status",
-    "selection_reason",
-    "equivalence_evidence_sha256",
-    "current_record_status",
-    "correction_applicability_status",
-    "source_member_ordinal",
-    "source_observations",
     "conversion_inputs",
     "conversion_diagnostics",
     "source_input"
   ],
-  "receipt_only": true,
+  "receipt_only": false,
   "nullable_identity_fields": []
 }

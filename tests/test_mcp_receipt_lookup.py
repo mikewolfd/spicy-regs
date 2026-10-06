@@ -156,9 +156,9 @@ def _fec_identity():
 def _fec_subject():
     from spicy_regs.transforms.fec_subject_receipts import mapped_record
 
-    row = {"record_id": "r1", "identity_version": "v1", "mapping_status": "mapped"}
+    row = {"record_id": "r1", "mapping_reason_json": '["source_status"]'}
     return ("fec_account_transfers", mapped_record("fec_account_transfers", row, POLICIES["fec_account_transfers"]),
-            {"identity_version": "v1", "mapping_status": "mapped"})
+            {"mapping_reason_json": '["source_status"]'})
 
 
 def _scorecards():

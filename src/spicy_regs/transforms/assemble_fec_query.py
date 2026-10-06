@@ -28,6 +28,77 @@ class TypedInput:
     source_namespace: str | None = None
 
 
+@dataclass(frozen=True)
+class FilingAssociationInputs:
+    """Explicit selected dependencies for the maintained association rules.
+
+    These pins describe source and filing publications, not current-record or
+    amendment selection. Namespace digests must be admitted definition evidence
+    by the caller's existing release checks, as for the original mapper.
+    """
+    source_generation_pin: str
+    filing_generation_pin: str
+    filings: Sequence[TypedInput]
+    namespace_evidence: dict[str, str]
+    header_associations: Sequence[TypedInput] = ()
+
+    def prepare(self, table, schema, check_resources):
+        from .fec_filing_associations import association_records
+        from .fec_native_subjects import FIELD_RULES
+
+        _digest(self.source_generation_pin)
+        _digest(self.filing_generation_pin)
+        namespace_evidence = dict(self.namespace_evidence)
+        for evidence in namespace_evidence.values():
+            _digest(evidence)
+        if (table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]
+                or "filing_key" not in schema.names or not self.filings):
+            raise ValueError("Filing association requires an applicable source schema and selected filing inputs")
+        if schema.field("filing_key").type != pa.string():
+            raise ValueError("Filing association requires the declared string filing key type")
+
+        def read_selected(items):
+            rows, proofs = [], []
+            paths = [item.path.resolve() for item in items]
+            if len(paths) != len(set(paths)):
+                raise ValueError("The same filing dependency member was selected twice")
+            for item in items:
+                check_resources()
+                _digest(item.sha256)
+                if type(item.rows) is not int or item.rows < 0:
+                    raise ValueError("Filing dependency requires explicit integer row membership")
+                before = item.path.stat()
+                if item.path.is_symlink() or not item.path.is_file() or _sha(item.path) != item.sha256:
+                    raise ValueError("Filing dependency differs from its selected bytes")
+                source = pq.ParquetFile(item.path)
+                if source.metadata.num_rows != item.rows or item.rows > 100_000 or item.path.stat().st_size > 64 * 1024**2:
+                    raise ValueError("Filing dependency membership or bounded metadata size refused")
+                if len(rows) + item.rows > 100_000:
+                    raise ValueError("Combined filing metadata exceeds the bounded selection")
+                rows.extend(source.read(use_threads=False).to_pylist())
+                stamp = dict(inode=before.st_ino, bytes=before.st_size, mtime_ns=before.st_mtime_ns)
+                after = item.path.stat()
+                if (_sha(item.path) != item.sha256
+                        or stamp != dict(inode=after.st_ino, bytes=after.st_size, mtime_ns=after.st_mtime_ns)
+                        or len(rows) != sum(p["rows"] for p in proofs) + item.rows):
+                    raise ValueError("Filing dependency changed during complete read")
+                proofs.append(dict(path=str(item.path), sha256=item.sha256, rows=item.rows, stat=stamp))
+            return rows, proofs
+
+        filings, filing_proofs = read_selected(self.filings)
+        headers, header_proofs = read_selected(self.header_associations)
+        return (
+            lambda rows: association_records(
+                rows, table=table, schema=schema, filings=filings, headers=headers,
+                source_generation_pin=self.source_generation_pin,
+                target_generation_pin=self.filing_generation_pin,
+                namespace_evidence=namespace_evidence, check_resources=check_resources,
+            ),
+            dict(source_generation_pin=self.source_generation_pin, filing_generation_pin=self.filing_generation_pin,
+                 filings=filing_proofs, headers=header_proofs, namespace_evidence=namespace_evidence),
+        )
+
+
 def _sha(path: Path) -> str:
     with path.open("rb") as stream:
         return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
@@ -228,6 +299,7 @@ def assemble_subject_table(
     inputs: Sequence[TypedInput], *, table: str, schema: pa.Schema, output: Path,
     generation_id: str, context_for, check_resources: Callable[[], None],
     source_partitioned: bool = False, read_batch_rows: int = 8192,
+    filing_associations: FilingAssociationInputs | None = None,
 ) -> dict:
     """Assemble this FEC family's subjects and receipts from qualified mapper files.
 
@@ -266,9 +338,12 @@ def assemble_subject_table(
         for batch in _batches(inputs, schema, read_batch_rows, check_resources, source_partitioned):
             yield from batch.to_pylist()
 
+    associations_for, association_inputs = (None, None)
+    if filing_associations is not None:
+        associations_for, association_inputs = filing_associations.prepare(table, schema, check_resources)
     paths, policy = write_fec_subjects(records(), output, table=table, input_schema=schema,
                                       generation_id=generation_id, context_for=context_for,
-                                      batch_size=read_batch_rows)
+                                      batch_size=read_batch_rows, associations_for=associations_for)
     subject, receipts = paths
     refused = 0
     for batch in pq.ParquetFile(receipts).iter_batches(columns=["outcome"]):
@@ -287,9 +362,18 @@ def assemble_subject_table(
             if values:
                 yield pa.RecordBatch.from_pylist(values, schema=schema)
         checked = _equal_streams(_batches(inputs, schema, read_batch_rows, check_resources, source_partitioned), restored())
+    if association_inputs is not None:
+        for member in association_inputs["filings"] + association_inputs["headers"]:
+            check_resources()
+            path = Path(member["path"])
+            stamp = path.stat()
+            if (member["stat"] != dict(inode=stamp.st_ino, bytes=stamp.st_size, mtime_ns=stamp.st_mtime_ns)
+                    or _sha(path) != member["sha256"]):
+                raise ValueError("Selected filing dependency changed during subject assembly")
     return dict(dataset=table, subject_path=None if subject is None else str(subject), receipt_path=str(receipts),
                 policy=policy.descriptor(), input_rows=sum(i.rows for i in inputs),
                 subject_rows=0 if subject is None else pq.ParquetFile(subject).metadata.num_rows,
                 refused_rows=refused, exact_mapper_rows_compared=checked,
                 source_partition_columns=["source_namespace"] if source_partitioned else [],
-                subject_partition_columns=[], full_rebuild_qualified=not refused)
+                subject_partition_columns=[], full_rebuild_qualified=not refused,
+                filing_association_inputs=association_inputs)

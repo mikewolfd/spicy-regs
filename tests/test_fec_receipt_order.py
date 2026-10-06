@@ -47,7 +47,7 @@ def served(bundle):
 
     index = {"families": {"fec-source": {
         "prefix": "generations/fec-source/" + "b" * 64, "artifactDigest": "sha256:" + "b" * 64,
-        "tables": {"fec_relationships.parquet": descriptor(bundle / "fec_relationships.parquet")},
+        "tables": {table+".parquet":descriptor(bundle/(table+".parquet")) for table in TABLES},
         "etlReceipts": {**descriptor(bundle / RECEIPT_KEY), "key": RECEIPT_KEY,
                         "generationId": "g-nav", "datasets": list(TABLES)},
     }}}

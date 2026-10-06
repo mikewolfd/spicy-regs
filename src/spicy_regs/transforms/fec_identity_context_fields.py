@@ -12,7 +12,7 @@ from spicy_regs.contract_types import arrow_type
 
 from .fec_identity_native import native_list, native_scalar
 
-VERSION = "fec-identity-context-receipts/1"
+VERSION = "fec-identity-context-receipts/2"
 REGISTRY = json.loads(files("spicy_regs").joinpath("fec_identity_context_fields.json").read_text())
 
 _native_type = cache(arrow_type)
@@ -23,13 +23,17 @@ def subject_schema(table):
     return pa.schema([(name, _native_type(kind)) for name, kind in REGISTRY[table]["subject_fields"].items()])
 
 
-def normalize_record(table, row, *, source_input=None):
+def normalize_record(table, row, *, source_input=None, observation_ordinal=None):
     """Classify all input fields; preserve exact conversion inputs separately."""
     rules = REGISTRY[table]
     extra = set(row) - set(rules["input_fields"])
     if extra:
         raise ValueError(f"{table}: unclassified mapper fields {sorted(extra)}")
     result = dict(row)
+    if rules.get("observation_control"):
+        if type(observation_ordinal) is not int or observation_ordinal < 0:
+            raise ValueError("Public FEC control requires its generation-scoped observation ordinal")
+        result["observation_ordinal"] = observation_ordinal
     diagnostics, originals = {}, {}
     for raw, (name, kind) in rules["native_lists"].items():
         value = row.get(raw)
@@ -66,6 +70,9 @@ def normalize_record(table, row, *, source_input=None):
             "sha256:"
             + hashlib.sha256(json.dumps(identity, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
         )
+        from .fec_relationships import relationship_context
+
+        result.update(relationship_context(row, cycle=result.get("cycle")))
     elif table == "fec_research_meeting_observations":
         result["date_kind"] = {
             "source_single_date": "single_date",

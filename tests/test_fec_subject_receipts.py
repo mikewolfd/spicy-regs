@@ -13,25 +13,29 @@ from spicy_regs.etl_receipts import ReceiptContext, validate_receipt_bundle
 from spicy_regs.transforms.fec_subject_receipts import (
     write_fec_subjects,
     read_fec_with_receipts,
-    read_fec_processing,
     register_internal_fec_table,
 )
 from spicy_regs.transforms.fec_financial_policy import bulk_observation_eligibility
+from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
 from spicy_regs.relationship_views.fec_financial_meaning import financial_rule_sql
 
 
-#: Owner decision, 2026-10-05: two fields the native layout classed as processing are subject columns again, on
-#: the tables where their published values vary and nowhere else. These are the decision's lists written out, not
-#: read back from the field registries, so a registry that drifts from the decision fails here.
+#: These explicit table lists exercise main-row namespace/status fields used by the maintained rules.
+#: They are independent of the runtime registry so a missing field cannot make the test silently skip itself.
 SOURCE_NAMESPACE_TABLES = frozenset(
-    "fec_allocated_disbursements fec_contribution_aggregates fec_coordinated_party_expenditures fec_debts "
-    "fec_disbursements fec_filing_report_observations fec_filing_text_observations fec_inaugural_donations "
-    "fec_independent_expenditures fec_intercommittee_transactions fec_legal_matters fec_loans fec_receipts "
+    "fec_account_transfers fec_allocated_disbursements fec_allocation_bases fec_api_response_controls "
+    "fec_bundled_contributions fec_candidate_api_observations fec_committee_master_observations "
+    "fec_committee_observations fec_communication_costs fec_contribution_aggregates "
+    "fec_coordinated_party_expenditures fec_debts fec_disbursements fec_electioneering_communications "
+    "fec_filing_links fec_filing_report_observations fec_filing_text_observations fec_filings "
+    "fec_inaugural_donations fec_independent_expenditures fec_intercommittee_transactions fec_legal_matters "
+    "fec_loan_guarantors fec_loan_terms fec_loans fec_lobbyist_registrations "
+    "fec_postgres_committee_history_observations fec_quality_notices fec_receipts "
     "fec_registration_statements fec_reported_financial_summaries".split()
 )
 AMOUNT_STATUS_TABLES = frozenset(
     "fec_communication_costs fec_historical_ie_statistics fec_inaugural_donations fec_legal_events "
-    "fec_receipts".split()
+    "fec_receipts fec_retained_csv_observations".split()
 )
 RETURNED = {"source_namespace": SOURCE_NAMESPACE_TABLES, "amount_status": AMOUNT_STATUS_TABLES}
 
@@ -95,7 +99,7 @@ def test_financial_python_and_sql_match_prior_eligibility(tmp_path):
     # fec_receipts publishes its amount status and source namespace; what qualifies a row stays in the receipt.
     [published] = pq.ParquetFile(subject).read().to_pylist()
     assert (published["amount_status"], published["source_namespace"]) == ("exact", "fec-bulk-individual-contributions")
-    assert not {"current_record_status", "source_representation_role", "mapping_status"} & set(published)
+    assert {n: published[n] for n in ("current_record_status", "source_representation_role", "mapping_status")} == {n: source_row()[n] for n in ("current_record_status", "source_representation_role", "mapping_status")}
     witnesses = pq.ParquetFile(receipt).read(columns=["witnesses"]).to_pylist()[0]["witnesses"]
     assert len(witnesses) == 2 and witnesses[0] == witnesses[1]
     with duckdb.connect() as con:
@@ -136,7 +140,7 @@ def test_receipt_read_refuses_faults_before_yielding(tmp_path, fault):
         list(read_fec_with_receipts([subject], receipts, policy, generation_id=generation))
 
 
-def test_technical_table_has_only_observed_receipts(tmp_path):
+def test_definition_table_has_main_context_and_exact_processing_readback(tmp_path):
     rows = [
         dict(
             record_id="definition",
@@ -156,9 +160,10 @@ def test_technical_table_has_only_observed_receipts(tmp_path):
         generation_id="generation-a",
         context_for=context,
     )
-    assert subject is None
-    assert list(read_fec_processing([receipt], policy, generation_id="generation-a")) == rows
-    validate_receipt_bundle({"fec_filing_definitions": []}, [receipt], [policy], generation_id="generation-a")
+    assert pq.read_table(subject)["record_id"].to_pylist() == ["definition"]
+    assert "layout_json" not in pq.read_schema(subject).names
+    assert list(read_fec_with_receipts([subject], [receipt], policy, generation_id="generation-a")) == rows
+    validate_receipt_bundle({"fec_filing_definitions": [subject]}, [receipt], [policy], generation_id="generation-a")
 
 
 def test_invalid_native_values_preserve_failed_inputs_without_subject(tmp_path):
@@ -274,7 +279,7 @@ def _held(receipt):
     return [decode_exact_json(row["processing_json"])["fec_conversion_inputs"] for row in rows]
 
 
-@pytest.mark.parametrize("table", sorted((SOURCE_NAMESPACE_TABLES | AMOUNT_STATUS_TABLES) - {"fec_registration_statements"}))
+@pytest.mark.parametrize("table", sorted((SOURCE_NAMESPACE_TABLES | AMOUNT_STATUS_TABLES) & FIELD_RULES.keys()))
 def test_returned_values_are_published_once_and_the_pair_restores_the_mapper_row(tmp_path, table):
     """Each listed table of this family, converted from its producer's whole declared row."""
     schema = declared_schema(table)

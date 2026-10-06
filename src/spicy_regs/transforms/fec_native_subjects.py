@@ -74,6 +74,15 @@ _REPORT_MEASURES = pa.list_(
     )
 )
 _TEXT_FRAGMENTS = pa.list_(pa.struct([("field_position", pa.int32()), ("text", _TEXT)]))
+FILING_ASSOCIATION_FIELDS = {
+    **dict.fromkeys(
+        "filing_association_status filing_association_policy filing_association_source_generation_pin "
+        "filing_association_target_generation_pin filing_association_record_id "
+        "filing_association_referenced_key".split(), _TEXT
+    ),
+    "filing_association_target_count": pa.int64(),
+    "filing_association_target_record_ids": _TEXTS,
+}
 
 
 def _object(value, allowed, label):
@@ -211,6 +220,8 @@ def _organization(value):
 
 def native_fields(table):
     """Additional or reshaped business columns, explicitly declared by family."""
+    if FIELD_RULES[table].get("observation_control"):
+        return {"observation_ordinal": pa.int64()}
     if table == "fec_legal_matters":
         return _LEGAL_FACTS | _LEGAL_SCALARS
     if table == "fec_reported_financial_summaries":
@@ -252,6 +263,10 @@ def subject_schema(table, input_schema):
         return pa.schema([])
     fields = {f.name: f.type for f in input_schema if f.name in rule["keep"]}
     fields.update(native_fields(table))
+    # These are decision fields, available only on a financial/text mapper
+    # schema which already declares a filing key. Inapplicable rows gain none.
+    if "filing_key" in input_schema.names and "filing_key" in rule["keep"]:
+        fields.update(FILING_ASSOCIATION_FIELDS)
     return pa.schema(list(fields.items()))
 
 

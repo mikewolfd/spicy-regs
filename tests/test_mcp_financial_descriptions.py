@@ -256,8 +256,8 @@ def test_public_receipts_state_their_namespace_and_amount_status_beside_a_compat
     columns = {c["column_name"]: c for c in described["columns"]}
     for name in ("source_namespace", "amount_status"):
         assert columns[name]["column_type"] == "VARCHAR" and columns[name]["description"]
-    # What qualifies a row for a purpose is still not a column of the public table.
-    assert not {"mapping_status", "current_record_status", "source_representation_role"} & set(columns)
+    # Main context explains qualification; it does not assert a current financial total.
+    assert {"mapping_status", "current_record_status", "source_representation_role"} <= set(columns)
     decision = _tool_data(mcp, "query_sql", {"sql": f"SELECT status, reason FROM {NAME}"})
     assert _records(decision) == [{"status": "eligible", "reason": "source_defined_purpose"}]
     assert decision["publication"][NAME]["release_compatibility"]["status"] == "compatible"

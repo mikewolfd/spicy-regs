@@ -1,28 +1,16 @@
 {
   "dataset": "fec_research_response_outcomes",
-  "policy_version": "fec-identity-context-receipts/1",
-  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-  "identity_fields": [],
+  "policy_version": "fec-identity-context-receipts/2",
+  "subject_schema": "/////4gDAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA8AAAAQAwAAzAIAAJgCAABkAgAALAIAAPwBAADIAQAAlAEAAFgBAAAkAQAA7AAAALgAAACEAAAATAAAAAQAAAA8/f//AAABAhAAAAAsAAAABAAAAAAAAAAYAAAAb2JzZXJ2ZWRfcGF5bG9hZF9yZWNvcmRzAAAAADT9//8AAAABIAAAAID9//8AAAEFEAAAACQAAAAEAAAAAAAAABMAAABjYXB0dXJlX2Rpc3Bvc2l0aW9uALj9//+0/f//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAb3V0Y29tZV9zdGF0dXMAAOj9///k/f//AAABBRAAAAAgAAAABAAAAAAAAAANAAAAcGF5bG9hZF9zaGFwZQAAABj+//8U/v//AAABBRAAAAAkAAAABAAAAAAAAAASAAAAcXVlcnlfY29tcGxldGVuZXNzAABM/v//SP7//wAAAQUQAAAAIAAAAAQAAAAAAAAADwAAAHByb2ZpbGVfcmVmdXNhbAB8/v//eP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFgAAAHNvdXJjZV9jb250ZXh0X3BvaW50ZXIAALT+//+w/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGV4dF9zaGEyNTYAAOT+///g/v//AAABBRAAAAAgAAAABAAAAAAAAAANAAAAc291cmNlX3NoYTI1NgAAABT///8Q////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAc291cmNlX3VybAAAQP///zz///8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzb3VyY2VfYXV0aG9yaXR5AAAAAHT///9w////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAKT///+g////AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAbWFwcGluZ192ZXJzaW9uANT////Q////AAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAQABQACAAGAAcADAAAABAAEAAAAAAAAQIQAAAALAAAAAQAAAAAAAAAEwAAAG9ic2VydmF0aW9uX29yZGluYWwACAAMAAgABwAIAAAAAAAAAUAAAAAAAAAA",
+  "identity_fields": [
+    "observation_ordinal"
+  ],
   "receipt_fields": [
-    "record_id",
-    "mapping_version",
-    "collection_id",
-    "source_authority",
-    "source_url",
-    "source_sha256",
-    "context_sha256",
-    "source_context_pointer",
     "observed_at_json",
-    "profile_refusal",
-    "query_completeness",
-    "payload_shape",
-    "outcome_status",
-    "capture_disposition",
-    "observed_payload_records",
     "conversion_inputs",
     "conversion_diagnostics",
     "source_input"
   ],
-  "receipt_only": true,
+  "receipt_only": false,
   "nullable_identity_fields": []
 }

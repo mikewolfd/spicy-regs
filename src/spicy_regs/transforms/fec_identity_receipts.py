@@ -82,6 +82,7 @@ class IdentityReceiptWriter:
         self.batch_size = batch_size
         self.counts = {name: 0 for name in self.policies}
         self.attempts = 0
+        self.table_attempts = {name: 0 for name in self.policies}
         self._stack = ExitStack()
 
     def __enter__(self):
@@ -112,7 +113,9 @@ class IdentityReceiptWriter:
         if table not in self.policies:
             raise ValueError(f"Output outside explicitly selected identity tables: {table}")
         policy = self.policies[table]
-        mapped = normalize_record(table, row, source_input=source_input)
+        ordinal = self.table_attempts[table]
+        self.table_attempts[table] += 1
+        mapped = normalize_record(table, row, source_input=source_input, observation_ordinal=ordinal)
         if table == "fec_committees":
             mapped["conversion_inputs"] = dict(row)
         self.attempts += 1

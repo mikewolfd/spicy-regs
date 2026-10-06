@@ -37,6 +37,57 @@ SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 _ID = {"candidate": r"[HPS][A-Za-z0-9]{8}", "committee": r"C[0-9]{8}"}
 
 
+def relationship_context(row, *, cycle):
+    """Expose retained coordinates and lookup eligibility; never resolve a target.
+
+    The source locator is the authority for companion coordinates. A missing
+    coordinate stays missing. Endpoint lookup uses the recorded entity type,
+    identifier classification and cycle, not a name or a current-cycle guess.
+    """
+    try:
+        locator = json.loads(row.get("source_locator_json") or "null")
+    except (ValueError, TypeError):
+        locator = None
+    locator = locator if isinstance(locator, dict) else {}
+    coordinates = {
+        name: locator.get(name) if isinstance(locator.get(name), str) and locator[name].strip() else None
+        for name in ("collection_id", "source_record_id")
+    }
+    pointer = locator.get("json_pointer")
+    pointer = pointer if isinstance(pointer, str) and (pointer == "" or pointer.startswith("/")) else None
+    array_field, array_index = locator.get("array_field"), locator.get("array_index")
+    if pointer is not None and isinstance(array_field, str) and type(array_index) is int and array_index >= 0:
+        pointer += "/" + array_field.replace("~", "~0").replace("/", "~1") + "/" + str(array_index)
+
+    def ordinal(name):
+        value = locator.get(name)
+        return value if type(value) is int and 0 <= value < 2**63 else None
+
+    def endpoint(side):
+        kind, value = row.get(side + "_type"), row.get(side + "_id")
+        if side == "object" and row.get("value_status") != "reported":
+            return "no_edge_" + str(row.get("value_status") or "unknown")
+        if value in (None, ""):
+            return "name_only" if side == "object" and row.get("object_name") else "no_native_id"
+        if kind not in _ID:
+            return "unsupported_entity_type"
+        if row.get(side + "_id_status") != "source_id_shape" or _id_status(value, kind) != "source_id_shape":
+            return "invalid_native_id"
+        if type(cycle) is not int or not 0 < cycle < 2**31:
+            return "unavailable_source_cycle"
+        return "lookup_eligible"
+
+    return {
+        **coordinates,
+        "subrecord_pointer": pointer,
+        "source_ordinal": ordinal("ordinal"),
+        "subrecord_ordinal": ordinal("array_index"),
+        "companion_status": "locator_coordinates_available" if all(coordinates.values()) else "unavailable_locator_coordinates",
+        "subject_endpoint_status": endpoint("subject"),
+        "object_endpoint_status": endpoint("object"),
+    }
+
+
 def _id_status(value, kind):
     """Classify an identifier as not_reported, source_id_shape or invalid_source_id_shape."""
     if value in (None, ""):

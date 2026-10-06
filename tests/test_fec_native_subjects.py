@@ -37,7 +37,7 @@ def test_legal_hierarchy_ids_status_and_duplicate_citations():
     assert subject["subject"][2]["node"]["children"] == []
     assert subject["subjects"][0]["secondary_subject_id"] == "2"
     assert inputs["native_facts_json"] == row["native_facts_json"]
-    assert "mapping_status" not in subject
+    assert subject["mapping_status"] == "mapped"
 
 
 @pytest.mark.parametrize("value", [None, [], [None]])
@@ -87,8 +87,8 @@ def test_receipt_only_definition_does_not_produce_empty_subject():
         layout_json='{"fields":[]}',
     )
     subject, inputs = prepare_subject("fec_filing_definitions", row)
-    assert subject is None
-    assert inputs == row
+    assert subject == {k: row[k] for k in ("record_id", "family", "version", "form", "workbook_sha256")}
+    assert inputs == {"layout_json": row["layout_json"]}
 
 
 def test_unknown_input_and_nested_property_refuse_without_silent_loss():
@@ -130,10 +130,9 @@ def test_financial_source_corrections_are_data_and_qualification_is_receipt():
     )
     # The amount's own status is published beside it on fec_receipts (owner decision, 2026-10-05), once: it is
     # not also a conversion input. What qualifies the row for a purpose stays in the receipt.
-    assert subject == dict(record_id="r", correction_operation="deletion", amount=Decimal("1"), amount_status="exact")
+    assert subject == dict(record_id="r", correction_operation="deletion", amount=Decimal("1"), amount_status="exact", source_representation_role="deletion", current_record_status="unqualified")
     assert "amount_status" not in inputs
-    assert inputs["source_representation_role"] == "deletion"
-    assert inputs["current_record_status"] == "unqualified"
+    assert not {"source_representation_role", "current_record_status"} & inputs.keys()
 
 
 def test_native_child_views_keep_decimal_order_and_hierarchy():
@@ -231,8 +230,8 @@ def test_agency_text_keeps_reading_order_without_source_locator():
     row = dict(record_id="r", text="Paragraph", source_locator_json='{"ordinal":17}')
     subject, inputs = prepare_subject("fec_agency_report_text", row)
     assert subject["text_ordinal"] == 17
-    assert "source_locator_json" not in subject
-    assert inputs["source_locator_json"] == row["source_locator_json"]
+    assert subject["source_locator_json"] == row["source_locator_json"]
+    assert "source_locator_json" not in inputs
 
 
 @pytest.mark.parametrize("column", ["source_namespace", "amount_status"])
@@ -252,15 +251,18 @@ def test_returned_column_is_a_text_column_of_exactly_the_decided_tables(column):
         assert policy.subject_schema.field(column).type == pa.string()
         assert column not in policy.receipt_fields
         # None of these tables had published natively when the column returned, so the version did not move.
-        if policy.policy_version == "fec-identity-context-receipts/1":
+        if policy.policy_version == "fec-identity-context-receipts/2":
             declared = identity_policy(name)
         else:
-            assert policy.policy_version == "fec-subject-receipts/1"
+            assert policy.policy_version == "fec-subject-receipts/2"
             declared = dataset_policy(name, declared_schema(name))
         # Publication admits a generation against the installed declaration, not the registry it was made from.
         assert policy.descriptor() == declared.descriptor()
     # A table whose producer writes the column and which is not on the list still does not publish it.
     produced = {name for name, item in processing_declarations().items() if column in {c[0] for c in item["columns"]}}
     withheld = {name for name in produced - holders if name in installed and not installed[name].receipt_only}
-    assert {"source_namespace": "fec_communication_costs", "amount_status": "fec_disbursements"}[column] in withheld
+    if column == "source_namespace":
+        assert not withheld
+    else:
+        assert "fec_disbursements" in withheld
     assert all(column not in installed[name].subject_schema.names for name in withheld)

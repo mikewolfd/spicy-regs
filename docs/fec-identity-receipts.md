@@ -3,9 +3,9 @@
 The local identity builder writes useful domain values to subject Parquet files
 and processing evidence to one `etl_receipts.parquet`. The explicit field rules
 are in `src/spicy_regs/fec_identity_context_fields.json`. Unknown mapper fields
-refuse admission. The source inventory, collection outcomes, API controls,
-representation decisions, source records and evidence associations are receipt
-inputs; they do not create subject tables.
+refuse admission. Source inventory, collection outcomes, API controls, representation decisions, source records and evidence associations have main logical rows. Raw source bodies and conversion diagnostics stay in receipts. Collection-level witnesses retain their context column/pointer and generation pin; they never acquire an invented individual source-record identifier.
+
+`fec-identity-context-receipts/2` preserves each control/evidence observation with a generation-scoped `observation_ordinal`. Collections use their stated `collection_id`; source records use the complete `(collection_id, source_record_id, source_sha256)` key. Repeated evidence observations remain distinct.
 
 Candidate status, committee activity, cancellation, notice scope and treasurer
 names remain domain values. `treasurer_text` is a PostgreSQL search vector; its
@@ -66,3 +66,11 @@ array-expansion views, and the old processing-control views are not registered
 against them. Read processing values through explicit internal receipt reads.
 A receipt-only dataset such as `fec_source_catalog` emits only receipt rows and
 seals as a generation with no subject table.
+
+## Relationship endpoints
+
+Relationship main rows retain the literal source locator, digest, source coordinates and recorded source/array ordinals. The existing source locator determines these fields; missing coordinates produce `unavailable_locator_coordinates`.
+
+`subject_endpoint_status` and `object_endpoint_status` express lookup eligibility, not a successful target match. Candidate/committee endpoints require the retained type, valid native ID classification and stated cycle. Name-only, reported-none, unsupported, invalid-ID and missing-cycle observations remain visible with no inferred edge. The builder never expands a list of possible cycles into historical relationships.
+
+Replay retained mapped/source/context inputs through the same manifest builder to obtain the new main schemas. Publish the new subjects and receipts together with matching navigation metadata; preserve old generation/policy pins. This local writer change does not refresh providers or publish data.
