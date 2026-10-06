@@ -9,7 +9,9 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import etl_bulk
-from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, read_attempts, read_with_receipts, write_dataset
+from spicy_regs.etl_receipts import (
+    DatasetPolicy, ReceiptContext, observation_receipt, read_attempts, read_with_receipts, write_dataset,
+)
 from spicy_regs.parquet_rows import write_rows
 from .test_etl_bulk_validate import Bundle, REFUSALS, WITNESS, build
 
@@ -151,3 +153,11 @@ def test_subject_changed_after_admission_cannot_use_cached_identity(tmp_path, mo
 def test_empty_inputs_preserve_reference_behavior():
     policy = DatasetPolicy("items", pa.schema([("id", pa.string())]), ("id",), ())
     assert result([], [], policy, bulk=True) == result([], [], policy, bulk=False) == ([], None)
+
+
+def test_observation_only_generation_with_unproven_subject_schema(tmp_path):
+    policy = DatasetPolicy("items", pa.schema([("id", pa.string()), ("value", pa.float64())]), ("id",), ("raw",))
+    context = ReceiptContext("g1", "empty-observation", "test/1", [WITNESS])
+    observation = observation_receipt(policy, context, processing_fields={"raw": {"empty": True}})
+    _, receipts = write_dataset([], tmp_path / "written", policy, failures=[observation])
+    assert result([], [receipts], policy, bulk=True) == result([], [receipts], policy, bulk=False) == ([], None)

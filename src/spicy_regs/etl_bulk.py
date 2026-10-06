@@ -583,6 +583,8 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id):
         raise NotBulkEligible("The row reader decides absent receipt inputs")
     with _validated_bundle({policy.dataset: subject_paths}, receipt_paths, [policy],
                            generation_id=generation_id, retain_processing=True) as con:
+        if not subject_paths:
+            return
         start = 0
         number = "n"
         while number in {field.name.casefold() for field in policy.subject_schema}:
