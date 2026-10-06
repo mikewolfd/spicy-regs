@@ -9,6 +9,9 @@ def endpoint_query(source, roles):
         parts = []
         for role, field, target, target_field, kind in roles:
             valid = f"regexp_full_match(s.{field}, '[1-9][0-9]*')"
+            # Keep one equality join key. A source-only validity term in ON
+            # makes DuckDB choose a blockwise nested loop over large targets.
+            # Invalid source rows still survive with the unsupported outcome.
             parts.append(f"""SELECT s.*, '{role}' AS endpoint_role, '{kind}' AS target_kind,
                 s.{field} AS target_key, coalesce(t.n,0) AS target_count,
                 CASE WHEN NOT coalesce({valid},FALSE) THEN 'unsupported'
@@ -17,7 +20,7 @@ def endpoint_query(source, roles):
                 {pin(p, target)} AS target_publication_json, 'court-native-endpoint-v1' AS rule_version
                 FROM {source} s LEFT JOIN
                     (SELECT {target_field}, count(*) AS n FROM {target} GROUP BY {target_field}) t
-                ON {valid} AND s.{field}=t.{target_field}""")
+                ON CASE WHEN {valid} THEN s.{field} ELSE NULL END=t.{target_field}""")
         return ' UNION ALL '.join(parts)
     return query
 
