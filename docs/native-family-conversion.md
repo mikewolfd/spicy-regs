@@ -296,16 +296,27 @@ before conversion, then checks the prepared or downloaded artifact's captured
 entry against the same digest before publication. The first check does not
 lock the publication index; a change before the converter captures it makes
 the later check fail, retaining the candidate without publishing it.
-The converter separately checks clean current main, the
-installed locked wheel, complete processing restoration, source evidence and
-the exact stored predecessor before publication.
+The workflow explicitly checks out current main for the producer, even when
+the manual dispatch selects a workflow repair branch. The invocation's
+`revision` identifies the workflow revision; `producer-revision.txt` and the
+conversion receipt identify the checked-out producer revision. The converter
+receives that producer revision as `--expect-main` and separately checks clean
+current main, the installed locked wheel, complete processing restoration,
+source evidence and the exact stored predecessor before publication.
 
 Leave `publish` false to prepare without publication credentials. The run
 retains the sealed family under the `native-family-<family>` artifact, and its
 invocation, logs and observed process resources in a separate evidence
-artifact. Preparation has a 45-minute command timeout; publication has a
-10-minute timeout inside the 60-minute job, leaving time to retain failed
-outputs. Hosted limits do not establish that a larger family fits the runner.
+artifact. Preparation has a 180-minute command timeout; publication has a
+90-minute timeout inside the 300-minute job, leaving time to retain failed
+outputs. The former 45-minute preparation bound interrupted normal work in
+[court](https://github.com/mikewolfd/spicy-regs/actions/runs/37448262153),
+[votes](https://github.com/mikewolfd/spicy-regs/actions/runs/37448264683),
+[vote terms](https://github.com/mikewolfd/spicy-regs/actions/runs/37448267222)
+and [bills](https://github.com/mikewolfd/spicy-regs/actions/runs/37448753043).
+Publication also needs time for complete restoration and anonymous readback.
+The runner, disk floor, thread limits and acceptance checks remain unchanged.
+Hosted limits do not establish that a larger family fits the runner.
 
 After checks against the actual reader, dispatch with `publish=true`, the
 explicit `expected_bucket`, and `source_run_id` naming that preparation run.
