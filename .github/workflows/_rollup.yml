@@ -183,6 +183,11 @@ on:
         required: false
         default: 30
         type: number
+      producer_ref:
+        description: 'Optional producer checkout ref; blank preserves the caller revision'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   rollup:
@@ -192,6 +197,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.producer_ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -210,14 +217,15 @@ jobs:
         run: |
           mkdir -p output
           python - <<'PY'
-          import datetime, json, os
+          import datetime, json, os, subprocess
           from pathlib import Path
           scope = json.loads(os.environ['ROLLUP_INPUTS'])
           # URLs may carry temporary access tokens; digests identify transferred bytes.
           scope.pop('fec_inputs_url', None)
           receipt = {
               'started_at': datetime.datetime.now(datetime.UTC).isoformat(),
-              'code_revision': os.environ['GITHUB_SHA'],
+              'code_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'workflow_revision': os.environ['GITHUB_SHA'],
               'run_id': os.environ['GITHUB_RUN_ID'],
               'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
               'inputs': scope,

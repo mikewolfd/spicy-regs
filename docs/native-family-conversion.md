@@ -328,6 +328,17 @@ attempt and reconcile its pointer read-only; never clear its journal, reseal
 it, or dispatch a blind retry. Ordinary producer acceptance remains a later
 check after successful publication and anonymous readback.
 
+The ordinary Federal Register, docket-link and rulemaking workflows also
+declare finite limits that allow complete restoration of native priors.
+These workflows explicitly check out main, so a workflow timing repair can
+run before its merge without changing the producer. The shared rollup's
+optional `producer_ref` leaves other callers at their original revision.
+Its invocation records the actual `code_revision` and the separate
+`workflow_revision`. See `rollup-federal-register.yml`,
+`rollup-fr-docket-links.yml` and `materialize-rulemaking.yml` for their
+limits; their source schedules, publication defaults and command arguments
+stay the same.
+
 ## Verify
 
 - The command's last line is "published and read back", and

@@ -21,10 +21,11 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-federal-register
+      producer_ref: main
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       fr_since: ${{ inputs.since || '' }}
-      # A full re-read walks about a million documents; the daily resume takes minutes.
-      timeout_minutes: ${{ inputs.since && 240 || 30 }}
+      # Native priors also require complete retained restoration during a daily resume.
+      timeout_minutes: ${{ inputs.since && 240 || 180 }}
 
   docket-links:
     needs: run
@@ -33,3 +34,5 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-fr-docket-links
+      producer_ref: main
+      timeout_minutes: 180

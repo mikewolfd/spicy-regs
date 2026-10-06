@@ -15,4 +15,6 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-fr-docket-links
+      producer_ref: main
+      timeout_minutes: 180
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
