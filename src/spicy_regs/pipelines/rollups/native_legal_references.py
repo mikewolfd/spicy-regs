@@ -12,7 +12,10 @@ from spicy_regs.transforms.native_legal_references import build_native_legal_ref
 class NativeLegalReferencesRollup(LegislativeReceiptRollup):
     name: ClassVar[str] = "native-legal-references"
     inputs: ClassVar[tuple[str, ...]] = ()
-    outputs: ClassVar[tuple[str, ...]] = ("native_legal_references.parquet",)
+    outputs: ClassVar[tuple[str, ...]] = (
+        "native_legal_references.parquet",
+        "native_legal_reference_reads.parquet",
+    )
     receipt_only_tables = ("native_legal_reference_reads.parquet",)
     receipt_policies = family_policies("native_legal_references", "native_legal_reference_reads")
     retain_source_evidence: ClassVar[bool] = True

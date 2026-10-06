@@ -26,6 +26,7 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
         "report_sections.parquet",
         "hearing_transcripts.parquet",
         "hearing_bill_links.parquet",
+        "committee_report_reads.parquet",
     )
 
     receipt_only_tables = ("committee_report_reads.parquet",)
