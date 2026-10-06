@@ -130,6 +130,7 @@ def write_congress_dataset(
     generation_id: str,
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
+    bulk: bool = False,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -138,6 +139,13 @@ def write_congress_dataset(
     witnesses. The first witness never asserts that a shaped file is an original
     publisher response.
     """
+    if bulk:
+        if dataset not in {'member_votes', 'member_vote_terms', 'roll_call_votes'}:
+            raise ValueError('Batch vote writing requires a declared vote dataset')
+        from spicy_regs.votes_batch_receipts import write_congress_dataset as write_votes
+        return write_votes(source, directory, dataset=dataset, generation_id=generation_id,
+                           witnesses=witnesses, prior=prior, bulk=True)
+
     from rulespec_artifacts import publish_directory_no_replace
 
     if directory.exists():
@@ -208,7 +216,7 @@ def write_congress_dataset(
                             )
                             if subject is not None:
                                 subject_batch.append(subject)
-                    except (ValueError, TypeError, pa.ArrowException) as error:
+                    except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
                         # Missing identity and bad native values both remain attempts.
                         # Arbitrary exception text can contain source content or credentials.
                         receipt = failure_receipt(
@@ -241,7 +249,8 @@ def write_congress_dataset(
 
 
 def restore_processing_input(
-    subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str
+    subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str,
+    bulk: bool = False,
 ) -> Path:
     """Restore retained original source fields and schema after exact receipt admission.
 
@@ -249,6 +258,13 @@ def restore_processing_input(
     and processing events remain receipt-only in the public generation. Footer
     metadata includes bill-family completion scopes and per-reader refusal state.
     """
+    if bulk:
+        if dataset not in {'member_votes', 'member_vote_terms', 'roll_call_votes'}:
+            raise ValueError('Batch vote restoration requires a declared vote dataset')
+        from spicy_regs.votes_batch_receipts import restore_processing_input as restore_votes
+        return restore_votes(subject, receipts, destination, dataset=dataset,
+                             generation_id=generation_id, bulk=True)
+
     selected = policy(dataset)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
