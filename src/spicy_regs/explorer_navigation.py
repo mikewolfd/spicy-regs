@@ -165,7 +165,7 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                            (route("fec_filings", ("filing_key",),
                                   (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),)),),
                            meaning="All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.", mode="row"))
-    return validate_navigation(specs)
+    return validate_navigation(deepcopy(specs))
 
 
 def scalar(value):
