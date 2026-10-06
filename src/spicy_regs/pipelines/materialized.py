@@ -543,12 +543,12 @@ class MaterializedDatasetPipeline(Pipeline):
         # The pointer is a few hundred bytes and roughly constant in size, so the
         # shrink guard in upload_file does not apply; R2_ALLOW_SHRINK=1 is the
         # documented override if a snapshot id ever makes it fire.
-        r2.upload_file(
-            pointer_path,
-            remote_key=f"{_ROOT_PREFIX}/{self.dataset_name}/latest.json",
-        )
+        self._publish_pointer(pointer_path)
         logger.info(
             "Published materialized dataset {} snapshot {}",
             self.dataset_name,
             pointer["snapshot_id"],
         )
+
+    def _publish_pointer(self, pointer_path: Path) -> None:
+        r2.upload_file(pointer_path, remote_key=f"{_ROOT_PREFIX}/{self.dataset_name}/latest.json")

@@ -366,3 +366,12 @@ old pointer and every old snapshot object, verify restore, and include the
 actual retention deadline and compatible server rollback in the same concrete
 run approval package. Scheduled materialization remains held until the native
 snapshot is admitted and the verified consumers read it.
+
+Current rulemaking publication retains the full prior pointer and manifest
+captured during priming. Before uploading the candidate, it checks both against
+canonical storage. After uploading validated artifacts and the manifest, it
+checks the same prior again and replaces `latest.json` conditionally on the
+captured pointer's ETag. A changed pointer or manifest refuses publication;
+an explicit bootstrap requires an absent canonical pointer. If the pointer
+write loses its response, reconcile the canonical pointer before retrying.
+The publisher does not retry or roll back that uncertain write automatically.

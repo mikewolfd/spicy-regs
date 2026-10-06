@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from functools import cache
+import json
+import os
 from pathlib import Path
 import shutil
 from typing import Annotated, ClassVar
@@ -65,6 +67,76 @@ class RulemakingDatasetPipeline(MaterializedDatasetPipeline):
         "agency_lifecycle_stats.parquet",
     )
     receipt_policies: ClassVar[tuple] = tuple(policy(Path(name).stem) for name in published_outputs)
+
+    def _publish(self, *, manifest_path, pointer_path, artifact_paths) -> None:
+        """Keep ordinary admission and uploads; guard the captured prior before they start."""
+        from spicy_regs.sources import publication, r2
+
+        next_pointer = json.loads(pointer_path.read_bytes(), object_pairs_hook=publication._pairs)
+        next_manifest = json.loads(manifest_path.read_bytes(), object_pairs_hook=publication._pairs)
+        next_snapshot = next_manifest["snapshot_id"]
+        if (not publication.SNAPSHOT_ID.fullmatch(next_snapshot)
+                or (next_pointer["dataset"], next_pointer["snapshot_id"], next_pointer["format_version"]) != (
+                    "rulemaking", next_snapshot, next_manifest["format_version"])
+                or next_manifest["dataset"] != "rulemaking"
+                or next_manifest["format_version"] not in publication.SNAPSHOT_FORMAT_VERSIONS
+                or next_pointer["manifest_key"] != f"materialized/rulemaking/snapshots/{next_snapshot}/manifest.json"):
+            raise ValueError("Rulemaking candidate pointer and manifest differ")
+        client = r2.get_r2_client()
+        bucket = os.getenv("R2_BUCKET_NAME", "spicy-regs")
+        directory = manifest_path.parent
+        captured_pointer = directory / "_rulemaking_latest.json"
+        captured_manifest = directory / "_rulemaking_previous_manifest.json"
+        prior = captured_pointer.read_bytes() if captured_pointer.exists() else None
+        stored = publication._get_bounded(client, bucket, publication.SNAPSHOT_POINTER)
+        manifest_key = None
+        manifest = None
+        etag = None
+        if prior is None:
+            if not self.allow_bootstrap or stored is not None:
+                raise ValueError("Rulemaking publication requires its captured full prior pointer")
+        else:
+            if stored is None or stored[0] != prior or not isinstance(stored[1], str) or not stored[1]:
+                raise ValueError("Rulemaking prior pointer changed before publication")
+            pointer = json.loads(prior, object_pairs_hook=publication._pairs)
+            snapshot = pointer["snapshot_id"]
+            manifest_key = f"materialized/rulemaking/snapshots/{snapshot}/manifest.json"
+            if (not publication.SNAPSHOT_ID.fullmatch(snapshot) or pointer["dataset"] != "rulemaking"
+                    or pointer["format_version"] not in publication.SNAPSHOT_FORMAT_VERSIONS
+                    or pointer["manifest_key"] != manifest_key):
+                raise ValueError("Rulemaking captured prior pointer is invalid")
+            manifest = captured_manifest.read_bytes()
+            old = json.loads(manifest, object_pairs_hook=publication._pairs)
+            if (old["dataset"], old["snapshot_id"], old["format_version"]) != (
+                    "rulemaking", snapshot, pointer["format_version"]):
+                raise ValueError("Rulemaking captured prior manifest differs from its pointer")
+            current_manifest = publication._get_bounded(client, bucket, manifest_key)
+            if current_manifest is None or current_manifest[0] != manifest:
+                raise ValueError("Rulemaking prior manifest changed before publication")
+            etag = stored[1]
+        self._rulemaking_pointer_guard = (client, bucket, etag, prior, manifest_key, manifest)
+        try:
+            super()._publish(manifest_path=manifest_path, pointer_path=pointer_path, artifact_paths=artifact_paths)
+        finally:
+            del self._rulemaking_pointer_guard
+
+    def _publish_pointer(self, pointer_path: Path) -> None:
+        from spicy_regs.sources import publication
+        from spicy_regs.sources.cloudflare import purge_urls
+
+        client, bucket, etag, prior, manifest_key, manifest = self._rulemaking_pointer_guard
+        stored = publication._get_bounded(client, bucket, publication.SNAPSHOT_POINTER)
+        if (stored is None) != (prior is None) or stored is not None and (stored[0] != prior or stored[1] != etag):
+            raise ValueError("Rulemaking prior pointer changed during publication")
+        if manifest_key is not None:
+            current_manifest = publication._get_bounded(client, bucket, manifest_key)
+            if current_manifest is None or current_manifest[0] != manifest:
+                raise ValueError("Rulemaking prior manifest changed during publication")
+        if not publication._put_pointer(client, bucket, publication.SNAPSHOT_POINTER, pointer_path.read_bytes(), etag):
+            raise ValueError("Rulemaking latest pointer changed at conditional publication")
+        public_url = os.getenv("R2_PUBLIC_URL", "")
+        if public_url:
+            purge_urls([f"{public_url.rstrip('/')}/{publication.SNAPSHOT_POINTER}"])
 
     def _prime_sources(self, output_dir: Path) -> None:
         """Restore stage inputs from one selected native subject/receipt index."""
