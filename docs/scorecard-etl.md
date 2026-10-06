@@ -63,8 +63,7 @@ After writing a refresh, `verify_family_readback` uses the shared
 source rows already held by the build. Identity indexes reference those rows;
 the check does not construct another complete source family. It compares every
 literal source and evidence field, accepts reordered rows, and refuses missing,
-extra, duplicated or changed rows. Processing-only snapshots receive the same
-check. Earlier visits remain provisional until all receipt and subject joins
+extra, duplicated or changed rows. Accepted snapshots publish as main rows and receive the same check. Earlier visits remain provisional until all receipt and subject joins
 finish, so preservation callbacks and success events run only after complete
 readback admission.
 
@@ -107,10 +106,19 @@ reports that addition separately as `generated_footer_keys_added`. Its
 `exact_schema_and_authored_footer` field establishes retained source metadata,
 without asserting byte-identical physical Parquet storage.
 
-The resolver's exact-match and conflict rules remain authoritative. Moving
-snapshot identifiers requires query integration to check that an analysis used the
-currently selected scorecard generation before linking ratings to official people
-or legislation. A stable publisher key alone does not establish a current link.
+The resolver's exact-match and conflict rules remain authoritative. Main
+associations retain their accepted source snapshot, resolution status, candidate
+count and candidates, rule version, source context and exact input pins. Valid
+unresolved, ambiguous and conflicting decisions remain main rows with empty
+target identifiers. Target navigation requires `resolution_status = resolved`;
+a recorded resolution and a lookup against current target data are separate.
+
+Every edition fact retains its accepted `snapshot_id` and capture association.
+`scorecard_snapshots` publishes parser, completeness, methodology and capture-role
+facts. Capture lists preserve order and repetition. None of these fields becomes
+part of a member, item or rating business identity. Shipped older policies remain
+exact supported readers; a retained-source rewrite creates new subject hashes
+and new policies rather than relabeling prior evidence.
 
 ## Qualified live refresh
 

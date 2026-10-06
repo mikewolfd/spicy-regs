@@ -296,8 +296,8 @@ def test_mixed_success_replaces_whole_scope_and_retains_failed_edition(tmp_path,
         assert [r for r in rows if r["scorecard_id"] == b.scorecard_id] == old_b[name]
     assert not [r for r in result["scorecard_items"] if r["scorecard_id"] == a.scorecard_id]
     assert len(result["scorecard_member_ratings"]) == 3
-    assert len(paths) == len(SCHEMA["tables"]) - 1
-    assert not any(p.stem == "scorecard_snapshots" for p in paths)
+    assert len(paths) == len(SCHEMA["tables"])
+    assert any(p.stem == "scorecard_snapshots" for p in paths)
     assert any(r["event"] == "rows-retired" and r["rows"] for r in journal(e))
     assert journal(e)[-1]["failed_scopes"] == [b.scorecard_id]
 
@@ -448,7 +448,7 @@ def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(t
     assert len(generations) == 1
     admitted = verify_generation(generations[0])
     assert set(admitted.root["spec"]["tables"]) == {
-        table["name"] + ".parquet" for table in SCHEMA["tables"] if table["name"] != "scorecard_snapshots"
+        table["name"] + ".parquet" for table in SCHEMA["tables"]
     }
     assert admitted.root["spec"]["etlReceipts"]["key"] == "etl_receipts.parquet"
     assert admitted.root["spec"]["family"] == "scorecards"

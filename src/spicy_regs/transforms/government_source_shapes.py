@@ -21,10 +21,10 @@ import pyarrow as pa
 RECEIPT_FIELDS = {
     "crs_reports": ("url",),
     "fcc_filings": ("filing_url", "native_fields_sha256", "pdf_extraction_results_json"),
-    "gao_decisions": ("listing_page", "source"),
+    "gao_decisions": (),
     # How a letter value and a product-page value were read (rule, bytes, spans, each blank's reason) is processing:
     # the values are the subject columns, and the readings stay with the row's receipt.
-    "gao_reports": ("url", "source", "major_rule_letter_json", "product_page_json"),
+    "gao_reports": ("major_rule_letter_json", "product_page_json"),
     "lobbying_filings": ("url",),
     "usaspending_recipients": ("observed_at", "source_capture_sha256"),
 }
@@ -474,7 +474,7 @@ def _fcc_extractions(row: Mapping[str, Any], documents: list | None) -> list | N
         url = _text(result.get("url"))
         try:
             parts = urlsplit(url) if url else None
-            usable = bool(parts and parts.scheme == "https" and parts.hostname
+            usable = bool(isinstance(url, str) and parts and parts.scheme == "https" and parts.hostname
                           and not parts.username and not parts.password
                           and not re.search(r"\s", url))
         except ValueError:
@@ -482,7 +482,7 @@ def _fcc_extractions(row: Mapping[str, Any], documents: list | None) -> list | N
         digest = _text(result.get("source_sha256"))
         valid_digest = bool(digest and re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest))
         mapped.append({
-            "attempt_ordinal": ordinal, "url": url, "offered_ordinals": offered.get(url, []),
+            "attempt_ordinal": ordinal, "url": url, "offered_ordinals": offered.get(url, []) if isinstance(url, str) else [],
             "url_status": "usable" if usable else "missing" if url is None else "invalid",
             "source_sha256": digest,
             "digest_status": "recorded" if valid_digest else "missing" if digest is None else "invalid",

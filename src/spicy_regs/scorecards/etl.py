@@ -66,7 +66,8 @@ def policy(name):
 POLICIES = {name: policy(name) for name in SOURCE_COLUMNS}
 # Source replay and shared admission use one exact historical declaration source.
 EARLIER_POLICIES = {name: earlier_policies(policy) for name, policy in POLICIES.items()}
-LEGACY_RATING_POLICY_V2, LEGACY_RATING_POLICY = EARLIER_POLICIES["scorecard_member_ratings"]
+LEGACY_RATING_POLICY_V2, LEGACY_RATING_POLICY = (p for p in EARLIER_POLICIES["scorecard_member_ratings"]
+                                                if p.policy_version in {"scorecards-etl-ratings-v2", "scorecards-etl-v1"})
 
 
 def admitted_read_policies(names, *, descriptors=None, columns=None):
@@ -75,25 +76,35 @@ def admitted_read_policies(names, *, descriptors=None, columns=None):
 
     if (descriptors is None) == (columns is None):
         raise ValueError("Scorecard reads require exactly one admitted policy declaration")
-    current = {name: POLICIES[name] for name in names}
-    selections = [current]
-    if "scorecard_member_ratings" in current:
-        selections.extend(
-            dict(current, scorecard_member_ratings=rating) for rating in EARLIER_POLICIES["scorecard_member_ratings"]
-        )
-    for selected in selections:
-        if descriptors is not None:
-            if not isinstance(descriptors, list) or len(descriptors) != len(selected):
-                continue
-            declared = {value.get("dataset"): value for value in descriptors if isinstance(value, dict)}
-            if declared == {name: p.descriptor() for name, p in selected.items()}:
-                return selected
-        elif columns is not None:
-            expected = {name: described_schema(p.subject_schema) for name, p in selected.items() if not p.receipt_only}
-            if set(columns) == set(expected) and all(
-                [tuple(column) for column in columns[name]] == shape for name, shape in expected.items()
-            ):
-                return selected
+    from itertools import product
+    choices = {name: (POLICIES[name], *EARLIER_POLICIES[name]) for name in names}
+    if descriptors is not None:
+        if not isinstance(descriptors, list) or len(descriptors) != len(names):
+            raise ValueError("Scorecard policy declaration count differs")
+        declared = {value.get("dataset"): value for value in descriptors if isinstance(value, dict)}
+        if len(declared) != len(names):
+            raise ValueError("Scorecard declarations differ from supported exact policies: repeated dataset")
+        selected = {}
+        for name, candidates in choices.items():
+            matches = [p for p in candidates if p.descriptor() == declared.get(name)]
+            if len(matches) != 1:
+                raise ValueError("Scorecard policy is not a supported exact declaration")
+            selected[name] = matches[0]
+        return selected
+    assert columns is not None
+    # Schema-only historical inputs must identify one exact known family layout.
+    # Avoid a Cartesian search when each table's columns already decide its policy.
+    matches = {}
+    for name, candidates in choices.items():
+        matches[name] = [p for p in candidates if (p.receipt_only and name not in columns) or
+                         (not p.receipt_only and name in columns and
+                          [tuple(c) for c in columns[name]] == described_schema(p.subject_schema))]
+        if not matches[name]:
+            raise ValueError("Scorecard columns are not a supported exact layout")
+    for variant in product(*(matches[name] for name in names)):
+        selected = dict(zip(names, variant))
+        if set(columns) == {name for name, p in selected.items() if not p.receipt_only}:
+            return selected
     raise ValueError("Scorecard input differs from the supported exact historical or current policies")
 
 
@@ -187,18 +198,9 @@ def write_family(
                 )
                 errors.append(f"{name}: {type(error).__name__}")
                 continue
-            if name in LINK_NAMES and raw["resolution_status"] != "resolved":
-                failures.append(
-                    failure_receipt(
-                        POLICIES[name],
-                        context,
-                        outcome="refused",
-                        raw_fields=mapped,
-                        identity={k: mapped[k] for k in IDENTITIES[name]},
-                    )
-                )
-            else:
-                yield mapped, context
+            # Unresolved is a valid recorded domain decision, not a failed ETL
+            # conversion. Publish the complete association with no invented edge.
+            yield mapped, context
 
     for name, rows in tables.items():
         failures: list[dict] = list(attempt_failures) if name == "scorecard_snapshots" else []

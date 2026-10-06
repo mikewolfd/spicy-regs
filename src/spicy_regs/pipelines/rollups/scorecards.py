@@ -22,7 +22,7 @@ class ScorecardsRollup(RollupPipeline):
     outputs: ClassVar[tuple[str, ...]] = OUTPUTS
     retain_source_evidence: ClassVar[bool] = True
     receipt_policies: ClassVar[tuple] = tuple(POLICIES[name] for name in SOURCE_NAMES)
-    receipt_only_tables: ClassVar[tuple[str, ...]] = ("scorecard_snapshots.parquet",)
+    receipt_only_tables: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,

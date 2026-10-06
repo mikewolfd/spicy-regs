@@ -144,7 +144,8 @@ def test_earlier_gao_selection_reads_original_fields_and_refuses_unknown_or_mixe
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter
 
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
-    current, earlier = receipt_policies(installed_policies()["gao_reports"])
+    current, *historical = receipt_policies(installed_policies()["gao_reports"])
+    earlier = next(policy for policy in historical if policy.policy_version == "government-sources/1")
     original = {**dict.fromkeys(earlier.subject_schema.names), "report_id": "gao-26-1", "title": "As published"}
     witness = {"source_id": "original", "source_uri": None, "sha256": "sha256:" + "0" * 64,
                "locator": None, "body_version": None}

@@ -29,6 +29,11 @@ def main(tables=None):
             for nested, (target, _) in FLATTEN.get((table, source), {}).items():
                 field_prose[table, target] = f'{prose} This column retains the source property {nested}.'
     manual = {
+        'evidence_occurrences': 'Every accepted source date window before membership lists reduce to sets. Includes source namespace, native document key, source row order, role, dates, and ordered RIN observations. A Register reference requires both document number and publication date; missing older observations remain null.',
+        'parent_artifact_digest': 'Exact recorded court-opinions artifact used for this capture. A current opinion lookup is a separate check.',
+        'parent_generation_id': 'Receipt generation of the recorded court-opinions parent, when declared. Null for older parents without native receipts.',
+        'parent_member_sha256': 'SHA-256 of the exact recorded court-opinions member; never an identity inferred from a URL or native SHA-1 alone.',
+        'parent_member_byte_size': 'Declared byte size of the recorded court-opinions member.',
         'observation_ordinal': 'Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier.',
         'filing_association_status': 'The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.',
         'filing_association_policy': 'Version of the maintained filing association rule used for this decision.',

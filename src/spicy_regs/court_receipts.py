@@ -22,7 +22,7 @@ from spicy_regs.etl_receipts import (
 )
 
 POLICIES = {
-    name: DatasetPolicy(name, schema, IDENTITIES[name], RECEIPT_FIELDS[name], policy_version='courts/1')
+    name: DatasetPolicy(name, schema, IDENTITIES[name], RECEIPT_FIELDS[name], policy_version='courts/2' if name in {'court_opinions', 'court_opinion_pdf_extractions'} else 'courts/1')
     for name, schema in SUBJECT_SCHEMAS.items()
 }
 
@@ -173,15 +173,18 @@ def local_receipt_selection(path: Path) -> tuple[Path, str]:
 def read_court_rows(path: Path, *, dataset: str, receipt_path: Path | None = None,
                     generation_id: str | None = None) -> Iterable[dict]:
     """Internal processing read; a migrated row never falls back to missing evidence."""
-    if not pq.read_schema(path).equals(SUBJECT_SCHEMAS[dataset]):
-        raise ValueError('Court prior must use the native subject schema and selected receipts')
+    from spicy_regs.etl_receipts import selected_subject_policy
+    try:
+        selected_policy = selected_subject_policy(POLICIES[dataset], [path])
+    except ValueError as error:
+        raise ValueError('Court prior must use the native subject schema and selected receipts') from error
     if receipt_path is None:
         receipt_path, generation_id = local_receipt_selection(path)
     if generation_id is None:
         raise ValueError('Court internal read requires the selected receipt generation')
     with TemporaryDirectory(prefix='court-read-') as temporary:
         selected = select_receipts(receipt_path, Path(temporary) / 'etl_receipts.parquet', dataset=dataset)
-        yield from read_with_receipts([path], [selected], POLICIES[dataset], generation_id=generation_id)
+        yield from read_with_receipts([path], [selected], selected_policy, generation_id=generation_id)
 
 
 def restore_processing_input(path: Path, destination: Path, *, dataset: str, schema: pa.Schema,

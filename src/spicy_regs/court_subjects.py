@@ -83,6 +83,23 @@ def normalize_court_row(dataset: str, row: Mapping[str, Any]) -> dict:
             if not math.isfinite(value) or not 0 <= value <= 1:
                 raise ValueError(f'{name}: publisher score outside [0,1]')
         result[name] = value
+    if dataset == 'court_opinion_pdf_extractions':
+        parent = json.loads(row.get('parent_opinion_publication_json') or '{}')
+        if not isinstance(parent, dict):
+            raise ValueError('Recorded parent publication must be an object')
+        tables, receipts = parent.get('tables', {}), parent.get('etlReceipts', {})
+        if not isinstance(tables, dict) or not isinstance(receipts, dict):
+            raise ValueError('Recorded parent table and receipt declarations must be objects')
+        member = tables.get('court_opinions.parquet', {})
+        if not isinstance(member, dict):
+            raise ValueError('Recorded parent opinion member must be an object')
+        recorded = dict(parent_artifact_digest=parent.get('artifactDigest'),
+                        parent_generation_id=receipts.get('generationId'),
+                        parent_member_sha256=member.get('sha256'), parent_member_byte_size=member.get('byteSize'))
+        for name, value in recorded.items():
+            if row.get(name) is not None and result[name] != value:
+                raise ValueError(f'{name}: differs from the recorded selected parent')
+        result.update(recorded)
     for name in IDENTITIES[dataset]:
         if not isinstance(result[name], str) or not result[name]:
             raise ValueError(f'{dataset}: missing stable identity {name}')
@@ -175,6 +192,21 @@ SUBJECT_SCHEMAS = {
         ('opinion_id', pa.string()),
         ('cluster_id', pa.string()),
         ('text_content', pa.string()),
+        ('source_url', pa.string()),
+        ('resolved_url', pa.string()),
+        ('source_sha256', pa.string()),
+        ('native_sha1', pa.string()),
+        ('actual_sha1', pa.string()),
+        ('pdf_extraction_results_json', pa.string()),
+        ('observed_at', pa.string()),
+        ('extractor', pa.string()),
+        ('extractor_version', pa.string()),
+        ('parent_opinion_publication_json', pa.string()),
+        ('sha1_matches', pa.bool_()),
+        ('parent_artifact_digest', pa.string()),
+        ('parent_generation_id', pa.string()),
+        ('parent_member_sha256', pa.string()),
+        ('parent_member_byte_size', pa.int64()),
     ]),
     'court_opinions': pa.schema([
         ('opinion_id', pa.string()),
@@ -185,6 +217,8 @@ SUBJECT_SCHEMAS = {
         ('per_curiam', pa.bool_()),
         ('joined_by_str', pa.string()),
         ('page_count', pa.int64()),
+        ('sha1', pa.string()),
+        ('download_url', pa.string()),
     ]),
     'court_parentheticals': pa.schema([
         ('parenthetical_id', pa.string()),
@@ -213,8 +247,8 @@ RECEIPT_FIELDS = {
     'court_docket_groups': ('edition', 'rule_version', 'match_basis', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_dockets': ('date_created', 'absolute_url', 'parties_json', 'attorneys_json', 'firms_json', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_opinion_clusters': ('source', 'slug', 'absolute_url', 'date_created', 'date_modified', 'ingest_source', 'conversion_inputs', 'raw_source_record', 'source_observation'),
-    'court_opinion_pdf_extractions': ('source_url', 'resolved_url', 'source_sha256', 'native_sha1', 'actual_sha1', 'sha1_matches', 'pdf_extraction_results_json', 'observed_at', 'extractor', 'extractor_version', 'parent_opinion_publication_json', 'conversion_inputs', 'raw_source_record', 'source_observation'),
-    'court_opinions': ('sha1', 'download_url', 'local_path', 'extracted_by_ocr', 'date_created', 'date_modified', 'dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
+    'court_opinion_pdf_extractions': ('conversion_inputs', 'raw_source_record', 'source_observation'),
+    'court_opinions': ('local_path', 'extracted_by_ocr', 'date_created', 'date_modified', 'dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_parentheticals': ('dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
 }
 

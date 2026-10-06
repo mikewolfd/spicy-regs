@@ -283,7 +283,7 @@ def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_wit
 
     module = import_module("spicy_regs.transforms.build_gao_reports")
     dataset = "gao_decisions"
-    [earlier] = EARLIER_POLICIES[dataset]
+    earlier = next(p for p in EARLIER_POLICIES[dataset] if p.policy_version == "government-sources/1")
     assert earlier.policy_version != POLICIES[dataset].policy_version
     raw = {
         **dict.fromkeys(_legacy_schema(dataset).names),
@@ -343,7 +343,7 @@ def test_gao_recommendations_prior_published_without_its_seen_dates_restores_the
     from spicy_regs.transforms.government_receipts import EARLIER_POLICIES
 
     dataset = "gao_recommendations"
-    [earlier] = EARLIER_POLICIES[dataset]
+    earlier = next(p for p in EARLIER_POLICIES[dataset] if p.policy_version == "government-sources/1")
     raw = {
         **dict.fromkeys(_legacy_schema(dataset).names),
         "recommendation_id": "r-1",
@@ -395,9 +395,9 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
     module = import_module("spicy_regs.transforms.build_gao_reports")
     dataset = "gao_reports"
     added = ("major_rule_agency", "major_rule_rins", "major_rule_fr_citations")
-    [earlier] = EARLIER_POLICIES[dataset]
+    earlier = next(p for p in EARLIER_POLICIES[dataset] if p.policy_version == "government-sources/1")
     assert earlier.policy_version == "government-sources/1" != POLICIES[dataset].policy_version
-    assert [name for name in SUBJECT_SCHEMAS[dataset].names if name not in earlier.subject_schema.names] == list(added)
+    assert [name for name in SUBJECT_SCHEMAS[dataset].names if name not in earlier.subject_schema.names] == ["url", "source", *added]
     # The row as that generation's receipt holds it: the columns of the time, none of the later ones.
     published = module.COLUMNS[: module.COLUMNS.index("subject_terms_json") + 1]
     raw = {

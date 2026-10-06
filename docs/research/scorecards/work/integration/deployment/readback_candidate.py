@@ -50,7 +50,10 @@ def public_files(args, prepared, authenticated):
     if family != authenticated["family_entry"] or family["artifactDigest"] != prepared["generation"]["artifactDigest"]:
         raise ValueError("Public source pointer differs from the authenticated qualified generation")
     tables = family["tables"]
-    if set(tables) != {name + ".parquet" for name in prepared["counts"] if name != "scorecard_snapshots"}:
+    from spicy_regs.scorecards.etl import admitted_read_policies
+    selected = admitted_read_policies(tuple(prepared["counts"]), columns={
+        key.removesuffix(".parquet"): value["columns"] for key, value in tables.items()})
+    if set(tables) != {name + ".parquet" for name, policy in selected.items() if not policy.receipt_only}:
         raise ValueError("Public source table membership differs from the qualified preparation")
     paths, downloads = {}, []
     target = args.output / "members"
@@ -82,7 +85,7 @@ def public_files(args, prepared, authenticated):
     for name, expected in prepared["counts"].items():
         sql = (
             "SELECT count(*) AS rows FROM etl_receipts WHERE dataset='scorecard_snapshots' AND outcome='observed'"
-            if name == "scorecard_snapshots"
+            if selected[name].receipt_only
             else f'SELECT count(*) AS rows FROM "{name}"'
         )
         if local_rows(connection, sql) != [{"rows": expected}]:

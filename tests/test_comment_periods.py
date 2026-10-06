@@ -442,7 +442,7 @@ def test_each_register_record_and_document_sits_in_at_most_one_period(tmp_path):
     assert held and max(held.values()) == 1
     extended = _one_holding(periods, "2026-15000@2026-08-05")
     assert _holding(extended, "2026-18000@2026-09-02") and extended["close_date"] == "2026-10-05"
-    assert {p["actor_id"] for p in periods} == {ACTOR_ID} == {"spicy-regs:comment-periods:v13"}
+    assert {p["actor_id"] for p in periods} == {ACTOR_ID} == {"spicy-regs:comment-periods:v14"}
 
 
 def test_a_copy_reopened_after_the_register_window_closed_is_a_second_period(tmp_path):

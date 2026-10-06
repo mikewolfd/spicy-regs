@@ -7,8 +7,8 @@ from decimal import Decimal
 from collections.abc import Mapping
 import pyarrow as pa
 
-POLICY_VERSION = "scorecards-etl-v1"
-RATING_POLICY_VERSION = "scorecards-etl-ratings-v3"
+POLICY_VERSION = "scorecards-etl-v2"
+RATING_POLICY_VERSION = "scorecards-etl-ratings-v4"
 SOURCE_COLUMNS = {
     "scorecard_item_links": (
         "scorecard_id",
@@ -419,7 +419,21 @@ DOMAIN_COLUMNS = {
     ),
 }
 
+# Recorded source associations and resolution decisions are user-visible facts.
+# None of these observation identifiers changes the complete business key.
+for _name in DOMAIN_COLUMNS:
+    _context = ("source_snapshot_id",) if _name.endswith("_links") else ("snapshot_id",)
+    DOMAIN_COLUMNS[_name] += tuple(field for field in (*_context, "capture_id", "source_url", "source_path")
+                                  if field in SOURCE_COLUMNS[_name] and field not in DOMAIN_COLUMNS[_name])
+for _name in ("scorecard_item_links", "scorecard_member_links"):
+    DOMAIN_COLUMNS[_name] += tuple(field for field in SOURCE_COLUMNS[_name] if field not in DOMAIN_COLUMNS[_name])
+DOMAIN_COLUMNS["scorecard_snapshots"] = SOURCE_COLUMNS["scorecard_snapshots"]
+
 NATIVE_LISTS = {
+    "capture_ids_json": ("capture_ids", pa.list_(pa.string())),
+    "capture_roles_json": ("capture_roles", pa.list_(pa.struct([
+        ("capture_id", pa.string()), ("role", pa.string()), ("field_groups", pa.list_(pa.string())),
+    ]))),
     "aliases_json": ("aliases", pa.list_(pa.string())),
     "identifiers_json": ("identifiers", pa.list_(pa.struct([(k, pa.string()) for k in ("scheme", "value")]))),
     "periods_json": (
@@ -464,7 +478,7 @@ NATIVE_LISTS = {
     ),
 }
 BOOLEAN_FIELDS = frozenset({"is_primary", "counts_toward_metric"})
-INTEGER_FIELDS = frozenset({"congress", "session", "roll_number"})
+INTEGER_FIELDS = frozenset({"congress", "session", "roll_number", "candidate_count"})
 DECIMAL_FIELDS = frozenset({"value_number", "weight_number", "contribution_number"})
 # Weights and contributions keep their declared exact 18-digit scale. Ratings
 # retain validated decimal text: observed publisher JSON exceeds DuckDB's
@@ -506,7 +520,15 @@ def native_list(field: str, raw: str | None):
     entries = json.loads(raw, object_pairs_hook=_unique, parse_constant=_constant)
     if not isinstance(entries, list):
         raise ValueError(f"{field}: expected array, not null or scalar")
-    if field == "aliases_json":
+    if field == "capture_roles_json":
+        for entry in entries:
+            if (not isinstance(entry, dict) or set(entry) != {"capture_id", "role", "field_groups"}
+                or not all(isinstance(entry[k], str) and entry[k] for k in ("capture_id", "role"))
+                or not isinstance(entry["field_groups"], list)
+                or any(not isinstance(v, str) or not v for v in entry["field_groups"])):
+                raise ValueError("Capture roles require exact capture, role and ordered field groups")
+        return entries
+    if field in {"aliases_json", "capture_ids_json"}:
         if any(not isinstance(entry, str) or not entry for entry in entries):
             raise ValueError("Aliases require nonempty literal names")
         return entries
@@ -548,6 +570,13 @@ def map_source_row(name: str, row: Mapping) -> dict:
         raise ValueError(f"{name}: source schema changed; classify every field before migration")
     if any(v is not None and not isinstance(v, str) for v in row.values()):
         raise ValueError(f"{name}: source rows must retain their string/null shape")
+    if name in {"scorecard_item_links", "scorecard_member_links"}:
+        status = row.get("resolution_status")
+        if status not in {None, "resolved", "unresolved", "ambiguous", "conflict"}:
+            raise ValueError("Unknown scorecard resolution status")
+        targets = ("bioguide_id",) if name == "scorecard_member_links" else ("vote_id", "bill_id", "amendment_id")
+        if status != "resolved" and any(row.get(key) is not None for key in targets):
+            raise ValueError("Unresolved scorecard association contains a resolved target")
     mapped = dict(row)
     originals = {}
     for column in DOMAIN_COLUMNS[name]:

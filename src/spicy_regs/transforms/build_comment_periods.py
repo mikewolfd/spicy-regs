@@ -68,7 +68,8 @@ OUTPUT = "comment_periods.parquet"
 # are unchanged. Documents stating a close but no opening are counted as they are left out.
 # v13 (one bump over published v12): code unchanged; 124 periods drop a proceeding that proceedings v13 no longer
 # forms (a docket that was a rulemaking only through a withdrawn posting); ids, dates and anchors are unchanged.
-ACTOR_ID = "spicy-regs:comment-periods:v13"
+# v14 preserves every accepted source window before membership lists reduce to sets.
+ACTOR_ID = "spicy-regs:comment-periods:v14"
 
 COLUMNS = (
     "comment_period_id",
@@ -80,6 +81,7 @@ COLUMNS = (
     "source",
     "opened_by_artifact_ids_json",
     "evidence_ids_json",
+    "evidence_occurrences_json",
     *ATTESTATION_COLUMNS,
     "unresolved_fr_references_json",
     "anchor_kind",
@@ -111,6 +113,13 @@ class _Window:
     end: date
     source: str
     evidence_id: str
+    occurrence_ordinal: int = 0
+    source_ordinal: int | None = None
+    document_id: str | None = None
+    document_number: str | None = None
+    publication_date: str | None = None
+    rins: tuple[str | None, ...] = ()
+    rin_values_json: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +139,7 @@ class _Notice:
     rins: tuple[str, ...]
     extends: bool
     cites: tuple[tuple[int, int], ...]
+    register_context: dict | None = None
 
     @property
     def start(self) -> date:
@@ -290,8 +300,14 @@ def build_comment_periods(
     skipped: Counter[str] = Counter()
     skipped_examples: dict[str, list[str]] = defaultdict(list)
 
-    def window(start: object, end: object, source: str, evidence_id: object) -> _Window | None:
+    accepted_window_count = 0
+
+    def window(start: object, end: object, source: str, evidence_id: object, *,
+               source_ordinal: int, document_id: str | None = None,
+               document_number: str | None = None, publication_date: str | None = None,
+               rins: tuple[str | None, ...] = (), rin_values_json: str | None = None) -> _Window | None:
         """A source's stated window, or None when it states no usable one (counted by reason)."""
+        nonlocal accepted_window_count
         open_date, close_date = eastern_day(start), eastern_day(end)
         evidence = str(evidence_id or "").strip()
         if not evidence:
@@ -311,7 +327,10 @@ def build_comment_periods(
                 skipped_examples[reason].append(f"{evidence}: {open_date or '?'}..{close_date or '?'}")
             return None
         assert open_date is not None and close_date is not None
-        return _Window(open_date, close_date, source, evidence)
+        result = _Window(open_date, close_date, source, evidence, accepted_window_count,
+                         source_ordinal, document_id, document_number, publication_date, rins, rin_values_json)
+        accepted_window_count += 1
+        return result
 
     def stated_rins(value: object, table: str, row_id: object, column: str) -> set[str]:
         raw = parse_json_list(value, stats=json_stats, table=table, row_id=row_id, column=column)
@@ -325,7 +344,7 @@ def build_comment_periods(
     copy_windows_by_fr: dict[str, list[_Window]] = defaultdict(list)
     copy_rins_by_fr: dict[str, set[str]] = defaultdict(set)
     ambiguous_document_notices = 0
-    for row in iter_parquet_rows(
+    for source_ordinal, row in enumerate(iter_parquet_rows(
         required["documents"],
         columns=(
             "document_id",
@@ -337,7 +356,7 @@ def build_comment_periods(
             "comment_start_date",
             "comment_end_date",
         ),
-    ):
+    )):
         docket = normalize_regsgov_identifier(row.get("docket_id"))
         anchor = anchor_docket(docket)
         copy = copy_of(row, fr_index)
@@ -354,7 +373,10 @@ def build_comment_periods(
             row.get("comment_start_date") or row.get("posted_date"),
             row.get("comment_end_date"),
             REGULATIONS_GOV,
-            document_id,
+            document_id, source_ordinal=source_ordinal, document_id=document_id,
+            rins=tuple(normalize_rin(value) for value in parse_json_list(row.get("additional_rins"),
+                stats=json_stats, table="documents", row_id=document_id, column="additional_rins") or ()),
+            rin_values_json=row.get("additional_rins"),
         )
         if copy is not None:
             copy_rins_by_fr[copy].update(rins)
@@ -389,7 +411,7 @@ def build_comment_periods(
                 unresolved_by_fr[candidate].append(reference)
 
     shared_fr_notices = 0
-    for row in iter_parquet_rows(
+    for source_ordinal, row in enumerate(iter_parquet_rows(
         required["federal_register"],
         columns=(
             "document_number",
@@ -399,11 +421,17 @@ def build_comment_periods(
             "title",
             "abstract",
         ),
-    ):
+    )):
         document_number = str(row.get("document_number") or "")
         identity = fr_index.record_id(row)
         stated = (
-            window(row.get("publication_date"), row.get("comments_close_on"), REGISTER, identity)
+            window(row.get("publication_date"), row.get("comments_close_on"), REGISTER, identity,
+                   source_ordinal=source_ordinal, document_number=document_number,
+                   publication_date=str(row["publication_date"]),
+                   rins=tuple(normalize_rin(value) for value in parse_json_list(row.get("regulation_id_numbers_json"),
+                       stats=json_stats, table="federal_register", row_id=identity,
+                       column="regulation_id_numbers_json") or ()),
+                   rin_values_json=row.get("regulation_id_numbers_json"))
             if row.get("comments_close_on") and row.get("publication_date")
             else None
         )
@@ -424,6 +452,13 @@ def build_comment_periods(
         extends = extends_comment_period(row.get("title"))
         notices[identity] = _Notice(
             register_record=identity,
+            register_context={"source": REGISTER, "source_ordinal": source_ordinal,
+                              "document_id": None, "document_number": document_number,
+                              "publication_date": str(row["publication_date"]),
+                              "rins": [normalize_rin(value) for value in parse_json_list(row.get("regulation_id_numbers_json"),
+                                  stats=json_stats, table="federal_register", row_id=identity,
+                                  column="regulation_id_numbers_json") or ()],
+                              "rin_values_json": row.get("regulation_id_numbers_json")},
             windows=windows,
             docket_ids=tuple(sorted(dockets)),
             proceeding_ids=tuple(sorted(proceeding_ids)),
@@ -571,6 +606,18 @@ def _period_row(
         closes = [window.end for window in windows if window.source == source]
         return max(closes).isoformat() if closes else None
 
+    occurrences = [
+        {"source": window.source, "role": "stated_window", "evidence_id": window.evidence_id,
+         "source_ordinal": window.source_ordinal, "document_id": window.document_id,
+         "document_number": window.document_number, "publication_date": window.publication_date,
+         "rins": list(window.rins), "rin_values_json": window.rin_values_json,
+         "open_date": window.start.isoformat(), "close_date": window.end.isoformat()}
+        for window in sorted(windows, key=lambda window: window.occurrence_ordinal)
+    ]
+    for notice in notices:
+        if notice.register_record in quiet_records:
+            occurrences.append({**(notice.register_context or {}), "role": "notice_without_stated_window",
+                                "evidence_id": notice.register_record, "open_date": None, "close_date": None})
     return {
         "comment_period_id": stable_id("comment_period", canonical_json(opened_by)),
         "proceeding_ids_json": canonical_json(proceedings),
@@ -581,6 +628,7 @@ def _period_row(
         "source": "+".join(sorted({window.source for window in windows})),
         "opened_by_artifact_ids_json": canonical_json(opened_by),
         "evidence_ids_json": canonical_json(sorted({window.evidence_id for window in windows} | quiet_records)),
+        "evidence_occurrences_json": canonical_json(occurrences),
         "anchor_kind": "docket" if dockets else "proceeding" if proceedings else "none",
         "register_close_date": latest(REGISTER),
         "regulations_gov_close_date": latest(REGULATIONS_GOV),

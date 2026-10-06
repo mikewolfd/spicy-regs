@@ -57,7 +57,7 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         IDENTITIES[dataset],
         (*RECEIPT_COLUMNS[dataset], "raw_conversion_inputs", "input_metadata", "raw_source_record"),
-        policy_version="regulations-native-v1",
+        policy_version=("regulations-native-v2" if dataset in {"comment_periods", "lifecycle_events", "comments", "documents", "agenda_item_proceedings", "rule_targets", "proceedings", "regulatory_agenda_items"} else "regulations-native-v1"),
         nullable_identity_fields=NULLABLE_IDENTITIES.get(dataset, ()),
     )
 
@@ -83,16 +83,18 @@ def _qualified_rows(selected: ReceiptInput) -> Iterable[dict]:
     Absence, ambiguity, a different subject version or a different generation
     refuses; no public projection can substitute for missing retry evidence.
     """
+    from spicy_regs.etl_receipts import selected_subject_policy
+    admitted = selected_subject_policy(policy(selected.dataset), selected.subjects)
     with TemporaryDirectory(prefix="regulations-receipt-read-") as temporary:
         scoped = select_receipts(selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
         # Complete input consistency validation precedes any processor yield.
         # This stays bounded and catches a bad later row before an external fetch.
         for row in read_with_receipts(
-            selected.subjects, [scoped], policy(selected.dataset), generation_id=selected.generation_id
+            selected.subjects, [scoped], admitted, generation_id=selected.generation_id
         ):
             _processor_input(selected.dataset, row)
         yield from read_with_receipts(
-            selected.subjects, [scoped], policy(selected.dataset), generation_id=selected.generation_id
+            selected.subjects, [scoped], admitted, generation_id=selected.generation_id
         )
 
 
@@ -175,7 +177,8 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
                 or len(set(source_schema.names)) != len(source_schema.names)
                 or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
             raise ValueError("Exact regulatory source schema differs from the declared input fields")
-    if bulk and selected.dataset in {'dockets', 'documents', 'federal_register', 'fr_docket_links'}:
+    if bulk and selected.dataset in {'dockets', 'documents', 'federal_register', 'fr_docket_links'} and all(
+            pq.read_schema(path).equals(subject_schema(selected.dataset)) for path in selected.subjects):
         from spicy_regs import etl_bulk, regulations_bulk
         try:
             return regulations_bulk.materialize_internal(selected, destination, source_schema=source_schema)

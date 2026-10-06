@@ -24,6 +24,7 @@ from uuid import uuid4
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.earlier_receipt_policies import earlier_policies
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
@@ -54,9 +55,9 @@ from spicy_regs.transforms.parquet_rows import write_rows
 #: decision 2026-10-04): gao_reports ``major_rule_agency``, ``major_rule_rins`` and ``major_rule_fr_citations``.
 POLICY_VERSIONS = {
     "fcc_filings": "government-sources/3",
-    "gao_decisions": "government-sources/2",
+    "gao_decisions": "government-sources/3",
     "gao_recommendations": "government-sources/2",
-    "gao_reports": "government-sources/2",
+    "gao_reports": "government-sources/3",
 }
 POLICIES = {
     dataset: DatasetPolicy(
@@ -83,11 +84,14 @@ def _without(dataset: str, *columns: str) -> DatasetPolicy:
 #: original rows; every write uses POLICIES. On 2026-10-04 gao-reports published gao_decisions without
 #: ``b_numbers_truncated`` and gao-recommendations published without ``first_seen`` and ``last_seen``; gao-reports
 #: published gao_reports to 2026-10-05 without the three major-rule letter columns, which no receipt held either.
-EARLIER_POLICIES = {
+EARLIER_POLICIES: dict[str, tuple[DatasetPolicy, ...]] = {
     "gao_decisions": (_without("gao_decisions", "b_numbers_truncated"),),
     "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),
     "gao_reports": (_without("gao_reports", "major_rule_agency", "major_rule_rins", "major_rule_fr_citations"),),
 }
+# Exact earlier GAO policies restore private source rows without relabeling them.
+for _name in ("gao_decisions", "gao_reports"):
+    EARLIER_POLICIES[_name] = earlier_policies(POLICIES[_name])
 _FCC_HISTORY = json.loads(Path(__file__).parents[1].joinpath("navigation_policy_history.json").read_text())
 EARLIER_POLICIES["fcc_filings"] = tuple(
     DatasetPolicy.from_descriptor(_FCC_HISTORY[key]) for key in ("fcc_filings", "fcc_filings_v2")

@@ -176,7 +176,7 @@ def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
                 assert receipt == prior
             else:
                 assert_full_prior_history(receipt, prior)
-    assert "text_extraction_status" not in pq.read_schema(subject).names
+    assert "text_extraction_status" in pq.read_schema(subject).names
 
 
 def test_pdf_requires_receipt_validation_before_fetch(tmp_path):
@@ -235,7 +235,7 @@ def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
         "ok",
         '[{"status":"ok"}]',
     )
-    assert "pdf_extraction_results_json" not in pq.read_schema(subject).names
+    assert "pdf_extraction_results_json" in pq.read_schema(subject).names
     [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
     [prior_receipt] = [r for r in pq.read_table(prior.receipts).to_pylist() if r['outcome'] == 'accepted']
     [fresh_receipt] = [r for r in pq.read_table(fresh.receipts).to_pylist() if r['outcome'] == 'accepted']

@@ -23,10 +23,10 @@ def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tm
     files = write_family(directory, before)
     assert read_family(directory, SOURCE_NAMES) == before
     assert not list(directory.glob(".scorecard-etl-*"))
-    assert not (directory / "scorecard_snapshots.parquet").exists()
+    assert (directory / "scorecard_snapshots.parquet").exists()
     for path in files:
         names = pq.read_schema(path).names
-        assert not {"snapshot_id", "capture_id", "source_url", "source_path", "observed_at"} & set(names)
+        assert {"capture_id", "source_url", "source_path"} <= set(names)
     target = tmp_path / "generation"
     artifact = build_generation(
         target,
@@ -81,9 +81,8 @@ def test_exact_readback_refuses_duplicate_processing_only_source_identity(tmp_pa
     before = tables(edition("2025"))
     before["scorecard_snapshots"].append(deepcopy(before["scorecard_snapshots"][0]))
     directory = tmp_path / "candidate"
-    write_family(directory, before)
-    with pytest.raises(ValueError):
-        verify_family_readback(directory, before)
+    with pytest.raises(ValueError, match="Duplicate or ambiguous"):
+        write_family(directory, before)
 
 
 @pytest.mark.parametrize("corruption", ["subject", "receipt", "generation", "duplicate", "missing"])
@@ -365,14 +364,12 @@ def test_historical_rating_policy_is_validated_before_exact_current_rewrite(
     )
     assert old["policy_version"] == rating.policy_version
     assert old["record_id"] == new["record_id"] and old["witnesses"] == new["witnesses"]
-    assert old["processing_json"] == new["processing_json"]
-    assert (old["subject_version"] == new["subject_version"]) is (numeric is None)
+    assert old["subject_version"] != new["subject_version"]
+    assert new["policy_version"] == "scorecards-etl-ratings-v4"
     from spicy_regs.etl_receipts import _digest, decode_exact_json
 
-    if numeric is None:
-        assert new == old
-    else:
-        assert new["policy_version"] == "scorecards-etl-ratings-v3"
+    if True:  # Adding recorded snapshot/capture fields changes every historical subject.
+        assert new["policy_version"] == "scorecards-etl-ratings-v4"
         assert new["generation_id"] != old["generation_id"]
         assert decode_exact_json(new["diagnostic_json"]) == {
             "prior_receipt": {
@@ -418,14 +415,19 @@ def test_decimal_to_text_cast_cannot_reinterpret_historical_receipt_hashes(tmp_p
     directory = tmp_path / "historical"
     path = directory / "scorecard_member_ratings.parquet"
     table = pq.read_table(path)
-    pq.write_table(table.cast(etl.POLICIES["scorecard_member_ratings"].subject_schema, safe=True), path)
+    current = etl.POLICIES["scorecard_member_ratings"].subject_schema
+    # A schema cast cannot add the newly promoted context; model an attempted
+    # unqualified null fill as well as the historical decimal-to-text cast.
+    for field in current:
+        if field.name not in table.schema.names:
+            table = table.append_column(field, pa.nulls(len(table), type=field.type))
+    pq.write_table(table.cast(current, safe=True), path)
     subjects = {
         name: [] if etl.POLICIES[name].receipt_only else [directory / (name + ".parquet")] for name in SOURCE_NAMES
     }
     # Casting the old physical file cannot replace a receipt-checked source
     # reconstruction: its padded decimal text differs from the source lexeme.
-    rating = replace(etl.POLICIES["scorecard_member_ratings"], policy_version="scorecards-etl-v1")
-    policies = [rating if name == "scorecard_member_ratings" else etl.POLICIES[name] for name in SOURCE_NAMES]
+    policies = [etl.POLICIES[name] for name in SOURCE_NAMES]
     with pytest.raises(ValueError, match="Missing, ambiguous or reused subject receipt"):
         validate_receipt_bundle(subjects, [directory / "etl_receipts.parquet"], policies)
 
@@ -505,8 +507,9 @@ def test_changed_scorecard_row_references_only_direct_predecessor(tmp_path, chan
             "processing_sha256": _digest(decode_exact_json(old["processing_json"])),
         }
     }
-    assert (new["subject_version"] != old["subject_version"]) is (change == "subject")
-    assert new["processing_json"] != old["processing_json"]
+    assert new["subject_version"] != old["subject_version"]
+    # A public context change also remains visible in the exact raw_source receipt.
+    assert (new["processing_json"] != old["processing_json"]) is (change == "subject")
     fresh = tmp_path / "fresh-without-prior"
     write_family(fresh, raw)
     fresh_rating = next(

@@ -41,6 +41,18 @@ def earlier_policies(policy):
             raise ValueError("Current FCC policy differs from the exact declared policy")
         history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
         return tuple(DatasetPolicy.from_descriptor(history[key]) for key in ("fcc_filings_v2", "fcc_filings"))
+    context_history = json.loads(files("spicy_regs").joinpath("source_context_policy_history.json").read_text())
+    if policy.dataset in context_history and policy.policy_version in {
+        "regulations-native-v2", "courts/2", "scorecards-etl-v2", "scorecards-etl-ratings-v4", "government-sources/3",
+    }:
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/" + policy.dataset + ".json").read_text()))
+        if policy.descriptor() != expected.descriptor():
+            raise ValueError("Current source-context policy differs from the exact declared policy")
+        prior = DatasetPolicy.from_descriptor(context_history[policy.dataset])
+        if prior.dataset != policy.dataset or (not prior.receipt_only and prior.identity_fields != policy.identity_fields):
+            raise ValueError("Source-context migration changes a historical business identity")
+        return (prior, *earlier_policies(prior))
     history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
     if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2"}:
         earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
@@ -62,7 +74,7 @@ def earlier_policies(policy):
         if any(p.dataset != policy.dataset or p.policy_version != version for version, p in policies.items()):
             raise ValueError("Historical scorecard policy identity differs")
         if policy.policy_version == "scorecards-etl-ratings-v3":
-            current = json.loads(files("spicy_regs").joinpath("etl_policies/scorecard_member_ratings.json").read_text())
+            current = context_history[policy.dataset]
             expected = DatasetPolicy.from_descriptor(current)
             admitted = tuple(policies[version] for version in versions)
         else:
