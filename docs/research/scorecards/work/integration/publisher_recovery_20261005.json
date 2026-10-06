@@ -2445,8 +2445,8 @@
         "category": "source_or_identity_qualification",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "Nine ASCF original chamber PDFs are recovered for 2003–2010, newest recovered being 2010 Senate. The catalog offers the 113th Congress edition, whose body is missing. File recovery and representative rows do not establish complete tables; ASC and ASCF source names remain distinct.",
-      "next_action": "Keep the original American Security Council candidate unverified. The retained ASCF chamber originals are qualified under the distinct american_security_council_foundation publisher. Seek an attributable original ASC edition from 2000 onward or explicit publisher-succession evidence before relating the two identities; retain older leads in the catalogue.",
+      "finding": "The archived ASCF first-party history page distributes the retained 2005 Fisher history. It reports a June 4, 1997 ASC-to-ASCF merger and subsequent renaming to ASC; leadership labels run through 2002. This establishes publisher-reported history, not legal equivalence, retirement or a new ASC scorecard. The separate ASCF chamber qualifications retain their original attribution.",
+      "next_action": "Record the publisher-reported merger and renaming from the 2005 history, pages 1, 38 and 61, while keeping ASC and ASCF IDs, stages and qualifications separate. Keep ASC active and unverified; seek an original ASC-named scorecard from 2000 onward. Do not repeat the completed history-page route or infer an alias or 1997 retirement.",
       "recovery": {
         "integration_state": "private_original_documents_and_representative_observations_only",
         "production_qualified": false,
@@ -3152,7 +3152,12 @@
           "finding": "All nine PDF file pins match, but no complete member/cell grid was independently qualified. Newest recovered is 2010 Senate; newest offered is the 113th Congress edition with an unrecovered body. ASC and ASCF names remain distinct."
         }
       ],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/american_security_council/asc-attribution-followup-20261005.json",
+        "sha256": "dd1f6c4d4d67a4d0a4e7d872444197ef95e2b2e76016b54367949b0a0ff50b9f",
+        "byte_size": 11723
+      }
     },
     {
       "publisher_id": "americans_constitutional_action",
@@ -18363,8 +18368,8 @@
         "category": "catalog_or_source_discovery",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "National magazine originals and retrieval routes are recovered without the national House/Senate Votes section. The complete 2024 regional metric-free grid belongs to North Central States Regional Council of Carpenters under its own identity. Magazine and election percentages do not establish national ratings.",
-      "next_action": "Keep the national source unverified and target UMD Publications object 333136 for the actual magazine voting section; preserve the regional source separately with no national alias.",
+      "finding": "UMD identifies national The Carpenter print holdings dated 2000–2015. The newest inspected holding is Vol. 135, No. 1 (2015), object 343929, identifier 13.40.21, Box 40/Folder 21.0. The inspected catalogue leaves expose no original scan or House/Senate Votes rating section. Holdings are discovery leads; regional scorecards remain separately attributed.",
+      "next_action": "Obtain and inspect national The Carpenter Vol. 135, No. 1 (2015), UMD object 343929, identifier 13.40.21, Box 40/Folder 21.0, or another specifically identified 2000+ voting-section issue from subseries 334779. The catalogue PDF export is a finding aid, not an original magazine or rating grid. Keep the national publisher unverified and regional sources separate.",
       "recovery": {
         "production_qualified_by_this_task": false,
         "qualified_editions": [],
@@ -19405,7 +19410,12 @@
         "recovery.archive_catalog": "/archive_catalog"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/carpenters/national-followup-v2.json",
+        "sha256": "674c4a01e98ec9df4d24fcf8221af75789c68b39a1edeef14c7194dac233c9f0",
+        "byte_size": 14877
+      }
     },
     {
       "publisher_id": "united_church_christ",
