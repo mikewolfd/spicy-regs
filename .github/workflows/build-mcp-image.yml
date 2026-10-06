@@ -1,0 +1,65 @@
+name: Build MCP reader image (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: Exact source commit to build; must match the dispatched ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+      IMAGE_TAG: spicy-regs-reader:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact source
+        shell: bash
+        run: |
+          SOURCE_STATUS=$(git status --porcelain)
+          mkdir image-output
+          printf '%s\n' "$EXPECTED_SOURCE_SHA" > image-output/expected-source-commit.txt
+          git rev-parse HEAD > image-output/source-commit.txt
+          git rev-parse HEAD^{tree} > image-output/source-tree.txt
+          test "$EXPECTED_SOURCE_SHA" = "$(git rev-parse HEAD)"
+          test -z "$SOURCE_STATUS"
+      - name: Build the existing locked reader image
+        shell: bash
+        run: |
+          set -o pipefail
+          docker build --platform linux/amd64 --provenance=false \
+            -f deploy/cloudflare/Dockerfile -t "$IMAGE_TAG" . \
+            2>&1 | tee image-output/build.log
+      - name: Record installed runtime and image
+        shell: bash
+        run: |
+          set -o pipefail
+          docker image inspect "$IMAGE_TAG" > image-output/image-inspect.json
+          docker run --rm --entrypoint python "$IMAGE_TAG" \
+            /app/lock/lock_pins.py check /app/lock/uv.lock \
+            2>&1 | tee image-output/lock-check.log
+          docker run --rm --entrypoint python "$IMAGE_TAG" -c \
+            'import json; from spicy_regs.fec_release import runtime_consumer; print(json.dumps(runtime_consumer(None), sort_keys=True))' \
+            > image-output/installed-consumer.json 2> image-output/runtime-stderr.log
+      - name: Save the same image for registry publication
+        shell: bash
+        run: |
+          set -o pipefail
+          docker image save "$IMAGE_TAG" | gzip -1 > image-output/image.tar.gz
+          sha256sum image-output/image.tar.gz > image-output/image.tar.gz.sha256
+      - name: Retain image and build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-reader-image-${{ github.sha }}
+          path: image-output/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
