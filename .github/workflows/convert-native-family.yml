@@ -34,7 +34,7 @@ concurrency:
 jobs:
   convert:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 360
     env:
       FAMILY: ${{ inputs.family }}
       ENTRY_SHA256: ${{ inputs.expected_entry_sha256 }}
@@ -86,7 +86,7 @@ jobs:
           WHEEL=$(uv run --frozen python -c 'from importlib.metadata import version; print(version("spicy-docs"))')
           # Leave time for publication and artifact retention before the job deadline.
           /usr/bin/time -v -o output/logs/prepare-resources.txt \
-            timeout --signal=TERM --kill-after=30s 180m \
+            timeout --signal=TERM --kill-after=30s 240m \
             uv run --frozen python scripts/convert_family_to_native.py "$FAMILY" \
               --allow "$FAMILY" --work "$GITHUB_WORKSPACE/output/native/$FAMILY" \
               --expect-main "$(git rev-parse HEAD)" --expect-spicy-docs "$WHEEL" --remote origin \
