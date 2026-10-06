@@ -63,6 +63,7 @@ def test_boundaries_column_collisions_and_no_whole_row_index(tmp_path, monkeypat
              "raw": {"value": [i, None, "\x1b" if i % 5 == 4 else "plain"]}} for i in range(4003)]
     subject, receipts = write_dataset(((row, ReceiptContext("g1", str(i), "test/1", [WITNESS]))
                                       for i, row in enumerate(rows)), tmp_path / "written", policy)
+    assert subject is not None
     expected = list(read_with_receipts([subject], [receipts], policy, generation_id="g1", bulk=False))
     load = etl_bulk._load_receipts
     referred = []
@@ -91,6 +92,7 @@ def test_truncated_replay_cannot_replace_a_complete_processing_file(tmp_path, mo
     policy = DatasetPolicy("items", schema, ("id",), ())
     subject, receipts = write_dataset((({"id": i}, ReceiptContext("g1", str(i), "test/1", [WITNESS]))
                                       for i in range(4003)), tmp_path / "written", policy)
+    assert subject is not None
     target = tmp_path / "processing.parquet"
     pq.write_table(pa.table({"id": [999]}, schema=schema), target)
     prior = target.read_bytes()
