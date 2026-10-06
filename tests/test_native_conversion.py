@@ -834,13 +834,15 @@ def test_split_legislative_members_convert_and_restore_without_collapsing_partit
 
 
 @pytest.mark.parametrize("damage", [
-    "metadata", "field-metadata", "nullability", "column-order", "drop-empty", "extra-empty", "move-rows", "type", "column", "layout",
+    "metadata", "field-metadata", "nullability", "column-order", "row-order", "drop-empty", "extra-empty",
+    "move-rows", "type", "column", "layout",
 ])
 def test_split_restoration_must_preserve_each_member_before_publication(tmp_path, monkeypatch, bucket, damage):
     """An unchanged union/count is insufficient: partition membership and each footer belong to the source."""
     from dataclasses import replace
 
     old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    retained_first = tmp_path / "old/bill_sections/congress=118/part-000000.parquet"
     real = conversion._convert_rollup
 
     def broken(*args, **kwargs):
@@ -861,6 +863,10 @@ def test_split_restoration_must_preserve_each_member_before_publication(tmp_path
                 pq.write_table(table.cast(pa.schema(fields, metadata=table.schema.metadata)), first)
             elif damage == "column-order":
                 pq.write_table(table.select(list(reversed(table.column_names))), first)
+            elif damage == "row-order":
+                pq.write_table(table.take(list(reversed(range(table.num_rows)))), first)
+                # Count, schema, metadata and multiset stay identical; only source order changes.
+                assert not conversion._has_differences(conversion._differences(first, retained_first))
             elif damage == "drop-empty":
                 empty.unlink()
             elif damage == "extra-empty":
@@ -987,9 +993,7 @@ def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
     from tests.test_legislative_receipts import retained, row
 
-    # Empty processing tables have wider legacy footers; this fake-bucket test
-    # exercises receipt ownership/restoration, not the production shrink guard.
-    monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
+    monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
     cls = conversion._rollup_class(family)
     reads_key = read_dataset + ".parquet"
     assert reads_key in cls.source_outputs
