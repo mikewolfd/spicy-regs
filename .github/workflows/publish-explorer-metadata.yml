@@ -13,6 +13,7 @@ on:
       - 'scripts/publish_explorer_metadata.py'
       - 'tests/test_explorer_metadata.py'
       - 'tests/test_explorer_publications.py'
+      - 'tests/test_column_navigation.py'
       - '.github/workflows/publish-explorer-metadata.yml'
   workflow_dispatch:
   # Also catches workstation publications and new publishing workflows. GitHub
@@ -134,7 +135,7 @@ jobs:
       - name: Validate metadata behavior
         env:
           PYTHONPATH: src
-        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py tests/test_explorer_publications.py -q
+        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py tests/test_explorer_publications.py tests/test_column_navigation.py -q
       - name: Publish only the explorer metadata bundle
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

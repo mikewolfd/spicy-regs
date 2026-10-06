@@ -55,7 +55,18 @@ def test_full_selected_receipts_cover_new_keys_and_populated_attributes():
         assert join.kind in {"complete", "scope", "design", "empty"}
         assert 0 <= join.measurement["max_parent_multiplicity"] <= 1
         assert join.measurement["parent_duplicate_keys"] == 0
-        assert all('/generations/' in url for key in ['child_urls','parent_urls'] for url in join.measurement[key])
+        for side in ['child','parent']:
+            urls=join.measurement[side+'_urls']
+            if all('/generations/' in url for url in urls):
+                continue
+            selected=join.measurement['selected_inputs'][side]
+            assert urls == [m['url'] for m in selected['members']]
+            assert selected['publicationIdentity'].startswith('sha256:')
+            if any(m.get('etag') for m in selected['members']):
+                assert join.measurement['mutable_versions_checked_before_after'] is True
+                assert all(m['etag'] and m['byteSize'] > 0 for m in selected['members'])
+            else:
+                assert all('/materialized/rulemaking/snapshots/snapshot_' in url for url in urls)
 
 
 def test_changed_printing_keys_do_not_inherit_old_measurements():

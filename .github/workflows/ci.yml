@@ -94,6 +94,9 @@ jobs:
       - name: Check descriptions vs schema
         run: uv run spicy-regs-dict check
 
+      - name: Verify catalog descriptions fit the MCP reply budget
+        run: uv run --extra comments-reader pytest tests/test_chaos_r6_server.py::test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cut -q
+
       - name: Verify generated table pages are up to date
         run: |
           uv run spicy-regs-dict generate

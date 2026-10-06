@@ -32,6 +32,7 @@ _MAINTAINER_PATH = re.compile(r"(?<![\w/.~])(?:~|/[A-Za-z][\w.-]*)/[^`\s]*")
 BASELINE_DATE = "2026-09-26"
 BASELINE_RECEIPTS = (
     "src/spicy_regs/join_measurements.json",
+    "docs/evidence/column-navigation-2026-10-06.json",
     "docs/evidence/explorer-joins-2026-10-03.json",
     "docs/evidence/scorecard-navigation-2026-10-03.json",
     "docs/evidence/scorecard-source-joins-2026-10-04.json",
@@ -929,6 +930,49 @@ JOINS: tuple[Join, ...] = (
           expected_cardinality="one"),
 )
 
+
+# Column inventory candidates checked against all selected key columns, not row samples.
+JOINS += (
+    _join('amendments', ('amended_bill_id',), 'congress_bills', ('bill_id',),
+          203, 0, 'complete', 'Bill that the amendment targets. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('amendments', ('amended_amendment_id',), 'amendments', ('amendment_id',),
+          73, 0, 'complete', 'Amendment that this amendment modifies; null means no such target is supplied. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('committees', ('parent_system_code',), 'committees', ('system_code',),
+          40, 0, 'complete', 'Parent of this committee or subcommittee. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('committee_assignments', ('parent_system_code',), 'committees', ('system_code',),
+          19, 0, 'complete', 'Parent committee of the assigned committee. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('bill_committee_activities', ('parent_system_code',), 'committees', ('system_code',),
+          29, 0, 'complete', 'Parent committee of the committee recording activity. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('bill_committee_activities', ('system_code',), 'committees', ('system_code',),
+          255, 0, 'complete', 'Committee recording activity on the bill. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('committee_reports', ('recital_bill_id',), 'congress_bills', ('bill_id',),
+          153, 0, 'complete', 'Bill the report cover says it accompanies; retain the recital separately from other attachments. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('cbo_cost_estimates', ('title_bill_id',), 'congress_bills', ('bill_id',),
+          13128, 0, 'complete', 'Bill identified by the title reader; retain its documented extraction caveats. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('bill_vote_references', ('congress', 'chamber', 'session', 'roll_number'), 'roll_call_votes', ('congress', 'chamber', 'session', 'roll_number'),
+          11726, 0, 'complete', 'All four fields identify the vote. Congress alone is a filter. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('agency_lifecycle_stats', ('agency_code',), 'agency_stats', ('agency_code',),
+          163, 0, 'complete', 'Null agency codes represent all agencies together and are excluded. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('rulemaking_lifecycles', ('agency_code',), 'agency_stats', ('agency_code',),
+          170, 0, 'complete', 'Agency assigned to the proceeding; preserve mapping provenance. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('comments_index', ('docket_id',), 'dockets', ('docket_id',),
+          60296, 28, 'scope', 'Partial navigation: 28 selected docket IDs have no destination. Do not claim complete coverage. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+    _join('comments_index', ('agency_code',), 'agency_stats', ('agency_code',),
+          180, 0, 'complete', 'Receiving agency of the counted comments. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
+          expected_cardinality='one'),
+)
 
 # New full-key/attribute baselines include raw-row cardinality and immutable input
 # URLs. Keep historical declarations above as lineage; replace their measured
