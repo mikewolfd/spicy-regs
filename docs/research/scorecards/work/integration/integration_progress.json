@@ -8,7 +8,7 @@
     "integration_qualifications.json": "bf9491164bb680d93c71ecb61bf3dd7abbf9b2f6f18349a2bb6cc49b44fa3c60",
     "publisher_survey_20261005.json": "7e7431dc37bf8564d16df4f044498e1176f7e654cc0cd694b8bdb8a07944c9c1",
     "publisher_implementation_20261005.json": "02c472173923a4a2f3438155e36b76b83a6dd1d9210504ffec2a76abedbdb2f5",
-    "publisher_recovery_20261005.json": "e902b551a304fb28a5a0f7825e9249ea4515e651c151ca144bccdbd4d4f256b3",
+    "publisher_recovery_20261005.json": "49ebb9b78240ea23756fb984d2e1e31868410e40e986cf19ff3a03a88ae37c01",
     "publisher_recovery_api_20261005.json": "a56098666af454d924dc15a63832fc1fd40dbd7b74053e35518548667b64a1d6",
     "publisher_work_policy.json": "09224c662959e2505eccfbda16ee8042815eb7243276a17049a4416029d70d92"
   },
@@ -5592,7 +5592,7 @@
         "observed_on": "2026-10-05",
         "source_file": "publisher_recovery_20261005.json",
         "finding": "Nine ASCF original chamber PDFs are recovered for 2003–2010, newest recovered being 2010 Senate. The catalog offers the 113th Congress edition, whose body is missing. File recovery and representative rows do not establish complete tables; ASC and ASCF source names remain distinct.",
-        "next_action": "Reconcile every source-defined member and cell in the retained 2010 Senate PDF before qualifying an explicit reader; retain the exact 2010 House and 112th/113th Congress retrieval leads separately.",
+        "next_action": "Keep the original American Security Council candidate unverified. The retained ASCF chamber originals are qualified under the distinct american_security_council_foundation publisher. Seek an attributable original ASC edition from 2000 onward or explicit publisher-succession evidence before relating the two identities; retain older leads in the catalogue.",
         "reported_research_result": {
           "task_result": "original-recovered-partial"
         },
@@ -5679,7 +5679,7 @@
           "byte_size": 14068
         }
       },
-      "next_action": "Reconcile every source-defined member and cell in the retained 2010 Senate PDF before qualifying an explicit reader; retain the exact 2010 House and 112th/113th Congress retrieval leads separately."
+      "next_action": "Keep the original American Security Council candidate unverified. The retained ASCF chamber originals are qualified under the distinct american_security_council_foundation publisher. Seek an attributable original ASC edition from 2000 onward or explicit publisher-succession evidence before relating the two identities; retain older leads in the catalogue."
     },
     {
       "publisher_id": "americans_constitutional_action",
@@ -10262,7 +10262,7 @@
         "observed_on": "2026-10-05",
         "source_file": "publisher_recovery_20261005.json",
         "finding": "The original 2000 text and methodology cover votes only through July 27, with all six rating-chart GIFs missing. A separate 1997 original filing exhibit contains both chamber charts and needs complete cell qualification. ARA remains separately attributed.",
-        "next_action": "Keep 2000 partial and retain the six exact missing GIF names; use the retained 1997 FEC exhibit as a separate bounded reader candidate only after complete page/member/cell reconciliation.",
+        "next_action": "Recover the six missing chart GIFs for the retained partial 2000 edition. Catalogue the Baylor Mike Morrison papers, Box 35, File 180, Seniority/NCSC dated 2000, as a holding lead. The bounded recovery found no chart bodies; the 1997 FEC exhibit remains catalogue-only under the 2000 work priority.",
         "reported_research_result": {
           "recovery_status": "original_1997_scan_recovered_and_original_2000_text_recovered_without_rating_charts"
         },
@@ -10356,7 +10356,7 @@
           "byte_size": 8473
         }
       },
-      "next_action": "Keep 2000 partial and retain the six exact missing GIF names; use the retained 1997 FEC exhibit as a separate bounded reader candidate only after complete page/member/cell reconciliation."
+      "next_action": "Recover the six missing chart GIFs for the retained partial 2000 edition. Catalogue the Baylor Mike Morrison papers, Box 35, File 180, Seniority/NCSC dated 2000, as a holding lead. The bounded recovery found no chart bodies; the 1997 FEC exhibit remains catalogue-only under the 2000 work priority."
     },
     {
       "publisher_id": "national_farmers_organization",

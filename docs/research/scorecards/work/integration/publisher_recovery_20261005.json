@@ -2446,7 +2446,7 @@
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
       "finding": "Nine ASCF original chamber PDFs are recovered for 2003–2010, newest recovered being 2010 Senate. The catalog offers the 113th Congress edition, whose body is missing. File recovery and representative rows do not establish complete tables; ASC and ASCF source names remain distinct.",
-      "next_action": "Reconcile every source-defined member and cell in the retained 2010 Senate PDF before qualifying an explicit reader; retain the exact 2010 House and 112th/113th Congress retrieval leads separately.",
+      "next_action": "Keep the original American Security Council candidate unverified. The retained ASCF chamber originals are qualified under the distinct american_security_council_foundation publisher. Seek an attributable original ASC edition from 2000 onward or explicit publisher-succession evidence before relating the two identities; retain older leads in the catalogue.",
       "recovery": {
         "integration_state": "private_original_documents_and_representative_observations_only",
         "production_qualified": false,
@@ -11634,7 +11634,7 @@
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
       "finding": "The original 2000 text and methodology cover votes only through July 27, with all six rating-chart GIFs missing. A separate 1997 original filing exhibit contains both chamber charts and needs complete cell qualification. ARA remains separately attributed.",
-      "next_action": "Keep 2000 partial and retain the six exact missing GIF names; use the retained 1997 FEC exhibit as a separate bounded reader candidate only after complete page/member/cell reconciliation.",
+      "next_action": "Recover the six missing chart GIFs for the retained partial 2000 edition. Catalogue the Baylor Mike Morrison papers, Box 35, File 180, Seniority/NCSC dated 2000, as a holding lead. The bounded recovery found no chart bodies; the 1997 FEC exhibit remains catalogue-only under the 2000 work priority.",
       "recovery": {
         "evidence_policy": "hash_only",
         "raw_capture_visibility": "private",
