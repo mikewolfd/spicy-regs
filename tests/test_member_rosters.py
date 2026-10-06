@@ -29,7 +29,7 @@ def reader(raw, *, expected=None):
 
     def respond(request):
         requests.append(str(request.url))
-        return httpx.Response(200, content=raw, headers={"content-type": "application/json"})
+        return httpx.Response(200, stream=httpx.ByteStream(raw), headers={"content-type": "application/json"})
 
     return ReviewedMemberRosters(
         budget=LegislatorsBudget(4, 1024 * 1024, 10.0, 0.0), selection=selection,

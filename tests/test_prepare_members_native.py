@@ -15,7 +15,6 @@ from spicy_regs.generations import verify_generation
 from spicy_regs.sources import publication
 from spicy_regs.sources.member_rosters import ReviewedMemberRosters, SELECTION
 from tests.generation_fakes import Store
-from tests.test_generation_publication import build
 from tests.test_member_rosters import capture
 
 
@@ -38,17 +37,6 @@ def test_preparation_refuses_missing_or_different_published_prior_before_build(t
 
 def test_complete_preparation_restores_all_tables_and_retains_captured_prior(tmp_path, monkeypatch):
     keys = ("members.parquet", "member_terms.parquet", "member_party_affiliations.parquet")
-    old, artifact = build(tmp_path, family="members", keys=keys)
-    prior = publication.publish_generation(old, client=Store(), bucket="test", prior_index=publication.empty_index())
-    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
-    observations = []
-
-    def load_index(url):
-        observations.append(url)
-        return prior
-
-    monkeypatch.setattr(publication, "load_index", load_index)
-    monkeypatch.setattr(publication, "load_family_root", lambda url, entry: ((old / "artifact.json").read_bytes(), artifact.root))
     bodies = {"current": capture(), "historical": capture().replace(b"A000001", b"B000002").replace(b"S001", b"S002")}
     supplied = json.loads(SELECTION.read_bytes())
     for name, member in supplied.items():
@@ -60,7 +48,36 @@ def test_complete_preparation_restores_all_tables_and_retains_captured_prior(tmp
         requests.append(str(request.url))
         roster = "current" if str(request.url).endswith("-current.json") else "historical"
         supplied[roster]["sha256"] = "0" * 64  # caller mutation cannot change consumed pins or summary
-        return httpx.Response(200, content=bodies[roster], headers={"content-type": "application/json"})
+        return httpx.Response(200, stream=httpx.ByteStream(bodies[roster]), headers={"content-type": "application/json"})
+
+    def initial_response(request):
+        roster = "current" if str(request.url).endswith("-current.json") else "historical"
+        return httpx.Response(200, stream=httpx.ByteStream(bodies[roster]), headers={"content-type": "application/json"})
+
+    initial_owner = ReviewedMemberRosters(
+        budget=LegislatorsBudget(4, 1024 * 1024, 10.0, 0.0), selection=consumed,
+        transport=httpx.MockTransport(initial_response),
+    )
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    initial = preparation.CompleteRosterMembers(roster_owner=initial_owner, output_dir=tmp_path / "old", skip_upload=True)
+    with initial_owner:
+        initial.run()
+    (old,) = (tmp_path / "old" / "generations").iterdir()
+    artifact = verify_generation(old)
+    assert initial.source_evidence is not None
+    prior = publication.publish_generation(
+        old, client=Store(), bucket="test", prior_index=publication.empty_index(),
+        evidence_directories=(initial.source_evidence.artifact_dir,),
+    )
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://test.invalid")
+    observations = []
+
+    def load_index(url):
+        observations.append(url)
+        return prior
+
+    monkeypatch.setattr(publication, "load_index", load_index)
+    monkeypatch.setattr(publication, "load_family_root", lambda url, entry: ((old / "artifact.json").read_bytes(), artifact.root))
 
     owner = ReviewedMemberRosters(
         budget=LegislatorsBudget(4, 1024 * 1024, 10.0, 0.0), selection=supplied,
