@@ -1,0 +1,12 @@
+{
+  "current": {
+    "url": "https://raw.githubusercontent.com/mikewolfd/congress-legislators/edbc8ac9bf1b74de72ca6c673b7bcec780b46b40/legislators-current.json",
+    "sha256": "e4dbbfb665c059e1c748fca85bad60e7eba2b5de704bcd7b8791908195f38aeb",
+    "bytes": 1469059
+  },
+  "historical": {
+    "url": "https://raw.githubusercontent.com/mikewolfd/congress-legislators/edbc8ac9bf1b74de72ca6c673b7bcec780b46b40/legislators-historical.json",
+    "sha256": "5bc614370d4f880944521477dae2a0f53f8e0ad676a470911c61b39d0aef2e31",
+    "bytes": 13483039
+  }
+}

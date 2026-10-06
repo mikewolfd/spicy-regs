@@ -13944,6 +13944,11 @@
         "column_name": "current_term_district",
         "column_type": "VARCHAR",
         "description": "District of the latest term; absent for a Senate term."
+      },
+      {
+        "column_name": "name_nickname",
+        "column_type": "VARCHAR",
+        "description": "The crosswalk's own name.nickname for the person, as it spells it; NULL means the crosswalk states none, not that the person has none."
       }
     ],
     "subject": "congress",

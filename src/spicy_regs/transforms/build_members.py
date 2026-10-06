@@ -28,7 +28,7 @@ from spicy_docs.sources.legislators import LegislatorsAcquirer, LegislatorsBudge
 from spicy_regs.sources import r2
 from spicy_regs.transforms.table_merge import merge_contract_table
 from spicy_regs.source_evidence import CaptureEvidence
-from spicy_regs.sources.retained import RetainedLegislatorsAcquirer
+from spicy_regs.sources.member_rosters import ReviewedMemberRosters
 
 # Two requests, paced. The historical file is the large one (~12 MB); the
 # acquirer's own ``max_historical_bytes`` default covers it.
@@ -53,8 +53,7 @@ def build_members(
         return receipt_build.run(build_members, output_dir, **{
             key: value for key, value in locals().items() if key not in {"output_dir", "receipt_build"}
         })
-    acquirer = acquirer or (RetainedLegislatorsAcquirer(budget=BUDGET, evidence=evidence)
-                           if evidence else LegislatorsAcquirer(budget=BUDGET))
+    acquirer = acquirer or ReviewedMemberRosters(budget=BUDGET, evidence=evidence)
 
     member_rows: list[dict] = []
     term_rows: list[dict] = []

@@ -4596,7 +4596,8 @@
      "current_term_party",
      "current_term_district",
      "roster",
-     "observed_at"
+     "observed_at",
+     "name_nickname"
     ]
    },
    "renamed": {

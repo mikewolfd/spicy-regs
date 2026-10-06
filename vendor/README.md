@@ -5,6 +5,21 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.58.0`: release commit
+  `ca3a9bd84ca01e296c54856ed20ea71339b6ce57`, tag `v0.58.0`. The exact
+  coordinated release wheel has SHA-256
+  `952bae11f8353caa8a367dc62f98cae94692a15d6b70f5c04a33ae1a8154b144`;
+  see `spicy_docs-0.58.0.json` for the retained source receipt pin. It adds
+  source-stated member nicknames and the separately qualified scorecard readers.
+  The members policy classifies `name_nickname` as nullable source input.
+  Native members must be built with this wheel and policy together; earlier
+  native members bundles refuse schema-mismatched resume. Existing native
+  subjects and receipts need an explicitly approved paired rebuild rather
+  than an implicit schema change. Scheduled member writes keep exact source
+  strings and retain row-level input evidence. Reader installation, scheduled
+  source publication, native conversion and serving qualification are separate
+  stages. This wheel is vendored; no public registry publication is claimed.
+
 - `spicy_docs-0.57.0`: the SpicyDocs 0.57.0 release, from release commit
   `080762574c16e5eef2f3b56cfac876f5e09b00a3`. SHA-256
   `4efc149a18f2222e53dee8e7588cc59fdbd33cadb9a9fcf1851e51329def1dc2`, 2,478,280 bytes;
