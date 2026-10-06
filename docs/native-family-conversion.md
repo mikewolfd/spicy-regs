@@ -282,6 +282,37 @@ and `R2_BUCKET_NAME`; no bucket is assumed. `CLOUDFLARE_API_TOKEN` with
 loaded from a `.env` implicitly; `--env-file` names one. A variable already
 set in the shell that the file contradicts is refused, by name.
 
+### Hosted execution
+
+`convert-native-family.yml` runs the same maintained converter on a hosted
+runner, one named family per manual dispatch. It supports the bulk regulatory,
+court and votes families and `bill-family`. Their owners still coordinate
+reader compatibility and concurrent ordinary writers.
+
+Bind `expected_entry_sha256` to the complete observed family entry with
+`scripts.native_conversion_invocation.entry_digest(entry)`. This digest
+includes timestamps, schemas and every table member. A changed entry refuses
+before conversion. The converter separately checks clean current main, the
+installed locked wheel, complete processing restoration, source evidence and
+the exact stored predecessor before publication.
+
+Leave `publish` false to prepare without publication credentials. The run
+retains the sealed family under the `native-family-<family>` artifact, and its
+invocation, logs and observed process resources in a separate evidence
+artifact. Preparation has a 45-minute command timeout; publication has a
+10-minute timeout inside the 60-minute job, leaving time to retain failed
+outputs. Hosted limits do not establish that a larger family fits the runner.
+
+After checks against the actual reader, dispatch with `publish=true`, the
+explicit `expected_bucket`, and `source_run_id` naming that preparation run.
+The workflow downloads those same bytes and calls `--publish-prepared`;
+it does not rerun the writer. Current main, runtime and complete prior entry
+must still match. Alternatively, a cleared single dispatch can prepare and
+publish immediately by leaving `source_run_id` empty. Always retain a failed
+attempt and reconcile its pointer read-only; never clear its journal, reseal
+it, or dispatch a blind retry. Ordinary producer acceptance remains a later
+check after successful publication and anonymous readback.
+
 ## Verify
 
 - The command's last line is "published and read back", and
