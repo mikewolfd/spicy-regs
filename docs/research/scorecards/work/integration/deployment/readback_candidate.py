@@ -11,7 +11,7 @@ import argparse
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
-from hashlib import sha256
+from hashlib import file_digest, sha256
 import json
 from pathlib import Path
 
@@ -21,6 +21,7 @@ from mcp.client.streamable_http import streamable_http_client
 import pyarrow.parquet as pq
 
 from readback_hrc_mcp import query_rows, write
+from spicy_regs.scorecards.etl import SOURCE_NAMES
 from spicy_regs.sources import publication
 
 
@@ -86,12 +87,21 @@ def public_files(args, prepared, authenticated):
         )
         if local_rows(connection, sql) != [{"rows": expected}]:
             raise ValueError("Public source count differs from preparation: " + name)
-    sql = "SELECT generation_id,count(*) AS rows FROM etl_receipts GROUP BY generation_id ORDER BY generation_id"
-    expected_receipts = [
-        {"generation_id": family["etlReceipts"]["generationId"], "rows": family["etlReceipts"]["rows"]}
-    ]
-    if local_rows(connection, sql) != expected_receipts:
-        raise ValueError("Public source receipts do not share the admitted generation")
+    # The container pins the member; carried receipts retain their original generation_id.
+    candidate = Path(prepared["generation_directory"]) / family["etlReceipts"]["key"]
+    with candidate.open("rb") as stream:
+        digest = "sha256:" + file_digest(stream, "sha256").hexdigest()
+    if candidate.stat().st_size != family["etlReceipts"]["byteSize"] or digest != family["etlReceipts"]["sha256"]:
+        raise ValueError("Local candidate receipts differ from the admitted public member")
+    connection.read_parquet(str(candidate)).create_view("_candidate_scorecard_receipts")
+    sql = (
+        "SELECT generation_id,dataset,outcome,count(*) AS rows FROM {} "
+        "GROUP BY generation_id,dataset,outcome ORDER BY generation_id,dataset,outcome"
+    )
+    if local_rows(connection, sql.format("etl_receipts")) != local_rows(
+        connection, sql.format("_candidate_scorecard_receipts")
+    ):
+        raise ValueError("Public source receipt origins or outcome counts differ from the pinned candidate")
     write(args.output / "public-files.json", dict(status="passed", generation=prepared["generation"], members=members))
     return connection, family
 
@@ -146,11 +156,13 @@ async def hosted(args, connection, family):
             receipt_description = await call("describe_table", {"table": "etl_receipts"}, "describe_receipts")
             if not receipt_description.get("available"):
                 raise ValueError("Hosted shared ETL receipt table is unavailable")
-            # Other families can share this view; restrict to this immutable source generation.
-            generation = family["etlReceipts"]["generationId"].replace("'", "''")
+            # Other families share this view; include every origin of this family's source datasets.
+            if set(family["etlReceipts"]["datasets"]) != set(SOURCE_NAMES):
+                raise ValueError("Source receipt datasets differ from the complete scorecard family")
+            datasets = ",".join("'" + name + "'" for name in sorted(SOURCE_NAMES))
             sql = (
-                "SELECT dataset,outcome,count(*) AS rows FROM etl_receipts "
-                f"WHERE generation_id='{generation}' GROUP BY dataset,outcome ORDER BY dataset,outcome"
+                "SELECT generation_id,dataset,outcome,count(*) AS rows FROM etl_receipts "
+                f"WHERE dataset IN ({datasets}) GROUP BY generation_id,dataset,outcome ORDER BY generation_id,dataset,outcome"
             )
             # A shared receipt query legitimately returns other family pins.
             result = await session.call_tool("query_sql", {"sql": sql, "max_rows": 500})
@@ -162,6 +174,18 @@ async def hosted(args, connection, family):
             body = payload.get("structuredContent")
             if body is None:
                 body = json.loads(next(row["text"] for row in payload["content"] if row["type"] == "text"))
+            expected_receipt_pin = {
+                "artifact_digest": expected_pin,
+                "generation_id": family["etlReceipts"]["generationId"],
+                "sha256": family["etlReceipts"]["sha256"],
+                "rows": family["etlReceipts"]["rows"],
+                "datasets": family["etlReceipts"]["datasets"],
+            }
+            actual_receipt_pin = (
+                body.get("publication", {}).get("etl_receipts", {}).get("families", {}).get("scorecards", {})
+            )
+            if any(actual_receipt_pin.get(key) != value for key, value in expected_receipt_pin.items()):
+                raise ValueError("Hosted shared receipts do not pin the selected scorecards family")
             if body.get("truncated") or query_rows(body) != local_rows(connection, sql):
                 raise ValueError("Hosted source receipt outcomes differ from the pinned public member")
             calls.append(
