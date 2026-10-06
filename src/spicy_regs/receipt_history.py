@@ -1,4 +1,5 @@
 """One bounded set comparison carries immutable receipt occurrences in file order."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -26,40 +27,55 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
 
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary, \
-            duckdb.connect(str(Path(temporary) / "history.duckdb")) as con:
+    with (
+        TemporaryDirectory(prefix="receipt-history-", dir=destination.parent) as temporary,
+        duckdb.connect(str(Path(temporary) / "history.duckdb")) as con,
+    ):
         con.execute("SET threads=4")
         con.execute("SET memory_limit='1GB'")
         con.execute("SET max_temp_directory_size='32GB'")
         con.execute("SET temp_directory=?", [str(Path(temporary) / "spill")])
         con.execute("SET preserve_insertion_order=true")
+
         def quoted(path):
             return "'" + str(path).replace("'", "''") + "'"
-        con.execute("CREATE VIEW current AS SELECT * EXCLUDE(file_row_number), file_row_number AS ordinal "
-                    f"FROM read_parquet({quoted(current_path)}, file_row_number=true, hive_partitioning=false)")
+
+        con.execute(
+            "CREATE VIEW current AS SELECT * EXCLUDE(file_row_number), file_row_number AS ordinal "
+            f"FROM read_parquet({quoted(current_path)}, file_row_number=true, hive_partitioning=false)"
+        )
         offset, parts = 0, []
         for path in prior_paths:
             with pq.ParquetFile(path) as parquet:
                 count = parquet.metadata.num_rows
-            parts.append(f"SELECT * EXCLUDE(file_row_number), file_row_number+{offset} AS ordinal "
-                         f"FROM read_parquet({quoted(path)}, file_row_number=true, hive_partitioning=false)")
+            parts.append(
+                f"SELECT * EXCLUDE(file_row_number), file_row_number+{offset} AS ordinal "
+                f"FROM read_parquet({quoted(path)}, file_row_number=true, hive_partitioning=false)"
+            )
             offset += count
-        con.execute("CREATE VIEW prior AS " + (" UNION ALL ".join(parts) if parts else "SELECT * FROM current WHERE false"))
-        duplicate = con.execute("SELECT EXISTS(SELECT 1 FROM prior WHERE outcome='accepted' "
-                       "GROUP BY dataset,record_id HAVING count(*)>1)").fetchone()
+        con.execute(
+            "CREATE VIEW prior AS " + (" UNION ALL ".join(parts) if parts else "SELECT * FROM current WHERE false")
+        )
+        duplicate = con.execute(
+            "SELECT EXISTS(SELECT 1 FROM prior WHERE outcome='accepted' GROUP BY dataset,record_id HAVING count(*)>1)"
+        ).fetchone()
         assert duplicate is not None
         if duplicate[0]:
             raise ValueError("Conflicting selected prior receipts")
         for name in ("current", "prior"):
-            con.execute(f"CREATE TABLE {name}_keys AS SELECT ordinal,dataset,outcome,record_id,subject_version, "
-                        f"{_processing_key('processing_json')} AS processing_key, "
-                        f"CASE WHEN outcome<>'accepted' THEN {_processing_key('diagnostic_json')} END AS diagnostic_key "
-                        f"FROM {name}")
-            con.execute(f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
-                        "processing_key, CASE WHEN outcome='accepted' THEN record_id END, "
-                        "CASE WHEN outcome='accepted' THEN subject_version END, "
-                        "diagnostic_key ORDER BY ordinal) AS occurrence "
-                        f"FROM {name}_keys")
+            con.execute(
+                f"CREATE TABLE {name}_keys AS SELECT ordinal,dataset,outcome,record_id,subject_version, "
+                f"{_processing_key('processing_json')} AS processing_key, "
+                f"CASE WHEN outcome<>'accepted' THEN {_processing_key('diagnostic_json')} END AS diagnostic_key "
+                f"FROM {name}"
+            )
+            con.execute(
+                f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
+                "processing_key, CASE WHEN outcome='accepted' THEN record_id END, "
+                "CASE WHEN outcome='accepted' THEN subject_version END, "
+                "diagnostic_key ORDER BY ordinal) AS occurrence "
+                f"FROM {name}_keys"
+            )
         con.execute("""CREATE TABLE matches AS SELECT c.ordinal AS current_ordinal,p.ordinal AS prior_ordinal,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.ordinal END AS predecessor_ordinal
             FROM current_ranked c LEFT JOIN prior_ranked p ON c.dataset=p.dataset AND c.outcome=p.outcome
@@ -102,7 +118,9 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
             written = 0
             for batch in reader:
                 expected_order = pa.array(range(written, written + batch.num_rows), type=pa.int64())
-                if not pc.call_function("all", [pc.call_function("equal", [batch.column("current_ordinal"), expected_order])]).as_py():
+                if not pc.call_function(
+                    "all", [pc.call_function("equal", [batch.column("current_ordinal"), expected_order])]
+                ).as_py():
                     raise ValueError("Receipt history changed current receipt order")
                 table = pa.Table.from_batches([batch])
                 changed = pc.call_function("indices_nonzero", [pc.call_function("is_valid", [table["predecessor_id"]])])
@@ -115,10 +133,16 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
                         processing = row.pop("predecessor_processing")
                         row.pop("current_ordinal")
                         values = decode_exact_json(row["diagnostic_json"])
-                        values = {k: v for k, v in values.items()
-                                  if k not in {"prior_receipts", "retained_processing", "prior_receipt"}}
-                        values["prior_receipt"] = {"receipt_id": predecessor, "generation_id": generation,
-                                                 "processing_sha256": _digest(decode_exact_json(processing))}
+                        values = {
+                            k: v
+                            for k, v in values.items()
+                            if k not in {"prior_receipts", "retained_processing", "prior_receipt"}
+                        }
+                        values["prior_receipt"] = {
+                            "receipt_id": predecessor,
+                            "generation_id": generation,
+                            "processing_sha256": _digest(decode_exact_json(processing)),
+                        }
                         row["diagnostic_json"] = exact_json(values)
                         diagnostics.append(row["diagnostic_json"])
                         identities.append(_digest({k: v for k, v in row.items() if k != "receipt_id"}))
@@ -127,9 +151,14 @@ def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], desti
                     for name, values in (("diagnostic_json", diagnostics), ("receipt_id", identities)):
                         by_position = dict(zip(positions, values))
                         replacements = pa.array([by_position.get(i) for i in range(batch.num_rows)], type=pa.string())
-                        table = table.set_column(table.schema.get_field_index(name), name,
-                                                 pc.call_function("if_else", [pc.call_function("is_valid", [table["predecessor_id"]]),
-                                                                             replacements, table[name]]))
+                        table = table.set_column(
+                            table.schema.get_field_index(name),
+                            name,
+                            pc.call_function(
+                                "if_else",
+                                [pc.call_function("is_valid", [table["predecessor_id"]]), replacements, table[name]],
+                            ),
+                        )
                 writer.write_table(table.select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA))
                 written += batch.num_rows
             if written != expected_count:

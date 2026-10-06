@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "lugar_mccourt",
+  "scorecard_id": "lugar_mccourt:117-senate-html",
+  "source_url": "https://www.thelugarcenter.org/ourwork-Bipartisan-Index.html",
+  "parser_version": "lugar-mccourt-native-html/1",
+  "reader_sha256": "145434f812e351d7686ccda95b4c949ab037352aa38606ce699b41460eb6a50b",
+  "capture_manifest_sha256": "b9ccc8dbdbaca2182d6f1dfcbbdc7c37324e6ca9f38807d73d5e9fcb049f2902",
+  "native_reference_sha256": "c89324aa9cbd1ebf137f88f9b63269bd28b10884e2253b0b3c4db2ca5356a88c",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "f80c49d686028a83f517af1cc8ae60b3f5c128591115edb9354f0c7b9ee8591c",
+  "completeness_rule": "Every reviewed source table row parsed to EOF; exact native population, column shape and unique member contexts checked; independent alphabetical view retained; selected source facts and method stable on reread",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 4,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 98,
+    "scorecard_member_ratings": 98,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

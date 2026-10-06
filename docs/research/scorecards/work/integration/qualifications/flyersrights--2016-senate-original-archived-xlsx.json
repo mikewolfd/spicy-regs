@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "flyersrights",
+  "scorecard_id": "flyersrights:2016-senate-original-archived-xlsx",
+  "source_url": "https://web.archive.org/web/20161230082303id_/http://flyersrights.org/dbmanager/reportcard/Senate%20Report%20Card%20%202016.xlsx",
+  "parser_version": "flyersrights-2016-literal-renditions/1",
+  "reader_sha256": "9f2ace7bbf4c044adbdfd710eba799ba336876fdbb90074fbc445abcc95a33aa",
+  "capture_manifest_sha256": "8a73e2a53ba8877e01822532af6cff9708aaa0fd4d3f84354fc09a8965938e4b",
+  "native_reference_sha256": "2f8e7b898446c44230b4dfc9c0c7c1e3743e71c33e491db530b25f2d28d26df3",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "fa7fd8353e494ed797cba99e4d3d1daab77fc6715547533b31a64df8d635c02d",
+  "completeness_rule": "Exact publisher-linked 2016 retrospective rendition, full rectangular source roster and all literal component, total and grade cells; complete reviewed four-page methodology and original announcement retained; selected bytes agree on reread. Workbook member ranges follow their original summary formula; auxiliary cells and formula attributes remain separate. No official roster, roll calls, score calculation or exact start year inferred.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 6,
+    "scorecard_metrics": 12,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 100,
+    "scorecard_member_ratings": 1200,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 5,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition only; remaining editions and renditions stay in scope",
+  "published": false
+}

@@ -1,0 +1,177 @@
+{
+  "format_version": "scorecard-reader-package-adoption/1",
+  "status": "passed-installed-full-source-reference-and-final-consumer-policy-checks",
+  "version": "0.61.0",
+  "source_commit": "9aac355e7fb9efc24d2a0717faef031e73377212",
+  "source_state": {
+    "approved_reader_commit": "c26e43707cdef2ba86056086c861a33493e6f516",
+    "wheel_source_commit": "9aac355e7fb9efc24d2a0717faef031e73377212",
+    "wheel_source_tree": "1e97f035a950af3603cc1d104bc6d9ecf636358a",
+    "final_source_candidate_commit": "ceb3b7644f3d9af8ebf2d3f4c457873b15bb3e0f",
+    "final_source_candidate_tree": "b10df17b4252c0858fb0fb5b0906aa5e720906b3",
+    "final_source_delta": "Only docs/README.md guide-index link; all packaged runtime bytes remain identical",
+    "source_release_state": "Final source CI passed at ceb3; merged and tagged source has the same full tree as ceb3. Its packaged runtime and rebuilt wheel equal the independently approved exact wheel gated at 9aac.",
+    "merged_source_tree": "b10df17b4252c0858fb0fb5b0906aa5e720906b3"
+  },
+  "consumer_base_commit": "13e8a7dc85f3258edcd7826c5bba5812cbe60f79",
+  "runtime": {
+    "provider_version": "0.61.0",
+    "provider_path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-current-queue-v1/.venv/lib/python3.12/site-packages/spicy_docs/__init__.py",
+    "source_path_shadowing": false
+  },
+  "wheel_sha256": "081cfb339b63d3ea6b396cea68f1ae3a2a5e339a10355325c64e07e295ae74ea",
+  "selected_plan_sha256": "6573d71ddafe7d8a176e16a0f1123b5ff56fefd509f3437d54bf5c1c4b7501f6",
+  "package_proofs": {
+    "independent_source_review": {
+      "corpus_relative_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/independent-review.md",
+      "sha256": "68e588a6ef0ce49b16ae3e46a76c7044383a53e6703c478b9ff69fe44469621f"
+    },
+    "source_qualification": {
+      "corpus_relative_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/qualification.json",
+      "sha256": "3de021780e08b3556cf99bfedec2acc791e0da0d5df98c863b847d2734db3778"
+    },
+    "source_integration_entry": {
+      "corpus_relative_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/integration-entry.json",
+      "sha256": "fa7f8549d3a1fe0749c1a7843ca5d2f171587305c97f538d5fb1d6b6ee2c8319"
+    },
+    "independent_package_review": {
+      "corpus_relative_file": "finish-20261004/root/source-package-061-v1/independent-review.md",
+      "sha256": "ec2a7d2fc56c3f581e7069848c70ffa63d75402a4c3f3713a6232ab5c15f15b0"
+    },
+    "installed_package_gate": {
+      "corpus_relative_file": "finish-20261004/root/source-package-061-v1/installed-gate.json",
+      "sha256": "a79601c5cff615ea6da0a7fbd37a3bf44dab894127e92fdcebea3c9823310dc9"
+    },
+    "prior_complete_replay": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed124-replay.json",
+      "sha256": "c8a44be9ee402288e25436c9dd77b8b311b6ab77222f1b2c97eab3492f4117cf"
+    },
+    "prior_installed_package_gate": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed-gate.json",
+      "sha256": "a33a188792098280564b33074b77248ef3eea05c4d1899bf634ebe1a17fcea2e"
+    },
+    "source_release": {
+      "corpus_relative_file": "finish-20261004/root/source-package-061-v1/source-release.json",
+      "sha256": "1acd94bcb7d382990207263780cf290401ee196d4c31fba1ae6adb09d50bcc89"
+    }
+  },
+  "scopes": [
+    {
+      "publisher_id": "new_american",
+      "scorecard_id": "new_american:freedom-index-110-4-print",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 85,
+        "scorecard_metrics": 4,
+        "scorecard_items": 20,
+        "scorecard_metric_items": 20,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 534,
+        "scorecard_member_ratings": 1068,
+        "scorecard_member_item_results": 5340
+      },
+      "complete_reference": "PASS",
+      "all_source_fields_final_consumer_policy_roundtrip": "PASS",
+      "reader_sha256": "cd4bc962b6befb0de916baf848f47303e87320ace9b8570119af01c8e3609844"
+    }
+  ],
+  "captures": [
+    {
+      "url": "https://thenewamerican.com/assets/sites/2/pdf/Freedom_Index_110-4.pdf",
+      "sha256": "4d0d982181ed842ab94c4fa2958204036ac99374d05fb908291044fa59a05f26",
+      "stage": "new-american-print:original"
+    },
+    {
+      "url": "https://thenewamerican.com/assets/sites/10/TNA-Oct-27-2008-Vol.-24-No.-22.pdf",
+      "sha256": "c04f5a0a15d2d8a9523f71702c9e3d5c0bf66a802a8871768a6a910c193583e0",
+      "stage": "new-american-print:source-time-imprint"
+    },
+    {
+      "url": "https://thenewamerican.com/assets/sites/2/pdf/Freedom_Index_110-4.pdf",
+      "sha256": "4d0d982181ed842ab94c4fa2958204036ac99374d05fb908291044fa59a05f26",
+      "stage": "new-american-print:original-reread"
+    }
+  ],
+  "private_semantic_inputs": [
+    {
+      "source_sha256": "4d0d982181ed842ab94c4fa2958204036ac99374d05fb908291044fa59a05f26",
+      "asset_sha256": "549c86c8aa6860e01a1889c361d68b982e6573b90399ea2a80cb4973c3bf883b",
+      "stage": "new-american-print:reviewed-native-facts"
+    }
+  ],
+  "all_source_rows_checked": 7074,
+  "consumer_field_policy": {
+    "scope": "All eleven source table families and every original row/field through final map_source_row, split_record, validate_receipt_row and restore_source_row",
+    "persistent_native_writer_runs": 0,
+    "source_semantic_asset_copies": 0
+  },
+  "registry": {
+    "all_installed_publisher_bindings_equal": true,
+    "existing_default_adapter": "new_american",
+    "new_variant_adapter": "new_american_print",
+    "publisher_id": "new_american",
+    "enabled": false,
+    "historical_backfill": false,
+    "evidence_policy": "hash_only",
+    "rights_status": "unreviewed"
+  },
+  "measured_wall_seconds": 10.638791291974485,
+  "preservation": {
+    "prior_ledger_records_equal": 431,
+    "new_named_scopes": 1,
+    "prior_qualification_files_byte_equal": 432,
+    "historical_vendor_files_byte_equal": 40,
+    "publication_ledger_byte_equal": true,
+    "work_policy_byte_equal": true,
+    "deferred_publishers_unchanged": 14,
+    "all_current_candidate_identity_sets_equal": true,
+    "prior_publisher_stages_equal": true,
+    "current_candidate_count": 128,
+    "source_catalog_registry_recovery_and_api_inventory_byte_equal": true,
+    "all_other_dependency_packages_unchanged": true,
+    "existing_new_american_default_reader_unchanged": "new_american",
+    "qualification_sha256": "3f68037efe3442e2c05c0659b98fd2342da2b0998df7f6fbdc1daeef612bc26b",
+    "ledger_sha256": "b8d75eb6f55e4697f58ff0eb1fbb7d07bf45f165a82a6837a5d242aafd9932be"
+  },
+  "installed_wheel_runtime_files_byte_equal": 488,
+  "checks": {
+    "focused_source_family_pipeline_registry_etl": {
+      "command": "uv run --frozen --offline pytest -q -p no:cacheprovider tests/test_scorecard_*.py tests/test_source_evidence.py tests/test_etl_receipts.py",
+      "result": "546 passed in 24.27s"
+    },
+    "shared_source_receiving": {
+      "command": "uv run --frozen --offline pytest -q -p no:cacheprovider tests/test_contract_tables.py tests/test_member_vote_terms.py tests/test_bill_subjects.py tests/test_unified_agenda*.py tests/test_pdf_text*.py tests/test_courtlistener_bulk.py tests/test_courtlistener_shared.py tests/test_court_scope.py tests/test_cluster_court_scope_backfill.py",
+      "result": "430 passed in 12.82s"
+    },
+    "ruff": "uv run --frozen --offline ruff check .: PASS",
+    "ty": "uv run --frozen --offline ty check: PASS whole declared gate",
+    "lock": "uv lock --offline; uv sync --frozen --offline; uv lock --check --offline: PASS",
+    "generators": "uv run --frozen --offline python scripts/build_scorecard_integrations.py --check; uv run --frozen --offline python scripts/build_scorecard_survey.py --check: PASS",
+    "dictionary": "uv run --frozen --offline spicy-regs-dict check; spicy-regs-dict generate; unchanged docs/tables, data_dictionary and generated source metadata: PASS",
+    "format": "uv run --frozen --offline ruff format --check scripts/build_scorecard_integrations.py: PASS",
+    "final_research_and_qualification_inventory": {
+      "command": "uv run --frozen --offline pytest -q -p no:cacheprovider tests/test_scorecard_integration_survey.py tests/test_scorecard_qualification_inventory.py tests/test_scorecard_survey.py",
+      "result": "76 passed in 0.98s"
+    }
+  },
+  "source_scope": "The New American Freedom Index, 110th Congress fourth installment, printed 2008. House and Senate member grids and source blank/P/? marks remain literal. Votes 31\u201340 metrics are distinct from cumulative 1\u201340 ratings; unprinted votes 1\u201330 are not reconstructed. Ohio 11 vacancy remains source context, not a member or rating. The historical John Birch Society candidate remains separate.",
+  "boundary": "One named source scope; in-memory source-family compatibility and hermetic synthetic pipeline tests only. No native generation, source activation, historical backfill, public data publication, hosted deployment or official member/vote resolution.",
+  "network_requests": 0,
+  "model_calls": 0,
+  "native_writer_runs": 0,
+  "consumer_full_ci_claimed": false,
+  "read_only_replay": {
+    "command": "uv run --frozen --offline python -c \"import json; exec(json.load(open('docs/research/scorecards/work/integration/reader_adoption_new_american_print_20261005.json'))['read_only_replay']['program'])\"",
+    "program": "from hashlib import sha256\nfrom importlib.metadata import version\nfrom pathlib import Path\nfrom uuid import uuid4\nfrom zipfile import ZipFile\nimport json, time\nimport spicy_docs\nfrom spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS, get_adapter, validate_scorecard_bundle\nfrom spicy_docs.sources.scorecards.common import ScorecardContext\nfrom spicy_regs.etl_receipts import ReceiptContext, decode_exact_json, split_record, validate_receipt_row\nfrom spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES, _witnesses\nfrom spicy_regs.scorecards.registry import load_registry\nfrom spicy_regs.scorecards.retained import RetainedScorecardBatch\nfrom spicy_regs.scorecards.subject_shapes import map_source_row, restore_source_row\n\nROOT=Path.cwd();CORPUS=ROOT.parent.parent.parent\nPLAN=ROOT/'docs/research/scorecards/work/integration/new_american_print_2008_plan_20261005.json'\nassert sha256(PLAN.read_bytes()).hexdigest()=='6573d71ddafe7d8a176e16a0f1123b5ff56fefd509f3437d54bf5c1c4b7501f6'\nassert version('spicy-docs')=='0.61.0'\nassert Path(spicy_docs.__file__).resolve().is_relative_to((ROOT/'.venv').resolve())\nWHEEL=ROOT/'vendor/spicy_docs-0.61.0-py3-none-any.whl'\nassert sha256(WHEEL.read_bytes()).hexdigest()=='081cfb339b63d3ea6b396cea68f1ae3a2a5e339a10355325c64e07e295ae74ea'\ninstalled=Path(spicy_docs.__file__).resolve().parent.parent;files=0\nwith ZipFile(WHEEL) as wheel:\n for name in wheel.namelist():\n  if name.startswith('spicy_docs/') and not name.endswith('/'):\n   assert (installed/name).read_bytes()==wheel.read(name),name;files+=1\nplan=json.loads(PLAN.read_bytes());assert len(plan['entries'])==1;entries=plan['entries'];captures=[];retentions=[];scopes=[];start=time.perf_counter()\ndef retain(document,body,*,stage):\n assert sha256(body).hexdigest()==entries[0]['observations_sha256']\n retentions.append({'source_sha256':sha256(document.body).hexdigest(),'asset_sha256':sha256(body).hexdigest(),'stage':stage})\n return {'observation_id':str(uuid4())}\nbatch=RetainedScorecardBatch(CORPUS,entries,retain_observations=retain)\ndef capture(response,**kwargs):\n captures.append({'url':response.requested_url,'sha256':sha256(response.body).hexdigest(),'stage':kwargs.get('stage')})\n return {'capture_id':str(uuid4())}\ncontext=ScorecardContext(batch,capture,max_requests=3)\nfor edition in batch.list_scorecards(context):\n entry=batch.entries[edition.scorecard_id];adapter=get_adapter(entry['adapter']);path=Path(adapter.__file__).resolve()\n assert path.is_relative_to((ROOT/'.venv').resolve()) and sha256(path.read_bytes()).hexdigest()==entry['reader_sha256']\n for relative,pin in entry['shared_source_dependencies'].items():\n  assert sha256((path.parents[2]/relative.removeprefix('src/spicy_docs/')).read_bytes()).hexdigest()==pin,relative\n result=batch.for_edition(edition).acquire_scorecard(edition,context);tables=result.tables;validate_scorecard_bundle(tables)\n assert set(tables)==set(SOURCE_NAMES)==set(POLICIES)-{'scorecard_member_links','scorecard_item_links'}\n for name,rows in tables.items():\n  policy=POLICIES[name]\n  for index,raw in enumerate(rows):\n   mapped=map_source_row(name,raw);subject,receipt=split_record(policy,mapped,ReceiptContext('new-american-print-memory-check',f'{edition.scorecard_id}:{name}:{index}',policy.policy_version,_witnesses(raw)))\n   validate_receipt_row(receipt,POLICIES);restored=restore_source_row(name,(subject or {})|decode_exact_json(receipt['processing_json']))\n   assert restored==raw,(edition.scorecard_id,name,index)\n scopes.append({'publisher_id':edition.publisher_id,'scorecard_id':edition.scorecard_id,'counts':{name:len(rows) for name,rows in tables.items()},'complete_reference':'PASS','all_source_fields_final_consumer_policy_roundtrip':'PASS','reader_sha256':entry['reader_sha256']})\nbatch.complete();assert len(batch.checked)==1 and len(captures)==3 and len(retentions)==1\nregistry=load_registry();assert {r.publisher_id for r in registry}==set(ADAPTER_PUBLISHERS.values())\nreg=next(r for r in registry if r.publisher_id=='new_american')\nassert reg.adapter=='new_american' and reg.enabled is False and reg.historical_backfill is False and reg.evidence_policy=='hash_only' and reg.rights_status=='unreviewed'\nprint(json.dumps({'scopes':scopes,'captures':captures,'private_semantic_inputs':retentions,'all_source_rows_checked':sum(sum(x['counts'].values()) for x in scopes),'registry_publishers':len(registry),'installed_wheel_runtime_files_byte_equal':files,'measured_wall_seconds':time.perf_counter()-start,'provider_version':version('spicy-docs'),'provider_path':str(Path(spicy_docs.__file__).resolve()),'source_path_shadowing':False}))\n",
+    "difference_from_executed_program": "None; prints measured metadata only and writes no proof/native files",
+    "executed_program_sha256": "87684a812b98f3c689aa24c632c87f9ec4b42e237c404d212926a417c62b72f3"
+  },
+  "consumer_qualification": {
+    "file": "docs/research/scorecards/work/integration/qualifications/new_american--freedom-index-110-4-print.json",
+    "sha256": "3f68037efe3442e2c05c0659b98fd2342da2b0998df7f6fbdc1daeef612bc26b"
+  },
+  "source_merge_commit": "76ec8628f608b1ed2080b8ef2a4a8c920af72c4f",
+  "source_tag": "v0.61.0"
+}

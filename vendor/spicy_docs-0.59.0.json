@@ -1,0 +1,184 @@
+{
+  "source_commit": "c67e3f45242a9d582618b5b2e5f37377f4e23bf5",
+  "source_tag": null,
+  "version": "0.59.0",
+  "filename": "spicy_docs-0.59.0-py3-none-any.whl",
+  "sha256": "522d1fceb47dcf1fcbeccebf0ab26cfe1426918d38e8e1134a09afa5e783b601",
+  "byte_size": 2572538,
+  "source_state": "Independently qualified local source package candidate; no tag or public package registry release claimed",
+  "wheel_distribution": "vendored exact independently reviewed installed-wheel candidate",
+  "source_package_qualification": {
+    "corpus_relative_file": "source-package-059-v1/qualification.json",
+    "sha256": "358e67f25ef300c1f3a6f15bd0696fb3bec46f90f6d428253c65f37541b375e8"
+  },
+  "selected_scope_plan": {
+    "corpus_relative_file": "selected-actions-integration-v1/entries.json",
+    "sha256": "5e9fa24e35d0812c2de359f6c81fa5364f3643a81e6af9779c3b97fbbb6be5e2"
+  },
+  "installed_selected_scope_replay": {
+    "status": "PASS",
+    "scopes": 10,
+    "publishers": 6,
+    "captures": 43,
+    "semantic_inputs": 4,
+    "entries": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/selected-actions-integration-v1/entries.json",
+      "sha256": "5e9fa24e35d0812c2de359f6c81fa5364f3643a81e6af9779c3b97fbbb6be5e2",
+      "byte_size": 11914
+    },
+    "frozen_source_qualification": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/selected-actions-integration-v1/qualification.json",
+      "sha256": "fa7fd8353e494ed797cba99e4d3d1daab77fc6715547533b31a64df8d635c02d",
+      "byte_size": 5941
+    },
+    "result": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/source-package-059-v1/installed-replay.json",
+      "sha256": "60278e04f5857fe2141a024fcda1aa5da8146f0367f41505d2c7737f98580bd4",
+      "byte_size": 11880
+    },
+    "consumer_checkout": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-catalog-reconciliation-v1",
+    "consumer_commit": "72cf4e431e3cfcec5865a0eda3b326a7f0f6e8ef",
+    "maintained_batch": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/consumer-catalog-reconciliation-v1/src/spicy_regs/scorecards/retained.py",
+      "sha256": "f188e3ec6c98029566249ae700a56c8bbc087ed512fdaf2aae481e885740d5b3",
+      "byte_size": 13891
+    },
+    "comparison": "Complete source table families, ordered capture roles, all counts and private asset retention hashes/stages match frozen qualification",
+    "source_reference_field_differences": [],
+    "scopes_excluded_from_cutoff": []
+  },
+  "installed_prior111_replay": {
+    "status": "PASS",
+    "scopes": 111,
+    "publishers": 32,
+    "adapter_modules": 34,
+    "captures": 1880,
+    "semantic_inputs": 24,
+    "original_plan": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/plan-qualified111-v1.json",
+      "sha256": "8474f8724146a343f672e35e0e0a78e6cfc35d3bd60c244b0dcdf7a5c1cb1163",
+      "byte_size": 157344
+    },
+    "candidate_plan": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/source-package-059-v1/prior111-plan-059.json",
+      "sha256": "9f1055577abd8075dd165c73d102e7a3e7d7ad23060664d20ccf3b7195be396c",
+      "byte_size": 157356
+    },
+    "explicit_dependency_changes": [
+      {
+        "scorecard_id": "dav:110-2-house-archived-native",
+        "field": "shared_source_dependencies.src/spicy_docs/sources/scorecards/capwiz_html.py",
+        "original_sha256": "55e23d9b22cb7928f1cfc360a54df8933b11c4ccc4890379a3334cbc0392ac64",
+        "candidate_sha256": "b2bbe2713d85ddee8a5b381a41e7c7ed9894ffaaed64ce8c33646972062de0b9",
+        "original_pin_check": "REFUSED: candidate bytes differ from original helper pin",
+        "source_reference_file": "finish-20261004/teamsters-latest-recovery-v1/dav-qualification-v4/110-2-house-archived-native/semantic-tables.json",
+        "source_reference_sha256": "dadadbe1ef2ceba15152d9235398fb11654eb1e23c841e690ab9b554670a8581",
+        "captures_root": "finish-20261004/teamsters-latest-recovery-v1/dav-qualification-v4/110-2-house-archived-native",
+        "manifest_sha256": "a5fcded6cb43eddf608d5edee5c7dd41cf06ed96fb8318dc66bff7ca48946682",
+        "candidate_acceptance": "Exact candidate dependency pin plus complete original source-reference equality required at replay; original plan is immutable"
+      },
+      {
+        "scorecard_id": "dav:109-2-both-archived-native",
+        "field": "shared_source_dependencies.src/spicy_docs/sources/scorecards/capwiz_html.py",
+        "original_sha256": "55e23d9b22cb7928f1cfc360a54df8933b11c4ccc4890379a3334cbc0392ac64",
+        "candidate_sha256": "b2bbe2713d85ddee8a5b381a41e7c7ed9894ffaaed64ce8c33646972062de0b9",
+        "original_pin_check": "REFUSED: candidate bytes differ from original helper pin",
+        "source_reference_file": "finish-20261004/teamsters-latest-recovery-v1/dav-qualification-v4/109-2-both-archived-native/semantic-tables.json",
+        "source_reference_sha256": "cb2a2574e8f9d40c27b39214418d455ac25363d0d3e53fd88194bd6286f68822",
+        "captures_root": "finish-20261004/teamsters-latest-recovery-v1/dav-qualification-v4/109-2-both-archived-native",
+        "manifest_sha256": "57f682295a5cbe0482f23175ea8dd8b45f833e66ff10a5a4c37a385fd854bf2d",
+        "candidate_acceptance": "Exact candidate dependency pin plus complete original source-reference equality required at replay; original plan is immutable"
+      },
+      {
+        "scorecard_id": "teamsters:115-2-house-archived-native",
+        "field": "shared_source_dependencies.src/spicy_docs/sources/scorecards/capwiz_html.py",
+        "original_sha256": "55e23d9b22cb7928f1cfc360a54df8933b11c4ccc4890379a3334cbc0392ac64",
+        "candidate_sha256": "b2bbe2713d85ddee8a5b381a41e7c7ed9894ffaaed64ce8c33646972062de0b9",
+        "original_pin_check": "REFUSED: candidate bytes differ from original helper pin",
+        "source_reference_file": "finish-20261004/teamsters-latest-recovery-v1/qualification-v2/semantic-tables.json",
+        "source_reference_sha256": "a74d830d0b8a61970acf966a3a1e0f2e7d5f9aa8e4a8cb003ea30531d25f9740",
+        "captures_root": "finish-20261004/teamsters-latest-recovery-v1/qualification-v2",
+        "manifest_sha256": "cdc66e75a78630c2e988231124c72c209e341fcc00943c329345f2c3c93ce8d8",
+        "candidate_acceptance": "Exact candidate dependency pin plus complete original source-reference equality required at replay; original plan is immutable"
+      }
+    ],
+    "candidate_plan_other_fields": "Identical to original plan; direct deep comparison passed after restoring exactly three helper pins",
+    "original_recipe_proofs": [
+      {
+        "file": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-05/members-scorecards058-installed111-replay-HANDOFF.json",
+        "sha256": "e8c3afe4d3a16efb4a932218581df14f1b08d1ea09f15d63dfbebec1d69aad21",
+        "byte_size": 7338
+      },
+      {
+        "file": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-05/members-scorecards058-installed111-replay.py",
+        "sha256": "d63f3f6bee298b73eb5f990cf517f6b981b24283e116318f597c0dbe5f93803a",
+        "byte_size": 8799
+      },
+      {
+        "file": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-05/members-scorecards058-installed111-replay-input-inventory.json",
+        "sha256": "18f85089e8c9cd8cfe6fbbf85dcaed575f6012408f6f593a30ec9cf892c733b1",
+        "byte_size": 371844
+      },
+      {
+        "file": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-05/members-scorecards058-installed111-replay-counts-VERIFY.json",
+        "sha256": "81641acd2a294134406965ab98c16fe10d233d77c772ea80e912fa3e67f4c2ac",
+        "byte_size": 30037
+      },
+      {
+        "file": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-05/members-scorecards058-installed111-replay-review-evidence.json",
+        "sha256": "579b8bc32d836eaef362e71ac6800faccdb7b0eaa9c6461f481ecf61b05d3021",
+        "byte_size": 474382
+      },
+      {
+        "file": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-05/members-scorecards058-installed111-replay-v1/summary.json",
+        "sha256": "f4d395277b3cea3b998a5a1897db44808ef9b3ebc60a5a497452c09bee8e42e5",
+        "byte_size": 73886
+      }
+    ],
+    "result": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/source-package-059-v1/prior111-installed-replay-v1/summary.json",
+      "sha256": "e51ea5538cbf8197f85711cd2f0ea550ca0745370efb1775cc3f046958079300",
+      "byte_size": 86593
+    },
+    "resource_result": {
+      "file": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/source-package-059-v1/prior111-installed-replay-v1/resource-result.json",
+      "sha256": "6d261a63cffcf3ef317eeb9e293f32560a405a2653fa06d0842057b3aa1830e6",
+      "byte_size": 548
+    },
+    "consumer_checkout": "/Users/mikewolfd/Work/spicy-stack-worktrees/codex-regs-adoption058-final",
+    "consumer_commit": "b6e1a3c0a30dee2348b23bc230fe9d82c3bfb013",
+    "maintained_batch": {
+      "file": "/Users/mikewolfd/Work/spicy-stack-worktrees/codex-regs-adoption058-final/src/spicy_regs/scorecards/retained.py",
+      "sha256": "f188e3ec6c98029566249ae700a56c8bbc087ed512fdaf2aae481e885740d5b3",
+      "byte_size": 13891
+    },
+    "maintained_sequence": {
+      "file": "/Users/mikewolfd/Work/spicy-stack-worktrees/codex-regs-adoption058-final/src/spicy_regs/scorecards/replay.py",
+      "sha256": "757344326b05998cc99cd95ab3ca3c7f959f5ab84a3eeaff5e42f318238da602",
+      "byte_size": 4651
+    },
+    "comparison": "Maintained complete source-table reference comparison and full sequence consumption passed. Ordered snapshot capture roles, all111 prior replay counts, all1880 ordered capture SHA/stage/URL records and24 observation source/asset SHA/stages equal prior installed0.58 evidence",
+    "source_reference_field_differences": [],
+    "capture_or_asset_or_count_differences": [],
+    "optional_original_plan_counts": "43 entries supply parsed_counts;68 do not. All111 complete source references and actual prior replay counts were compared independently of optional plan counts.",
+    "resource": {
+      "exit_code": 0,
+      "wall_seconds": 56.70499491598457,
+      "peak_rss_bytes": 652083200,
+      "peak_scratch_bytes": 87938,
+      "bound_refusal": null,
+      "consumer_head": "b6e1a3c0a30dee2348b23bc230fe9d82c3bfb013",
+      "limits": {
+        "wall_seconds": 1200,
+        "rss_bytes": 2147483648,
+        "scratch_bytes": 268435456,
+        "pyarrow_cpu_threads": 2,
+        "pyarrow_io_threads": 2,
+        "native_library_thread_preferences": 2,
+        "enforcement": "0.5s owned-group RSS/disk watchdog plus final wall/disk checks; not an OS hard memory or universal thread cap"
+      }
+    }
+  },
+  "consumer_policy": "Selected named scopes only; new sources stay disabled. Full writer, native generation, publication and scheduled refresh require their own qualification; preserve frozen0.58 evidence.",
+  "historical_package_pins": "Unchanged; old vendored wheels and old proof files remain retained"
+}

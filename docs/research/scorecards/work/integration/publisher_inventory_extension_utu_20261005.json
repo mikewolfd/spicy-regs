@@ -1,0 +1,407 @@
+{
+  "extension_id": "named-original-source-united_transportation-20261005",
+  "observed_at": "2026-10-05T23:22:47+00:00",
+  "publisher_id": "united_transportation",
+  "source_id": "united_transportation:named-retrospective-assessments",
+  "task_id": "ss-zhrk",
+  "preserved_candidate_ids": [
+    "aauw",
+    "acec",
+    "aclu",
+    "ada",
+    "afge",
+    "afl_cio",
+    "afp",
+    "afscme",
+    "aft",
+    "agc",
+    "aia",
+    "ajp_action",
+    "alaska_wilderness_action",
+    "amalgamated_clothing_workers",
+    "american_bakers",
+    "american_cause",
+    "american_energy_alliance",
+    "american_parents",
+    "american_security_council",
+    "americans_constitutional_action",
+    "animal_welfare_institute",
+    "ara",
+    "arts_action",
+    "atlantic_richfield",
+    "bipac",
+    "boilermakers",
+    "bread_world",
+    "c4ip",
+    "carpenters",
+    "carpenters_ncsrcc",
+    "ccrkba",
+    "childrens_defense",
+    "club_for_growth",
+    "coalition_foreign_military",
+    "committee_education_funding",
+    "common_cause",
+    "communication_workers",
+    "congressional_quarterly",
+    "consumer_federation",
+    "cpac",
+    "dav",
+    "defenders_action",
+    "drug_policy_action",
+    "drum_major",
+    "end_citizens_united",
+    "environment_america",
+    "environmental_action",
+    "farm_bureau",
+    "fcnl",
+    "few",
+    "ffrf_action",
+    "first_focus",
+    "flyersrights",
+    "food_beverage_trades",
+    "food_policy_action",
+    "foreign_policy_america",
+    "frc_action",
+    "free_congress_survival",
+    "freedomworks",
+    "global_solutions",
+    "goa",
+    "heritage_action",
+    "hrc",
+    "human_events",
+    "humane_world_action",
+    "iava",
+    "ijm",
+    "ila",
+    "interreligious_food",
+    "ipaa",
+    "john_birch_historical",
+    "joint_center",
+    "lcv",
+    "leadership_conference",
+    "league_women_voters",
+    "liberty_lobby",
+    "life_underwriters",
+    "lugar_mccourt",
+    "machinists",
+    "march_for_life",
+    "naacp",
+    "nam",
+    "nasw",
+    "national_alliance_seniors",
+    "national_associated_businessmen",
+    "national_audiovisual",
+    "national_council_seniors",
+    "national_farmers_organization",
+    "national_farmers_union",
+    "national_parks_action",
+    "national_womens_caucus",
+    "nea",
+    "network",
+    "new_american",
+    "nfib",
+    "niac_action",
+    "norml",
+    "now",
+    "nra_pvf",
+    "nrf",
+    "ntu",
+    "numbersusa",
+    "peace_action",
+    "planned_parenthood",
+    "public_citizen",
+    "radical_middle",
+    "railway_clerks",
+    "reproductive_freedom",
+    "retail_clerks",
+    "ripon_society",
+    "sace_action",
+    "sane_historical",
+    "sba",
+    "shriver",
+    "smart_transportation",
+    "taxation_representation",
+    "teamsters",
+    "uaw",
+    "united_church_christ",
+    "united_mine_workers",
+    "united_transportation",
+    "us_chamber",
+    "us_student_association",
+    "wilberforce",
+    "woman_activist",
+    "womens_lobby",
+    "write_congressman"
+  ],
+  "related_candidate_ids": [
+    "smart_transportation"
+  ],
+  "input_pins": {
+    "scorecard_source_catalog.json": "774f95285437a3adcda26f01bc7e6a84911e74399a45626d708f895bacdca868",
+    "capture_receipts.json": "f3239581be6b6e1f3b045bae06b4b98e57741df9c3415a6fb9487493c9075177",
+    "work/integration/adapter_tasks.json": "e1612ec7b21f5cafbf6a386bdc242268631d4c18bf72a88bf4f0dfaae8c5ec69",
+    "work/integration/adapter_inventory.json": "fd7ecf934f0d30abfc9045534cc762cc63e20d766610264536fe413cc75e0ace",
+    "work/integration/publisher_api_inventory.json": "24cb134d5e23124c44d7dbbb00ec75b0155995c80a2965b1a656f8c7b8eff887"
+  },
+  "source_pins": {
+    "source_commit": "66607cb40846494a88cdf86a7936de55262eeee9",
+    "qualification": {
+      "path": "utu-reader-2012-v1/qualification.json",
+      "sha256": "9af25d2ff07dca4ab7b6529c762af98d940e243c1807a8e84f242fc50ff07674"
+    },
+    "frozen_entries": {
+      "path": "utu-reader-2012-v1/integration-entry.json",
+      "sha256": "2499968a28fd6afda7e82dd7096adc086d5958b981d3df2d4f7dec17201fb3e0"
+    },
+    "reference": {
+      "path": "utu-reader-2012-v1/private/assessment-reference.json",
+      "sha256": "053e9705cdd4da948c4a9f75ac771794db2e5464784b300cbb7fcb7bddef80bd"
+    },
+    "independent_review": {
+      "path": "utu-reader-2012-v1/independent-review.md",
+      "sha256": "4dae45effcd80a17fae05025817124d498d00f2a7dd3b1286626d71a1d12f0a2"
+    }
+  },
+  "boundary": "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established.",
+  "baseline_consumer_commit": "f19bb609287d6d09043405ea81398f3c9493e910",
+  "added_records": {
+    "catalog": {
+      "source_id": "united_transportation:named-retrospective-assessments",
+      "publisher_id": "united_transportation",
+      "publisher_name": "United Transportation Union",
+      "publisher_aliases": [],
+      "homepage_url": null,
+      "scorecard_name": "Why Obama-Biden deserve your vote Nov. 6",
+      "scorecard_index_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "archive_url": null,
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "senate",
+      "source_format": [
+        "html",
+        "pdf"
+      ],
+      "machine_readable": "partial",
+      "discovered_via": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "capture_id": "extension-utu-post-18264-retrospective"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+          "capture_id": "extension-utu-october-2012-corroboration"
+        }
+      ],
+      "discovered_at": "2026-10-05T19:26:35.820184+00:00",
+      "last_verified_at": "2026-10-05T23:22:47+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established.",
+      "verification_capture_ids": [
+        "extension-utu-post-18264-retrospective",
+        "extension-utu-october-2012-corroboration"
+      ],
+      "scope_status": "named_original_renditions_verified"
+    },
+    "captures": [
+      {
+        "requested_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+        "resolved_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+        "http_status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "observed_at": "2026-10-05T19:26:35.820184+00:00",
+        "sha256": "fc134e9a91f1f9a8c8869a8eb4411574686eec69ca190b93bb5391d4919c0ebd",
+        "byte_size": 233445,
+        "method": "GET",
+        "capture_id": "extension-utu-post-18264-retrospective",
+        "evidence_policy": "hash_only",
+        "parser_version": "reviewed-source-inventory-extension/1",
+        "body_retained_publicly": false,
+        "capture_complete": true,
+        "source_snapshot_complete": false,
+        "request_outcome": "response_received",
+        "review_status": "original_source_verified",
+        "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+      },
+      {
+        "requested_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+        "resolved_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "observed_at": "2026-10-05T19:28:09.952242+00:00",
+        "sha256": "6ebb47439bb6030b2d3d65b659d57988f6a2134cf3aea67043cb5ea864260ef2",
+        "byte_size": 3174562,
+        "method": "GET",
+        "capture_id": "extension-utu-october-2012-corroboration",
+        "evidence_policy": "hash_only",
+        "parser_version": "reviewed-source-inventory-extension/1",
+        "body_retained_publicly": false,
+        "capture_complete": true,
+        "source_snapshot_complete": false,
+        "request_outcome": "response_received",
+        "review_status": "original_source_verified",
+        "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+      }
+    ]
+  },
+  "validation": {
+    "source_attribution_reviewed": true,
+    "source_bodies_public": false,
+    "consumer_package_adopted": false,
+    "ledger_advanced": false,
+    "runtime_enabled": false,
+    "historical_backfill": false,
+    "published": false
+  },
+  "later_observations": {
+    "adapter": {
+      "publisher_id": "united_transportation",
+      "publisher_name": "United Transportation Union",
+      "source_id": "united_transportation:named-retrospective-assessments",
+      "task_id": "ss-zhrk",
+      "catalog_state": {
+        "discovery_status": "verified",
+        "scope_status": "named_original_renditions_verified",
+        "rights_status": "unreviewed",
+        "last_verified_at": "2026-10-05T23:22:47+00:00"
+      },
+      "implementation_disposition": "named_readers_pending_installed_consumer_adoption",
+      "original_evidence_level": "original_edition_document_observed",
+      "formats_observed_or_reported": [
+        "html",
+        "pdf"
+      ],
+      "original_source_urls": [
+        "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+        "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf"
+      ],
+      "profile_ids": [],
+      "profile_assessments": [],
+      "source_evidence": [
+        {
+          "requested_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "resolved_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "http_status": 200,
+          "content_type": "text/html; charset=UTF-8",
+          "observed_at": "2026-10-05T19:26:35.820184+00:00",
+          "sha256": "fc134e9a91f1f9a8c8869a8eb4411574686eec69ca190b93bb5391d4919c0ebd",
+          "byte_size": 233445,
+          "method": "GET",
+          "capture_id": "extension-utu-post-18264-retrospective",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-source-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+        },
+        {
+          "requested_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+          "resolved_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T19:28:09.952242+00:00",
+          "sha256": "6ebb47439bb6030b2d3d65b659d57988f6a2134cf3aea67043cb5ea864260ef2",
+          "byte_size": 3174562,
+          "method": "GET",
+          "capture_id": "extension-utu-october-2012-corroboration",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-source-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+        }
+      ],
+      "discovery_inputs": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "capture_id": "extension-utu-post-18264-retrospective"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+          "capture_id": "extension-utu-october-2012-corroboration"
+        }
+      ],
+      "support_status": "implemented_unqualified",
+      "next_action": "Adopt the independently reviewed 0.60 installed reader and replay the exact retained scopes before ledger admission",
+      "catalog_notes": "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established.",
+      "known_blockers": [
+        "Exact 0.60 installed-wheel replay and consumer ledger admission are pending; runtime source remains disabled"
+      ],
+      "implementation_state": {
+        "adapter_module_exists": true,
+        "adapter_module_path": "src/spicy_docs/sources/scorecards/united_transportation.py",
+        "registered_enabled": false,
+        "production_supported": false,
+        "qualified_current_whole_edition": false,
+        "state_basis": "Source reader independently reviewed; installed consumer 0.59 does not include this adapter"
+      },
+      "fixture_readiness": {
+        "raw_source_captured": true,
+        "checked_full_edition_fixture": true,
+        "qualification_rule": "Named source references and semantic assets remain private; consumer qualification requires installed-wheel replay"
+      },
+      "related_candidate_ids": [
+        "smart_transportation"
+      ],
+      "retirement_status": "not_established",
+      "exclusion_status": "not_excluded",
+      "reviewed_at": "2026-10-05T23:22:47+00:00"
+    },
+    "api": {
+      "publisher_id": "united_transportation",
+      "publisher_name": "United Transportation Union",
+      "source_id": "united_transportation:named-retrospective-assessments",
+      "original_scorecard_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+      "homepage_url": null,
+      "discovery_status": "html_pdf_only_observed",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "search_method": [
+        "Existing retained originals and independently reviewed source-reader qualification; no new network research"
+      ],
+      "inspected_urls": [
+        "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+        "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf"
+      ],
+      "evidence_refs": [
+        "extension-utu-post-18264-retrospective",
+        "extension-utu-october-2012-corroboration"
+      ],
+      "search_refs": [],
+      "endpoints": [],
+      "acquisition_alternatives": {
+        "observed_or_previously_reported_formats": [
+          "html",
+          "pdf"
+        ],
+        "linked_export_urls": [],
+        "original_source_urls": [
+          "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf"
+        ],
+        "profiles": [],
+        "distinction": "Named documents do not establish a publisher rating API"
+      },
+      "uninspected_script_urls": [],
+      "blockers": [],
+      "observations": [
+        "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established."
+      ],
+      "complete_scorecard_coverage": false,
+      "production_qualified_by_this_inventory": false,
+      "rights_status": "unreviewed",
+      "next_step": "Adopt and replay the independently reviewed exact 0.60 installed reader; qualify other scopes separately",
+      "retirement_status": "not_established"
+    }
+  }
+}

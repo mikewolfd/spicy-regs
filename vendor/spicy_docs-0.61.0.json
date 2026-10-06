@@ -1,0 +1,63 @@
+{
+  "source_commit": "9aac355e7fb9efc24d2a0717faef031e73377212",
+  "source_tree": "1e97f035a950af3603cc1d104bc6d9ecf636358a",
+  "version": "0.61.0",
+  "filename": "spicy_docs-0.61.0-py3-none-any.whl",
+  "sha256": "081cfb339b63d3ea6b396cea68f1ae3a2a5e339a10355325c64e07e295ae74ea",
+  "byte_size": 2586714,
+  "source_state": {
+    "approved_reader_commit": "c26e43707cdef2ba86056086c861a33493e6f516",
+    "wheel_source_commit": "9aac355e7fb9efc24d2a0717faef031e73377212",
+    "wheel_source_tree": "1e97f035a950af3603cc1d104bc6d9ecf636358a",
+    "final_source_candidate_commit": "ceb3b7644f3d9af8ebf2d3f4c457873b15bb3e0f",
+    "final_source_candidate_tree": "b10df17b4252c0858fb0fb5b0906aa5e720906b3",
+    "final_source_delta": "Only docs/README.md guide-index link; all packaged runtime bytes remain identical",
+    "source_release_state": "Final source CI passed at ceb3; merged and tagged source has the same full tree as ceb3. Its packaged runtime and rebuilt wheel equal the independently approved exact wheel gated at 9aac.",
+    "merged_source_tree": "b10df17b4252c0858fb0fb5b0906aa5e720906b3"
+  },
+  "wheel_distribution": "Vendored exact independently reviewed installed-wheel candidate; no PyPI upload claimed",
+  "package_proofs": {
+    "independent_source_review": {
+      "corpus_relative_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/independent-review.md",
+      "sha256": "68e588a6ef0ce49b16ae3e46a76c7044383a53e6703c478b9ff69fe44469621f"
+    },
+    "source_qualification": {
+      "corpus_relative_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/qualification.json",
+      "sha256": "3de021780e08b3556cf99bfedec2acc791e0da0d5df98c863b847d2734db3778"
+    },
+    "source_integration_entry": {
+      "corpus_relative_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/integration-entry.json",
+      "sha256": "fa7f8549d3a1fe0749c1a7843ca5d2f171587305c97f538d5fb1d6b6ee2c8319"
+    },
+    "independent_package_review": {
+      "corpus_relative_file": "finish-20261004/root/source-package-061-v1/independent-review.md",
+      "sha256": "ec2a7d2fc56c3f581e7069848c70ffa63d75402a4c3f3713a6232ab5c15f15b0"
+    },
+    "installed_package_gate": {
+      "corpus_relative_file": "finish-20261004/root/source-package-061-v1/installed-gate.json",
+      "sha256": "a79601c5cff615ea6da0a7fbd37a3bf44dab894127e92fdcebea3c9823310dc9"
+    },
+    "prior_complete_replay": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed124-replay.json",
+      "sha256": "c8a44be9ee402288e25436c9dd77b8b311b6ab77222f1b2c97eab3492f4117cf"
+    },
+    "prior_installed_package_gate": {
+      "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed-gate.json",
+      "sha256": "a33a188792098280564b33074b77248ef3eea05c4d1899bf634ebe1a17fcea2e"
+    },
+    "source_release": {
+      "corpus_relative_file": "finish-20261004/root/source-package-061-v1/source-release.json",
+      "sha256": "1acd94bcb7d382990207263780cf290401ee196d4c31fba1ae6adb09d50bcc89"
+    }
+  },
+  "consumer_selection_plan": {
+    "file": "docs/research/scorecards/work/integration/new_american_print_2008_plan_20261005.json",
+    "sha256": "6573d71ddafe7d8a176e16a0f1123b5ff56fefd509f3437d54bf5c1c4b7501f6"
+  },
+  "consumer_base_commit": "13e8a7dc85f3258edcd7826c5bba5812cbe60f79",
+  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_new_american_print_20261005.json",
+  "consumer_policy": "Only new_american:freedom-index-110-4-print, with printed votes 31\u201340 and cumulative ratings 1\u201340 kept separate. Existing new_american reader/default registry remains disabled, hash_only, unreviewed rights and no historical backfill.",
+  "historical_package_pins": "All prior vendored wheels, sidecars and source qualification proofs remain unchanged",
+  "source_merge_commit": "76ec8628f608b1ed2080b8ef2a4a8c920af72c4f",
+  "source_tag": "v0.61.0"
+}

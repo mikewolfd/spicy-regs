@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-tennessee-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/tennessee",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "5c633602782f28ca9d6dcf3991ce0f9360baf0ce091548fed30183870b435513",
+  "native_reference_sha256": "d358475e786413f1b7aa76cb9147007472767b059a346d6427ae3f7cbd53cc24",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "4dbace7eea7f9aaf3bfc621cecd1519f4db383fd0f82a77bd67810005b1abe60",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 7,
+    "scorecard_member_ratings": 7,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

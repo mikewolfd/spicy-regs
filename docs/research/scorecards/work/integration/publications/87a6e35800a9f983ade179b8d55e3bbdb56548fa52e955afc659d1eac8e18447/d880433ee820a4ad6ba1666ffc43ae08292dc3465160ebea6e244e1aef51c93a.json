@@ -1,0 +1,24 @@
+{
+  "format_version": "scorecard-integration-published-observation/2",
+  "publisher_id": "common_cause",
+  "scorecard_id": "common_cause:2020-archived",
+  "parser_version": "common-cause-named-qualified-original-pdf/1",
+  "counts": {
+    "scorecard_items": 35,
+    "scorecard_member_item_results": 8420,
+    "scorecard_member_ratings": 528,
+    "scorecard_members": 528,
+    "scorecard_methodologies": 37,
+    "scorecard_metric_components": 0,
+    "scorecard_metric_items": 35,
+    "scorecard_metrics": 2,
+    "scorecard_publishers": 1,
+    "scorecard_snapshots": 1,
+    "scorecards": 1
+  },
+  "source_qualification": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/bd8712999d5d4e1192a47d544f629a087e093e03e4ed26051ae9b12f0542f670.json",
+  "source_qualification_sha256": "bd8712999d5d4e1192a47d544f629a087e093e03e4ed26051ae9b12f0542f670",
+  "public_readback": "publications/87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447/readback.json",
+  "public_readback_sha256": "c7c3927a710c46c75711bc197026de9a2e19fc2451a299646411547d9fdf1af1",
+  "observed_source_generation": "sha256:87a6e35800a9f983ade179b8d55e3bbdb56548fa52e955afc659d1eac8e18447"
+}

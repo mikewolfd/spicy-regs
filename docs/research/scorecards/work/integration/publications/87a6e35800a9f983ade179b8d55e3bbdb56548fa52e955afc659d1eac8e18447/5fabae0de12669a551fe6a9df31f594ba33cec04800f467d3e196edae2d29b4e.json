@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "ara",
+  "scorecard_id": "ara:119-2025",
+  "source_url": "https://retiredamericans.org/wp-content/uploads/2026/03/2025-Congressional-Voting-Record.pdf",
+  "parser_version": "ara-2025-qualified-semantic/1",
+  "reader_sha256": "de57c28a08518b2fb58f6a6a3bf2936bf9bd9b45f21d78b275d2f333bb220b17",
+  "capture_manifest_sha256": "bc1fe72582df1e8683c3f197a211f8ebf194c077384aad9be1b9320d043d6075",
+  "native_reference_sha256": "6c298e0bc4d2e04ceb128d25315317b3c4ce80112811cf8f3f9350a62b79c043",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "418f10f2fc72c399dca6b65bcd20b87bf5931d1a06023ad5fa4a81f280b7bf2f",
+  "completeness_rule": "Complete original 2025 report: exact source/observation hashes and every member-page count reconcile; all annual/lifetime scores and ten actions per member match the original. Source surname-only identities, eligibility and missed-vote glyphs remain literal. The contradictory final House preferred-position header is retained; item targets use explicit source narratives. No lifetime item ledger or universal reproduction formula is invented.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 2,
+    "scorecard_metrics": 4,
+    "scorecard_items": 20,
+    "scorecard_metric_items": 20,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 1070,
+    "scorecard_member_item_results": 5350
+  },
+  "capture_count": 1,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "7f5c48baebd21cf8e668060edd9ab1171c45f9f744987ecb4b9b7bde2be9a6a7"
+}

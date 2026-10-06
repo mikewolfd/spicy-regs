@@ -19,7 +19,7 @@ One source-reported metric value for a member; different grades, ranks and score
 | `metric_id` | `VARCHAR` | Stable source-layer metric id; no downstream identity resolution. |
 | `publisher_member_key` | `VARCHAR` | Versioned reader key for this source member context; not a resolved official identifier. |
 | `value_text` | `VARCHAR` | The publisher-reported rating, including units, suffixes and exclusions; reader-documented text normalization retains the original in source evidence. |
-| `value_number` | `DECIMAL(38,19)` | Optional exact decimal text read from an unambiguous numerical value; never a grade conversion. |
+| `value_number` | `VARCHAR` | Optional exact decimal text read from an unambiguous numerical value; never a grade conversion. |
 | `value_status_text` | `VARCHAR` | Source-stated value status, preserved as text; NULL when unstated. |
 | `rank_text` | `VARCHAR` | Source-stated rank, preserved as text; NULL when unstated. |
 | `notes_text` | `VARCHAR` | Source-stated notes, preserved as text; NULL when unstated. |

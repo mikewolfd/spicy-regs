@@ -13,20 +13,35 @@ distinct. Reference and period locators remain in receipt evidence, alongside th
 exact original JSON, so absent object properties remain distinguishable from
 explicit null properties during replay.
 
-Boolean flags retain unknown values as null. Exact rating numbers become
-`DECIMAL(38,19)`, which permits nineteen integer digits and nineteen fractional
-digits. Weights and contributions retain `DECIMAL(38,18)`. A value outside its
-declared bound refuses instead of rounding. Publisher display text remains
-independently available. Grade letters never become numbers.
+Boolean flags retain unknown values as null. Under `scorecards-etl-ratings-v3`,
+exact rating numbers retain validated decimal text in `VARCHAR`. Original
+publisher JSON exceeds the earlier fixed decimal precision; increasing Arrow's
+precision did not preserve those values in DuckDB. Weights and contributions
+retain `DECIMAL(38,18)` and refuse values outside that bound. Publisher display
+text remains independently available. Grade letters never become numbers.
+See [exact rating numbers](research/scorecards/work/integration/rating_numbers.md)
+for source evidence, SQL behavior and the supported local migration path.
 The retained-row census and exact-roundtrip checks are in
 `/Users/mikewolfd/Work/corpora/spicy-regs-etl-split-20261003/scorecards-report.json`.
 The additional ILA precision census and exact Arrow/DuckDB comparisons are in
 `receipts/scorecards-expansion-20261004/etl-conversion-review/diagnosis.json`.
-Historical rating generations retain their pinned scale and receipt policy.
+Historical rating generations retain their original `DECIMAL(38,18)` or
+`DECIMAL(38,19)` scale and their exact frozen receipt policy.
 Reads admit only the exact known historical or current declarations and verify
 the original schema, subject hashes and receipt joins before restoring source
-strings. A subsequent build generates current rating receipts from those exact
-source strings; it never reinterprets an old receipt under a different policy.
+strings. A subsequent build generates current rating subjects from those exact source
+strings. An unchanged NULL rating can retain its original receipt under its
+explicitly admitted historical policy. A changed numeric subject gets a current
+receipt naming the direct predecessor; old receipt hashes are never reinterpreted.
+
+A refresh compares the completed family through the shared
+`carry_receipt_history` helper. Unchanged accepted rows retain their complete
+original receipts, including their original generation and any historical notes.
+Changed accepted rows retain only a direct predecessor reference alongside their
+current source evidence. Repeated failed attempts match in source order when
+both their processing values and diagnostics agree. The helper preserves current
+row order and count; it does not trim historical files. Conversion refusal skips
+prior carry and leaves the prior family untouched.
 
 Snapshot records describe capture, parsing, completeness and evidence policy.
 They belong entirely in receipts. Resolver receipts retain input pins, candidate
@@ -50,8 +65,8 @@ the measurement covers that captured edition rather than full-corpus throughput.
 
 See `src/spicy_regs/etl_policies/scorecard*.json` for installed receipt requirements.
 Both rollups use the shared `receipt_policies` path and its build identity.
-Unchanged prior observations retain their original witnesses and attempt through
-the shared `rebind_receipt` helper. New attempts remain specific to the new build;
+Unchanged prior observations retain their complete original receipts through
+the shared `carry_receipt_history` helper. New attempts remain specific to the new build;
 earlier failures remain available in their retained immutable generations.
 Official inputs with receipts use `CongressInput.materialize` before resolution.
 The reader restores every selected partition under its generation-bound receipts.

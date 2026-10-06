@@ -16,7 +16,10 @@ SPEC.loader.exec_module(survey)
 
 @pytest.fixture
 def data():
-    return {name: json.loads((survey.DEFAULT_DIRECTORY / name).read_text()) for name in survey.INPUTS}
+    names = survey.INPUTS + (
+        (survey.RECOVERY_FILE,) if (survey.DEFAULT_DIRECTORY / survey.RECOVERY_FILE).exists() else ()
+    )
+    return {name: json.loads((survey.DEFAULT_DIRECTORY / name).read_text()) for name in names}
 
 
 def test_research_inputs_and_reports_are_consistent():
@@ -65,6 +68,30 @@ def test_complete_http_read_does_not_establish_a_complete_scorecard(data):
 def test_research_cannot_promote_a_production_adapter(data):
     data["scorecard_source_catalog.json"]["sources"][0]["discovery_status"] = "supported"
     with pytest.raises(ValueError, match="cannot establish production support"):
+        survey.validate(data)
+
+
+@pytest.mark.parametrize("change", ["missing_notice", "failed_response", "discovery_only"])
+def test_retirement_requires_a_successful_original_closure_notice(data, change):
+    source = next(s for s in data["scorecard_source_catalog.json"]["sources"] if s["publisher_id"] == "liberty_lobby")
+    source["discovery_status"] = "retired"
+    capture = data["capture_receipts.json"]["captures"][0]
+    capture["capture_complete"] = True
+    capture["http_status"] = 200
+    capture["review_status"] = "original_publisher_retirement_notice"
+    source["verification_capture_ids"] = [capture["capture_id"]]
+    source["latest_discovery_outcome"] = {
+        "outcome": "retired_confirmed",
+        "capture_ids": [capture["capture_id"]],
+        "notes": "Publisher closure notice; last rating edition unknown",
+    }
+    if change == "missing_notice":
+        source.pop("latest_discovery_outcome")
+    elif change == "failed_response":
+        capture["http_status"] = 404
+    else:
+        capture["review_status"] = "discovery_only"
+    with pytest.raises(ValueError, match="Retirement needs an original publisher closure notice"):
         survey.validate(data)
 
 

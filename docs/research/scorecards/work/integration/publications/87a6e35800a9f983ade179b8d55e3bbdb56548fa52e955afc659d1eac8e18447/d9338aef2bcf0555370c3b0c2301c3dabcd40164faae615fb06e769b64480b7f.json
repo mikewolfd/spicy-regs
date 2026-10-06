@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-north-dakota-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/north-dakota",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "e6de9e144ab73cba54875d13216c12d7730a3caddbd6227a49d8b224e5724cfe",
+  "native_reference_sha256": "942f3223cf5d3231f490b3c20119d75b6e7ef9e3520ae5b44497e32f076000a7",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "b2ff847245c7d7fcb04ddbc490279b8dd7da85fd80f7023fc23dddea4b6e5220",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 1,
+    "scorecard_member_ratings": 1,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}
