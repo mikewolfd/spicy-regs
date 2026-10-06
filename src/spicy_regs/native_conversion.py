@@ -413,9 +413,10 @@ def _check_processing_restore(original: Path, restored: Path, *, label: str) -> 
 
 def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], base: str, work: Path,
                            generation_id: str, evidence: tuple[Path, ...]) -> _Built:
-    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.selected_generations import SelectedInputs
     from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal, policy
 
+    source_schema = pq.read_schema(retained[cls.output])
     dataset = cls.output.removesuffix(".parquet")
 
     def exact(restored: Path) -> Path:
@@ -426,13 +427,20 @@ def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], 
             raise ValueError("Regulatory prepared dataset differs from its maintained family")
         return exact(materialize_internal(
             ReceiptInput(dataset, (generation / cls.output,), generation / "etl_receipts.parquet", generation_id),
-            work / "restored" / uuid4().hex / cls.output, bulk=True,
+            work / "restored" / uuid4().hex / cls.output, bulk=True, source_schema=source_schema,
         ))
 
     def read_published(name: str, index: Mapping) -> int:
         if name != dataset:
             raise ValueError("Regulatory published dataset differs from its maintained family")
-        restored = SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset)
+        directory = work / "read-back" / uuid4().hex
+        selected = SelectedInputs(directory, directory / "native", index=index, public_url=base).select(dataset)
+        if selected is None:
+            raise ValueError("Published regulatory input selection is absent")
+        restored = materialize_internal(
+            ReceiptInput(dataset, selected.subjects, selected.receipts, selected.generation_id),
+            directory / cls.output, bulk=True, source_schema=source_schema,
+        )
         return _table_rows(exact(restored))
 
     return _Built(generation, {dataset: policy(dataset).policy_version}, restore, read_published, evidence)
