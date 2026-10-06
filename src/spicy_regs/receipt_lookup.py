@@ -117,21 +117,29 @@ class Member(NamedTuple):
     family: str | None
     generation_id: str
     artifact_digest: str | None
+    snapshot_id: str | None = None
+    manifest_key: str | None = None
 
 
-def selected_member(index: Mapping, local: Mapping | None, base_url: str, table: str) -> Member | None:
-    """The receipt member of the family that publishes ``table`` here, as the ``etl_receipts`` view selects it.
+def selected_member(index: Mapping, local: Mapping | None, base_url: str, table: str,
+                    snapshot: Mapping | None = None) -> Member | None:
+    """The receipt member paired with the subjects this connection selects.
 
     A native build root names its member itself; a download holds only its selected families' members; a remote
     connection reads the member under the family's generation prefix. ``None`` where the table's family has no
     receipts in this connection, or a download selected a sibling table of the family and not this one.
     """
-    from spicy_regs.sources.publication import table_owner
+    from spicy_regs.sources.publication import rulemaking_receipt, table_owner
 
     native = (local or {}).get("native", {}).get(table)
     if native is not None:
         return Member(native["receipts"], None, None, native["generation_id"], None)
     owner = table_owner(index, f"{table}.parquet")
+    if owner is None and local is None and snapshot is not None and f"{table}.parquet" in snapshot["tables"]:
+        receipt = rulemaking_receipt(snapshot)
+        if receipt is not None and table in receipt["datasets"]:
+            return Member(f"{base_url.rstrip('/')}/{receipt['remote_key']}", "sha256:" + receipt["sha256"],
+                          None, receipt["generationId"], None, snapshot["snapshot_id"], snapshot["manifest_key"])
     if owner is None or table not in owner[1].get("etlReceipts", {}).get("datasets", ()):
         return None
     family, entry = owner
@@ -146,10 +154,12 @@ def selected_member(index: Mapping, local: Mapping | None, base_url: str, table:
     return Member(location, receipt["sha256"], family, receipt["generationId"], entry["artifactDigest"])
 
 
-def tables_with_receipts(index: Mapping, local: Mapping | None, base_url: str) -> list[str]:
+def tables_with_receipts(index: Mapping, local: Mapping | None, base_url: str,
+                         snapshot: Mapping | None = None) -> list[str]:
     """Every table this connection can answer for: an installed row identity and a selected receipt member."""
     return sorted(table for table in descriptors()
-                  if carried_fields(table) is not None and selected_member(index, local, base_url, table) is not None)
+                  if carried_fields(table) is not None
+                  and selected_member(index, local, base_url, table, snapshot) is not None)
 
 
 class _Group(NamedTuple):
@@ -476,16 +486,16 @@ def _field_states(table: str, fields: Sequence[str], where: Mapping[str, str | N
 
 def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequence[str], index: Mapping,
                 local: Mapping | None, base_url: str, entry: Mapping[str, Any],
-                plain: Callable[[Any], Any]) -> dict[str, Any]:
+                plain: Callable[[Any], Any], snapshot: Mapping | None = None) -> dict[str, Any]:
     """The tool's reply: one entry per key in request order, under the facts every entry shares.
 
     ``entry`` is the table's dictionary entry and ``plain`` the server's JSON conversion. Every refusal is a
     ValueError whose text says what is valid.
     """
     where = carried_fields(table)
-    member = selected_member(index, local, base_url, table) if where is not None else None
+    member = selected_member(index, local, base_url, table, snapshot) if where is not None else None
     if where is None or member is None:
-        served = tables_with_receipts(index, local, base_url)
+        served = tables_with_receipts(index, local, base_url, snapshot)
         reason = (f"{table!r} is not a table with a row identity" if where is None
                   else f"{table} has no receipts in this connection (nothing here publishes them yet)")
         raise ValueError(f"{reason}, so there is no receipt to read. Tables whose receipts this connection holds: "
@@ -546,6 +556,8 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
         "receipts": {
             "family": member.family, "generation_id": member.generation_id,
             "artifact_digest": member.artifact_digest,
+            **({"snapshot_id": member.snapshot_id, "manifest_key": member.manifest_key,
+                "member_sha256": member.sha256} if member.snapshot_id is not None else {}),
             "policy_version": next(iter(stated)) if len(stated) == 1 else sorted(stated) or None,
         },
         "fields": {name: {"meaning": meaning, "kept_in": where[name],

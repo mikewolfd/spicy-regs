@@ -215,7 +215,7 @@ def word(recipe, element, row):
         match = re.fullmatch(r"([1-9][0-9]*)-senate-[12]-[1-9][0-9]*", value)
         return match[1] if match else None
     if transform == "hearing-congress":
-        match = re.fullmatch(r"[SH]\.Hrg\. ([1-9][0-9]*)-[0-9]+", value)
+        match = re.fullmatch(r"[SH]\.Hrg\. ?([1-9][0-9]*)-[0-9]+", value)
         return match[1] if match else None
     if transform == "lower":
         return value.lower()
@@ -323,7 +323,7 @@ def array_sql_relationships():
         if transform == "lower":
             return f"lower({result})"
         if transform == "hearing-congress":
-            return f"regexp_extract({result}, '[SH]\\.Hrg\\. ([1-9][0-9]*)-[0-9]+', 1)"
+            return f"regexp_extract({result}, '^[SH]\\.Hrg\\. ?([1-9][0-9]*)-[0-9]+$', 1)"
         if transform:
             raise ValueError("Unsupported SQL navigation transform")
         return result

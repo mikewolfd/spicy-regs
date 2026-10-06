@@ -15,6 +15,7 @@ derived again on every row each run.
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence, Set
 from dataclasses import asdict, dataclass
@@ -116,6 +117,8 @@ class IndexSpec:
     #: each row's "detail was read" (:func:`_rederive_held`), so a held row gains a changed rule without a re-read.
     rederive: Callable[[Any, Sequence[bool]], Any] | None = None
     related_routes: tuple[tuple[str, str], ...] = ()
+    #: Newly read fields may have been dropped on any held detail, including rows that already state detail_read.
+    reread_on_shape_change: bool = False
 
 
 def _per_congress(route: CongressListRoute) -> Callable[[Sequence[int], Mapping[int, str]], Sequence[tuple[str, str]]]:
@@ -262,7 +265,10 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         # join-gaps-2026-09-26/f/). hearing_transcripts joins on event_id, and
         # every transcript it could not join was a 118th meeting.
         trailing_congresses=1,
-        shape_version="lists=related-nominations-treaties-002",
+        # 002 was journaled while holding previously read rows without the new
+        # references. 003 repairs their exact retained responses before API retries.
+        shape_version="lists=related-nominations-treaties-003",
+        reread_on_shape_change=True,
     ),
     "record_issues": IndexSpec(
         "record_issues",
@@ -368,7 +374,9 @@ def _unevidenced(held: Mapping[tuple, _Held], spec: IndexSpec, evidence: Capture
     the set starts as every held detail and only shrinks as runs read it. A
     prior journaled under a detail shape other than ``spec.shape_version``
     (or none) no longer backs the rows that shape reads differently
-    (``_Held.stale``), so they join its remainder; each run journals its
+    (``_Held.stale``), so they join its remainder. An index adding detail fields
+    opts into invalidating every read row on a shape change; retained response
+    replay may repair it before the bounded request queue. Each run journals its
     shape beside the remainder, so they join once. A run without evidence has
     nothing to back and re-reads nothing.
     """
@@ -380,7 +388,7 @@ def _unevidenced(held: Mapping[tuple, _Held], spec: IndexSpec, evidence: Capture
         return read
     remainder = read & {tuple(key) for key in selection["unevidenced"]}
     if selection.get("shape_version") != spec.shape_version:
-        remainder |= {key for key in read if held[key].stale}
+        remainder |= read if spec.reread_on_shape_change else {key for key in read if held[key].stale}
     return remainder
 
 
@@ -562,6 +570,13 @@ def build_index_table(
     prior = published_table(output_dir, spec.table, download_prior)
     held = _held_rows(prior, spec, identity, version)
     unevidenced = _unevidenced(held, spec, evidence)
+    replay_ambiguous: set[tuple] = set()
+    if spec.table == "committee_meetings" and prior is not None and evidence is not None:
+        from spicy_regs.transforms.meeting_reference_replay import replay_meeting_references
+
+        resolved, replay_ambiguous = replay_meeting_references(
+            prior, unevidenced, evidence, base_url=os.getenv("R2_PUBLIC_URL", ""))
+        unevidenced -= resolved
     windows = _windows(held, congresses, unevidenced=unevidenced) if spec.trailing_congresses else {}
     listed = _walk(reader, spec, congresses, identity, windows)
 
@@ -594,6 +609,9 @@ def build_index_table(
         state = held.get(entry.key)
         stamp = entry.row[version]
         reread = state is not None and state.read and state.stamp == stamp
+        if reread and entry.key in replay_ambiguous:
+            outcomes["ambiguous_replay"] += 1
+            continue
         if reread and entry.key not in unevidenced:
             outcomes["held"] += 1
             continue

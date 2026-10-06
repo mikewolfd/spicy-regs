@@ -186,3 +186,36 @@ def test_the_other_map_time_statuses_name_where_they_are_decided():
     assert len(entity) == 1 and all(name in next(iter(entity)) for name in ("`fec_committees", "`fec_candidate_history",
                                                                             "P00000001"))
     assert "`back_reference_transaction_id`" in _column("fec_loan_guarantors", "loan_link_status")
+
+
+@pytest.mark.parametrize('table', ['committee_meetings', 'hearing_transcripts'])
+@pytest.mark.parametrize('native', [False, True], ids=['legacy-json', 'native-list'])
+def test_live_witness_claim_counts_stated_witnesses_and_preserves_null_and_empty(table, native):
+    import duckdb
+    import pyarrow as pa
+    from spicy_regs.subject_catalog import policies
+    from tests.test_chaos_r6_dictionary_live import _stated_witnesses
+
+    if native:
+        field = policies()[table].subject_schema.field('witnesses')
+        schema = pa.schema([field])
+        witness = {'name': 'Original witness'} if pa.types.is_struct(field.type.value_type) else 'Original witness'
+        values = [None, [], [witness]]
+        data = pa.Table.from_pylist([{'witnesses': value} for value in values], schema=schema)
+    else:
+        data = pa.table({'witnesses_json': [None, '[]', '[{"name":"Original witness"}]']})
+    with duckdb.connect() as con:
+        con.register('held', data)
+        columns = {row[0]: row[1] for row in con.execute('DESCRIBE held').fetchall()}
+        condition = _stated_witnesses(table, columns)
+        assert con.execute(f'SELECT count(*) FROM held WHERE {condition}').fetchone() == (1,)
+
+
+@pytest.mark.parametrize('columns', [{}, {'witnesses': 'VARCHAR'},
+                                     {'witnesses_json': 'INTEGER'},
+                                     {'witnesses': 'VARCHAR[]', 'witnesses_json': 'VARCHAR'}])
+def test_live_witness_claim_refuses_missing_ambiguous_or_undeclared_representations(columns):
+    from tests.test_chaos_r6_dictionary_live import _stated_witnesses
+
+    with pytest.raises(ValueError):
+        _stated_witnesses('committee_meetings', columns)
