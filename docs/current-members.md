@@ -5,6 +5,9 @@ reviewed fork commit named in `src/spicy_regs/sources/member_rosters.json`.
 Each request uses that immutable URL and checks the response size and digest.
 SpicyDocs owns transport, parsing, byte limits and source refusals. The source
 evidence records the requested URL, capture and selected input pin.
+Raw GitHub serves these JSON files as `text/plain`; the adapter admits that
+media type only for its selected immutable URLs. It retains the real response
+header and still requires valid roster JSON and the approved size and digest.
 
 These inputs were generated with the community repository's unchanged JSON
 serializer from the approved term-date patch. The patch changes the documented

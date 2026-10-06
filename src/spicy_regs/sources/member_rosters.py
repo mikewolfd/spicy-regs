@@ -68,6 +68,14 @@ class ReviewedMemberRosters(LegislatorsAcquirer):
                 attach_capture(error, self._current_capture)
             raise
 
+    def capture_validated(self, url: str, *, media_types: tuple[str, ...], **kwargs):
+        # Raw GitHub serves these JSON files as text/plain. Admit that actual
+        # header only for our immutable selected routes; shared capture and
+        # JSON validation still run, and _acquire checks both approved pins.
+        if url in {member["url"] for member in self.selection.values()} and media_types == ("application/json",):
+            media_types = (*media_types, "text/plain")
+        return super().capture_validated(url, media_types=media_types, **kwargs)
+
     def _acquire(self, url: str, operation: str, max_bytes: int):
         member = self.selection[operation]
         if self.evidence:
