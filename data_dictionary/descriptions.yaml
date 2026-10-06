@@ -3527,11 +3527,13 @@ tables:
       once. The shared pooled list reader must
       settle each query by distinct identity before any output is replaced.
       Every existing publisher row receives source_route=congress-gov-detail.
-      The four Record evidence columns remain NULL until the separate Record
-      backfill, one GovInfo request per entry, is acquired in the next rollup.
-      In that future reconstruction submitting_official and submitting_agency
-      must both remain NULL: held-out precision was 85.3% and 88.4%, below the
-      declared 90% gate. The original sentence stays in record_entry_text.
+      Bounded reads of selected Congressional Record issues can fill
+      record_package_id, record_granule_id and record_entry_text from exactly
+      one printed entry with matching Congress, communication type and number.
+      Missing, repeated or incompletely read entries leave these fields empty.
+      The source receipts distinguish unread, failed, empty and ambiguous results.
+      API observations and source_route remain unchanged. Submitting-official
+      and submitting-agency values are not inferred from the printed text.
     columns_from: spicy_docs
 
   committee_meetings:

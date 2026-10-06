@@ -576,12 +576,17 @@ def test_every_hosted_column_has_prose():
 
 
 def test_hosted_prose_is_the_contract_prose_not_a_copy():
-    """The sentences are read from the wheel, so there is only one copy of them; a list is named as published."""
+    """Wheel prose remains authoritative except the repository's three enriched Record fields."""
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     descriptions = dd.load_descriptions()
     for table in set(dd.CONTRACT_TABLES) & set(dd.TABLES):
         source = dict(TABLE_CONTRACTS[table].descriptions)
+        if table == "house_communications":
+            enriched = dd.contract_column_prose(table)
+            fields = {"record_package_id", "record_granule_id", "record_entry_text"}
+            assert {field for field in source if source[field] != enriched[field]} == fields
+            source.update({field: enriched[field] for field in fields})
         policy = dd.subject_policies().get(table)
         for field, prose in descriptions[table]["columns"].items():
             if field in source and (policy is None or str(policy.subject_schema.field(field).type) in {"string", "bool", "int64", "int32"}):

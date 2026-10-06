@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 from dataclasses import asdict
+from datetime import date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -30,6 +32,18 @@ FIELDS = ("record_package_id", "record_granule_id", "record_entry_text")
 EVENT = "house-record-package"
 RULE = "house-record-enrichment-001:" + RECORD_COMMUNICATION_RULE_VERSION
 BODY_LIMIT = 2 ** 20
+
+
+def _calendar_day(value):
+    """Validate the entire stated ISO date/time and keep its local calendar day."""
+    if not isinstance(value, str):
+        raise ValueError("Record date must be a stated ISO date or datetime")
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+        return date.fromisoformat(value).isoformat()
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+                    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-5][0-9])?", value):
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).date().isoformat()
+    raise ValueError("Record date must be a stated ISO date or datetime")
 
 
 def _digest(value):
@@ -110,7 +124,14 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                 evidence.event("house-record-result", congress=row["congress"], communication_type="ec",
                                number=row["number"], outcome="unread", reason="API states no Record date")
                 continue
-            wanted[(str(row["congress"]), str(date))].append(position)
+            try:
+                day = _calendar_day(date)
+            except ValueError:
+                evidence.event("house-record-result", congress=row["congress"], communication_type="ec",
+                               number=row["number"], outcome="refused", congressional_record_date=date,
+                               reason="API Record date is not a valid ISO date or datetime")
+                continue
+            wanted[(str(row["congress"]), day)].append(position)
     if not wanted:
         return
     issue_path = output.parent / "record-enrichment-issues.parquet"
@@ -122,15 +143,24 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
             or pin.get("processing", {}).get("byteSize") != issue_path.stat().st_size
             or pin.get("processing", {}).get("sha256") != "sha256:" + hashlib.sha256(issue_path.read_bytes()).hexdigest()):
         raise ValueError("Record issue processing input differs from selected receipts")
-    issues = defaultdict(list)
+    issues, invalid_congresses = defaultdict(list), set()
     for issue in pq.read_table(issue_path).to_pylist():
-        scope = (str(issue.get("congress")), str(issue.get("issue_date")))
+        congress = str(issue.get("congress"))
+        if not any(scope[0] == congress for scope in wanted):
+            continue
+        try:
+            scope = (congress, _calendar_day(issue.get("issue_date")))
+        except ValueError:
+            evidence.event(EVENT, package_id=issue.get("package_id"), outcome="refused",
+                           reason="Selected Record issue date is not a valid ISO date or datetime", issue=issue, input=pin)
+            invalid_congresses.add(congress)
+            continue
         if scope in wanted:
             issues[scope].append(issue)
     fetched = granules_used = bytes_used = replayed_bytes = 0
     fetch = fetch_retained or (lambda url, limit: publication._bounded_get(url, allow_missing=False, limit=limit))
     for scope, positions in sorted(wanted.items()):
-        candidates, complete = [], bool(issues[scope])
+        candidates, complete = [], bool(issues[scope]) and scope[0] not in invalid_congresses
         for issue in issues[scope]:
             package = issue.get("package_id")
             if package in (None, ""):
@@ -237,6 +267,7 @@ def enrich_house_record(output: Path, *, download_prior, selected_input, evidenc
                         if not row.get(field):
                             row[field] = value
             evidence.event("house-record-result", congress=row["congress"], communication_type="ec", number=row["number"],
+                           congressional_record_date=row["congressional_record_date"], record_calendar_day=scope[1],
                            outcome=outcome, qualified_occurrences=len(matched), complete_scope=complete,
                            witnesses=[{"entry":entry, "marker":cp["marker"], "input":cp["input"],
                                        "bodies":cp["bodies"]} for entry, cp in matched])
