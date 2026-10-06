@@ -7,7 +7,7 @@ Only RESULT.json status=captured qualifies the complete local input.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 import hashlib
 import importlib.metadata
 import json
@@ -187,7 +187,7 @@ def task_pin(task) -> dict:
             return encode(value.value)
         if isinstance(value, bytes):
             return {'bytesHex': value.hex()}
-        if isinstance(value, dict):
+        if isinstance(value, Mapping):
             return {str(key): encode(item) for key, item in value.items()}
         if isinstance(value, (list, tuple, Record)):
             return [encode(item) for item in value]
