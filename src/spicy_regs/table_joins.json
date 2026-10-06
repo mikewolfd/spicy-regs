@@ -14077,6 +14077,3398 @@
       "ruleVersion": "source-navigation/1"
     },
     {
+      "id": "fec_source_row_fec_account_transfers",
+      "source": "fec_account_transfers",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_agency_mapping_dispositions",
+      "source": "fec_agency_mapping_dispositions",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_agency_report_documents",
+      "source": "fec_agency_report_documents",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_agency_report_text",
+      "source": "fec_agency_report_text",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_agency_reports",
+      "source": "fec_agency_reports",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_allocated_disbursements",
+      "source": "fec_allocated_disbursements",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_allocation_bases",
+      "source": "fec_allocation_bases",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_api_response_controls",
+      "source": "fec_api_response_controls",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_audit_findings",
+      "source": "fec_audit_findings",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_bundled_contributions",
+      "source": "fec_bundled_contributions",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_candidate_api_observations",
+      "source": "fec_candidate_api_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_collection_selection",
+      "source": "fec_collection_selection",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_committee_master_observations",
+      "source": "fec_committee_master_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_committee_observations",
+      "source": "fec_committee_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_communication_costs",
+      "source": "fec_communication_costs",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_contribution_aggregates",
+      "source": "fec_contribution_aggregates",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_coordinated_party_expenditures",
+      "source": "fec_coordinated_party_expenditures",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_debts",
+      "source": "fec_debts",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_disbursements",
+      "source": "fec_disbursements",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_electioneering_communications",
+      "source": "fec_electioneering_communications",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_filing_definition_evidence",
+      "source": "fec_filing_definition_evidence",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_filing_header_associations",
+      "source": "fec_filing_header_associations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_filing_links",
+      "source": "fec_filing_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_filing_report_observations",
+      "source": "fec_filing_report_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_filing_text_observations",
+      "source": "fec_filing_text_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_filings",
+      "source": "fec_filings",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_historical_ie_statistics",
+      "source": "fec_historical_ie_statistics",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_inaugural_donations",
+      "source": "fec_inaugural_donations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_independent_expenditures",
+      "source": "fec_independent_expenditures",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_intercommittee_transactions",
+      "source": "fec_intercommittee_transactions",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_legal_documents",
+      "source": "fec_legal_documents",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_legal_events",
+      "source": "fec_legal_events",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_legal_matters",
+      "source": "fec_legal_matters",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_legal_parties",
+      "source": "fec_legal_parties",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_loan_guarantors",
+      "source": "fec_loan_guarantors",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_loan_terms",
+      "source": "fec_loan_terms",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_loans",
+      "source": "fec_loans",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_lobbyist_registrations",
+      "source": "fec_lobbyist_registrations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_oversight_recommendations",
+      "source": "fec_oversight_recommendations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_postgres_committee_history_observations",
+      "source": "fec_postgres_committee_history_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_quality_notices",
+      "source": "fec_quality_notices",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_receipts",
+      "source": "fec_receipts",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_record_evidence",
+      "source": "fec_record_evidence",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_registration_statements",
+      "source": "fec_registration_statements",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_report_metrics",
+      "source": "fec_report_metrics",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_reported_financial_summaries",
+      "source": "fec_reported_financial_summaries",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_research_context_dispositions",
+      "source": "fec_research_context_dispositions",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_research_document_observations",
+      "source": "fec_research_document_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_research_filing_feed_items",
+      "source": "fec_research_filing_feed_items",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_research_meeting_observations",
+      "source": "fec_research_meeting_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_research_response_outcomes",
+      "source": "fec_research_response_outcomes",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_research_source_pages",
+      "source": "fec_research_source_pages",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_source_row_fec_retained_csv_observations",
+      "source": "fec_retained_csv_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@receipt:fec_source_records",
+          "columns": [
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "collection_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_sha256"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "receiptFields": [
+        "collection_id",
+        "source_record_id",
+        "source_sha256"
+      ],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
       "id": "native_filing_fec_account_transfers",
       "source": "fec_account_transfers",
       "fields": [],

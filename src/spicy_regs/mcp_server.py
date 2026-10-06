@@ -2082,7 +2082,7 @@ def _tools() -> list[Tool]:
         family. inputs_current is false if any lags, otherwise null if unknown.
         prior_generation is earlier output; snapshot_inputs names rulemaking sources.
         qualification compares live/audited pins, date and disposition for the
-        ledger's publisher. not_in_ledger means absent, not unevidenced.
+        ledger's publisher. not_in_ledger means absent from the bundled output ledger, not unevidenced.
         joins gives outgoing/incoming declarations. detail=true adds outgoing
         measurements and ledger statements; incoming measurements link to the
         child, retaining baselines. incoming_parent names the parent;
@@ -2090,8 +2090,7 @@ def _tools() -> list[Tool]:
         appears per entry. Missing reason means empty; floor_pct, no measured
         floor; expected_cardinality, unspecified; measured_via, measure the child.
         detail=false lists omissions in detail.omitted. receipt_fields names
-        inputs accepted by read_receipt_fields. Preserved source columns inherit
-        meanings; other view columns use declared meanings or null.
+        inputs accepted by read_receipt_fields. Source columns inherit meanings; other view columns use declared meanings or null.
         FEC release_compatibility is in publication (relationship if unavailable).
         detail=false retains pins, reasons, dependency generations and receipt
         count. compatible means captured data, interpretation and consumer match

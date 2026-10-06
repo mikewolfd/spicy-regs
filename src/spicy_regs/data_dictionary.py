@@ -774,25 +774,27 @@ def contract_grain(table: str) -> str:
     return _contracts()[table].grain
 
 
-@lru_cache(maxsize=1)
-def _former_spellings() -> re.Pattern[str]:
+@lru_cache(maxsize=256)
+def _former_spellings(table: str | None = None) -> re.Pattern[str]:
     """Every ``<column>_json`` no table or receipt declares while ``<column>`` is declared: a list's former name."""
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA
 
-    declared = {name for policy in subject_policies().values() for name in policy.subject_schema.names}
+    policies = subject_policies()
+    selected = [policies[table]] if table in policies else policies.values()
+    declared = {name for policy in selected for name in policy.subject_schema.names}
     declared |= set(RECEIPT_SCHEMA.names)
     former = sorted(name + "_json" for name in declared if name + "_json" not in declared)
     return re.compile(r"\b(" + "|".join(former) + r")\b")
 
 
-def native_spelling(prose: str) -> str:
+def native_spelling(prose: str, table: str | None = None) -> str:
     """Name each native list by its column where carried prose still uses its former serialized spelling.
 
     A contract's sentences describe the columns as spicy-docs emits them, lists serialized under ``<column>_json``.
     The native layout publishes the list as ``<column>``, so a sentence naming a sibling list is respelled, here
     only, for every reader of the prose; the sentence itself stays the contract's.
     """
-    return _former_spellings().sub(lambda match: match.group(1).removesuffix("_json"), prose)
+    return _former_spellings(table).sub(lambda match: match.group(1).removesuffix("_json"), prose)
 
 
 def fec_typed_schemas() -> dict[str, list[tuple[str, str]]]:

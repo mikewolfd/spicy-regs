@@ -158,6 +158,13 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
     # A stored native filing_key is already the retained mapper's decision; browser
     # navigation keeps every metadata observation and makes no latest/current selection.
     filing_sources = {j.child for j in processing_joins if j.parent == "fec_collections"}
+    for source in sorted(filing_sources - {"fec_source_records"}):
+        specs.append(array("fec_source_row_" + source, source, (),
+                           (route("@receipt:fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
+                                  (key(part("collection_id", row=True)), key(part("source_record_id", row=True)),
+                                   key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}"))),),
+                           meaning="The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+                           receipt_fields=("collection_id", "source_record_id", "source_sha256"), mode="row"))
     for source in sorted(filing_sources):
         if source == "fec_filings":
             continue

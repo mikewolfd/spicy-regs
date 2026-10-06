@@ -86,3 +86,10 @@ def test_receipt_only_targets_use_a_published_legacy_table_when_its_key_exists()
     assert target['available'] is True
     del schemas['native_legal_reference_reads']
     assert published_navigation([spec], schemas)[0]['targets'][0]['table'] == '@receipt:native_legal_reference_reads'
+
+
+def test_fec_source_row_retains_collection_and_source_content_identity():
+    target = recipe('fec_source_row_fec_filings')['targets'][0]
+    row = {'collection_id':'filings-f13-selected','source_record_id':'1010420180036115817','source_sha256':'sha256:'+'a'*64}
+    assert target_keys(target,row,row) == list(row.values())
+    assert target_keys(target,row,{**row,'source_sha256':None}) is None
