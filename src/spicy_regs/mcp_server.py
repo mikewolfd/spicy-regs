@@ -1531,11 +1531,24 @@ def _table_joins(table: str, *, measurements: bool) -> dict:
     join still states its kind, reason, baseline counts and floor.
     """
     record = _joins()
+    incoming = [join for join in record["joins"] if join["parent"] == table]
+    parent_columns = incoming[0]["parent_columns"] if incoming and all(
+        join["parent_columns"] == incoming[0]["parent_columns"] for join in incoming
+    ) else None
 
     def shaped(join: dict, *, incoming: bool = False) -> dict:
         shaped = {key: value for key, value in join.items() if measurements or key != "measurement"}
         if not incoming:
             return shaped
+        # The enclosing group names the parent once. Factor its columns only
+        # when every incoming declaration uses the same complete key.
+        shaped.pop("parent")
+        if parent_columns is not None:
+            shaped.pop("parent_columns")
+        if not shaped.get("reason"):
+            shaped.pop("reason", None)
+        if shaped.get("floor_pct") is None:
+            shaped.pop("floor_pct", None)
         # Missing optional fields retain their defaults; all keys, scope reasons,
         # baseline counts and floors stay present in both directions.
         if shaped.get("measured_via") is None:
@@ -1554,7 +1567,9 @@ def _table_joins(table: str, *, measurements: bool) -> dict:
         "basis": record["basis"],
         "baseline": record["baseline"],
         "outgoing": [shaped(join) for join in record["joins"] if join["child"] == table],
-        "incoming": [shaped(join, incoming=True) for join in record["joins"] if join["parent"] == table],
+        "incoming_parent": table,
+        **({"incoming_parent_columns": parent_columns} if parent_columns is not None else {}),
+        "incoming": [shaped(join, incoming=True) for join in incoming],
     }
 
 
@@ -2071,7 +2086,11 @@ def _tools() -> list[Tool]:
         not unevidenced. joins lists outgoing and incoming declarations.
         detail=true adds full outgoing measurements and ledger statements;
         incoming measurements link to the child's detailed description, keeping
-        baselines here. Missing expected_cardinality means unspecified; missing
+        baselines here. joins.incoming_parent names their parent once;
+        incoming_parent_columns supplies their shared complete parent key when
+        present, otherwise each entry carries parent_columns. Missing reason
+        means empty; missing floor_pct means no measured floor.
+        Missing expected_cardinality means unspecified; missing
         measured_via means measure the child. detail=false names omissions in
         detail.omitted. receipt_fields: what read_receipt_fields takes here.
         A view column preserving a source column inherits its meaning; otherwise

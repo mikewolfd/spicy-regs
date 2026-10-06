@@ -64,6 +64,11 @@ identify the same entity. Detailed MCP
 descriptions include full measurements on outgoing joins. Incoming joins retain
 their keys, reasons and baseline counts, and point to the child description for
 full measurement evidence so heavily connected tables stay within reply limits.
+MCP groups incoming links under `incoming_parent` and, when identical for every
+link, `incoming_parent_columns`. Otherwise each link keeps its own complete
+`parent_columns`. An absent incoming reason means empty; an absent `floor_pct`
+means no measured floor. Canonical JSON and public explorer metadata retain the
+full per-link records. CI runs a focused catalog-size check alongside the full test partitions.
 
 Every declared join uses the same checks. Pull requests measure added or changed
 joins against published data; the scheduled check measures the whole registry.

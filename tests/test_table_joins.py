@@ -303,8 +303,9 @@ def test_incoming_measurement_evidence_is_retrievable_from_the_child(monkeypatch
     for declared in record["joins"]:
         parent = mcp_server._table_joins(declared["parent"], measurements=True)
         incoming = next(j for j in parent["incoming"]
-                        if (j["child"], j["child_columns"], j["parent_columns"]) ==
+                        if (j["child"], j["child_columns"], j.get("parent_columns", parent.get("incoming_parent_columns"))) ==
                         (declared["child"], declared["child_columns"], declared["parent_columns"]))
+        assert parent["incoming_parent"] == declared["parent"]
         if declared["measurement"]:
             detail = incoming["measurement"]
             assert detail["status"] == "see_child_description" and detail["tool"] == "describe_table"
@@ -312,7 +313,24 @@ def test_incoming_measurement_evidence_is_retrievable_from_the_child(monkeypatch
             assert declared in child["outgoing"]
         else:
             assert "measurement" not in incoming
-        for key in ("kind", "reason", "baseline_keys", "baseline_missing", "floor_pct"):
+        for key in ("kind", "baseline_keys", "baseline_missing"):
             assert incoming[key] == declared[key]
+        assert incoming.get("reason", "") == declared["reason"]
+        assert incoming.get("floor_pct") == declared["floor_pct"]
         assert incoming.get("measured_via") == declared["measured_via"]
         assert incoming.get("expected_cardinality", "unspecified") == declared["expected_cardinality"]
+
+
+def test_incoming_parent_keys_are_factored_only_when_every_complete_key_matches(monkeypatch):
+    from spicy_regs import mcp_server
+
+    records = [table_joins.record(table_joins.Join("child_a", ("a",), "parent", ("id",), 1, 0)),
+               table_joins.record(table_joins.Join("child_b", ("b",), "parent", ("id",), 1, 0))]
+    monkeypatch.setattr(mcp_server, "_joins", lambda: {"basis": "test", "baseline": {}, "joins": records})
+    shared = mcp_server._table_joins("parent", measurements=True)
+    assert shared["incoming_parent_columns"] == ["id"]
+    assert all("parent_columns" not in j for j in shared["incoming"])
+    records[1]["parent_columns"] = ["alternate_id"]
+    mixed = mcp_server._table_joins("parent", measurements=True)
+    assert "incoming_parent_columns" not in mixed
+    assert [j["parent_columns"] for j in mixed["incoming"]] == [["id"], ["alternate_id"]]

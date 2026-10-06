@@ -1,8 +1,9 @@
 # Column navigation architecture review — 2026-10-06
 
-The review approves the reconciled integration. Two concerns were resolved:
+The review approves the reconciled integration. Three concerns were resolved:
 the duplicate separate-publication reader was removed from the release change,
-and category browsing now rejects structured fields and ambiguous Congress scopes.
+category browsing now rejects structured fields and ambiguous Congress scopes,
+and incoming MCP descriptions factor repeated parent identities without losing keys.
 The comments-to-dockets link keeps its measured missing destinations explicit.
 
 ## 1. Artifact summary
@@ -174,6 +175,24 @@ filter. Evidence: `spicygov/lib/shared-browse.ts:7-21,51-59` and the regression
 test in `spicygov/tests/shared-browse.test.mjs`.
 **RESHAPE:** qualify scalar category types and require one normalized Congress
 for session browsing. Both guards are implemented.
+
+### F5 — CONCERN, consumer conformance — RESOLVED
+
+The complete hosted test partition exposed a size failure: the detailed
+Congressional bills description reached 36,244 characters, exceeding the
+35,000-character fixture limit that reserves room for live publication evidence.
+Evidence: CI run `37420875812`, test (1),
+`tests/test_chaos_r6_server.py:401-438`.
+**RESHAPE:** factor the repeated incoming parent table and identical complete
+parent key once at the enclosing MCP group. Preserve per-link parent keys when
+they differ, all measured floors and baseline counts, material reasons, and the
+existing child-description evidence calls. Empty reasons and unmeasured floors
+have explicit documented defaults. Canonical registry records and public
+explorer metadata remain full records. See `src/spicy_regs/mcp_server.py:1533-1582`;
+`tests/test_table_joins.py:298-334`;
+`docs/explorer-metadata.md`, Contents and ownership. The focused reply-budget
+check also runs in the dictionary CI job, exposing this failure promptly.
+
 
 ### F3 — OBSERVATION, user value — KEEP
 
