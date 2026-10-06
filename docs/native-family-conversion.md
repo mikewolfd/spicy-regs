@@ -221,7 +221,7 @@ remote whose `main` is checked (default `origin`).
 ### Prepare, qualify, and publish the same build
 
 A successful official dry run now seals its `conversion.json`. Run it from
-the clean merged main and pinned environment that will publish the result:
+clean merged main and its pinned environment:
 
 ```sh
 R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py bill-family \
@@ -241,14 +241,32 @@ Publish those same bytes once the package is qualified:
 ```sh
 R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py \
   --publish-prepared "$RUN/bill-family/conversion.json" --allow bill-family \
-  --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --remote fork \
+  --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --expect-producer "$PRODUCER" --remote fork \
   --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
 ```
 
+`MAIN` names the current clean publisher; `PRODUCER` is the full commit in
+that sealed receipt's `source.checkout` and `source.main`. For an earlier
+producer, the command verifies its commit and ancestry in the same repository,
+hashes historical Python Git blobs using the generation's path ordering,
+and compares both producer and verifier implementation identities. Its
+historical vendored wheel must match its lock, the sealed wheel, and the
+current installed wheel. This path requires identical historical and current
+`uv.lock` bytes. Missing history, a different locked runtime, or an unproved
+producer refuses. Same-revision API callers may omit the producer pin.
+
 Prepared publication reruns byte checks, native admission and exact input
 restoration; it never runs the source writer. It refuses an altered or
-incomplete receipt, changed source/runtime, missing or altered members,
+incomplete receipt, unproved producer or changed publisher/runtime, missing
+or altered members,
 different restoration results, or a changed captured family entry.
+The generation bytes, producer source, and original prepared seal stay
+unchanged. After qualification, the publication attempt separately records
+the actual publisher source, runtime and implementation identity. Main and
+its installed locked wheel are rechecked immediately before that attempt.
+Original-row restoration does not prove every mapped native field, so the
+release package's native-field and installed reader qualifications still
+apply; a known relevant mapper defect requires a fresh preparation.
 Timestamp-only changes to that entry also refuse, including during a
 conditional pointer retry. Unrelated family updates remain intact.
 
@@ -296,12 +314,13 @@ before conversion, then checks the prepared or downloaded artifact's captured
 entry against the same digest before publication. The first check does not
 lock the publication index; a change before the converter captures it makes
 the later check fail, retaining the candidate without publishing it.
-The workflow explicitly checks out current main for the producer, even when
-the manual dispatch selects a workflow repair branch. The invocation's
+The workflow explicitly checks out current main with complete Git history,
+even when the manual dispatch selects a workflow repair branch. The invocation's
 `revision` identifies the workflow revision; `producer-revision.txt` and the
-conversion receipt identify the checked-out producer revision. The converter
-receives that producer revision as `--expect-main` and separately checks clean
-current main, the installed locked wheel, complete processing restoration,
+conversion receipt identify the retained producer revision. `publisher-revision.txt`
+identifies the current publisher. The converter receives the publisher revision
+as `--expect-main` and the full retained revision as `--expect-producer`.
+It separately checks clean current main, the installed locked wheel, complete processing restoration,
 source evidence and the exact stored predecessor before publication.
 
 Leave `publish` false to prepare without publication credentials. The run
@@ -325,11 +344,16 @@ The runner, disk floor, thread limits and acceptance checks remain unchanged.
 Hosted limits do not establish that a larger family fits the runner.
 
 After checks against the actual reader, dispatch with `publish=true`, the
-explicit `expected_bucket`, and `source_run_id` naming that preparation run.
+explicit `expected_bucket`, `source_run_id` naming that preparation run, and
+`expected_producer` naming its full producer commit.
 The workflow downloads those same bytes and calls `--publish-prepared`;
-it does not rerun the writer. Current main, runtime and complete prior entry
-must still match. Alternatively, a cleared single dispatch can prepare and
-publish immediately by leaving `source_run_id` empty. Always retain a failed
+it does not rerun the writer. The runner records whether retained output
+exists before downloading the missing official archive. It retains the original
+layout, including the sealed absolute generation path; a native-only subset
+cannot replace the complete publish directory. Never rewrite receipt paths or
+reseal a copied receipt. Current clean main, the same locked runtime, retained
+producer identities, and complete prior entry must pass the checks above.
+Alternatively, a cleared single dispatch can prepare and publish immediately by leaving `source_run_id` empty. Always retain a failed
 attempt and reconcile its pointer read-only; never clear its journal, reseal
 it, or dispatch a blind retry. Ordinary producer acceptance remains a later
 check after successful publication and anonymous readback.
