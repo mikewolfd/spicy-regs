@@ -32,6 +32,7 @@ from spicy_docs.interpretation.citations import (
 from spicy_docs.schemas.document_citation_tables import DocumentProvenance, shape_document_citation
 
 from spicy_regs.citation_sources import TEXT_SOURCES, document_key
+from spicy_regs.legislative_documents import native_document_key
 from spicy_regs.transforms.read_checkpoints import checkpoint_metadata, read_checkpoints
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path, published_table
 
@@ -168,6 +169,40 @@ def _read_fields(cursor, selections: Sequence[Selection], max_field_bytes: int) 
     return results
 
 
+def _normalize_prior_keys(prior: Path | None) -> list[dict[str, Any]]:
+    """Normalize a private prior copy and its checkpoints; refuse merged source scopes."""
+    spellings: dict[tuple[str, str], str] = {}
+
+    def normalize(row):
+        kind, original = row.get("document_kind"), row.get("document_key")
+        key = native_document_key(kind, original)
+        scope = kind, key
+        if scope in spellings and spellings[scope] != original:
+            raise ValueError("Historical citation keys converge on one native scope")
+        spellings[scope] = original
+        return {**row, "document_key": key}
+
+    checkpoints = [normalize(state) for state in read_checkpoints(prior, NAMESPACE)]
+    if prior is None:
+        return checkpoints
+    from spicy_regs.transforms.parquet_rows import write_rows
+
+    def rows():
+        with pq.ParquetFile(prior) as parquet:
+            for batch in parquet.iter_batches(batch_size=2000):
+                for row in batch.to_pylist():
+                    yield normalize(row)
+
+    schema = pq.read_schema(prior).with_metadata(checkpoint_metadata(prior, NAMESPACE, checkpoints))
+    temporary = prior.with_name("." + prior.name + ".native-keys")
+    try:
+        write_rows(rows(), temporary, schema)
+        temporary.replace(prior)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return checkpoints
+
+
 def build_held_citations(
     output_dir: Path, *, cursor, selections: Sequence[Selection],
     input_pins: Mapping[str, Mapping[str, Any]], download_prior,
@@ -194,7 +229,7 @@ def build_held_citations(
         shutil.copyfile(current, prior_scratch_path(output_dir, "document_citations"))
     prior = published_table(output_dir, "document_citations", download_prior)
     states = {(s.get("document_kind"), s.get("document_key"), s.get("text_sha256")): s
-              for s in read_checkpoints(prior, NAMESPACE)}
+              for s in _normalize_prior_keys(prior)}
     rows, replaced, receipts = [], set(), []
     reads = _read_fields(cursor, selections, max_field_bytes)
     for selection, (text, status, error_type) in zip(selections, reads, strict=True):

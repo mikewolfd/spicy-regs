@@ -28,7 +28,7 @@ def install_citation_inputs(connection, adapter, available):
     if "document_citations" not in available or not selected("document_citations"):
         return
     import pyarrow as pa
-    from spicy_regs.legislative_documents import field_registry, map_subject, bill_section_document_key
+    from spicy_regs.legislative_documents import field_registry, recorded_subject, native_document_key
 
     registry = field_registry()
     tables = {}
@@ -38,18 +38,25 @@ def install_citation_inputs(connection, adapter, available):
             continue
         schema = pa.schema([(field["name"], pa.string()) for field in registry[table]["fields"]])
 
-        def original(row, dataset=table):
+        court_keys = {}
+
+        def original(row, dataset=table, court_keys=court_keys):
             raw = row.get("raw_source_row")
             if not isinstance(raw, Mapping):
                 raise ValueError(f"{dataset}: citation source input is missing from the selected receipt")
-            mapped = map_subject(dataset, raw)
+            mapped = recorded_subject(dataset, raw, row)
             if mapped is not None and any(row.get(name) != value for name, value in mapped.items()):
                 raise ValueError(f"{dataset}: citation source input differs from its selected native subject")
             result = dict(raw)
             if dataset == "document_citations":
-                result["document_key"] = row["document_key"]
-            elif dataset == "document_citation_reads" and raw.get("document_kind") == "bill_section":
-                result["document_key"] = bill_section_document_key(raw.get("document_key"))
+                result["document_key"] = native_document_key(raw.get("document_kind"), row["document_key"])
+            elif dataset == "document_citation_reads":
+                result["document_key"] = native_document_key(raw.get("document_kind"), raw.get("document_key"))
+            if raw.get("document_kind") == "court_opinion_derived_pdf":
+                key, spelling = result["document_key"], raw["document_key"]
+                if key in court_keys and court_keys[key] != spelling:
+                    raise ValueError("Historical citation keys converge on one native scope")
+                court_keys[key] = spelling
             return result
 
         tables[table] = adapter.restore_originals(table, schema, original, prefix=PROCESSING_PREFIX)

@@ -8,6 +8,7 @@ from pathlib import Path
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from spicy_regs.citation_sources import document_key, source_digests
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS, normalize_court_row, opinion_body_id
@@ -50,3 +51,71 @@ def test_retained_court_text_pdf_keys_spans_and_source_specific_abstention(tmp_p
     assert all(
         "case_docket_number" in json.loads(c["processing_version"])["excluded_source_rules"] for c in checkpoints
     )
+
+
+def test_converted_historical_court_scopes_reread_once_without_duplicate_native_keys(tmp_path):
+    import shutil
+    from spicy_regs.legislative_receipts import restore_prior, write_legislative_outputs
+    from spicy_regs.transforms.held_citations import write_citation_reads
+    from spicy_regs.transforms.read_checkpoints import checkpoint_metadata
+
+    fixture = json.loads((Path(__file__).parent / 'fixtures/court_citations/derived-text-cohort.json').read_text())
+    source = [normalize_court_row('court_opinion_pdf_extractions', row) for row in fixture['rows']]
+    legacy = {r['opinion_body_id']: json.dumps([r['opinion_id'], r['source_sha256']], separators=(',', ':')) for r in source}
+    kind = 'court_opinion_derived_pdf'
+    initial = tmp_path / 'historical'
+    with duckdb.connect() as con:
+        con.register('court_opinion_pdf_extractions', pa.Table.from_pylist(source, schema=SUBJECT_SCHEMAS['court_opinion_pdf_extractions']))
+        path = build_held_citations(initial, cursor=con, selections=[Selection(kind, (r['opinion_body_id'],)) for r in source],
+                                    input_pins={'court_opinion_pdf_extractions': {'artifactDigest': fixture['publication']}},
+                                    download_prior=lambda *_: False)
+        # Model the exact historical capture shape before the court key changed.
+        checkpoints = [{**s, 'document_key': legacy[s['document_key']]} for s in read_checkpoints(path, NAMESPACE)]
+        table = pq.read_table(path)
+        table = table.set_column(table.schema.get_field_index('document_key'), 'document_key',
+                                 pa.array([legacy[key] for key in table['document_key'].to_pylist()]))
+        table = table.replace_schema_metadata(checkpoint_metadata(path, NAMESPACE, checkpoints))
+        pq.write_table(table, path)
+        reads = write_citation_reads(initial, path)
+        bundle = tmp_path / 'converted'
+        write_legislative_outputs([path, reads], bundle, generation_id='converted')
+        restored = restore_prior(bundle, tmp_path / 'processing')
+        assert pq.read_table(restored['document_citations'])['document_key'][0].as_py() in legacy.values()
+
+        def download(key, target):
+            name = key.removesuffix('.parquet')
+            if name not in restored:
+                return False
+            shutil.copyfile(restored[name], target)
+            return True
+
+        work = tmp_path / 'reread'
+        for generation in ('first-reread', 'repeat-reread'):
+            result = build_held_citations(work, cursor=con, selections=[Selection(kind, (r['opinion_body_id'],)) for r in source],
+                                         input_pins={'court_opinion_pdf_extractions': {'artifactDigest': fixture['publication']}},
+                                         download_prior=download)
+            rows = pq.read_table(result).to_pylist()
+            assert len(rows) == 18 and {r['document_key'] for r in rows} <= set(legacy)
+            assert len(read_checkpoints(result, NAMESPACE)) == 3
+            reads = write_citation_reads(work, result)
+            # The production writer previously refused this first native-key reread.
+            write_legislative_outputs([result, reads], tmp_path / generation, generation_id=generation)
+
+
+@pytest.mark.parametrize("with_checkpoints", [False, True])
+def test_converging_court_key_spellings_refuse_without_replacing_private_prior(tmp_path, with_checkpoints):
+    from spicy_regs.transforms.held_citations import _normalize_prior_keys
+    from spicy_regs.transforms.read_checkpoints import checkpoint_metadata
+
+    old = json.dumps(["123", "sha256:" + "a" * 64])
+    native = opinion_body_id("123", "sha256:" + "a" * 64)
+    rows = [{"document_kind": "court_opinion_derived_pdf", "document_key": key,
+             "text_sha256": "sha256:" + "b" * 64} for key in (old, native)]
+    prior = tmp_path / "prior.parquet"
+    pq.write_table(pa.Table.from_pylist(rows).replace_schema_metadata(
+        checkpoint_metadata(None, NAMESPACE, rows if with_checkpoints else [])), prior)
+    original = prior.read_bytes()
+    with pytest.raises(ValueError, match="converge"):
+        _normalize_prior_keys(prior)
+    assert prior.read_bytes() == original
+    assert not prior.with_name("." + prior.name + ".native-keys").exists()

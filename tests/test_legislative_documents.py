@@ -227,3 +227,35 @@ def test_diff_summary_lists_are_independent_and_ordered():
                 dollar_changes_json='["Increased by $0.01"]'))
     assert subject["key_changes"] == ["a", "a"]
     assert subject["sections_added"] == [] and subject["sections_removed"] is None
+
+
+def test_court_keys_use_the_exact_captured_body_without_changing_source_row():
+    from spicy_regs.court_subjects import opinion_body_id
+    from spicy_regs.legislative_documents import court_opinion_document_key, recorded_subject
+
+    legacy = json.dumps(["123", "sha256:" + "a" * 64])
+    key = opinion_body_id("123", "sha256:" + "a" * 64)
+    original = row("document_citations", document_kind="court_opinion_derived_pdf", document_key=legacy,
+                   cite_kind="usc_section", target_key="5-552", span_start="0", text_sha256="b" * 64)
+    native = required_subject("document_citations", original)
+    assert native["document_key"] == key and original["document_key"] == legacy
+    assert court_opinion_document_key(key) == key
+    historical = native | {"document_key": legacy}
+    assert recorded_subject("document_citations", original, historical) == historical
+    assert recorded_subject("document_citations", original, native) == native
+    other = opinion_body_id("123", "sha256:" + "c" * 64)
+    assert recorded_subject("document_citations", original, native | {"document_key": other}) != native | {"document_key": other}
+
+
+@pytest.mark.parametrize("key", [
+    None, [], {}, ["123", "sha256:" + "a" * 64], "not-json", '[]', '["123"]', '["123","sha256:' + 'a' * 64 + '","extra"]',
+    '[123,"sha256:' + 'a' * 64 + '"]', '["0123","sha256:' + 'a' * 64 + '"]',
+    '["123","' + 'a' * 64 + '"]', '"court-opinion-body:' + 'a' * 64 + '"',
+    "court-opinion-body:" + "a" * 63, '[{},"sha256:' + 'a' * 64 + '"]',
+    '["123",[]]',
+])
+def test_court_keys_refuse_incomplete_or_unqualified_identity(key):
+    from spicy_regs.legislative_documents import court_opinion_document_key
+
+    with pytest.raises(LegislativeShapeError):
+        court_opinion_document_key(key)

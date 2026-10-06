@@ -37,6 +37,7 @@ from spicy_regs.legislative_documents import (
     LegislativeShapeError,
     field_registry,
     map_subject,
+    recorded_subject,
     subject_schema,
 )
 from spicy_regs.transforms.parquet_rows import write_rows
@@ -57,6 +58,12 @@ def policy(dataset: str) -> DatasetPolicy:
         policy_version="legislative-documents/1",
         receipt_only=spec["processing_only"],
     )
+
+
+def _processor(dataset: str) -> str:
+    # The field policy stays /1: columns and receipt ownership are unchanged.
+    # Version the changed court-key mapping separately in each new attempt.
+    return "legislative-documents/2" if dataset == "document_citations" else "legislative-documents/1"
 
 
 def mapped_record(dataset: str, row: Mapping[str, Any]) -> dict:
@@ -150,7 +157,7 @@ def write_legislative_outputs(
                 states.append(
                     (
                         {"file_state": state},
-                        ReceiptContext(generation_id, f"{dataset}/empty", "legislative-documents/1", [witness]),
+                        ReceiptContext(generation_id, f"{dataset}/empty", _processor(dataset), [witness]),
                     )
                 )
                 (stage / dataset).mkdir()
@@ -172,7 +179,7 @@ def write_legislative_outputs(
                 member_context = ReceiptContext(
                     generation_id,
                     f"{dataset}/member/{member_index}",
-                    "legislative-documents/1",
+                    _processor(dataset),
                     [witness, *source_witnesses],
                 )
                 with pq.ParquetFile(member) as source:
@@ -194,7 +201,7 @@ def write_legislative_outputs(
                         context = ReceiptContext(
                             generation_id,
                             f"{dataset}/{member_index}/{row_index}",
-                            "legislative-documents/1",
+                            _processor(dataset),
                             [dict(witness, locator=f"row:{row_index}"), *source_witnesses],
                         )
                         try:
@@ -307,7 +314,7 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
                         generation_id=generation,
                     ):
                         raw = record[RAW]
-                        if map_subject(dataset, raw) != {k: v for k, v in record.items() if k != RAW}:
+                        if recorded_subject(dataset, raw, record) != {k: v for k, v in record.items() if k != RAW}:
                             raise ValueError("Retained conversion input disagrees with its native subject")
                         yield raw
 
