@@ -217,7 +217,7 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
 
 
 def materialize_internal(selected, destination, *, source_schema=None):
-    if (selected.dataset not in DATASETS and selected.dataset != 'federal_register') or len(selected.subjects) != 1:
+    if (selected.dataset not in DATASETS and selected.dataset not in {'federal_register', 'fr_docket_links'}) or len(selected.subjects) != 1:
         raise etl_bulk.NotBulkEligible('Regulatory base restore requires one selected member')
     with TemporaryDirectory(prefix='regulatory-base-selected-') as temporary:
         scoped = select_receipts(selected.receipts, Path(temporary)/'receipts.parquet', dataset=selected.dataset)
