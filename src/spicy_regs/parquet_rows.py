@@ -16,14 +16,15 @@ def write_rows(records: Iterable[dict], destination: Path, schema: pa.Schema, *,
     """
     if type(batch_size) is not int or batch_size <= 0:
         raise ValueError("batch_size must be a positive integer")
+    from spicy_regs.native_types import extra_field_checker
     rows = iter(records)
     with TemporaryDirectory(dir=destination.parent) as scratch:
         temporary = Path(scratch) / "rows.parquet"
         with pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
+            check_fields = extra_field_checker(schema)
             while batch := list(islice(rows, batch_size)):
-                from spicy_regs.native_types import reject_extra_fields
                 for row in batch:
-                    reject_extra_fields(row, schema)
+                    check_fields(row)
                 writer.write_table(pa.Table.from_pylist(batch, schema=schema))
         temporary.replace(destination)
     return destination

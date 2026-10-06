@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from functools import lru_cache
 
 from duckdb import connect as _connect
@@ -46,17 +47,33 @@ def polars_sql_type(dtype) -> str:
 
 def reject_extra_fields(row, schema, *, label="row") -> None:
     """Refuse extra record/struct fields before Arrow or Polars can discard them."""
-    from collections.abc import Mapping
+    _check_extra_fields(row, pa.struct(schema), label)
 
-    def check(value, dtype, path):
-        if value is None:
-            return
-        if pa.types.is_struct(dtype) and isinstance(value, Mapping):
-            if extra := set(value) - {f.name for f in dtype}:
-                raise ValueError(f"{path}: unclassified fields {sorted(extra)}")
-            for f in dtype:
-                check(value.get(f.name), f.type, f"{path}.{f.name}")
-        elif (pa.types.is_list(dtype) or pa.types.is_large_list(dtype)) and isinstance(value, (list, tuple)):
-            for item in value:
-                check(item, dtype.value_type, path)
-    check(row, pa.struct(schema), label)
+
+def extra_field_checker(schema, *, label="row"):
+    """Prepare the same field checks once for a batch writer's immutable schema."""
+    dtype = pa.struct(schema)
+    flat = all(not (pa.types.is_struct(f.type) or pa.types.is_list(f.type)
+                    or pa.types.is_large_list(f.type)) for f in dtype)
+    names = frozenset(schema.names) if flat else None
+
+    def check(row):
+        if names is not None and type(row) is dict:
+            if extra := set(row) - names:
+                raise ValueError(f"{label}: unclassified fields {sorted(extra)}")
+        else:
+            _check_extra_fields(row, dtype, label)
+    return check
+
+
+def _check_extra_fields(value, dtype, path):
+    if value is None:
+        return
+    if pa.types.is_struct(dtype) and isinstance(value, Mapping):
+        if extra := set(value) - {f.name for f in dtype}:
+            raise ValueError(f"{path}: unclassified fields {sorted(extra)}")
+        for f in dtype:
+            _check_extra_fields(value.get(f.name), f.type, f"{path}.{f.name}")
+    elif (pa.types.is_list(dtype) or pa.types.is_large_list(dtype)) and isinstance(value, (list, tuple)):
+        for item in value:
+            _check_extra_fields(item, dtype.value_type, path)
