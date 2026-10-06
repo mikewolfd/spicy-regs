@@ -146,24 +146,27 @@ def test_the_rows_own_bioguide_id_is_read_and_a_null_one_is_unresolved(tmp_path)
     }
 
 
-def test_a_name_keyed_row_before_2003_is_no_person_and_takes_no_term(tmp_path):
+def test_a_name_keyed_row_before_2003_is_matched_only_through_the_id_the_votes_rollup_filled(tmp_path):
     """A `name:` key identifies the row within its roll call, never a person (spicy-docs 0.52.0, owner decision).
 
-    The Clerk's files of 1990-2002 name members by label only, so the row states no bioguide id. It stays
-    ``unresolved_member`` with no term even where a member of that name served on the day, and its key is never
-    read as a bioguide id; the capital-month spelling of 1991 reads as its day.
+    The Clerk's files of 1990-2002 name members by label only. No name is matched here: a row the votes rollup's
+    name crosswalk left NULL stays ``unresolved_member`` with no term even where a member of that name served on
+    the day, and its key is never read as a bioguide id. A row that crosswalk filled takes its term like any other;
+    the capital-month spelling of 1991 reads as its day.
     """
     rows = _build(
         tmp_path,
         [
             _vote("102-house-1-1", "name:Abercrombie", "house", "3-JAN-1991"),
+            _vote("102-house-1-2", "name:Abercrombie", "house", "3-JAN-1991", bioguide="A000014"),
             _vote("102-house-1-1", "A000014", "house", "3-JAN-1991", bioguide="A000014"),
         ],
         [_term("A000014", "3", "rep", "1991-01-03", "1993-01-03")],
     )
-    assert {key[1]: (r["bioguide_id"], r["vote_day"], r["term_match"], r["term_index"]) for key, r in rows.items()} == {
-        "name:Abercrombie": (None, "1991-01-03", "unresolved_member", None),
-        "A000014": ("A000014", "1991-01-03", "half_open", "3"),
+    assert {key: (r["bioguide_id"], r["vote_day"], r["term_match"], r["term_index"]) for key, r in rows.items()} == {
+        ("102-house-1-1", "name:Abercrombie"): (None, "1991-01-03", "unresolved_member", None),
+        ("102-house-1-2", "name:Abercrombie"): ("A000014", "1991-01-03", "half_open", "3"),
+        ("102-house-1-1", "A000014"): ("A000014", "1991-01-03", "half_open", "3"),
     }
 
 

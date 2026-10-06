@@ -9,10 +9,12 @@ merge time, its only linkage source — a ``soft_input``, so a run with no famil
 output still acquires the native vote identities. A bill link remains NULL when
 no recorded reference establishes it. It also reads the published ``members``
 crosswalk best-effort after the ``member_votes`` merge, to fill each Senate
-row's ``bioguide_id`` through its LIS id; ``run-rollup-members`` writes that
-table in this same refresh workflow, so the fill sees the previous run's
-crosswalk, a day's lag at most (not a declared ``soft_input`` only because the
-declaration test requires the writer's cron to fire earlier). Both publishers
+row's ``bioguide_id`` through its LIS id and, with ``member_terms`` and
+``member_party_affiliations``, each House ``name:`` row's through its printed
+label; ``run-rollup-members`` writes those tables in this same refresh
+workflow, so the fill sees the previous run's crosswalk, a day's lag at most
+(not declared ``soft_inputs`` only because the declaration test requires the
+writer's cron to fire earlier). Both publishers
 are keyless, so the run needs no credential. The cron runs an hour after the
 family's to reuse any available links.
 
@@ -44,9 +46,9 @@ class RollCallVotesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
-        def builder(work, **kwargs):
+        def builder(work, *, selected_input, **kwargs):
             try:
-                return build_roll_call_votes(work, **kwargs)
+                return build_roll_call_votes(work, selected_input=selected_input, **kwargs)
             except ChamberListingRefused as refused:
                 # Seal the successful chamber and its receipts before the run reports the refusal.
                 self.deferred_failure = refused
