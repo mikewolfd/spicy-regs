@@ -5181,8 +5181,8 @@
         "category": "catalog_or_source_discovery",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "Original Point Blank issues for October 2015, 2014 and 2002 are recovered without a CCRKBA rating section. The CRS directory identifies congressional ratings as an irregular newsletter section. Externally attributed ratings remain external.",
-      "next_action": "Retain the newsletter indexes and exact special-section title; target a dated rating-bearing Point Blank issue or supplement using the recovered annual links, with a complete section and continuation witness.",
+      "finding": "Five additional original Point Blank newsletter issue bodies recovered and inspected, newest first. No CCRKBA congressional-rating grid identified within them; existing October2015/October2014/October2002 findings remain frozen.",
+      "next_action": "Target an explicitly congressional-rating-bearing Point Blank issue or separately mailed insert. Remaining uninspected indexed months and dated holdings are still leads; these five issue bodies do not establish series cessation or rating absence.",
       "recovery": {
         "integration_state": "catalog_metadata_and_original_newsletter_evidence_only",
         "qualified_editions": [],
@@ -5489,7 +5489,12 @@
         "recovery.unresolved_questions": "/unresolved_questions"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/league_women_voters/modern-recovery-20261005.json",
+        "sha256": "8d2c5dc7637f77ad152528cacdb10a2238ad7a83da281ba74cad265bd140c1d7",
+        "byte_size": 38281
+      }
     },
     {
       "publisher_id": "coalition_foreign_military",
@@ -8598,8 +8603,8 @@
         "category": "source_or_identity_qualification",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "A March 1974 affiliate newsletter reproduces a small LWVUS rating excerpt; the national original is missing. Five named Vote Smart 2007 records provide later third-party leads. Current map-assessment scorecards and VOTE411 do not fill congressional rating coverage.",
-      "next_action": "Follow Vote Smart group 1833 and its five 2007 IDs to an original source-description or archived national publication; preserve the affiliate excerpt and physical Political Accountability Rating holdings separately.",
+      "finding": "The 2007 Energy Score third-party record was read directly; it supplies no original-source locator and mixes historical scores with current office labels. The original archived LWV homepage supplies exact Take_Action ContentID10429 and takeaction.lwv.org links. Its recovered Action Center leads to an officials lookup explicitly powered by Capitol Advantage. These are publisher-attributed advocacy/directory sources, not a recovered national rating edition.",
+      "next_action": "Retain this original historical host/provider and exact Congressional Directory link as discovery metadata. An original 2007 rating-bearing source or native publisher citation is still required; ordinary directory data should reuse existing congressional data instead of becoming a scorecard.",
       "recovery": {
         "recovery_status_scope": "Original national federal congressional scorecard editions dated 2000 onward",
         "public_evidence_policy": "hash_only",
@@ -8956,7 +8961,12 @@
         "recovery.edition_catalog__8": "/edition_catalog/8"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/league_women_voters/modern-recovery-20261005.json",
+        "sha256": "8d2c5dc7637f77ad152528cacdb10a2238ad7a83da281ba74cad265bd140c1d7",
+        "byte_size": 38281
+      }
     },
     {
       "publisher_id": "liberty_lobby",
@@ -9363,8 +9373,8 @@
         "category": "candidate_scope_decision",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "January 2025 Action letters announce future scoring, and all nine original 2020 candidate comparisons were already retained. These are distinct from a completed congressional rating edition and from the historical Journal voting-record section; Action sister-organization attribution remains explicit.",
-      "next_action": "Catalog the 2025 prospective declarations and retained metric-free candidate comparisons separately; recover an original Journal voting-record section or completed Action member grid before treating either as the historical rating series.",
+      "finding": "The selected 2025+ original attachment responses supply only versions of two prospective March for Life Action scoring letters, without member results. The source identifies Action separately from its sister organization; current presidential and 2020 candidate comparisons do not recover the historical Journal voting-record series.",
+      "next_action": "Retain the exact prospective scoring positions and sister-publisher attribution as discovery. Seek a completed 119th Congress Action member grid or an attributable 2000+ Journal voting-record section; no final member values are inferred from the letters.",
       "recovery": {
         "integration_state": "research_artifacts_only",
         "publisher_identity": {
@@ -9591,7 +9601,12 @@
         "recovery.rights_access": "/rights_access"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/march_for_life/modern-recovery-followup-20261005.md",
+        "sha256": "7dfca440a70b17c01363cf32caff1077534673663d31f6e3ae4da80074d6ec26",
+        "byte_size": 12294
+      }
     },
     {
       "publisher_id": "national_alliance_seniors",
@@ -12316,8 +12331,8 @@
         "category": "catalog_or_source_discovery",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "Original magazines, a dFlip catalog and historical Reporter navigation are recovered without a federal rating edition. Vote Smart historical leads and Iowa State’s 1982 folder remain catalog evidence. NFO is distinct from National Farmers Union.",
-      "next_action": "Follow the retained 2000 Reporter issue-index redirect at timestamp 20010209014559 and inspect original issue labels before selecting pages; retain Iowa State MS481, box 3, folder 45 as a historical fallback.",
+      "finding": "The original 2010 and 2000 Reporter indexes are recovered. Complete July–August and September–October 2000 issues, selected contents lists and the crop-insurance article supply no congressional member observations. The selected 2010 PDF route returned 404; snapshot lookup was rate-limited and its Zyte fallback refused. Those failures do not establish source absence.",
+      "next_action": "Use the recovered Reporter index to try its literal February–March 2010 and December 2009–January 2010 PDF links, newest first. The exact February 2000 contents redirect and May–June Senate article remain unvisited leads. Preserve historical Voting Record continuity as unknown; NFO and NFU remain separate.",
       "recovery": {
         "integration_state": "catalog_metadata_only",
         "recovered_scorecard_editions": [],
@@ -12641,7 +12656,12 @@
         "recovery.source_capture_010": "/secondary_leads/2/evidence"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/march_for_life/modern-recovery-followup-20261005.md",
+        "sha256": "7dfca440a70b17c01363cf32caff1077534673663d31f6e3ae4da80074d6ec26",
+        "byte_size": 12294
+      }
     },
     {
       "publisher_id": "now",
@@ -13999,8 +14019,8 @@
         "category": "catalog_or_source_discovery",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "The current membership service remains access-required. A public eVoter demo shows a partial vote list, not publisher ratings. Exact Voting Records archive indexes supply an uninspected April 7, 2016 replay lead; archive dates are not edition dates.",
-      "next_action": "Retain and later inspect exact replay timestamp 20160407131741 for /explore.cfm/voteschedule; determine whether it contains grids, downloads or instructions, and distinguish ordinary votes, personalized agreement and publisher scoring.",
+      "finding": "Exact 20160407131741 replay is original Floor Schedule / Major Votes of 2015 HTML, not member ratings. It contains 38 ordered House tally/link occurrences and32 distinct Clerk roll-call URLs; six repeated URLs remain separate source occurrences.",
+      "next_action": "Classify this precise public archive route as an ordinary vote-list discovery source. Reuse existing official roll-call tables. Actual NWYC member voting record/export and permitted access remain unresolved; no publisher preference or personalized agreement inferred.",
       "recovery": {
         "recovery_status_scope": "access-required applies to current member service; historical public archive replay is unresolved, not established as account-gated",
         "historical_recovery_status": "original-unrecovered; exact publisher URL archive leads retained",
@@ -14387,7 +14407,12 @@
         "recovery.edition_archive_catalog": "/edition_archive_catalog"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/league_women_voters/modern-recovery-20261005.json",
+        "sha256": "8d2c5dc7637f77ad152528cacdb10a2238ad7a83da281ba74cad265bd140c1d7",
+        "byte_size": 38281
+      }
     },
     {
       "publisher_id": "retail_clerks",
@@ -19412,8 +19437,8 @@
         "category": "catalog_or_source_discovery",
         "basis": "editorial synthesis of pinned research; not adapter qualification or publication"
       },
-      "finding": "No original UCC voting chart is recovered. A historical account names UCC Network, formerly Washington Report, and native archive search yields a specific Regional Offices finding aid. The Baylor 1995 voting record remains a precise physical holding.",
-      "next_action": "Inspect the publisher-indexed finding aid 2013.16, Regional Offices, document 00000021, for UCC Network holdings dates and containers before targeting a latest original chart.",
+      "finding": "The exact publisher viewer identifies finding aid 2013.16 and selects page 26 for the UCC Network query. Publisher OCR for that page describes EKU-UCC, Network for the Relationship, 1987 and 1993, within Germany exchange-program holdings. This is not an identified annual Washington Report/UCC Network congressional voting chart.",
+      "next_action": "The specific Regional Offices hit is resolved as a different network context. Seek an exact OCIS/Washington Report/UCC Network serial inventory with attributable 2000+ holdings; retain the 1995 Baylor voting-record holding as catalogue evidence only.",
       "recovery": {
         "integration_state": "catalog_metadata_and_discovery_evidence_only",
         "recovered_editions": [],
@@ -19724,7 +19749,12 @@
         "recovery.source_capture_013": "/evidence/45"
       },
       "independent_review": [],
-      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded."
+      "capture_locator_note": "Capture paths and hashes below are copied literally from the source result. Relative paths retain their original spelling; the complete result/report pin supplies their private context. No original body or member/model payload is embedded.",
+      "followup": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/publisher-deep-dives-20261005/results/united_church_christ/modern_followup_20261005.json",
+        "sha256": "e63158a3747f824abb9deec3f25b0b657b392f59c27231b161a683edb7e9d150",
+        "byte_size": 2982
+      }
     },
     {
       "publisher_id": "united_mine_workers",

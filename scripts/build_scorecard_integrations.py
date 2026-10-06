@@ -72,7 +72,16 @@ def recovery_findings(document, inventory, *, api=False):
         )
     ):
         raise ValueError("Recovery must cover every assigned known publisher without qualification or publication")
-    fields = ("finding", "next_action", "reported_research_result", "assessment", "source_input", "result", "report")
+    fields = (
+        "finding",
+        "next_action",
+        "reported_research_result",
+        "assessment",
+        "source_input",
+        "result",
+        "report",
+        "followup",
+    )
     if api:
         fields += (
             "categories",
