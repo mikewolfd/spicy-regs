@@ -1,0 +1,107 @@
+{
+  "sourceRepository": "mikewolfd/spicy-regs",
+  "sourceRunId": 37486836634,
+  "artifactId": 11434297788,
+  "archiveBytes": 7275990602,
+  "archiveSha256": "893d18826352f193847f2a6f4868b5269838d2734f96b27cb7e11bcbb43b2f83",
+  "generationId": "61ef48c6dbb34bb09353c2409fb2daf2",
+  "nativeArtifactDigest": "731ab961d8825f1f099581d70f4100fd3fb1a3d1fbc3d1aa3ecc85a75553f8f6",
+  "selectedBytes": 1983146278,
+  "members": [
+    {
+      "name": "court-opinions/build/generation/artifact.json",
+      "bytes": 245270,
+      "compressedBytes": 245270,
+      "compression": 0,
+      "dateTime": [
+        2026,
+        10,
+        6,
+        17,
+        41,
+        26
+      ],
+      "sha256": "ac4ab4355ee03157d22174bf275cfb0f9bef32fe0af7fd1b000050ad7f7e2f69"
+    },
+    {
+      "name": "court-opinions/build/generation/etl_receipts.parquet",
+      "bytes": 1845564116,
+      "compressedBytes": 1845564116,
+      "compression": 0,
+      "dateTime": [
+        2026,
+        10,
+        6,
+        17,
+        41,
+        18
+      ],
+      "sha256": "2093b91dc929c518954719dc26e929b0031ae01879c6ba460116804215730175"
+    },
+    {
+      "name": "court-opinions/build/generation/court_opinions.parquet",
+      "bytes": 137076846,
+      "compressedBytes": 137076846,
+      "compression": 0,
+      "dateTime": [
+        2026,
+        10,
+        6,
+        17,
+        41,
+        16
+      ],
+      "sha256": "c913a8fe99b382a67ff27b1e38d2821d968c32f1da015c807eacd70403046071"
+    },
+    {
+      "name": "court-opinions/build/generation/members.json",
+      "bytes": 693,
+      "compressedBytes": 693,
+      "compression": 0,
+      "dateTime": [
+        2026,
+        10,
+        6,
+        17,
+        41,
+        26
+      ],
+      "sha256": "52c442017a0a611e22b28e567b5776fc64b00d1262db87ab8c873585f74a04e5"
+    },
+    {
+      "name": "court-opinions/captured-publication.v2.json",
+      "bytes": 255218,
+      "compressedBytes": 255218,
+      "compression": 0,
+      "dateTime": [
+        2026,
+        10,
+        6,
+        15,
+        21,
+        56
+      ],
+      "sha256": "c5f6ba1b42f9f13b61793230fcbedd43d628101cc6157f4068935387c80ca147"
+    },
+    {
+      "name": "court-opinions/conversion.json",
+      "bytes": 4135,
+      "compressedBytes": 4135,
+      "compression": 0,
+      "dateTime": [
+        2026,
+        10,
+        6,
+        18,
+        24,
+        20
+      ],
+      "sha256": "e4e06332e9c4764d7eae3738cd14b2ad8e2b637968b5ffbc3b6b96d16eced898"
+    }
+  ],
+  "provenance": {
+    "inventory": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-06/bulk-current-resume/hosted-37486836634/remote-archive-index.json",
+    "nativeInventory": "/Users/mikewolfd/Work/corpora/session-reports-2026-10-06/bulk-current-resume/hosted-37486836634/native-subset-inventory.json",
+    "helper": "Bulk thread01a10cb3-142f-7600-8144-fbff3c441330 command exec-4213cc55-7aba-4c43-bec3-d797ad8276a5 (stored ZIP range/resume + CRC)"
+  }
+}
