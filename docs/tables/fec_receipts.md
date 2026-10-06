@@ -2,7 +2,7 @@
 
 # `fec_receipts`
 
-**Reported receipt observations**
+**Campaign money received**
 
 One reported receipt record version or physical source observation. Preserves contributor, amount, date, transaction type, memo, source role and evidence. Main/date partitions, amendments and correction streams remain distinct observations; select proved representation membership and a named financial rule before totals. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates. For original-filing rows, definition_set_id joins fec_filing_definitions.record_id and its fec_filing_definition_evidence context witnesses; filing_header_record_id and filing_header_locator_json identify the separate actual header witness. Other source layouts retain their own dictionary evidence.
 

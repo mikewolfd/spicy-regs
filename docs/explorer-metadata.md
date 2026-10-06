@@ -31,6 +31,12 @@ quality notes and column descriptions. It also records:
   remains discoverable even when its description or origin is undocumented.
 - Optional `emptyReason` and `joinAudit`: documented empty-output reasons and
   relationship dispositions. Counts never establish completeness.
+- Optional `category: processing_evidence`: collection checkpoints and other
+  explicitly classified processing evidence. These remain inspectable under
+  their source's Collection status, outside ordinary record navigation and
+  dataset counts. The dictionary classifies the three `bill_family_*` state
+  tables this way. `fec_receipts` contains financial records and is not a
+  processing-receipt table. `kind` continues to describe coverage, separately.
 
 `data_dictionary/descriptions.yaml` owns curated table descriptions, generated
 into `src/spicy_regs/table_metadata.json`. Still-published processing tables use
