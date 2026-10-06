@@ -156,6 +156,7 @@ def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
 
     policies = installed_policies()
     native, visible, parts, signatures = {}, {}, {}, {}
+    receipt_versions = {}
     with TemporaryDirectory(prefix="local-native-selection-") as temporary:
         inputs = SelectedInputs(root, temporary, public_url="")
         for name in inputs.local:
@@ -169,6 +170,33 @@ def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
                 signatures[str(path)] = file_signature(path)
             checkpoint()
             policy = selected_subject_policy(policies[name], selected.subjects)
+            if not selected.subjects:
+                from spicy_regs.etl_receipts import receipt_policies
+                import pyarrow.parquet as pq
+                historical = {p.policy_version: p for p in receipt_policies(policy) if p.receipt_only}
+                if historical and not policy.receipt_only:
+                    # Classify historical receipt-only data without replaying
+                    # payloads during discovery. Reuse one narrow projection for
+                    # all datasets sharing the same selected receipt file.
+                    receipt_path = str(selected.receipts)
+                    if receipt_path not in receipt_versions:
+                        versions_by_dataset = {}
+                        with pq.ParquetFile(selected.receipts) as parquet:
+                            for batch in parquet.iter_batches(columns=["dataset", "policy_version"]):
+                                checkpoint()
+                                for dataset, version in zip(batch.column(0).to_pylist(), batch.column(1).to_pylist(), strict=True):
+                                    versions_by_dataset.setdefault(dataset, set()).add(version)
+                        receipt_versions[receipt_path] = versions_by_dataset
+                    versions = receipt_versions[receipt_path].get(name, set())
+                    if len(versions) != 1:
+                        raise ValueError("No-subject selection requires one exact receipt policy")
+                    version, = versions
+                    if version in historical:
+                        policy = historical[version]
+                    elif version != policy.policy_version:
+                        raise ValueError("No-subject selection has an unsupported receipt policy")
+                    else:
+                        raise ValueError("Selected current main dataset has no physical subject member")
             if admit_rows:
                 scoped = select_receipts(selected.receipts, Path(temporary) / f"{name}.parquet", dataset=name)
                 validate_receipt_bundle({name: selected.subjects}, [scoped], [policy],

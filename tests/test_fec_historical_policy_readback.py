@@ -101,6 +101,72 @@ def test_shared_schema_does_not_admit_a_changed_complete_identity(tmp_path, monk
     alternate=replace(policy,identity_fields=('collection_id',),policy_version='unrelated-history')
     subject,_=write_dataset([(mapped_record('fec_receipts',source_row(),policy),
                             ReceiptContext('same','row','writer',[{'source_id':'fixture','body_version':'selected'}]))],tmp_path/'bundle',policy)
+    assert subject is not None
     monkeypatch.setattr(receipts,'receipt_policies',lambda current: (current,alternate))
     with pytest.raises(ValueError,match='Subject schema differs'):
         selected_subject_policy(policy,[subject])
+
+
+def test_historical_receipt_only_selection_has_no_public_main_or_queryable_empty_table(tmp_path, monkeypatch):
+    from spicy_regs.local_data import local_selection
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    from spicy_regs import mcp_server
+    from tests.test_mcp_server import _tool_data
+    from mcp.server.mcpserver.exceptions import ToolError
+    from tests.test_local_native_selection import connection
+    row={'collection_id':'old-collection','source_family':'bulk','record_count':1,
+         'conversion_inputs':{'collection_id':'old-collection','source_family':'bulk','record_count':1}}
+    _,subject,receipt=old_pair(tmp_path/'bundle','fec_collections',row)
+    assert subject is None
+    root=tmp_path/'state'
+    remember_selection(root,[SelectedDataset('fec_collections',(),receipt,'historical')])
+    selection=local_selection(root)
+    assert 'fec_collections' not in selection.files and 'fec_collections' in selection.native
+    con=connection(root,monkeypatch)
+    monkeypatch.setattr(mcp_server,'_get_connection',lambda: con)
+    try:
+        with pytest.raises(ToolError,match='Unknown table'):
+            _tool_data(mcp_server.build_server(),'describe_table',{'table':'fec_collections'})
+        with pytest.raises(ToolError,match='fec_collections'):
+            _tool_data(mcp_server.build_server(),'query_sql',{'sql':'SELECT * FROM fec_collections'})
+        adapter=ReceiptAdapter(con,{'families':{}},'',local_native={
+            'fec_collections':dict(subjects=[],receipts=receipt,generation_id='historical')})
+        assert list(adapter.selected_rows('fec_collections'))==[row]
+    finally:
+        con.close()
+
+
+def test_current_empty_promoted_fec_main_is_a_real_visible_file(tmp_path):
+    from spicy_regs.local_data import local_selection
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    subject,receipt=write_dataset([],tmp_path/'empty',policies()['fec_collections'])
+    assert subject is not None and pq.ParquetFile(subject).metadata.num_rows==0
+    root=tmp_path/'state'
+    remember_selection(root,[SelectedDataset('fec_collections',(subject,),receipt,'current-empty')])
+    selected=local_selection(root)
+    assert selected.paths('fec_collections')==(subject,) and 'fec_collections' in selected.files
+
+
+@pytest.mark.parametrize('damage',['unknown','mixed','accepted-current-without-subject'])
+def test_no_subject_selection_refuses_unknown_mixed_or_missing_current_rows(tmp_path, damage):
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest
+    from spicy_regs.local_data import local_selection
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    row={'collection_id':'held','source_family':'bulk','record_count':1,'conversion_inputs':{'collection_id':'held'}}
+    if damage=='accepted-current-without-subject':
+        policy=policies()['fec_collections']
+        current={name:None for name in policy.input_fields}
+        current.update(row)
+        subject,receipt=write_dataset([(current,ReceiptContext('historical','row','new-writer',[{'source_id':'held','body_version':'held'}]))],tmp_path/'bundle',policy)
+        assert subject is not None
+    else:
+        _,_,receipt=old_pair(tmp_path/'bundle','fec_collections',row)
+        records=pq.read_table(receipt).to_pylist()
+        wrong=dict(records[0],policy_version='undeclared')
+        wrong['receipt_id']=_digest({k:v for k,v in wrong.items() if k!='receipt_id'})
+        pq.write_table(pa.Table.from_pylist([wrong] if damage=='unknown' else [*records,wrong],schema=RECEIPT_SCHEMA),receipt)
+    root=tmp_path/'state'
+    remember_selection(root,[SelectedDataset('fec_collections',(),receipt,'historical')])
+    with pytest.raises(ValueError,match='policy|receipt|subject|Subject'):
+        local_selection(root)
