@@ -138,7 +138,9 @@ def read_fec_with_receipts(subject_paths, receipt_paths, policy, *, generation_i
     with select_receipts before this call. The shared reader checks the entire
     content/version/generation join before any row is returned.
     """
-    for row in read_with_receipts(subject_paths, receipt_paths, policy, generation_id=generation_id):
+    from spicy_regs.etl_receipts import selected_subject_policy
+    admitted = selected_subject_policy(policy, subject_paths)
+    for row in read_with_receipts(subject_paths, receipt_paths, admitted, generation_id=generation_id):
         conversion = row[_CONVERSIONS]
         original = {}
         for name in row[_INPUT_COLUMNS]:

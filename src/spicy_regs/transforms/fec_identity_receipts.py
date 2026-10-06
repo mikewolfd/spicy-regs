@@ -207,8 +207,11 @@ def read_identity_rows(directory, table, *, generation_id):
         receipts = select_receipts(
             directory / "etl_receipts.parquet", Path(temporary) / "receipts.parquet", dataset=table
         )
+        from spicy_regs.etl_receipts import selected_subject_policy
+        subjects = [directory / (table + ".parquet")]
+        admitted = selected_subject_policy(policy, subjects)
         yield from read_with_receipts(
-            [directory / (table + ".parquet")], [receipts], policy, generation_id=generation_id
+            subjects, [receipts], admitted, generation_id=generation_id
         )
 
 

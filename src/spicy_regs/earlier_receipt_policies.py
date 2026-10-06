@@ -25,6 +25,22 @@ def earlier_policies(policy):
             raise ValueError("Native legal migration changes a historical observation identity")
         return (earlier,)
 
+    if policy.policy_version in {"fec-subject-receipts/2", "fec-identity-context-receipts/2"}:
+        fec_history = json.loads(files("spicy_regs").joinpath("fec_policy_history.json").read_text())
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/" + policy.dataset + ".json").read_text()))
+        if policy.descriptor() != expected.descriptor() or policy.dataset not in fec_history:
+            # Fixture or partial writer schemas do not acquire historical policy
+            # authority merely by sharing the current version label.
+            return ()
+        return (DatasetPolicy.from_descriptor(fec_history[policy.dataset]),)
+    if policy.dataset == "fcc_filings" and policy.policy_version == "government-sources/3":
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/fcc_filings.json").read_text()))
+        if policy.descriptor() != expected.descriptor():
+            raise ValueError("Current FCC policy differs from the exact declared policy")
+        history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
+        return tuple(DatasetPolicy.from_descriptor(history[key]) for key in ("fcc_filings_v2", "fcc_filings"))
     history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
     if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2"}:
         earlier = DatasetPolicy.from_descriptor(history[policy.dataset])

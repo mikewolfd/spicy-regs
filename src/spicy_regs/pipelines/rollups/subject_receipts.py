@@ -25,7 +25,7 @@ from spicy_regs.congress_receipts import (
     restore_processing_input,
     write_congress_dataset,
 )
-from spicy_regs.etl_receipts import combine_receipts, read_with_receipts, select_receipts, validate_receipt_bundle
+from spicy_regs.etl_receipts import combine_receipts, read_with_receipts, select_receipts, validate_receipt_bundle, selected_subject_policy
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_receipts import (
     FILE_POLICY,
@@ -91,6 +91,7 @@ class SelectedPriors:
         directory = self.directory / dataset
         directory.mkdir()
         scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)
+        selected_policy = selected_subject_policy(selected_policy, subjects)
         validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
         self.selections[dataset] = (subjects, receipt_path, generation)
         output = directory / "processing" / (dataset + ".parquet")

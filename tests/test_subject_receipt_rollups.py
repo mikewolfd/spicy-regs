@@ -219,17 +219,19 @@ def test_held_citations_carries_exact_sibling_receipts_and_zero_result_checkpoin
     assert len(checkpoint) == 1 and checkpoint[0]["findings"] == 0
 
 
-def test_scheduled_fec_catalog_emits_only_receipts(tmp_path, monkeypatch):
+def test_scheduled_fec_catalog_emits_public_catalog_and_receipts(tmp_path, monkeypatch):
     from spicy_regs.pipelines.rollups.fec_source_catalog import FecSourceCatalogRollup
 
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     rollup = FecSourceCatalogRollup()
-    assert rollup.build(tmp_path) == ()
-    assert not (tmp_path / "fec_source_catalog.parquet").exists()
+    assert rollup.build(tmp_path) == tmp_path / "fec_source_catalog.parquet"
+    subjects = pq.read_table(tmp_path / "fec_source_catalog.parquet")
+    assert subjects.num_rows > 0
     receipts = pq.read_table(tmp_path / "etl_receipts.parquet")
     assert receipts.num_rows > 0
     assert set(receipts["dataset"].to_pylist()) == {"fec_source_catalog"}
-    assert set(receipts["outcome"].to_pylist()) == {"observed"}
+    assert set(receipts["outcome"].to_pylist()) == {"accepted"}
+    assert receipts.num_rows == subjects.num_rows
 
 
 def test_scheduled_fec_committee_cold_increment_refuses(tmp_path, monkeypatch):

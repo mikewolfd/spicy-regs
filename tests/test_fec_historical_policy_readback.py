@@ -1,0 +1,106 @@
+"""New FEC readers admit exact shipped /1 pairs without relabeling old subjects."""
+import json
+from pathlib import Path
+
+import duckdb
+import pyarrow.parquet as pq
+import pytest
+
+from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, write_dataset, selected_subject_policy
+from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+from spicy_regs.subject_catalog import policies
+
+HISTORY=json.loads(Path(__file__).parents[1].joinpath('src/spicy_regs/fec_policy_history.json').read_text())
+
+
+@pytest.mark.parametrize('dataset',sorted(HISTORY))
+def test_every_exact_pre_migration_policy_is_supported(dataset):
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+    [prior]=earlier_policies(policies()[dataset])
+    assert prior.descriptor()==HISTORY[dataset]
+
+
+def old_pair(tmp_path, table, row):
+    policy=DatasetPolicy.from_descriptor(HISTORY[table])
+    context=ReceiptContext('historical','row','old-writer',[{'source_id':'retained','body_version':'selected-original'}])
+    subject,receipt=write_dataset([(row,context)],tmp_path,policy)
+    return policy,subject,receipt
+
+
+def test_adapter_restores_historical_receipt_only_collection_without_new_main_file(tmp_path):
+    row={'collection_id':'old-collection','source_family':'bulk','record_count':1,
+         'conversion_inputs':{'collection_id':'old-collection','source_family':'bulk','record_count':1}}
+    prior,subject,receipt=old_pair(tmp_path/'bundle','fec_collections',row)
+    assert subject is None and prior.receipt_only
+    native={'fec_collections':dict(subjects=[],receipts=receipt,generation_id='historical')}
+    with duckdb.connect() as con:
+        adapter=ReceiptAdapter(con,{'families':{}},'',local_native=native)
+        [restored]=adapter.selected_rows('fec_collections')
+        assert restored==row
+        target=adapter.restore('fec_collections')
+        assert con.execute(f'SELECT collection_id,source_family,record_count FROM "{target}"').fetchall()==[('old-collection','bulk',1)]
+
+
+def test_adapter_and_scalar_reader_keep_old_financial_shape_and_source_literals(tmp_path):
+    from tests.test_fec_subject_receipts import source_row
+    from spicy_regs.transforms.fec_subject_receipts import mapped_record
+    from spicy_regs.transforms.fec_subject_receipts import read_fec_with_receipts
+    row=source_row()
+    current=policies()['fec_receipts']
+    prior=DatasetPolicy.from_descriptor(HISTORY['fec_receipts'])
+    mapped=mapped_record('fec_receipts',row,current)
+    held={name:mapped.get(name) for name in prior.input_fields}
+    held["fec_conversion_inputs"] = {**mapped["fec_conversion_inputs"],
+        **{name:value for name,value in row.items() if name not in prior.subject_schema.names}}
+    prior,subject,receipt=old_pair(tmp_path/'bundle','fec_receipts',held)
+    before=subject.read_bytes()
+    assert selected_subject_policy(current,[subject]).descriptor()==prior.descriptor()
+    [restored]=read_fec_with_receipts([subject],[receipt],current,generation_id='historical')
+    assert restored==row
+    with duckdb.connect() as con:
+        adapter=ReceiptAdapter(con,{'families':{}},'',local_native={
+            'fec_receipts':dict(subjects=[subject],receipts=receipt,generation_id='historical')})
+        target=adapter.restore('fec_receipts')
+        assert con.execute(f'SELECT source_namespace FROM "{target}"').fetchone()==(row['source_namespace'],)
+    assert subject.read_bytes()==before and pq.read_schema(subject)==prior.subject_schema
+
+
+def test_selected_priors_restores_old_committee_policy_before_new_context_cutover(tmp_path):
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    from spicy_regs.transforms.build_fec_committees import COLUMNS
+    original=dict.fromkeys(COLUMNS)
+    original.update(committee_id='C00000001',name='Retained',cycles_json='[2026]',candidate_ids_json='[]')
+    prior=DatasetPolicy.from_descriptor(HISTORY['fec_committees'])
+    row={name:None for name in prior.subject_schema.names}
+    row.update(committee_id='C00000001',name='Retained',cycles=[2026],candidate_ids=[],
+               cycles_json=original['cycles_json'],candidate_ids_json=original['candidate_ids_json'],
+               conversion_inputs=original)
+    prior,subject,receipt=old_pair(tmp_path/'bundle','fec_committees',row)
+    root=tmp_path/'root'
+    remember_selection(root,[SelectedDataset('fec_committees',(subject,),receipt,'historical')])
+    selected=SelectedPriors(tmp_path/'read',root=root,public_url='')
+    output=selected.get('fec_committees')
+    assert pq.read_table(output).to_pylist()==[original]
+
+
+def test_additive_fcc_history_preserves_both_exact_old_declarations():
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+    from spicy_regs.transforms.government_receipts import POLICIES
+    history=json.loads(Path(__file__).parents[1].joinpath('src/spicy_regs/navigation_policy_history.json').read_text())
+    assert [p.descriptor() for p in earlier_policies(POLICIES['fcc_filings'])]==[
+        history['fcc_filings_v2'],history['fcc_filings']]
+
+
+def test_shared_schema_does_not_admit_a_changed_complete_identity(tmp_path, monkeypatch):
+    from dataclasses import replace
+    import spicy_regs.etl_receipts as receipts
+    from tests.test_fec_subject_receipts import source_row
+    from spicy_regs.transforms.fec_subject_receipts import mapped_record
+    policy=policies()['fec_receipts']
+    alternate=replace(policy,identity_fields=('collection_id',),policy_version='unrelated-history')
+    subject,_=write_dataset([(mapped_record('fec_receipts',source_row(),policy),
+                            ReceiptContext('same','row','writer',[{'source_id':'fixture','body_version':'selected'}]))],tmp_path/'bundle',policy)
+    monkeypatch.setattr(receipts,'receipt_policies',lambda current: (current,alternate))
+    with pytest.raises(ValueError,match='Subject schema differs'):
+        selected_subject_policy(policy,[subject])

@@ -571,6 +571,16 @@ def selected_subject_policy(policy: DatasetPolicy, paths: Sequence[ParquetInput]
         with _parquet(path) as parquet:
             matches = [candidate for candidate in receipt_policies(policy)
                        if parquet.schema_arrow.equals(candidate.subject_schema)]
+        if len(matches) > 1 and all(
+            (candidate.identity_fields, candidate.nullable_identity_fields, candidate.receipt_only) ==
+            (matches[0].identity_fields, matches[0].nullable_identity_fields, matches[0].receipt_only)
+            for candidate in matches
+        ):
+            # Some migrations promote only receipt context already present in
+            # the native schema. Identical subject values and complete identity
+            # have identical hashes; each receipt still validates under its exact
+            # shipped version. No processing declaration is inferred here.
+            matches = [policy if policy in matches else matches[0]]
         if len(matches) != 1:
             raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
         if selected is not None and matches[0] != selected:
