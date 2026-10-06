@@ -33,6 +33,16 @@ Boundary checks are in `tests/test_etl_receipts.py`,
 the regulatory checks resolve original API witnesses after repeated row and
 bounded rewrites and retain ordered evidence from multiple prior inputs.
 
+## Catalog comments batching
+
+Catalog comments use the batch writer only when the selected incoming scope has
+no prior receipts. If prior receipts exist, the entire staged write uses the
+current row writer, preserving all witnesses and retained processing history.
+Processing reads can batch after complete receipt admission and source-to-native
+reproduction; an unsupported proof returns the whole pair to the row reader for
+its exact first error. Batch conversion preserves source order and count, routes
+unsupported rows through the shared mapper, and retains refused attempts.
+
 ## Explicit auxiliary key indexes
 
 `receipt_key_index_writer.build_key_index` builds a separate narrow key file. It
