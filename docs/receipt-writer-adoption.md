@@ -63,6 +63,20 @@ Boundary checks are in `tests/test_receipt_key_index_writer.py`,
 `tests/test_qualify_receipt_index.py`, `tests/test_generation_publication.py` and
 `tests/test_remote_generations.py`.
 
+## Receipt-order experiment
+
+The physical-sort proposal is closed without changing receipt admission. The
+hosted FEC reader regression reproduced a derived candidate-list difference
+when identical receipt rows were stored in a different order. The evidence
+view now orders companion digests, with nulls last, while preserving repeated
+and null candidates. Its rule is `fec-companion-location-v3`.
+
+`tests/test_fec_receipt_order.py` exercises the receipt-backed serving path in
+both physical orders. Navigation tests cover repeated and null candidates.
+This makes the derived list deterministic without rewriting source observations
+or adopting the proposed physical receipt sort. The separate key-index utility
+continues to refer to original receipt ordinals.
+
 ## Replacement of the earlier draft stack
 
 This mapping was checked against merged source
