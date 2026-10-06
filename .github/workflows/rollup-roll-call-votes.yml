@@ -42,8 +42,9 @@ jobs:
       roll_call_chambers: ${{ inputs.chambers || '' }}
       roll_call_max_votes: ${{ inputs.max_votes || '' }}
       # MAX_VOTES_PER_RUN (1,500) at ~2 roll calls/second is ~13 minutes, and the
-      # 4,000 ceiling ~35; the headroom covers a full-Congress first pass.
+      # 4,000 ceiling ~35; native prior restoration and publication need
+      # additional time beyond source acquisition.
       # The 101st-107th House backfill (7,327 Clerk files of 1990-2002) is
       # congresses=101,102,103,104,105,106,107, chambers=house, max_votes=4000,
       # dispatched until a run fetches nothing: two runs at 4,000, five at 1,500.
-      timeout_minutes: 60
+      timeout_minutes: 180
