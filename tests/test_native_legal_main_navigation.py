@@ -34,6 +34,7 @@ def test_every_maintained_route_keeps_its_complete_identity_and_recorded_pin(kin
                      target_snapshot=pin, resolution_rule="selected-target-lookup/1",
                      derivation_rule="retained-rule", derivation_version="004", occurrence_key="original:0")
     result = map_subject("native_legal_references", observation([candidate, None, candidate]))
+    assert result is not None
     assert result["source_path"] == "/*[1]/*[2]" and result["text"] == "The original passage"
     assert result["rule_version"] == "native-legal-reference/003"
     assert result["interpretation_status"] == "partial_text_findings"
@@ -65,7 +66,9 @@ def test_recorded_outcomes_and_refusals_are_preserved_without_a_new_lookup(statu
     candidate = dict(target_status=status, reason=reason, match_count=count, candidate_keys=keys,
                      source_status="current_text", target_resolved=False, error_type="TimeoutError",
                      match_basis="page_range", text_sha256="sha256:" + "d" * 64)
-    [result] = map_subject("native_legal_references", observation([candidate]))["target_candidates"]
+    mapped = map_subject("native_legal_references", observation([candidate]))
+    assert mapped is not None
+    [result] = mapped["target_candidates"]
     for name in ("target_status", "reason", "match_count", "source_status", "target_resolved",
                  "error_type", "match_basis", "text_sha256"):
         assert result[name] == candidate[name]
@@ -78,6 +81,7 @@ def test_recorded_outcomes_and_refusals_are_preserved_without_a_new_lookup(statu
 def test_unsupported_empty_and_unread_observations_remain_visible(candidates, status):
     raw = observation(candidates) | {"interpretation_status": status, "href": "opaque:retained"}
     result = map_subject("native_legal_references", raw)
+    assert result is not None
     assert result["href"] == "opaque:retained" and result["text"] == raw["text"]
     assert result["interpretation_status"] == status
     assert result["target_candidates"] == candidates
@@ -100,6 +104,7 @@ def test_main_read_scope_keeps_zero_empty_unknown_and_selected_shapes():
               source_locator="retained:xml", read_status="complete_selected_shapes", rule_version="rule-3",
               manifest_sha256="sha256:" + "b" * 64)
     result = map_subject("native_legal_reference_reads", raw)
+    assert result is not None
     assert result["occurrence_count"] == 0 and result["source_bytes"] == 17
     assert result["edition"] is None and result["unsupported_shapes"] == []
     assert result["selected_shapes"] == ["AUTH", "SOURCE"]

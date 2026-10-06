@@ -98,24 +98,33 @@ _struct_list(NATIVE_CANDIDATE_TYPE, NATIVE_CANDIDATE_FIELDS)
 def _native_candidates(value: Any) -> Any:
     if value is None:
         return None
-    if not isinstance(value, list) or any(v is not None and not isinstance(v, dict) for v in value):
+    if not isinstance(value, list):
         raise LegislativeShapeError("target_candidates_json: expected list of objects")
     result = []
     for ordinal, candidate in enumerate(value):
         if candidate is None:
             result.append(None)
             continue
+        if not isinstance(candidate, dict):
+            raise LegislativeShapeError("target_candidates_json: expected list of objects")
         if "candidate_ordinal" in candidate:
             raise LegislativeShapeError("target_candidates_json: source supplied a derived ordinal")
-        candidate = dict(candidate, candidate_ordinal=ordinal)
+        candidate = {**candidate, "candidate_ordinal": ordinal}
         if candidate.get("candidate_keys") is not None:
             keys = candidate["candidate_keys"]
-            if not isinstance(keys, list) or any(k is not None and not isinstance(k, dict) for k in keys):
+            if not isinstance(keys, list):
                 raise LegislativeShapeError("candidate_keys: expected list of identity objects")
-            if any(k is not None and "target_key_ordinal" in k for k in keys):
-                raise LegislativeShapeError("candidate_keys: source supplied a derived ordinal")
-            candidate["candidate_keys"] = [None if k is None else dict(k, target_key_ordinal=i)
-                                           for i, k in enumerate(keys)]
+            qualified_keys = []
+            for i, inner_key in enumerate(keys):
+                if inner_key is None:
+                    qualified_keys.append(None)
+                    continue
+                if not isinstance(inner_key, dict):
+                    raise LegislativeShapeError("candidate_keys: expected list of identity objects")
+                if "target_key_ordinal" in inner_key:
+                    raise LegislativeShapeError("candidate_keys: source supplied a derived ordinal")
+                qualified_keys.append({**inner_key, "target_key_ordinal": i})
+            candidate["candidate_keys"] = qualified_keys
         result.append(candidate)
     return result
 

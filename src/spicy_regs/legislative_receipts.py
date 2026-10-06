@@ -260,6 +260,8 @@ def write_legislative_outputs(
                               "locator": f"row:{ordinal}", "body_version": None}])
                 subject, receipts = write_dataset(recorded_checkpoints(), stage / ".outcomes" / name,
                                                    OUTCOME_POLICIES[name])
+                if subject is None:
+                    raise ValueError(f"Main read-outcome policy has no subject: {name}")
                 shutil.copyfile(subject, stage / f"{name}.parquet")
                 receipt_shards.append(receipts)
                 manifest["outcome_subjects"][name] = [f"{name}.parquet"]
@@ -274,6 +276,8 @@ def write_legislative_outputs(
                 ((row | {"recorded_event": raw}, context) for row, raw, context in
                  file_rows(states, mapped, stage, generation_id=generation_id)),
                 stage / ".outcomes" / file_outcomes_table, selected_policy)
+            if subject is None:
+                raise ValueError(f"Main file-outcome policy has no subject: {file_outcomes_table}")
             shutil.copyfile(subject, stage / f"{file_outcomes_table}.parquet")
             receipt_shards.append(receipts)
             manifest["outcome_subjects"][file_outcomes_table] = [f"{file_outcomes_table}.parquet"]
