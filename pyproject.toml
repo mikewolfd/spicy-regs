@@ -31,6 +31,9 @@ embed = [
     "sentence-transformers",
     "torch",
 ]
+comments-reader = [
+    "pyiceberg[pyarrow]==0.12.0",
+]
 
 [dependency-groups]
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
