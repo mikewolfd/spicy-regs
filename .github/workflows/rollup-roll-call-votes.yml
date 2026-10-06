@@ -37,6 +37,7 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-roll-call-votes
+      producer_ref: main
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       bill_family_congresses: ${{ inputs.congresses || '' }}
       roll_call_chambers: ${{ inputs.chambers || '' }}

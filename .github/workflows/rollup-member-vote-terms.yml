@@ -15,5 +15,6 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-member-vote-terms
+      producer_ref: main
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       timeout_minutes: 180
