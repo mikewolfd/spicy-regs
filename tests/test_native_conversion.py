@@ -987,9 +987,7 @@ def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
     from tests.test_legislative_receipts import retained, row
 
-    # Empty processing tables have wider legacy footers; this fake-bucket test
-    # exercises receipt ownership/restoration, not the production shrink guard.
-    monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
+    monkeypatch.delenv("R2_ALLOW_SHRINK", raising=False)
     cls = conversion._rollup_class(family)
     reads_key = read_dataset + ".parquet"
     assert reads_key in cls.source_outputs

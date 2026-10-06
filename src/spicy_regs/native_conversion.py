@@ -830,7 +830,8 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         _, replaced = publication.load_family_root(base, old)
         scheduled = _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
-        proof, problems = _qualify_conversion(family, built, old, retained, replaced, retains, _handed_on(base, replaced))
+        proof, problems, conversion_proof = _qualify_conversion(
+            family, built, old, retained, replaced, retains, _handed_on(base, replaced))
         if problems or any(receipt.get(key) != value for key, value in proof.items()):
             raise ConversionRefused(f"Prepared restoration proof differs: {problems}")
     except (ConversionRefused, publication.PublicationError) as failure:
@@ -841,7 +842,7 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
     receipt["target"] = target
     return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
                                expected_spicy_docs=expected_spicy_docs, remote=remote, state=state, exact_prior=True,
-                               publisher_source=now)
+                               publisher_source=now, conversion_proof=conversion_proof)
 
 
 def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: str, expected_spicy_docs: str,
@@ -927,7 +928,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             raise ConversionRefused(f"{family}: {refusal}") from refusal
         receipt["convert_seconds"] = round(time.monotonic() - elapsed, 1)
 
-    proof, problems = _qualify_conversion(family, built, old, retained, replaced, retains, handed_on)
+    proof, problems, conversion_proof = _qualify_conversion(family, built, old, retained, replaced, retains, handed_on)
     receipt.update(proof)
 
     def save() -> dict:
@@ -944,11 +945,13 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         return save()
 
     return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
-                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state)
+                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state,
+                               conversion_proof=conversion_proof)
 
 
 def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapping[str, Path],
-                        replaced: Mapping, retains: bool, handed_on: Sequence[Mapping]) -> tuple[dict, list[str]]:
+                        replaced: Mapping, retains: bool, handed_on: Sequence[Mapping],
+                        ) -> tuple[dict, list[str], publication.NativeConversionProof | None]:
     artifact = json.loads((built.generation / "artifact.json").read_bytes())
     outcomes = Counter(outcome for batch in pq.ParquetFile(built.generation / "etl_receipts.parquet").iter_batches(
         columns=["outcome"]) for outcome in batch.column(0).to_pylist())
@@ -959,7 +962,13 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         dataset = key.removesuffix(".parquet")
         subject = built.generation / (dataset if "members" in table else key)
         try:
-            check = _table_differences(built.restore(dataset), retained[key]) | {"retained_rows": table["rows"]}
+            restored = built.restore(dataset)
+            actual, original = _table_files(restored), _table_files(retained[key])
+            if restored.is_dir() != retained[key].is_dir() or actual.keys() != original.keys():
+                raise ValueError("Processing member layout changed")
+            for name in original:
+                _check_processing_restore(original[name], actual[name], label=dataset)
+            check = _table_differences(restored, retained[key]) | {"retained_rows": table["rows"]}
         except ValueError as unreadable:
             problems.append(f"{dataset} does not restore: {unreadable}")
             continue
@@ -1011,6 +1020,10 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
                      if row.get("event") in INHERITED_EVENTS]
         if journaled != list(handed_on):
             problems.append(f"{len(handed_on)} journal events the next run reads back were not all handed on")
+    from rulespec_artifacts import canonical_json_bytes
+
+    conversion_proof = (None if problems else publication.NativeConversionProof(
+        artifact["logicalId"], artifact["artifactDigest"], canonical_json_bytes(old), frozenset(old["tables"])))
     return {
         "policy_versions": dict(built.policies),
         "receipt_outcomes": dict(outcomes),
@@ -1018,12 +1031,14 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         "lineage": lineage,
         "generation": {"directory": str(built.generation), "artifactDigest": artifact["artifactDigest"],
                        "receiptGenerationId": artifact["spec"]["etlReceipts"]["generationId"]},
-    }, problems
+    }, problems, conversion_proof
 
 
 def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: Path, *,
                         expected_main: str, expected_spicy_docs: str, remote: str, state: Callable[[str], dict],
-                        exact_prior: bool = False, publisher_source: Mapping | None = None) -> dict:
+                        exact_prior: bool = False, publisher_source: Mapping | None = None,
+                        conversion_proof: publication.NativeConversionProof | None = None) -> dict:
+    exact_prior = exact_prior or conversion_proof is not None
     family, base, target = (receipt[name] for name in ("family", "public_url", "target"))
     started = publisher_source if publisher_source is not None else receipt["source"]
     old, tables = receipt["captured"]["entry"], receipt["tables"]
@@ -1052,7 +1067,8 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
     try:
         index = publication.publish_generation(
             built.generation, client=client, bucket=bucket, prior_index=captured, evidence_directories=built.evidence,
-            added_tables=built.added_tables, receipt_only_tables=built.receipt_only_tables, exact_prior=exact_prior)
+            added_tables=built.added_tables, receipt_only_tables=built.receipt_only_tables, exact_prior=exact_prior,
+            conversion_proof=conversion_proof)
         entry = index["families"][family]
     except Exception as failure:
         # The publish call did not return. A conditional write whose response was lost has still moved the pointer,

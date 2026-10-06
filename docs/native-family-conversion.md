@@ -33,7 +33,7 @@ for a cheaper writer. Evidence for everything below:
    court writer for a court family. Field policies are read at run time.
 5. Refuses unless every row converts (every receipt `accepted` or
    `observed`) and a native read restores each table to exactly the retained
-   rows, with the same columns, types and file metadata.
+   ordered rows and repetitions, with the same full Arrow schema and file metadata.
    Split tables also retain exact relative member names, empty members,
    per-member row counts, and each member's full Arrow schema and metadata.
    A table-wide union cannot substitute for this member-by-member check.
@@ -45,6 +45,18 @@ for a cheaper writer. Evidence for everything below:
    pointer write and reads the result back without credentials: the entry
    carries `etlReceipts`, row counts match, and the read that refused before
    now passes.
+
+A successful conversion passes an in-memory restoration proof to publication.
+It names the admitted candidate, the complete captured family entry, and every
+original table checked during this invocation. For those tables, full
+restoration replaces the ordinary byte-size heuristic: moving fields into
+receipts can make a complete native subject much smaller. The proof requires
+the exact prior entry, including its timestamp, on every pointer retry.
+Partition, table membership, receipt ownership, installed policy, and immutable
+byte-verification checks still run. Added tables and ordinary publications keep
+the size guard. A saved success report cannot supply the proof; prepared
+publication repeats the full checks while preserving the original seal and
+candidate bytes.
 
 Each run writes `conversion.json` in its `--work` directory. It holds the
 captured entry and the generation the run intends to publish, and it is
@@ -64,9 +76,7 @@ columns. The court converter still refuses split tables.
 
 ### What the checks cannot see
 
-- Row order and `-0.0` against `0.0` are not compared. For single-file
-  tables, column order, `string` against `large_string`, nullability, and a
-  timestamp's timezone label are not compared either.
+- Arrow value equality does not distinguish floating-point `-0.0` from `0.0`.
 - On the rollup path the restored table is rebuilt from the receipt's copy
   of each input row. A mapper defect in a public column is therefore
   invisible to the comparison: it proves the next run's prior, not the
