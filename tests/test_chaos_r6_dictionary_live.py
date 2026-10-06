@@ -84,12 +84,33 @@ def test_each_original_filing_expenditure_has_exactly_one_cover_and_the_bulk_fil
 def test_senate_meetings_list_no_witnesses_while_their_printed_hearings_do(urls, con):
     """Cannot see: whether a Senate meeting with no printed hearing had witnesses at all."""
     assert "`hearing_transcripts.witnesses_json`" in _text("committee_meetings")
+    conditions = {}
+    for table in ("committee_meetings", "hearing_transcripts"):
+        columns = {row[0]: row[1] for row in con.execute(f"DESCRIBE SELECT * FROM {_scan(urls, table)}").fetchall()}
+        conditions[table] = _stated_witnesses(table, columns)
     meetings, transcripts = con.execute(f"""
         SELECT (SELECT count(*) FROM {_scan(urls, 'committee_meetings')} WHERE chamber IN ('senate', 'nochamber')
-                AND witnesses_json IS NOT NULL AND witnesses_json <> '[]'),
+                AND {conditions['committee_meetings']}),
                (SELECT count(*) FROM {_scan(urls, 'hearing_transcripts')} WHERE chamber = 'senate'
-                AND witnesses_json IS NOT NULL AND witnesses_json <> '[]')""").fetchone()
+                AND {conditions['hearing_transcripts']})""").fetchone()
     assert meetings == 0 and transcripts > 0
+
+
+def _stated_witnesses(table, columns):
+    """Count witnesses using exactly one declared native or legacy representation."""
+    from spicy_regs.native_types import described_schema
+    from spicy_regs.subject_catalog import policies
+
+    native_type = dict(described_schema(policies()[table].subject_schema))["witnesses"]
+    declared = {"witnesses": native_type, "witnesses_json": "VARCHAR"}
+    present = set(declared) & columns.keys()
+    if len(present) != 1:
+        raise ValueError(f"{table}: expected one witness representation, found {sorted(present)}")
+    column = present.pop()
+    if columns[column] != declared[column]:
+        raise ValueError(f"{table}: {column} has undeclared type {columns[column]}")
+    return ("witnesses IS NOT NULL AND len(witnesses) > 0" if column == "witnesses"
+            else "witnesses_json IS NOT NULL AND witnesses_json <> '[]'")
 
 
 def test_table_iii_at_release_point_119_73_holds_no_record_of_119_70(urls, con):

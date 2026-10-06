@@ -69,12 +69,24 @@ def test_comments_coverage_states_no_end_bound_the_data_has_passed(base_url, con
     assert lagging == [], f"coverage states {lagging} as a bound; the data reaches {live_month:%Y-%m}"
 
 
-def test_house_communications_is_a_window_held_whole(base_url, con):
+def test_house_communications_is_a_window_held_whole(base_url, con, tmp_path):
     """Window means every listed communication is held, not a per-run slice: numbers contiguous from 1, no list-only row."""
     from spicy_regs.transforms.build_congress_index import INDEX_SPECS, _read_sql
 
     assert _kinds()["house_communications"] == "window"
-    scan = publication.parquet_scan(publication.published_urls(base_url)["house_communications"])
+    index = publication.load_index(base_url)
+    owner = publication.table_owner(index, "house_communications.parquet")
+    if owner is not None and "etlReceipts" in owner[1]:
+        from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+        # Detail-read markers live in the paired receipt. Restore the captured pair through
+        # the maintained processing reader before applying the original completeness rule.
+        processing = SelectedPriors(tmp_path / "house-prior", index=index, public_url=base_url).get("house_communications")
+        assert processing is not None
+        scan = publication.parquet_scan([str(processing)])
+    else:
+        scan = publication.parquet_scan([f"{base_url}/{member.path}"
+                                         for member in publication.table_members(index, "house_communications.parquet")])
     # A read detail that states no committees leaves committees_json NULL (spicy-docs 0.54.0); the run's own rule says.
     columns = {str(row[0]) for row in con.execute(f"DESCRIBE SELECT * FROM {scan}").fetchall()}
     read = _read_sql(columns, INDEX_SPECS["house_communications"].detail_marker or "")
