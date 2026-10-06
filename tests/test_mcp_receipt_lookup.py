@@ -926,3 +926,108 @@ def test_the_roll_call_markers_are_the_builder_s_read_columns_by_chamber():
                if marker.table == "roll_call_votes"}
     assert {chamber: marker.columns for chamber, marker in markers.items()} == dict(_READ_COLUMNS)
     assert all(marker.fields == marker.columns and marker.read_value is None for marker in markers.values())
+
+
+def snapshot_serving(tmp_path, monkeypatch, *, edit=None):
+    """Native subjects and internal receipts under a captured snapshot, with no family index entry."""
+    from spicy_regs.sources import publication as pub
+
+    rows = [{"proceeding_id": "proceeding_00003fe56396de15cc98430a", "method": "original method",
+             "actor_id": None, "raw_conversion_inputs": {"literal": ["042", None, True]}},
+            {"proceeding_id": "other", "method": "second"}]
+    subject, receipts = written(tmp_path / "work", "proceedings", rows)
+    root = tmp_path / "bucket"
+    entry = published(root, "snapshot-fixture", {"proceedings": subject}, pq.read_table(receipts))
+    snapshot_id = "snapshot_under_test"
+    prefix = f"materialized/rulemaking/snapshots/{snapshot_id}"
+    target = root / prefix
+    target.parent.mkdir(parents=True)
+    (root / entry["prefix"]).rename(target)
+    artifacts = {key: {"remote_key": f"{prefix}/{key}", "sha256": value["sha256"].removeprefix("sha256:"),
+                       "bytes": value["byteSize"], "rows": value["rows"], "visibility": "public"}
+                 for key, value in entry["tables"].items()}
+    receipt = entry["etlReceipts"]
+    artifacts["etl_receipts.parquet"] = {
+        "remote_key": f"{prefix}/etl_receipts.parquet", "sha256": receipt["sha256"].removeprefix("sha256:"),
+        "bytes": receipt["byteSize"], "rows": receipt["rows"], "visibility": "internal"}
+    manifest = {"dataset": "rulemaking", "format_version": 2, "snapshot_id": snapshot_id,
+                "run_id": GENERATION, "asserted_at": "2026-10-05T00:00:00Z", "artifacts": artifacts,
+                "etlReceipts": {"key": "etl_receipts.parquet", "generationId": GENERATION,
+                                "policies": [POLICIES["proceedings"].descriptor()]}}
+    if edit is not None:
+        edit(manifest)
+    manifest_key = f"{prefix}/manifest.json"
+    pointer = {"dataset": "rulemaking", "format_version": 2, "snapshot_id": snapshot_id,
+               "manifest_key": manifest_key}
+    documents = {f"{root}/{pub.SNAPSHOT_POINTER}": pointer, f"{root}/{manifest_key}": manifest}
+    snapshot = pub.load_rulemaking_snapshot(str(root), read=lambda url, **kwargs: json.dumps(documents[url]).encode())
+    monkeypatch.setattr(server, "R2_BASE_URL", str(root))
+    monkeypatch.setattr(server, "TABLES", ("proceedings",))
+    monkeypatch.setattr(server, "load_public_http", lambda con, retries: None)
+    con = server._build_connection(server._Publication(pub.empty_index(), snapshot, None))
+    monkeypatch.setattr(server, "_get_connection", lambda: con)
+    return con, snapshot, target
+
+
+def test_captured_snapshot_receipts_preserve_values_order_and_native_provenance(tmp_path, monkeypatch):
+    from spicy_regs.sources import publication as pub
+
+    con, snapshot, target = snapshot_serving(tmp_path, monkeypatch)
+    assert con.execute("SELECT current_setting('enable_external_access')").fetchone() == (False,)
+    allowed = con.execute("SELECT current_setting('allowed_paths')").fetchone()[0]
+    assert str(target / "etl_receipts.parquet") in allowed
+    monkeypatch.setattr(pub, "load_rulemaking_snapshot", lambda *a, **k: pytest.fail("lookup fetched a new snapshot"))
+    key = {"proceeding_id": "proceeding_00003fe56396de15cc98430a"}
+    reply = call("proceedings", [key, {"proceeding_id": "other"}, key, {"proceeding_id": "absent"}],
+                 ["method", "actor_id", "raw_conversion_inputs"])
+    assert [item["key"] for item in reply["keys"]] == [key, {"proceeding_id": "other"}, key, {"proceeding_id": "absent"}]
+    assert reply["keys"][0] == reply["keys"][2]
+    assert reply["keys"][0]["fields"] == {
+        "method": {"state": "stated", "value": "original method"}, "actor_id": {"state": "null_unmarked"},
+        "raw_conversion_inputs": {"state": "stated", "value": {"literal": ["042", None, True]}}}
+    assert reply["keys"][3]["receipt"] == "not_in_table"
+    assert reply["receipts"] == {
+        "family": None, "generation_id": GENERATION, "artifact_digest": None,
+        "snapshot_id": snapshot["snapshot_id"], "manifest_key": snapshot["manifest_key"],
+        "member_sha256": "sha256:" + snapshot["manifest"]["artifacts"]["etl_receipts.parquet"]["sha256"],
+        "policy_version": POLICIES["proceedings"].policy_version}
+    assert _tool_data(server.build_server(), "describe_table", {"table": "proceedings"})["receipt_fields"]["available"]
+    assert "proceedings" in lookup.tables_with_receipts(pub.empty_index(), None, str(target), snapshot)
+    assert "gives no proceeding_id" in refused("proceedings", [{}], ["method"])
+    assert "do not carry 'not_a_field'" in refused("proceedings", [key], ["not_a_field"])
+    monkeypatch.setattr(lookup, "SCAN_ROW_BOUND", 1)
+    assert "over the 1-receipt bound" in refused("proceedings", [key], ["method"])
+    con.close()
+
+
+@pytest.mark.parametrize("change", [
+    lambda m: m["etlReceipts"].__setitem__("generationId", "another-run"),
+    lambda m: m["etlReceipts"].__setitem__("key", "../other.parquet"),
+    lambda m: m["artifacts"]["etl_receipts.parquet"].__setitem__("remote_key", "materialized/other/etl_receipts.parquet"),
+    lambda m: m["artifacts"]["etl_receipts.parquet"].__setitem__("sha256", "missing"),
+    lambda m: m["artifacts"]["etl_receipts.parquet"].__setitem__("visibility", "public"),
+    lambda m: m["artifacts"].pop("etl_receipts.parquet"),
+    lambda m: m["etlReceipts"].__setitem__("policies", [{"dataset": "proceedings"}, {"dataset": "proceedings"}]),
+])
+def test_a_misbound_snapshot_receipt_refuses_at_snapshot_admission(tmp_path, monkeypatch, change):
+    from spicy_regs.sources.publication import PublicationError
+
+    with pytest.raises(PublicationError):
+        snapshot_serving(tmp_path, monkeypatch, edit=change)
+
+
+def test_snapshot_selection_follows_subject_precedence_and_never_supplies_local_receipts(tmp_path, monkeypatch):
+    from spicy_regs.sources import publication as pub
+
+    con, snapshot, _ = snapshot_serving(tmp_path, monkeypatch)
+    index = pub.empty_index()
+    assert lookup.selected_member(index, {}, "unused", "proceedings", snapshot) is None
+    assert lookup.selected_member(index, None, "unused", "rule_targets", snapshot) is None
+    # A legacy snapshot with no declared receipt remains honestly unavailable.
+    legacy = json.loads(json.dumps(snapshot))
+    legacy["manifest"].pop("etlReceipts")
+    assert lookup.selected_member(index, None, "unused", "proceedings", legacy) is None
+    # A family entry owns the subject even if it has no receipts; a snapshot must not fill that gap.
+    index["families"]["new-owner"] = {"tables": {"proceedings.parquet": {}}, "prefix": "new-owner"}
+    assert lookup.selected_member(index, None, "unused", "proceedings", snapshot) is None
+    con.close()

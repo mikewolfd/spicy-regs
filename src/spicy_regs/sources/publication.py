@@ -297,6 +297,39 @@ def load_index(base_url: str) -> dict:
     return empty_index()
 
 
+def rulemaking_receipt(snapshot: Mapping) -> dict | None:
+    """The captured snapshot's declared receipt member; legacy snapshots declare none.
+
+    The internal member must belong to the same snapshot and run as its subjects.
+    Validate its path and digest before a consumer constructs a URL from it.
+    """
+    manifest = snapshot.get("manifest", {})
+    declaration = manifest.get("etlReceipts")
+    if declaration is None:
+        return None
+    try:
+        snapshot_id = snapshot["snapshot_id"]
+        prefix = f"materialized/rulemaking/snapshots/{snapshot_id}"
+        generation = declaration["generationId"]
+        record = manifest["artifacts"]["etl_receipts.parquet"]
+        datasets = [policy["dataset"] for policy in declaration["policies"]]
+        if (not SNAPSHOT_ID.fullmatch(snapshot_id)
+                or snapshot["manifest_key"] != f"{prefix}/manifest.json"
+                or manifest["snapshot_id"] != snapshot_id or manifest["dataset"] != "rulemaking"
+                or declaration["key"] != "etl_receipts.parquet"
+                or not isinstance(generation, str) or not generation or generation != manifest["run_id"]
+                or record["remote_key"] != f"{prefix}/etl_receipts.parquet"
+                or record["visibility"] != "internal"
+                or not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"])
+                or any(type(record[name]) is not int or record[name] < 0 for name in ("bytes", "rows"))
+                or not datasets or any(not isinstance(name, str) or not _NAME.fullmatch(name) for name in datasets)
+                or len(set(datasets)) != len(datasets)):
+            raise ValueError("receipt is not the declared snapshot/run member")
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise PublicationError("Invalid rulemaking snapshot receipt") from exc
+    return {**record, "generationId": generation, "datasets": datasets}
+
+
 def load_rulemaking_snapshot(base_url: str, *, read=None) -> dict | None:
     """Read the rulemaking pointer and the manifest it names, once; ``None`` while no snapshot is published.
 
@@ -336,8 +369,10 @@ def load_rulemaking_snapshot(base_url: str, *, read=None) -> dict | None:
                 raise ValueError(f"public artifact {key!r} is not its snapshot's member")
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         raise PublicationError("Invalid rulemaking snapshot") from exc
-    return {"snapshot_id": snapshot_id, "manifest_key": f"{prefix}/manifest.json", "tables": tables,
-            "manifest": manifest}
+    snapshot = {"snapshot_id": snapshot_id, "manifest_key": f"{prefix}/manifest.json", "tables": tables,
+                "manifest": manifest}
+    rulemaking_receipt(snapshot)
+    return snapshot
 
 
 #: The comment files the export receipt identifies at fixed public URLs, as table names; the receipt's agency

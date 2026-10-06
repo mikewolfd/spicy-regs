@@ -810,6 +810,14 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                              {"sha256": _pin(value.receipts), "byteSize": value.receipts.stat().st_size,
                               "rows": pq.ParquetFile(value.receipts).metadata.num_rows})
                 allowed_paths.append(str(value.key_index))
+    if local is None and rulemaking is not None:
+        from spicy_regs.sources.publication import rulemaking_receipt
+
+        snapshot_receipt = rulemaking_receipt(rulemaking)
+        if snapshot_receipt is not None:
+            # The lookup reads this internal member directly. Admit only the receipt paired with
+            # the connection's captured subjects before external access is locked.
+            allowed_paths.append(f"{R2_BASE_URL.rstrip('/')}/{snapshot_receipt['remote_key']}")
     _install_relationship_views(con)
     _apply_security_settings(con, allowed_paths)
     return con
@@ -2153,7 +2161,7 @@ def _tools() -> list[Tool]:
         # names are the same value in both replies; the meanings are a key only the detailed one carries.
         local = _connection_local_selection(cursor) if DATA_DIR is not None else None
         receipts = receipt_lookup.describe(table, entry, available=receipt_lookup.selected_member(
-            _connection_index(cursor), local, R2_BASE_URL, table) is not None)
+            _connection_index(cursor), local, R2_BASE_URL, table, _connection_rulemaking(cursor)) is not None)
         if receipts is not None and not detail:
             omitted.append(RECEIPT_FIELD_MEANINGS)
         # Full release evidence sits once: in publication for an available view, else in relationship.
@@ -2417,7 +2425,7 @@ def _tools() -> list[Tool]:
         the table declares a read marker for it, else null_unmarked (nothing
         says whether it was read). receipt_meaning and state_meaning define the
         words a reply uses; fields gives each field's meaning. receipts names
-        the family, generation and policy version read. A lookup reads the
+        the family or snapshot, receipt member, generation and policy version read. A lookup reads the
         record id of every receipt of the table, so a table with more than
         2,000,000 receipts is refused. A reply past the reply limit is refused
         with how many keys fit.
@@ -2428,6 +2436,7 @@ def _tools() -> list[Tool]:
                 cursor, table=table, keys=keys, fields=fields, index=_connection_index(cursor),
                 local=_connection_local_selection(cursor) if DATA_DIR is not None else None, base_url=R2_BASE_URL,
                 entry=_table_metadata().get(table, {}), plain=_jsonify,
+                snapshot=_connection_rulemaking(cursor),
             )
         reply = {**_source_details(cursor), **reply}
         receipt_lookup.refuse_oversized(reply, REPLY_CHARS, lambda value: len(_reply_text(value)[1]))
