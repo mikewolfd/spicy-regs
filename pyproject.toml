@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+comments-reader = ["pyiceberg[pyarrow]==0.12.0"]
 source-readers = [
     "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
     "spicy-docs[acquisition,html,pdf,pdf-pypdf,bill-diff,courtlistener-local,yaml]==0.58.0",
