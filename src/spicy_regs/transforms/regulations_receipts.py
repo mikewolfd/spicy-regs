@@ -123,17 +123,18 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     File-level placement/aggregation metadata is restored only when every row's
     receipt agrees. This keeps CFR incremental placement from becoming a blind
     full re-read after the split, and never promotes one row's marker to a file.
-    Dockets and documents use a private batch proof before exposing the file;
+    Dockets, documents, Federal Register and its docket links use a private batch
+    proof before exposing the file;
     ``bulk=False`` retains the complete row reader as the reference authority.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
     if source_schema is not None:
         known = dict(SOURCE_COLUMNS[selected.dataset])
-        if (selected.dataset not in {"dockets", "documents"}
+        if (selected.dataset not in {"dockets", "documents", "federal_register", "fr_docket_links"}
                 or len(set(source_schema.names)) != len(source_schema.names)
                 or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
             raise ValueError("Exact regulatory source schema differs from the declared input fields")
-    if bulk and selected.dataset in {'dockets', 'documents'}:
+    if bulk and selected.dataset in {'dockets', 'documents', 'federal_register', 'fr_docket_links'}:
         from spicy_regs import etl_bulk, regulations_bulk
         try:
             return regulations_bulk.materialize_internal(selected, destination, source_schema=source_schema)

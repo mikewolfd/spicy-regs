@@ -1,8 +1,8 @@
 """Congress.gov index tables — house communications, committee meetings, record issues, treaties and nominations —
 built with bounded detail reads and own-output resume keyed on each table's marker column.
 
-House communications retain the publisher route on historical rows. The
-Congressional Record reconstruction is a separate, deferred acquisition. A table
+House communications retain the publisher route on historical rows. A bounded
+Record enrichment fills missing locators from uniquely qualified printed entries. A table
 that keeps an earlier Congress in scope lists it only from the day before its
 held rows' newest stamp, so that Congress costs its changes, not a re-walk. A
 held detail that no retained response backs, or that an older detail shape read
@@ -549,6 +549,12 @@ def build_index_table(
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
     receipt_build=None,
+    selected_input=None,
+    record_reader=None,
+    record_acquirer=None,
+    max_record_packages: int = 8,
+    max_record_granules: int = 24,
+    max_record_bytes: int = 16 * 2 ** 20,
 ) -> Path:
     """Walk ``spec``'s list units, read the details the published table lacks, and merge."""
     if receipt_build is not None:
@@ -675,11 +681,18 @@ def build_index_table(
         output_dir, spec.table, rows, download_prior=download_prior, prior_present=prior is not None
     )
     _rederive_held(output, spec)
+    if spec.table == "house_communications":
+        from spicy_regs.transforms.house_record_enrichment import enrich_house_record
+
+        enrich_house_record(output, download_prior=download_prior, selected_input=selected_input,
+                            evidence=evidence, reader=record_reader, acquirer=record_acquirer,
+                            max_packages=max_record_packages, max_granules=max_record_granules,
+                            max_bytes=max_record_bytes)
     return output
 
 
-def build_house_communications(output_dir: Path, **kwargs: Any) -> Path:
-    return build_index_table(output_dir, INDEX_SPECS["house_communications"], **kwargs)
+def build_house_communications(output_dir: Path, *, selected_input=None, **kwargs: Any) -> Path:
+    return build_index_table(output_dir, INDEX_SPECS["house_communications"], selected_input=selected_input, **kwargs)
 
 
 def build_committee_meetings(output_dir: Path, **kwargs: Any) -> Path:

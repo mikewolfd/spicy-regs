@@ -383,6 +383,18 @@ JOINS: tuple[Join, ...] = (
     _join("fec_source_records", "collection_id", "fec_collections", "collection_id", 647, 0),
     *(_join(table, "collection_id", "fec_collections", "collection_id", keys, 0, expected_cardinality="one")
       for table, keys in _FEC_COLLECTION_KEYS.items()),
+    _join("fec_agency_report_documents", "report_id", "fec_agency_reports", "report_id", 98, 0,
+          reason="Report edition explicitly named by this document reference. Repeated links remain separate "
+                 "observations; a link does not establish that its body was captured or extracted.",
+          expected_cardinality="one"),
+    _join("fec_agency_report_text", "report_id", "fec_agency_reports", "report_id", 60, 0,
+          reason="Report edition explicitly named by this text observation. Each retained passage keeps its "
+                 "source location; report titles do not merge editions.",
+          expected_cardinality="one"),
+    _join("fec_report_metrics", "report_id", "fec_agency_reports", "report_id", 107, 0,
+          reason="Report edition explicitly named by this metric observation. The relationship supplies "
+                 "report context; it does not combine metric values or qualify financial totals.",
+          expected_cardinality="one"),
     _join("fec_independent_expenditures", "collection_id", "fec_filing_report_observations", "collection_id", 54, 1,
           "scope", "An original-filing row's cover: each electronic collection holds one fec_filing_report_observations "
           "row, its report_record_role reported-form (F24N or F24A, F3XN or F3XA, F5N). The bulk file "

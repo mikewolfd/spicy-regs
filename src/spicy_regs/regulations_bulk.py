@@ -217,7 +217,7 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
 
 
 def materialize_internal(selected, destination, *, source_schema=None):
-    if selected.dataset not in DATASETS or len(selected.subjects) != 1:
+    if (selected.dataset not in DATASETS and selected.dataset not in {'federal_register', 'fr_docket_links'}) or len(selected.subjects) != 1:
         raise etl_bulk.NotBulkEligible('Regulatory base restore requires one selected member')
     with TemporaryDirectory(prefix='regulatory-base-selected-') as temporary:
         scoped = select_receipts(selected.receipts, Path(temporary)/'receipts.parquet', dataset=selected.dataset)
@@ -235,9 +235,18 @@ def _materialize_selected(selected, destination, *, source_schema=None):
     if not expected:
         raise etl_bulk.NotBulkEligible('Empty observed input metadata stays with the row reader')
     key = declared.identity_fields[0]
+    join = f'n."{key}"=json_extract_string(r.identity_json, \'$[1][0][1][1][1]\')'
+    if len(declared.identity_fields) > 1:
+        # Compare each typed identity value, including nulls, to its exact
+        # retained encoding. A printed identifier may recur in another edition.
+        join = ' AND '.join(
+            etl_bulk.exact_json_sql('n."' + name.replace('"', '""') + '"', declared.subject_schema.field(name).type)
+            + f"=CAST(json_extract(r.identity_json, '$[1][{index}][1][1]') AS VARCHAR)"
+            for index, name in enumerate(declared.identity_fields)
+        )
     query = f'''SELECT n.* EXCLUDE(file_row_number), n.file_row_number AS _ordinal, r.processing_json AS _processing
         FROM read_parquet({_text(subject)}, file_row_number=true) n
-        JOIN read_parquet({_text(receipts)}) r ON n."{key}"=json_extract_string(r.identity_json, '$[1][0][1][1][1]')
+        JOIN read_parquet({_text(receipts)}) r ON {join}
         WHERE r.dataset={_text(selected.dataset)} AND r.outcome='accepted' ORDER BY n.file_row_number'''
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)

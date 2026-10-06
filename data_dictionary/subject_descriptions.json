@@ -2782,9 +2782,9 @@
       "rins": "All interpreted RIN occurrences supplied by the consumer, with exact field spans and digest. NULL means unread; [] means the supplied field was read and contained no RIN. Each occurrence's field_sha256 is spelled sha256: plus the hex digest under the rule report_nature/shared_rin/2; one stored under the earlier report_nature/shared_rin carries the bare hex and is re-read, not reused. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "update_date": "The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins.",
       "source_route": "What produced this row: `congress-gov-detail` where the publisher decomposed the communication itself, `congressional-record-granule` where it was reconstructed from the printed entry.",
-      "record_package_id": "The CREC package whose issue printed the entry (`CREC-{congressional_record_date}`); NULL on a publisher-decomposed row.",
-      "record_granule_id": "The `EXECUTIVE COMMUNICATIONS, ETC.` granule within that package, so the row is replayable the way `committee_reports` replays from `package_id`; NULL on a publisher-decomposed row.",
-      "record_entry_text": "The sentence the Record printed, GPO's own wording with none of the publisher's normalizations applied, kept beside the derived fields the way `rin_matched_text` is kept beside `rin`, so a bad parse is readable from the row; NULL on a publisher-decomposed row."
+      "record_package_id": "The exact Congressional Record package that printed the communication. May also be filled on a Congress.gov API row from a unique captured entry with matching Congress, communication type and number. Missing, ambiguous or incomplete reads leave it empty.",
+      "record_granule_id": "The exact House executive-communications granule that printed the entry. Paired with record_package_id; repeated qualifying entries do not supply a scalar locator.",
+      "record_entry_text": "The entry's printed text, retained beside the original Congress.gov fields. An API row keeps its original abstract, report nature and source route when this field is filled."
     }
   },
   "law_code_sections": {

@@ -146,7 +146,7 @@ class SelectedPriors:
             output.parent.mkdir(parents=True, exist_ok=True)
             materialize_internal(
                 ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output,
-                bulk=dataset in {"dockets", "documents"},
+                bulk=dataset in {"dockets", "documents", "federal_register", "fr_docket_links"},
             )
         self.restored[dataset] = output
         return output
