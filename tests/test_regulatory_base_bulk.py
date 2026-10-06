@@ -203,3 +203,49 @@ def test_existing_native_attachment_policy_keeps_all_classified_source_attribute
     assert raw['attachment_records_json'] == literal
     restored = materialize_internal(ReceiptInput('documents', (subject,), receipts, 'g'), tmp_path/'restored', bulk=bulk)
     assert pq.read_table(restored)['attachment_records_json'].to_pylist() == [literal]
+
+
+@pytest.mark.parametrize('bulk', [False, True])
+def test_api_witness_and_full_processing_survive_repeated_base_rewrites(tmp_path, bulk):
+    from hashlib import sha256
+    from spicy_regs.etl_receipts import ReceiptContext, resolve_receipt_witness
+    from spicy_regs.transforms.regulations_receipts import write_records
+
+    original = {'source_api': {'id': 'A', 'unmapped': 'keep original'}}
+    witness = {'source_id': 'api', 'source_uri': None,
+               'sha256': sha256(exact_json(original).encode()).hexdigest(),
+               'locator': 'receipt.values.raw_source_record (canonical exact_json)', 'body_version': 'body-v1'}
+    subject, receipts = write_records('dockets', [(original, ReceiptContext('api', 'initial', 'api', [witness]))],
+                                      tmp_path / 'initial', project=lambda row: {'docket_id': row['source_api']['id']})
+    original_receipt = receipts.read_bytes()
+    for ordinal in range(2):
+        restored = materialize_internal(ReceiptInput('dockets', (subject,), receipts, 'api'),
+                                        tmp_path / f'input-{ordinal}.parquet', bulk=bulk)
+        next_subject, next_receipts = write_held_dataset(
+            'dockets', restored, tmp_path / f'next-{ordinal}', generation_id=f'next-{ordinal}',
+            prior_receipts=[receipts], bulk=bulk,
+        )
+        restored.unlink()
+        subject, receipts = next_subject, next_receipts
+        [accepted] = [row for row in pq.read_table(receipts).to_pylist() if row['outcome'] == 'accepted']
+        assert resolve_receipt_witness(accepted, witness) == exact_json(original).encode()
+        for held in accepted['witnesses']:
+            assert sha256(resolve_receipt_witness(accepted, held)).hexdigest() == held['sha256'].removeprefix('sha256:')
+    assert (tmp_path / 'initial' / 'etl_receipts.parquet').read_bytes() == original_receipt
+
+
+@pytest.mark.parametrize('bulk', [False, True])
+def test_explicit_original_schema_preserves_absent_fields_and_refuses_null_substitution(tmp_path, bulk):
+    source = tmp_path / 'source.parquet'
+    schema = pa.schema([('title', pa.string()), ('document_id', pa.string())], metadata={b'keep': b'\xff'})
+    pq.write_table(pa.Table.from_pylist([{'title': 'literal', 'document_id': 'D'}], schema=schema), source)
+    subject, receipts = write_held_dataset('documents', source, tmp_path / 'native', generation_id='g', bulk=bulk)
+    selected = ReceiptInput('documents', (subject,), receipts, 'g')
+    restored = materialize_internal(selected, tmp_path / 'exact.parquet', bulk=bulk, source_schema=schema)
+    assert pq.read_table(source).equals(pq.read_table(restored), check_metadata=True)
+    canonical = pq.read_table(materialize_internal(selected, tmp_path / 'canonical.parquet', bulk=bulk))
+    assert 'publisher_status' in canonical.column_names
+    assert canonical['publisher_status'].to_pylist() == [None]
+    with pytest.raises(ValueError, match='field presence differs'):
+        materialize_internal(selected, tmp_path / 'invented.parquet', bulk=bulk,
+                             source_schema=pa.schema(list(schema) + [pa.field('publisher_status', pa.string())]))
