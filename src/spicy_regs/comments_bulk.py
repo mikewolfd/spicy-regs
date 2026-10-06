@@ -47,7 +47,7 @@ def _attachments(values):
             _validate(native, COMMENT_ATTACHMENTS, 'comments.attachments')
             stored = pa.array([native], type=COMMENT_ATTACHMENTS).to_pylist()[0]
             rows.append({'native': None if stored is None else json.dumps(stored, ensure_ascii=False, separators=(',', ':')), 'reference': False})
-        except (ValueError, TypeError, OverflowError, pa.ArrowException):
+        except (ValueError, TypeError, OverflowError, RecursionError, pa.ArrowException):
             rows.append({'native': None, 'reference': True})
     return pa.array(rows, type=_ATTACHMENT_RESULT)
 

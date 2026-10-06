@@ -90,3 +90,41 @@ def test_restore_failure_keeps_existing_destination(tmp_path, monkeypatch):
         comments_bulk.restore_catalog(*pair, destination, generation_id='g')
     assert destination.read_bytes() == before
     assert not list(tmp_path.glob('comments-restore-*'))
+
+
+@pytest.mark.parametrize('batch_size', [1, 4])
+def test_fresh_deep_attachment_uses_reference_order_and_error(tmp_path, monkeypatch, batch_size):
+    rows = [
+        {'comment_id': 'earlier-accepted', 'comment': '\x1bpreserve', 'attachments_json': '[]'},
+        {'comment_id': 'earlier-refused', 'attachments_json': '{bad'},
+        {'comment_id': 'deep', 'attachments_json': '[' * 20000 + ']' * 20000},
+        {'comment_id': 'later', 'comment': '\x1blater', 'attachments_json': '[]'},
+    ]
+    source = tmp_path / 'source.parquet'
+    schema = pa.schema([(name, pa.string()) for name in ('comment_id', 'comment', 'attachments_json')])
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), source)
+    rows = pq.read_table(source).to_pylist()
+    reference_order = []
+    def reference_project(row):
+        reference_order.append(row['comment_id'])
+        return normalize_source_record('comments', row)
+    with pytest.raises(RecursionError) as reference:
+        write_records('comments', [(row, context(row, i)) for i, row in enumerate(rows)],
+                      tmp_path / 'reference', project=reference_project)
+    routed = []
+    outcomes = []
+    def attempt(raw, ordinal):
+        routed.append((ordinal, raw['comment_id']))
+        result = map_regulations_attempt('comments', raw, context(raw, ordinal),
+                                         project=lambda row: normalize_source_record('comments', row))
+        outcomes.append(result[1]['outcome'])
+        return result
+    monkeypatch.setattr(comments_bulk, '_BATCH', batch_size)
+    with pytest.raises(RecursionError) as actual:
+        comments_bulk.write_bundle(source, tmp_path / 'subjects.parquet', tmp_path / 'receipts.parquet',
+                                   policy=policy('comments'), generation_id='g', source_label='source',
+                                   row_attempt=attempt)
+    assert str(actual.value) == str(reference.value)
+    assert routed == list(enumerate(reference_order))
+    assert reference_order == ['earlier-accepted', 'earlier-refused', 'deep']
+    assert outcomes == ['accepted', 'refused']
