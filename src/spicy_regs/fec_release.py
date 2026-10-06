@@ -364,7 +364,7 @@ def release_summary(record: Mapping, fields: Sequence[str] | None = None) -> dic
     return deepcopy(summary)
 
 
-def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables, prepare=None):
+def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables, prepare=None, defer_admission=False):
     """Check first, then reuse the relationship-view owner for compatible trusted SQL."""
     from .relationship_views.sql_views import install_sql_views
 
@@ -383,7 +383,14 @@ def install_views(connection, specs, configuration, index, available_tables, pub
                 release["reasons"].append(dict(path="sql", reason=f"registered_sql_invalid: {exc}", expected=None, actual=None))
             if release["reasons"]:
                 release["status"] = "disabled"
-        if release["status"] == "compatible":
+        if release["status"] == "compatible" and defer_admission:
+            entry = dict(status="deferred", reason="Release pins match; exact receipt row and output schema admission remains pending.",
+                         dependencies=list(spec.view.required), metadata=dict(
+                             label=spec.view.name.replace("_", " "), summary=spec.view.meaning, kind="derived",
+                             rule_version=spec.view.rule_version, identity_columns=list(spec.view.identity_columns),
+                             input_publications={table: publication.get(table) for table in spec.view.required},
+                             query_admission="pending_receipt_rows"))
+        elif release["status"] == "compatible":
             sql = configuration["views"][spec.view.name]["sql"]
             prepared = replace(spec.view, query=lambda _pins, sql=sql: sql)
             if prepare is not None:

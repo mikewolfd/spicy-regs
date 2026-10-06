@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from spicy_regs.runtime_bounds import checkpoint
+
 
 def processing_declarations():
     return json.loads(files("spicy_regs").joinpath("fec_processing_schemas.json").read_text())
@@ -93,6 +95,7 @@ class ReceiptAdapter:
         from .subject_catalog import descriptors
         from .sources.publication import receipt_members, receipt_key_members, table_members, table_owner
 
+        checkpoint()
         self.require_selected((table,))
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
         owner, native = receipt_owner(self.index, table), self.local_native.get(table)
@@ -158,6 +161,7 @@ class ReceiptAdapter:
         try:
             batch = []
             for selected in self.selected_rows(table):
+                checkpoint()
                 batch.append(original(selected))
                 if len(batch) == 2000:
                     con.register(temporary, pa.Table.from_pylist(batch, schema=schema))
@@ -179,6 +183,7 @@ class ReceiptAdapter:
         from .etl_receipts import DatasetPolicy
         from .subject_catalog import descriptors
 
+        checkpoint()
         self.require_selected((table,))
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
         declaration = processing_declarations()[table]

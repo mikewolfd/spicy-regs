@@ -26,6 +26,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
@@ -77,7 +78,7 @@ def bulk_connection(directory: Path | None = None):
         with closing(duckdb.connect(str(root / "work.duckdb"), config={
             "threads": 4, "memory_limit": "4GB", "max_temp_directory_size": "32GB",
             "temp_directory": str(root / "spill"),
-        })) as con:
+        })) as con, bounded_connection(con):
             yield con, root
 
 
@@ -86,6 +87,7 @@ def _ordinal_file(con, query: str, parameters, path: Path) -> Iterator[int]:
     con.execute(f"COPY ({query}) TO {_literal(str(path))} (FORMAT PARQUET)", parameters)
     with pq.ParquetFile(path) as source:
         for batch in source.iter_batches(batch_size=_BATCH):
+            checkpoint()
             yield from batch.column(0).to_pylist()
 
 
@@ -299,6 +301,7 @@ def _numbered(
     def batches() -> Iterator[pa.RecordBatch]:
         first = start
         for batch in parquet.iter_batches(batch_size=_BATCH):
+            checkpoint()
             batch.validate(full=True)
             last = first + batch.num_rows
             kept = batch.num_rows

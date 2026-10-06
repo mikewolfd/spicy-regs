@@ -26,6 +26,8 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from spicy_regs.runtime_bounds import checkpoint
+
 ParquetInput = Path | Callable[[], AbstractContextManager[BinaryIO]]
 
 RECEIPT_KEY = "etl_receipts.parquet"
@@ -439,6 +441,7 @@ def _parquet(path):
 def _rows(path):
     with _parquet(path) as parquet:
         for batch in parquet.iter_batches(batch_size=2000):
+            checkpoint()
             yield from batch.to_pylist()
 
 
@@ -767,6 +770,7 @@ def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> P
                     if shared:
                         with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
                             for batch in parquet.iter_batches(batch_size=2000):
+                                checkpoint()
                                 batch.validate(full=True)
                                 selected = batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)]))
                                 if selected.num_rows:

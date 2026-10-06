@@ -22,6 +22,7 @@ import threading
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -47,6 +48,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from spicy_regs import receipt_lookup
+from spicy_regs.runtime_bounds import RequestBound, bounded_connection, checkpoint, current_bound
 from spicy_regs._icon import ICON_DATA_URI
 from spicy_regs.citation_resolution import SOURCE_TABLES
 from spicy_regs.duckdb_settings import INTERACTIVE_HTTP_RETRIES, load_public_http, memory_limit
@@ -638,7 +640,27 @@ def _comments_exports(comments: dict, served: list[str]) -> dict[str, dict]:
     return {name: {**pin, "matches_object": mutable_versions_match({name: pin})} for name, pin in pins.items()}
 
 
+_discovery_only = ContextVar("spicy_schema_discovery", default=False)
+
+
 def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
+    """Discard cancelled/failed admissions; never cache a partially built connection."""
+    checkpoint()
+    if DATA_DIR is None and _resolve_catalog_config() is not None:
+        raise RuntimeError(
+            "MCP catalog reads require dynamic file access, which this restricted SQL server refuses; "
+            "serve published Parquet or SPICY_REGS_DATA_DIR instead"
+        )
+    con = duckdb.connect()
+    try:
+        with bounded_connection(con):
+            return _build_connection_inputs(con, publication)
+    except BaseException:
+        con.close()
+        raise
+
+
+def _build_connection_inputs(con, publication):
     """Open a DuckDB connection with one view per available table, pinned to one publication snapshot.
 
     A remote connection pins ``publication``, read here when not given; a
@@ -650,23 +672,18 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     """
     from spicy_regs.sources.publication import COMMENTS_EXPORT_TABLES, parquet_scan, table_descriptor, table_members
 
-    if DATA_DIR is None and _resolve_catalog_config() is not None:
-        raise RuntimeError(
-            "MCP catalog reads require dynamic file access, which this restricted SQL server refuses; "
-            "serve published Parquet or SPICY_REGS_DATA_DIR instead"
-        )
     local = None
     signatures = {}
     comments = None
     if DATA_DIR is not None:
         from spicy_regs.local_data import local_selection, verify_local_members
 
-        local = local_selection(DATA_DIR)
+        local = local_selection(DATA_DIR, admit_rows=not _discovery_only.get())
         signatures = verify_local_members(local)
         publication_index, rulemaking = local.publication, None
     else:
         publication_index, rulemaking, comments = publication or _read_publication()
-    con = duckdb.connect()
+    checkpoint()
     con.execute("SET allow_persistent_secrets=false")
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     if DATA_DIR is None:
@@ -690,6 +707,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                         "directory": str(local.directory),
                         "signatures": signatures,
                         "selected_tables": list(local.files),
+                        "receipt_rows_admitted": not _discovery_only.get(),
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
                         "receipt_indexes": {name: str(path) for name, path in local.receipt_indexes.items()},
                         "native": {name: {"subjects": [str(p) for p in value.subjects],
@@ -708,6 +726,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     selected_names = list(local.files) if local is not None else []
     exports: list[str] = []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
+        checkpoint()
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
         pinned = rulemaking["tables"].get(f"{name}.parquet") if rulemaking is not None and published is None else None
@@ -941,6 +960,15 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         adapter.require_selected(spec.required)
     relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
     for spec in adapted:
+        if _discovery_only.get():
+            relationships[spec.name] = {
+                "status": "deferred", "reason": "Exact receipt row admission is deferred until a query connection is requested.",
+                "dependencies": list(spec.required), "metadata": {
+                    "label": spec.name.replace("_", " "), "summary": spec.meaning, "kind": "derived",
+                    "rule_version": spec.rule_version, "identity_columns": list(spec.identity_columns),
+                    "input_publications": {table: status["publication"].get(table) for table in spec.required},
+                    "query_admission": "pending_receipt_rows"}}
+            continue
         prepared = adapter.prepare(spec, spec.query(status["publication"]))
         item = install_sql_views(con, prepared.required, [prepared], status["publication"])[spec.name]
         item["dependencies"] = list(spec.required)
@@ -955,12 +983,13 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
             raise ValueError("Qualified FEC view collides with an existing table or relationship view")
         relationships.update(install_views(
             con, _selected_fec_views(con), selected, index, set(status["tables"]) | processing, status["publication"],
-            read_tables=_tables_named, prepare=adapter.prepare_qualified,
+            read_tables=_tables_named, prepare=adapter.prepare_qualified, defer_admission=_discovery_only.get(),
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
     from spicy_regs.citation_receipts import install_citation_inputs
-    install_citation_inputs(con, adapter, status["tables"])
+    if not _discovery_only.get():
+        install_citation_inputs(con, adapter, status["tables"])
     con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
 
@@ -989,7 +1018,9 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
     }
     if local is not None:
         managed.update({name: {"status": "native_selected", "generation_id": value["generation_id"],
-                               "verification": "Selected bytes and exact receipt joins verified; file changes checked around statements."}
+                               "verification": ("Selected bytes rehashed; exact receipt row joins remain pending."
+                                                if not local.get("receipt_rows_admitted", True) else
+                                                "Selected bytes and exact receipt joins verified; file changes checked around statements.")}
                         for name, value in local.get("native", {}).items()})
     receipt_families = _receipt_families(index, local)
     if "etl_receipts" in available and receipt_families:
@@ -1314,6 +1345,41 @@ _cached_connection_at = 0.0
 _refreshing = False
 
 
+_discovery_lock = threading.Lock()
+_cached_discovery_connection = None
+_cached_discovery_at = 0.0
+
+
+@contextmanager
+def _bounded_lock(lock):
+    while not lock.acquire(timeout=.05):
+        checkpoint()
+    try:
+        checkpoint()
+        yield
+    finally:
+        lock.release()
+
+
+def _get_discovery_connection():
+    """A separately pinned schema-only connection never restores financial/citation rows."""
+    global _cached_discovery_connection, _cached_discovery_at
+    with _bounded_lock(_discovery_lock):
+        checkpoint()
+        if _cached_discovery_connection is None:
+            _cached_discovery_connection = _build_connection()
+            _cached_discovery_at = _monotonic()
+        elif _monotonic() - _cached_discovery_at >= _CONNECTION_TTL_SECONDS:
+            try:
+                _cached_discovery_connection = _refreshed(_cached_discovery_connection)
+            except TimeoutError:
+                raise
+            except Exception:
+                logger.exception("discovery refresh failed; keeping its pinned schemas")
+            _cached_discovery_at = _monotonic()
+        return _cached_discovery_connection
+
+
 def _get_connection() -> duckdb.DuckDBPyConnection:
     """Return the shared connection, building it on first use and refreshing it past the TTL (see above).
 
@@ -1321,8 +1387,10 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     concurrent calls do not share a statement and a timeout interrupt stays
     scoped to one call.
     """
+    if _discovery_only.get():
+        return _get_discovery_connection()
     global _cached_connection, _cached_connection_at, _refreshing
-    with _connection_lock:
+    with _bounded_lock(_connection_lock):
         if _cached_connection is None:  # cold start: concurrent callers wait for this one build
             _cached_connection, _cached_connection_at = _build_connection(), _monotonic()
             return _cached_connection
@@ -1332,6 +1400,8 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     replacement = current
     try:
         replacement = _refreshed(current)
+    except TimeoutError:
+        raise
     except Exception:
         logger.exception("connection refresh failed; serving the pinned connection until the next TTL")
     finally:
@@ -1355,9 +1425,11 @@ def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
 
 def _reset_connection_cache() -> None:
     """Forget the cached connection so the next call rebuilds. For tests."""
-    global _cached_connection, _cached_connection_at, _refreshing
+    global _cached_connection, _cached_connection_at, _refreshing, _cached_discovery_connection, _cached_discovery_at
     with _connection_lock:
         _cached_connection, _cached_connection_at, _refreshing = None, 0.0, False
+    with _discovery_lock:
+        _cached_discovery_connection, _cached_discovery_at = None, 0.0
 
 
 @contextmanager
@@ -1367,6 +1439,16 @@ def _statement_timeout(cursor: duckdb.DuckDBPyConnection) -> Iterator[None]:
     Local member signatures are re-checked before and after the statement; with
     no configured timeout this is only the signature check.
     """
+    if current_bound() is not None:
+        with bounded_connection(cursor):
+            local = _connection_local_selection(cursor) if DATA_DIR is not None else None
+            if local is not None:
+                from spicy_regs.local_data import assert_local_members_unchanged
+                assert_local_members_unchanged(local["signatures"])
+            yield
+            if local is not None:
+                assert_local_members_unchanged(local["signatures"])
+        return
     local = _connection_local_selection(cursor) if DATA_DIR is not None else None
     if local is not None:
         from spicy_regs.local_data import assert_local_members_unchanged
@@ -1958,10 +2040,23 @@ def _tools() -> list[Tool]:
 
         @functools.wraps(fn)
         async def call(**arguments: Any) -> CallToolResult:
+            bound = RequestBound(STATEMENT_TIMEOUT_SECONDS, f"Request exceeded the {STATEMENT_TIMEOUT} timeout, including input admission")
+            def run():
+                token = _discovery_only.set(getattr(fn, "__name__", None) in ("list_sources", "describe_table"))
+                try:
+                    with bound.scope():
+                        return fn(**arguments)
+                finally:
+                    _discovery_only.reset(token)
             try:
-                result = await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
+                with anyio.fail_after(STATEMENT_TIMEOUT_SECONDS):
+                    result = await anyio.to_thread.run_sync(run, limiter=limiter, abandon_on_cancel=True)
+            except TimeoutError as exc:
+                raise ToolError(bound.label) from exc
             except Exception as exc:
                 raise ToolError(str(exc)) from exc
+            finally:
+                bound.cancel()
             structured, text = _reply_text(result)
             return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
 
@@ -2012,8 +2107,11 @@ def _tools() -> list[Tool]:
         the file matched the receipt when this connection was built (a later
         statement can read a newer export); export_receipt_does_not_match_object
         means the file had moved, and rows is null.
-        A listed table loaded in this connection; that is not a data or
-        freshness audit. Call describe_table before querying a table: it gives
+        Discovery binds source schemas without restoring receipt-backed rows.
+        deferred_views names views whose exact receipt admission remains pending
+        until query_sql builds its separate query connection. No output schema or
+        execution claim is supplied for a deferred view. Listed source schemas
+        are not a data or freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
         ledger's audit.
         fec_release.status_counts summarizes compatible and disabled views;
@@ -2064,6 +2162,9 @@ def _tools() -> list[Tool]:
             "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
             "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
             "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
+            "deferred_views": [{"view": name, "reason": entry["reason"],
+                                "query_admission": entry["metadata"]["query_admission"]}
+                               for name, entry in relationships.items() if entry["status"] == "deferred"],
             "etl_receipts": {
                 "available": "etl_receipts" in available,
                 "query_table": "etl_receipts" if "etl_receipts" in available else None,
@@ -2085,11 +2186,9 @@ def _tools() -> list[Tool]:
         schema_differences compares them. publication pins rows and coverage;
         published_at is a pointer move, not a source read. last_object_write
         bounds that move from below.
-        inputs: the parents its producer recorded (none recorded is not none;
-        a read that bypassed the download helper is not recorded), built_from
-        beside live.
-        input_table_current compares parent bytes; another table can move a
-        family. inputs_current is false if any lags, otherwise null if unknown.
+        inputs names recorded parents (none recorded does not mean none);
+        built_from sits beside live. input_table_current compares parent bytes;
+        inputs_current is false if any lags, else null if unknown.
         prior_generation is earlier output; snapshot_inputs names rulemaking sources.
         qualification compares live/audited pins, date and disposition for the
         ledger's publisher. not_in_ledger means absent from the bundled output ledger, not unevidenced.
@@ -2103,7 +2202,9 @@ def _tools() -> list[Tool]:
         inputs accepted by read_receipt_fields. Source columns inherit meanings; other view columns use declared meanings or null.
         FEC release_compatibility is in publication (relationship if unavailable).
         detail=false retains pins, reasons, dependency generations and receipt
-        count. compatible means captured data, interpretation and consumer match
+        count. Deferred views report pending_receipt_rows: pins may match before
+        row admission and output binding.
+        compatible means captured data, interpretation and consumer match
         the selected release, not current/net money or completeness. Financial
         eligibility applies to its named purpose.
         """

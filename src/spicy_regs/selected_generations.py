@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import file_digest
 import json
 import os
 from pathlib import Path
 from uuid import uuid4
 
 from spicy_regs.sources import publication
+from spicy_regs.runtime_bounds import stream_sha256
 
 
 def _pin(path):
     with Path(path).open("rb") as stream:
-        return "sha256:" + file_digest(stream, "sha256").hexdigest()
+        return "sha256:" + stream_sha256(stream)
 
 
 @dataclass(frozen=True)

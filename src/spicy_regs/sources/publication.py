@@ -36,6 +36,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple
 
+from spicy_regs.runtime_bounds import checkpoint, remaining_timeout
+
 import httpx
 from loguru import logger
 
@@ -303,12 +305,13 @@ def _bounded_get(
 ) -> bytes | None:
     """GET at most ``limit`` bytes; a 404 is ``None`` only when ``allow_missing``."""
     with httpx.stream("GET", url, headers={"User-Agent": "spicy-regs", **(headers or {})},
-                      follow_redirects=True, timeout=60) as response:
+                      follow_redirects=True, timeout=remaining_timeout(60)) as response:
         if allow_missing and response.status_code == 404:
             return None
         response.raise_for_status()
         raw = bytearray()
         for chunk in response.iter_bytes():
+            checkpoint()
             raw.extend(chunk)
             if len(raw) > limit:
                 raise PublicationError(f"{url} exceeds its byte limit")
@@ -461,7 +464,7 @@ def mutable_versions_match(pins: Mapping[str, Mapping | None]) -> bool:
     for pin in pins.values():
         if pin is None or pin.get("kind") != "comments-mirror":
             continue
-        response = httpx.head(pin["urls"][0], follow_redirects=True, timeout=30,
+        response = httpx.head(pin["urls"][0], follow_redirects=True, timeout=remaining_timeout(30),
                               headers={"Cache-Control": "no-cache"})
         response.raise_for_status()
         if response.headers.get("etag") != pin["etag"] or int(response.headers.get("content-length", -1)) != pin["bytes"]:
@@ -496,6 +499,7 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
     label = label or member.path
     url = f"{base_url.rstrip('/')}/{member.path}"
     temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
+    timeout = remaining_timeout(timeout)
     request: dict = {name: value for name, value in (("headers", headers), ("timeout", timeout)) if value is not None}
     digest, byte_size = hashlib.sha256(), 0
     try:
@@ -509,6 +513,7 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
                 raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
             with temp_path.open("wb") as out:
                 for chunk in response.iter_bytes():
+                    checkpoint()
                     out.write(chunk)
                     digest.update(chunk)
                     byte_size += len(chunk)
@@ -738,6 +743,7 @@ def file_identity(path: Path, *, part_bytes: int = PART_BYTES) -> dict:
     parts = []
     with path.open("rb") as stream:
         while chunk := stream.read(part_bytes):
+            checkpoint()
             digest.update(chunk)
             parts.append(hashlib.md5(chunk, usedforsecurity=False).digest())
     if len(parts) <= 1:
