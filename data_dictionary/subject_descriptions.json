@@ -808,7 +808,9 @@
       "bureaus": "Native list of FCC bureau names the filing was routed to. Often empty. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "text_data": "The filing's inline text — for express comments this is the full comment text. Null for document-only filings.",
       "total_page_count": "Total page count across the filing's attached documents, as a numeric string.",
-      "documents": "Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      "documents": "Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "generation_id": "Selected main filing generation. Binds retained result observations to this filing version; it is not the original attempt time.",
+      "extraction_results": "Latest retained extraction results in source order: URL, status, body digest, page count, error and matching offered document positions. Null means no result was recorded; an empty list means the retained result list was empty. Repeated offers keep every position. Capture custody and extracted-text access remain unverified. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
   },
   "fcc_proceedings": {
