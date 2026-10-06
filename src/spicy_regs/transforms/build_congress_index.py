@@ -115,6 +115,7 @@ class IndexSpec:
     #: The merged table with its own columns derived again from the stored fields its shaper reads them from, given
     #: each row's "detail was read" (:func:`_rederive_held`), so a held row gains a changed rule without a re-read.
     rederive: Callable[[Any, Sequence[bool]], Any] | None = None
+    related_routes: tuple[tuple[str, str], ...] = ()
 
 
 def _per_congress(route: CongressListRoute) -> Callable[[Sequence[int], Mapping[int, str]], Sequence[tuple[str, str]]]:
@@ -228,6 +229,13 @@ def _treaty_query(row: Row) -> Mapping[str, Any] | None:
     return {"congress": int(str(row["congress_received"])), "number": int(str(row["number"]))}
 
 
+def _nomination_query(row: Row) -> Mapping[str, Any]:
+    citation = str(row["citation"])
+    if not citation.startswith("PN"):
+        raise ValueError("Nomination citation does not state a PN identifier")
+    return {"congress": int(str(row["congress"])), "nomination_number": citation[2:]}
+
+
 INDEX_SPECS: Mapping[str, IndexSpec] = {
     "house_communications": IndexSpec(
         "house_communications",
@@ -254,7 +262,7 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         # join-gaps-2026-09-26/f/). hearing_transcripts joins on event_id, and
         # every transcript it could not join was a 118th meeting.
         trailing_congresses=1,
-        shape_version=DETAIL_SHAPE,
+        shape_version="lists=related-nominations-treaties-002",
     ),
     "record_issues": IndexSpec(
         "record_issues",
@@ -280,7 +288,12 @@ INDEX_SPECS: Mapping[str, IndexSpec] = {
         "nominations",
         LIST_ROUTES["nomination"],
         _per_congress(LIST_ROUTES["nomination"]),
-        lambda listed, _detail: shape_nomination(listed),
+        shape_nomination,
+        detail_route=LIST_ROUTES["nomination-detail"],
+        detail_marker="committees_json",
+        detail_query=_nomination_query,
+        shape_version="lists=nomination-relationships-001",
+        related_routes=(("nomination-committees", "committee_records"), ("nomination-hearings", "hearing_records")),
         rederive=_rederive_civilian,
     ),
 }
@@ -508,6 +521,13 @@ def _detail(
     stated = spec.shape(detail, detail)
     if tuple(str(stated[column]) for column in identity) != entry.key:
         raise PagedJsonSourceError(f"{spec.detail_route.name} identity differs from the requested record")
+    if spec.related_routes:
+        detail = dict(detail)
+        for route_name, field in spec.related_routes:
+            route = LIST_ROUTES[route_name]
+            related_url = list_route_url(route, **query)
+            detail[field] = [record for related_page in reader.records(route, related_url)
+                             for record in related_page.records]
     return detail
 
 

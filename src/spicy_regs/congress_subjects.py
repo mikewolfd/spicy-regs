@@ -106,7 +106,7 @@ INPUT_COLUMNS = {
         'location_room committee_system_code committee_count committees_json hearing_jacket '
         'hearing_jacket_count hearing_jackets_json bill_count bill_ids_json witness_count witnesses_json '
         'witness_document_count witness_documents_json meeting_document_count meeting_documents_json '
-        'document_urls_json videos_json update_date url detail_read'
+        'document_urls_json videos_json update_date url detail_read nomination_references_json treaty_references_json'
     .split()),
     'committees': tuple(
         'system_code chamber name committee_type parent_system_code parent_name is_subcommittee '
@@ -156,7 +156,7 @@ INPUT_COLUMNS = {
     .split()),
     'nominations': tuple(
         'citation congress number part_number description organization received_date is_civilian '
-        'nomination_type_json latest_action_date latest_action_text update_date url'
+        'nomination_type_json latest_action_date latest_action_text update_date url committees_json hearings_json detail_read'
     .split()),
     'press_releases': tuple(
         'release_id chamber feed_url channel_title channel_link channel_description channel_language '
@@ -211,15 +211,14 @@ PROCESSING = {
         'referral_signals cbo_cost_estimates_outcome url_source cosponsors_outcome'
     .split()),
     'house_communications': frozenset(
-        'url rin_rule rin_matched_text source_route record_package_id record_granule_id '
-        'record_entry_text reconstruction_rule_version detail_read'
+        'url rin_rule rin_matched_text reconstruction_rule_version detail_read'
     .split()),
     'member_party_affiliations': frozenset('input_sha256 start_status end_status source_path observed_at'.split()),
     'member_terms': frozenset('observed_at party_affiliations_state'.split()),
     'member_vote_terms': frozenset('term_match'.split()),
     'member_votes': frozenset(''.split()),
     'members': frozenset('roster observed_at'.split()),
-    'nominations': frozenset('url'.split()),
+    'nominations': frozenset('url detail_read'.split()),
     'press_releases': frozenset(
         'feed_url channel_title channel_link channel_description channel_language channel_copyright '
         'channel_docs channel_last_build_date channel_ttl channel_skip_days channel_skip_hours '

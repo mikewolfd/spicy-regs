@@ -56,7 +56,10 @@ def test_real_index_producer_admits_native_subjects_and_resumes_from_receipts(tm
     before = {tuple(sorted((k, str(v)) for k, v in row.items())) for row in pq.read_table(subject).to_pylist()}
     after = {tuple(sorted((k, str(v)) for k, v in row.items())) for row in pq.read_table(again).to_pylist()}
     assert before == after
-    assert not set(reader.details) & set(next_reader.details)
+    if name == "nominations":
+        assert set(reader.details) == set(next_reader.details)  # refused detail routes retry; they are not empty lists
+    else:
+        assert not set(reader.details) & set(next_reader.details)
 
 
 def test_missing_receipts_and_changed_subject_cannot_resume(tmp_path):

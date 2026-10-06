@@ -1091,6 +1091,7 @@ def maintainer_path(text: str) -> str | None:
 
 def joins_record() -> dict:
     """The bundled ``table_joins.json`` document."""
+    from spicy_regs.explorer_navigation import declarations
     return {
         "format": RECORD_FORMAT,
         "version": 1,
@@ -1105,6 +1106,7 @@ def joins_record() -> dict:
         "joins": [record(join) for join in JOINS],
         "processing_joins": [record(join) for join in RETIRED_PROCESSING_JOINS],
         "references": references(),
+        "navigation": declarations(RETIRED_PROCESSING_JOINS),
     }
 
 

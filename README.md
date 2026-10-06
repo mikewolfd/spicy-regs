@@ -492,3 +492,11 @@ volunteer community using technology to serve the DC region.
 **[Come build with us.](https://join.slack.com/t/civictechdc/shared_invite/zt-43eotbj04-QLQ_Ria296PtRYJU2EgwxQ)**
 
 </div>
+
+### Source-reference navigation
+
+`src/spicy_regs/explorer_navigation.py` defines complete source keys for array and receipt-backed browser navigation. `table_joins.json` packages those recipes alongside scalar joins; the explorer metadata publisher binds them to the selected schemas. New meeting and nomination SQL relationship views compile from those same recipes. Add definitions here rather than matching field names in the browser.
+
+The source reader preserves nomination partitions, independent meeting references, FCC document offers and Congressional Record passages. Native receipt migrations admit exact recorded prior schemas; original source fields remain recoverable from receipts paired with the selected generation. Missing keys refuse navigation, and legal ambiguity retains every recorded candidate. FEC routes expose retained observations without selecting current amendments or combining money amounts.
+
+After changing source fields, run the focused navigation, Congress receipt and government shape checks, the dictionary check and generators, then full CI. Refresh only the affected rollup families. Metadata publication requires successful CI for the exact main revision and does not rescan unchanged comments or FEC records.

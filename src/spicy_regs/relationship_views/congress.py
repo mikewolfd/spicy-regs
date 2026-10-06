@@ -2,6 +2,8 @@
 
 from dataclasses import replace
 
+from spicy_regs.explorer_navigation import array_sql_relationships
+
 from .core import ArrayRelationship
 
 
@@ -142,3 +144,7 @@ NATIVE_COMMUNICATION_RINS = ArrayRelationship(
     'Ordered RIN findings on the communication. Repeats remain distinct.',
     context_columns=('update_date',),
 )
+
+
+# New relationship key rules have one owner, shared with public browser navigation.
+NATIVE_CONGRESS_RELATIONSHIPS += array_sql_relationships()

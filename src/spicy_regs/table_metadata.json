@@ -11606,7 +11606,7 @@
       },
       {
         "column_name": "documents",
-        "column_type": "STRUCT(filename VARCHAR, description VARCHAR)[]",
+        "column_type": "STRUCT(filename VARCHAR, description VARCHAR, src VARCHAR)[]",
         "description": "Native list of attached documents as `{filename, src}` objects, where `src` is the fcc.gov download URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       }
     ],
@@ -16304,6 +16304,26 @@
         "column_name": "update_date",
         "column_type": "VARCHAR",
         "description": "The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins."
+      },
+      {
+        "column_name": "source_route",
+        "column_type": "VARCHAR",
+        "description": "What produced this row: `congress-gov-detail` where the publisher decomposed the communication itself, `congressional-record-granule` where it was reconstructed from the printed entry."
+      },
+      {
+        "column_name": "record_package_id",
+        "column_type": "VARCHAR",
+        "description": "The CREC package whose issue printed the entry (`CREC-{congressional_record_date}`); NULL on a publisher-decomposed row."
+      },
+      {
+        "column_name": "record_granule_id",
+        "column_type": "VARCHAR",
+        "description": "The `EXECUTIVE COMMUNICATIONS, ETC.` granule within that package, so the row is replayable the way `committee_reports` replays from `package_id`; NULL on a publisher-decomposed row."
+      },
+      {
+        "column_name": "record_entry_text",
+        "column_type": "VARCHAR",
+        "description": "The sentence the Record printed, GPO's own wording with none of the publisher's normalizations applied, kept beside the derived fields the way `rin_matched_text` is kept beside `rin`, so a bad parse is readable from the row; NULL on a publisher-decomposed row."
       }
     ],
     "subject": "congress",
@@ -16450,6 +16470,16 @@
         "column_name": "update_date",
         "column_type": "VARCHAR",
         "description": "The publisher's updateDate; the merge prefers the larger value."
+      },
+      {
+        "column_name": "nomination_references_json",
+        "column_type": "VARCHAR",
+        "description": "Publisher-listed related nominations, including Congress, number, partition and URL; NULL when not stated or unread, [] only when stated empty."
+      },
+      {
+        "column_name": "treaty_references_json",
+        "column_type": "VARCHAR",
+        "description": "Publisher-listed related treaties, including Congress, number, partition and URL; NULL when not stated or unread, [] only when stated empty."
       }
     ],
     "subject": "congress",
@@ -16731,6 +16761,16 @@
         "column_name": "update_date",
         "column_type": "VARCHAR",
         "description": "The publisher's updateDate; the merge prefers the larger value."
+      },
+      {
+        "column_name": "committees_json",
+        "column_type": "VARCHAR",
+        "description": "Every committee returned by the nomination committees route, in source order; NULL when unread, [] on a complete empty response."
+      },
+      {
+        "column_name": "hearings_json",
+        "column_type": "VARCHAR",
+        "description": "Every printed hearing returned by the nomination hearings route, including jacket number and chamber; NULL when unread, [] on a complete empty response."
       }
     ],
     "subject": "congress",
@@ -18476,7 +18516,7 @@
       {
         "dataset": "committee_meetings",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "congress",
           "chamber",
@@ -18812,7 +18852,7 @@
       {
         "dataset": "fcc_filings",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "id_submission"
         ],
@@ -20182,7 +20222,7 @@
       {
         "dataset": "house_communications",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "communication_id"
         ],
@@ -20398,7 +20438,7 @@
       {
         "dataset": "nominations",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "congress",
           "citation"

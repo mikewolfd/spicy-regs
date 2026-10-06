@@ -585,7 +585,7 @@ def test_hosted_prose_is_the_contract_prose_not_a_copy():
         policy = dd.subject_policies().get(table)
         for field, prose in descriptions[table]["columns"].items():
             if field in source and (policy is None or str(policy.subject_schema.field(field).type) in {"string", "bool", "int64", "int32"}):
-                assert prose == dd.native_spelling(source[field]), (table, field)
+                assert prose == dd.native_spelling(source[field], table), (table, field)
 
 
 def test_hosted_entries_do_not_list_columns_inline():
@@ -676,3 +676,8 @@ def test_live_check_holds_declared_types_to_the_published_file(monkeypatch, caps
     assert "[rulemaking_lifecycles.proposal_date] in-code type DATE but live parquet VARCHAR" in capsys.readouterr().err
     monkeypatch.setattr(dd, "discover_schemas", lambda *_: {"rulemaking_lifecycles": declared})
     assert args.func(args) == 0
+
+
+def test_native_list_names_are_respelled_within_their_own_table():
+    assert dd.native_spelling('committees_json', 'house_communications') == 'committees'
+    assert dd.native_spelling('committees_json', 'nominations') == 'committees_json'

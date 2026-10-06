@@ -108,10 +108,11 @@ def test_a_run_publishes_every_listed_record_and_details_only_the_sampled_ones(t
     assert len(reader.details) == len(DETAILED[table])
 
 
-def test_nominations_are_complete_from_the_list_and_ask_for_no_detail(tmp_path):
+def test_nominations_preserve_list_rows_when_relationship_details_are_unavailable(tmp_path):
     rows, reader = _run(tmp_path, "nominations")
     listed = json.loads((FIXTURES / "nomination-119.json").read_text())["nominations"]
-    assert reader.details == []
+    assert len(reader.details) == len(listed)
+    assert all(row["detail_read"] == "false" for row in rows)
     assert [row["citation"] for row in rows] == sorted(record["citation"] for record in listed)
     assert all(row["latest_action_text"] for row in rows)
 
@@ -423,7 +424,7 @@ def test_nominations_pool_page_boundary_ties_without_changing_the_query(tmp_path
             yield SimpleNamespace(records=chosen, declared_count=8)
             yield SimpleNamespace(records=chosen, declared_count=8)
 
-    rows, reader = _run(tmp_path, "nominations", reader=BoundaryReader())
+    rows, reader = _run(tmp_path, "nominations", reader=BoundaryReader(), max_details=0)
     assert {row["citation"] for row in rows} == set(citations)
     assert len(reader.urls) == 2
     assert "limit=250" in reader.urls[0] and "limit=237" in reader.urls[1]
@@ -578,7 +579,7 @@ BEFORE_SHAPES = {"unevidenced": []}
 def _seed_published(tmp_path, table: str, *, detail_read_column: bool = True, **replace) -> None:
     """The rows published at 16:20Z on 2026-10-03 as the prior; without ``detail_read_column``, as written before 0.54.0."""
     columns = [c for c in TABLE_CONTRACTS[table].columns if detail_read_column or c != "detail_read"]
-    rows = [{c: replace.get(c, row[c]) for c in columns} for row in PUBLISHED[table]]
+    rows = [{c: replace.get(c, row.get(c)) for c in columns} for row in PUBLISHED[table]]
     schema = pa.schema([(c, pa.string()) for c in columns])
     pq.write_table(pa.Table.from_pylist(rows, schema=schema), prior_scratch_path(tmp_path, table))
 
@@ -706,3 +707,33 @@ def test_a_held_military_nomination_the_list_no_longer_names_reads_is_civilian_f
     rows, _ = _run(tmp_path, "nominations")
     by_citation = {row["citation"]: row["is_civilian"] for row in rows}
     assert by_citation == {"PN1189": "false", "PN1266": "false", "PN1273-8": "true", "PN937-10": "true"}
+
+
+@pytest.mark.parametrize('refuse_hearings',[False,True])
+def test_nomination_relationship_reads_are_complete_or_remain_retryable(tmp_path,refuse_hearings):
+    """Synthetic route responses test the consumer's whole-read requirement, not publisher availability."""
+    class NominationReader(FixtureReader):
+        def records(self,route,url,*,max_pages=1):
+            if route.name=='nomination':
+                yield from super().records(route,url,max_pages=max_pages)
+                return
+            self.urls.append(url)
+            listed=json.loads((FIXTURES/'nomination-119.json').read_text())['nominations']
+            citation='PN'+_path_of(url).split('/')[2]
+            if route.name=='nomination-detail':
+                yield SimpleNamespace(records=[next(r for r in listed if r['citation']==citation)],declared_count=None)
+            elif route.name=='nomination-committees':
+                yield SimpleNamespace(records=[{'systemCode':'ssju00','name':'Judiciary'}],declared_count=1)
+            elif refuse_hearings:
+                raise PagedJsonSourceError('synthetic incomplete hearing route')
+            else:
+                yield SimpleNamespace(records=[],declared_count=0)
+    rows,reader=_run(tmp_path,'nominations',reader=NominationReader())
+    if refuse_hearings:
+        assert all(r['detail_read']=='false' and r['committees_json'] is None and r['hearings_json'] is None for r in rows)
+    else:
+        assert all(r['detail_read']=='true' and json.loads(r['committees_json'])[0]['systemCode']=='ssju00' and r['hearings_json']=='[]' for r in rows)
+        seed(tmp_path, "nominations", rows)
+        held=NominationReader()
+        again,_=_run(tmp_path,'nominations',reader=held)
+        assert again==rows and held.details==[]

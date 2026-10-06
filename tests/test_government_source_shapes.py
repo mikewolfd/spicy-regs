@@ -39,7 +39,7 @@ def test_fcc_roles_nulls_duplicates_and_stated_fields_are_native(tmp_path):
     assert shaped["lawfirms"] is None and shaped["bureaus"] is None
     assert shaped["proceedings"][0]["id_proceeding"] == "301759"
     assert shaped["proceedings"][0]["filing_status"] == "OPENALL"
-    assert shaped["documents"] == [{"filename": "a.pdf", "description": ""}]
+    assert shaped["documents"] == [{"filename": "a.pdf", "description": "", "src": "https://example.test/a"}]
     assert "native_fields_json" not in shaped and "pdf_extraction_results_json" not in shaped
     path = tmp_path / "fcc.parquet"
     pq.write_table(pa.Table.from_pylist([shaped], schema=SUBJECT_SCHEMAS["fcc_filings"]), path)

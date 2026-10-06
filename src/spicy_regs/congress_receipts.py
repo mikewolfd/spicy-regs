@@ -57,9 +57,23 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         IDENTITIES.get(dataset, ()),
         RECEIPT_FIELDS,
-        policy_version="congress-subjects/1",
+        policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications"} else "congress-subjects/1",
         receipt_only=dataset in RECEIPT_ONLY,
     )
+
+
+def input_policy(dataset: str, subjects: Path | tuple[Path, ...] | None) -> DatasetPolicy:
+    """Admit only a current or explicitly retained historical subject schema."""
+    selected = policy(dataset)
+    paths = () if subjects is None else (subjects,) if isinstance(subjects, Path) else subjects
+    if not paths or all(pq.read_schema(path).equals(selected.subject_schema, check_metadata=False) for path in paths):
+        return selected
+    history = json.loads(Path(__file__).with_name("navigation_policy_history.json").read_text())
+    if dataset in history:
+        earlier = DatasetPolicy.from_descriptor(history[dataset])
+        if all(pq.read_schema(path).equals(earlier.subject_schema, check_metadata=False) for path in paths):
+            return earlier
+    raise ValueError(f"{dataset}: subject schema has no supported receipt policy")
 
 
 def _rows(path: Path):
@@ -168,7 +182,7 @@ def write_congress_dataset(
         prior_paths = []
         if prior is not None:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
-            validate_receipt_bundle({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id)
+            validate_receipt_bundle({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id)
             prior_paths.append(scoped)
         lineage = stack.enter_context(ReceiptLineage(prior_paths, dataset=dataset))
 
@@ -265,7 +279,7 @@ def restore_processing_input(
         return restore_votes(subject, receipts, destination, dataset=dataset,
                              generation_id=generation_id, bulk=True)
 
-    selected = policy(dataset)
+    selected = input_policy(dataset, subject)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
         scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)

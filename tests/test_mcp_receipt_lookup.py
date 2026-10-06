@@ -89,7 +89,7 @@ def test_a_found_receipt_gives_decoded_plain_values_in_request_order(tmp_path, m
     family = server._connection_index(con.cursor())["families"]["fcc-filings"]
     assert reply["table"] == "fcc_filings" and reply["identity_fields"] == {"id_submission": "VARCHAR"}
     assert reply["receipts"] == {"family": "fcc-filings", "generation_id": GENERATION,
-                                 "artifact_digest": family["artifactDigest"], "policy_version": "government-sources/1"}
+                                 "artifact_digest": family["artifactDigest"], "policy_version": "government-sources/2"}
     assert [entry["key"] for entry in reply["keys"]] == [{"id_submission": "0427547924954"}, {"id_submission": "100"}]
     leading_zero, hundred = (entry["fields"] for entry in reply["keys"])
     assert leading_zero["filing_url"] == {"state": "stated", "value": "https://www.fcc.gov/ecfs/filing/0427547924954"}
@@ -339,7 +339,7 @@ def test_receipts_under_another_identity_definition_are_refused_before_any_key_i
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
     assert "written under policy_version 'government-sources/9'" in message
     assert "whose row identity is id_submission (text), submission_type (text)" in message
-    assert "this server's policy ('government-sources/1') identifies a row by id_submission (text)" in message
+    assert "this server's policy ('government-sources/2') identifies a row by id_submission (text)" in message
 
 
 def test_record_ids_this_server_does_not_reproduce_are_refused_before_any_key_is_called_missing(tmp_path, monkeypatch):
@@ -353,7 +353,7 @@ def test_record_ids_this_server_does_not_reproduce_are_refused_before_any_key_is
 
     one_family(tmp_path, monkeypatch, {"fcc_filings": [fcc("100")]}, edit=another_digest)
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
-    assert "written under policy_version 'government-sources/1' hold record ids this server does not reproduce" in message
+    assert "written under policy_version 'government-sources/2' hold record ids this server does not reproduce" in message
     assert "id_submission (text)" in message and "Every key would miss" in message
 
 
@@ -370,7 +370,7 @@ def test_every_version_a_member_holds_is_compared_and_one_differing_identity_ref
     _under(tmp_path, monkeypatch, [(installed, [fcc("100")]), (earlier, [fcc("200")])])
     reply = call("fcc_filings", [{"id_submission": "100"}, {"id_submission": "200"}], ["filing_url"])
     assert [entry["receipt"] for entry in reply["keys"]] == ["found", "found"]
-    assert reply["receipts"]["policy_version"] == ["government-sources/0", "government-sources/1"]
+    assert reply["receipts"]["policy_version"] == ["government-sources/0", "government-sources/2"]
     typed = replace(installed, identity_fields=("id_submission", "total_page_count"), policy_version="government-sources/8")
     _under(tmp_path / "second", monkeypatch, [(installed, [fcc("100")]), (typed, [fcc("200", total_page_count="4")])])
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])

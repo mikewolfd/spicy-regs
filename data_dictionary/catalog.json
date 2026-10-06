@@ -815,7 +815,7 @@
       {
         "dataset": "committee_meetings",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "congress",
           "chamber",
@@ -1151,7 +1151,7 @@
       {
         "dataset": "fcc_filings",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "id_submission"
         ],
@@ -2521,7 +2521,7 @@
       {
         "dataset": "house_communications",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "communication_id"
         ],
@@ -2737,7 +2737,7 @@
       {
         "dataset": "nominations",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "congress",
           "citation"
@@ -7623,7 +7623,11 @@
         "matching_requirements",
         "rin",
         "rins",
-        "update_date"
+        "update_date",
+        "source_route",
+        "record_package_id",
+        "record_granule_id",
+        "record_entry_text"
       ]
     },
     {
@@ -7660,7 +7664,9 @@
         "meeting_documents",
         "document_urls",
         "videos",
-        "update_date"
+        "update_date",
+        "nomination_references_json",
+        "treaty_references_json"
       ]
     },
     {
@@ -7739,7 +7745,9 @@
         "is_military",
         "latest_action_date",
         "latest_action_text",
-        "update_date"
+        "update_date",
+        "committees_json",
+        "hearings_json"
       ]
     },
     {

@@ -199,8 +199,17 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         joins.append(deepcopy(join))
     # Availability belongs to this index, while the audit's evidence belongs to
     # its reviewed snapshot. A disappearing parent must not leave 'connected'.
+    from spicy_regs.explorer_navigation import published_navigation
+    navigation = published_navigation(join_record.get("navigation", []),
+                                      {name: entry["schema"] for name, entry in live.items()})
+    receipt_fields = read_json("receipt_fields.json").get("tables", {})
     for name, table in tables.items():
+        table["receiptIdentity"] = table.get("identity_columns", [])
+        table["receiptContainers"] = receipt_fields.get(name, {}).get("containers", {})
         available = sum(join["child"] == name or join["parent"] == name for join in joins)
+        available += sum(spec["source"] == name and spec["available"] and any(t["available"] for t in spec["targets"])
+                         or spec["available"] and any(t["table"] == name and t["available"] for t in spec["targets"])
+                         for spec in navigation)
         unavailable = [join for join in omitted if name in (join["child"], join["parent"])]
         reviewed = table.get("joinAudit", {})
         if not isinstance(reviewed, dict):
@@ -224,7 +233,8 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             "sourceRevision": source_revision,
             "publication": {"sha256": "sha256:" + hashlib.sha256(canonical_bytes(index)).hexdigest(),
                             "families": {f: e["artifactDigest"] for f, e in index["families"].items()}},
-            "extra_tables": extra_tables, "tables": tables, "joins": joins, "omittedJoins": omitted}
+            "extra_tables": extra_tables, "tables": tables, "joins": joins, "omittedJoins": omitted,
+            "navigation": navigation}
 
 
 def canonical_bytes(value: dict) -> bytes:

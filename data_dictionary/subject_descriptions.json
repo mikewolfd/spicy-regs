@@ -426,7 +426,9 @@
       "meeting_documents": "Every meeting document the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "document_urls": "The URL of every document the meeting lists, witness documents first then meeting documents, in publisher order: what the map's meeting-to-documents edge resolves. NULL where neither list is stated (or no detail was read); `[]` where the stated lists carry no URL. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "videos": "Every video link the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "update_date": "The publisher's updateDate; the merge prefers the larger value."
+      "update_date": "The publisher's updateDate; the merge prefers the larger value.",
+      "nomination_references_json": "Publisher-listed related nominations, including Congress, number, partition and URL; NULL when not stated or unread, [] only when stated empty.",
+      "treaty_references_json": "Publisher-listed related treaties, including Congress, number, partition and URL; NULL when not stated or unread, [] only when stated empty."
     }
   },
   "committee_reports": {
@@ -2778,7 +2780,11 @@
       "matching_requirements": "Every matching requirement the detail lists, as a Native list of numbers. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "rin": "The Regulation Identifier Number read from report_nature, where the rule found one: the first occurrence in rin_occurrences_json that a RIN label directly precedes, as its published key.",
       "rins": "All interpreted RIN occurrences supplied by the consumer, with exact field spans and digest. NULL means unread; [] means the supplied field was read and contained no RIN. Each occurrence's field_sha256 is spelled sha256: plus the hex digest under the rule report_nature/shared_rin/2; one stored under the earlier report_nature/shared_rin carries the bare hex and is re-read, not reused. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
-      "update_date": "The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins."
+      "update_date": "The publisher's updateDate; the merge prefers the larger value, except across source_route, where a `congress-gov-detail` row always wins.",
+      "source_route": "What produced this row: `congress-gov-detail` where the publisher decomposed the communication itself, `congressional-record-granule` where it was reconstructed from the printed entry.",
+      "record_package_id": "The CREC package whose issue printed the entry (`CREC-{congressional_record_date}`); NULL on a publisher-decomposed row.",
+      "record_granule_id": "The `EXECUTIVE COMMUNICATIONS, ETC.` granule within that package, so the row is replayable the way `committee_reports` replays from `package_id`; NULL on a publisher-decomposed row.",
+      "record_entry_text": "The sentence the Record printed, GPO's own wording with none of the publisher's normalizations applied, kept beside the derived fields the way `rin_matched_text` is kept beside `rin`, so a bad parse is readable from the row; NULL on a publisher-decomposed row."
     }
   },
   "law_code_sections": {
@@ -3020,7 +3026,9 @@
       "is_military": "The publisher's nominationType object, as JSON. This column retains the source property isMilitary.",
       "latest_action_date": "Date of the publisher's latestAction entry.",
       "latest_action_text": "Text of the publisher's latestAction entry.",
-      "update_date": "The publisher's updateDate; the merge prefers the larger value."
+      "update_date": "The publisher's updateDate; the merge prefers the larger value.",
+      "committees_json": "Every committee returned by the nomination committees route, in source order; NULL when unread, [] on a complete empty response.",
+      "hearings_json": "Every printed hearing returned by the nomination hearings route, including jacket number and chamber; NULL when unread, [] on a complete empty response."
     }
   },
   "org_committee_links": {
