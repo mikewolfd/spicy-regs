@@ -157,9 +157,8 @@ def write_family(
     stage = directory / (".scorecard-etl-" + uuid4().hex)
     stage.mkdir(parents=True)
     receipts, outputs, errors = [], [], []
-    for name, rows in tables.items():
-        records = []
-        failures: list[dict] = list(attempt_failures) if name == "scorecard_snapshots" else []
+
+    def mapped_records(name, rows, failures):
         for index, raw in enumerate(rows):
             context = ReceiptContext(
                 generation_id,
@@ -197,8 +196,13 @@ def write_family(
                     )
                 )
             else:
-                records.append((mapped, context))
-        subject, receipt = write_dataset(records, stage / name, POLICIES[name], failures=failures)
+                yield mapped, context
+
+    for name, rows in tables.items():
+        failures: list[dict] = list(attempt_failures) if name == "scorecard_snapshots" else []
+        subject, receipt = write_dataset(
+            mapped_records(name, rows, failures), stage / name, POLICIES[name], failures=failures
+        )
         receipts.append(receipt)
         if subject:
             outputs.append(subject)
@@ -257,7 +261,10 @@ def read_family(
             name: frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"}) for name in names
         },
     )
-    return {name: [restore_source_row(name, row) for row in rows] for name, rows in joined.items()}
+    for name, rows in joined.items():
+        for index, row in enumerate(rows):
+            rows[index] = restore_source_row(name, row)
+    return joined
 
 
 def read_indexed_family(directory: Path, names, family: Mapping, *, receipt_path: Path | None = None) -> dict:

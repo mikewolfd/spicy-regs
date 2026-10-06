@@ -270,3 +270,176 @@ def test_complete_preparation_uses_late_publisher_reference_and_real_generation_
     assert all(count == 0 for count in report["preserved_row_counts"].values())
     generation = verify_generation(args.output / "generation")
     assert generation.pin.as_dict() == report["generation"]
+
+
+def carried_public_readback(tmp_path, monkeypatch, corruption=None):
+    import importlib.util
+    from pathlib import Path
+
+    deployment = Path(__file__).resolve().parents[1] / "docs/research/scorecards/work/integration/deployment"
+    monkeypatch.syspath_prepend(str(deployment))
+    spec = importlib.util.spec_from_file_location("scorecard_deployment_readback", deployment / "readback_candidate.py")
+    assert spec is not None and spec.loader is not None
+    readback = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(readback)
+    previous = tables(edition("2024"))
+    first = tmp_path / "prior"
+    write_family(first, previous, generation_id="original-source-generation")
+    current = combine(previous, tables(edition("2025")))
+    candidate = tmp_path / "candidate"
+    files = write_family(
+        candidate, current, generation_id="current-container-generation", prior_receipts=first / "etl_receipts.parquet"
+    )
+    generation = tmp_path / "generation"
+    artifact = build_generation(
+        generation,
+        family="scorecards",
+        files=files,
+        expected_keys=tuple(p.name for p in files),
+        **generation_options(candidate, SOURCE_NAMES),
+    )
+    store = Store()
+    index = pub.publish_generation(generation, client=store, bucket="test", prior_index=pub.empty_index())
+    monkeypatch.setattr(pub, "load_index", lambda *args: index)
+
+    def fetch(url, member, path, *args, **kwargs):
+        path.write_bytes(store.objects[member.path])
+        if member.key == "etl_receipts.parquet" and corruption:
+            arrow = pq.read_table(path)
+            rows = arrow.to_pylist()
+            row = next(
+                row for row in rows if row["dataset"] == "scorecard_member_ratings" and row["outcome"] == "accepted"
+            )
+            row["generation_id" if corruption == "origin" else "outcome"] = (
+                "changed-origin" if corruption == "origin" else "refused"
+            )
+            # Isolate semantic readback checks after a transport claims pinned bytes.
+            pq.write_table(pa.Table.from_pylist(rows, schema=arrow.schema), path)
+        return True
+
+    monkeypatch.setattr(pub, "fetch_member", fetch)
+    output = tmp_path / "public-readback"
+    output.mkdir()
+    args = SimpleNamespace(output=output, public_url="https://offline.example", mcp_url="https://offline.example/mcp")
+    prepared = dict(
+        generation=artifact.pin.as_dict(),
+        generation_directory=str(generation),
+        counts={name: len(rows) for name, rows in current.items()},
+    )
+    authenticated = dict(family_entry=index["families"]["scorecards"])
+    return readback, args, prepared, authenticated
+
+
+@pytest.mark.parametrize("corruption", [None, "origin", "count"])
+def test_public_readback_compares_carried_origin_distribution_to_exact_candidate(tmp_path, monkeypatch, corruption):
+    readback, args, prepared, authenticated = carried_public_readback(tmp_path, monkeypatch, corruption)
+    if corruption:
+        with pytest.raises(ValueError, match="origins or outcome counts"):
+            readback.public_files(args, prepared, authenticated)
+    else:
+        connection, _ = readback.public_files(args, prepared, authenticated)
+        try:
+            origins = connection.execute(
+                "SELECT DISTINCT generation_id FROM etl_receipts ORDER BY generation_id"
+            ).fetchall()
+            assert origins == [("current-container-generation",), ("original-source-generation",)]
+        finally:
+            connection.close()
+
+
+@pytest.mark.parametrize("corruption", [None, "origin", "count", "missing-pin", "stale-pin"])
+def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_pins(tmp_path, monkeypatch, corruption):
+    import asyncio
+    from contextlib import asynccontextmanager
+    import duckdb
+
+    readback, args, prepared, authenticated = carried_public_readback(tmp_path, monkeypatch)
+    connection, family = readback.public_files(args, prepared, authenticated)
+    server = duckdb.connect()
+    for key in family["tables"]:
+        server.read_parquet(str(args.output / "members" / key)).create_view(key.removesuffix(".parquet"))
+    receipts = pq.read_table(args.output / "members/etl_receipts.parquet")
+    rows = receipts.to_pylist()
+    rows.append(dict(rows[0], dataset="members", generation_id="unrelated-family-generation"))
+    server.register("_hosted_receipts", pa.Table.from_pylist(rows, schema=receipts.schema))
+    server.execute("CREATE VIEW etl_receipts AS SELECT * FROM _hosted_receipts")
+    receipts_pin = dict(
+        artifact_digest=family["artifactDigest"],
+        generation_id=family["etlReceipts"]["generationId"],
+        sha256=family["etlReceipts"]["sha256"],
+        rows=family["etlReceipts"]["rows"],
+        datasets=family["etlReceipts"]["datasets"],
+    )
+
+    @asynccontextmanager
+    async def stream(*args, **kwargs):
+        yield None, None
+
+    class Session:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def initialize(self):
+            pass
+
+        async def call_tool(self, tool, arguments):
+            if tool == "list_sources":
+                body = dict(tables=[dict(table=key.removesuffix(".parquet")) for key in family["tables"]])
+            elif tool == "describe_table":
+                body: dict[str, object] = dict(available=True)
+                if arguments["table"] == "scorecard_member_ratings":
+                    body.update(
+                        publication=dict(artifact_digest=family["artifactDigest"]),
+                        columns=[
+                            dict(column_name=name, column_type=kind)
+                            for name, kind in family["tables"]["scorecard_member_ratings.parquet"]["columns"]
+                        ],
+                    )
+            else:
+                cursor = server.execute(arguments["sql"])
+                columns = [column[0] for column in cursor.description]
+                records = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+                pins = {
+                    key.removesuffix(".parquet"): dict(artifact_digest=family["artifactDigest"])
+                    for key in family["tables"]
+                }
+                if "FROM etl_receipts" in arguments["sql"]:
+                    assert sum(row["rows"] for row in records) == family["etlReceipts"]["rows"]
+                    assert {row["generation_id"] for row in records} == {
+                        "original-source-generation",
+                        "current-container-generation",
+                    }
+                    source_pin = deepcopy(receipts_pin)
+                    if corruption == "missing-pin":
+                        source_pin = None
+                    elif corruption == "stale-pin":
+                        source_pin["artifact_digest"] = "sha256:" + "f" * 64
+                    elif corruption == "origin":
+                        records[0]["generation_id"] = "changed-origin"
+                    elif corruption == "count":
+                        records[0]["rows"] += 1
+                    families = {"members": dict(artifact_digest="sha256:" + "e" * 64)}
+                    if source_pin is not None:
+                        families["scorecards"] = source_pin
+                    pins = dict(etl_receipts=dict(status="managed_receipts", families=families))
+                body = dict(columns=columns, rows=records, truncated=False, publication=pins)
+            return SimpleNamespace(model_dump=lambda **kwargs: dict(structuredContent=body))
+
+    monkeypatch.setattr(readback, "streamable_http_client", stream)
+    monkeypatch.setattr(readback, "ClientSession", Session)
+    try:
+        if corruption:
+            with pytest.raises(ValueError, match="selected scorecards family|outcomes differ"):
+                asyncio.run(readback.hosted(args, connection, family))
+        else:
+            calls = asyncio.run(readback.hosted(args, connection, family))
+            assert calls[-1]["label"] == "source_receipt_counts"
+    finally:
+        server.close()
+        connection.close()

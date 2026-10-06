@@ -164,6 +164,57 @@ def test_conversion_refusal_does_not_read_or_change_prior_receipts(tmp_path):
     assert _unpack(json.loads(failures[0]["processing_json"]))["raw_source"]["value_number"] == "1e2"
 
 
+@pytest.mark.parametrize("late_error", [False, True])
+def test_streamed_multibatch_family_keeps_late_failure_receipts_and_prior(tmp_path, monkeypatch, late_error):
+    from spicy_regs import etl_receipts
+
+    base = tables(edition("2025"))["scorecard_member_ratings"][0]
+    sizes = []
+    original_subjects = etl_receipts._subjects
+
+    def subjects(policy, rows):
+        sizes.append(len(rows))
+        return original_subjects(policy, rows)
+
+    monkeypatch.setattr(etl_receipts, "_subjects", subjects)
+
+    def source_rows():
+        for index in range(4001):
+            if index and index % 2000 == 0:
+                # The next input batch is read only after the preceding batch reaches the shared writer.
+                assert sizes == [2000] * (index // 2000)
+            yield dict(base, publisher_member_key=f"member-{index}")
+        if late_error:
+            yield dict(base, publisher_member_key="invalid-member", value_number="1e2")
+
+    candidate = tmp_path / "candidate"
+    prior = tmp_path / "prior.parquet"
+    prior_bytes = b"A late conversion refusal must not read or change prior receipts."
+    prior.write_bytes(prior_bytes)
+    raw = {"scorecard_member_ratings": source_rows()}
+    if late_error:
+        with pytest.raises(ValueError, match="conversion refused"):
+            write_family(candidate, raw, prior_receipts=prior)
+        assert prior.read_bytes() == prior_bytes
+        assert not list(candidate.glob("*.parquet"))
+        assert not (candidate / "scorecard-etl-build.json").exists()
+        receipts = list(candidate.glob(".scorecard-etl-*/etl_receipts.parquet"))
+        assert len(receipts) == 1
+        rows = pq.read_table(receipts[0]).to_pylist()
+        assert sum(row["outcome"] == "accepted" for row in rows) == 4001
+        failures = [row for row in rows if row["outcome"] == "error"]
+        assert len(failures) == 1
+        held = etl_receipts._unpack(json.loads(failures[0]["processing_json"]))
+        assert held["raw_source"]["value_number"] == "1e2"
+    else:
+        write_family(candidate, raw)
+        monkeypatch.setattr(etl_receipts, "_subjects", original_subjects)
+        assert read_family(candidate, ("scorecard_member_ratings",)) == {
+            "scorecard_member_ratings": [dict(base, publisher_member_key=f"member-{index}") for index in range(4001)]
+        }
+    assert sizes == [2000, 2000, 1]
+
+
 def test_installed_scorecard_policy_refuses_receiptless_new_generation(tmp_path):
     from spicy_regs.etl_policy_registry import installed_policies
     from spicy_regs.scorecards.etl import POLICIES
