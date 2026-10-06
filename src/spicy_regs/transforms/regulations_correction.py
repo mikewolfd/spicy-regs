@@ -127,4 +127,4 @@ def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
                     )
                     ordinal += 1
 
-        return write_records(dataset, records(), destination, prior_receipts=[prior.receipts])
+        return write_records(dataset, records(), destination, prior_receipts=[prior.receipts, fresh.receipts])

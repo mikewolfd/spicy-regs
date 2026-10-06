@@ -41,6 +41,27 @@ def write(tmp_path, dataset, rows, generation="g1", label="input"):
     return ReceiptInput(dataset, (subjects,), receipts, generation)
 
 
+def assert_full_prior_history(receipt, prior):
+    from spicy_regs.etl_receipts import decode_exact_json, exact_json, resolve_receipt_witness
+
+    diagnostics = decode_exact_json(receipt["diagnostic_json"])
+    [reference] = [entry for entry in diagnostics["prior_receipts"]
+                   if entry["receipt_id"] == prior["receipt_id"] and entry["generation_id"] == prior["generation_id"]]
+    for field in ("processor", "attempt_id", "outcome"):
+        assert reference[field] == prior[field]
+    previous = decode_exact_json(prior["diagnostic_json"])
+    assert reference["diagnostics"] == {
+        key: value for key, value in previous.items() if key not in {"prior_receipts", "retained_processing"}
+    }
+    processing = decode_exact_json(prior["processing_json"])
+    assert diagnostics["retained_processing"][reference["processing_sha256"]] == processing
+    [witness] = [entry for entry in receipt["witnesses"]
+                 if entry["source_uri"] == "receipt-processing:" + reference["processing_sha256"]
+                 and entry["body_version"] == prior["receipt_id"]]
+    assert resolve_receipt_witness(receipt, witness) == exact_json(processing).encode()
+    assert all(witness in receipt["witnesses"] for witness in prior["witnesses"])
+
+
 @pytest.mark.parametrize("dataset", list(SOURCE_COLUMNS))
 def test_every_assigned_policy_can_round_trip_a_qualified_row(tmp_path, dataset):
     row: dict = {k: "1" for k in IDENTITIES[dataset] if k not in ("rule_target_id", "lifecycle_event_id")}
@@ -154,10 +175,8 @@ def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
             if (receipt['subject_version'], receipt['processing_json']) == (prior['subject_version'], prior['processing_json']):
                 assert receipt == prior
             else:
-                from spicy_regs.etl_receipts import decode_exact_json
-                reference = decode_exact_json(receipt['diagnostic_json'])['prior_receipt']
-                assert reference['receipt_id'] == prior['receipt_id']
-                assert reference['generation_id'] == prior['generation_id']
+                assert_full_prior_history(receipt, prior)
+    assert "text_extraction_status" not in pq.read_schema(subject).names
 
 
 def test_pdf_requires_receipt_validation_before_fetch(tmp_path):
@@ -217,12 +236,11 @@ def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
         '[{"status":"ok"}]',
     )
     assert "pdf_extraction_results_json" not in pq.read_schema(subject).names
-    from spicy_regs.etl_receipts import decode_exact_json
     [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
     [prior_receipt] = [r for r in pq.read_table(prior.receipts).to_pylist() if r['outcome'] == 'accepted']
-    reference = decode_exact_json(receipt['diagnostic_json'])['prior_receipt']
-    assert reference['receipt_id'] == prior_receipt['receipt_id']
-    assert reference['generation_id'] == prior.generation_id
+    [fresh_receipt] = [r for r in pq.read_table(fresh.receipts).to_pylist() if r['outcome'] == 'accepted']
+    assert_full_prior_history(receipt, prior_receipt)
+    assert_full_prior_history(receipt, fresh_receipt)
     receipt_sources = {w['source_uri'] for w in receipt['witnesses']}
     assert str(prior.receipts) in receipt_sources
     assert str(fresh.receipts) in receipt_sources
