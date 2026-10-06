@@ -4,7 +4,8 @@ from tempfile import TemporaryDirectory
 from collections.abc import Sequence
 
 
-def inherit_current_receipts(current: Path, priors: Sequence[Path], destination: Path, *, inherit_observations: bool = True) -> Path:
+def inherit_current_receipts(current: Path, priors: Sequence[Path], destination: Path, *, inherit_observations: bool = True,
+                             require_unique_prior: bool = False) -> Path:
     """Batch the disk lookup; preserve the current row writer's inheritance exactly.
 
     Callers admit both input bundles first. Matching accepted identity inherits
@@ -30,8 +31,9 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
         if not parts:
             raise ValueError("Prior inheritance requires an admitted prior")
         con.execute("CREATE VIEW prior AS " + " UNION ALL ".join(parts))
+        conflicts = "count(*)>1" if require_unique_prior else "count(DISTINCT receipt_id)>1"
         conflicting = con.execute("SELECT EXISTS(SELECT 1 FROM prior WHERE outcome='accepted' "
-                                  "GROUP BY dataset,record_id HAVING count(DISTINCT receipt_id)>1)").fetchone()
+                                  f"GROUP BY dataset,record_id HAVING {conflicts})").fetchone()
         if conflicting == (True,):
             raise ValueError("Conflicting selected prior receipts")
         con.execute("CREATE TABLE accepted_keys AS SELECT dataset,record_id,min(ordinal) AS ordinal "
