@@ -1,5 +1,6 @@
 """Retained Register editions use their full identity in the maintained batch reader."""
 import copy
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -126,3 +127,37 @@ def test_unproven_batch_proof_keeps_exact_row_fallback(tmp_path, monkeypatch):
     actual = materialize_internal(selected, tmp_path / 'bulk.parquet', bulk=True, source_schema=schema)
     assert calls == ['row']
     assert pq.read_table(actual).equals(pq.read_table(source), check_metadata=True)
+
+
+@pytest.mark.parametrize('fallback', [False, True])
+def test_selected_processing_prior_preserves_editions_and_exact_fallback(tmp_path, monkeypatch, fallback):
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.sources.publication import empty_index
+
+    selected, source, _ = _source(tmp_path, [
+        {'document_number': '2026-00001', 'publication_date': '2025-06-30', 'title': 'first'},
+        {'document_number': '2026-00001', 'publication_date': '2026-06-30', 'title': 'second'},
+    ])
+    prior = SelectedPriors(tmp_path / 'selected', index=empty_index(), public_url='https://example.invalid')
+    monkeypatch.setattr(prior.selected, 'select', lambda _: SimpleNamespace(
+        subjects=selected.subjects, receipts=selected.receipts, generation_id=selected.generation_id,
+    ))
+    calls = []
+    reference = regulations_receipts._qualified_rows
+
+    def row_reader(*args, **kwargs):
+        calls.append('row')
+        if not fallback:
+            raise AssertionError('A proven selected prior must use the batch reader')
+        yield from reference(*args, **kwargs)
+
+    monkeypatch.setattr(regulations_receipts, '_qualified_rows', row_reader)
+    if fallback:
+        def unproven(*args, **kwargs):
+            raise etl_bulk.NotBulkEligible('Retained input has no batch proof')
+        monkeypatch.setattr(regulations_bulk, '_materialize_selected', unproven)
+    output = prior.get('federal_register')
+    assert pq.read_table(output).equals(pq.read_table(source), check_metadata=True)
+    assert calls == (['row'] if fallback else [])
+    assert prior.get('federal_register') == output
+    assert calls == (['row'] if fallback else [])

@@ -1,5 +1,6 @@
 """Retained docket references keep edition, source position and literal target."""
 import copy
+from types import SimpleNamespace
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -94,3 +95,34 @@ def test_nullable_identity_field_still_requires_its_declared_type(tmp_path):
     with pytest.raises(ValueError, match='source schema differs'):
         materialize_internal(selected, tmp_path / 'invalid.parquet', bulk=True, source_schema=schema)
     assert not (tmp_path / 'invalid.parquet').exists()
+
+
+@pytest.mark.parametrize('fallback', [False, True])
+def test_selected_processing_prior_preserves_nullable_positions_and_exact_fallback(tmp_path, monkeypatch, fallback):
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.sources.publication import empty_index
+
+    selected, source, _ = _source(tmp_path)
+    prior = SelectedPriors(tmp_path / 'selected', index=empty_index(), public_url='https://example.invalid')
+    monkeypatch.setattr(prior.selected, 'select', lambda _: SimpleNamespace(
+        subjects=selected.subjects, receipts=selected.receipts, generation_id=selected.generation_id,
+    ))
+    calls = []
+    reference = regulations_receipts._qualified_rows
+
+    def row_reader(*args, **kwargs):
+        calls.append('row')
+        if not fallback:
+            raise AssertionError('A proven selected prior must use the batch reader')
+        yield from reference(*args, **kwargs)
+
+    monkeypatch.setattr(regulations_receipts, '_qualified_rows', row_reader)
+    if fallback:
+        def unproven(*args, **kwargs):
+            raise etl_bulk.NotBulkEligible('Retained input has no batch proof')
+        monkeypatch.setattr(regulations_bulk, '_materialize_selected', unproven)
+    output = prior.get('fr_docket_links')
+    assert pq.read_table(output).equals(pq.read_table(source), check_metadata=True)
+    assert calls == (['row'] if fallback else [])
+    assert prior.get('fr_docket_links') == output
+    assert calls == (['row'] if fallback else [])
