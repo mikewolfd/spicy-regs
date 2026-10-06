@@ -141,7 +141,10 @@ class SelectedPriors:
             raise ValueError(f"No processing reconstruction declared for {dataset}")
         else:
             output.parent.mkdir(parents=True, exist_ok=True)
-            materialize_internal(ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output)
+            materialize_internal(
+                ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output,
+                bulk=dataset in {"dockets", "documents"},
+            )
         self.restored[dataset] = output
         return output
 
