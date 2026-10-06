@@ -150,3 +150,15 @@ def test_published_processing_tables_reuse_dictionary_prose_without_expanding_na
     assert table["columns"][0]["description"] == source["fec_collections"]["columns"]["collection_id"]
     assert table["sourceStatus"] == table["metadataStatus"] == "documented"
     assert table["publicationSchema"] == columns
+
+
+def test_detail_attempt_navigation_requires_event_kind_and_complete_partition_identity():
+    from spicy_regs.explorer_navigation import declarations, target_keys, validate_navigation
+    specs=[spec for spec in declarations() if spec['id']=='nominations_detail_attempts']
+    target=specs[0]['targets'][0]
+    assert target_keys(target, {}, {'congress':'119','citation':'PN129-10'}) == ['congress-detail-result','119','PN129-10']
+    assert target_keys(target, {}, {'congress':'119'}) is None
+    malformed=json.loads(json.dumps(specs))
+    malformed[0]['targets'][0]['keys'][0]['parts'][0]['literal']=42
+    with pytest.raises(ValueError,match='literal'):
+        validate_navigation(malformed)

@@ -10282,10 +10282,22 @@
         {
           "table": "@receipt:congress_acquisition",
           "columns": [
+            "event",
             "congress",
             "citation"
           ],
           "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "literal": "congress-detail-result"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
             {
               "parts": [
                 {
@@ -10329,11 +10341,23 @@
         {
           "table": "@receipt:congress_acquisition",
           "columns": [
+            "event",
             "congress",
             "chamber",
             "event_id"
           ],
           "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "literal": "congress-detail-result"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
             {
               "parts": [
                 {
@@ -10389,11 +10413,23 @@
         {
           "table": "@receipt:congress_acquisition",
           "columns": [
+            "event",
             "congress",
             "communication_type",
             "number"
           ],
           "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "literal": "congress-detail-result"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
             {
               "parts": [
                 {

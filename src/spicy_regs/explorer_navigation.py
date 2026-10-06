@@ -91,8 +91,9 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                              ("committee_meetings", ("congress", "chamber", "event_id")),
                              ("house_communications", ("congress", "communication_type", "number"))):
         specs.append(array(source + "_detail_attempts", source, (),
-                           (route("@receipt:congress_acquisition", identity,
-                                  tuple(key(part(column, row=True)) for column in identity)),),
+                           (route("@receipt:congress_acquisition", ("event", *identity),
+                                  (key({**part(""), "literal": "congress-detail-result"}),
+                                   *(key(part(column, row=True)) for column in identity))),),
                            meaning="Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
                            mode="row"))
     specs += [
@@ -196,6 +197,8 @@ def at(value, path):
 
 
 def word(recipe, element, row):
+    if "literal" in recipe:
+        return recipe["literal"]
     value = at(row if recipe.get("from") == "row" else element, recipe["path"])
     transform = recipe.get("transform")
     if transform == "partition":
@@ -286,6 +289,8 @@ def validate_navigation(specs):
                     raise ValueError("Invalid navigation field path")
                 if recipe.get("transform") not in {None, "lower", "bill-type", "nomination-citation", "partition", "partition-value", "senate-amendment", "hearing-congress", "vote-congress"}:
                     raise ValueError("Unknown navigation transform")
+                if "literal" in recipe and (not isinstance(recipe["literal"], str) or not 0 < len(recipe["literal"]) <= 4096 or recipe.get("transform")):
+                    raise ValueError("Invalid navigation literal")
             for check in [*target["guards"], *target["keys"]]:
                 if "pattern" in check:
                     re.compile(check["pattern"])
