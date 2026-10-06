@@ -570,11 +570,19 @@ def build_index_table(
     queue: list[tuple[_Listed, Mapping[str, Any], bool]] = []
     outcomes: Counter[str] = Counter()
 
+    def detail_result(entry: _Listed, outcome: str, error: Exception | None = None) -> None:
+        """Keep each attempt's complete identity in the existing acquisition receipts."""
+        if evidence is not None:
+            evidence.event("congress-detail-result", table=spec.table,
+                           **dict(zip(identity, entry.key, strict=True)), read_outcome=outcome,
+                           error_type=type(error).__name__ if error else None)
+
     def refuse(entry: _Listed, state: _Held | None, error: Exception) -> None:
         """One row's refusal: counted, logged scrubbed, and a new record still indexed list-only."""
         outcomes["refused"] += 1
         if evidence is not None:
             evidence.refusal(error, stage=f"{spec.table}-detail")
+        detail_result(entry, "failed", error)
         logger.warning("{}: {} refused: {}", spec.table, "-".join(entry.key), scrub_credential(str(error), ""))
         if state is None:
             rows.append(entry.row)
@@ -633,6 +641,7 @@ def build_index_table(
             refuse(entry, state, error)
             continue
         rows.append(spec.shape(entry.record, detail))
+        detail_result(entry, "read")
         outcomes["reread" if reread else "read"] += 1
         unevidenced.discard(entry.key)
 
