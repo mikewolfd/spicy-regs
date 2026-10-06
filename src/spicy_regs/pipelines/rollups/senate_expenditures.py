@@ -24,7 +24,7 @@ class SenateExpendituresRollup(LegislativeReceiptRollup):
     output: ClassVar[str] = "senate_expenditures.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir, build_senate_expenditures)[0]
+        return self.build_receipts(output_dir, build_senate_expenditures)
 
 
 app = make_rollup_app(SenateExpendituresRollup)
