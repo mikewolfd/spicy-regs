@@ -15,6 +15,7 @@ from uuid import uuid4
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA, rebind_receipt, read_with_receipts, subject_identity
 from spicy_regs.native_types import described_schema
 from spicy_regs.transforms.parquet_rows import write_rows
@@ -108,9 +109,15 @@ def _ddl(schema):
     return ', '.join('"' + name.replace('"', '""') + '" ' + dtype for name, dtype in described_schema(schema))
 
 
-def _copy(con, sql, path):
+def _copy(con, sql, path, *, resources: ExportResources | None = None):
     from .iceberg import _sql_str
-    con.execute(f"COPY ({sql}) TO '{_sql_str(str(path))}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+    options = 'FORMAT PARQUET, COMPRESSION ZSTD'
+    if resources is not None:
+        options += f', ROW_GROUP_SIZE {resources.row_group_rows}'
+        # DuckDB permits the byte target only when the caller allows reordering.
+        if not con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0]:
+            options += f", ROW_GROUP_SIZE_BYTES '{_sql_str(resources.row_group_bytes)}'"
+    con.execute(f"COPY ({sql}) TO '{_sql_str(str(path))}' ({options})")
 
 
 def _rows(path):
@@ -171,7 +178,9 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
     has_prior = prior_receipts is not None and con.execute(f'SELECT 1 FROM {prior_receipts} LIMIT 1').fetchone() is not None
     if has_prior:
         source_query = f'SELECT s.*, w.receipt AS _prior_receipt FROM {source} s LEFT JOIN {prior_receipts} w USING ("{key}")'
-    _copy(con, source_query, source_path)
+    # Reuse comments layout targets before its private receipt writer reads
+    # these wide strings. Preserve the caller's connection and ordering settings.
+    _copy(con, source_query, source_path, resources=ExportResources() if dataset == 'comments' else None)
     def observations():
         from spicy_regs.etl_receipts import exact_json
         for i, row in enumerate(_rows(source_path)):

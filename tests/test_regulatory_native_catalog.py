@@ -25,6 +25,31 @@ def source(con, *, identity='c1', text='first', attachments='[]'):
     return row
 
 
+@pytest.mark.parametrize('ordered', [True, False])
+def test_comments_copy_layout_preserves_values_and_caller_ordering(con, tmp_path, ordered):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_regs.duckdb_settings import ExportResources
+
+    size = 25_001
+    columns = {name: pa.nulls(size, type=pa.string()) for name in COMMENT.schema}
+    columns.update(comment_id=pa.array([f'c{i}' for i in range(size)]),
+                   agency_code=pa.array(['01'] * size),
+                   comment=pa.array([None if i % 7 == 0 else f' literal\u00a0é😀 {i} ' for i in range(size)]),
+                   duplicate_comments=pa.array(['007'] * size))
+    expected = pa.table(columns)
+    con.register('copy_source', expected)
+    con.execute('SET preserve_insertion_order=?', [ordered])
+    target = tmp_path / 'comments.parquet'
+    native._copy(con, 'SELECT * FROM copy_source', target, resources=ExportResources())
+    assert pq.ParquetFile(target).metadata.num_row_groups > 1
+    actual = pq.read_table(target)
+    assert actual.sort_by('comment_id').equals(expected.sort_by('comment_id'))
+    if ordered:
+        assert actual.equals(expected)
+    assert con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0] is ordered
+
+
 def test_native_pair_and_processing_read(con):
     expected = source(con)
     iceberg.replace_rows(con, COMMENT, 'source')
