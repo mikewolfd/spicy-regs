@@ -13,6 +13,178 @@ import re
 from typing import Any
 
 
+SURVEY_FILE = "publisher_survey_20261005.json"
+IMPLEMENTATION_FILE = "publisher_implementation_20261005.json"
+RECOVERY_FILE = "publisher_recovery_20261005.json"
+RECOVERY_API_FILE = "publisher_recovery_api_20261005.json"
+WORK_POLICY_FILE = "publisher_work_policy.json"
+
+
+def work_priorities(document, inventory, inputs):
+    """Defer historical work without changing source or publication evidence."""
+    if document is None:
+        return {}
+    cutoff = document.get("minimum_activity_year")
+    entries = document.get("publishers", [])
+    identifiers = [entry.get("publisher_id") for entry in entries]
+    if (
+        document.get("format_version") != "scorecard-publisher-work-policy/1"
+        or type(cutoff) is not int
+        or cutoff < 1
+        or len(set(identifiers)) != len(identifiers)
+        or not set(identifiers) <= set(inventory)
+        or any(
+            type(entry.get("last_documented_activity_year")) is not int
+            or not 0 < entry["last_documented_activity_year"] < cutoff
+            or entry.get("activity_basis") not in {"historical_scorecard_only", "original_entity_ended"}
+            or not isinstance(entry.get("reason"), str)
+            or not entry["reason"].strip()
+            or entry.get("source_file") not in inputs
+            or entry.get("source_file") == WORK_POLICY_FILE
+            for entry in entries
+        )
+    ):
+        raise ValueError("Work policy requires distinct known publishers, pre-cutoff evidence and a pinned source")
+    return {entry["publisher_id"]: entry for entry in entries}
+
+
+def recovery_findings(document, inventory, *, api=False):
+    """Use complete task coverage to guide work, without promoting source readiness."""
+    entries = document.get("publishers", [])
+    identifiers = [entry["publisher_id"] for entry in entries]
+    expected = document.get("expected_publishers", [])
+    summary = document.get("summary", {})
+    kind = "api" if api else "aggregate"
+    if (
+        document.get("format_version") != f"scorecard-publisher-recovery-{kind}/1"
+        or not expected
+        or len(set(expected)) != len(expected)
+        or len(set(identifiers)) != len(identifiers)
+        or set(identifiers) != set(expected)
+        or not set(identifiers) <= set(inventory)
+        or summary.get("reviewed_publishers" if api else "assigned_publishers") != len(entries)
+        or summary.get("newly_qualified_editions") != 0
+        or summary.get("newly_published_editions") != 0
+        or any(
+            not isinstance(entry.get(field), str) or not entry[field].strip()
+            for entry in entries
+            for field in ("finding", "next_action")
+        )
+    ):
+        raise ValueError("Recovery must cover every assigned known publisher without qualification or publication")
+    fields = (
+        "finding",
+        "next_action",
+        "reported_research_result",
+        "assessment",
+        "source_input",
+        "result",
+        "report",
+        "followup",
+    )
+    if api:
+        fields += (
+            "categories",
+            "target_rating_api_status",
+            "inspection_limits_as_reported",
+            "access_and_rights_as_reported",
+            "source_result",
+            "source_report",
+        )
+    return {
+        entry["publisher_id"]: {
+            "observed_on": document["observed_on"],
+            "source_file": RECOVERY_API_FILE if api else RECOVERY_FILE,
+            **({"endpoint_observation_count": len(entry.get("endpoints", []))} if api else {}),
+            **{field: entry[field] for field in fields if field in entry},
+        }
+        for entry in entries
+    }
+
+
+def implementation_findings(document, inventory):
+    """Retain task outcomes while qualification remains receipt-backed."""
+    entries = document.get("publishers", [])
+    identifiers = [entry["publisher_id"] for entry in entries]
+    summary = document.get("summary", {})
+    statuses = {
+        "implemented",
+        "source-recovered-but-unsupported-shape",
+        "access-required",
+        "original-unrecovered",
+        "existing-reader-attribution",
+        "verified-retired",
+    }
+    if (
+        document.get("format_version") != "scorecard-publisher-implementation-aggregate/1"
+        or summary.get("newly_published_editions") != 0
+        or summary.get("assigned_publishers") != len(entries)
+        or len(set(identifiers)) != len(identifiers)
+        or not set(identifiers) <= set(inventory)
+        or any(entry.get("task_result") not in statuses for entry in entries)
+    ):
+        raise ValueError("Implementation metadata must describe distinct known publishers without publication")
+    return {
+        entry["publisher_id"]: {
+            "observed_on": document["observed_on"],
+            "source_file": IMPLEMENTATION_FILE,
+            **{
+                field: entry.get(field)
+                for field in (
+                    "group",
+                    "task_result",
+                    "integration_state",
+                    "period_fields",
+                    "next_missing_item",
+                    "authority",
+                    "source_document",
+                    "source_manifest",
+                )
+            },
+        }
+        for entry in entries
+    }
+
+
+def survey_findings(document, inventory):
+    """Select discovery metadata; no finding establishes qualification or support."""
+    entries = document.get("publishers", [])
+    identifiers = [entry["publisher_id"] for entry in entries]
+    summary = document.get("summary", {})
+    if (
+        document.get("format_version") != "scorecard-publisher-survey-aggregate/1"
+        or summary.get("newly_qualified_editions") != 0
+        or summary.get("surveyed_publishers") != len(entries)
+        or len(set(identifiers)) != len(identifiers)
+        or not set(identifiers) <= set(inventory)
+    ):
+        raise ValueError("Survey must describe distinct known publishers and discovery only")
+    findings = {}
+    for entry in entries:
+        survey = entry["survey"]
+        if not isinstance(survey.get("next_step"), str) or not survey["next_step"].strip():
+            raise ValueError("Survey needs a concrete discovery or integration next step")
+        findings[entry["publisher_id"]] = {
+            "observed_on": document["observed_on"],
+            "source_file": SURVEY_FILE,
+            "task_id": entry["task_id"],
+            "assessment": entry["assessment"],
+            **{
+                name: survey.get(name)
+                for name in (
+                    "latest_publication",
+                    "latest_offered",
+                    "newest_recovered",
+                    "year_intervals",
+                    "unknown_year_intervals",
+                    "inspection_limits",
+                    "next_step",
+                )
+            },
+        }
+    return findings
+
+
 def pinned_document(directory, relative, pin):
     path = (directory / relative).resolve()
     if Path(relative).is_absolute() or not path.is_relative_to(directory.resolve()):
@@ -57,7 +229,8 @@ def read_receipt(directory, record):
             or readback.get("format_version") != "scorecard-family-publication-readback/1"
             or readback.get("status") != "passed"
             or readback.get("source_generation") != receipt.get("observed_source_generation")
-            or scope != dict(
+            or scope
+            != dict(
                 publisher_id=record["publisher_id"],
                 parser_version=qualification["parser_version"],
                 counts=qualification["counts"],
@@ -119,12 +292,25 @@ def read_receipt(directory, record):
 def generate(directory: Path):
     names = ("adapter_inventory.json", "publisher_api_inventory.json", "integration_qualifications.json")
     raw = {name: (directory / name).read_bytes() for name in names}
+    for name in (SURVEY_FILE, IMPLEMENTATION_FILE, RECOVERY_FILE, RECOVERY_API_FILE, WORK_POLICY_FILE):
+        if (directory / name).exists():
+            raw[name] = (directory / name).read_bytes()
     data = {name: json.loads(body) for name, body in raw.items()}
     inventory = data[names[0]]["publishers"]
     apis = {row["publisher_id"]: row for row in data[names[1]]["publishers"]}
     ledger = data[names[2]]
     if set(inventory) != set(apis):
         raise ValueError("Publisher inventories differ; reconcile candidates before generating coverage")
+    findings = survey_findings(data[SURVEY_FILE], inventory) if SURVEY_FILE in data else {}
+    implementations = (
+        implementation_findings(data[IMPLEMENTATION_FILE], inventory) if IMPLEMENTATION_FILE in data else {}
+    )
+    recoveries = recovery_findings(data[RECOVERY_FILE], inventory) if RECOVERY_FILE in data else {}
+    recovery_apis = recovery_findings(data[RECOVERY_API_FILE], inventory, api=True) if RECOVERY_API_FILE in data else {}
+    work_policy = data.get(WORK_POLICY_FILE)
+    priorities = work_priorities(work_policy, inventory, raw)
+    if recoveries and recovery_apis and set(recoveries) != set(recovery_apis):
+        raise ValueError("Recovery catalog and API review cover different publishers")
     qualifications = {}
     scopes = set()
     for record in ledger["editions"]:
@@ -153,6 +339,7 @@ def generate(directory: Path):
                     **endpoint,
                     "qualification_receipt": observed["receipt"],
                     "parser_version": receipt["parser_version"],
+                    "evidence_stage": "source_qualified",
                 }
             )
     readers = ledger["readers"]
@@ -167,12 +354,23 @@ def generate(directory: Path):
                 if editions
                 else "reader_implemented"
                 if publisher in readers
+                else "retired_confirmed"
+                if implementations.get(publisher, {}).get("task_result") == "verified-retired"
                 else source["support_status"]
             )
         )
         endpoints = [e for e in apis[publisher]["endpoints"] if e["discovery_status"] == "verified_api"]
         routes = [
-            {"method": e["method"], "url_template": e["url_template"], "purpose": e["purpose"]} for e in endpoints
+            {
+                "method": e["method"],
+                "url_template": e["url_template"],
+                "purpose": e["purpose"],
+                "evidence_stage": "dated_discovery",
+                "source_file": "publisher_api_inventory.json",
+                "publisher_id": publisher,
+                "discovery_status": e["discovery_status"],
+            }
+            for e in endpoints
         ]
         routes.extend(newer_apis.get(publisher, []))
         rows.append(
@@ -181,16 +379,30 @@ def generate(directory: Path):
                 "publisher_name": source["publisher_name"],
                 "task_id": source["task_id"],
                 "state": state,
+                "work_status": "deferred_pre_2000" if publisher in priorities else "active",
+                "work_priority": priorities.get(publisher),
                 "reader": readers.get(publisher),
                 "qualified_editions": editions,
                 "verified_api_endpoints": routes,
                 "discovery_api_status": apis[publisher]["discovery_status"],
                 "discovery_support_status": source["support_status"],
                 "original_source_urls": source["original_source_urls"],
+                "survey_finding": findings.get(publisher),
+                "implementation_finding": implementations.get(publisher),
+                "recovery_finding": recoveries.get(publisher),
+                "recovery_api_finding": recovery_apis.get(publisher),
                 "next_action": "Integrate remaining available editions and renditions"
                 if editions
                 else "Qualify original source through the implemented reader"
                 if publisher in readers
+                else recoveries[publisher]["next_action"]
+                if publisher in recoveries
+                else implementations[publisher]["next_missing_item"]
+                if publisher in implementations
+                and isinstance(implementations[publisher].get("next_missing_item"), str)
+                and implementations[publisher]["next_missing_item"].strip()
+                else findings[publisher]["next_step"]
+                if publisher in findings
                 else source.get("next_action")
                 or (
                     "Implement source-specific reader using verified endpoints"
@@ -204,7 +416,8 @@ def generate(directory: Path):
         "schema_version": "1",
         "observed_at": ledger["observed_at"],
         "input_pins": {name: sha256(body).hexdigest() for name, body in raw.items()},
-        "scope": "Every publisher candidate in both inventories; all available editions and renditions remain in scope",
+        "scope": "Every publisher candidate remains cataloged; the work policy defers pre-2000-only publishers without changing source stages or retained editions",
+        "work_policy": work_policy,
         "states": dict(sorted(Counter(r["state"] for r in rows).items())),
         "publishers": rows,
         "validation": {"candidate_sets_equal": True, "qualification_receipt_pins_match": True},
@@ -215,23 +428,123 @@ def generate(directory: Path):
         "",
         f"Generated from pinned inputs at {ledger['observed_at']}.",
         "",
-        "Edition receipts supersede the older discovery matrix only for their named scopes. The queue retains every candidate and every remaining rendition.",
+        "Edition receipts supersede the older discovery matrix only for their named scopes. The queue retains every candidate and every remaining rendition. Work priority is separate from source readiness and retirement.",
         "",
-        "| Publisher | Stage | Qualified editions | Reader | Next action |",
-        "|---|---|---|---|---|",
+        "| Publisher | Work status | Stage | Qualified editions | Reader | Remaining action | Latest survey | Implementation result | Recovery finding |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         editions = ", ".join(f"[{e['scorecard_id']}]({e['receipt']})" for e in r["qualified_editions"]) or "Pending"
+        finding = r["survey_finding"]
+        survey_note = (
+            f"[{finding['assessment']['finding'].replace('|', r'\|')}]({SURVEY_FILE.replace('.json', '.md')})"
+            if finding
+            else "Pending"
+        )
+        implementation = r["implementation_finding"]
+        authority = implementation.get("authority") if implementation else None
+        if (
+            implementation
+            and implementation["task_result"] == "verified-retired"
+            and isinstance(authority, str)
+            and authority.strip()
+        ):
+            # Retain the dated survey in structured evidence; display the explicit
+            # current correction rather than repeating its superseded date claim.
+            survey_note = f"Current correction: {authority.replace('|', r'\|')}"
+            if finding:
+                survey_note += f" ([Dated survey]({SURVEY_FILE.replace('.json', '.md')}))"
+        implementation_note = (
+            f"[{implementation['task_result']}]({IMPLEMENTATION_FILE.replace('.json', '.md')})"
+            if implementation
+            else "Pending"
+        )
+        recovery = r["recovery_finding"]
+        recovery_note = (
+            f"[{recovery['finding'].replace('|', r'\|')}]({RECOVERY_FILE.replace('.json', '.md')})"
+            if recovery
+            else "Not assigned to recovery review"
+        )
         markdown.append(
-            f"| {r['publisher_name']} (`{r['publisher_id']}`) | `{r['state']}` | {editions} | `{r['reader'] or 'pending'}` | {r['next_action']} |"
+            f"| {r['publisher_name']} (`{r['publisher_id']}`) | `{r['work_status']}` | `{r['state']}` | {editions} | `{r['reader'] or 'pending'}` | {r['next_action'].replace('|', r'\|')} | {survey_note} | {implementation_note} | {recovery_note} |"
         )
     markdown.extend(
         [
             "",
             "See [observed API routes](publisher_api_routes.md) for rating JSON, JSON containing HTML, embedded JSON and navigation-only distinctions.",
+            "The [current publisher API inventory](publisher_api_current.md) combines dated discovery, qualified routes and the latest recovery review. Recovery endpoints remain research observations until separately qualified.",
+            "Survey findings guide remaining work. Qualification and publication stages come only from their separate receipts.",
+            "Implementation outcomes record completed task work and exact missing inputs. Their metadata preserves the separate source qualification and publication stages.",
         ]
     )
     return report, "\n".join(markdown) + "\n"
+
+
+def current_api_inventory(directory, progress):
+    """Present current evidence together while retaining each observation's authority."""
+    discovery = json.loads((directory / "publisher_api_inventory.json").read_bytes())
+    dated = {row["publisher_id"]: row for row in discovery["publishers"]}
+    rows: list[dict[str, Any]] = [
+        {
+            "publisher_id": row["publisher_id"],
+            "publisher_name": row["publisher_name"],
+            "integration_state": row["state"],
+            "work_status": row["work_status"],
+            "dated_discovery": {
+                "source_file": "publisher_api_inventory.json",
+                "publisher_id": row["publisher_id"],
+                "discovery_status": dated[row["publisher_id"]]["discovery_status"],
+                "endpoint_observation_count": len(dated[row["publisher_id"]]["endpoints"]),
+            },
+            "dated_discovery_routes": [
+                route for route in row["verified_api_endpoints"] if route["evidence_stage"] == "dated_discovery"
+            ],
+            "qualified_api_endpoints": [
+                route for route in row["verified_api_endpoints"] if route["evidence_stage"] == "source_qualified"
+            ],
+            "recovery_review": row["recovery_api_finding"],
+        }
+        for row in progress["publishers"]
+    ]
+    result = {
+        "format_version": "scorecard-publisher-api-current/1",
+        "input_pins": progress["input_pins"],
+        "boundary": "Dated discovery, source-qualified routes and recovery observations retain separate authority. Catalog, CMS, archive, metadata and third-party endpoints do not establish a complete original rating API.",
+        "publishers": rows,
+    }
+    lines = [
+        "# Current publisher API inventory",
+        "",
+        "Generated from the [dated API inventory](publisher_api_inventory.md), source qualification records and the [recovery API review](publisher_recovery_api_20261005.md). Original dated observations remain unchanged.",
+        "",
+        result["boundary"],
+        "",
+        "| Publisher | Work status | Dated API discovery | Source-qualified routes | Latest recovery API finding |",
+        "|---|---|---|---|---|",
+    ]
+    for row in rows:
+        routes = (
+            "; ".join(f"`{e['method']}` {e['url_template']}" for e in row["qualified_api_endpoints"])
+            or "None qualified"
+        )
+        recovery = row["recovery_review"]
+        finding = recovery["finding"] if recovery else "Not assigned to recovery review"
+        values = (
+            row["publisher_name"],
+            row["work_status"],
+            row["dated_discovery"]["discovery_status"],
+            routes,
+            finding,
+        )
+        lines.append("| " + " | ".join(str(value).replace("|", r"\|").replace("\n", " ") for value in values) + " |")
+    lines.extend(
+        [
+            "",
+            "The [structured inventory](publisher_api_current.json) links each dated discovery entry and recovery endpoint set to its pinned source file and retains verified routes. Detailed endpoint observations are stored once in those source inventories.",
+            "",
+        ]
+    )
+    return result, "\n".join(lines)
 
 
 def main():
@@ -244,6 +557,13 @@ def main():
         "integration_progress.json": json.dumps(report, indent=2, ensure_ascii=False) + "\n",
         "integration_progress.md": markdown,
     }
+    api_report, api_markdown = current_api_inventory(args.directory, report)
+    outputs.update(
+        {
+            "publisher_api_current.json": json.dumps(api_report, indent=2, ensure_ascii=False) + "\n",
+            "publisher_api_current.md": api_markdown,
+        }
+    )
     for name, body in outputs.items():
         path = args.directory / name
         if args.check:

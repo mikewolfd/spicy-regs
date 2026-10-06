@@ -1,0 +1,49 @@
+{
+  "source_commit": "2d62f887ae9e4972d7abaa6e821387fa3504fc70",
+  "source_merge_commit": "ec18a2665e2e7764e624cf17a4e718ab4217ae3a",
+  "source_tag": "v0.60.0",
+  "source_tree": "9928dbadb576a1a9466adc0ca624e92f8fcf6109",
+  "version": "0.60.0",
+  "filename": "spicy_docs-0.60.0-py3-none-any.whl",
+  "sha256": "4e0bae7cbda92c1af4adbee87000b283c880451b68c8ff14e630f431762cb3f4",
+  "byte_size": 2581708,
+  "source_state": "Independently approved candidate and tagged merge have the same full tree; full source CI passed before merge",
+  "wheel_distribution": "Vendored exact independently reviewed installed-wheel candidate; no PyPI upload claimed",
+  "source_package_qualification": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/qualification.json",
+    "sha256": "9918d785e0417c48ed724d689ccbfa773a4c038ef96802e5426f1dc46242f581"
+  },
+  "independent_package_review": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/independent-review.md",
+    "sha256": "9aa99b60948bf14f84e88288c52d91058dc62dcdac8e1c5c0b66a644d7ef1d91"
+  },
+  "installed_complete_replay": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed124-replay.json",
+    "sha256": "c8a44be9ee402288e25436c9dd77b8b311b6ab77222f1b2c97eab3492f4117cf"
+  },
+  "installed_package_gate": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/installed-gate.json",
+    "sha256": "a33a188792098280564b33074b77248ef3eea05c4d1899bf634ebe1a17fcea2e"
+  },
+  "complete_replay_plan": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/plan-qualified124-v1.json",
+    "sha256": "2c11322cec7142930c331a56755d6f16dd2703e858f8a23eb5ec146c24e179ab"
+  },
+  "complete_replay_bindings": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/plan-bindings.json",
+    "sha256": "3cfd30979dc369bb9227e9d4340c5cab78dae35aa90947b0d686e50638e7007f"
+  },
+  "three_source_entries": {
+    "corpus_relative_file": "finish-20261004/root/source-package-060-v1/integration-entries.json",
+    "sha256": "2f910a93a47335dd9592e5099c7fcc2fc1a521b2fce1debcc4e25dedc16d9668"
+  },
+  "consumer_selection_plan": {
+    "file": "docs/research/scorecards/work/integration/modern_reader_plan_20261005.json",
+    "sha256": "0871fc3f9a8cb62d719783cd2107d81e9d1c20dcbf8f43b4b950de590d148942"
+  },
+  "consumer_base_commit": "f19bb609287d6d09043405ea81398f3c9493e910",
+  "consumer_preparation_commit": "8b9dafc24130a7a5f4a5497c4228af8713f168f9",
+  "adoption_receipt": "docs/research/scorecards/work/integration/reader_adoption_modern_20261005.json",
+  "consumer_policy": "Only one named UTU lifetime article assessment and two separately attributed ASCF chamber originals; disabled, hash_only, unreviewed rights and no historical backfill",
+  "historical_package_pins": "All prior vendored wheels, sidecars and source qualification proofs remain unchanged"
+}

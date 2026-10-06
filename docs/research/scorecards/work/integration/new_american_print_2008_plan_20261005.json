@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "acquisition_limits": {
+    "max_bytes": 67108864,
+    "max_requests": 3
+  },
+  "entries": [
+    {
+      "adapter": "new_american_print",
+      "reader_class": "PrintedFreedomIndexReader",
+      "reader_sha256": "cd4bc962b6befb0de916baf848f47303e87320ace9b8570119af01c8e3609844",
+      "edition": {
+        "publisher_id": "new_american",
+        "edition_id": "freedom-index-110-4-print",
+        "source_url": "https://thenewamerican.com/assets/sites/2/pdf/Freedom_Index_110-4.pdf",
+        "title": "The Freedom Index",
+        "year": "2008",
+        "congress": "110",
+        "chamber": "both",
+        "is_current": false
+      },
+      "captures_root": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/sequence",
+      "manifest_sha256": "f142000384241856f2ceb4ccbd0d2f2660557a194e2df81ff985baeed308cb05",
+      "reference_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/reference-tables.json",
+      "reference_sha256": "ef6addea50728e859eed2ad6ee9de92c478cff8b7deda9c8b1e3b0f7818746dd",
+      "observations_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/qualified-native-facts.json",
+      "observations_sha256": "549c86c8aa6860e01a1889c361d68b982e6573b90399ea2a80cb4973c3bf883b",
+      "shared_source_dependencies": {
+        "src/spicy_docs/sources/scorecards/common.py": "fa63946128dbc509fea5bee77a81d54a95e34cfe7f69b88d5ece2cf57856546f",
+        "src/spicy_docs/sources/scorecards/qualified_observations.py": "f1af67095a8a02717a0dd2c1f99d1566325910ea5fbd56346491f6f13b28e8e7",
+        "src/spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
+        "src/spicy_docs/transport/source_acquirer.py": "3ca83b91d7de20bdf114b97e189d937be49b2c1498296f57d98e72d42c15cef2",
+        "src/spicy_docs/transport/captured.py": "a5b2e4f3c182ed0a26a76e6338ce154fd6012c62d6189e80d5b1da069a291212",
+        "src/spicy_docs/schemas/scorecard_tables.py": "39e31e235a8908e877461c7dd7f14f3b8d4743f7dbf433158a3310fc3636c2e0",
+        "src/spicy_docs/schemas/tables.py": "7ff239e8bd719a7a8f3c9288a27dcf01d62812af9381acc74d38171f11e494cc"
+      },
+      "qualification_file": "finish-20261004/root/publisher-deep-dives-20261005/results/john_birch_historical/private/reader-2008-followup/revision-2/qualification.json",
+      "qualification_sha256": "3de021780e08b3556cf99bfedec2acc791e0da0d5df98c863b847d2734db3778"
+    }
+  ]
+}

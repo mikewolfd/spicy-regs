@@ -3026,7 +3026,7 @@
       {
         "dataset": "scorecard_member_ratings",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-ratings-v2",
+        "policy_version": "scorecards-etl-ratings-v3",
         "identity_columns": [
           "scorecard_id",
           "metric_id",

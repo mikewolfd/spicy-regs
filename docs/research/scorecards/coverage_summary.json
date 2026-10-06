@@ -1,9 +1,9 @@
 {
-  "surveyed_at": "2026-10-05T04:04:54.413681+00:00",
+  "surveyed_at": "2026-10-05",
   "input_sha256": {
-    "scorecard_source_catalog.json": "58d18b88b3c5bd2f7150f7360481b65e7ef3f0b2b0b639a3d4703c755a225170",
+    "scorecard_source_catalog.json": "23932ad5d7d6707698abea55696614a84fed05f7eb59ef514128a35a312edd79",
     "shape_profiles.json": "6339c8189e69b1a9dcb0021c9c70e511e34338e14b66cc85b45102dca25c3ea9",
-    "capture_receipts.json": "4fecf6b1a41a1d443043ce2043e39be285c0f9f4e25c4c0e75e10c3ddb9805a6",
+    "capture_receipts.json": "89c829661e0f3ec4f80a9678f3a77aea4f59f2a2efb4f6e4da57521514c4aa31",
     "schema_breakers.json": "1e0a8cd8e55cc25ae8a2c1465f5fa857b1d416713b24e0f8561021ee58298b06",
     "proposed_schema.json": "ac7f946fb4026a725acd89760db27bbf110e82f08152e03ebfb9199df15546d2",
     "schema_examples.json": "08db294a3d1033f580eac8029688c212809510c4a62a1d5f5fced1f7e00d9932",
@@ -12,19 +12,20 @@
     "work/samples/row_examples.json": "4a6bdaaa392dca0f0444463098591bb5d75245a054eba885c6ec9f69e6268798",
     "work/samples/measurements.json": "4e75d8efcd3f8a24f6ada13a35ef968cd83ed7076d1407ed7e739cf90af94819",
     "work/gate/qualification.json": "3af99eef3ea732dfcded898da0f8420eef1254ff04aabe789b0c42a74426e5c0",
-    "work/gate/freeze_receipt.json": "86d333cf4af455310413bd4f571e2091ffe5fa9e3b7a300ac2c50c32e779bab2"
+    "work/gate/freeze_receipt.json": "86d333cf4af455310413bd4f571e2091ffe5fa9e3b7a300ac2c50c32e779bab2",
+    "work/integration/publisher_recovery_20261005.json": "725dd0268775cfeb070a31cf0105de4cad1ed62b0a2aa7482890d9f273ff51f7"
   },
-  "catalog_series_candidates": 126,
-  "distinct_publisher_candidates": 126,
+  "catalog_series_candidates": 129,
+  "distinct_publisher_candidates": 128,
   "status_counts": {
     "blocked": 2,
-    "discovered": 79,
+    "discovered": 78,
     "profiled": 34,
-    "retired": 0,
+    "retired": 1,
     "supported": 0,
-    "verified": 11
+    "verified": 14
   },
-  "verified_or_profiled_series": 45,
+  "verified_or_profiled_series": 48,
   "profiled_publishers": 34,
   "sample_profiles": 38,
   "profile_depths": {
@@ -46,8 +47,8 @@
     "blocked_undisclosed_formula": 2,
     "not_qualified": 36
   },
-  "captured_responses": 200,
-  "capture_attempts": 204,
+  "captured_responses": 208,
+  "capture_attempts": 212,
   "complete_scorecard_snapshots": 0,
   "research_sample_scopes": 7,
   "schema_frozen": true,

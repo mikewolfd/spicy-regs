@@ -26,6 +26,7 @@ INPUTS = (
     "work/gate/freeze_receipt.json",
 )
 STATUSES = {"discovered", "verified", "profiled", "supported", "blocked", "retired"}
+RECOVERY_FILE = "work/integration/publisher_recovery_20261005.json"
 
 
 def unique(rows: list[dict], key: str) -> dict:
@@ -51,6 +52,30 @@ def validate(data: dict) -> None:
     breakers = unique(data["schema_breakers.json"]["unsupported_shapes"], "id")
     tables = unique(data["proposed_schema.json"]["tables"], "name")
     schema = data["proposed_schema.json"]
+    recovery = data.get(RECOVERY_FILE)
+    if recovery:
+        entries = unique(recovery["publishers"], "publisher_id")
+        linked = {s["publisher_id"] for s in sources.values() if s.get("latest_recovery")}
+        require(linked == set(entries), "Recovery catalog links must cover every assigned publisher")
+        require(
+            recovery.get("format_version") == "scorecard-publisher-recovery-aggregate/1"
+            and recovery["summary"].get("newly_qualified_editions") == 0
+            and recovery["summary"].get("newly_published_editions") == 0,
+            "Recovery cannot establish source qualification or publication",
+        )
+        for source in sources.values():
+            reference = source.get("latest_recovery")
+            if reference:
+                entry = entries[source["publisher_id"]]
+                require(reference.get("source_file") == RECOVERY_FILE, "Recovery catalog source differs")
+                require(reference.get("observed_on") == recovery["observed_on"], "Recovery catalog date differs")
+                for field in ("finding", "next_action", "reported_research_result", "result", "report"):
+                    require(
+                        reference.get(field) == entry.get(field),
+                        f"Recovery catalog field differs: {source['publisher_id']}/{field}",
+                    )
+    else:
+        require(not any(s.get("latest_recovery") for s in sources.values()), "Recovery catalog source is missing")
     require(type(schema["frozen"]) is bool, "Schema freeze status must be explicit")
     if schema["frozen"]:
         receipt = data["work/gate/freeze_receipt.json"]
@@ -82,6 +107,20 @@ def validate(data: dict) -> None:
         require(bool(source["discovered_via"]), f"No discovery evidence: {key}")
         ids = source["verification_capture_ids"]
         require(set(ids) <= captures.keys(), f"Unknown verification capture: {key}")
+        if status == "retired":
+            outcome = source.get("latest_discovery_outcome", {})
+            require(
+                outcome.get("outcome") == "retired_confirmed"
+                and bool(outcome.get("capture_ids"))
+                and set(outcome["capture_ids"]) <= set(ids)
+                and any(
+                    captures[k]["capture_complete"]
+                    and captures[k]["http_status"] == 200
+                    and captures[k].get("review_status") == "original_publisher_retirement_notice"
+                    for k in outcome["capture_ids"]
+                ),
+                f"Retirement needs an original publisher closure notice: {key}",
+            )
         if status in {"verified", "profiled"}:
             require(bool(source["scorecard_index_url"] and source["last_verified_at"]), f"Missing verification: {key}")
             require(
@@ -223,10 +262,18 @@ def cell(value: object) -> str:
 
 def generate(directory: Path) -> dict[str, str]:
     raw = {name: (directory / name).read_bytes() for name in INPUTS}
+    if (directory / RECOVERY_FILE).exists():
+        raw[RECOVERY_FILE] = (directory / RECOVERY_FILE).read_bytes()
     data = {name: json.loads(value) for name, value in raw.items()}
     validate(data)
     catalog = data["scorecard_source_catalog.json"]
     sources = catalog["sources"]
+    for source in sources:
+        if source.get("latest_recovery"):
+            require(
+                source["latest_recovery"].get("source_sha256") == hashlib.sha256(raw[RECOVERY_FILE]).hexdigest(),
+                f"Recovery catalog pin differs: {source['publisher_id']}",
+            )
     profiles = data["shape_profiles.json"]["profiles"]
     captures = data["capture_receipts.json"]["captures"]
     summary = {
@@ -261,13 +308,20 @@ def generate(directory: Path) -> dict[str, str]:
         intro,
         f"Observed through {catalog['surveyed_at']}.\n\n",
         "Counts and exact input hashes: [coverage_summary.json](coverage_summary.json). Candidates include unverified historical leads and mixed election guides.\n\n",
-        "| Publisher / series | Status | Original location | Scope note |\n| --- | --- | --- | --- |\n",
+        "Latest completed investigations appear in the [recovery rollup](work/integration/publisher_recovery_20261005.md). Their original-source, partial-data and archive findings guide further work; qualification remains in the separate integration ledger.\n\n",
+        "| Publisher / series | Status | Original location | Scope note | Latest recovery |\n| --- | --- | --- | --- | --- |\n",
     ]
     for source in sources:
         url = source["scorecard_index_url"]
         location = f"[Publisher]({url})" if url else "Discovery lead only"
+        recovery_note = source.get("latest_recovery", {}).get("finding")
+        recovery_note = (
+            f"[{cell(recovery_note)}](work/integration/publisher_recovery_20261005.md)"
+            if recovery_note
+            else "Not assigned to recovery review"
+        )
         report.append(
-            f"| {cell(source['publisher_name'])} / {cell(source['scorecard_name'])} | {source['discovery_status']} | {location} | {cell(source['notes'])} |\n"
+            f"| {cell(source['publisher_name'])} / {cell(source['scorecard_name'])} | {source['discovery_status']} | {location} | {cell(source['notes'])} | {recovery_note} |\n"
         )
     features = sorted({feature for p in profiles for feature in p["features"]})
     matrix = [

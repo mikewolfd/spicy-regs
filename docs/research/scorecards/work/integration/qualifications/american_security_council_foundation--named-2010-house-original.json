@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "american_security_council_foundation",
+  "scorecard_id": "american_security_council_foundation:named-2010-house-original",
+  "source_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+  "parser_version": "ascf-named-2010-qualified-originals/1",
+  "reader_sha256": "9c5af1f22a44e144c5bcb5c10154ca87b298b966fabc659aced7bbe39159afba",
+  "capture_manifest_sha256": "a13aab2c91e0c95f65843b9b5c287229178bcbf765224a348bc075d383c4d583",
+  "native_reference_sha256": "5da2e38ad49a643b5e210b244892757d16f88e1e25be3a16f1a3c63fc263ddc3",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "39c8327afc09611486f42bcc6620a77bd3a09b987a255b47bead128c37902b27",
+  "completeness_rule": "Complete only for the named archived chamber original and its exact reviewed asset. All 437 source member occurrences, ten actions, ten keyed cells per occurrence, printed metric columns, target marks, full legends and paragraph context pass pinned shape checks. Exact original PDF bytes and URL agree on full reread. NANA remains unresolved name-area context with keyed columns1/2 empty; P and empty totals/minus cells stay literal. No score, formula, Congress, session, edition year or official member/action identity is inferred.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 66,
+    "scorecard_metrics": 2,
+    "scorecard_items": 10,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 437,
+    "scorecard_member_ratings": 874,
+    "scorecard_member_item_results": 4370
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "c6249ae42d81768fb76d824751a5ea2e210178576dce0fefaedd6e7cda071619"
+}

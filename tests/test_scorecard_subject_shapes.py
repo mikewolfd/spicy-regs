@@ -1,9 +1,9 @@
 """Domain conversion preserves publisher meaning and exact conversion inputs."""
 
-from decimal import Decimal
 import json
 
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 import duckdb
 from spicy_docs.schemas.scorecard_tables import SCORECARD_TABLES
@@ -72,10 +72,10 @@ def test_exact_numeric_and_status_facts():
         value_status_text="not graded",
     )
     mapped = map_source_row("scorecard_member_ratings", before)
-    assert mapped["value_number"] == Decimal("97.123456789012345")
+    assert mapped["value_number"] == "+097.123456789012345"
     assert mapped["value_status_text"] == "not graded"
     assert restore_source_row("scorecard_member_ratings", mapped) == before
-    assert subject_schema("scorecard_member_ratings").field("value_number").type == pa.decimal128(38, 19)
+    assert subject_schema("scorecard_member_ratings").field("value_number").type == pa.string()
     before = row("scorecard_metric_items", counts_toward_metric="false", weight_number="-2.00")
     mapped = map_source_row("scorecard_metric_items", before)
     assert mapped["counts_toward_metric"] is False
@@ -94,12 +94,34 @@ def test_nineteen_digit_rating_survives_arrow_duckdb_and_exact_source_replay(lit
         found = connection.execute("SELECT value_number FROM ratings").fetchone()
         assert found is not None
         value = found[0]
-    assert value == Decimal(literal)
+    assert value == literal
     assert restore_source_row("scorecard_member_ratings", mapped) == before
 
 
-@pytest.mark.parametrize("value", ["NaN", "1e2", "0.00000000000000000001", "10000000000000000000"])
-def test_numeric_overflow_and_rounding_refuse(value):
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "88.888888888888885730921174399554729461669921875",
+        "-0.00000000000000000000000000000000000000000000001",
+        "+00088.888888888888885730921174399554729461669921875",
+        "10000000000000000000",
+    ],
+)
+def test_rating_lexeme_survives_parquet_duckdb_without_a_precision_bound(tmp_path, literal):
+    before = row("scorecard_member_ratings", value_text=literal, value_number=literal)
+    mapped = map_source_row("scorecard_member_ratings", before)
+    path = tmp_path / "ratings.parquet"
+    pq.write_table(pa.Table.from_pylist([mapped], schema=subject_schema("scorecard_member_ratings")), path)
+    with duckdb.connect() as connection:
+        declared = connection.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(path)]).fetchall()
+        assert next(value[1] for value in declared if value[0] == "value_number") == "VARCHAR"
+        assert connection.execute("SELECT value_number FROM read_parquet(?)", [str(path)]).fetchone() == (literal,)
+    assert mapped["value_number"] == literal
+    assert restore_source_row("scorecard_member_ratings", mapped) == before
+
+
+@pytest.mark.parametrize("value", ["NaN", "1e2", "Infinity", "94%", " 94", "", "A+"])
+def test_non_decimal_rating_text_refuses(value):
     with pytest.raises((ValueError, pa.ArrowInvalid)):
         map_source_row("scorecard_member_ratings", row("scorecard_member_ratings", value_number=value))
 

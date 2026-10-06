@@ -1,0 +1,93 @@
+{
+  "schema_version": "1",
+  "acquisition_limits": {
+    "max_bytes": 67108864,
+    "max_requests": 6000
+  },
+  "entries": [
+    {
+      "adapter": "united_transportation",
+      "reader_sha256": "89bcb512cf63c4ebdd27158c6670f3843d6e8b9b1967dda19104966040354e3d",
+      "edition": {
+        "publisher_id": "united_transportation",
+        "edition_id": "2012-10-26-post-18264-retrospective-assessment",
+        "source_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+        "title": "Why Obama-Biden deserve your vote Nov. 6",
+        "year": null,
+        "congress": null,
+        "chamber": "UTU Senate",
+        "is_current": false
+      },
+      "captures_root": "finish-20261004/root/utu-reader-2012-v1/private/sequence",
+      "manifest_sha256": "16ba42d2d581b0075e380b1c89f96542599170b9e461a9f48f9168ddb71b6132",
+      "reference_file": "finish-20261004/root/utu-reader-2012-v1/private/assessment-reference.json",
+      "reference_sha256": "053e9705cdd4da948c4a9f75ac771794db2e5464784b300cbb7fcb7bddef80bd",
+      "shared_source_dependencies": {
+        "src/spicy_docs/sources/scorecards/common.py": "fa63946128dbc509fea5bee77a81d54a95e34cfe7f69b88d5ece2cf57856546f",
+        "src/spicy_docs/sources/scorecards/capwiz_html.py": "b2bbe2713d85ddee8a5b381a41e7c7ed9894ffaaed64ce8c33646972062de0b9",
+        "src/spicy_docs/sources/scorecards/qualified_observations.py": "f1af67095a8a02717a0dd2c1f99d1566325910ea5fbd56346491f6f13b28e8e7",
+        "src/spicy_docs/reading/pdf_bytes.py": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
+        "src/spicy_docs/transport/source_acquirer.py": "3ca83b91d7de20bdf114b97e189d937be49b2c1498296f57d98e72d42c15cef2",
+        "src/spicy_docs/transport/captured.py": "a5b2e4f3c182ed0a26a76e6338ce154fd6012c62d6189e80d5b1da069a291212",
+        "src/spicy_docs/schemas/scorecard_tables.py": "39e31e235a8908e877461c7dd7f14f3b8d4743f7dbf433158a3310fc3636c2e0",
+        "src/spicy_docs/schemas/tables.py": "7ff239e8bd719a7a8f3c9288a27dcf01d62812af9381acc74d38171f11e494cc"
+      },
+      "qualification_file": "finish-20261004/root/utu-reader-2012-v1/qualification.json",
+      "qualification_sha256": "9af25d2ff07dca4ab7b6529c762af98d940e243c1807a8e84f242fc50ff07674"
+    },
+    {
+      "adapter": "american_security_council_foundation",
+      "reader_class": "ASCFReader",
+      "reader_sha256": "9c5af1f22a44e144c5bcb5c10154ca87b298b966fabc659aced7bbe39159afba",
+      "edition": {
+        "publisher_id": "american_security_council_foundation",
+        "edition_id": "named-2010-house-original",
+        "source_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "title": "HOUSE VOTES",
+        "year": null,
+        "congress": null,
+        "chamber": "HOUSE OF REPRESENTATIVES",
+        "is_current": false
+      },
+      "captures_root": "finish-20261004/root/ascf-reader-2010-v1/private/reader-sequence/house",
+      "manifest_sha256": "a13aab2c91e0c95f65843b9b5c287229178bcbf765224a348bc075d383c4d583",
+      "reference_file": "finish-20261004/root/ascf-reader-2010-v1/private/reference-house-tables.json",
+      "reference_sha256": "5da2e38ad49a643b5e210b244892757d16f88e1e25be3a16f1a3c63fc263ddc3",
+      "observations_file": "finish-20261004/root/ascf-reader-2010-v1/private/reviewed-house-2010.json",
+      "observations_sha256": "c6249ae42d81768fb76d824751a5ea2e210178576dce0fefaedd6e7cda071619",
+      "shared_source_dependencies": {
+        "src/spicy_docs/sources/scorecards/common.py": "fa63946128dbc509fea5bee77a81d54a95e34cfe7f69b88d5ece2cf57856546f",
+        "src/spicy_docs/sources/scorecards/qualified_observations.py": "f1af67095a8a02717a0dd2c1f99d1566325910ea5fbd56346491f6f13b28e8e7"
+      },
+      "qualification_file": "finish-20261004/root/ascf-reader-2010-v1/qualification.json",
+      "qualification_sha256": "39c8327afc09611486f42bcc6620a77bd3a09b987a255b47bead128c37902b27"
+    },
+    {
+      "adapter": "american_security_council_foundation",
+      "reader_class": "ASCFReader",
+      "reader_sha256": "9c5af1f22a44e144c5bcb5c10154ca87b298b966fabc659aced7bbe39159afba",
+      "edition": {
+        "publisher_id": "american_security_council_foundation",
+        "edition_id": "named-2010-senate-original",
+        "source_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+        "title": "SENATE VOTES",
+        "year": null,
+        "congress": null,
+        "chamber": "U.S. SENATE",
+        "is_current": false
+      },
+      "captures_root": "finish-20261004/root/ascf-reader-2010-v1/private/reader-sequence/senate",
+      "manifest_sha256": "0f24e472808960c3bdaa26257795b90cd83dbf960ef74a3f56e150d6be34dc74",
+      "reference_file": "finish-20261004/root/ascf-reader-2010-v1/private/reference-senate-tables.json",
+      "reference_sha256": "2f2cb7325fc9d64f9519a54cabcc588f33bb9ea7523c43cd5636205213558e11",
+      "observations_file": "finish-20261004/root/ascf-reader-2010-v1/private/reviewed-senate-2010.json",
+      "observations_sha256": "0801bff0d5ff53af60039a323dbee6c546d3e7f0f42df67b4024d8e74e0027a1",
+      "shared_source_dependencies": {
+        "src/spicy_docs/sources/scorecards/common.py": "fa63946128dbc509fea5bee77a81d54a95e34cfe7f69b88d5ece2cf57856546f",
+        "src/spicy_docs/sources/scorecards/qualified_observations.py": "f1af67095a8a02717a0dd2c1f99d1566325910ea5fbd56346491f6f13b28e8e7"
+      },
+      "qualification_file": "finish-20261004/root/ascf-reader-2010-v1/qualification.json",
+      "qualification_sha256": "39c8327afc09611486f42bcc6620a77bd3a09b987a255b47bead128c37902b27"
+    }
+  ]
+}

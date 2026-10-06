@@ -1,0 +1,403 @@
+{
+  "format_version": "scorecard-reader-package-adoption/1",
+  "status": "passed-installed-replay-and-complete-consumer-gates",
+  "observed_at": "2026-10-05T15:44:09.843888+00:00",
+  "source_commit": "93a674f4ae74d094bf4213cc2c0e1fc9396140be",
+  "version": "0.57.0+scorecards.b945bbdedfe9",
+  "baseline_version": "0.57.0",
+  "wheel": {
+    "status": "passed",
+    "candidate_sha256": "639f36ec78a2a6f43256fdc89c3d204537dddbf16505ba2be281d207b6b32347",
+    "baseline_sha256": "4efc149a18f2222e53dee8e7588cc59fdbd33cadb9a9fcf1851e51329def1dc2",
+    "record_entries_verified": 478,
+    "unchanged_baseline_runtime_files": 462,
+    "changed_runtime_files": [
+      "spicy_docs/sources/scorecards/__init__.py",
+      "spicy_docs/sources/scorecards/american_bakers.py",
+      "spicy_docs/sources/scorecards/capwiz_html.py",
+      "spicy_docs/sources/scorecards/congressional_quarterly.py",
+      "spicy_docs/sources/scorecards/consumer_federation.py",
+      "spicy_docs/sources/scorecards/dav.py",
+      "spicy_docs/sources/scorecards/farm_bureau.py",
+      "spicy_docs/sources/scorecards/machinists.py",
+      "spicy_docs/sources/scorecards/rds_bt50.py",
+      "spicy_docs/sources/scorecards/shriver_2013.py",
+      "spicy_docs/sources/scorecards/teamsters.py",
+      "spicy_docs/sources/scorecards/votervoice_public.py"
+    ],
+    "dependency_metadata_unchanged": true,
+    "unrelated_distribution_files_unchanged": true,
+    "shared_pdf_bytes_sha256": "889dc357391a000f5857516c8eca7fd75f44607791247e98d1fb80c31e925b4c",
+    "all_named_reader_pins_match": true,
+    "plan_sha256": "aa0654c774780a9f74ddd68cfe004a658ed9722cddc135a95ab33bf43edb9a40"
+  },
+  "replay_plan": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/plan-qualified95-v3.json",
+    "sha256": "aa0654c774780a9f74ddd68cfe004a658ed9722cddc135a95ab33bf43edb9a40"
+  },
+  "replay_summary": {
+    "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-installed-replay-v1/summary.json",
+    "sha256": "8bc86ec5fcf2f473a002892c5c95c4ef38434404c12570182a20a427f9588fe6"
+  },
+  "source_network_requests_during_replay": 0,
+  "scopes": [
+    {
+      "scorecard_id": "dav:110-2-house-archived-native",
+      "publisher_id": "dav",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 4,
+        "scorecard_metrics": 1,
+        "scorecard_items": 2,
+        "scorecard_metric_items": 2,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 442,
+        "scorecard_member_ratings": 442,
+        "scorecard_member_item_results": 884
+      }
+    },
+    {
+      "scorecard_id": "dav:109-2-both-archived-native",
+      "publisher_id": "dav",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 12,
+        "scorecard_metrics": 2,
+        "scorecard_items": 9,
+        "scorecard_metric_items": 9,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 538,
+        "scorecard_member_ratings": 538,
+        "scorecard_member_item_results": 2252
+      }
+    },
+    {
+      "scorecard_id": "farm_bureau:115-senate-original-archived-key-vote-tables",
+      "publisher_id": "farm_bureau",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 7,
+        "scorecard_metrics": 0,
+        "scorecard_items": 4,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 100,
+        "scorecard_member_ratings": 0,
+        "scorecard_member_item_results": 400
+      }
+    },
+    {
+      "scorecard_id": "machinists:3709",
+      "publisher_id": "machinists",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 497,
+        "scorecard_metrics": 4,
+        "scorecard_items": 47,
+        "scorecard_metric_items": 69,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 447,
+        "scorecard_member_ratings": 1788,
+        "scorecard_member_item_results": 3596
+      }
+    },
+    {
+      "scorecard_id": "shriver:2013-original-pdf",
+      "publisher_id": "shriver",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 114,
+        "scorecard_metrics": 4,
+        "scorecard_items": 36,
+        "scorecard_metric_items": 36,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 534,
+        "scorecard_member_ratings": 1068,
+        "scorecard_member_item_results": 9612
+      }
+    },
+    {
+      "scorecard_id": "teamsters:115-2-house-archived-native",
+      "publisher_id": "teamsters",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 4,
+        "scorecard_metrics": 1,
+        "scorecard_items": 2,
+        "scorecard_metric_items": 2,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 445,
+        "scorecard_member_ratings": 445,
+        "scorecard_member_item_results": 890
+      }
+    },
+    {
+      "scorecard_id": "consumer_federation:2000-november-defeated-senators-lifetime-ratings",
+      "publisher_id": "consumer_federation",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 1,
+        "scorecard_metrics": 1,
+        "scorecard_items": 0,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 4,
+        "scorecard_member_ratings": 4,
+        "scorecard_member_item_results": 0
+      }
+    },
+    {
+      "scorecard_id": "congressional_quarterly:2025-presidential-support-native-tables",
+      "publisher_id": "congressional_quarterly",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 2,
+        "scorecard_metrics": 6,
+        "scorecard_items": 0,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 545,
+        "scorecard_member_ratings": 1635,
+        "scorecard_member_item_results": 0
+      }
+    },
+    {
+      "scorecard_id": "congressional_quarterly:2025-participation-native-tables",
+      "publisher_id": "congressional_quarterly",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 2,
+        "scorecard_metrics": 6,
+        "scorecard_items": 0,
+        "scorecard_metric_items": 0,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 546,
+        "scorecard_member_ratings": 1638,
+        "scorecard_member_item_results": 0
+      }
+    },
+    {
+      "scorecard_id": "american_bakers:2351-1541",
+      "publisher_id": "american_bakers",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 2,
+        "scorecard_metrics": 1,
+        "scorecard_items": 1,
+        "scorecard_metric_items": 1,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 431,
+        "scorecard_member_ratings": 431,
+        "scorecard_member_item_results": 431
+      }
+    },
+    {
+      "scorecard_id": "american_bakers:2351-1413",
+      "publisher_id": "american_bakers",
+      "status": "passed-full-source-reference-replay",
+      "counts": {
+        "scorecard_publishers": 1,
+        "scorecards": 1,
+        "scorecard_snapshots": 1,
+        "scorecard_methodologies": 4,
+        "scorecard_metrics": 1,
+        "scorecard_items": 3,
+        "scorecard_metric_items": 3,
+        "scorecard_metric_components": 0,
+        "scorecard_members": 531,
+        "scorecard_member_ratings": 531,
+        "scorecard_member_item_results": 961
+      }
+    }
+  ],
+  "compatible_prior_scopes": [
+    "common_cause:2016-original",
+    "common_cause:2016-revised",
+    "common_cause:2018-archived",
+    "common_cause:2020-archived",
+    "common_cause:2022-archived",
+    "common_cause:2024-publisher-linked",
+    "bread_world:113-as-of-july-2014-pdf",
+    "nasw:4135-1848",
+    "nasw:4135-1729",
+    "lcv:2025",
+    "afscme:2025-2026",
+    "defenders_action:2005",
+    "defenders_action:2005-2006",
+    "food_policy_action:lifetime-archived-pdf",
+    "few:117-first",
+    "few:117-second",
+    "iava:2008-original-report-pdf",
+    "public_citizen:vchart00-senate-archived-html",
+    "public_citizen:vchart00-house-archived-html",
+    "nra_pvf:2026-11-03-general-alabama-federal-incumbents",
+    "nra_pvf:2026-11-03-general-alaska-federal-incumbents",
+    "nra_pvf:2026-11-03-general-arizona-federal-incumbents",
+    "nra_pvf:2026-11-03-general-arkansas-federal-incumbents",
+    "nra_pvf:2026-11-03-general-california-federal-incumbents",
+    "nra_pvf:2026-11-03-general-colorado-federal-incumbents",
+    "nra_pvf:2026-11-03-general-connecticut-federal-incumbents",
+    "nra_pvf:2026-11-03-general-delaware-federal-incumbents",
+    "nra_pvf:2026-11-03-general-florida-federal-incumbents",
+    "nra_pvf:2026-11-03-general-georgia-federal-incumbents",
+    "nra_pvf:2026-11-03-general-hawaii-federal-incumbents",
+    "nra_pvf:2026-11-03-general-idaho-federal-incumbents",
+    "nra_pvf:2026-11-03-general-illinois-federal-incumbents",
+    "nra_pvf:2026-11-03-general-indiana-federal-incumbents",
+    "nra_pvf:2026-11-03-general-iowa-federal-incumbents",
+    "nra_pvf:2026-11-03-general-kansas-federal-incumbents",
+    "nra_pvf:2026-11-03-general-kentucky-federal-incumbents",
+    "nra_pvf:2026-11-03-general-louisiana-federal-incumbents",
+    "nra_pvf:2026-11-03-general-maine-federal-incumbents",
+    "nra_pvf:2026-11-03-general-maryland-federal-incumbents",
+    "nra_pvf:2026-11-03-general-massachusetts-federal-incumbents",
+    "nra_pvf:2026-11-03-general-michigan-federal-incumbents",
+    "nra_pvf:2026-11-03-general-minnesota-federal-incumbents",
+    "nra_pvf:2026-11-03-general-mississippi-federal-incumbents",
+    "nra_pvf:2026-11-03-general-missouri-federal-incumbents",
+    "nra_pvf:2026-11-03-general-montana-federal-incumbents",
+    "nra_pvf:2026-11-03-general-nebraska-federal-incumbents",
+    "nra_pvf:2026-11-03-general-nevada-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-hampshire-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-jersey-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-mexico-federal-incumbents",
+    "nra_pvf:2026-11-03-general-new-york-federal-incumbents",
+    "nra_pvf:2026-11-03-general-north-carolina-federal-incumbents",
+    "nra_pvf:2026-11-03-general-north-dakota-federal-incumbents",
+    "nra_pvf:2026-11-03-general-ohio-federal-incumbents",
+    "nra_pvf:2026-11-03-general-oklahoma-federal-incumbents",
+    "nra_pvf:2026-11-03-general-oregon-federal-incumbents",
+    "nra_pvf:2026-11-03-general-pennsylvania-federal-incumbents",
+    "nra_pvf:2026-11-03-general-rhode-island-federal-incumbents",
+    "nra_pvf:2026-11-03-general-south-carolina-federal-incumbents",
+    "nra_pvf:2026-11-03-general-south-dakota-federal-incumbents",
+    "nra_pvf:2026-11-03-general-tennessee-federal-incumbents",
+    "nra_pvf:2026-11-03-general-texas-federal-incumbents",
+    "nra_pvf:2026-11-03-general-utah-federal-incumbents",
+    "nra_pvf:2026-11-03-general-vermont-federal-incumbents",
+    "nra_pvf:2026-11-03-general-virginia-federal-incumbents",
+    "nra_pvf:2026-11-03-general-washington-federal-incumbents",
+    "nra_pvf:2026-11-03-general-west-virginia-federal-incumbents",
+    "nra_pvf:2026-11-03-general-wisconsin-federal-incumbents",
+    "wilberforce:116-revised-5.12.21-pdf",
+    "drug_policy_action:2016-house-all-representatives-archived-html",
+    "uaw:2019-senate-original-pdf",
+    "aft:111-original-pdf",
+    "agc:119-aggregate-key-vote-index",
+    "agc:118-aggregate-key-vote-index",
+    "agc:117-aggregate-key-vote-index",
+    "agc:116-aggregate-key-vote-index",
+    "global_solutions:2010-original-report-pdf",
+    "environment_america:2009-original-report-pdf",
+    "smart_transportation:2023-house-thud-committee",
+    "smart_transportation:2013-14-house-original-pdf",
+    "smart_transportation:2013-14-senate-original-pdf",
+    "communication_workers:2025-native-descending-lists-and-key-vote-grids",
+    "drum_major:2005-original-pdf",
+    "drum_major:2007-original-pdf"
+  ],
+  "independent_reviews": {
+    "receipt": "reader_independent_reviews_breadth_20261005.json",
+    "sha256": "eb4266c8172c6b0c8611f06dd931c37f6a8f64b8b067cff14796de5f9d662b8d"
+  },
+  "checks": {
+    "source_gate": {
+      "command": "./scripts/check",
+      "status": "passed",
+      "source_commit": "93a674f4ae74d094bf4213cc2c0e1fc9396140be",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/survey-source-gate-v1.log",
+        "sha256": "a2ea6dbc83dd8d536714cc14eb0e91c75a92e314030b7b88d5b898cca2e6821e"
+      },
+      "passed": 15593,
+      "skipped": 4,
+      "deselected": 51
+    },
+    "consumer_gate": {
+      "command": "uv run --frozen --no-sync pytest --ignore=site",
+      "status": "passed",
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-consumer-gate-v1.log",
+        "sha256": "475242e62905b48e311e12a7260ae55e587a49a1677bfd49422a1317a715cf65"
+      },
+      "passed": 6624,
+      "skipped": 2,
+      "deselected": 35
+    },
+    "readback_final_guard_and_types": {
+      "status": "passed",
+      "focused_tests": 38,
+      "log": {
+        "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-readback-focused-final-v1.log",
+        "sha256": "67e82aae4d21a8d1f94408a70d6cdbe26d113f4862ca5fe8e3378e0792ffa12f"
+      },
+      "boundary": "Final guard/type-only correction after the full suite, with independent AST equivalence to the successful live public readback; the separate package review also retained five overlay-builder regressions"
+    },
+    "ruff": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-consumer-ruff-v2.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "ty": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-consumer-ty-v2.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "dictionary": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-consumer-dictionary-v1.log",
+      "sha256": "49ddbbb360358a4ea39a2a06dc8c9cb4b4013bda47dc683d76b9ca127049fa3a"
+    },
+    "installed_afp_ijm_default_api_regressions": {
+      "afp": {
+        "status": "PASS",
+        "module_sha256": "120ca60e0718ef69674712978f55c5ee34efa2c618f798befb03b45488963b50",
+        "shared_reader_sha256": "d3b234a7aaf2e7d4e66be513343e7208730392d9ba572c038a4929e2b5c3f0dc",
+        "selected_original_captures": 1071,
+        "original_native_field_assertions": 32919,
+        "exact_whole_family_reference": "PASS"
+      },
+      "ijm": {
+        "status": "PASS",
+        "module_sha256": "22698114ed8b47a3f7419f7468ff66f0a743cd2401d03b4ab04908f5249d6cd6",
+        "shared_reader_sha256": "d3b234a7aaf2e7d4e66be513343e7208730392d9ba572c038a4929e2b5c3f0dc",
+        "selected_original_captures": 969,
+        "original_native_field_assertions": 10162,
+        "exact_whole_family_reference": "PASS"
+      }
+    },
+    "installed_afp_ijm_default_api_receipt": {
+      "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/scorecards-expansion-20261004/finish-20261004/root/breadth95-installed-default-api-v1/receipt.json",
+      "sha256": "8185fe5b35776b9f9c3cb894c1b44de1a27ebf48321570e0da7847dcdd4cbc73"
+    }
+  },
+  "baseline_preservation": "Merged main0.57.0 dependency metadata and all unrelated runtime files remain unchanged; previous evidence and wheels remain retained",
+  "qualification_boundary": "Eight new publishers have complete named source renditions. New source publication is pending; the generated ledger still identifies existing published scopes independently. Automatic registry refresh remains disabled for newly adopted sources."
+}

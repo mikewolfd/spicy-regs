@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "peace_action",
+  "scorecard_id": "peace_action:2010-joint-pdf",
+  "source_url": "https://www.peaceaction.org/wp-content/uploads/2017/05/2010vr.pdf",
+  "parser_version": "peace-action-qualified-2010-pdf/1",
+  "reader_sha256": "e7492c55451c64fa0a41e60bada4891a90def9ba290990bc118e62e5f1db97b3",
+  "capture_manifest_sha256": "d6f89c2b6c6c03e2f91f89ebb6ea1aaf2a2e1aea6035a2701ffc4917e74ca40e",
+  "native_reference_sha256": "31368a0f0a055300b6745232f54bcc9ea8ca62cb641ebbb25ba52c4fd31e5a7a",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "3930417e575c10b6570db942cf5efcd68e79336057ea95b91d486ebf6dfb5953",
+  "completeness_rule": "Complete joint Peace Action / Peace Action West original 2010 PDF: every source member row, published percent, chamber-specific scored description and action symbol reconciles to exact embedded text/font spans and reviewed original page images. PDF bytes are stable across complete rereads. Globe/radiation symbol names remain distinct from NV, Present, inactive and Speaker statuses; source legends and exclusions, literal district punctuation, full roll citations and native item prose survive. No official action conversion, inferred session/date/bill number/weights or score reproduction.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 27,
+    "scorecard_metrics": 2,
+    "scorecard_items": 22,
+    "scorecard_metric_items": 22,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 535,
+    "scorecard_member_ratings": 535,
+    "scorecard_member_item_results": 4880
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "6afd9918b0e78d08c3f71dcb66d5b99afb9cce211ce79365d7c8db97496ff112"
+}

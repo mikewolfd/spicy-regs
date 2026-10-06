@@ -6995,7 +6995,54 @@
       "production_qualified_by_this_inventory": false,
       "rights_status": "unreviewed",
       "next_step": "Follow publisher-linked application/archival leads; inspect missing scripts or resolve access/authority, then test only attributable read-only data routes.",
-      "retirement_status": "not_established"
+      "retirement_status": "not_established",
+      "later_source_observations": [
+        {
+          "publisher_id": "united_transportation",
+          "publisher_name": "United Transportation Union",
+          "source_id": "united_transportation:named-retrospective-assessments",
+          "original_scorecard_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+          "homepage_url": null,
+          "discovery_status": "html_pdf_only_observed",
+          "observed_at": "2026-10-05T23:22:47+00:00",
+          "search_method": [
+            "Existing retained originals and independently reviewed source-reader qualification; no new network research"
+          ],
+          "inspected_urls": [
+            "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+            "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf"
+          ],
+          "evidence_refs": [
+            "extension-utu-post-18264-retrospective",
+            "extension-utu-october-2012-corroboration"
+          ],
+          "search_refs": [],
+          "endpoints": [],
+          "acquisition_alternatives": {
+            "observed_or_previously_reported_formats": [
+              "html",
+              "pdf"
+            ],
+            "linked_export_urls": [],
+            "original_source_urls": [
+              "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+              "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf"
+            ],
+            "profiles": [],
+            "distinction": "Named documents do not establish a publisher rating API"
+          },
+          "uninspected_script_urls": [],
+          "blockers": [],
+          "observations": [
+            "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established."
+          ],
+          "complete_scorecard_coverage": false,
+          "production_qualified_by_this_inventory": false,
+          "rights_status": "unreviewed",
+          "next_step": "Adopt and replay the independently reviewed exact 0.60 installed reader; qualify other scopes separately",
+          "retirement_status": "not_established"
+        }
+      ]
     },
     {
       "publisher_id": "woman_activist",
@@ -7439,6 +7486,90 @@
       "production_qualified_by_this_inventory": false,
       "rights_status": "unreviewed",
       "next_step": "Adopt reviewed readers, replay retained scopes, publish and verify; recover further editions separately",
+      "retirement_status": "not_established"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "source_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+      "homepage_url": "https://northcountrycarpenter.org/",
+      "discovery_status": "html_pdf_only_observed",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "search_method": [
+        "Reviewed exact original regional publisher PDF and private source-faithful qualification"
+      ],
+      "inspected_urls": [
+        "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
+      ],
+      "evidence_refs": [
+        "a5bf4511-92a6-4936-ae32-e0b5752f8aa9"
+      ],
+      "search_refs": [],
+      "endpoints": [],
+      "acquisition_alternatives": {
+        "observed_or_previously_reported_formats": [
+          "pdf"
+        ],
+        "linked_export_urls": [],
+        "original_source_urls": [
+          "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
+        ],
+        "profiles": [],
+        "distinction": "Qualified named PDF does not establish a publisher rating API"
+      },
+      "uninspected_script_urls": [],
+      "blockers": [],
+      "observations": [
+        "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred."
+      ],
+      "complete_scorecard_coverage": false,
+      "production_qualified_by_this_inventory": false,
+      "rights_status": "unreviewed",
+      "next_step": "Publish and verify the qualified named regional scope; recover further editions separately",
+      "retirement_status": "not_established"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "source_id": "american_security_council_foundation:voter_index",
+      "original_scorecard_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "homepage_url": "http://www.ascfusa.org/",
+      "discovery_status": "html_pdf_only_observed",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "search_method": [
+        "Existing retained originals and independently reviewed source-reader qualification; no new network research"
+      ],
+      "inspected_urls": [
+        "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf"
+      ],
+      "evidence_refs": [
+        "extension-ascf-house-named-2010",
+        "extension-ascf-senate-named-2010"
+      ],
+      "search_refs": [],
+      "endpoints": [],
+      "acquisition_alternatives": {
+        "observed_or_previously_reported_formats": [
+          "pdf"
+        ],
+        "linked_export_urls": [],
+        "original_source_urls": [
+          "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf"
+        ],
+        "profiles": [],
+        "distinction": "Named documents do not establish a publisher rating API"
+      },
+      "uninspected_script_urls": [],
+      "blockers": [],
+      "observations": [
+        "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established."
+      ],
+      "complete_scorecard_coverage": false,
+      "production_qualified_by_this_inventory": false,
+      "rights_status": "unreviewed",
+      "next_step": "Adopt and replay the independently reviewed exact 0.60 installed reader; qualify other scopes separately",
       "retirement_status": "not_established"
     }
   ],
@@ -15399,6 +15530,27 @@
       "receipt": "publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "receipt": "publisher_inventory_extension_carpenters_ncsrcc_20261005.json",
+      "receipt_sha256": "13469ee592c4b6155ed0c182c0ae6443ef14c53fc16813bf19ecd2ec274ccf2d",
+      "boundary": "The dated pass is preserved; this later separately attributed publisher and its evidence are in the pinned supplement"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "publisher_inventory_extension_ascf_20261005.json",
+      "receipt_sha256": "46774878d9be766916648ab889335b98541d0a274427bdac98b34ed609a00bf9",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "publisher_inventory_extension_utu_20261005.json",
+      "receipt_sha256": "35bf4e6a0836ec31737eaafdf25882ff28ed297142e00decc6d7cdb6b211b259",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
     }
   ]
 }

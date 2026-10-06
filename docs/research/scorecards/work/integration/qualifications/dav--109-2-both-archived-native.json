@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "dav",
+  "scorecard_id": "dav:109-2-both-archived-native",
+  "source_url": "https://web.archive.org/web/20061121145631id_/http://capwiz.com/dav/scorecard.xc",
+  "parser_version": "dav-named-capwiz-html/2",
+  "reader_sha256": "1272be64ad845112f6a09743f7f6154f4f0cf64e21e54d430d59afe57d0a0238",
+  "capture_manifest_sha256": "57f682295a5cbe0482f23175ea8dd8b45f833e66ff10a5a4c37a385fd854bf2d",
+  "native_reference_sha256": "cb2a2574e8f9d40c27b39214418d455ac25363d0d3e53fd88194bd6286f68822",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "a5bc7e74d23f495abdddde513310d741889b05e32130fe834859a2f2e1d3b720",
+  "completeness_rule": "Complete named original HTML reached closing HTML; every native chamber, all-state filter, measured state subtotal, replacement member occurrence, score and action cell, key-vote explanation, repeated header and legend reconciled; all retained authored facts reread unchanged.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 12,
+    "scorecard_metrics": 2,
+    "scorecard_items": 9,
+    "scorecard_metric_items": 9,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 538,
+    "scorecard_member_ratings": 538,
+    "scorecard_member_item_results": 2252
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

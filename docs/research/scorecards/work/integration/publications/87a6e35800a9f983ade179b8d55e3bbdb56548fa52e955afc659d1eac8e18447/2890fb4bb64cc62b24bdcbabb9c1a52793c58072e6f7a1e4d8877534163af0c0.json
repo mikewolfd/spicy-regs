@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "nra_pvf",
+  "scorecard_id": "nra_pvf:2026-11-03-general-arkansas-federal-incumbents",
+  "source_url": "https://www.nrapvf.org/grades/arkansas",
+  "parser_version": "nra-pvf-public-election-federal-incumbents/2",
+  "reader_sha256": "8368eb8586428877d6a71cb44bcb9256973922d2d1834f12f026d1148edd9f54",
+  "capture_manifest_sha256": "c067575a1a0c2a8c1a61679cae44cb8326e06c03348170ac2544c0a7fdd1da06",
+  "native_reference_sha256": "76cd67f075fa6c8af2935c6662621650d50569e3486104b67b243efdbff64b95",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "c5f7e09f78ed552e4ab16b0c30a2e45a3d06f6a653f36af481c06a9ec769de95",
+  "completeness_rule": "Complete advertised state/election HTML through EOF; every tab, office and candidate context accounted for; exact federal-office/Incumbent filter; source facts and navigation agree on reread. This is the publisher-listed election incumbent cohort, not a complete congressional roster.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 1,
+    "scorecard_metrics": 1,
+    "scorecard_items": 0,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 5,
+    "scorecard_member_ratings": 5,
+    "scorecard_member_item_results": 0
+  },
+  "capture_count": 4,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false
+}

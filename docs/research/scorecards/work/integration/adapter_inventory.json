@@ -10458,7 +10458,110 @@
       "retirement_status": "not_established",
       "exclusion_status": "not_excluded",
       "reviewed_at": "2026-10-03T19:34:49.787516+00:00",
-      "support_status": "unverified_lead"
+      "support_status": "unverified_lead",
+      "later_source_observations": [
+        {
+          "publisher_id": "united_transportation",
+          "publisher_name": "United Transportation Union",
+          "source_id": "united_transportation:named-retrospective-assessments",
+          "task_id": "ss-zhrk",
+          "catalog_state": {
+            "discovery_status": "verified",
+            "scope_status": "named_original_renditions_verified",
+            "rights_status": "unreviewed",
+            "last_verified_at": "2026-10-05T23:22:47+00:00"
+          },
+          "implementation_disposition": "named_readers_pending_installed_consumer_adoption",
+          "original_evidence_level": "original_edition_document_observed",
+          "formats_observed_or_reported": [
+            "html",
+            "pdf"
+          ],
+          "original_source_urls": [
+            "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+            "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf"
+          ],
+          "profile_ids": [],
+          "profile_assessments": [],
+          "source_evidence": [
+            {
+              "requested_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+              "resolved_url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+              "http_status": 200,
+              "content_type": "text/html; charset=UTF-8",
+              "observed_at": "2026-10-05T19:26:35.820184+00:00",
+              "sha256": "fc134e9a91f1f9a8c8869a8eb4411574686eec69ca190b93bb5391d4919c0ebd",
+              "byte_size": 233445,
+              "method": "GET",
+              "capture_id": "extension-utu-post-18264-retrospective",
+              "evidence_policy": "hash_only",
+              "parser_version": "reviewed-source-inventory-extension/1",
+              "body_retained_publicly": false,
+              "capture_complete": true,
+              "source_snapshot_complete": false,
+              "request_outcome": "response_received",
+              "review_status": "original_source_verified",
+              "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+            },
+            {
+              "requested_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+              "resolved_url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+              "http_status": 200,
+              "content_type": "application/pdf",
+              "observed_at": "2026-10-05T19:28:09.952242+00:00",
+              "sha256": "6ebb47439bb6030b2d3d65b659d57988f6a2134cf3aea67043cb5ea864260ef2",
+              "byte_size": 3174562,
+              "method": "GET",
+              "capture_id": "extension-utu-october-2012-corroboration",
+              "evidence_policy": "hash_only",
+              "parser_version": "reviewed-source-inventory-extension/1",
+              "body_retained_publicly": false,
+              "capture_complete": true,
+              "source_snapshot_complete": false,
+              "request_outcome": "response_received",
+              "review_status": "original_source_verified",
+              "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+            }
+          ],
+          "discovery_inputs": [
+            {
+              "kind": "manual_original_publisher_recovery",
+              "url": "https://www.smart-union.org/why-obama-biden-deserve-your-vote-nov-6/",
+              "capture_id": "extension-utu-post-18264-retrospective"
+            },
+            {
+              "kind": "manual_original_publisher_recovery",
+              "url": "https://www.smart-union.org/wp-content/uploads/2022/02/October-2012-SMART-Transportation-Newsletter.pdf",
+              "capture_id": "extension-utu-october-2012-corroboration"
+            }
+          ],
+          "support_status": "implemented_unqualified",
+          "next_action": "Adopt the independently reviewed 0.60 installed reader and replay the exact retained scopes before ledger admission",
+          "catalog_notes": "Only the named UTU original article published October 26, 2012 and its one explicit lifetime UTU Senate assessment; the October 2012 newsletter separately corroborates attribution and value and is not a second rating. Publication date is not evaluation year or source-time Senate membership. The historical UTU Washington Report candidate and modern SMART Transportation Division sources remain separate. Lifetime bounds, Congress, session, denominator and scored items remain unknown; no annual roster, historical backfill, live activation or publication is established.",
+          "known_blockers": [
+            "Exact 0.60 installed-wheel replay and consumer ledger admission are pending; runtime source remains disabled"
+          ],
+          "implementation_state": {
+            "adapter_module_exists": true,
+            "adapter_module_path": "src/spicy_docs/sources/scorecards/united_transportation.py",
+            "registered_enabled": false,
+            "production_supported": false,
+            "qualified_current_whole_edition": false,
+            "state_basis": "Source reader independently reviewed; installed consumer 0.59 does not include this adapter"
+          },
+          "fixture_readiness": {
+            "raw_source_captured": true,
+            "checked_full_edition_fixture": true,
+            "qualification_rule": "Named source references and semantic assets remain private; consumer qualification requires installed-wheel replay"
+          },
+          "related_candidate_ids": [
+            "smart_transportation"
+          ],
+          "retirement_status": "not_established",
+          "exclusion_status": "not_excluded",
+          "reviewed_at": "2026-10-05T23:22:47+00:00"
+        }
+      ]
     },
     "woman_activist": {
       "publisher_id": "woman_activist",
@@ -11138,6 +11241,159 @@
       "reviewed_at": "2026-10-05T04:04:54.413681+00:00",
       "pdf_processing_requirement": "Use shared SpicyDocs/DocSpec defaults, Docling/OvisOCR2 and checked data-shaped PDF outcomes",
       "support_status": "implemented_unqualified"
+    },
+    "carpenters_ncsrcc": {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "source_id": "carpenters_ncsrcc:federal-regional",
+      "task_id": "source-qualified:carpenters_ncsrcc",
+      "catalog_state": {
+        "discovery_status": "verified",
+        "scope_status": "named_original_rendition_qualified",
+        "rights_status": "unreviewed",
+        "last_verified_at": "2026-10-05T22:53:44.782835+00:00"
+      },
+      "implementation_disposition": "named_reader_pending_consumer_publication",
+      "original_evidence_level": "original_edition_document_observed",
+      "formats_observed_or_reported": [
+        "pdf"
+      ],
+      "original_source_urls": [
+        "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf"
+      ],
+      "profile_ids": [],
+      "profile_assessments": [],
+      "source_evidence": [
+        {
+          "capture_id": "a5bf4511-92a6-4936-ae32-e0b5752f8aa9",
+          "requested_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "resolved_url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T13:35:34.576058+00:00",
+          "byte_size": 17608886,
+          "sha256": "306d2222ac22bed1d6923097f84a60fbaaa607215721bfcea5f1b52cff100eb7",
+          "method": "GET",
+          "evidence_policy": "hash_only",
+          "parser_version": "carpenters-ncsrcc-qualified-grid/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": true,
+          "request_outcome": "response_received",
+          "review_status": "named_source_qualified",
+          "scope_boundary": "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred."
+        }
+      ],
+      "discovery_inputs": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20251121232831id_/https://northcountrycarpenter.org/sites/default/files/documents/2024%20Carpenter%20Economics%20_0.pdf",
+          "capture_id": "a5bf4511-92a6-4936-ae32-e0b5752f8aa9"
+        }
+      ],
+      "support_status": "verified_unimplemented",
+      "next_action": "Publish and verify the qualified named regional scope; recover further editions separately",
+      "notes": "Only the North Central States regional council's named2024source; no United Brotherhood of Carpenters national-source continuity or coverage inferred."
+    },
+    "american_security_council_foundation": {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "source_id": "american_security_council_foundation:voter_index",
+      "task_id": "source-qualified:american_security_council_foundation",
+      "catalog_state": {
+        "discovery_status": "verified",
+        "scope_status": "named_original_renditions_verified",
+        "rights_status": "unreviewed",
+        "last_verified_at": "2026-10-05T23:22:47+00:00"
+      },
+      "implementation_disposition": "named_readers_pending_installed_consumer_adoption",
+      "original_evidence_level": "original_edition_document_observed",
+      "formats_observed_or_reported": [
+        "pdf"
+      ],
+      "original_source_urls": [
+        "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf"
+      ],
+      "profile_ids": [],
+      "profile_assessments": [],
+      "source_evidence": [
+        {
+          "requested_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "resolved_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T21:21:22.629717+00:00",
+          "sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72",
+          "byte_size": 1183451,
+          "method": "GET",
+          "capture_id": "extension-ascf-house-named-2010",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-source-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+        },
+        {
+          "requested_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "resolved_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T19:33:51.236872+00:00",
+          "sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba",
+          "byte_size": 5439817,
+          "method": "GET",
+          "capture_id": "extension-ascf-senate-named-2010",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-source-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+        }
+      ],
+      "discovery_inputs": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-house-named-2010"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-senate-named-2010"
+        }
+      ],
+      "support_status": "implemented_unqualified",
+      "next_action": "Adopt the independently reviewed 0.60 installed reader and replay the exact retained scopes before ledger admission",
+      "catalog_notes": "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established.",
+      "known_blockers": [
+        "Exact 0.60 installed-wheel replay and consumer ledger admission are pending; runtime source remains disabled"
+      ],
+      "implementation_state": {
+        "adapter_module_exists": true,
+        "adapter_module_path": "src/spicy_docs/sources/scorecards/american_security_council_foundation.py",
+        "registered_enabled": false,
+        "production_supported": false,
+        "qualified_current_whole_edition": false,
+        "state_basis": "Source reader independently reviewed; installed consumer 0.59 does not include this adapter"
+      },
+      "fixture_readiness": {
+        "raw_source_captured": true,
+        "checked_full_edition_fixture": true,
+        "qualification_rule": "Named source references and semantic assets remain private; consumer qualification requires installed-wheel replay"
+      },
+      "related_candidate_ids": [
+        "american_security_council"
+      ],
+      "retirement_status": "not_established",
+      "exclusion_status": "not_excluded",
+      "reviewed_at": "2026-10-05T23:22:47+00:00"
     }
   },
   "validation": {
@@ -11232,6 +11488,27 @@
       "receipt": "publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "observed_at": "2026-10-05T22:53:44.782835+00:00",
+      "receipt": "publisher_inventory_extension_carpenters_ncsrcc_20261005.json",
+      "receipt_sha256": "13469ee592c4b6155ed0c182c0ae6443ef14c53fc16813bf19ecd2ec274ccf2d",
+      "boundary": "The dated pass is preserved; this later separately attributed publisher and its evidence are in the pinned supplement"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "publisher_inventory_extension_ascf_20261005.json",
+      "receipt_sha256": "46774878d9be766916648ab889335b98541d0a274427bdac98b34ed609a00bf9",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "publisher_inventory_extension_utu_20261005.json",
+      "receipt_sha256": "35bf4e6a0836ec31737eaafdf25882ff28ed297142e00decc6d7cdb6b211b259",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
     }
   ]
 }

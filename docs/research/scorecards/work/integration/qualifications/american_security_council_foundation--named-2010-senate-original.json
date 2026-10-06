@@ -1,0 +1,32 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "american_security_council_foundation",
+  "scorecard_id": "american_security_council_foundation:named-2010-senate-original",
+  "source_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+  "parser_version": "ascf-named-2010-qualified-originals/1",
+  "reader_sha256": "9c5af1f22a44e144c5bcb5c10154ca87b298b966fabc659aced7bbe39159afba",
+  "capture_manifest_sha256": "0f24e472808960c3bdaa26257795b90cd83dbf960ef74a3f56e150d6be34dc74",
+  "native_reference_sha256": "2f2cb7325fc9d64f9519a54cabcc588f33bb9ea7523c43cd5636205213558e11",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "39c8327afc09611486f42bcc6620a77bd3a09b987a255b47bead128c37902b27",
+  "completeness_rule": "Complete only for the named archived chamber original and its exact reviewed asset. All 103 source member occurrences, ten actions, ten keyed cells per occurrence, printed metric columns, target marks, full legends and paragraph context pass pinned shape checks. Exact original PDF bytes and URL agree on full reread. NANA remains unresolved name-area context with keyed columns1/2 empty; P and empty totals/minus cells stay literal. No score, formula, Congress, session, edition year or official member/action identity is inferred.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 65,
+    "scorecard_metrics": 3,
+    "scorecard_items": 10,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 103,
+    "scorecard_member_ratings": 309,
+    "scorecard_member_item_results": 1030
+  },
+  "capture_count": 2,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition; remaining editions and renditions stay in scope",
+  "published": false,
+  "qualified_observations_sha256": "0801bff0d5ff53af60039a323dbee6c546d3e7f0f42df67b4024d8e74e0027a1"
+}

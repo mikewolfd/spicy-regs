@@ -883,6 +883,20 @@
       "task_id": "ss-o13k",
       "source_id": "smart_transportation:federal",
       "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "task_id": "source-qualified:carpenters_ncsrcc",
+      "source_id": "carpenters_ncsrcc:federal-regional",
+      "discovery_status_at_expansion": "verified"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "task_id": "source-qualified:american_security_council_foundation",
+      "source_id": "american_security_council_foundation:voter_index",
+      "discovery_status_at_expansion": "verified"
     }
   ],
   "later_inventory_extensions": [
@@ -892,6 +906,20 @@
       "receipt": "publisher_inventory_extension_smart_20261005.json",
       "receipt_sha256": "cbcc0d04430a9ad690c388e6ab718a46c243a7df6ec05c3c53508cf38295aa66",
       "boundary": "The dated pass is preserved; later candidates and evidence are in this pinned supplement"
+    },
+    {
+      "publisher_id": "american_security_council_foundation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "publisher_inventory_extension_ascf_20261005.json",
+      "receipt_sha256": "46774878d9be766916648ab889335b98541d0a274427bdac98b34ed609a00bf9",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
+    },
+    {
+      "publisher_id": "united_transportation",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "receipt": "publisher_inventory_extension_utu_20261005.json",
+      "receipt_sha256": "35bf4e6a0836ec31737eaafdf25882ff28ed297142e00decc6d7cdb6b211b259",
+      "boundary": "Dated records remain unchanged; named-source observations and installed-package limits are in this supplement"
     }
   ]
 }

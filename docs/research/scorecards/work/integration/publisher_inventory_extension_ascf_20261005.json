@@ -1,0 +1,429 @@
+{
+  "extension_id": "named-original-source-american_security_council_foundation-20261005",
+  "observed_at": "2026-10-05T23:22:47+00:00",
+  "publisher_id": "american_security_council_foundation",
+  "source_id": "american_security_council_foundation:voter_index",
+  "task_id": "source-qualified:american_security_council_foundation",
+  "preserved_candidate_ids": [
+    "aauw",
+    "acec",
+    "aclu",
+    "ada",
+    "afge",
+    "afl_cio",
+    "afp",
+    "afscme",
+    "aft",
+    "agc",
+    "aia",
+    "ajp_action",
+    "alaska_wilderness_action",
+    "amalgamated_clothing_workers",
+    "american_bakers",
+    "american_cause",
+    "american_energy_alliance",
+    "american_parents",
+    "american_security_council",
+    "americans_constitutional_action",
+    "animal_welfare_institute",
+    "ara",
+    "arts_action",
+    "atlantic_richfield",
+    "bipac",
+    "boilermakers",
+    "bread_world",
+    "c4ip",
+    "carpenters",
+    "carpenters_ncsrcc",
+    "ccrkba",
+    "childrens_defense",
+    "club_for_growth",
+    "coalition_foreign_military",
+    "committee_education_funding",
+    "common_cause",
+    "communication_workers",
+    "congressional_quarterly",
+    "consumer_federation",
+    "cpac",
+    "dav",
+    "defenders_action",
+    "drug_policy_action",
+    "drum_major",
+    "end_citizens_united",
+    "environment_america",
+    "environmental_action",
+    "farm_bureau",
+    "fcnl",
+    "few",
+    "ffrf_action",
+    "first_focus",
+    "flyersrights",
+    "food_beverage_trades",
+    "food_policy_action",
+    "foreign_policy_america",
+    "frc_action",
+    "free_congress_survival",
+    "freedomworks",
+    "global_solutions",
+    "goa",
+    "heritage_action",
+    "hrc",
+    "human_events",
+    "humane_world_action",
+    "iava",
+    "ijm",
+    "ila",
+    "interreligious_food",
+    "ipaa",
+    "john_birch_historical",
+    "joint_center",
+    "lcv",
+    "leadership_conference",
+    "league_women_voters",
+    "liberty_lobby",
+    "life_underwriters",
+    "lugar_mccourt",
+    "machinists",
+    "march_for_life",
+    "naacp",
+    "nam",
+    "nasw",
+    "national_alliance_seniors",
+    "national_associated_businessmen",
+    "national_audiovisual",
+    "national_council_seniors",
+    "national_farmers_organization",
+    "national_farmers_union",
+    "national_parks_action",
+    "national_womens_caucus",
+    "nea",
+    "network",
+    "new_american",
+    "nfib",
+    "niac_action",
+    "norml",
+    "now",
+    "nra_pvf",
+    "nrf",
+    "ntu",
+    "numbersusa",
+    "peace_action",
+    "planned_parenthood",
+    "public_citizen",
+    "radical_middle",
+    "railway_clerks",
+    "reproductive_freedom",
+    "retail_clerks",
+    "ripon_society",
+    "sace_action",
+    "sane_historical",
+    "sba",
+    "shriver",
+    "smart_transportation",
+    "taxation_representation",
+    "teamsters",
+    "uaw",
+    "united_church_christ",
+    "united_mine_workers",
+    "united_transportation",
+    "us_chamber",
+    "us_student_association",
+    "wilberforce",
+    "woman_activist",
+    "womens_lobby",
+    "write_congressman"
+  ],
+  "related_candidate_ids": [
+    "american_security_council"
+  ],
+  "input_pins": {
+    "scorecard_source_catalog.json": "774f95285437a3adcda26f01bc7e6a84911e74399a45626d708f895bacdca868",
+    "capture_receipts.json": "f3239581be6b6e1f3b045bae06b4b98e57741df9c3415a6fb9487493c9075177",
+    "work/integration/adapter_tasks.json": "e1612ec7b21f5cafbf6a386bdc242268631d4c18bf72a88bf4f0dfaae8c5ec69",
+    "work/integration/adapter_inventory.json": "fd7ecf934f0d30abfc9045534cc762cc63e20d766610264536fe413cc75e0ace",
+    "work/integration/publisher_api_inventory.json": "24cb134d5e23124c44d7dbbb00ec75b0155995c80a2965b1a656f8c7b8eff887"
+  },
+  "source_pins": {
+    "source_commit": "af915eb63745b596b1ad4d47c4e84a8faefccc9f",
+    "qualification": {
+      "path": "ascf-reader-2010-v1/qualification.json",
+      "sha256": "39c8327afc09611486f42bcc6620a77bd3a09b987a255b47bead128c37902b27"
+    },
+    "frozen_entries": {
+      "path": "ascf-reader-2010-v1/integration-entries.json",
+      "sha256": "1ca4ea4a526494ce78ed3032baaf891a169a26953775b5b51c5602c8d3f50292"
+    },
+    "reader_pin_delta": {
+      "path": "ascf-reader-2010-v1/typing-fix.json",
+      "sha256": "2cbdeb31f3e7c4dadc522dd4e69d1b4c640ae1722d4bde4cbefc649060bcb8e4"
+    },
+    "independent_review": {
+      "path": "ascf-reader-2010-v1/independent-review.md",
+      "sha256": "61a2729668a1e5f033648d37a8bff058efcb2d99c0caebbd39a6b1b5bb63efac"
+    },
+    "package_replay_plan": {
+      "path": "source-package-060-v1/plan-qualified124-v1.json",
+      "sha256": "2c11322cec7142930c331a56755d6f16dd2703e858f8a23eb5ec146c24e179ab"
+    },
+    "package_replay_bindings": {
+      "path": "source-package-060-v1/plan-bindings.json",
+      "sha256": "3cfd30979dc369bb9227e9d4340c5cab78dae35aa90947b0d686e50638e7007f"
+    }
+  },
+  "boundary": "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established.",
+  "baseline_consumer_commit": "f19bb609287d6d09043405ea81398f3c9493e910",
+  "added_records": {
+    "catalog": {
+      "source_id": "american_security_council_foundation:voter_index",
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "publisher_aliases": [
+        "ASCF"
+      ],
+      "homepage_url": "http://www.ascfusa.org/",
+      "scorecard_name": "HOUSE VOTES and SENATE VOTES",
+      "scorecard_index_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "archive_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "first_known_year": null,
+      "last_known_year": null,
+      "congresses_available": [],
+      "chamber_scope": "both",
+      "source_format": [
+        "pdf"
+      ],
+      "machine_readable": "partial",
+      "discovered_via": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-house-named-2010"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-senate-named-2010"
+        }
+      ],
+      "discovered_at": "2026-10-05T19:33:51.236872+00:00",
+      "last_verified_at": "2026-10-05T23:22:47+00:00",
+      "discovery_status": "verified",
+      "rights_status": "unreviewed",
+      "notes": "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established.",
+      "verification_capture_ids": [
+        "extension-ascf-house-named-2010",
+        "extension-ascf-senate-named-2010"
+      ],
+      "scope_status": "named_original_renditions_verified"
+    },
+    "captures": [
+      {
+        "requested_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "resolved_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "observed_at": "2026-10-05T21:21:22.629717+00:00",
+        "sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72",
+        "byte_size": 1183451,
+        "method": "GET",
+        "capture_id": "extension-ascf-house-named-2010",
+        "evidence_policy": "hash_only",
+        "parser_version": "reviewed-source-inventory-extension/1",
+        "body_retained_publicly": false,
+        "capture_complete": true,
+        "source_snapshot_complete": false,
+        "request_outcome": "response_received",
+        "review_status": "original_source_verified",
+        "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+      },
+      {
+        "requested_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+        "resolved_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "observed_at": "2026-10-05T19:33:51.236872+00:00",
+        "sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba",
+        "byte_size": 5439817,
+        "method": "GET",
+        "capture_id": "extension-ascf-senate-named-2010",
+        "evidence_policy": "hash_only",
+        "parser_version": "reviewed-source-inventory-extension/1",
+        "body_retained_publicly": false,
+        "capture_complete": true,
+        "source_snapshot_complete": false,
+        "request_outcome": "response_received",
+        "review_status": "original_source_verified",
+        "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+      }
+    ],
+    "task": {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "task_id": "source-qualified:american_security_council_foundation",
+      "source_id": "american_security_council_foundation:voter_index",
+      "discovery_status_at_expansion": "verified"
+    },
+    "adapter": {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "source_id": "american_security_council_foundation:voter_index",
+      "task_id": "source-qualified:american_security_council_foundation",
+      "catalog_state": {
+        "discovery_status": "verified",
+        "scope_status": "named_original_renditions_verified",
+        "rights_status": "unreviewed",
+        "last_verified_at": "2026-10-05T23:22:47+00:00"
+      },
+      "implementation_disposition": "named_readers_pending_installed_consumer_adoption",
+      "original_evidence_level": "original_edition_document_observed",
+      "formats_observed_or_reported": [
+        "pdf"
+      ],
+      "original_source_urls": [
+        "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf"
+      ],
+      "profile_ids": [],
+      "profile_assessments": [],
+      "source_evidence": [
+        {
+          "requested_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "resolved_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T21:21:22.629717+00:00",
+          "sha256": "700b016dccc35695044b9d0a639d799146c6fb3709b1ba7996741374a4560b72",
+          "byte_size": 1183451,
+          "method": "GET",
+          "capture_id": "extension-ascf-house-named-2010",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-source-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+        },
+        {
+          "requested_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "resolved_url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "http_status": 200,
+          "content_type": "application/pdf",
+          "observed_at": "2026-10-05T19:33:51.236872+00:00",
+          "sha256": "53f85a3838e06d5a1fe2d1d46da53d9eb3db63070b4bdb5eb6cee5b273228eba",
+          "byte_size": 5439817,
+          "method": "GET",
+          "capture_id": "extension-ascf-senate-named-2010",
+          "evidence_policy": "hash_only",
+          "parser_version": "reviewed-source-inventory-extension/1",
+          "body_retained_publicly": false,
+          "capture_complete": true,
+          "source_snapshot_complete": false,
+          "request_outcome": "response_received",
+          "review_status": "original_source_verified",
+          "scope_boundary": "Research capture metadata only; complete named-source qualification is separately pinned"
+        }
+      ],
+      "discovery_inputs": [
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-house-named-2010"
+        },
+        {
+          "kind": "manual_original_publisher_recovery",
+          "url": "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf",
+          "capture_id": "extension-ascf-senate-named-2010"
+        }
+      ],
+      "support_status": "implemented_unqualified",
+      "next_action": "Adopt the independently reviewed 0.60 installed reader and replay the exact retained scopes before ledger admission",
+      "catalog_notes": "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established.",
+      "known_blockers": [
+        "Exact 0.60 installed-wheel replay and consumer ledger admission are pending; runtime source remains disabled"
+      ],
+      "implementation_state": {
+        "adapter_module_exists": true,
+        "adapter_module_path": "src/spicy_docs/sources/scorecards/american_security_council_foundation.py",
+        "registered_enabled": false,
+        "production_supported": false,
+        "qualified_current_whole_edition": false,
+        "state_basis": "Source reader independently reviewed; installed consumer 0.59 does not include this adapter"
+      },
+      "fixture_readiness": {
+        "raw_source_captured": true,
+        "checked_full_edition_fixture": true,
+        "qualification_rule": "Named source references and semantic assets remain private; consumer qualification requires installed-wheel replay"
+      },
+      "related_candidate_ids": [
+        "american_security_council"
+      ],
+      "retirement_status": "not_established",
+      "exclusion_status": "not_excluded",
+      "reviewed_at": "2026-10-05T23:22:47+00:00"
+    },
+    "api": {
+      "publisher_id": "american_security_council_foundation",
+      "publisher_name": "American Security Council Foundation",
+      "source_id": "american_security_council_foundation:voter_index",
+      "original_scorecard_url": "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+      "homepage_url": "http://www.ascfusa.org/",
+      "discovery_status": "html_pdf_only_observed",
+      "observed_at": "2026-10-05T23:22:47+00:00",
+      "search_method": [
+        "Existing retained originals and independently reviewed source-reader qualification; no new network research"
+      ],
+      "inspected_urls": [
+        "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+        "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf"
+      ],
+      "evidence_refs": [
+        "extension-ascf-house-named-2010",
+        "extension-ascf-senate-named-2010"
+      ],
+      "search_refs": [],
+      "endpoints": [],
+      "acquisition_alternatives": {
+        "observed_or_previously_reported_formats": [
+          "pdf"
+        ],
+        "linked_export_urls": [],
+        "original_source_urls": [
+          "https://web.archive.org/web/20120125114210id_/http://www.ascfusa.org/files/fckfiles/House_Votes_ASCF.pdf",
+          "https://web.archive.org/web/20120125110853id_/http://www.ascfusa.org/files/fckfiles/Senate_Votes_ASCF.pdf"
+        ],
+        "profiles": [],
+        "distinction": "Named documents do not establish a publisher rating API"
+      },
+      "uninspected_script_urls": [],
+      "blockers": [],
+      "observations": [
+        "Only the two named ASCF House/Senate archived originals and their independently reviewed retained inputs. American Security Council Foundation is separately attributed, with literal alias ASCF; the historical American Security Council candidate remains unverified and continuity is not inferred. The named 2010 selectors and dated 2010 actions do not establish a printed edition year, Congress or session; the stale 110th Congress legend remains source context. No historical backfill, live activation or public publication is established."
+      ],
+      "complete_scorecard_coverage": false,
+      "production_qualified_by_this_inventory": false,
+      "rights_status": "unreviewed",
+      "next_step": "Adopt and replay the independently reviewed exact 0.60 installed reader; qualify other scopes separately",
+      "retirement_status": "not_established"
+    }
+  },
+  "validation": {
+    "source_attribution_reviewed": true,
+    "source_bodies_public": false,
+    "consumer_package_adopted": false,
+    "ledger_advanced": false,
+    "runtime_enabled": false,
+    "historical_backfill": false,
+    "published": false
+  },
+  "baseline_identity_correction": {
+    "adapter_tasks": {
+      "publisher_id": "carpenters_ncsrcc",
+      "publisher_name": "North Central States Regional Council of Carpenters",
+      "task_id": "source-qualified:carpenters_ncsrcc",
+      "source_id": "carpenters_ncsrcc:federal-regional",
+      "discovery_status_at_expansion": "verified"
+    },
+    "basis": "The existing catalog, adapter and API inventories already contain this independently attributed Carpenters identity; the clean consumer059 task list omitted it. No new source, qualification or publication is inferred."
+  }
+}

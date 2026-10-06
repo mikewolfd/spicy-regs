@@ -1,0 +1,31 @@
+{
+  "format_version": "scorecard-integration-qualified-scope/1",
+  "qualified": true,
+  "publisher_id": "railway_clerks",
+  "scorecard_id": "railway_clerks:107-1-senate",
+  "source_url": "https://www.goiam.org/news/us-senate-votes-1st-session/",
+  "parser_version": "tcu-rcpl-senate-107-1-native-html/2",
+  "reader_sha256": "31eceb1c7892db2d3f4d30ae6ae668053f9f8ed41f31e888bf19fd50e88ad905",
+  "capture_manifest_sha256": "870817170cd9d0d087b51583abfa78f37ac56e9311a6ce9724f507168997af5b",
+  "native_reference_sha256": "9940ae8f0eadcdea2930f262f4af6dcf05950119d9e994609f4cb29a75549ea7",
+  "native_reference_kind": "source_table_family",
+  "source_qualification_sha256": "fa7fd8353e494ed797cba99e4d3d1daab77fc6715547533b31a64df8d635c02d",
+  "completeness_rule": "Qualified first-session 107th Congress Senate source scope: exact reviewed state-heading order, two full-width member occurrences per state, ordinal action columns matched to same-session captions, original legend and all four printed totals retained. Authored source facts and attribution witnesses agree on reread. Counts are observed publisher occurrences; official roster completeness and other editions are not asserted.",
+  "counts": {
+    "scorecard_publishers": 1,
+    "scorecards": 1,
+    "scorecard_snapshots": 1,
+    "scorecard_methodologies": 15,
+    "scorecard_metrics": 4,
+    "scorecard_items": 11,
+    "scorecard_metric_items": 0,
+    "scorecard_metric_components": 0,
+    "scorecard_members": 100,
+    "scorecard_member_ratings": 400,
+    "scorecard_member_item_results": 1100
+  },
+  "capture_count": 8,
+  "evidence_policy": "hash_only",
+  "qualification_boundary": "Named source rendition only; remaining editions and renditions stay in scope",
+  "published": false
+}
