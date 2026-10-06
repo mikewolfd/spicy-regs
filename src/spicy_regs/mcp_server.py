@@ -2070,36 +2070,33 @@ def _tools() -> list[Tool]:
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
         """Return columns, meanings, row identity, coverage caveats and joins.
 
-        Coverage describes supported output, not live population or freshness.
-        columns are loaded columns with dictionary meanings (declared columns
-        if unavailable); schema_differences compares them. publication gives
-        pinned rows, coverage kind and published_at: pointer move, not source
-        read; last_object_write is a lower bound on that move.
+        Coverage means supported output, not population or freshness. columns
+        gives loaded fields and dictionary meanings (declared fields if unavailable);
+        schema_differences compares them. publication pins rows and coverage;
+        published_at is a pointer move, not a source read. last_object_write
+        bounds that move from below.
         inputs: the parents its producer recorded (none recorded is not none;
         a read that bypassed the download helper is not recorded), built_from
-        beside live. input_table_current compares parent
-        bytes; a family may move for another table. inputs_current is false if
-        any lags, else null if any is unknown. prior_generation is earlier output,
-        not an input; snapshot_inputs are rulemaking snapshot sources.
-        qualification compares live and audited pins, date and disposition for
-        the ledger's publisher only. not_in_ledger means absent from the bundled output ledger,
-        not unevidenced. joins lists outgoing and incoming declarations.
-        detail=true adds full outgoing measurements and ledger statements;
-        incoming measurements link to the child's detailed description, keeping
-        baselines here. joins.incoming_parent names their parent once;
-        incoming_parent_columns supplies their shared complete parent key when
-        present, otherwise each entry carries parent_columns. Missing reason
-        means empty; missing floor_pct means no measured floor.
-        Missing expected_cardinality means unspecified; missing
-        measured_via means measure the child. detail=false names omissions in
-        detail.omitted. receipt_fields: what read_receipt_fields takes here.
-        A view column preserving a source column inherits its meaning; otherwise
-        its declared meaning or null. FEC release_compatibility appears once in
-        publication (relationship if unavailable); detail=false keeps pins,
-        reasons, dependency generations and receipt count. compatible means
-        captured data, interpretation and consumer match the selected release,
-        not current/net money or completeness. Financial eligibility applies
-        only to its named purpose.
+        beside live.
+        input_table_current compares parent bytes; another table can move a
+        family. inputs_current is false if any lags, otherwise null if unknown.
+        prior_generation is earlier output; snapshot_inputs names rulemaking sources.
+        qualification compares live/audited pins, date and disposition for the
+        ledger's publisher. not_in_ledger means absent, not unevidenced.
+        joins gives outgoing/incoming declarations. detail=true adds outgoing
+        measurements and ledger statements; incoming measurements link to the
+        child, retaining baselines. incoming_parent names the shared parent;
+        incoming_parent_columns gives its complete key, otherwise parent_columns
+        appears per entry. Missing reason means empty; floor_pct, no measured
+        floor; expected_cardinality, unspecified; measured_via, measure the child.
+        detail=false lists omissions in detail.omitted. receipt_fields names
+        inputs accepted by read_receipt_fields. Preserved source columns inherit
+        meanings; other view columns use declared meanings or null.
+        FEC release_compatibility is in publication (relationship if unavailable).
+        detail=false retains pins, reasons, dependency generations and receipt
+        count. compatible means captured data, interpretation and consumer match
+        the selected release, not current/net money or completeness. Financial
+        eligibility applies only to its named purpose.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):

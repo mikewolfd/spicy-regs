@@ -309,7 +309,10 @@ def test_describe_omits_only_measurements_and_ledger_statements_by_default_and_s
     full = _tool_data(mcp, "describe_table", {"table": "bill_versions", "detail": True})
     joins = compact["joins"]["outgoing"] + compact["joins"]["incoming"]
     assert joins and all("measurement" not in join for join in joins)
-    assert all({"kind", "reason", "baseline_keys", "baseline_missing", "floor_pct"} <= set(join) for join in joins)
+    assert all({"kind", "baseline_keys", "baseline_missing"} <= set(join) for join in joins)
+    # Incoming compact groups factor shared parent fields and omit empty reasons/null floors.
+    # A missing floor means unmeasured, never a zero-percent floor; populated values stay exact.
+    assert all(join.get("floor_pct") is None or 0 <= join["floor_pct"] <= 100 for join in joins)
     assert "ledger_statements" not in compact["qualification"]
     assert {"status", "generation", "live_pin", "ledger_pin", "ledger_disposition", "ledger_tasks"} <= set(compact["qualification"])
     # bill_versions has receipts: its receipt fields' meanings are a third key only the detailed reply carries.
