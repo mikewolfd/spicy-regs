@@ -765,8 +765,21 @@ def contract_schemas() -> dict[str, list[tuple[str, str]]]:
 
 
 def contract_column_prose(table: str) -> dict[str, str]:
-    """The contract's own sentence per column, for a ``columns_from: spicy_docs`` entry."""
-    return dict(_contracts()[table].descriptions)
+    """Source column prose, including this repository's added Record enrichment."""
+    descriptions = dict(_contracts()[table].descriptions)
+    if table == "house_communications":
+        # SpicyDocs shapes publisher-decomposed rows with these slots empty.
+        # This builder also fills them from a uniquely qualified printed entry.
+        descriptions.update({
+            "record_package_id": "The exact Congressional Record package that printed the communication. "
+                "May also be filled on a Congress.gov API row from a unique captured entry with matching Congress, "
+                "communication type and number. Missing, ambiguous or incomplete reads leave it empty.",
+            "record_granule_id": "The exact House executive-communications granule that printed the entry. "
+                "Paired with record_package_id; repeated qualifying entries do not supply a scalar locator.",
+            "record_entry_text": "The entry's printed text, retained beside the original Congress.gov fields. "
+                "An API row keeps its original abstract, report nature and source route when this field is filled.",
+        })
+    return descriptions
 
 
 def contract_grain(table: str) -> str:
