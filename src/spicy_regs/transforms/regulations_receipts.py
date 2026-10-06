@@ -37,6 +37,7 @@ from spicy_regs.transforms.regulations_shape import (
     RECEIPT_COLUMNS,
     TYPES,
     shape_record,
+    shape_records,
     subject_schema,
 )
 
@@ -108,6 +109,46 @@ def _processor_input(dataset, row):
     if any(exact_json(shaped.get(name)) != exact_json(row.get(name)) for name in RECEIPT_COLUMNS[dataset]):
         raise ValueError(f"{dataset}: retained processor input differs from selected processing evidence")
     return dict(value)
+
+
+def _batch_equality_type(dtype):
+    """Types whose Arrow equality proves equality of normalized exact values."""
+    if pa.types.is_list(dtype):
+        return _batch_equality_type(dtype.value_type)
+    if pa.types.is_struct(dtype):
+        return all(_batch_equality_type(field.type) for field in dtype)
+    # Floating equality merges signed zero; unproven types use exact_json.
+    return (pa.types.is_string(dtype) or pa.types.is_integer(dtype) or
+            pa.types.is_boolean(dtype) or pa.types.is_date32(dtype))
+
+
+def _processor_inputs(dataset, rows):
+    """Prove a bounded admitted batch and return every exact retained source row.
+
+    The row function decides an unproven batch, preserving its errors. Receipt
+    admission belongs to the caller's maintained ``read_with_receipts`` read.
+    """
+    rows = list(rows)
+    raw = [row.get("raw_conversion_inputs") for row in rows]
+    schema = subject_schema(dataset)
+    if not all(_batch_equality_type(field.type) for field in schema):
+        return [_processor_input(dataset, row) for row in rows]
+    try:
+        if any(not isinstance(value, Mapping) for value in raw):
+            raise ValueError("Exact retained processor input is required")
+        shaped = shape_records(dataset, raw)
+        reproduced = pa.Table.from_pylist(shaped, schema=schema)
+        selected = pa.Table.from_pylist(rows, schema=schema)
+        if not reproduced.equals(selected):
+            raise ValueError("Retained processor input differs from selected native subject")
+        names = RECEIPT_COLUMNS[dataset]
+        if any(exact_json({name: value.get(name) for name in names}) !=
+               exact_json({name: row.get(name) for name in names})
+               for value, row in zip(shaped, rows)):
+            raise ValueError("Retained processor input differs from selected processing evidence")
+    except (ValueError, TypeError, OverflowError, RecursionError, pa.ArrowException):
+        return [_processor_input(dataset, row) for row in rows]
+    return [dict(value) for value in raw]
 
 
 def read_internal(selected: ReceiptInput) -> Iterable[dict]:

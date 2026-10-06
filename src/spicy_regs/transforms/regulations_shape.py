@@ -351,7 +351,7 @@ def _validate(value, dtype, path):
         raise RegulationsShapeError(f"{path}: expected boolean")
 
 
-def shape_record(dataset, row):
+def _shape_record(dataset, row):
     """Return native fields plus explicitly declared receipt-only input fields.
 
     An omitted source field stays omitted in raw_conversion_inputs; SQL NULL,
@@ -436,6 +436,26 @@ def shape_record(dataset, row):
     schema = subject_schema(dataset)
     for field in schema:
         _validate(shaped.get(field.name), field.type, f"{dataset}.{field.name}")
-    # Arrow checks range/date errors after structural validation prevents loss.
-    pa.Table.from_pylist([{f.name: shaped.get(f.name) for f in schema}], schema=schema)
+    return shaped
+
+
+def shape_record(dataset, row):
+    """Shape one source row and check Arrow range/date rules with the reference schema."""
+    shaped = _shape_record(dataset, row)
+    pa.Table.from_pylist([shaped], schema=subject_schema(dataset))
+    return shaped
+
+
+def shape_records(dataset, rows):
+    """Apply the same mapper and Arrow checks once for a bounded source batch.
+
+    Unproven batches replay the row function, preserving its first exception
+    when an earlier range failure precedes a later structural failure.
+    """
+    rows = list(rows)
+    try:
+        shaped = [_shape_record(dataset, row) for row in rows]
+        pa.Table.from_pylist(shaped, schema=subject_schema(dataset))
+    except (ValueError, TypeError, OverflowError, RecursionError, pa.ArrowException):
+        return [shape_record(dataset, row) for row in rows]
     return shaped

@@ -226,7 +226,7 @@ def materialize_internal(selected, destination, *, source_schema=None):
 
 def _materialize_selected(selected, destination, *, source_schema=None):
     from spicy_regs.transforms.regulations_receipts import policy
-    from spicy_regs.transforms.regulations_shape import shape_record
+    from spicy_regs.transforms.regulations_shape import shape_records
 
     declared = policy(selected.dataset)
     subject, receipts = selected.subjects[0], selected.receipts
@@ -274,7 +274,7 @@ def _materialize_selected(selected, destination, *, source_schema=None):
                         raise etl_bulk.NotBulkEligible('Regulatory base exact processor input is required')
                     if source_schema is not None and any(set(value) != set(source_schema.names) for value in raw):
                         raise etl_bulk.NotBulkEligible("Exact regulatory source field presence differs from retained input")
-                    shaped = [shape_record(selected.dataset, value) for value in raw]
+                    shaped = shape_records(selected.dataset, raw)
                     reproduced = pa.Table.from_pylist(shaped, schema=declared.subject_schema)
                     if not reproduced.equals(table.select(declared.subject_schema.names).cast(declared.subject_schema)):
                         raise etl_bulk.NotBulkEligible('Regulatory base retained processor input differs from subject')
