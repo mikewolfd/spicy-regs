@@ -109,7 +109,7 @@ def _ddl(schema):
     return ', '.join('"' + name.replace('"', '""') + '" ' + dtype for name, dtype in described_schema(schema))
 
 
-def _copy(con, sql, path, *, resources: ExportResources | None = None):
+def _copy(con, sql, path, *, resources: ExportResources | None = None, parameters=None):
     from .iceberg import _sql_str
     options = 'FORMAT PARQUET, COMPRESSION ZSTD'
     if resources is not None:
@@ -117,7 +117,11 @@ def _copy(con, sql, path, *, resources: ExportResources | None = None):
         # DuckDB permits the byte target only when the caller allows reordering.
         if not con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0]:
             options += f", ROW_GROUP_SIZE_BYTES '{_sql_str(resources.row_group_bytes)}'"
-    con.execute(f"COPY ({sql}) TO '{_sql_str(str(path))}' ({options})")
+    statement = f"COPY ({sql}) TO '{_sql_str(str(path))}' ({options})"
+    if parameters is None:
+        con.execute(statement)
+    else:
+        con.execute(statement, parameters)
 
 
 def _rows(path):
@@ -345,8 +349,26 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             # Scoped reads join only selected identities and avoid restoring unrelated agencies.
             selected_ids = (f" SEMI JOIN read_parquet('{iceberg._sql_str(str(ids))}') i USING (record_id)"
                             if where else '')
+            receipt_predicate = f"r.dataset='{dataset}' AND r.outcome='accepted'"
+            parameters = None
+            if where:
+                # Hashed identities span nearly every file's bounds. Read only
+                # narrow headers first; generation bounds can then prune payload
+                # files. Both reads retain the same transaction and exact IDs.
+                generations = con.execute(
+                    f'SELECT DISTINCT r.generation_id FROM {receipts_table()} r{selected_ids} '
+                    f'WHERE {receipt_predicate}').fetchall()
+                parameters = [value for (value,) in generations if value is not None]
+                choices = []
+                if parameters:
+                    choices.append('r.generation_id IN (' + ','.join('?' for _ in parameters) + ')')
+                if any(value is None for (value,) in generations):
+                    choices.append('r.generation_id IS NULL')
+                # Malformed generations remain selected for the reference reader
+                # to refuse; duplicate accepted receipts also remain visible.
+                receipt_predicate += ' AND (' + (' OR '.join(choices) or 'FALSE') + ')'
             _copy(con, f"SELECT r.* FROM {receipts_table()} r{selected_ids} "
-                       f"WHERE r.dataset='{dataset}' AND r.outcome='accepted'", raw_receipts)
+                       f'WHERE {receipt_predicate}', raw_receipts, parameters=parameters)
             receipts = work / 'receipts.parquet'
             write_rows((rebind_receipt(row, generation_id=generation) for row in _rows(raw_receipts)),
                        receipts, RECEIPT_SCHEMA)
