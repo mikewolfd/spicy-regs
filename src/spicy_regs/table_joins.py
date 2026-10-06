@@ -1040,7 +1040,7 @@ def _processing_join(join):
 def _native_join(join):
     def columns(table, names):
         return tuple(_NATIVE_JOIN_FIELDS.get((table, name), name) for name in names
-                     if (table, name) not in _NATIVE_SCOPE_FIELDS)
+                     if (table, name) not in _NATIVE_SCOPE_FIELDS or join.parent == "scorecard_snapshots")
     child, parent = columns(join.child, join.child_columns), columns(join.parent, join.parent_columns)
     if (child, parent) == (join.child_columns, join.parent_columns):
         return join
