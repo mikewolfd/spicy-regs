@@ -53,7 +53,7 @@ HOUSE_SCHEMA = pa.schema([
         ("input_generation", S), ("input_processing_sha256", S),
     ]))),
 ])
-POLICIES = {name: DatasetPolicy(name, DETAIL_SCHEMA, ("generation_id", "attempt_id"),
+POLICIES: dict[str, DatasetPolicy] = {name: DatasetPolicy(name, DETAIL_SCHEMA, ("generation_id", "attempt_id"),
                               ("recorded_event",), policy_version="navigation-read-outcomes/1")
             for name in DETAIL_TABLES.values()}
 POLICIES[HOUSE_TABLE] = DatasetPolicy(HOUSE_TABLE, HOUSE_SCHEMA, ("generation_id", "attempt_id"),
@@ -90,7 +90,7 @@ FILE_SCHEMA = pa.schema([
         ("relative_path", S), ("sha256", S), ("byte_size", INT), ("row_count", INT),
     ]))),
 ])
-FILE_POLICIES = {name: DatasetPolicy(name, FILE_SCHEMA, ("generation_id", "source_dataset", "member_ordinal"),
+FILE_POLICIES: dict[str, DatasetPolicy] = {name: DatasetPolicy(name, FILE_SCHEMA, ("generation_id", "source_dataset", "member_ordinal"),
                                   ("recorded_event",), policy_version="navigation-read-outcomes/1")
                  for name in FILE_TABLES.values()}
 POLICIES.update(FILE_POLICIES)

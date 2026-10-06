@@ -672,19 +672,22 @@ def build_index_table(
             else:
                 outcomes["unevidenced" if reread else "stale"] += 1
             continue
+        detail_route = spec.detail_route
+        if detail_route is None:
+            raise ValueError(f"{spec.table}: queued detail has no source route")
         try:
             detail = _detail(reader, spec, entry, query, identity, record_read=detail_result)
         except CredentialRefusedError:
             raise
         except _REFUSALS as error:
-            refuse(entry, state, error, source_url=list_route_url(spec.detail_route, limit=1, **query))
+            refuse(entry, state, error, source_url=list_route_url(detail_route, limit=1, **query))
             continue
         rows.append(spec.shape(entry.record, detail))
         shaped = rows[-1]
         states = {name: "source-not-stated" if shaped.get(name) is None else
                   "stated-empty" if shaped[name] == "[]" else "stated"
                   for name in contract.columns if name.endswith("_json")}
-        detail_result(entry, "read", source_url=list_route_url(spec.detail_route, limit=1, **query),
+        detail_result(entry, "read", source_url=list_route_url(detail_route, limit=1, **query),
                       field_states=states)
         outcomes["reread" if reread else "read"] += 1
         unevidenced.discard(entry.key)
