@@ -759,7 +759,9 @@ def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> P
                         with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
                             for batch in parquet.iter_batches(batch_size=2000):
                                 batch.validate(full=True)
-                                writer.write_batch(batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)])))
+                                selected = batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)]))
+                                if selected.num_rows:
+                                    writer.write_table(pa.Table.from_batches([selected], schema=RECEIPT_SCHEMA))
                 if shared:
                     temporary.replace(destination)
                     return destination
