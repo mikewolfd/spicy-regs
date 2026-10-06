@@ -87,6 +87,14 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
               (route("fec_candidate_history", ("candidate_id",), (key(part(""), pattern=r"[HSP][0-9][A-Z0-9]{7}"),)),),
               meaning="Source-asserted candidate IDs; returns retained cycle observations, not an adjudicated person identity."),
     ]
+    for source, identity in (("nominations", ("congress", "citation")),
+                             ("committee_meetings", ("congress", "chamber", "event_id")),
+                             ("house_communications", ("congress", "communication_type", "number"))):
+        specs.append(array(source + "_detail_attempts", source, (),
+                           (route("@receipt:congress_acquisition", identity,
+                                  tuple(key(part(column, row=True)) for column in identity)),),
+                           meaning="Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
+                           mode="row"))
     specs += [
         array("bill_related_bills", "congress_bills", ("related_bills", "related_bills_json"),
               (route("congress_bills", ("bill_id",),
