@@ -71,6 +71,8 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
     from spicy_regs.transforms.regulations_receipts import map_regulations_attempt, policy
     from rulespec_artifacts import publish_directory_no_replace
 
+    if len(prior_receipts) > 1:
+        raise etl_bulk.NotBulkEligible("Ordered multiple regulatory prior bundles require the original row writer")
     schema = pq.read_schema(source)
     if not eligible(dataset, schema):
         raise etl_bulk.NotBulkEligible('Regulatory base bulk requires declared string input columns')
@@ -201,8 +203,13 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
             raise RuntimeError(f'{dataset}: source population changed')
         if prior_receipts:
             from spicy_regs.current_receipt_history import inherit_current_receipts
-            inherited = inherit_current_receipts(receipt_path, prior_receipts, stage / "inherited.parquet",
-                                                inherit_observations=False)
+            try:
+                inherited = inherit_current_receipts(
+                    receipt_path, prior_receipts, stage / "inherited.parquet",
+                    inherit_observations=False, require_unique_prior=True,
+                )
+            except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
+                raise etl_bulk.NotBulkEligible("Regulatory prior inheritance requires the original row writer") from error
             inherited.replace(receipt_path)
         validate_receipt_bundle({dataset: [subject_path]}, [receipt_path], [declared], generation_id=generation_id)
         publish_directory_no_replace(stage, destination)

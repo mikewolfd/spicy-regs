@@ -249,3 +249,58 @@ def test_explicit_original_schema_preserves_absent_fields_and_refuses_null_subst
     with pytest.raises(ValueError, match='field presence differs'):
         materialize_internal(selected, tmp_path / 'invented.parquet', bulk=bulk,
                              source_schema=pa.schema(list(schema) + [pa.field('publisher_status', pa.string())]))
+
+
+def test_multiple_prior_paths_keep_ordered_row_inheritance_before_any_batch_write(tmp_path, monkeypatch):
+    from spicy_regs import current_receipt_history
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    source = tmp_path / 'source.parquet'
+    priors = []
+    for ordinal, title in enumerate(['first', 'second']):
+        pq.write_table(pa.table({'docket_id': ['A'], 'title': [title]}), source)
+        priors.append(write_held_dataset('dockets', source, tmp_path / f'prior-{ordinal}',
+                                         generation_id=f'prior-{ordinal}')[1])
+    pq.write_table(pa.table({'docket_id': ['A'], 'title': ['current']}), source)
+    expected = write_held_dataset('dockets', source, tmp_path / 'row', generation_id='current',
+                                  prior_receipts=priors, bulk=False)
+
+    def no_single_prior_lookup(*args, **kwargs):
+        raise AssertionError('Multiple ordered priors must be classified before a batch write')
+
+    monkeypatch.setattr(current_receipt_history, 'inherit_current_receipts', no_single_prior_lookup)
+    actual = write_held_dataset('dockets', source, tmp_path / 'selected', generation_id='current',
+                                prior_receipts=priors, bulk=True)
+    for before, after in zip(expected, actual):
+        assert pq.read_table(before).equals(pq.read_table(after), check_metadata=True)
+    accepted = next(row for row in pq.read_table(actual[1]).to_pylist() if row['outcome'] == 'accepted')
+    history = decode_exact_json(accepted['diagnostic_json'])['prior_receipts']
+    assert [row['generation_id'] for row in history] == ['prior-0', 'prior-1']
+
+
+@pytest.mark.parametrize('tampered', [False, True])
+def test_duplicate_prior_receipt_ids_require_exact_row_proof(tmp_path, tampered):
+    source = tmp_path / 'source.parquet'
+    pq.write_table(pa.table({'docket_id': ['A'], 'title': ['prior']}), source)
+    _, receipts = write_held_dataset('dockets', source, tmp_path / 'prior', generation_id='prior')
+    held = pq.read_table(receipts)
+    rows = held.to_pylist()
+    duplicate = dict(next(row for row in rows if row['outcome'] == 'accepted'))
+    if tampered:
+        duplicate['processing_json'] = exact_json({'raw_conversion_inputs': {'docket_id': 'A', 'title': 'tampered'}})
+    rows.append(duplicate)
+    pq.write_table(pa.Table.from_pylist(rows, schema=held.schema), receipts)
+    pq.write_table(pa.table({'docket_id': ['A'], 'title': ['current']}), source)
+    if tampered:
+        for bulk in [False, True]:
+            destination = tmp_path / f'refused-{bulk}'
+            with pytest.raises(ValueError, match='Conflicting selected prior receipts'):
+                write_held_dataset('dockets', source, destination, generation_id='new',
+                                   prior_receipts=[receipts], bulk=bulk)
+            assert not destination.exists()
+    else:
+        expected = write_held_dataset('dockets', source, tmp_path / 'row', generation_id='new', prior_receipts=[receipts])
+        actual = write_held_dataset('dockets', source, tmp_path / 'selected', generation_id='new',
+                                    prior_receipts=[receipts], bulk=True)
+        for before, after in zip(expected, actual):
+            assert pq.read_table(before).equals(pq.read_table(after), check_metadata=True)
