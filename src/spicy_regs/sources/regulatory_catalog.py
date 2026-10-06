@@ -133,13 +133,43 @@ def _validate_source_columns(con, source, dataset):
                      else f'CAST(NULL AS {dtype}) AS "{name}"' for name, dtype in SOURCE_COLUMNS[dataset])
 
 
-def _stage(con, source, dataset, work, generation, *, prior_receipts=None):
+def normalize_source_record(dataset, row):
+    """Validate and normalize the declared source fields without losing raw values."""
+    key = policy(dataset).identity_fields[0]
+    from datetime import date, datetime
+    shaped = {}
+    identity = row.get(key)
+    if not isinstance(identity, str) or not identity.strip():
+        raise ValueError(f'{dataset}: source identity must be nonblank text')
+    for name, dtype in SOURCE_COLUMNS[dataset]:
+        value = row.get(name)
+        if isinstance(value, str) and dtype in {'INTEGER', 'BIGINT'}:
+            import re
+            if not re.fullmatch(r'[+-]?[0-9]+', value):
+                raise ValueError(f'{dataset}.{name}: invalid integer')
+            value = int(value)
+        elif isinstance(value, str) and dtype == 'BOOLEAN':
+            if value.lower() not in {'true', 'false'}:
+                raise ValueError(f'{dataset}.{name}: invalid boolean')
+            value = value.lower() == 'true'
+        elif isinstance(value, str) and dtype == 'DATE':
+            value = date.fromisoformat(value)
+        elif isinstance(value, str) and dtype.startswith('TIMESTAMP'):
+            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        elif isinstance(value, str) and dtype == 'DOUBLE':
+            value = float(value)
+        shaped[name] = value
+    return shaped
+
+
+def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=True):
     from spicy_regs.etl_receipts import ReceiptContext
     source_path = work / 'source.parquet'
     _validate_source_columns(con, source, dataset)  # Refuse unclassified columns before conversion.
     key = policy(dataset).identity_fields[0]
     source_query = f'SELECT * FROM {source}'
-    if prior_receipts is not None:
+    has_prior = prior_receipts is not None and con.execute(f'SELECT 1 FROM {prior_receipts} LIMIT 1').fetchone() is not None
+    if has_prior:
         source_query = f'SELECT s.*, w.receipt AS _prior_receipt FROM {source} s LEFT JOIN {prior_receipts} w USING ("{key}")'
     _copy(con, source_query, source_path)
     def observations():
@@ -159,31 +189,32 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None):
             yield row, context
     records = observations()
     def normalized(row):
-        from datetime import date, datetime
-        shaped = {}
-        identity = row.get(key)
-        if not isinstance(identity, str) or not identity.strip():
-            raise ValueError(f'{dataset}: source identity must be nonblank text')
-        for name, dtype in SOURCE_COLUMNS[dataset]:
-            value = row.get(name)
-            if isinstance(value, str) and dtype in {'INTEGER', 'BIGINT'}:
-                import re
-                if not re.fullmatch(r'[+-]?[0-9]+', value):
-                    raise ValueError(f'{dataset}.{name}: invalid integer')
-                value = int(value)
-            elif isinstance(value, str) and dtype == 'BOOLEAN':
-                if value.lower() not in {'true', 'false'}:
-                    raise ValueError(f'{dataset}.{name}: invalid boolean')
-                value = value.lower() == 'true'
-            elif isinstance(value, str) and dtype == 'DATE':
-                value = date.fromisoformat(value)
-            elif isinstance(value, str) and dtype.startswith('TIMESTAMP'):
-                value = datetime.fromisoformat(value.replace('Z', '+00:00'))
-            elif isinstance(value, str) and dtype == 'DOUBLE':
-                value = float(value)
-            shaped[name] = value
-        return shaped
-    subject, receipts = write_records(dataset, records, work / 'mapped', project=normalized)
+        return normalize_source_record(dataset, row)
+    subject = receipts = None
+    # Initial comments acquisitions can batch safely. A replacement with prior
+    # receipts uses the existing writer, including its complete witness/history
+    # inheritance. Never replace that history with only a predecessor pointer.
+    if dataset == 'comments' and bulk and not has_prior:
+        from spicy_regs import comments_bulk, etl_bulk
+        from spicy_regs.etl_receipts import exact_json
+        from spicy_regs.transforms.regulations_receipts import map_regulations_attempt
+        def row_attempt(row, ordinal):
+            witness = {'source_id': source, 'source_uri': None,
+                       'sha256': sha256(exact_json(row).encode()).hexdigest(),
+                       'locator': 'receipt.values.raw_source_record (canonical exact_json)',
+                       'body_version': generation}
+            context = ReceiptContext(generation, f'row:{ordinal}', 'regulatory-catalog-native-v1', [witness])
+            return map_regulations_attempt(dataset, row, context, project=normalized)
+        mapped = work / 'mapped'
+        mapped.mkdir(parents=True, exist_ok=True)
+        subject, receipts = mapped / 'comments.parquet', mapped / 'receipts.parquet'
+        try:
+            comments_bulk.write_bundle(source_path, subject, receipts, policy=policy(dataset),
+                generation_id=generation, source_label=source, row_attempt=row_attempt)
+        except etl_bulk.NotBulkEligible:
+            subject = receipts = None
+    if subject is None:
+        subject, receipts = write_records(dataset, records, work / 'mapped', project=normalized)
     if pq.ParquetFile(subject).metadata.num_rows != pq.ParquetFile(source_path).metadata.num_rows:
         raise CatalogConversionRefused(receipts)
     return subject, receipts
@@ -297,8 +328,9 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             subject = work / 'subjects.parquet'
             _copy(con, f'SELECT * FROM {target}{predicate}', subject)
             ids = work / 'identities.parquet'
-            write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
-                       ids, pa.schema([('record_id', pa.string())]))
+            if where:
+                write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
+                           ids, pa.schema([('record_id', pa.string())]))
             raw_receipts = work / 'selected-receipts.parquet'
             # Full reads also detect orphan receipts (for example an unpaired DELETE).
             # Scoped reads join only selected identities and avoid restoring unrelated agencies.
@@ -314,8 +346,16 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                 for row in read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation):
                     from spicy_regs.transforms.regulations_receipts import _processor_input
                     yield _processor_input(dataset, row)
-            rows = source_rows()
-            write_rows(rows, restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
+            batch_restored = False
+            if dataset == 'comments':
+                from spicy_regs import comments_bulk, etl_bulk
+                try:
+                    comments_bulk.restore_catalog(subject, receipts, restored, generation_id=generation)
+                    batch_restored = True
+                except etl_bulk.NotBulkEligible:
+                    pass  # The reference reader determines the exact first error.
+            if not batch_restored:
+                write_rows(source_rows(), restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
             con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [str(restored)])
     return '"' + temporary_name + '"'
 

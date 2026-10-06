@@ -247,3 +247,131 @@ def test_resealed_catalog_receipt_cannot_restore_inconsistent_source_input(con):
     con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM altered_receipt')
     with pytest.raises(ValueError, match='retained processor input differs'):
         native.processing_table(con, COMMENT)
+
+
+def test_full_comments_processing_uses_batch_proof_without_unused_identity_scan(con, monkeypatch):
+    expected = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    monkeypatch.setattr(native, 'subject_identity', lambda *a, **k: pytest.fail('unused full-read identity scan'))
+    monkeypatch.setattr(native, 'read_with_receipts', lambda *a, **k: pytest.fail('unproven row fallback'))
+    restored = native.processing_table(con, COMMENT)
+    [actual] = con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist()
+    assert all(actual[name] == value for name, value in expected.items())
+
+
+@pytest.mark.parametrize('later_attachment', ['{bad', '['*20000+']'*20000])
+def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch, later_attachment):
+    import pyarrow as pa
+    from spicy_regs import comments_bulk
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, decode_exact_json, exact_json, _digest
+    source(con)
+    con.execute("INSERT INTO source SELECT * REPLACE ('c2' AS comment_id, 'second' AS text_content) FROM source")
+    iceberg.replace_rows(con, COMMENT, 'source')
+    rows = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted' ORDER BY record_id").to_arrow_table().to_pylist()
+    # Native subject file order selects c1 first, then c2. Both payloads remain
+    # valid receipt data, but their retained source inputs fail mapper proof.
+    for row in rows:
+        values = decode_exact_json(row['processing_json'])
+        raw = values['raw_conversion_inputs']
+        if raw['comment_id']=='c1':
+            raw['text_content'] = 'different'
+        if raw['comment_id']=='c2':
+            raw['attachments_json'] = later_attachment
+        old_id = row['receipt_id']
+        row['processing_json'] = exact_json(values)
+        row['receipt_id'] = _digest({k: v for k,v in row.items() if k!='receipt_id'})
+        con.register('_damaged', pa.Table.from_pylist([row], schema=RECEIPT_SCHEMA))
+        con.execute(f'DELETE FROM {native.receipts_table()} WHERE receipt_id=?', [old_id])
+        con.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM _damaged')
+        con.unregister('_damaged')
+    monkeypatch.setattr(comments_bulk, '_BATCH', 2)
+    with pytest.raises(ValueError, match='retained processor input differs from selected native subject'):
+        native.processing_table(con, COMMENT)
+
+
+def test_empty_comments_processing_batch_preserves_declared_schema(con, monkeypatch):
+    native.ensure_native(con, COMMENT)
+    monkeypatch.setattr(native, 'read_with_receipts', lambda *a, **k: pytest.fail('empty batch fell back'))
+    restored = native.processing_table(con, COMMENT)
+    assert con.execute(f'SELECT count(*) FROM {restored}').fetchone() == (0,)
+    assert {row[0] for row in con.execute(f'DESCRIBE {restored}').fetchall()} == set(COMMENT.schema)
+
+
+def test_initial_comments_stage_batches_with_empty_prior_and_matches_row_writer(con, tmp_path, monkeypatch):
+    import pyarrow.parquet as pq
+    from spicy_regs import comments_bulk
+
+    source(con)
+    con.execute("INSERT INTO source SELECT * REPLACE ('c2' AS comment_id, 'second' AS text_content) FROM source")
+    con.execute("INSERT INTO source SELECT * REPLACE ('c3' AS comment_id, 'third' AS text_content) FROM source LIMIT 1")
+    native.ensure_native(con, COMMENT)
+    con.execute(f'CREATE TEMP TABLE empty_prior AS SELECT r.record_id AS comment_id, r AS receipt '
+                f'FROM {native.receipts_table()} r WHERE false')
+    calls = []
+    real = comments_bulk.write_bundle
+    def batch(*args, **kwargs):
+        calls.append(kwargs['generation_id'])
+        return real(*args, **kwargs)
+    monkeypatch.setattr(comments_bulk, 'write_bundle', batch)
+    monkeypatch.setattr(comments_bulk, '_BATCH', 2)
+    batch_dir, row_dir = tmp_path / 'batch', tmp_path / 'row'
+    batch_dir.mkdir()
+    row_dir.mkdir()
+    actual = native._stage(con, 'source', 'comments', batch_dir, 'same-generation', prior_receipts='empty_prior')
+    expected = native._stage(con, 'source', 'comments', row_dir, 'same-generation', prior_receipts='empty_prior', bulk=False)
+    assert calls == ['same-generation']
+    for got, reference in zip(actual, expected):
+        assert pq.read_table(got).equals(pq.read_table(reference))
+    assert pq.read_table(actual[0])['comment_id'].to_pylist() == ['c1', 'c2', 'c3']
+
+
+def test_repeated_comments_updates_keep_all_prior_witnesses_and_payloads(con, monkeypatch):
+    from spicy_regs import comments_bulk
+    from spicy_regs.etl_receipts import decode_exact_json, resolve_receipt_witness
+
+    first_source = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    def selected_receipt():
+        rows = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()
+        assert len(rows) == 1
+        return rows[0]
+    first = selected_receipt()
+    monkeypatch.setattr(comments_bulk, 'write_bundle', lambda *a, **k: pytest.fail('prior history routed to fresh writer'))
+    second_source = source(con, text='second')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    second = selected_receipt()
+    third_source = source(con, text='third')
+    iceberg.replace_rows(con, COMMENT, 'source')
+    third = selected_receipt()
+    assert third['witnesses'][:len(second['witnesses'])] == second['witnesses']
+    assert second['witnesses'][:len(first['witnesses'])] == first['witnesses']
+    history = decode_exact_json(third['diagnostic_json'])
+    assert {row['receipt_id'] for row in history['prior_receipts']} == {first['receipt_id'], second['receipt_id']}
+    assert {values['raw_source_record']['text_content'] for values in history['retained_processing'].values()} == {'first', 'second'}
+    raw_witnesses = [w for w in third['witnesses'] if w['source_uri'] is None]
+    assert [decode_exact_json(resolve_receipt_witness(third, w).decode()) for w in raw_witnesses] == [first_source, second_source, third_source]
+    assert all(resolve_receipt_witness(third, w) for w in third['witnesses'])
+    processing = native.processing_table(con, COMMENT)
+    assert con.execute(f'SELECT * FROM {processing}').to_arrow_table().to_pylist() == [third_source]
+
+
+def test_fresh_batch_refusal_commits_no_partial_subjects(con, monkeypatch):
+    from spicy_regs import comments_bulk
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    source(con)
+    con.execute("INSERT INTO source SELECT * REPLACE ('refused' AS comment_id, 'not-json' AS attachments_json) FROM source")
+    calls = []
+    real = comments_bulk.write_bundle
+    def batch(*args, **kwargs):
+        calls.append(True)
+        return real(*args, **kwargs)
+    monkeypatch.setattr(comments_bulk, 'write_bundle', batch)
+    monkeypatch.setattr(comments_bulk, '_BATCH', 1)
+    with pytest.raises(native.CatalogConversionRefused):
+        iceberg.replace_rows(con, COMMENT, 'source')
+    assert calls == [True]
+    assert con.execute(f'SELECT count(*) FROM {native.qualified(COMMENT)}').fetchone() == (0,)
+    assert con.execute(f"SELECT count(*) FROM {native.receipts_table()} WHERE outcome='accepted'").fetchone() == (0,)
+    [refused] = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='refused'").to_arrow_table().to_pylist()
+    assert decode_exact_json(refused['processing_json'])['raw_conversion_inputs']['attachments_json'] == 'not-json'
