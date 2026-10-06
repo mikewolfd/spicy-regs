@@ -8,6 +8,8 @@ on:
       - 'src/spicy_regs/table_joins.py'
       - 'src/spicy_regs/join_audit.json'
       - 'src/spicy_regs/explorer_*'
+      - 'src/spicy_regs/navigation_measurements.py'
+      - 'tests/test_navigation_measurements.py'
       - 'src/spicy_regs/data_dictionary.py'
       - 'data_dictionary/descriptions.yaml'
       - 'scripts/publish_explorer_metadata.py'
@@ -135,7 +137,7 @@ jobs:
       - name: Validate metadata behavior
         env:
           PYTHONPATH: src
-        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py tests/test_explorer_publications.py tests/test_column_navigation.py -q
+        run: uv run --frozen --no-group source-readers pytest --noconftest tests/test_explorer_metadata.py tests/test_explorer_publications.py tests/test_column_navigation.py tests/test_navigation_measurements.py -q
       - name: Publish only the explorer metadata bundle
         env:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

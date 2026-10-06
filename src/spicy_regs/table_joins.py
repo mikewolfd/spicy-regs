@@ -1027,6 +1027,12 @@ _PROCESSING_JOIN_FIELDS = {
 
 
 def _processing_join(join):
+    # Resolver outputs require the recorded resolution status, not bare equality.
+    # The same declarations supply guarded main-row navigation recipes.
+    if join.child in {'scorecard_member_links', 'scorecard_item_links'} and join.parent in {
+        'members', 'congress_bills', 'roll_call_votes', 'amendments',
+    }:
+        return True
     if join.child in _PROCESSING_TABLES or join.parent in _PROCESSING_TABLES:
         return True
     if join.child == "hearing_transcripts" and join.child_columns == ("bill_id",):

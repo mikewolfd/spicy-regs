@@ -2,4 +2,51 @@
 
 # `fec_filing_header_associations`
 
-`fec_filing_header_associations` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'fec_filing_header_associations'`.
+**FEC header-to-filing matches**
+
+One evidenced association decision for one retained original-file header observation. Retains all matching filing observations and explicit ambiguity. A source header, archive filename or image number is not treated as a native financial file number; association does not select an amendment or replacement scope. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.
+
+**Coverage.** Sampled. Supported observations from retained original-file headers matched through supported captured original URLs to filing metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+
+- **Parquet file:** `fec_filing_header_associations.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `record_id` | `VARCHAR` | Deterministic identity of this header-to-filing association decision under policy_version, separate from both endpoints. |
+| `policy_version` | `VARCHAR` | Exact named/versioned selection or association policy responsible for this decision. |
+| `target_table` | `VARCHAR` | Source endpoint table for the original-file header; fec_source_records is resolved in source_generation_pin. |
+| `target_record_id` | `VARCHAR` | Native header source_record_id within collection_id and source_generation_pin, verified by the source locator and digest. This endpoint is not a typed financial record key. |
+| `source_generation_pin` | `VARCHAR` | Exact sealed source generation used for this decision or association; binds the source namespace and evidence lookup. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `association_basis` | `VARCHAR` | Evidenced basis for the filing association, such as a matched original URL or qualified native file number. |
+| `association_status` | `VARCHAR` | Resolution outcome for this association; ambiguous and missing filing targets remain explicit. |
+| `referenced_filing_key` | `VARCHAR` | Qualified filing key derived from the supported native reference even when no retained target resolves. |
+| `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `namespace_evidence_sha256` | `VARCHAR` | Digest of verified source definition evidence establishing the filing-number namespace used by the association. |
+| `report_number_raw` | `VARCHAR` | Literal source value before conversion for report_number. Preserves spelling, signs and empty values; the typed value and its status are separate. |
+| `header_record_id` | `VARCHAR` | Source-record identity of the actual filing header used by this association; it is not itself a filing-version key. |
+| `header_locator_json` | `VARCHAR` | Exact native address of the associated filing header in the selected source generation. |
+| `request_url` | `VARCHAR` | Captured request URL used as association evidence, without a fresh network request. |
+| `resolved_url` | `VARCHAR` | Captured resolved URL retained separately from the request URL; an exact supported URL match is required for an original-file association. |
+| `replacement_mode` | `VARCHAR` | Evidenced amendment replacement mode, such as complete, partial or unknown. A filing link alone does not prove delete-by-omission behavior. |
+| `membership_completeness` | `VARCHAR` | Whether all records in the amendment/replacement scope were established; unknown scope cannot justify removing omitted rows. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `filing_observation_count` | `BIGINT` | Number of candidate filing observations examined for this association; association_status states whether they resolve to one supported filing identity. |
+| `filing_observation_ids` | `VARCHAR[]` | List of all candidate fec_filings.record_id values retained by the association, including unresolved/conflicting candidates; expanding it changes row cardinality. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |
+| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
+| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
+| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
+| `filing_association_target_generation_pin` | `VARCHAR` | Exact selected filing-metadata generation against which this association was checked. |
+| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
+| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
+| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
+| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

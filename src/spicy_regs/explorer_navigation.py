@@ -7,6 +7,9 @@ not read source rows. Existing source-occurrence SQL views remain available.
 from __future__ import annotations
 
 import re
+import json
+from datetime import date, datetime
+from pathlib import Path
 from collections.abc import Mapping
 from copy import deepcopy
 from functools import lru_cache
@@ -81,7 +84,7 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
               (route("@url", ("url",), (key(part("src"), pattern=r"https://[^\s]+"),)),),
               meaning="Document URLs offered by the FCC; offering a URL does not establish capture or extraction."),
         array("fcc_extraction_results", "fcc_filings", ("extraction_results",),
-              (route("@url", ("url",), (key(part("url"), pattern=r"https://[^\s]+"),)),),
+              (route("@url", ("url",), (key(part("url"), pattern=r"https://[^\s]+"),), guard("url_status", values=("usable",))),),
               meaning="Recorded extraction URLs. Status and digest describe retained results; public capture and text access remain unverified."),
         array("house_communication_record", "house_communications", (),
               (route("record_issues", ("package_id",), (key(part("record_package_id", row=True)),)),),
@@ -93,13 +96,16 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
     ]
     for source, identity in (("nominations", ("congress", "citation")),
                              ("committee_meetings", ("congress", "chamber", "event_id")),
-                             ("house_communications", ("congress", "communication_type", "number"))):
+                             ("house_communications", ("communication_id",))):
         specs.append(array(source + "_detail_attempts", source, (),
-                           (route("@receipt:congress_acquisition", ("event", *identity),
-                                  (key({**part(""), "literal": "congress-detail-result"}),
-                                   *(key(part(column, row=True)) for column in identity))),),
+                           (route(source + "_detail_reads", identity,
+                                  tuple(key(part(column, row=True)) for column in identity)),),
                            meaning="Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
                            mode="row"))
+    specs.append(array("house_record_enrichment_outcomes", "house_communications", (),
+                       (route("house_record_enrichment_results", ("communication_id",),
+                              (key(part("communication_id", row=True)),)),), mode="row",
+                       meaning="Recorded enrichment checks for this communication, including incomplete reads, conflicts and exact passage witnesses."))
     specs += [
         array("bill_related_bills", "congress_bills", ("related_bills", "related_bills_json"),
               (route("congress_bills", ("bill_id",),
@@ -140,51 +146,86 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
     legal_targets = [route(r.table, r.identity, tuple(key(part(c)) for c in r.identity),
                            guard("target_table_selected", values=(r.table,)),
                            guard("target_status", values=("found", "ambiguous")))
-                     for r in dict.fromkeys(ROUTES.values())]
+                     for r in {(r.table, r.identity): r for r in ROUTES.values()}.values()]
     specs.append(array("native_legal_targets", "native_legal_references", ("target_candidates", "target_candidates_json"), tuple(legal_targets),
                        receipt_fields=("target_candidates_json",),
                        candidates=True,
-                       meaning="Every recorded candidate identity, including ambiguous matches. Missing, unsupported and unchecked targets remain explicit."))
+                       meaning="Recorded candidate identities, including ambiguous matches. Links check the currently selected target table; recorded resolution and pins do not prove a current match. Missing, unsupported and unchecked outcomes remain visible."))
     specs.append(array("native_legal_read", "native_legal_references", (),
-                       (route("@receipt:native_legal_reference_reads", ("scope_id",), (key(part("scope_id", row=True)),)),),
+                       (route("native_legal_reference_reads", ("scope_id",), (key(part("scope_id", row=True)),)),),
                        meaning="The complete-read scope for this observed legal reference.", mode="row"))
+    for source, target, columns in (
+        ("committee_reports", "committee_report_read_outcomes", ("package_id",)),
+        ("document_citations", "document_citation_read_outcomes", ("document_kind", "document_key", "body_version_id")),
+    ):
+        specs.append(array(source + "_read_outcomes", source, (),
+                           (route(target, columns, tuple(key(part(column, row=True)) for column in columns)),),
+                           mode="row", meaning="Recorded reads for the exact document and body scope; no recorded row does not mean a successful empty read."))
     for source, field, target, column in (("fec_committee_observations", "candidate_ids_json", "fec_candidate_history", "candidate_id"),
                                            ("fec_committee_observations", "sponsor_candidate_ids_json", "fec_candidate_history", "candidate_id")):
         specs.append(array(source + "_" + field, source, (field, field.removesuffix("_json")),
                            (route(target, (column,), (key(part(""), pattern=r"[HSP][0-9A-Z]{8}"),)),),
                            meaning="Source-reported candidate relationship; all retained cycle observations remain available."))
-    from spicy_regs.subject_catalog import descriptors
-    policies = descriptors()
+    field_rules = json.loads(Path(__file__).with_name("fec_subject_fields.json").read_text())
     for join in processing_joins:
+        if join.child in {"scorecard_member_links", "scorecard_item_links"} and join.parent in {
+            "members", "congress_bills", "roll_call_votes", "amendments",
+        }:
+            specs.append(array("resolved_" + join.child + "_" + join.parent, join.child, (),
+                               (route(join.parent, join.parent_columns,
+                                      tuple(key(part(c, row=True)) for c in join.child_columns),
+                                      guard("resolution_status", row=True, values=("resolved",))),),
+                               meaning="Recorded resolved identifier. This link checks current published data; the resolver's recorded input pins describe its original target.",
+                               mode="row"))
+            continue
         if not join.child.startswith("fec_"):
             continue
         # These are existing canonical declarations, not inferred matching names.
         guards = ()
         if join.child == "fec_record_evidence" and "target_record_id" in join.child_columns:
             guards = (guard("target_table", row=True, values=(join.parent,)),)
+        if join.parent == "fec_filings" and "filing_key" in field_rules.get(join.child, {}).get("keep", ()):
+            guards += (guard("filing_association_status", row=True, values=("resolved_native_filing_key",)),)
         specs.append(array("receipt_" + join.child + "_" + "_".join(join.child_columns) + "_" + join.parent,
-                           join.child, (), (route("@receipt:" + join.parent if policies.get(join.parent, {}).get("receipt_only") else join.parent, join.parent_columns,
+                           join.child, (), (route(join.parent, join.parent_columns,
                                                 tuple(key(part(c, row=True)) for c in join.child_columns), *guards),),
                            meaning=join.reason or "Retained source-record relationship; no current-record or financial-total qualification.",
-                           receipt_fields=join.child_columns, mode="row"))
+                           mode="row"))
     # These canonical collection relationships enumerate the typed observations.
     # A stored native filing_key is already the retained mapper's decision; browser
     # navigation keeps every metadata observation and makes no latest/current selection.
     filing_sources = {j.child for j in processing_joins if j.parent == "fec_collections"}
     for source in sorted(filing_sources - {"fec_source_records"}):
         specs.append(array("fec_source_row_" + source, source, (),
-                           (route("@receipt:fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
+                           (route("fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
                                   (key(part("collection_id", row=True)), key(part("source_record_id", row=True)),
                                    key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}"))),),
                            meaning="The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-                           receipt_fields=("collection_id", "source_record_id", "source_sha256"), mode="row"))
+                           mode="row"))
     for source in sorted(filing_sources):
-        if source == "fec_filings":
+        if "filing_key" not in field_rules.get(source, {}).get("keep", ()):
             continue
         specs.append(array("native_filing_" + source, source, (),
                            (route("fec_filings", ("filing_key",),
-                                  (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),)),),
+                                  (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),),
+                                  guard("filing_association_status", row=True, values=("resolved_native_filing_key",))),),
                            meaning="All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.", mode="row"))
+    for side in ("subject", "object"):
+        targets = tuple(route(table, (column, "cycle"),
+                              (key(part(side + "_id", row=True), pattern=pattern), key(part("cycle", row=True), pattern=NUM)),
+                              guard(side + "_type", row=True, values=(kind,)),
+                              guard(side + "_endpoint_status", row=True, values=("lookup_eligible",)))
+                        for kind, table, column, pattern in (
+                            ("candidate", "fec_candidate_history", "candidate_id", r"[HPS][A-Za-z0-9]{8}"),
+                            ("committee", "fec_committee_history", "committee_id", r"C[0-9]{8}")))
+        specs.append(array("fec_relationship_" + side, "fec_relationships", (), targets,
+                           mode="row", meaning="The retained entity type, native ID and stated cycle qualify this endpoint. Name-only, absent and unavailable-cycle results create no edge."))
+    specs.append(array("fec_relationship_source_record", "fec_relationships", (),
+                       (route("fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
+                              (key(part("collection_id", row=True)), key(part("source_record_id", row=True)),
+                               key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}")),
+                              guard("companion_status", row=True, values=("locator_coordinates_available",))),),
+                       mode="row", meaning="Literal retained source coordinates and digest; target existence does not establish verified source bytes."))
     return validate_navigation(deepcopy(specs))
 
 
@@ -195,6 +236,8 @@ def scalar(value):
         return value
     if isinstance(value, int) and not isinstance(value, bool) and -(2**63) <= value < 2**64:
         return str(value)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value.isoformat()
     return None
 
 
@@ -289,7 +332,7 @@ def _path_status(typ, path):
     return "published"
 
 
-def _dependencies(target, fields, selected_field, mode):
+def _dependencies(target, fields, selected_field, mode, *, candidates=False):
     main, nested = {}, {}
     if mode == "array":
         main[selected_field or "<reference array>"] = (
@@ -305,7 +348,14 @@ def _dependencies(target, fields, selected_field, mode):
         elif mode == "array":
             typ = fields.get(selected_field, "")
             if typ.endswith("[]"):
-                status = _path_status(typ[:-2], path)
+                element_type = typ[:-2]
+                if candidates and any(recipe is p for k in target["keys"] for p in k["parts"]):
+                    candidate_fields = _struct_fields(element_type)
+                    inner_type = (candidate_fields or {}).get("candidate_keys", "")
+                    status = _path_status(inner_type[:-2], path) if inner_type.endswith("[]") else "missing"
+                    path = ["candidate_keys", *path]
+                else:
+                    status = _path_status(element_type, path)
             elif typ.upper() in {"VARCHAR", "JSON"}:
                 status = "runtime_checked"
             else:
@@ -345,7 +395,7 @@ def published_navigation(specs, schemas, identities=None):
                 dataset = target["table"].removeprefix("@receipt:")
                 if set(target["columns"]) <= set(dict(schemas.get(dataset, []))):
                     target["table"] = dataset
-            main, nested = _dependencies(target, fields, spec["field"], spec["mode"])
+            main, nested = _dependencies(target, fields, spec["field"], spec["mode"], candidates=spec["candidates"])
             target["requiredMainFields"], target["requiredElementFields"] = main, nested
             target["sourceAvailable"] = spec["source"] in schemas and all(
                 item["status"] != "missing" for item in [*main, *nested])

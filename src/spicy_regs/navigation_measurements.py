@@ -242,7 +242,8 @@ class MeasurementCache:
             return held
         kind = 'occurrences' if spec else 'target_keys'
         schema = pa.schema([('key_json', pa.string()), ('source_identity', pa.string()),
-                            ('row_position', pa.int64()), ('source_ordinal', pa.int64())])
+                            ('row_position', pa.int64()), ('source_ordinal', pa.int64()),
+                            ('candidate_ordinal', pa.int64()), ('target_key_ordinal', pa.int64())])
         output = self._path(kind, dependency).with_suffix('.parquet')
         temporary = output.with_suffix('.' + uuid4().hex + '.partial.parquet')
         states, raw, refused, repeats, position, target_null, target_unsupported, unusable_identity = Counter(), 0, 0, 0, 0, 0, 0, 0
@@ -265,19 +266,24 @@ class MeasurementCache:
                         states[state] += 1
                         seen = set()
                         for ordinal, element in elements:
-                            raw += 1
+                            expanded = [(None, element)]
                             if spec.get('candidates'):
-                                candidate = element.get('candidate_keys') if isinstance(element, dict) else None
-                                element = {**element, **candidate} if isinstance(candidate, dict) else None
-                            values = navigation.target_keys(spec['targets'][target_index], element, row)
-                            value = json.dumps(values, separators=(',', ':')) if values is not None else None
-                            if value is None:
-                                refused += 1
-                            else:
-                                repeats += value in seen
-                                seen.add(value)
-                            output_rows.append({'key_json': value, 'source_identity': identity_key(row, source_identity),
-                                                'row_position': position, 'source_ordinal': ordinal})
+                                keys = element.get('candidate_keys') if isinstance(element, dict) else None
+                                expanded = [(i, {**element, **candidate} if isinstance(candidate, dict) else None)
+                                            for i, candidate in enumerate(keys)] if isinstance(keys, list) and keys else [(None, None)]
+                            for key_ordinal, candidate in expanded:
+                                raw += 1
+                                values = navigation.target_keys(spec['targets'][target_index], candidate, row)
+                                value = json.dumps(values, separators=(',', ':')) if values is not None else None
+                                if value is None:
+                                    refused += 1
+                                else:
+                                    repeats += value in seen
+                                    seen.add(value)
+                                output_rows.append({'key_json': value, 'source_identity': identity_key(row, source_identity),
+                                                    'row_position': position, 'source_ordinal': ordinal,
+                                                    'candidate_ordinal': ordinal if spec.get('candidates') else None,
+                                                    'target_key_ordinal': key_ordinal})
                     position += 1
                 writer.write_table(pa.Table.from_pylist(output_rows, schema=schema))
         if position != projection['rows']:
@@ -310,7 +316,7 @@ class MeasurementCache:
                 source_column = recipe['parts'][0]['path'][0]
                 left = duckdb.sqltype(dict(source['schema'])[source_column]).id
                 right = duckdb.sqltype(dict(target['schema'])[column]).id
-                if not (left == right == 'varchar' or left in integer_types and right in integer_types):
+                if not (left == right and left in {'varchar', 'date'} or left in integer_types and right in integer_types):
                     raise ValueError('Native scalar key types are incompatible or unsupported')
         dependency = {'source': source, 'target': target,
                       'recipe': recipe_digest(original, target_index, source_identity),

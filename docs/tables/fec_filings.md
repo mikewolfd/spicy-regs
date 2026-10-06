@@ -59,3 +59,37 @@ One retained metadata observation of a submitted report or statement version. Us
 | `is_amended` | `BOOLEAN` | Literal API amendment state at capture time; it does not establish a complete retained amendment chain. |
 | `most_recent` | `BOOLEAN` | Literal publisher most-recent flag captured for this observation; not an independently qualified current selection. |
 | `amendment_chain` | `VARCHAR[]` | Native amendment-chain references as retained; completeness and replacement meaning are separate qualifications. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
+| `filing_link_status` | `VARCHAR` | Set when the row is mapped: `native_file_number` where the filing states its own FEC file number (then `filing_key` is set), `unresolved_no_file_number` where it does not. It does not look up any other filing. |
+| `filer_id_status` | `VARCHAR` | State or syntax check of the native filer ID; not an independently resolved identity. |
+| `candidate_id_status` | `VARCHAR` | State or syntax check of the reported candidate ID; a valid shape is not a resolved identity. |
+| `pdf_body_status` | `VARCHAR` | Explicit deferred/unprocessed state of the linked PDF body. |
+| `linked_original_body_status` | `VARCHAR` | Availability/processing state of the linked original filing, distinct from the captured metadata observation. |
+| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
+| `amendment_scope_status` | `VARCHAR` | Whether the affected report/schedule membership and replacement scope have been proved. |
+| `financial_fields_status` | `VARCHAR` | Status of financial-field interpretation for this filing metadata observation; metadata presence does not make a financial total. |
+| `receipt_date_status` | `VARCHAR` | Source-presence or conversion state for receipt_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `filed_date_status` | `VARCHAR` | Source-presence or conversion state for filed_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `coverage_start_date_status` | `VARCHAR` | Source-presence or conversion state for coverage_start_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `coverage_end_date_status` | `VARCHAR` | Source-presence or conversion state for coverage_end_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `update_date_status` | `VARCHAR` | Source-presence or conversion state for update_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `load_timestamp_status` | `VARCHAR` | Source-presence or conversion state for load_timestamp, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
+| `pages_status` | `VARCHAR` | Interpretation of source pages: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |
+| `reported_cycle_status` | `VARCHAR` | Interpretation of source reported_cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `election_year_status` | `VARCHAR` | Interpretation of source election_year: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `is_amended_status` | `VARCHAR` | Interpretation of source is_amended: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `most_recent_status` | `VARCHAR` | Interpretation of source most_recent: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |

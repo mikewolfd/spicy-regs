@@ -23,3 +23,20 @@ One source notice observation about an explicitly stated filing/committee scope.
 | `notice_kind` | `VARCHAR` | Source classification of the quality notice; it is not an independently proved allegation. |
 | `notice_scope` | `VARCHAR` | Population or filing scope actually stated by the source notice; no inferred donor identity or broader affected set. |
 | `first_receipt_date` | `DATE` | The first receipt date the quality notice states. A two-digit year (FEC's false and fictitious filings list writes `31-DEC-76`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`76` is 1976, not 2076; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `first_receipt_date_raw` keeps the date as filed. NULL has its reason in `first_receipt_date_status`; capture time is never substituted. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
+| `committee_id_status` | `VARCHAR` | State or syntax check of the reported committee ID; a valid shape is not a resolved identity. |
+| `exclusion_status` | `VARCHAR` | Explicit statement that a quality notice does not automatically exclude transactions without a supported inclusion policy. |
+| `first_receipt_date_status` | `VARCHAR` | How `first_receipt_date` was read. `exact_with_year_bounds`: a two-digit year read in the range described on `first_receipt_date`. `outside_selected_year_bounds`: no year in that range ends in those digits (a typed `34` in a file captured in 2026), so `first_receipt_date` is NULL. `source_empty`: the source left it blank. `unresolved_century`: every two-digit year in the fec-query generation `81453ac6…` (published 2026-10-02) and earlier, mapped before that range was applied. Not a financial eligibility test. |
+| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |

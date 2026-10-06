@@ -302,3 +302,50 @@ def test_conflicting_measurements_remain_unknown_without_hiding_other_metadata(t
                        join_record={'joins':[],'navigation':[spec]},measurements=[proof,conflicting,None])
     assert bundle['navigation'][0]['targets'][0]['directions']['forward']['measurement']['status']=='unknown'
     assert set(bundle['tables'])=={'source','target'}
+
+
+def test_candidate_key_occurrences_keep_each_identity_and_unresolved_candidate(tmp_path):
+    index, paths, spec = selection(tmp_path)
+    schema = pa.schema([('id', pa.string()), ('refs', pa.list_(pa.struct([
+        ('target_status', pa.string()),
+        ('candidate_keys', pa.list_(pa.struct([('id', pa.string())]))),
+    ])))])
+    rows = [{'id': 's1', 'refs': [
+        {'target_status': 'found', 'candidate_keys': [{'id': 'a'}, {'id': 'a'}]},
+        {'target_status': 'found', 'candidate_keys': [{'id': 'missing'}, None]},
+        {'target_status': 'unsupported', 'candidate_keys': []}, None,
+    ]}]
+    source, descriptor = member(tmp_path, 'source', rows, schema)
+    index['families']['fixture']['tables']['source.parquet'] = descriptor
+    paths[table_members(index, 'source.parquet')[0].path] = str(source)
+    spec['candidates'] = True
+    spec['targets'][0]['guards'] = [guard('target_status', values=('found',))]
+    cache = MeasurementCache(tmp_path / 'cache')
+    result = cache.measure(index, paths, spec, source_identity=('id',))
+    assert (result['rawReferences'], result['eligible'], result['matched'], result['missing']) == (6, 3, 2, 1)
+    assert result['unsupportedReferences'] == 3
+    assert result['repeatedReferences'] == 1
+    assert result['distinctMatchedSourceRecords'] == 1
+    occurrence_files = list((tmp_path / 'cache').rglob('*.parquet'))
+    occurrences = [pq.read_table(path).to_pylist() for path in occurrence_files]
+    held = next(rows for rows in occurrences if len(rows) == 6 and 'candidate_ordinal' in rows[0])
+    assert [(r['candidate_ordinal'], r['target_key_ordinal']) for r in held] == [(0, 0), (0, 1), (1, 0), (1, 1), (2, None), (3, None)]
+
+
+def test_native_date_keys_compare_calendar_values_without_text_coercion(tmp_path):
+    from datetime import date
+    from spicy_regs.navigation_measurements import scalar_navigation
+    index, paths, _ = selection(tmp_path)
+    for name, values in [('source', [date(2026, 1, 1), date(2026, 1, 2)]), ('target', [date(2026, 1, 1)])]:
+        path, descriptor = member(tmp_path, name, [{'day': d} for d in values], pa.schema([('day', pa.date32())]))
+        index['families']['fixture']['tables'][name + '.parquet'] = descriptor
+        paths[table_members(index, name + '.parquet')[0].path] = str(path)
+    spec = scalar_navigation({'child': 'source', 'child_columns': ['day'], 'parent': 'target', 'parent_columns': ['day']})
+    cache = MeasurementCache(tmp_path / 'cache')
+    measured = cache.measure(index, paths, spec, source_identity=('day',))
+    assert (measured['eligible'], measured['matched'], measured['missing']) == (2, 1, 1)
+    path, descriptor = member(tmp_path, 'target', [{'day': '2026-01-01'}], pa.schema([('day', pa.string())]))
+    index['families']['fixture']['tables']['target.parquet'] = descriptor
+    paths[table_members(index, 'target.parquet')[0].path] = str(path)
+    with pytest.raises(ValueError, match='types are incompatible'):
+        cache.measure(index, paths, spec, source_identity=('day',))

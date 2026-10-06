@@ -2,4 +2,31 @@
 
 # `fec_source_records`
 
-`fec_source_records` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'fec_source_records'`.
+**Original FEC source records**
+
+Joinable metadata and retained source evidence across FEC families. collection_id joins fec_collections; source_family joins fec_source_catalog. Rows from different files and election cycles share this table, which has no cycle column: join collection_id to the fec_collection_cycles view for the cycle (2026 means 2025-2026) before comparing with a cycle's totals. A transaction's type, direction, other party, amount and memo flag are fields inside metadata_json (TRANSACTION_TP, OTHER_ID, CAND_ID, TRANSACTION_AMT, MEMO_CD). Native identifiers are lifted only when the provider reports them, and committee_id can join fec_committees. metadata_json and source_record_json preserve the complete provider record. PostgreSQL metadata additionally exposes named_fields from its verified schema; raw COPY fields, decoded NULLs and array text remain separate. Missing IDs remain missing.
+
+**Coverage.** Sampled. The records of the selected collections in fec_collections, not complete FEC history. Inspect each collection's retained selection and source coordinates before combining observations. An archive's main file, date partitions and correction files can overlap; physical source rows are not a deduplicated transaction population. *(measured 2026-09-30)*
+
+**Data quality.** Memo, subtotal and attribution fields retain their source meaning. Their eligibility depends on the source family, retained definitions and analytic purpose; no blanket memo exclusion applies to every query. Joint fundraising transfer and attribution observations can overlap without carrying an exact source link between them. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.
+
+- **Parquet file:** `fec_source_records.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `collection_id` | `VARCHAR` | Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id. |
+| `source_family` | `VARCHAR` | Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content. |
+| `profile` | `VARCHAR` | Provider reader profile used to interpret the verified input. |
+| `source_record_id` | `VARCHAR` | Provider source-record identity, native API identity, bulk file key or byte-evidenced positional/agency-report observation ID, scoped to collection_id. |
+| `committee_id` | `VARCHAR` | Committee ID as the source reports it (bulk CMTE_ID or the API's committee_id). In transaction files this is the committee that filed the report, not necessarily the one that received the money: a PAC's contribution to a candidate is filed under the PAC's ID, with the recipient in metadata_json OTHER_ID and CAND_ID, and TRANSACTION_TP says which way the money moved. To find money a committee received from other committees, also search OTHER_ID: in the 2025-2026 file a candidate committee's own filings list no direct PAC contributions, so they appear only under each PAC's committee_id, with the candidate in OTHER_ID and CAND_ID (TRANSACTION_TP 24K). May join fec_committees.committee_id. Blanks remain blank; no identifier is inferred from a name or another entity's ID. |
+| `candidate_id` | `VARCHAR` | Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers. |
+| `filing_id` | `VARCHAR` | Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata. |
+| `legal_doc_id` | `VARCHAR` | Source-reported legal document identifier when present, retained in its original source scope. |
+| `audit_case_id` | `VARCHAR` | Source-reported audit case identifier when present. |
+| `source_sha256` | `VARCHAR` | Digest pinning the source bytes from which the provider observed this record. |
+| `source_url` | `VARCHAR` | Recorded source URL associated with the observation; this is evidence provenance, not a live availability check. |
+| `observed_at` | `VARCHAR` | Provider observation time when available, distinct from dates reported inside the source record. |
+| `source_locator_json` | `VARCHAR` | JSON source coordinates identifying the original response field, record, file or ZIP member and byte span when supplied. Optional field_mapping pins the selected source header or HTML field dictionary; complete dictionary cells appear in the parent collection's tableFieldDefinitions. |

@@ -37,3 +37,15 @@ One physical CSV row exposed by retained collection context. Preserves source va
 | `report_year` | `INTEGER` | Year reported for the filing/report, preserved independently of cycle and transaction date. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_date` | `DATE` | Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
+| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
+| `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |
+| `coverage_status` | `VARCHAR` | Explicit completeness/retention scope of the context rows; a retained prefix does not become complete source history. |
+| `current_total_status` | `VARCHAR` | Explicit limitation or refusal for current financial totals; historical/context observations are not silently treated as a current population. |
+| `report_year_status` | `VARCHAR` | Whether the CSV source report year has an exact four-digit spelling, is missing, or is unsupported. |

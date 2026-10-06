@@ -3323,219 +3323,50 @@
       "measurement": null
     },
     {
-      "child": "scorecard_member_links",
+      "child": "fec_collections",
       "child_columns": [
-        "bioguide_id"
+        "source_family"
       ],
-      "parent": "members",
+      "parent": "fec_source_catalog",
       "parent_columns": [
-        "bioguide_id"
+        "source_family"
       ],
-      "kind": "scope",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "kind": "complete",
+      "reason": "The collection records the official FEC inventory family. A catalog route identifies available source paths, not acquired coverage. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
       "measured_via": null,
-      "baseline_keys": 565,
+      "baseline_keys": 26,
       "baseline_missing": 0,
       "floor_pct": 100.0,
       "expected_cardinality": "one",
       "measurement": {
-        "join": "scorecard_member_links.bioguide_id -> members.bioguide_id",
-        "keys": 565,
+        "join": "fec_collections.source_family -> fec_source_catalog.source_family",
+        "keys": 26,
         "missing": 0,
         "resolved_pct": 100,
         "examples": [],
-        "child_input_rows": 2102,
-        "child_nonnull_rows": 1782,
-        "parent_input_rows": 12770,
-        "parent_distinct_keys": 12770,
+        "child_input_rows": 9178,
+        "child_nonnull_rows": 9178,
+        "parent_input_rows": 26,
+        "parent_distinct_keys": 26,
         "parent_duplicate_keys": 0,
         "max_parent_multiplicity": 1,
         "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 1782,
-        "left_join_nonnull_rows": 1782,
+        "inner_join_rows": 9178,
+        "left_join_nonnull_rows": 9178,
         "scope": "full_selected_inputs",
         "child_urls": [
-          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_member_links.parquet"
+          "https://data.spicygov.ai/generations/fec-observations/9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0/fec_collections.parquet"
         ],
         "parent_urls": [
-          "https://data.spicygov.ai/generations/members/5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b/members.parquet"
+          "https://data.spicygov.ai/generations/fec-source-catalog/167fc868d0c8c81540f819692f8347c64ada48a21cf695e975f6013d7f48a8ae/fec_source_catalog.parquet"
         ],
         "measured_on": "2026-10-03",
         "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
-        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
-        "kind": "scope",
+        "receipt": "docs/evidence/explorer-joins-2026-10-03.json",
+        "kind": "complete",
         "source_evidence": [
-          "src/spicy_regs/scorecards/resolution.py",
-          "src/spicy_regs/transforms/build_scorecard_analysis.py"
-        ],
-        "declaration_provenance": {
-          "repository": "https://github.com/mikewolfd/spicygov",
-          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
-          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
-        }
-      }
-    },
-    {
-      "child": "scorecard_item_links",
-      "child_columns": [
-        "bill_id"
-      ],
-      "parent": "congress_bills",
-      "parent_columns": [
-        "bill_id"
-      ],
-      "kind": "scope",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
-      "measured_via": null,
-      "baseline_keys": 95,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_item_links.bill_id -> congress_bills.bill_id",
-        "keys": 95,
-        "missing": 0,
-        "resolved_pct": 100,
-        "examples": [],
-        "child_input_rows": 406,
-        "child_nonnull_rows": 261,
-        "parent_input_rows": 421773,
-        "parent_distinct_keys": 421773,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 261,
-        "left_join_nonnull_rows": 261,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/bill-family/ff945e34ac1c7781f346a0dc14c18365df7281db236ecc7c3ab32529232cad21/congress_bills.parquet"
-        ],
-        "measured_on": "2026-10-03",
-        "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
-        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
-        "kind": "scope",
-        "source_evidence": [
-          "src/spicy_regs/scorecards/resolution.py",
-          "src/spicy_regs/transforms/build_scorecard_analysis.py"
-        ],
-        "declaration_provenance": {
-          "repository": "https://github.com/mikewolfd/spicygov",
-          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
-          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
-        }
-      }
-    },
-    {
-      "child": "scorecard_item_links",
-      "child_columns": [
-        "vote_id"
-      ],
-      "parent": "roll_call_votes",
-      "parent_columns": [
-        "vote_id"
-      ],
-      "kind": "scope",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
-      "measured_via": null,
-      "baseline_keys": 112,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_item_links.vote_id -> roll_call_votes.vote_id",
-        "keys": 112,
-        "missing": 0,
-        "resolved_pct": 100,
-        "examples": [],
-        "child_input_rows": 406,
-        "child_nonnull_rows": 112,
-        "parent_input_rows": 30702,
-        "parent_distinct_keys": 30702,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 112,
-        "left_join_nonnull_rows": 112,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/roll-call-votes/4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030/roll_call_votes.parquet"
-        ],
-        "measured_on": "2026-10-03",
-        "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
-        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
-        "kind": "scope",
-        "source_evidence": [
-          "src/spicy_regs/scorecards/resolution.py",
-          "src/spicy_regs/transforms/build_scorecard_analysis.py"
-        ],
-        "declaration_provenance": {
-          "repository": "https://github.com/mikewolfd/spicygov",
-          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
-          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
-        }
-      }
-    },
-    {
-      "child": "scorecard_item_links",
-      "child_columns": [
-        "amendment_id"
-      ],
-      "parent": "amendments",
-      "parent_columns": [
-        "amendment_id"
-      ],
-      "kind": "empty",
-      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
-      "measured_via": null,
-      "baseline_keys": 0,
-      "baseline_missing": 0,
-      "floor_pct": null,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_item_links.amendment_id -> amendments.amendment_id",
-        "keys": 0,
-        "missing": 0,
-        "resolved_pct": null,
-        "examples": [],
-        "child_input_rows": 406,
-        "child_nonnull_rows": 0,
-        "parent_input_rows": 7119,
-        "parent_distinct_keys": 7119,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 0,
-        "inner_join_rows": 0,
-        "left_join_nonnull_rows": 0,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/amendments/a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622/amendments.parquet"
-        ],
-        "measured_on": "2026-10-03",
-        "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
-        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
-        "kind": "empty",
-        "source_evidence": [
-          "src/spicy_regs/scorecards/resolution.py",
-          "src/spicy_regs/transforms/build_scorecard_analysis.py"
-        ],
-        "declaration_provenance": {
-          "repository": "https://github.com/mikewolfd/spicygov",
-          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
-          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
-        }
+          "src/spicy_regs/transforms/build_fec_source_catalog.py:COVERAGE_NOTE"
+        ]
       }
     },
     {
@@ -4172,6 +4003,53 @@
         "kind": "complete",
         "source_evidence": [
           "src/spicy_regs/table_metadata.json:house_communications"
+        ]
+      }
+    },
+    {
+      "child": "fec_filing_definition_evidence",
+      "child_columns": [
+        "target_record_id"
+      ],
+      "parent": "fec_filing_definitions",
+      "parent_columns": [
+        "record_id"
+      ],
+      "kind": "complete",
+      "reason": "The definition binder writes these witnesses with target_table=fec_filing_definitions and the exact layout digest as target_record_id. Each definition may have several evidence rows. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
+      "measured_via": null,
+      "baseline_keys": 174,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "fec_filing_definition_evidence.target_record_id -> fec_filing_definitions.record_id",
+        "keys": 174,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 198,
+        "child_nonnull_rows": 198,
+        "parent_input_rows": 174,
+        "parent_distinct_keys": 174,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 198,
+        "left_join_nonnull_rows": 198,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_filing_definition_evidence.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_filing_definitions.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/explorer-joins-2026-10-03.json",
+        "kind": "complete",
+        "source_evidence": [
+          "src/spicy_regs/transforms/fec_filing_definitions.py:bind_definition"
         ]
       }
     },
@@ -6968,6 +6846,222 @@
       }
     },
     {
+      "child": "scorecard_member_links",
+      "child_columns": [
+        "bioguide_id"
+      ],
+      "parent": "members",
+      "parent_columns": [
+        "bioguide_id"
+      ],
+      "kind": "scope",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "measured_via": null,
+      "baseline_keys": 565,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_member_links.bioguide_id -> members.bioguide_id",
+        "keys": 565,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 2102,
+        "child_nonnull_rows": 1782,
+        "parent_input_rows": 12770,
+        "parent_distinct_keys": 12770,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 1782,
+        "left_join_nonnull_rows": 1782,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_member_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/members/5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b/members.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
+        "kind": "scope",
+        "source_evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "declaration_provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        }
+      }
+    },
+    {
+      "child": "scorecard_item_links",
+      "child_columns": [
+        "bill_id"
+      ],
+      "parent": "congress_bills",
+      "parent_columns": [
+        "bill_id"
+      ],
+      "kind": "scope",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "measured_via": null,
+      "baseline_keys": 95,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_item_links.bill_id -> congress_bills.bill_id",
+        "keys": 95,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 261,
+        "parent_input_rows": 421773,
+        "parent_distinct_keys": 421773,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 261,
+        "left_join_nonnull_rows": 261,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/bill-family/ff945e34ac1c7781f346a0dc14c18365df7281db236ecc7c3ab32529232cad21/congress_bills.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
+        "kind": "scope",
+        "source_evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "declaration_provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        }
+      }
+    },
+    {
+      "child": "scorecard_item_links",
+      "child_columns": [
+        "vote_id"
+      ],
+      "parent": "roll_call_votes",
+      "parent_columns": [
+        "vote_id"
+      ],
+      "kind": "scope",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "measured_via": null,
+      "baseline_keys": 112,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_item_links.vote_id -> roll_call_votes.vote_id",
+        "keys": 112,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 112,
+        "parent_input_rows": 30702,
+        "parent_distinct_keys": 30702,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 112,
+        "left_join_nonnull_rows": 112,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/roll-call-votes/4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030/roll_call_votes.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
+        "kind": "scope",
+        "source_evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "declaration_provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        }
+      }
+    },
+    {
+      "child": "scorecard_item_links",
+      "child_columns": [
+        "amendment_id"
+      ],
+      "parent": "amendments",
+      "parent_columns": [
+        "amendment_id"
+      ],
+      "kind": "empty",
+      "reason": "Exact identifier emitted by the scorecard resolver. Unresolved or ambiguous identifiers remain NULL. The explorer follows current published records; input_pins_json identifies the historical input used by the resolver.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_item_links.amendment_id -> amendments.amendment_id",
+        "keys": 0,
+        "missing": 0,
+        "resolved_pct": null,
+        "examples": [],
+        "child_input_rows": 406,
+        "child_nonnull_rows": 0,
+        "parent_input_rows": 7119,
+        "parent_distinct_keys": 7119,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 0,
+        "inner_join_rows": 0,
+        "left_join_nonnull_rows": 0,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecard-analysis/4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46/scorecard_item_links.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/amendments/a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622/amendments.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/scorecard-navigation-2026-10-03.json",
+        "method": "Hyparquet 1.31.2 reads all rows of the named key columns; non-null ordered tuples are grouped with exact string equality. Parent multiplicity and unmatched distinct child tuples are counted.",
+        "kind": "empty",
+        "source_evidence": [
+          "src/spicy_regs/scorecards/resolution.py",
+          "src/spicy_regs/transforms/build_scorecard_analysis.py"
+        ],
+        "declaration_provenance": {
+          "repository": "https://github.com/mikewolfd/spicygov",
+          "revision": "c74cb76fdcec4f9f244a9ea84a0eadcb71db4f7e",
+          "reason": "Previously shipped scorecard navigation; consolidated after primary dictionary integration."
+        }
+      }
+    },
+    {
       "child": "fec_account_transfers",
       "child_columns": [
         "definition_set_id"
@@ -7780,53 +7874,6 @@
       }
     },
     {
-      "child": "fec_collections",
-      "child_columns": [
-        "source_family"
-      ],
-      "parent": "fec_source_catalog",
-      "parent_columns": [
-        "source_family"
-      ],
-      "kind": "complete",
-      "reason": "The collection records the official FEC inventory family. A catalog route identifies available source paths, not acquired coverage. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "measured_via": null,
-      "baseline_keys": 26,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "fec_collections.source_family -> fec_source_catalog.source_family",
-        "keys": 26,
-        "missing": 0,
-        "resolved_pct": 100,
-        "examples": [],
-        "child_input_rows": 9178,
-        "child_nonnull_rows": 9178,
-        "parent_input_rows": 26,
-        "parent_distinct_keys": 26,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 9178,
-        "left_join_nonnull_rows": 9178,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/fec-observations/9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0/fec_collections.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/fec-source-catalog/167fc868d0c8c81540f819692f8347c64ada48a21cf695e975f6013d7f48a8ae/fec_source_catalog.parquet"
-        ],
-        "measured_on": "2026-10-03",
-        "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/explorer-joins-2026-10-03.json",
-        "kind": "complete",
-        "source_evidence": [
-          "src/spicy_regs/transforms/build_fec_source_catalog.py:COVERAGE_NOTE"
-        ]
-      }
-    },
-    {
       "child": "committee_reports",
       "child_columns": [
         "package_id"
@@ -8431,53 +8478,6 @@
         "kind": "empty",
         "source_evidence": [
           "src/spicy_regs/table_metadata.json:bill_family_backfills"
-        ]
-      }
-    },
-    {
-      "child": "fec_filing_definition_evidence",
-      "child_columns": [
-        "target_record_id"
-      ],
-      "parent": "fec_filing_definitions",
-      "parent_columns": [
-        "record_id"
-      ],
-      "kind": "complete",
-      "reason": "The definition binder writes these witnesses with target_table=fec_filing_definitions and the exact layout digest as target_record_id. Each definition may have several evidence rows. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "measured_via": null,
-      "baseline_keys": 174,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "fec_filing_definition_evidence.target_record_id -> fec_filing_definitions.record_id",
-        "keys": 174,
-        "missing": 0,
-        "resolved_pct": 100,
-        "examples": [],
-        "child_input_rows": 198,
-        "child_nonnull_rows": 198,
-        "parent_input_rows": 174,
-        "parent_distinct_keys": 174,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 198,
-        "left_join_nonnull_rows": 198,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_filing_definition_evidence.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/fec-query/784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300/fec_filing_definitions.parquet"
-        ],
-        "measured_on": "2026-10-03",
-        "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/explorer-joins-2026-10-03.json",
-        "kind": "complete",
-        "source_evidence": [
-          "src/spicy_regs/transforms/fec_filing_definitions.py:bind_definition"
         ]
       }
     }
@@ -9802,15 +9802,6 @@
           "scorecard_id",
           "publisher_member_key"
         ]
-      },
-      {
-        "child_columns": [
-          "bioguide_id"
-        ],
-        "parent_table": "members",
-        "parent_columns": [
-          "bioguide_id"
-        ]
       }
     ],
     "scorecard_item_links": [
@@ -9824,32 +9815,16 @@
           "scorecard_id",
           "item_id"
         ]
-      },
+      }
+    ],
+    "fec_collections": [
       {
         "child_columns": [
-          "bill_id"
+          "source_family"
         ],
-        "parent_table": "congress_bills",
+        "parent_table": "fec_source_catalog",
         "parent_columns": [
-          "bill_id"
-        ]
-      },
-      {
-        "child_columns": [
-          "vote_id"
-        ],
-        "parent_table": "roll_call_votes",
-        "parent_columns": [
-          "vote_id"
-        ]
-      },
-      {
-        "child_columns": [
-          "amendment_id"
-        ],
-        "parent_table": "amendments",
-        "parent_columns": [
-          "amendment_id"
+          "source_family"
         ]
       }
     ],
@@ -10022,6 +9997,17 @@
         "parent_table": "committees",
         "parent_columns": [
           "system_code"
+        ]
+      }
+    ],
+    "fec_filing_definition_evidence": [
+      {
+        "child_columns": [
+          "target_record_id"
+        ],
+        "parent_table": "fec_filing_definitions",
+        "parent_columns": [
+          "record_id"
         ]
       }
     ],
@@ -10487,13 +10473,54 @@
       "mode": "array",
       "candidates": false,
       "meaning": "Document URLs offered by the FCC; offering a URL does not establish capture or extraction.",
-      "receiptFields": [
-        "native_fields_json",
-        "pdf_extraction_results_json"
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fcc_extraction_results",
+      "source": "fcc_filings",
+      "fields": [
+        "extraction_results"
       ],
-      "elementPath": [
-        "documents"
+      "targets": [
+        {
+          "table": "@url",
+          "columns": [
+            "url"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "url"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": "https://[^\\s]+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "url_status"
+              ],
+              "from": "element",
+              "values": [
+                "usable"
+              ]
+            }
+          ]
+        }
       ],
+      "mode": "array",
+      "candidates": false,
+      "meaning": "Recorded extraction URLs. Status and digest describe retained results; public capture and text access remain unverified.",
+      "receiptFields": [],
+      "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
     {
@@ -10575,24 +10602,12 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:congress_acquisition",
+          "table": "nominations_detail_reads",
           "columns": [
-            "event",
             "congress",
             "citation"
           ],
           "keys": [
-            {
-              "parts": [
-                {
-                  "path": [],
-                  "from": "element",
-                  "literal": "congress-detail-result"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
             {
               "parts": [
                 {
@@ -10634,25 +10649,13 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:congress_acquisition",
+          "table": "committee_meetings_detail_reads",
           "columns": [
-            "event",
             "congress",
             "chamber",
             "event_id"
           ],
           "keys": [
-            {
-              "parts": [
-                {
-                  "path": [],
-                  "from": "element",
-                  "literal": "congress-detail-result"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
             {
               "parts": [
                 {
@@ -10706,54 +10709,16 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:congress_acquisition",
+          "table": "house_communications_detail_reads",
           "columns": [
-            "event",
-            "congress",
-            "communication_type",
-            "number"
+            "communication_id"
           ],
           "keys": [
             {
               "parts": [
                 {
-                  "path": [],
-                  "from": "element",
-                  "literal": "congress-detail-result"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
                   "path": [
-                    "congress"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "communication_type"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "number"
+                    "communication_id"
                   ],
                   "from": "row"
                 }
@@ -10768,6 +10733,40 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "house_record_enrichment_outcomes",
+      "source": "house_communications",
+      "fields": [],
+      "targets": [
+        {
+          "table": "house_record_enrichment_results",
+          "columns": [
+            "communication_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "communication_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded enrichment checks for this communication, including incomplete reads, conflicts and exact passage witnesses.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -11318,73 +11317,6 @@
           ]
         },
         {
-          "table": "laws",
-          "columns": [
-            "congress",
-            "law_type",
-            "number"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "congress"
-                  ],
-                  "from": "element"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "law_type"
-                  ],
-                  "from": "element"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "number"
-                  ],
-                  "from": "element"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            }
-          ],
-          "guards": [
-            {
-              "path": [
-                "target_table_selected"
-              ],
-              "from": "element",
-              "values": [
-                "laws"
-              ]
-            },
-            {
-              "path": [
-                "target_status"
-              ],
-              "from": "element",
-              "values": [
-                "found",
-                "ambiguous"
-              ]
-            }
-          ]
-        },
-        {
           "table": "law_code_sections",
           "columns": [
             "congress",
@@ -11821,7 +11753,7 @@
       ],
       "mode": "array",
       "candidates": true,
-      "meaning": "Every recorded candidate identity, including ambiguous matches. Missing, unsupported and unchecked targets remain explicit.",
+      "meaning": "Recorded candidate identities, including ambiguous matches. Links check the currently selected target table; recorded resolution and pins do not prove a current match. Missing, unsupported and unchecked outcomes remain visible.",
       "receiptFields": [
         "target_candidates_json"
       ],
@@ -11834,7 +11766,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:native_legal_reference_reads",
+          "table": "native_legal_reference_reads",
           "columns": [
             "scope_id"
           ],
@@ -11858,6 +11790,100 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The complete-read scope for this observed legal reference.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "committee_reports_read_outcomes",
+      "source": "committee_reports",
+      "fields": [],
+      "targets": [
+        {
+          "table": "committee_report_read_outcomes",
+          "columns": [
+            "package_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "package_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded reads for the exact document and body scope; no recorded row does not mean a successful empty read.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "document_citations_read_outcomes",
+      "source": "document_citations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "document_citation_read_outcomes",
+          "columns": [
+            "document_kind",
+            "document_key",
+            "body_version_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_kind"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "body_version_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded reads for the exact document and body scope; no recorded row does not mean a successful empty read.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -11938,7 +11964,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -11962,9 +11988,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -11974,7 +11998,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -11998,9 +12022,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12010,7 +12032,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12034,9 +12056,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12046,7 +12066,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12070,9 +12090,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12082,7 +12100,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12106,9 +12124,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12118,7 +12134,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12142,9 +12158,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12154,7 +12168,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12178,9 +12192,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12190,7 +12202,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12214,9 +12226,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12226,7 +12236,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12250,9 +12260,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12262,7 +12270,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12286,9 +12294,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12298,7 +12304,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12322,9 +12328,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12334,7 +12338,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12358,9 +12362,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12370,7 +12372,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12394,9 +12396,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12406,7 +12406,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12430,9 +12430,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12442,7 +12440,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12466,9 +12464,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12478,7 +12474,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12502,9 +12498,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12514,7 +12508,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12538,9 +12532,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12550,7 +12542,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12574,9 +12566,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12586,7 +12576,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12610,9 +12600,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12622,7 +12610,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12646,9 +12634,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12658,7 +12644,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12682,9 +12668,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12694,7 +12678,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12718,9 +12702,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12730,7 +12712,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12754,9 +12736,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12766,7 +12746,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12790,9 +12770,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12802,7 +12780,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12826,9 +12804,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12838,7 +12814,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12862,9 +12838,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12874,7 +12848,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12898,9 +12872,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12910,7 +12882,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12934,9 +12906,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12946,7 +12916,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -12970,9 +12940,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -12982,7 +12950,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13006,9 +12974,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13018,7 +12984,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13042,9 +13008,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13054,7 +13018,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13078,9 +13042,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13090,7 +13052,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13114,9 +13076,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13126,7 +13086,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13150,9 +13110,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13162,7 +13120,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13186,9 +13144,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13198,7 +13154,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13222,9 +13178,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13234,7 +13188,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13258,9 +13212,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13270,7 +13222,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13294,9 +13246,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13306,7 +13256,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13330,9 +13280,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13342,7 +13290,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13366,9 +13314,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13378,7 +13324,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13402,9 +13348,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13414,7 +13358,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13438,9 +13382,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13450,7 +13392,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13474,9 +13416,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13486,7 +13426,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13510,9 +13450,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13522,7 +13460,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13546,9 +13484,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13558,7 +13494,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13582,9 +13518,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13594,7 +13528,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13618,9 +13552,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13630,7 +13562,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13654,9 +13586,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13666,7 +13596,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13690,9 +13620,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13702,7 +13630,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13726,9 +13654,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13738,7 +13664,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13762,9 +13688,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13774,7 +13698,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13798,9 +13722,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13810,7 +13732,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13834,9 +13756,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13846,7 +13766,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_collections",
+          "table": "fec_collections",
           "columns": [
             "collection_id"
           ],
@@ -13870,9 +13790,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13906,9 +13824,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "An original-filing row's cover: each electronic collection holds one fec_filing_report_observations row, its report_record_role reported-form (F24N or F24A, F3XN or F3XA, F5N). The bulk file (bulk-independent-expenditure-2024) has no cover row. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
-      "receiptFields": [
-        "collection_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13955,10 +13871,183 @@
       "mode": "row",
       "candidates": false,
       "meaning": "A Schedule C2 guarantor names its Schedule C loan by transaction id within one filing; each of the 22 met exactly one loan, though a few other loan keys repeat. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
-      "receiptFields": [
-        "collection_id",
-        "back_reference_transaction_id"
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "resolved_scorecard_member_links_members",
+      "source": "scorecard_member_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "members",
+          "columns": [
+            "bioguide_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bioguide_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "resolution_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved"
+              ]
+            }
+          ]
+        }
       ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded resolved identifier. This link checks current published data; the resolver's recorded input pins describe its original target.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "resolved_scorecard_item_links_congress_bills",
+      "source": "scorecard_item_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "congress_bills",
+          "columns": [
+            "bill_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bill_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "resolution_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded resolved identifier. This link checks current published data; the resolver's recorded input pins describe its original target.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "resolved_scorecard_item_links_roll_call_votes",
+      "source": "scorecard_item_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "roll_call_votes",
+          "columns": [
+            "vote_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "vote_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "resolution_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded resolved identifier. This link checks current published data; the resolver's recorded input pins describe its original target.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "resolved_scorecard_item_links_amendments",
+      "source": "scorecard_item_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "amendments",
+          "columns": [
+            "amendment_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "amendment_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "resolution_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded resolved identifier. This link checks current published data; the resolver's recorded input pins describe its original target.",
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -13968,7 +14057,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -13992,9 +14081,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14004,7 +14091,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14028,9 +14115,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14040,7 +14125,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14064,9 +14149,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14076,7 +14159,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14100,9 +14183,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14112,7 +14193,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14136,9 +14217,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14148,7 +14227,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14172,9 +14251,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14184,7 +14261,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14208,9 +14285,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14220,7 +14295,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14244,9 +14319,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14256,7 +14329,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14280,9 +14353,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14292,7 +14363,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14316,9 +14387,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14328,7 +14397,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14352,9 +14421,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14364,7 +14431,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14388,9 +14455,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14400,7 +14465,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14424,9 +14489,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14436,7 +14499,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14460,9 +14523,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14472,7 +14533,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_filing_definitions",
+          "table": "fec_filing_definitions",
           "columns": [
             "record_id"
           ],
@@ -14496,81 +14557,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "definition_set_id"
-      ],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "receipt_fec_collections_source_family_fec_source_catalog",
-      "source": "fec_collections",
-      "fields": [],
-      "targets": [
-        {
-          "table": "@receipt:fec_source_catalog",
-          "columns": [
-            "source_family"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_family"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The collection records the official FEC inventory family. A catalog route identifies available source paths, not acquired coverage. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "source_family"
-      ],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "receipt_fec_filing_definition_evidence_target_record_id_fec_filing_definitions",
-      "source": "fec_filing_definition_evidence",
-      "fields": [],
-      "targets": [
-        {
-          "table": "@receipt:fec_filing_definitions",
-          "columns": [
-            "record_id"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "target_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The definition binder writes these witnesses with target_table=fec_filing_definitions and the exact layout digest as target_record_id. Each definition may have several evidence rows. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "receiptFields": [
-        "target_record_id"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14580,7 +14567,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -14630,11 +14617,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14644,7 +14627,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -14694,11 +14677,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14708,7 +14687,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -14758,11 +14737,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14772,7 +14747,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -14822,11 +14797,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14836,7 +14807,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -14886,11 +14857,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14900,7 +14867,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -14950,11 +14917,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -14964,7 +14927,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15014,11 +14977,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15028,7 +14987,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15078,11 +15037,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15092,7 +15047,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15142,11 +15097,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15156,7 +15107,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15206,11 +15157,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15220,7 +15167,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15270,11 +15217,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15284,7 +15227,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15334,11 +15277,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15348,7 +15287,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15398,11 +15337,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15412,7 +15347,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15462,11 +15397,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15476,7 +15407,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15526,11 +15457,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15540,7 +15467,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15590,11 +15517,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15604,7 +15527,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15654,11 +15577,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15668,7 +15587,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15718,11 +15637,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15732,7 +15647,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15782,11 +15697,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15796,7 +15707,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15846,11 +15757,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15860,7 +15767,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15910,11 +15817,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15924,7 +15827,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -15974,11 +15877,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -15988,7 +15887,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16038,11 +15937,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16052,7 +15947,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16102,11 +15997,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16116,7 +16007,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16166,11 +16057,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16180,7 +16067,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16230,11 +16117,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16244,7 +16127,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16294,11 +16177,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16308,7 +16187,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16358,11 +16237,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16372,7 +16247,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16422,11 +16297,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16436,7 +16307,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16486,11 +16357,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16500,7 +16367,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16550,11 +16417,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16564,7 +16427,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16614,11 +16477,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16628,7 +16487,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16678,11 +16537,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16692,7 +16547,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16742,11 +16597,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16756,7 +16607,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16806,11 +16657,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16820,7 +16667,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16870,11 +16717,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16884,7 +16727,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16934,11 +16777,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -16948,7 +16787,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -16998,11 +16837,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17012,7 +16847,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17062,11 +16897,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17076,7 +16907,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17126,11 +16957,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17140,7 +16967,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17190,11 +17017,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17204,7 +17027,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17254,11 +17077,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17268,7 +17087,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17318,11 +17137,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17332,7 +17147,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17382,11 +17197,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17396,7 +17207,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17446,11 +17257,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17460,7 +17267,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17510,11 +17317,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17524,7 +17327,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17574,11 +17377,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17588,7 +17387,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17638,11 +17437,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17652,7 +17447,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17702,11 +17497,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17716,7 +17507,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17766,11 +17557,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17780,7 +17567,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17830,11 +17617,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17844,7 +17627,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17894,11 +17677,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17908,7 +17687,7 @@
       "fields": [],
       "targets": [
         {
-          "table": "@receipt:fec_source_records",
+          "table": "fec_source_records",
           "columns": [
             "collection_id",
             "source_record_id",
@@ -17958,11 +17737,7 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [
-        "collection_id",
-        "source_record_id",
-        "source_sha256"
-      ],
+      "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
@@ -17990,143 +17765,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_agency_mapping_dispositions",
-      "source": "fec_agency_mapping_dispositions",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_agency_report_documents",
-      "source": "fec_agency_report_documents",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_agency_report_text",
-      "source": "fec_agency_report_text",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_agency_reports",
-      "source": "fec_agency_reports",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -18160,7 +17809,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18194,75 +17853,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_api_response_controls",
-      "source": "fec_api_response_controls",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_audit_findings",
-      "source": "fec_audit_findings",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -18296,143 +17897,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_candidate_api_observations",
-      "source": "fec_candidate_api_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_collection_selection",
-      "source": "fec_collection_selection",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_committee_master_observations",
-      "source": "fec_committee_master_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_committee_observations",
-      "source": "fec_committee_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -18466,7 +17941,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18500,7 +17985,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18534,7 +18029,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18568,7 +18073,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18602,7 +18117,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18636,41 +18161,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_filing_definition_evidence",
-      "source": "fec_filing_definition_evidence",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -18704,41 +18205,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_filing_links",
-      "source": "fec_filing_links",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -18772,7 +18249,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18806,41 +18293,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_historical_ie_statistics",
-      "source": "fec_historical_ie_statistics",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -18874,7 +18337,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18908,7 +18381,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -18942,143 +18425,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_legal_documents",
-      "source": "fec_legal_documents",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_legal_events",
-      "source": "fec_legal_events",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_legal_matters",
-      "source": "fec_legal_matters",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_legal_parties",
-      "source": "fec_legal_parties",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -19112,7 +18469,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -19146,7 +18513,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -19180,143 +18557,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_lobbyist_registrations",
-      "source": "fec_lobbyist_registrations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_oversight_recommendations",
-      "source": "fec_oversight_recommendations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_postgres_committee_history_observations",
-      "source": "fec_postgres_committee_history_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_quality_notices",
-      "source": "fec_quality_notices",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -19350,109 +18601,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_record_evidence",
-      "source": "fec_record_evidence",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "filing_association_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
             }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_registration_statements",
-      "source": "fec_registration_statements",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_report_metrics",
-      "source": "fec_report_metrics",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
@@ -19486,7 +18645,17 @@
               "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
@@ -19497,273 +18666,309 @@
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "native_filing_fec_research_context_dispositions",
-      "source": "fec_research_context_dispositions",
+      "id": "fec_relationship_subject",
+      "source": "fec_relationships",
       "fields": [],
       "targets": [
         {
-          "table": "fec_filings",
+          "table": "fec_candidate_history",
           "columns": [
-            "filing_key"
+            "candidate_id",
+            "cycle"
           ],
           "keys": [
             {
               "parts": [
                 {
                   "path": [
-                    "filing_key"
+                    "subject_id"
                   ],
                   "from": "row"
                 }
               ],
               "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "pattern": "[HPS][A-Za-z0-9]{8}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "cycle"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "subject_type"
+              ],
+              "from": "row",
+              "values": [
+                "candidate"
+              ]
+            },
+            {
+              "path": [
+                "subject_endpoint_status"
+              ],
+              "from": "row",
+              "values": [
+                "lookup_eligible"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_committee_history",
+          "columns": [
+            "committee_id",
+            "cycle"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "subject_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "C[0-9]{8}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "cycle"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "subject_type"
+              ],
+              "from": "row",
+              "values": [
+                "committee"
+              ]
+            },
+            {
+              "path": [
+                "subject_endpoint_status"
+              ],
+              "from": "row",
+              "values": [
+                "lookup_eligible"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
+      "meaning": "The retained entity type, native ID and stated cycle qualify this endpoint. Name-only, absent and unavailable-cycle results create no edge.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "native_filing_fec_research_document_observations",
-      "source": "fec_research_document_observations",
+      "id": "fec_relationship_object",
+      "source": "fec_relationships",
       "fields": [],
       "targets": [
         {
-          "table": "fec_filings",
+          "table": "fec_candidate_history",
           "columns": [
-            "filing_key"
+            "candidate_id",
+            "cycle"
           ],
           "keys": [
             {
               "parts": [
                 {
                   "path": [
-                    "filing_key"
+                    "object_id"
                   ],
                   "from": "row"
                 }
               ],
               "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "pattern": "[HPS][A-Za-z0-9]{8}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "cycle"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "object_type"
+              ],
+              "from": "row",
+              "values": [
+                "candidate"
+              ]
+            },
+            {
+              "path": [
+                "object_endpoint_status"
+              ],
+              "from": "row",
+              "values": [
+                "lookup_eligible"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_committee_history",
+          "columns": [
+            "committee_id",
+            "cycle"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "object_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "C[0-9]{8}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "cycle"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "object_type"
+              ],
+              "from": "row",
+              "values": [
+                "committee"
+              ]
+            },
+            {
+              "path": [
+                "object_endpoint_status"
+              ],
+              "from": "row",
+              "values": [
+                "lookup_eligible"
+              ]
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
+      "meaning": "The retained entity type, native ID and stated cycle qualify this endpoint. Name-only, absent and unavailable-cycle results create no edge.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "native_filing_fec_research_filing_feed_items",
-      "source": "fec_research_filing_feed_items",
+      "id": "fec_relationship_source_record",
+      "source": "fec_relationships",
       "fields": [],
       "targets": [
         {
-          "table": "fec_filings",
+          "table": "fec_source_records",
           "columns": [
-            "filing_key"
+            "collection_id",
+            "source_record_id",
+            "source_sha256"
           ],
           "keys": [
             {
               "parts": [
                 {
                   "path": [
-                    "filing_key"
+                    "collection_id"
                   ],
                   "from": "row"
                 }
               ],
               "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_research_meeting_observations",
-      "source": "fec_research_meeting_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+              "pattern": ".+"
+            },
             {
               "parts": [
                 {
                   "path": [
-                    "filing_key"
+                    "source_record_id"
                   ],
                   "from": "row"
                 }
               ],
               "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_research_response_outcomes",
-      "source": "fec_research_response_outcomes",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+              "pattern": ".+"
+            },
             {
               "parts": [
                 {
                   "path": [
-                    "filing_key"
+                    "source_sha256"
                   ],
                   "from": "row"
                 }
               ],
               "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "pattern": "sha256:[a-f0-9]{64}"
             }
           ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_research_source_pages",
-      "source": "fec_research_source_pages",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
+          "guards": [
             {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
+              "path": [
+                "companion_status"
               ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+              "from": "row",
+              "values": [
+                "locator_coordinates_available"
+              ]
             }
-          ],
-          "guards": []
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_retained_csv_observations",
-      "source": "fec_retained_csv_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "native_filing_fec_source_records",
-      "source": "fec_source_records",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_filings",
-          "columns": [
-            "filing_key"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "filing_key"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.",
+      "meaning": "Literal retained source coordinates and digest; target existence does not establish verified source bytes.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"

@@ -21,3 +21,11 @@ One source-documentation page observation with build-extracted body text, conten
 | `text` | `VARCHAR` | Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference. |
 | `content_scope` | `VARCHAR` | Scope of retained page content; text, headings and links are source documentation rather than inferred transactions. |
 | `links` | `STRUCT(url VARCHAR, href VARCHAR, "label" VARCHAR)[]` | Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
+| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `content_status` | `VARCHAR` | Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer. |

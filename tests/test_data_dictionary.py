@@ -556,9 +556,9 @@ def test_a_view_points_at_a_receipt_in_at_most_one_sentence_too():
         fields = dd.receipt_pointers({"summary": spec.meaning, "columns": columns})
         assert len(fields) <= 1, (spec.name, fields)
         pointing |= {spec.name} if fields else set()
-    # Both read fcc_filings in its native form, so they exist only once it has receipts; its receipt holds the
-    # filing's and each document's fcc.gov address. A view added here needs the same two answers.
-    assert pointing == {"fcc_native_observations", "fcc_filing_artifacts"}
+    # Offered document URLs are now main fields. Native observation evidence
+    # still points once to retained receipts; artifacts need no receipt key.
+    assert pointing == {"fcc_native_observations"}
 
 
 # --------------------------------------------------------------------------- #

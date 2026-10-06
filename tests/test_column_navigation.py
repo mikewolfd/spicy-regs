@@ -75,7 +75,10 @@ def test_separate_schema_and_identity_activate_links_without_inventing_main_inde
         audit={},
         extra_tables={"comments_index": extra()},
     )
-    assert bundle["joins"] == [j]
+    declared = bundle["joins"][0]
+    assert {k: v for k, v in declared.items() if k not in {"directions", "completeKey", "requiredFields"}} == j
+    assert declared['directions']['forward']['measurement']['status'] == 'unknown'
+    assert declared['requiredFields'] == {'child': [{'path': 'agency_code', 'status': 'published'}], 'parent': [{'path': 'agency_code', 'status': 'published'}]}
     assert bundle["tables"]["comments_index"]["publicationIdentity"] == extra()["publicationIdentity"]
     assert bundle["extra_tables"]["comments_index"] == extra()
     assert set(bundle["publication"]["families"]) == {"agency"}
@@ -129,10 +132,10 @@ def test_historical_publisher_links_retain_source_urls_without_weakening_data_ba
         assert not public_url(url, allow_http=True)
 
 
-def test_published_processing_tables_reuse_dictionary_prose_without_expanding_native_catalog():
+def test_promoted_fec_source_tables_reuse_dictionary_prose():
     source = data_dictionary.load_curated_descriptions()
     native = json.loads((Path(__file__).parents[1] / "src/spicy_regs/table_metadata.json").read_text())
-    assert "fec_collections" in source and "fec_collections" not in native
+    assert "fec_collections" in source and "fec_collections" in native
     columns = [["collection_id", "VARCHAR"]]
     index = {
         "format": "spicy-regs-publication",
@@ -152,11 +155,12 @@ def test_published_processing_tables_reuse_dictionary_prose_without_expanding_na
     assert table["publicationSchema"] == columns
 
 
-def test_detail_attempt_navigation_requires_event_kind_and_complete_partition_identity():
+def test_main_detail_attempt_navigation_requires_complete_partition_identity():
     from spicy_regs.explorer_navigation import declarations, target_keys, validate_navigation
     specs=[spec for spec in declarations() if spec['id']=='nominations_detail_attempts']
     target=specs[0]['targets'][0]
-    assert target_keys(target, {}, {'congress':'119','citation':'PN129-10'}) == ['congress-detail-result','119','PN129-10']
+    assert target_keys(target, {}, {'congress':'119','citation':'PN129-10'}) == ['119','PN129-10']
+    assert target['table'] == 'nominations_detail_reads'
     assert target_keys(target, {}, {'congress':'119'}) is None
     malformed=json.loads(json.dumps(specs))
     malformed[0]['targets'][0]['keys'][0]['parts'][0]['literal']=42

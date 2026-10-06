@@ -2,4 +2,31 @@
 
 # `fec_research_response_outcomes`
 
-`fec_research_response_outcomes` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'fec_research_response_outcomes'`.
+**FEC API request outcomes**
+
+Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected.
+
+**Coverage.** Sampled. Supported observations from selected rejected, empty or otherwise limited OpenFEC contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+
+- **Parquet file:** `fec_research_response_outcomes.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |
+| `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
+| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `profile_refusal` | `VARCHAR` | Source-reader refusal retained for this context, even where the native response exposes useful outcome metadata. |
+| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
+| `payload_shape` | `VARCHAR` | Observed native response shape, distinguishing result arrays, error objects and unsupported structures. |
+| `outcome_status` | `VARCHAR` | Explicit retained response outcome, including rejection or empty payload. Neither establishes a completed successful query by itself. |
+| `capture_disposition` | `VARCHAR` | Distinguishes a provider refusal from an empty or present held payload. No value asserts successful source coverage. |
+| `observed_payload_records` | `INTEGER` | Count of result entries actually visible in the retained payload, distinct from a claimed complete query population. |

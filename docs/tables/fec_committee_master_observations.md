@@ -32,3 +32,19 @@ One physical committee-master row within its retained cycle/file capture. Keeps 
 | `organization_type` | `VARCHAR` | Literal source organization-type code; interpretation follows the source namespace. |
 | `connected_organization_name` | `VARCHAR` | Name of the connected organization reported by the committee source; not a resolved corporate identity. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `history_scope_status` | `VARCHAR` | Explicit historical scope limitation; repeated snapshots remain source observations instead of replacing committee/cycle identity rows. |
+| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
+| `cycle_status` | `VARCHAR` | Interpretation of source cycle: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |

@@ -16,8 +16,19 @@ One source observation of a namespaced legal matter. Use matter_id for authority
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
 | `matter_id` | `VARCHAR` | Authority-, matter-type- and namespace-qualified logical case key. Multiple retained observations may share it. |
 | `matter_record_id` | `VARCHAR` | Exact fec_legal_matters.record_id observation supporting this child event, party, document or finding. |
+| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `matter_type` | `VARCHAR` | Legal source family such as advisory opinion, enforcement, administrative fine, dispute resolution, rulemaking or audit. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
 | `native_matter_id` | `VARCHAR` | Literal case identifier within its legal source namespace; similar numbers across matter types do not identify the same case. |
@@ -25,6 +36,7 @@ One source observation of a namespaced legal matter. Use matter_id for authority
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
 | `description` | `VARCHAR` | Literal source description or narrative associated with this observation. |
 | `status` | `VARCHAR` | Legal status stated by the source at this observation, without selecting a current state across captures. |
+| `source_url` | `VARCHAR` | Source-provided absolute URL, or navigation URL resolved from a source-provided relative FEC path. Supported legacy matter routes are rewritten only after exact matter-type and identifier checks. Absolute URLs remain unchanged; a missing URL is not invented. It does not assert current availability or body retrieval. The original URL remains in source evidence. |
 | `committee_id` | `VARCHAR` | Literal FEC committee identifier as reported in this observation. Use cycle and source scope for historical joins. |
 | `candidate_id` | `VARCHAR` | Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match. |
 | `audit_id` | `VARCHAR` | Literal source audit identifier; it does not replace the namespaced matter identity. |
