@@ -972,3 +972,60 @@ def test_split_support_still_refuses_unlisted_physical_tables(tmp_path, monkeypa
         convert("bill-family", tmp_path / "work", publish=True)
     assert bucket.writes == written
     assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+@pytest.mark.parametrize("family,read_dataset", [
+    ("committee-reports", "committee_report_reads"),
+    ("native-legal-references", "native_legal_reference_reads"),
+])
+def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
+        tmp_path, monkeypatch, bucket, family, read_dataset):
+    """The complete family includes checkpoint reads even when no subject row was produced."""
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.generations import build_generation
+    from spicy_regs.legislative_documents import field_registry
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from tests.test_legislative_receipts import retained, row
+
+    # Empty processing tables have wider legacy footers; this fake-bucket test
+    # exercises receipt ownership/restoration, not the production shrink guard.
+    monkeypatch.setenv("R2_ALLOW_SHRINK", "1")
+    cls = conversion._rollup_class(family)
+    reads_key = read_dataset + ".parquet"
+    assert reads_key in cls.source_outputs
+    assert reads_key not in cls.outputs
+    assert reads_key in cls.receipt_only_tables
+    assert next(p for p in cls.receipt_policies if p.dataset == read_dataset).receipt_only
+    reads = (row(read_dataset, package_id="CRPT-119hrpt1", outcome="complete", rule_version="r1")
+             if read_dataset == "committee_report_reads" else row(
+                 read_dataset, scope_id="scope", source_family="uscode", source_record_key="record",
+                 read_status="complete", occurrence_count="0", source_bytes="0", rule_version="r1"))
+    source_reads = [reads, reads | ({"package_id": "CRPT-119hrpt2"} if read_dataset == "committee_report_reads"
+                                   else {"scope_id": "second-scope"})]
+    files = []
+    for key in cls.source_outputs:
+        dataset = key.removesuffix(".parquet")
+        assert dataset in field_registry()
+        files.append(retained(tmp_path / "old", dataset, source_reads if dataset == read_dataset else [],
+                              {b"checkpoint": b"preserve exact original metadata"}))
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        build_generation(tmp_path / "old-generation" / family, family=family, files=files,
+                         expected_keys=list(cls.source_outputs))
+        old = publication.publish_generation(tmp_path / "old-generation" / family, client=bucket,
+                                             bucket=BUCKET, prior_index=publication.current_index(BASE))["families"][family]
+    prepared = convert(family, tmp_path / "work", publish=False)
+    assert prepared["published"] is None
+    assert prepared["captured"]["entry"] == old
+    assert prepared["tables"][read_dataset]["retained_rows"] == 2
+    assert not any(prepared["tables"][read_dataset][name] for name in
+                   ("type_changes", "metadata_changes", "rows_only_in_restored", "rows_only_in_retained"))
+    conversion.publish_prepared(tmp_path / "work" / conversion.RECEIPT, allowed=[family], expected_main=MAIN,
+                                expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
+    current = publication.current_index(BASE)
+    entry = current["families"][family]
+    assert reads_key not in entry["tables"]
+    assert read_dataset in entry["etlReceipts"]["datasets"]
+    restored = SelectedPriors(tmp_path / "anonymous", index=current, public_url=BASE).get(read_dataset)
+    assert pq.read_table(restored).to_pylist() == source_reads
+    assert pq.read_schema(restored).equals(pq.read_schema(tmp_path / "old" / reads_key), check_metadata=True)
