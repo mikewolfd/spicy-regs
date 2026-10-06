@@ -58,7 +58,9 @@ identities. Mutable comments still require a matching ETag and size each run.
 All table descriptions, including scorecards, come from the primary dictionary.
 All relationships are authored in `table_joins.py` and generated into
 `table_joins.json`. Both the explorer and MCP read this one generated registry.
-There is no supplemental description or navigation registry. Detailed MCP
+There is no supplemental record-join registry. Shared-field browsing in the
+website applies reviewed category filters; it does not claim that two records
+identify the same entity. Detailed MCP
 descriptions include full measurements on outgoing joins. Incoming joins retain
 their keys, reasons and baseline counts, and point to the child description for
 full measurement evidence so heavily connected tables stay within reply limits.
@@ -82,6 +84,9 @@ retain the checked immutable inputs. The
 establishes baselines for 25 populated source joins and records five with no
 non-null keys. `join_audit.json` explains tables that
 remain standalone or need special handling; it does not define executable joins.
+The [column navigation receipt](evidence/column-navigation-2026-10-06.json)
+adds full-key checks for 13 populated scalar links. The comments-to-dockets link
+has 28 missing docket keys out of 60,296 and remains an explicit `scope` join.
 
 Before publishing, the builder validates every declared join's table names,
 columns, complete composite-key length, resolution kind and declared

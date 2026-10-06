@@ -1,0 +1,763 @@
+{
+  "measured_on": "2026-10-06",
+  "scope": "full_selected_inputs",
+  "method": "Maintained DuckDB join checker, selected key columns only.",
+  "results": [
+    {
+      "join": "amendments.amended_bill_id -> congress_bills.bill_id",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 203,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 203,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 7119,
+      "child_nonnull_rows": 7119,
+      "parent_input_rows": 421773,
+      "parent_distinct_keys": 421773,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 7119,
+      "left_join_nonnull_rows": 7119,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"amended_bill_id\" FROM read_parquet(['https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"bill_id\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"amended_bill_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"amended_bill_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"bill_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"bill_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet",
+              "rows": 7119,
+              "byteSize": 165568,
+              "sha256": "sha256:6bc83d9ef0167c5dfe86db5c74f868bfba8b239e18561a1a0ac43beeb9ae70e7"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet",
+              "rows": 421773,
+              "byteSize": 31060412,
+              "sha256": "sha256:3aa01689966d9c3ada4c47413e9091390f6aec83f7a6844529a142b77b7ff254"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "amendments.amended_amendment_id -> amendments.amendment_id",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 73,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 73,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 7119,
+      "child_nonnull_rows": 1105,
+      "parent_input_rows": 7119,
+      "parent_distinct_keys": 7119,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 1105,
+      "left_join_nonnull_rows": 1105,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"amended_amendment_id\" FROM read_parquet(['https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"amendment_id\" FROM read_parquet(['https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"amended_amendment_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"amended_amendment_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"amendment_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"amendment_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet",
+              "rows": 7119,
+              "byteSize": 165568,
+              "sha256": "sha256:6bc83d9ef0167c5dfe86db5c74f868bfba8b239e18561a1a0ac43beeb9ae70e7"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/amendments/39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807/amendments.parquet",
+              "rows": 7119,
+              "byteSize": 165568,
+              "sha256": "sha256:6bc83d9ef0167c5dfe86db5c74f868bfba8b239e18561a1a0ac43beeb9ae70e7"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "committees.parent_system_code -> committees.system_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 40,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 40,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 817,
+      "child_nonnull_rows": 589,
+      "parent_input_rows": 817,
+      "parent_distinct_keys": 817,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 589,
+      "left_join_nonnull_rows": 589,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"parent_system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"parent_system_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"parent_system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"system_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet",
+              "rows": 817,
+              "byteSize": 86113,
+              "sha256": "sha256:fc17558cf1bf74e3e89a70fcc97805bb436cae0a607939ee929a62774ae4103e"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet",
+              "rows": 817,
+              "byteSize": 86113,
+              "sha256": "sha256:fc17558cf1bf74e3e89a70fcc97805bb436cae0a607939ee929a62774ae4103e"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "committee_assignments.parent_system_code -> committees.system_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 19,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 19,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 2973,
+      "child_nonnull_rows": 1625,
+      "parent_input_rows": 817,
+      "parent_distinct_keys": 817,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 1625,
+      "left_join_nonnull_rows": 1625,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committee_assignments.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"parent_system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committee_assignments.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"parent_system_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"parent_system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"system_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committee_assignments.parquet",
+              "rows": 2973,
+              "byteSize": 37093,
+              "sha256": "sha256:75714d35703754436cbbace1297bd7882d7819cb451b59454197461209513f51"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet",
+              "rows": 817,
+              "byteSize": 86113,
+              "sha256": "sha256:fc17558cf1bf74e3e89a70fcc97805bb436cae0a607939ee929a62774ae4103e"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "bill_committee_activities.parent_system_code -> committees.system_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 29,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 29,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 340761,
+      "child_nonnull_rows": 85142,
+      "parent_input_rows": 817,
+      "parent_distinct_keys": 817,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 85142,
+      "left_join_nonnull_rows": 85142,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_committee_activities.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"parent_system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_committee_activities.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"parent_system_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"parent_system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"system_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_committee_activities.parquet",
+              "rows": 340761,
+              "byteSize": 2730333,
+              "sha256": "sha256:a3da99d1eda13946d5bd4d1a9dfa90bf9934ee404fc17e669e8590e35d88ef25"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet",
+              "rows": 817,
+              "byteSize": 86113,
+              "sha256": "sha256:fc17558cf1bf74e3e89a70fcc97805bb436cae0a607939ee929a62774ae4103e"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "bill_committee_activities.system_code -> committees.system_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 255,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 255,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 340761,
+      "child_nonnull_rows": 340761,
+      "parent_input_rows": 817,
+      "parent_distinct_keys": 817,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 340761,
+      "left_join_nonnull_rows": 340761,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_committee_activities.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_committee_activities.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"system_code\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"system_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"system_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"system_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_committee_activities.parquet",
+              "rows": 340761,
+              "byteSize": 2730333,
+              "sha256": "sha256:a3da99d1eda13946d5bd4d1a9dfa90bf9934ee404fc17e669e8590e35d88ef25"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-rosters/fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88/committees.parquet",
+              "rows": 817,
+              "byteSize": 86113,
+              "sha256": "sha256:fc17558cf1bf74e3e89a70fcc97805bb436cae0a607939ee929a62774ae4103e"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "committee_reports.recital_bill_id -> congress_bills.bill_id",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 153,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 153,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 161,
+      "child_nonnull_rows": 154,
+      "parent_input_rows": 421773,
+      "parent_distinct_keys": 421773,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 154,
+      "left_join_nonnull_rows": 154,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/committee-reports/516557a9ca339cf2bda253230f399daee9e01a83ecda45a88d258e0247ebbeda/committee_reports.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"recital_bill_id\" FROM read_parquet(['https://data.spicygov.ai/generations/committee-reports/516557a9ca339cf2bda253230f399daee9e01a83ecda45a88d258e0247ebbeda/committee_reports.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"bill_id\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"recital_bill_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"recital_bill_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"bill_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"bill_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/committee-reports/516557a9ca339cf2bda253230f399daee9e01a83ecda45a88d258e0247ebbeda/committee_reports.parquet",
+              "rows": 161,
+              "byteSize": 41134,
+              "sha256": "sha256:1ecac5cf181a4672021676a07f7d3bfe7ee60afe49e0cc67ab9e161a3493bb94"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet",
+              "rows": 421773,
+              "byteSize": 31060412,
+              "sha256": "sha256:3aa01689966d9c3ada4c47413e9091390f6aec83f7a6844529a142b77b7ff254"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "cbo_cost_estimates.title_bill_id -> congress_bills.bill_id",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 13128,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 13128,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 14803,
+      "child_nonnull_rows": 14425,
+      "parent_input_rows": 421773,
+      "parent_distinct_keys": 421773,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 14425,
+      "left_join_nonnull_rows": 14425,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/cbo_cost_estimates.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"title_bill_id\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/cbo_cost_estimates.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"bill_id\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"title_bill_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"title_bill_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"bill_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"bill_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/cbo_cost_estimates.parquet",
+              "rows": 14803,
+              "byteSize": 835599,
+              "sha256": "sha256:5d4d70a03b3d27326a2a393b2acf77ace35f9d201d4668e28d69716a6663cbd9"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/congress_bills.parquet",
+              "rows": 421773,
+              "byteSize": 31060412,
+              "sha256": "sha256:3aa01689966d9c3ada4c47413e9091390f6aec83f7a6844529a142b77b7ff254"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "bill_vote_references.congress+chamber+session+roll_number -> roll_call_votes.congress+chamber+session+roll_number",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 11726,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 11726,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 19766,
+      "child_nonnull_rows": 19766,
+      "parent_input_rows": 30702,
+      "parent_distinct_keys": 30702,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 19766,
+      "left_join_nonnull_rows": 19766,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_vote_references.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/roll-call-votes/e053a85168c530c8fe1dd8c9ce6dc3437b4a43478191124a119f407c69519c9d/roll_call_votes.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"congress\", \"chamber\", \"session\", \"roll_number\" FROM read_parquet(['https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_vote_references.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"congress\", \"chamber\", \"session\", \"roll_number\" FROM read_parquet(['https://data.spicygov.ai/generations/roll-call-votes/e053a85168c530c8fe1dd8c9ce6dc3437b4a43478191124a119f407c69519c9d/roll_call_votes.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"congress\" AS c0, \"chamber\" AS c1, \"session\" AS c2, \"roll_number\" AS c3, count(*) AS child_rows\n                   FROM child_input WHERE \"congress\" IS NOT NULL AND \"chamber\" IS NOT NULL AND \"session\" IS NOT NULL AND \"roll_number\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"congress\" AS p0, \"chamber\" AS p1, \"session\" AS p2, \"roll_number\" AS p3, count(*) AS parent_rows\n                   FROM parent_input WHERE \"congress\" IS NOT NULL AND \"chamber\" IS NOT NULL AND \"session\" IS NOT NULL AND \"roll_number\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, c1, c2, c3, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0 AND c.c1 = p.p1 AND c.c2 = p.p2 AND c.c3 = p.p3)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0, c1, c2, c3) ORDER BY c0, c1, c2, c3) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/bill-family/6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027/bill_vote_references.parquet",
+              "rows": 19766,
+              "byteSize": 222845,
+              "sha256": "sha256:bb6313b801e704813cbd99ce8c7f4dc33286b58a6a56a668077722f4302986d3"
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/roll-call-votes/e053a85168c530c8fe1dd8c9ce6dc3437b4a43478191124a119f407c69519c9d/roll_call_votes.parquet",
+              "rows": 30702,
+              "byteSize": 1519680,
+              "sha256": "sha256:3ae1dbf38e1ad71eb4dd2042383c4036e1e2445c31313e41a568b42aee2f7f20"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "agency_lifecycle_stats.agency_code -> agency_stats.agency_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 163,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 163,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 342,
+      "child_nonnull_rows": 334,
+      "parent_input_rows": 316,
+      "parent_distinct_keys": 316,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 334,
+      "left_join_nonnull_rows": 334,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/materialized/rulemaking/snapshots/snapshot_d1acc86e7a75e229668f074329b6483e/agency_lifecycle_stats.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"agency_code\" FROM read_parquet(['https://data.spicygov.ai/materialized/rulemaking/snapshots/snapshot_d1acc86e7a75e229668f074329b6483e/agency_lifecycle_stats.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"agency_code\" FROM read_parquet(['https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"agency_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"agency_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"agency_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"agency_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": "sha256:b095a0749ad34ba7cbd0a640dcbd7aadac31f15c7c098bbf8a7aff51f0a66a25",
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/materialized/rulemaking/snapshots/snapshot_d1acc86e7a75e229668f074329b6483e/agency_lifecycle_stats.parquet",
+              "rows": 342,
+              "byteSize": 14520
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet",
+              "rows": 316,
+              "byteSize": 3261,
+              "sha256": "sha256:3a3e35a4bf9fb0771cc798d28cd27eb113557bf0bbc9607d3afc33b62c53dd1e"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "rulemaking_lifecycles.agency_code -> agency_stats.agency_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 170,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 170,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 75195,
+      "child_nonnull_rows": 75195,
+      "parent_input_rows": 316,
+      "parent_distinct_keys": 316,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 75195,
+      "left_join_nonnull_rows": 75195,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/materialized/rulemaking/snapshots/snapshot_d1acc86e7a75e229668f074329b6483e/rulemaking_lifecycles.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"agency_code\" FROM read_parquet(['https://data.spicygov.ai/materialized/rulemaking/snapshots/snapshot_d1acc86e7a75e229668f074329b6483e/rulemaking_lifecycles.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"agency_code\" FROM read_parquet(['https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"agency_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"agency_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"agency_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"agency_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": false,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": "sha256:d13b41b5c95bc323a81b42447cf2381c968769c44b83bf6d977e1656286d92f3",
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/materialized/rulemaking/snapshots/snapshot_d1acc86e7a75e229668f074329b6483e/rulemaking_lifecycles.parquet",
+              "rows": 75195,
+              "byteSize": 2481068
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet",
+              "rows": 316,
+              "byteSize": 3261,
+              "sha256": "sha256:3a3e35a4bf9fb0771cc798d28cd27eb113557bf0bbc9607d3afc33b62c53dd1e"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "comments_index.docket_id -> dockets.docket_id",
+      "kind": "scope",
+      "status": "OK",
+      "keys": 60296,
+      "missing": 28,
+      "resolved_pct": 99.9536,
+      "floor_pct": 99.9535,
+      "baseline_keys": 60296,
+      "baseline_missing": 28,
+      "examples": [
+        "GIPSA-2010-FGIS-0002-RULEMAKING",
+        "GIPSA-2010-FGIS-0004-RULEMAKING",
+        "GIPSA-2010-FGIS-0009-RULEMAKING"
+      ],
+      "child_input_rows": 143605,
+      "child_nonnull_rows": 143604,
+      "parent_input_rows": 279719,
+      "parent_distinct_keys": 279719,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 143539,
+      "left_join_nonnull_rows": 143604,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/comments_index.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/dockets/98cab2924885b3aa3a181d4c40d11b418959677007022339e04c2414d3a89ca8/dockets.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"docket_id\" FROM read_parquet(['https://data.spicygov.ai/comments_index.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"docket_id\" FROM read_parquet(['https://data.spicygov.ai/generations/dockets/98cab2924885b3aa3a181d4c40d11b418959677007022339e04c2414d3a89ca8/dockets.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"docket_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"docket_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"docket_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"docket_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": true,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": "sha256:8c6374eea1e467b73529d1622aabec94cdfdec94731136354c207b077a5a49d3",
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/comments_index.parquet",
+              "rows": 143605,
+              "byteSize": 422630,
+              "etag": "\"54a1e45420f7eee935760a8b38c93774\""
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/dockets/98cab2924885b3aa3a181d4c40d11b418959677007022339e04c2414d3a89ca8/dockets.parquet",
+              "rows": 279719,
+              "byteSize": 11646366,
+              "sha256": "sha256:f77a85f90417c36bf023e49c74537c4887b6e0a3842860932541456a76f021f0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "join": "comments_index.agency_code -> agency_stats.agency_code",
+      "kind": "complete",
+      "status": "OK",
+      "keys": 180,
+      "missing": 0,
+      "resolved_pct": 100.0,
+      "floor_pct": 100.0,
+      "baseline_keys": 180,
+      "baseline_missing": 0,
+      "examples": [],
+      "child_input_rows": 143605,
+      "child_nonnull_rows": 143605,
+      "parent_input_rows": 316,
+      "parent_distinct_keys": 316,
+      "parent_duplicate_keys": 0,
+      "max_parent_multiplicity": 1,
+      "max_matched_parent_multiplicity": 1,
+      "inner_join_rows": 143605,
+      "left_join_nonnull_rows": 143605,
+      "scope": "full_selected_inputs",
+      "child_urls": [
+        "https://data.spicygov.ai/comments_index.parquet"
+      ],
+      "parent_urls": [
+        "https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet"
+      ],
+      "sql": "\n        WITH child_input AS (SELECT \"agency_code\" FROM read_parquet(['https://data.spicygov.ai/comments_index.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"agency_code\" FROM read_parquet(['https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"agency_code\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"agency_code\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"agency_code\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"agency_code\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+      "expected_cardinality": "one",
+      "mutable_versions_checked_before_after": true,
+      "measured_on": "2026-10-06",
+      "measured_expected_cardinality": "one",
+      "receipt": "docs/evidence/column-navigation-2026-10-06.json",
+      "selected_inputs": {
+        "child": {
+          "publicationIdentity": "sha256:8c6374eea1e467b73529d1622aabec94cdfdec94731136354c207b077a5a49d3",
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/comments_index.parquet",
+              "rows": 143605,
+              "byteSize": 422630,
+              "etag": "\"54a1e45420f7eee935760a8b38c93774\""
+            }
+          ]
+        },
+        "parent": {
+          "publicationIdentity": null,
+          "members": [
+            {
+              "url": "https://data.spicygov.ai/generations/agency-stats/e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8/agency_stats.parquet",
+              "rows": 316,
+              "byteSize": 3261,
+              "sha256": "sha256:3a3e35a4bf9fb0771cc798d28cd27eb113557bf0bbc9607d3afc33b62c53dd1e"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
