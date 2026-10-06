@@ -88,9 +88,13 @@ def native_regulations_views(available_tables):
         ids = ", ".join(quoted(k) for k in keys)
         pattern = "[0-9]{4}-[A-Z0-9]{4}" if kind == "rin" else "https?://.+" if kind == "offered_url" else ".+"
         valid = f"regexp_full_match({value}, '{pattern}')"
-        occurrences = f"""SELECT {selected}, ordinality-1 AS source_ordinal,
+        # SELECT-list expansion keeps native ordinals without a correlated
+        # delimiter join. Each definition expands only its own independent list.
+        occurrences = f"""SELECT {ids}, source_ordinal,
             '{kind}' AS target_kind, CASE WHEN {valid} THEN {value} ELSE NULL END AS target_key
-            FROM {quoted(table)} s, UNNEST(s.{quoted(field)}) WITH ORDINALITY AS elements(item,ordinality)"""
+            FROM (SELECT {selected}, unnest(s.{quoted(field)}) AS item,
+                    generate_subscripts(s.{quoted(field)},1)-1 AS source_ordinal
+                  FROM {quoted(table)} s) elements"""
         meaning = f"Each {field} value on {table} in source order; repeated and null positions remain distinct."
         add(name + "_occurrences", {table: (*keys, field)}, occurrences, meaning, (*keys, "source_ordinal"))
         add(name + "_pairs", {table: (*keys, field)},
