@@ -27,6 +27,92 @@ MIN_EXPECTED_ROWS = 1_000_000
 _AGENCY_KEY = re.compile(r"comments/agency/agency_code=[A-Za-z0-9_-]+/part-0\.parquet\Z")
 
 
+def _validate_prepared_export(output_dir, result, snapshot):
+    """Bind canonical checked/sealed/uploaded members to one derived manifest."""
+    canonical = {
+        "comments": output_dir / "comments.parquet",
+        "index": output_dir / "comments_index.parquet",
+        "partitions": output_dir / "comments" / "agency",
+        "receipts": output_dir / ".catalog-pairs" / "comments" / "etl_receipts.parquet",
+        "generation": output_dir / ".catalog-pairs" / "comments" / "generation.json",
+        "manifest": output_dir / "comments-prepared-export.json",
+    }
+    if set(result) != set(canonical):
+        raise ValueError("Prepared comments members differ from the canonical export")
+    for name, path in canonical.items():
+        if (Path(result[name]).absolute() != path.absolute()
+                or not path.resolve().is_relative_to(output_dir.resolve())):
+            raise ValueError("Prepared comments member is outside its canonical output path")
+    manifest = json.loads(canonical["manifest"].read_text())
+    derivation = json.loads(canonical["generation"].read_text())
+    if (manifest.get("format") != "comments-prepared-export/1"
+            or manifest.get("source") != asdict(snapshot)
+            or manifest.get("derivation") != derivation
+            or derivation.get("dataset") != "comments"
+            or derivation.get("snapshot") != asdict(snapshot)
+            or derivation.get("rows") != 26_418_078):
+        raise ValueError("Prepared comments derivation differs from the full selected pair")
+    from spicy_regs.transforms.regulations_receipts import policy
+    from spicy_regs.etl_receipts import receipt_policies
+    current = policy("comments")
+    earlier = [p for p in receipt_policies(current) if p.policy_version == "regulations-native-v1"]
+    original = derivation.get("original_pair", {})
+    if (len(earlier) != 1 or original.get("policy") != earlier[0].descriptor()
+            or derivation.get("current_policy") != current.descriptor()
+            or original.get("metadata", {}).get("snapshot") != asdict(snapshot)):
+        raise ValueError("Prepared comments policies or original pair differ")
+    files = [canonical[name] for name in ("comments", "index", "receipts", "generation")]
+    files += sorted(canonical["partitions"].glob("agency_code=*/part-0.parquet"))
+    expected = {path.relative_to(output_dir).as_posix(): path for path in files}
+    if set(manifest.get("members", {})) != set(expected):
+        raise ValueError("Prepared comments manifest membership differs")
+    for name, path in expected.items():
+        if not path.resolve().is_relative_to(output_dir.resolve()):
+            raise ValueError("Prepared comments member resolves outside the output")
+        actual = publication.file_identity(path)
+        if manifest["members"][name] != {
+            "sha256": actual["sha256"].removeprefix("sha256:"), "byteSize": actual["bytes"]
+        }:
+            raise ValueError("Prepared comments bytes differ from their manifest")
+    if pq.ParquetFile(canonical["comments"]).metadata.num_rows != 26_418_078:
+        raise ValueError("Prepared comments population is incomplete")
+
+
+def _seal_prepared_empty_replacements(output_dir, result, predecessor, receipt):
+    """Seal only validated zero-row additions from the maintained predecessor rule."""
+    path = result["manifest"]
+    manifest = json.loads(path.read_text())
+    before = dict(manifest["members"])
+    files = sorted(result["partitions"].glob("agency_code=*/part-0.parquet"))
+    additions = [file for file in files if file.relative_to(output_dir).as_posix() not in before]
+    if not additions:
+        return
+    allowed = set(predecessor.agencies)
+    if isinstance(receipt, dict) and isinstance(receipt.get("files"), dict):
+        allowed.update(key.split("agency_code=", 1)[1].split("/", 1)[0]
+                       for key in receipt["files"] if _AGENCY_KEY.fullmatch(key))
+    schema = pq.ParquetFile(result["comments"]).schema_arrow
+    schema = pa.schema([field for field in schema if field.name != "agency_code"])
+    for file in additions:
+        name = file.relative_to(output_dir).as_posix()
+        if (not _AGENCY_KEY.fullmatch(name) or not file.resolve().is_relative_to(output_dir.resolve())
+                or file.parent.name.removeprefix("agency_code=") not in allowed):
+            raise ValueError("Unexpected prepared comments member addition")
+        with pq.ParquetFile(file) as parquet:
+            if parquet.metadata.num_rows or not parquet.schema_arrow.equals(schema):
+                raise ValueError("Prepared agency replacement is not the expected empty schema")
+        actual = publication.file_identity(file)
+        manifest["members"][name] = {
+            "sha256": actual["sha256"].removeprefix("sha256:"), "byteSize": actual["bytes"]
+        }
+    backup = output_dir / "comments-prepared-export-before-empty.json"
+    if backup.exists():
+        raise FileExistsError("A prior prepared manifest requires explicit recovery")
+    backup.write_text(path.read_text())
+    manifest["emptyReplacements"] = sorted(file.relative_to(output_dir).as_posix() for file in additions)
+    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+
 @dataclass(frozen=True)
 class PublicPredecessor:
     etag: str
@@ -142,7 +228,9 @@ def _prepare_catalog(record_type) -> None:
 
 
 def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | None = None,
-                            skip_upload: bool = False, force: bool = False) -> bool:
+                            skip_upload: bool = False, force: bool = False,
+                            prepared_export: dict[str, Path] | None = None,
+                            prepared_reader=None) -> bool:
     """Build/verify/publish; return False only for a verified unchanged publication.
 
     The caller holds comments-catalog-write for the whole operation. Fixed public
@@ -151,30 +239,45 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     """
     resources = resources or ExportResources()
     rt = RECORD_TYPES["comments"]
+    if prepared_export is not None and not skip_upload and (
+            getenv("GITHUB_ACTIONS") != "true"
+            or getenv("SPICY_REGS_CATALOG_LOCK") != "comments-catalog-write"
+            or not getenv("GITHUB_WORKFLOW_REF", "").startswith(
+                "mikewolfd/spicy-regs/.github/workflows/publish-comments-mirror.yml@")):
+        raise RuntimeError("Prepared publication requires the existing locked manual comments workflow")
     if not skip_upload and not getenv("R2_ACCESS_KEY_ID"):
         raise RuntimeError("R2 upload credentials are required to publish the comments mirror")
     # Establish the selected native pair before pinning the export snapshot.
     # This also resumes a migration interrupted after empty-table preparation.
-    _prepare_catalog(rt)
-    snapshot = iceberg.catalog_snapshot(rt)
+    if prepared_export is None:
+        _prepare_catalog(rt)
+    if (prepared_export is None) != (prepared_reader is None):
+        raise ValueError("Prepared export and explicit historical reader are required together")
+    snapshot = (iceberg.catalog_snapshot(rt) if prepared_reader is None else
+                prepared_reader.snapshot())
+    if prepared_export is not None:
+        _validate_prepared_export(output_dir, prepared_export, snapshot)
     base_url = resolve_r2_base_url().rstrip("/")
     receipt = None
     if not skip_upload:
         if not getenv("R2_ACCESS_KEY_ID"):
             raise RuntimeError("R2 upload credentials are required to publish the comments mirror")
         receipt = None if force else r2.read_json_object(RECEIPT_KEY)
-        if not force and _receipt_matches(receipt, snapshot, base_url):
+        if prepared_export is None and not force and _receipt_matches(receipt, snapshot, base_url):
             logger.info("Comments snapshot {} already published; verified object versions, skipping build", snapshot.snapshot_id)
             return False
 
     prior_index = publication.current_index(base_url) if not skip_upload else publication.empty_index()
-    result = iceberg.export_public_comments(output_dir, rt, resources=resources, snapshot=snapshot)
+    result = (prepared_export if prepared_export is not None else
+              iceberg.export_public_comments(output_dir, rt, resources=resources, snapshot=snapshot))
     n_rows = pq.ParquetFile(result["comments"]).metadata.num_rows
     if n_rows < MIN_EXPECTED_ROWS:
         raise RuntimeError(f"Comments export has {n_rows:,} rows, below the {MIN_EXPECTED_ROWS:,} safety floor")
     previous_url = f"{base_url}/comments.parquet"
     predecessor = validate_export(output_dir, previous_url, resources=resources)
     _retain_empty_agencies(result, predecessor, receipt)
+    if prepared_export is not None:
+        _seal_prepared_empty_replacements(output_dir, result, predecessor, receipt)
     agency_files = sorted(result["partitions"].glob("agency_code=*/part-0.parquet"))
     with TemporaryDirectory(prefix="comments-check-", dir=output_dir) as spill, duckdb.connect() as con:
         resources.configure(con, Path(spill))
@@ -196,8 +299,12 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
 
     # The export pins subjects and receipts together. A rejected attempt can change
     # only receipts, so check both tables; compaction may move either without changing rows.
-    if not iceberg.rows_unchanged_since(rt, snapshot):
+    unchanged = (iceberg.rows_unchanged_since(rt, snapshot) if prepared_reader is None else
+                 prepared_reader.rows_unchanged_since(snapshot))
+    if not unchanged:
         raise RuntimeError("Catalog changed during export; refusing publication")
+    if prepared_export is not None:
+        _validate_prepared_export(output_dir, prepared_export, snapshot)
     current = r2.public_object_version(previous_url)
     if current is None or current["etag"] != predecessor.etag:
         raise RuntimeError("Prior comments mirror changed before publication; refusing overwrite")

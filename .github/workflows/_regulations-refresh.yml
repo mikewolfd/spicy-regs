@@ -6,6 +6,9 @@ on:
       skip_upload:
         type: boolean
         default: false
+      promote_v1:
+        type: boolean
+        default: false
 env:
   # Called only by workflows that hold comments-catalog-write.
   # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
@@ -68,6 +71,7 @@ jobs:
     secrets: inherit
     with:
       skip_upload: ${{ inputs.skip_upload }}
+      promote_v1: ${{ inputs.promote_v1 }}
   derived:
     needs: mirror
     if: ${{ !inputs.skip_upload }}

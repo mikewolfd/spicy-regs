@@ -6,6 +6,9 @@ on:
       skip_upload:
         type: boolean
         default: false
+      promote_v1:
+        type: boolean
+        default: false
 
 env:
   # Called only by workflows that hold comments-catalog-write.
@@ -57,6 +60,20 @@ jobs:
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
+          if [ "${{ inputs.promote_v1 }}" = "true" ]; then
+            git fetch --no-tags --depth=1 origin e9dfd216dc999845ea94e6171afb41e0c9380a10
+            git worktree add --detach ../comments-export-v1 e9dfd216dc999845ea94e6171afb41e0c9380a10
+            mkdir -p output
+            PROMOTED_ARGS=""
+            if [ "${{ inputs.skip_upload }}" != "true" ]; then
+              PROMOTED_ARGS="--publish"
+            fi
+            /usr/bin/time -v -o output/comments-resources.txt \
+              uv run --frozen python scripts/prepare_comments_selected_export.py \
+              --v1-source ../comments-export-v1 --original-pair output/comments-original-v1 \
+              --output output/comments-selected $PROMOTED_ARGS
+            exit 0
+          fi
           ARGS=""
           if [ "${{ inputs.skip_upload }}" = "true" ]; then
             ARGS="$ARGS --skip-upload"
@@ -71,10 +88,33 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: comments-publication-${{ github.run_id }}
+          include-hidden-files: true
           path: |
             output/comments-build.json
             output/comments-publication.json
             output/comments-resources.txt
+            output/comments-selected/comments-build.json
+            output/comments-selected/comments-publication.json
+            output/comments-selected/comments-exact-encoding.json
+            output/comments-selected/comments-prepared-export*.json
+            output/comments-selected/.catalog-pairs/comments/generation.json
+          retention-days: 30
+
+      - name: Retain completed prepared candidate for publication recovery
+        if: ${{ always() && inputs.promote_v1 && hashFiles('output/comments-selected/comments-prepared-export.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-prepared-${{ github.run_id }}
+          include-hidden-files: true
+          path: output/comments-selected
+          retention-days: 30
+
+      - name: Retain exact original selected v1 export
+        if: ${{ always() && inputs.promote_v1 }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-original-v1-${{ github.run_id }}
+          path: output/comments-original-v1
           retention-days: 30
 
       - name: Capture published base versions for dependent jobs
