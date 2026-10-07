@@ -98,14 +98,6 @@ def _captured_descriptor(path, expected_sha256):
             raise ValueError("Captured catalog table identity differs")
     if set(captured["members"]) != {"comments.parquet", "etl_receipts.parquet"}:
         raise ValueError("Captured pair must name exactly both original members")
-    return captured, descriptor_identity
-
-
-def verify_captured(pair, descriptor, expected_sha256):
-    """Verify retained bytes/custody, without asserting historical receipt validity."""
-    if (pair / "export-complete.json").exists():
-        raise ValueError("A sealed original pair must use the normal sealed-input path")
-    captured, descriptor_identity = _captured_descriptor(descriptor, expected_sha256)
     provenance = captured["capture_provenance"]
     if set(provenance) != {"path", "sha256", "byteSize"}:
         raise ValueError("Captured input must identify retained capture provenance")
@@ -115,6 +107,15 @@ def verify_captured(pair, descriptor, expected_sha256):
         raise ValueError("Captured input provenance changed")
     if _regular_signature(provenance_path) != provenance_before:
         raise ValueError("Captured input provenance changed during verification")
+    return captured, descriptor_identity
+
+
+def verify_captured(pair, descriptor, expected_sha256):
+    """Verify retained bytes/custody, without asserting historical receipt validity."""
+    if (pair / "export-complete.json").exists():
+        raise ValueError("A sealed original pair must use the normal sealed-input path")
+    captured, descriptor_identity = _captured_descriptor(descriptor, expected_sha256)
+    provenance = captured["capture_provenance"]
     members, signatures = {}, {}
     for name, pin in captured["members"].items():
         if set(pin) != {"path", "sha256", "byteSize", "custody"}:
@@ -291,8 +292,13 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         inherited.replace(receipt)
         validate_receipt_bundle({"comments": [subject]}, [receipt], [current], generation_id=generation)
         if captured_input is not None:
+            _captured_descriptor(captured_input, captured_input_sha256)
+            # Reuse byte identities verified at entry only while custody stays
+            # unchanged through conversion, failure rebinding and history use.
             if (count != EXPECTED_ROWS
-                    or verify_captured(pair, captured_input, captured_input_sha256) != sealed
+                    or (pair / "export-complete.json").exists()
+                    or {name: _regular_signature(pair / name) for name in sealed["members"]}
+                       != sealed["capture"]["custody"]
                     or _validation_source() != validation_source):
                 raise ValueError("Captured inputs or validation source changed during preparation")
         publish_directory_no_replace(staged, destination)
