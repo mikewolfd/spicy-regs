@@ -67,24 +67,30 @@ class V1CatalogReader:
             raise ValueError("Historical reader has local changes")
         code = """
 from dataclasses import asdict
+from pathlib import Path
 import json, sys
 from spicy_regs.sources import iceberg
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.transforms.regulations_receipts import policy
 assert policy('comments').policy_version == 'regulations-native-v1'
 rt = RECORD_TYPES['comments']
-if len(sys.argv) == 1:
-    print(json.dumps(asdict(iceberg.catalog_snapshot(rt))))
+if len(sys.argv) == 2:
+    result = asdict(iceberg.catalog_snapshot(rt))
 else:
-    value = json.loads(sys.argv[1])
+    value = json.loads(sys.argv[2])
     value['receipts'] = iceberg.CatalogSnapshot(**value['receipts'])
-    print(json.dumps(iceberg.rows_unchanged_since(rt, iceberg.CatalogPairSnapshot(**value))))
+    result = iceberg.rows_unchanged_since(rt, iceberg.CatalogPairSnapshot(**value))
+Path(sys.argv[1]).write_text(json.dumps(result))
 """
         environment = dict(os.environ, PYTHONPATH=str(self.checkout / "src"))
         arguments = [] if snapshot is None else [json.dumps(snapshot)]
-        output = subprocess.check_output([sys.executable, "-c", code, *arguments],
-                                         cwd=self.checkout, env=environment, text=True)
-        return json.loads(output)
+        # Catalog diagnostics may use stdout. Keep the exact JSON result separate
+        # and let both diagnostic streams reach the operation log.
+        with TemporaryDirectory(prefix="comments-snapshot-") as temporary:
+            result = Path(temporary) / "snapshot.json"
+            subprocess.run([sys.executable, "-c", code, str(result), *arguments],
+                           cwd=self.checkout, env=environment, check=True)
+            return json.loads(result.read_text())
 
     def snapshot(self):
         from spicy_regs.sources.iceberg import CatalogPairSnapshot, CatalogSnapshot
