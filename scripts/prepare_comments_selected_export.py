@@ -232,8 +232,8 @@ def assemble(pair: Path, output: Path):
     return result
 
 
-def export_v1(source_checkout: Path, pair: Path):
-    """Run earlier-policy export in a fresh interpreter, never the current cache."""
+def export_v1(source_checkout: Path, pair: Path, *, retained_subject=None):
+    """Export in the historical interpreter; optionally reuse a checked subject."""
     source_checkout, pair = Path(source_checkout).resolve(), Path(pair).resolve()
     if (pair / "generation.json").exists():
         if not (pair / "export-complete.json").exists():
@@ -260,15 +260,64 @@ from spicy_regs.transforms.regulations_receipts import policy
 assert policy('comments').policy_version == 'regulations-native-v1'
 rt = RECORD_TYPES['comments']
 snapshot = iceberg.catalog_snapshot(rt)
+pair = Path(sys.argv[1])
+generation = 'catalog-comments-v1-' + str(snapshot.snapshot_id)
+held = json.loads(sys.argv[3]) if len(sys.argv) == 4 else None
+if held is not None:
+    if set(held) != {'path', 'sha256', 'byteSize', 'snapshot'} or held['snapshot'] != asdict(snapshot):
+        raise ValueError('Retained subject does not name the exact selected pair')
+    source = Path(held['path'])
+    if not source.is_absolute() or source.is_symlink() or not source.is_file():
+        raise ValueError('Retained subject must be an absolute regular file')
+    with source.open('rb') as original:
+        digest = hashlib.file_digest(original, 'sha256').hexdigest()
+    if digest != held['sha256'] or source.stat().st_size != held['byteSize']:
+        raise ValueError('Retained subject bytes changed')
+    if pq.ParquetFile(source).metadata.num_rows != 26418078:
+        raise ValueError('Retained subject is not the full population')
 con = iceberg._connect()
 try:
-    if con.execute('SELECT count(*) FROM ' + regulatory_catalog.qualified(rt)).fetchone()[0] != 26418078:
+    if held is None and con.execute('SELECT count(*) FROM ' + regulatory_catalog.qualified(rt)).fetchone()[0] != 26418078:
         raise ValueError('Full native population is required before export')
-    selected = regulatory_catalog.export_pair(con, rt, Path(sys.argv[1]),
-        generation_id='catalog-comments-v1-' + str(snapshot.snapshot_id), snapshot=snapshot)
+    if held is None:
+        regulatory_catalog.export_pair(con, rt, pair,
+            generation_id=generation, snapshot=snapshot)
+    else:
+        from spicy_regs.duckdb_settings import ExportResources
+        # The historical entry point has no subject-reuse option. Keep its
+        # receipt selection, rebinding and admission primitives unchanged.
+        stage = pair.parent / 'original-v1-recovery-stage'
+        stage.mkdir()
+        pair.mkdir()
+        os.link(source, pair / 'comments.parquet')  # Same filesystem; no copy fallback.
+        ExportResources().configure(con, stage / 'spill')
+        with regulatory_catalog._transaction(con):
+            if not regulatory_catalog.initialized(con, 'comments'):
+                raise ValueError('Native catalog has no qualified initialization receipt')
+            if iceberg._read_pair_snapshot(con, rt) != snapshot:
+                raise RuntimeError('Selected pair changed before receipt recovery')
+            raw_receipts = stage / 'receipts.parquet'
+            regulatory_catalog._copy(con,
+                "SELECT * FROM " + regulatory_catalog.receipts_table() + " WHERE dataset='comments'",
+                raw_receipts, resources=ExportResources())
+            if pq.ParquetFile(raw_receipts).metadata.num_rows != 26418079:
+                raise ValueError('Receipt recovery is not the complete selected population')
+            regulatory_catalog.write_rows(
+                (regulatory_catalog.rebind_receipt(row, generation_id=generation)
+                 for row in regulatory_catalog._rows(raw_receipts)),
+                pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA)
+            for _ in regulatory_catalog.read_with_receipts(
+                    [pair / 'comments.parquet'], [pair / 'etl_receipts.parquet'],
+                    policy('comments'), generation_id=generation):
+                pass
+            if iceberg._read_pair_snapshot(con, rt) != snapshot:
+                raise RuntimeError('Selected pair changed during receipt recovery')
+        (pair / 'generation.json').write_text(json.dumps({
+            'generation_id': generation, 'dataset': 'comments', 'snapshot': asdict(snapshot)},
+            sort_keys=True) + '\\n')
 finally:
     con.close()
-if pq.ParquetFile(selected.subjects[0]).metadata.num_rows != 26418078:
+if pq.ParquetFile(pair / 'comments.parquet').metadata.num_rows != 26418078:
     raise ValueError('Native export is not the complete captured comments population')
 metadata_path = Path(sys.argv[1]) / 'generation.json'
 metadata = json.loads(metadata_path.read_text())
@@ -280,6 +329,9 @@ for name in ('comments.parquet', 'etl_receipts.parquet'):
     with path.open('rb') as source:
         digest = hashlib.file_digest(source, 'sha256').hexdigest()
     members[name] = {'sha256': digest, 'byteSize': path.stat().st_size}
+if held is not None and members['comments.parquet'] != {
+        'sha256': held['sha256'], 'byteSize': held['byteSize']}:
+    raise ValueError('Retained subject changed during receipt recovery')
 marker = Path(sys.argv[1]) / 'export-complete.json'
 temporary = marker.with_suffix('.tmp')
 with temporary.open('w') as output:
@@ -290,7 +342,8 @@ temporary.replace(marker)
 """
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(source_checkout / "src")
-    subprocess.run([sys.executable, "-c", code, str(pair), V1_EXPORT_REVISION], cwd=source_checkout,
+    arguments = [] if retained_subject is None else [json.dumps(retained_subject)]
+    subprocess.run([sys.executable, "-c", code, str(pair), V1_EXPORT_REVISION, *arguments], cwd=source_checkout,
                    env=environment, check=True)
 
 
