@@ -7,6 +7,7 @@ it does not manufacture an earlier export-complete seal.
 """
 
 from collections import Counter
+from dataclasses import asdict
 from hashlib import file_digest
 import json
 from pathlib import Path
@@ -157,6 +158,14 @@ def _validation_source():
     return {"revision": revision, "members": {name: identity(path) for name, path in members.items()}}
 
 
+def _pair_snapshot(value):
+    """Decode a recorded pair without changing its original IDs."""
+    from spicy_regs.sources.iceberg import CatalogPairSnapshot, CatalogSnapshot
+    value = dict(value)
+    value["receipts"] = CatalogSnapshot(**value["receipts"])
+    return CatalogPairSnapshot(**value)
+
+
 class V1CatalogReader:
     """Explicit earlier-policy metadata reads in an independent interpreter."""
 
@@ -198,13 +207,9 @@ Path(sys.argv[1]).write_text(json.dumps(result))
             return json.loads(result.read_text())
 
     def snapshot(self):
-        from spicy_regs.sources.iceberg import CatalogPairSnapshot, CatalogSnapshot
-        value = self._read()
-        value["receipts"] = CatalogSnapshot(**value["receipts"])
-        return CatalogPairSnapshot(**value)
+        return _pair_snapshot(self._read())
 
     def rows_unchanged_since(self, snapshot):
-        from dataclasses import asdict
         return self._read(asdict(snapshot)) is True
 
 
@@ -565,10 +570,11 @@ def main():
                         "verify", "--receipt", str(args.base_receipt)], check=True)
 
     verify_base()
+    from spicy_regs.pipelines.comments_mirror import _check_prepared_snapshot, _validate_prepared_export
     reader = V1CatalogReader(args.v1_source)
+    observed_snapshot = None
     manifest_path = args.output / "comments-prepared-export.json"
     if manifest_path.exists():
-        from spicy_regs.pipelines.comments_mirror import _validate_prepared_export
         sealed = (verify_original(args.original_pair) if args.captured_input is None else
                   verify_captured(args.original_pair, args.captured_input, args.captured_input_sha256))
         derivation = json.loads(manifest_path.read_text())["derivation"]
@@ -593,34 +599,38 @@ def main():
                   "receipts": args.output / ".catalog-pairs" / "comments" / "etl_receipts.parquet",
                   "generation": args.output / ".catalog-pairs" / "comments" / "generation.json",
                   "manifest": manifest_path}
-        _validate_prepared_export(args.output, result, reader.snapshot())
+        captured_snapshot = _pair_snapshot(sealed["metadata"]["snapshot"])
+        observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
+        _validate_prepared_export(args.output, result, captured_snapshot)
     else:
         if args.output.exists() and any(args.output.iterdir()):
             raise FileExistsError("Partial prepared output requires explicit recovery; refusing rebuild")
         if args.captured_input is None:
             export_v1(args.v1_source, args.original_pair)
         else:
-            from dataclasses import asdict
             captured, _ = _captured_descriptor(args.captured_input, args.captured_input_sha256)
-            if asdict(reader.snapshot()) != captured["metadata"]["snapshot"]:
-                raise RuntimeError("Selected pair changed before captured input preparation")
+            captured_snapshot = _pair_snapshot(captured["metadata"]["snapshot"])
+            observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
         result = assemble(args.original_pair, args.output, captured_input=args.captured_input,
                           captured_input_sha256=args.captured_input_sha256)
         if args.captured_input is not None:
             manifest = json.loads(manifest_path.read_text())
-            if asdict(reader.snapshot()) != manifest["source"]:
-                raise RuntimeError("Selected pair changed during captured input preparation")
+            if manifest["source"] != asdict(captured_snapshot):
+                raise ValueError("Prepared output names a different captured snapshot")
+            observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
     manifest = json.loads(manifest_path.read_text())
     proof = {"comments": encoding(result["comments"], manifest["members"]["comments.parquet"]),
              "index": encoding(result["index"], manifest["members"]["comments_index.parquet"]),
              "originalPair": str(args.original_pair), "status": "prepared-unpublished"}
+    if observed_snapshot is not None:
+        proof["observedSnapshot"] = asdict(observed_snapshot)
     evidence = args.output / "comments-exact-encoding.json"
     evidence.write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n")
     if args.publish:
         verify_base()
         from spicy_regs.pipelines.comments_mirror import publish_comments_mirror
         publish_comments_mirror(args.output, prepared_export=result,
-                                prepared_reader=reader)
+                                prepared_reader=reader, prepared_snapshot=_pair_snapshot(manifest["source"]))
         proof["status"] = "published"
         proof["publication"] = json.loads((args.output / "comments-publication.json").read_text())
         evidence.write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n")

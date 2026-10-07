@@ -27,6 +27,15 @@ MIN_EXPECTED_ROWS = 1_000_000
 _AGENCY_KEY = re.compile(r"comments/agency/agency_code=[A-Za-z0-9_-]+/part-0\.parquet\Z")
 
 
+def _check_prepared_snapshot(reader, captured_snapshot):
+    """Observe live state; allow only equality or unchanged rows in both tables."""
+    observed_snapshot = reader.snapshot()
+    if (observed_snapshot != captured_snapshot
+            and reader.rows_unchanged_since(captured_snapshot) is not True):
+        raise RuntimeError("Selected comments pair changed since capture")
+    return observed_snapshot
+
+
 def _validate_prepared_export(output_dir, result, snapshot):
     """Bind canonical checked/sealed/uploaded members to one derived manifest."""
     canonical = {
@@ -230,7 +239,8 @@ def _prepare_catalog(record_type) -> None:
 def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | None = None,
                             skip_upload: bool = False, force: bool = False,
                             prepared_export: dict[str, Path] | None = None,
-                            prepared_reader=None) -> bool:
+                            prepared_reader=None,
+                            prepared_snapshot: iceberg.CatalogPairSnapshot | None = None) -> bool:
     """Build/verify/publish; return False only for a verified unchanged publication.
 
     The caller holds comments-catalog-write for the whole operation. Fixed public
@@ -239,6 +249,9 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     """
     resources = resources or ExportResources()
     rt = RECORD_TYPES["comments"]
+    prepared = (prepared_export, prepared_reader, prepared_snapshot)
+    if any(value is not None for value in prepared) and any(value is None for value in prepared):
+        raise ValueError("Prepared export, historical reader and captured snapshot are required together")
     if prepared_export is not None and not skip_upload and (
             getenv("GITHUB_ACTIONS") != "true"
             or getenv("SPICY_REGS_CATALOG_LOCK") != "comments-catalog-write"
@@ -251,11 +264,10 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     # This also resumes a migration interrupted after empty-table preparation.
     if prepared_export is None:
         _prepare_catalog(rt)
-    if (prepared_export is None) != (prepared_reader is None):
-        raise ValueError("Prepared export and explicit historical reader are required together")
-    snapshot = (iceberg.catalog_snapshot(rt) if prepared_reader is None else
-                prepared_reader.snapshot())
-    if prepared_export is not None:
+        snapshot = iceberg.catalog_snapshot(rt)
+    else:
+        snapshot = prepared_snapshot
+        observed_snapshot = _check_prepared_snapshot(prepared_reader, snapshot)
         _validate_prepared_export(output_dir, prepared_export, snapshot)
     base_url = resolve_r2_base_url().rstrip("/")
     receipt = None
@@ -288,10 +300,13 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
         errors += check_retained_ids(con, "SELECT * FROM candidate", "SELECT * FROM partitions")
         if errors:
             raise RuntimeError("Invalid comments partitions: " + "; ".join(errors))
-    (output_dir / "comments-build.json").write_text(json.dumps({
+    build = {
         "format_version": FORMAT_VERSION, "source": asdict(snapshot),
         "resources": asdict(resources), "rows": n_rows, "predecessor_etag": predecessor.etag,
-    }, indent=2, sort_keys=True) + "\n")
+    }
+    if prepared_export is not None:
+        build["observed_source"] = asdict(observed_snapshot)
+    (output_dir / "comments-build.json").write_text(json.dumps(build, indent=2, sort_keys=True) + "\n")
     generation_directory = build_comments_generation(output_dir, result, snapshot)
     if skip_upload:
         logger.info("Verified local comments generation in {}", generation_directory)
