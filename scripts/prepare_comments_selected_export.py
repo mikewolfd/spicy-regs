@@ -1,13 +1,17 @@
-"""Derive current public comments from one qualified, retained v1 catalog pair.
+"""Derive current public comments from one explicitly pinned v1 catalog pair.
 
 The earlier-policy catalog export runs in a separate interpreter. This module
 only reads that local pair and writes private files; it never opens a catalog.
+An explicit captured input can defer historical validation to prepare's reader;
+it does not manufacture an earlier export-complete seal.
 """
 
 from collections import Counter
 from hashlib import file_digest
 import json
 from pathlib import Path
+import re
+import stat
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 import os
@@ -50,6 +54,106 @@ def verify_original(pair):
         if identity(pair / name) != expected:
             raise ValueError("Earlier export member changed after its snapshot was sealed")
     return marker
+
+
+def _regular_signature(path):
+    """Keep custody of the same absolute regular file across byte verification."""
+    if not path.is_absolute():
+        raise ValueError("Captured input must name absolute regular files")
+    value = path.lstat()
+    if not stat.S_ISREG(value.st_mode):
+        raise ValueError("Captured input must name absolute regular files")
+    return {"device": value.st_dev, "inode": value.st_ino, "byteSize": value.st_size,
+            "mtimeNs": value.st_mtime_ns, "ctimeNs": value.st_ctime_ns}
+
+
+def _captured_descriptor(path, expected_sha256):
+    before = _regular_signature(path)
+    descriptor_identity = identity(path)
+    if (not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
+            or descriptor_identity["sha256"] != expected_sha256):
+        raise ValueError("Captured input descriptor differs from its explicit digest")
+    captured = json.loads(path.read_text())
+    if _regular_signature(path) != before:
+        raise ValueError("Captured input descriptor changed during verification")
+    if (set(captured) != {"format", "state", "metadata", "members", "capture_provenance", "validationRevision"}
+            or captured["format"] != "comments-captured-pair/1"
+            or captured["state"] != "captured-validation-pending"
+            or not isinstance(captured["validationRevision"], str)
+            or not re.fullmatch(r"[0-9a-f]{40}", captured["validationRevision"])):
+        raise ValueError("Expected an explicit captured, validation-pending comments input")
+    metadata = captured["metadata"]
+    if (set(metadata) != {"dataset", "generation_id", "snapshot", "policy", "captureRevision"}
+            or metadata["dataset"] != "comments"
+            or not isinstance(metadata["generation_id"], str) or not metadata["generation_id"]
+            or metadata["captureRevision"] != V1_EXPORT_REVISION):
+        raise ValueError("Captured input lacks its exact historical source and publisher label")
+    snapshot = metadata["snapshot"]
+    if (set(snapshot) != {"table_uuid", "snapshot_id", "schema_id", "receipts"}
+            or set(snapshot["receipts"]) != {"table_uuid", "snapshot_id", "schema_id"}):
+        raise ValueError("Captured input must pin both exact catalog table snapshots")
+    for selected in (snapshot, snapshot["receipts"]):
+        if (not isinstance(selected["table_uuid"], str) or not selected["table_uuid"]
+                or any(type(selected[key]) is not int for key in ("snapshot_id", "schema_id"))):
+            raise ValueError("Captured catalog table identity differs")
+    if set(captured["members"]) != {"comments.parquet", "etl_receipts.parquet"}:
+        raise ValueError("Captured pair must name exactly both original members")
+    return captured, descriptor_identity
+
+
+def verify_captured(pair, descriptor, expected_sha256):
+    """Verify retained bytes/custody, without asserting historical receipt validity."""
+    if (pair / "export-complete.json").exists():
+        raise ValueError("A sealed original pair must use the normal sealed-input path")
+    captured, descriptor_identity = _captured_descriptor(descriptor, expected_sha256)
+    provenance = captured["capture_provenance"]
+    if set(provenance) != {"path", "sha256", "byteSize"}:
+        raise ValueError("Captured input must identify retained capture provenance")
+    provenance_path = Path(provenance["path"])
+    provenance_before = _regular_signature(provenance_path)
+    if identity(provenance_path) != {key: provenance[key] for key in ("sha256", "byteSize")}:
+        raise ValueError("Captured input provenance changed")
+    if _regular_signature(provenance_path) != provenance_before:
+        raise ValueError("Captured input provenance changed during verification")
+    members, signatures = {}, {}
+    for name, pin in captured["members"].items():
+        if set(pin) != {"path", "sha256", "byteSize", "custody"}:
+            raise ValueError("Captured member requires exact bytes and custody")
+        path = Path(pin["path"])
+        if path.absolute() != (pair / name).absolute():
+            raise ValueError("Captured member is outside its explicit original pair")
+        before = _regular_signature(path)
+        if before != pin["custody"]:
+            raise ValueError("Captured member custody changed; fresh verification is required")
+        expected = {key: pin[key] for key in ("sha256", "byteSize")}
+        if (identity(path) != expected or _regular_signature(path) != before):
+            raise ValueError("Captured member bytes or custody changed")
+        members[name], signatures[name] = expected, before
+    if pq.ParquetFile(pair / "comments.parquet").metadata.num_rows != EXPECTED_ROWS:
+        raise ValueError("Captured subject is not the full population")
+    if pq.ParquetFile(pair / "etl_receipts.parquet").metadata.num_rows != EXPECTED_ROWS + 1:
+        raise ValueError("Captured receipts are not the full population")
+    capture = {"format": captured["format"], "state": captured["state"],
+               "descriptor": {"path": str(descriptor), **descriptor_identity},
+               "provenance": provenance, "custody": signatures,
+               "validationRevision": captured["validationRevision"]}
+    return {"metadata": captured["metadata"], "members": members, "capture": capture}
+
+
+def _validation_source():
+    """Identify the clean maintained executable, separately from capture source."""
+    from spicy_regs import etl_bulk, etl_receipts
+    root = Path(__file__).resolve().parents[1]
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"],
+                               cwd=root, text=True).strip():
+        raise ValueError("Current comments validation source has tracked changes")
+    members = {"helper": Path(__file__).resolve(), "reader": Path(etl_receipts.__file__).resolve(),
+               "bulk_reader": Path(etl_bulk.__file__).resolve()}
+    if (members["reader"] != root / "src/spicy_regs/etl_receipts.py"
+            or members["bulk_reader"] != root / "src/spicy_regs/etl_bulk.py"):
+        raise ValueError("Current comments readers do not belong to the pinned source checkout")
+    return {"revision": revision, "members": {name: identity(path) for name, path in members.items()}}
 
 
 class V1CatalogReader:
@@ -103,11 +207,12 @@ Path(sys.argv[1]).write_text(json.dumps(result))
         return self._read(asdict(snapshot)) is True
 
 
-def prepare(pair: Path, destination: Path):
+def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None):
     """Keep the complete earlier pair and derive declared current subjects once."""
     pair, destination = Path(pair), Path(destination)
-    sealed = verify_original(pair)
-    metadata = json.loads((pair / "generation.json").read_text())
+    sealed = (verify_original(pair) if captured_input is None else
+              verify_captured(pair, captured_input, captured_input_sha256))
+    metadata = sealed["metadata"]
     if metadata.get("dataset") != "comments" or not metadata.get("snapshot"):
         raise ValueError("Exact catalog-pair snapshot metadata is required")
     subjects, receipts = pair / "comments.parquet", pair / "etl_receipts.parquet"
@@ -116,8 +221,14 @@ def prepare(pair: Path, destination: Path):
     if (earlier.policy_version != "regulations-native-v1"
             or current.policy_version != "regulations-native-v2"):
         raise ValueError("Expected exact declared earlier/current comments policies")
-    if metadata.get("policy") != earlier.descriptor() or metadata.get("exportRevision") != V1_EXPORT_REVISION:
+    revision_field = "exportRevision" if captured_input is None else "captureRevision"
+    if metadata.get("policy") != earlier.descriptor() or metadata.get(revision_field) != V1_EXPORT_REVISION:
         raise ValueError("Earlier export authority differs from the shipped historical policy")
+    validation_source = None
+    if captured_input is not None:
+        validation_source = _validation_source()
+        if validation_source["revision"] != sealed["capture"]["validationRevision"]:
+            raise ValueError("Captured input names a different current validation source")
     if pq.ParquetFile(subjects).metadata.num_rows != EXPECTED_ROWS:
         raise ValueError("The complete captured comments population is required")
     source_identity = sealed["members"]["comments.parquet"]
@@ -168,6 +279,8 @@ def prepare(pair: Path, destination: Path):
         from spicy_regs.current_receipt_history import inherit_current_receipts
         from rulespec_artifacts import publish_directory_no_replace
         staged = Path(temporary) / "fresh"
+        # This knob also bounds the wide Python input buffer. Output-only
+        # batching would need a separate maintained writer setting.
         subject, receipt = write_dataset(
             records(), staged, current, batch_size=128,
             failures=(rebind_receipt(row, generation_id=generation) for row in _rows(attempts)),
@@ -177,6 +290,11 @@ def prepare(pair: Path, destination: Path):
                                  inherit_observations=False, require_unique_prior=True)
         inherited.replace(receipt)
         validate_receipt_bundle({"comments": [subject]}, [receipt], [current], generation_id=generation)
+        if captured_input is not None:
+            if (count != EXPECTED_ROWS
+                    or verify_captured(pair, captured_input, captured_input_sha256) != sealed
+                    or _validation_source() != validation_source):
+                raise ValueError("Captured inputs or validation source changed during preparation")
         publish_directory_no_replace(staged, destination)
         subject, receipt = destination / subject.name, destination / receipt.name
     if count != EXPECTED_ROWS:
@@ -191,11 +309,16 @@ def prepare(pair: Path, destination: Path):
         "recorded_fields": {name: dict(values) for name, values in available.items()},
         "native_catalog_mutated": False,
     }
+    if captured_input is not None:
+        evidence["original_pair"]["capture"] = sealed["capture"]
+        evidence["historical_admission"] = {"status": "validated", "source": validation_source,
+            "policy": earlier.descriptor(), "generation_id": metadata["generation_id"],
+            "members": sealed["members"], "capture_descriptor": sealed["capture"]["descriptor"]}
     (destination / "generation.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     return subject, receipt, evidence
 
 
-def assemble(pair: Path, output: Path):
+def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sha256=None):
     """Use existing agency writers and index builder on the one derived artifact."""
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
@@ -203,7 +326,9 @@ def assemble(pair: Path, output: Path):
         assemble_comments, sort_comment_agencies, stage_comment_agencies,
     )
     output = Path(output)
-    subject, receipts, evidence = prepare(pair, output / ".catalog-pairs" / "comments")
+    subject, receipts, evidence = prepare(pair, output / ".catalog-pairs" / "comments",
+                                         captured_input=captured_input,
+                                         captured_input_sha256=captured_input_sha256)
     resources = ExportResources()
     with TemporaryDirectory(prefix="comments-derived-sort-", dir=output) as temporary:
         temporary = Path(temporary)
@@ -403,10 +528,18 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--base-receipt", type=Path)
+    parser.add_argument("--captured-input", type=Path,
+                        help="Explicit captured-validation-pending pair descriptor; never an export seal")
+    parser.add_argument("--captured-input-sha256", help="Exact digest of that captured input descriptor")
     args = parser.parse_args()
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
+    if (args.captured_input is None) != (args.captured_input_sha256 is None):
+        raise ValueError("Captured input path and exact descriptor digest are required together")
+    if args.captured_input is not None:
+        # Keep the literal path so symlink custody is checked rather than resolved away.
+        args.captured_input = args.captured_input.absolute()
     if args.base_receipt is not None:
         args.base_receipt = args.base_receipt.resolve()
     if args.publish and (os.getenv("GITHUB_ACTIONS") != "true"
@@ -430,12 +563,24 @@ def main():
     manifest_path = args.output / "comments-prepared-export.json"
     if manifest_path.exists():
         from spicy_regs.pipelines.comments_mirror import _validate_prepared_export
-        sealed = verify_original(args.original_pair)
-        original = json.loads(manifest_path.read_text())["derivation"]["original_pair"]
+        sealed = (verify_original(args.original_pair) if args.captured_input is None else
+                  verify_captured(args.original_pair, args.captured_input, args.captured_input_sha256))
+        derivation = json.loads(manifest_path.read_text())["derivation"]
+        original = derivation["original_pair"]
         if (original["metadata"] != sealed["metadata"]
                 or original["subjects"] != sealed["members"]["comments.parquet"]
                 or original["receipts"] != sealed["members"]["etl_receipts.parquet"]):
             raise ValueError("Prepared output names a different original export")
+        if args.captured_input is not None:
+            admission = derivation.get("historical_admission", {})
+            if (original.get("capture") != sealed["capture"]
+                    or admission.get("status") != "validated"
+                    or admission.get("source", {}).get("revision") != sealed["capture"]["validationRevision"]
+                    or admission.get("policy") != original["policy"]
+                    or admission.get("generation_id") != sealed["metadata"]["generation_id"]
+                    or admission.get("members") != sealed["members"]
+                    or admission.get("capture_descriptor") != sealed["capture"]["descriptor"]):
+                raise ValueError("Prepared output lacks its exact current historical admission")
         result = {"comments": args.output / "comments.parquet",
                   "index": args.output / "comments_index.parquet",
                   "partitions": args.output / "comments" / "agency",
@@ -446,8 +591,19 @@ def main():
     else:
         if args.output.exists() and any(args.output.iterdir()):
             raise FileExistsError("Partial prepared output requires explicit recovery; refusing rebuild")
-        export_v1(args.v1_source, args.original_pair)
-        result = assemble(args.original_pair, args.output)
+        if args.captured_input is None:
+            export_v1(args.v1_source, args.original_pair)
+        else:
+            from dataclasses import asdict
+            captured, _ = _captured_descriptor(args.captured_input, args.captured_input_sha256)
+            if asdict(reader.snapshot()) != captured["metadata"]["snapshot"]:
+                raise RuntimeError("Selected pair changed before captured input preparation")
+        result = assemble(args.original_pair, args.output, captured_input=args.captured_input,
+                          captured_input_sha256=args.captured_input_sha256)
+        if args.captured_input is not None:
+            manifest = json.loads(manifest_path.read_text())
+            if asdict(reader.snapshot()) != manifest["source"]:
+                raise RuntimeError("Selected pair changed during captured input preparation")
     manifest = json.loads(manifest_path.read_text())
     proof = {"comments": encoding(result["comments"], manifest["members"]["comments.parquet"]),
              "index": encoding(result["index"], manifest["members"]["comments_index.parquet"]),
