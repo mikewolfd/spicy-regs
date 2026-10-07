@@ -9,6 +9,9 @@ on:
       promote_v1:
         type: boolean
         default: false
+      comments_only:
+        type: boolean
+        default: false
       comments_runner:
         type: string
         default: ubuntu-latest
@@ -200,7 +203,7 @@ jobs:
           retention-days: 30
 
       - name: Capture published base versions for dependent jobs
-        if: ${{ !inputs.skip_upload }}
+        if: ${{ !inputs.skip_upload && !inputs.comments_only }}
         env:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
         run: |
@@ -212,7 +215,7 @@ jobs:
             uv run --frozen python scripts/check_refresh_inputs.py capture
           fi
       - name: Retain refresh input versions
-        if: ${{ !inputs.skip_upload }}
+        if: ${{ !inputs.skip_upload && !inputs.comments_only }}
         uses: actions/upload-artifact@v4
         with:
           name: regulations-refresh-inputs-${{ github.run_id }}
