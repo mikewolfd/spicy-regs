@@ -24,7 +24,7 @@ runpy.run_path({str(script)!r}, run_name='__main__')
         capture_output=True, text=True, check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert "Native citation receipt selection passed" in result.stdout
+    assert "Native citation receipt selection and checked public download passed" in result.stdout
 
 
 def test_transform_writer_imports_preserve_public_functions():

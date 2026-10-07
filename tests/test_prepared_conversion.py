@@ -206,31 +206,46 @@ def test_prepared_current_attempt_retains_its_confirmed_not_moved_state(tmp_path
     path = work / conversion.RECEIPT
     monkeypatch.setattr(conversion, "source_state", lambda _: dict(STATE))
 
+    intercepted = []
+    before = list(bucket.writes)
+
     def refuse(*args, **kwargs):
+        assert isinstance(kwargs["conversion_proof"], publication.NativeConversionProof)
+        intercepted.append(True)
         raise publication.PublicationError("injected publication refusal")
 
-    monkeypatch.setattr(publication, "publish_generation", refuse)
+    monkeypatch.setattr(publication, "_publish_verified_generation", refuse)
     assert conversion.main(["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET]) == 1
     state = capsys.readouterr().err
     assert conversion.NOTHING_PUBLISHED in state and "no new publication attempt" not in state
     assert json.loads(path.read_bytes())["publish_attempt"]["outcome"] == "not moved"
+    assert intercepted == [True]
+    assert bucket.writes == before
     assert stored(bucket) == old
 
 
 def test_prepared_native_admission_is_repeated_instead_of_trusting_saved_success(tmp_path, monkeypatch, bucket):
-    from spicy_regs import etl_receipts
+    from spicy_regs import conversion_reads
 
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     work = tmp_path / "work"
     convert("cfr-sections", work)
 
-    def refuse(*args, **kwargs):
-        raise ValueError("native admission refused this selected bundle")
+    intercepted = []
+    open_reader = conversion_reads._open_family_reader
 
-    monkeypatch.setattr(etl_receipts, "validate_receipt_bundle", refuse)
+    def refuse(*args, **kwargs):
+        # Repeat the real byte-bound receipt/subject admission, then fail inside
+        # its owned lifetime. A saved preparation success cannot avoid this path.
+        with open_reader(*args, **kwargs):
+            intercepted.append(kwargs["generation_id"])
+            raise ValueError("native admission refused this selected bundle")
+
+    monkeypatch.setattr(conversion_reads, "_open_family_reader", refuse)
     before = list(bucket.writes)
     with pytest.raises(conversion.ConversionRefused, match="native admission refused"):
         publish_prepared(work / conversion.RECEIPT)
+    assert len(intercepted) == 1
     assert bucket.writes == before and stored(bucket) == old
 
 

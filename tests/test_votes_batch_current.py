@@ -281,8 +281,19 @@ def test_selected_prior_batches_exact_current_restore_and_caches_source(tmp_path
     subject, receipts = write_congress_dataset(source, tmp_path / "bundle", dataset="member_votes", generation_id=GENERATION)
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     prior = SelectedPriors(tmp_path / "prior")
-    prior.selected = SimpleNamespace(select=lambda dataset: SimpleNamespace(  # ty: ignore[invalid-assignment]
-        subjects=(subject,), receipts=receipts, generation_id=GENERATION))
+    from spicy_regs.selected_generations import SelectedInputs
+
+    member_session = SelectedInputs(tmp_path / "member-session", tmp_path / "member-cache")
+    checked_members = []
+
+    def member_pin(path):
+        checked_members.append(path)
+        return member_session.member_pin(path)
+
+    prior.selected = SimpleNamespace(  # ty: ignore[invalid-assignment]
+        select=lambda dataset: SimpleNamespace(subjects=(subject,), receipts=receipts, generation_id=GENERATION),
+        member_pin=member_pin,
+    )
     taken = _taken(monkeypatch, "restore_input")
     reference = public_restore(subject, receipts, tmp_path / "reference.parquet",
                                dataset="member_votes", generation_id=GENERATION)
@@ -291,9 +302,11 @@ def test_selected_prior_batches_exact_current_restore_and_caches_source(tmp_path
     assert taken == ["restore_input"]
     assert pq.read_table(restored).equals(pq.read_table(reference), check_metadata=True)
     assert pq.read_table(restored).equals(pq.read_table(source), check_metadata=True)
+    assert checked_members == [restored]
     original = restored.read_bytes()
     assert prior.get("member_votes") == restored
     assert restored.read_bytes() == original
+    assert checked_members == [restored, restored]
     assert taken == ["restore_input"]
 
 

@@ -33,8 +33,9 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # Keep the complete partitions: the larger one can exceed 15 minutes on hosted runners.
-    timeout-minutes: 20
+    # The larger complete partition took 1196 seconds in run 37561777995.
+    # Allow bounded setup, reporting and artifact-upload time around that measured work.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

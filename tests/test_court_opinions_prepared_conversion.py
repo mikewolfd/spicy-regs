@@ -10,6 +10,21 @@ from tests.test_native_conversion import BASE, BUCKET, MAIN, STATE, WHEEL, bucke
 bucket = _bucket
 
 
+def observed_processing(monkeypatch):
+    """Observe exact literals and schema consumed by the real comparison stream."""
+    from spicy_regs import court_receipts
+
+    calls, processing = [], court_receipts.processing_rows
+
+    def observed(*args, **kwargs):
+        rows = list(processing(*args, **kwargs))
+        calls.append((kwargs['schema'], rows))
+        yield from rows
+
+    monkeypatch.setattr(court_receipts, 'processing_rows', observed)
+    return calls
+
+
 def opinions():
     from spicy_regs.court_subjects import LEGACY_COLUMNS
     result = []
@@ -24,14 +39,16 @@ def opinions():
 def test_original_court_opinions_prepare_and_publish_same_exact_native_artifact(tmp_path, monkeypatch, bucket):
     old = publish_old(bucket, monkeypatch, tmp_path, 'court-opinions', {'court_opinions': opinions()})
     work = tmp_path / 'prepared'
+    compared = observed_processing(monkeypatch)
     prepared = convert('court-opinions', work)
     generation = Path(prepared['generation']['directory'])
     subject = pq.read_table(generation / 'court_opinions.parquet')
     assert subject['page_count'].type == pa.int64() and subject['page_count'].to_pylist() == [7, None]
     assert subject['per_curiam'].type == pa.bool_() and subject['per_curiam'].to_pylist() == [True, False]
     assert prepared['tables']['court_opinions']['type_changes'] == {}
-    restored = pq.read_table(work / 'restored/court_opinions.parquet')
-    assert restored.to_pylist() == opinions()
+    assert compared and all(rows == opinions() for _, rows in compared)
+    assert all(schema.equals(pq.read_schema(work / 'retained/court_opinions.parquet'),
+                             check_metadata=True) for schema, _ in compared)
     sealed = {p.relative_to(generation): p.read_bytes() for p in generation.rglob('*') if p.is_file()}
 
     def no_writer(*args, **kwargs):
@@ -42,6 +59,8 @@ def test_original_court_opinions_prepare_and_publish_same_exact_native_artifact(
         expected_main=MAIN, expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
     assert published['generation'] == prepared['generation']
     assert published['read_back']['anonymous_read_rows'] == {'court_opinions': 2}
+    assert len(compared) >= 3  # Preparation, fresh publication proof, and actual anonymous bytes.
+    assert all(rows == opinions() for _, rows in compared)
     assert sealed == {p.relative_to(generation): p.read_bytes() for p in generation.rglob('*') if p.is_file()}
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
     assert publication.current_index(BASE)['families']['court-opinions'] == old
@@ -52,24 +71,38 @@ def test_court_preparation_refuses_changed_original_processing_before_publicatio
     from spicy_regs import court_receipts
     publish_old(bucket, monkeypatch, tmp_path, 'court-opinions', {'court_opinions': opinions()})
     written = list(bucket.writes)
-    restore = court_receipts.restore_processing_input
+    intercepted = []
+    if change == 'metadata':
+        from spicy_regs.conversion_reads import _FamilyReader
+        compare = _FamilyReader.compare_original
 
-    def changed(*args, **kwargs):
-        path = restore(*args, **kwargs)
-        table = pq.read_table(path)
-        if change == 'order':
-            table = table.take([1, 0])
-        elif change == 'value':
-            index = table.schema.get_field_index('page_count')
-            table = table.set_column(index, table.schema.field(index), pa.array(['7', None]))
-        else:
-            table = table.replace_schema_metadata({b'changed': b'yes'})
-        pq.write_table(table, path)
-        return path
+        def changed_metadata(reader, dataset, original, **kwargs):
+            intercepted.append(change)
+            # Change the actual retained Arrow metadata at the comparison boundary.
+            # The real streamed comparator must refuse it before publication.
+            table = pq.read_table(original).replace_schema_metadata({b'changed': b'yes'})
+            pq.write_table(table, original)
+            return compare(reader, dataset, original, **kwargs)
 
-    monkeypatch.setattr(court_receipts, 'restore_processing_input', changed)
-    with pytest.raises(conversion.ConversionRefused, match='Court processing'):
+        monkeypatch.setattr(_FamilyReader, 'compare_original', changed_metadata)
+        reason = 'schema or metadata'
+    else:
+        processing = court_receipts.processing_rows
+
+        def changed_rows(*args, **kwargs):
+            restored = list(processing(*args, **kwargs))
+            intercepted.append(change)
+            if change == 'order':
+                restored.reverse()
+            else:
+                restored[0]['page_count'] = '7'
+            yield from restored
+
+        monkeypatch.setattr(court_receipts, 'processing_rows', changed_rows)
+        reason = 'values, order or repetitions'
+    with pytest.raises(conversion.ConversionRefused, match=f'court_opinions does not restore.*{reason}'):
         convert('court-opinions', tmp_path / 'prepared', publish=True)
+    assert intercepted == [change]
     assert bucket.writes == written
 
 
@@ -95,6 +128,7 @@ def test_complete_conversion_replaces_size_heuristic_with_exact_restoration(
     rows = large_processing_opinions()
     old = publish_old(bucket, monkeypatch, tmp_path, 'court-opinions', {'court_opinions': rows})
     work = tmp_path / 'prepared'
+    compared = observed_processing(monkeypatch)
     if prepared_publication:
         prepared = convert('court-opinions', work)
         generation = Path(prepared['generation']['directory'])
@@ -116,9 +150,10 @@ def test_complete_conversion_replaces_size_heuristic_with_exact_restoration(
     assert 'local_path' not in subject.column_names
     assert subject['download_url'].to_pylist() == [row['download_url'] for row in rows]
     assert receipt['read_back']['anonymous_read_rows'] == {'court_opinions': len(rows)}
-    restored = next((work / 'read-back').rglob('processing.parquet'))
-    assert pq.read_table(restored).to_pylist() == rows
-    assert pq.read_schema(restored).equals(pq.read_schema(work / 'retained/court_opinions.parquet'), check_metadata=True)
+    assert len(compared) >= 2  # Local proof and actual anonymous read-back both decode exact originals.
+    assert all(restored == rows for _, restored in compared)
+    assert all(schema.equals(pq.read_schema(work / 'retained/court_opinions.parquet'),
+                             check_metadata=True) for schema, _ in compared)
 
 
 @pytest.mark.parametrize('damage', ['saved-report', 'candidate', 'logical-id', 'prior', 'incomplete', 'extra'])
@@ -130,9 +165,11 @@ def test_publication_refuses_mismatched_or_saved_conversion_proof(tmp_path, monk
     work = tmp_path / 'prepared'
     convert('court-opinions', work)
     before = list(bucket.writes)
-    publish = publication.publish_generation
+    publish = publication._publish_verified_generation
+    intercepted = []
 
     def changed(*args, **kwargs):
+        intercepted.append(damage)
         proof = kwargs['conversion_proof']
         if damage == 'saved-report':
             proof = json.loads((work / conversion.RECEIPT).read_text())
@@ -148,10 +185,11 @@ def test_publication_refuses_mismatched_or_saved_conversion_proof(tmp_path, monk
             proof = proof._replace(restored_tables=proof.restored_tables | {'other.parquet'})
         return publish(*args, **kwargs | {'conversion_proof': proof})
 
-    monkeypatch.setattr(publication, 'publish_generation', changed)
+    monkeypatch.setattr(publication, '_publish_verified_generation', changed)
     with pytest.raises(conversion.ConversionRefused, match='Native conversion proof differs'):
         conversion.publish_prepared(work / conversion.RECEIPT, allowed=['court-opinions'],
             expected_main=MAIN, expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
+    assert intercepted == [damage]
     assert bucket.writes == before
     assert publication.current_index(BASE)['families']['court-opinions'] == old
 
@@ -159,19 +197,24 @@ def test_publication_refuses_mismatched_or_saved_conversion_proof(tmp_path, monk
 def test_conversion_proof_cannot_be_reused_after_native_publication(tmp_path, monkeypatch, bucket):
     publish_old(bucket, monkeypatch, tmp_path, 'court-opinions', {'court_opinions': large_processing_opinions()})
     publish = publication.publish_generation
+    verified_publish = publication._publish_verified_generation
     proofs = []
 
     def capture(*args, **kwargs):
         proofs.append(kwargs['conversion_proof'])
-        return publish(*args, **kwargs)
+        return verified_publish(*args, **kwargs)
 
-    monkeypatch.setattr(publication, 'publish_generation', capture)
+    monkeypatch.setattr(publication, '_publish_verified_generation', capture)
     receipt = convert('court-opinions', tmp_path / 'work', publish=True)
+    assert len(proofs) == 1
     before = list(bucket.writes)
+    current = publication.current_index(BASE)['families']['court-opinions']
     with pytest.raises(publication.PublicationError, match='Native conversion proof differs'):
         publish(Path(receipt['generation']['directory']), client=bucket, bucket=BUCKET,
                 prior_index=publication.current_index(BASE), conversion_proof=proofs[0])
+    assert len(proofs) == 2
     assert bucket.writes == before
+    assert publication.current_index(BASE)['families']['court-opinions'] == current
 
 
 def test_conversion_keeps_complete_prior_on_conditional_pointer_retry(tmp_path, monkeypatch, bucket):
