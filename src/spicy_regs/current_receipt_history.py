@@ -1,7 +1,7 @@
 """Bounded lookups retain the maintained writers' exact receipt inheritance."""
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from collections.abc import Sequence
+from contextlib import ExitStack
 
 
 def inherit_current_receipts(current: Path, priors: Sequence[Path], destination: Path, *, inherit_observations: bool = True,
@@ -12,22 +12,32 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
     regardless of whether values changed. Matching observations inherit in prior
     file order, with repeated receipt identities ignored as ReceiptLineage does.
     Failed attempts remain fresh. No prior row replaces a current receipt.
+    SQL sorts ordinal pairs; full payloads are bounded by an output batch and
+    the largest prior row group. Prior groups may be reread across batches.
     """
-    import duckdb
     import pyarrow as pa
     import pyarrow.parquet as pq
+    from spicy_regs.etl_bulk import bulk_connection, _literal
+    from spicy_regs.receipt_history import _take_prior_rows
     from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, decode_exact_json,
                                         exact_json, inherit_receipt, _digest as receipt_digest)
-    with TemporaryDirectory(prefix="current-lineage-", dir=destination.parent) as temp, \
-            duckdb.connect(str(Path(temp) / "lineage.duckdb")) as con:
-        con.execute("SET threads=4; SET memory_limit='1GB'; SET max_temp_directory_size='32GB'")
-        con.execute("SET temp_directory=?", [str(Path(temp) / "spill")])
-        parts, offset = [], 0
+    with bulk_connection(destination.parent) as (con, _), ExitStack() as files:
+        # File ordinals and explicit ORDER BY clauses define every required order.
+        con.execute("SET threads=1; SET memory_limit='1GB'; SET preserve_insertion_order=false")
+        parts, offset, parquet_priors, file_ends, group_ends = [], 0, [], [], []
         for prior in priors:
-            literal = "'" + str(prior).replace("'", "''") + "'"
+            parquet = files.enter_context(pq.ParquetFile(prior))
+            parquet_priors.append(parquet)
+            ends, total = [], 0
+            for group in range(parquet.metadata.num_row_groups):
+                total += parquet.metadata.row_group(group).num_rows
+                ends.append(total)
+            group_ends.append(ends)
+            literal = _literal(str(prior))
             parts.append(f"SELECT * EXCLUDE(file_row_number), file_row_number+{offset} AS ordinal "
                          f"FROM read_parquet({literal}, file_row_number=true, hive_partitioning=false)")
-            offset += pq.read_metadata(prior).num_rows
+            offset += parquet.metadata.num_rows
+            file_ends.append(offset)
         if not parts:
             raise ValueError("Prior inheritance requires an admitted prior")
         con.execute("CREATE VIEW prior AS " + " UNION ALL ".join(parts))
@@ -57,24 +67,37 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
         metadata['witnesses'] = list(metadata_context.witnesses)
         metadata['diagnostic_json'] = exact_json(metadata_context.diagnostics)
         metadata['receipt_id'] = receipt_digest({k: v for k, v in metadata.items() if k != 'receipt_id'})
-        aliases = ','.join(f'p."{name}" AS "prior_{name}"' for name in RECEIPT_SCHEMA.names)
-        query = f"""SELECT c.*, {aliases}
+        query = """SELECT c.file_row_number AS current_ordinal, k.ordinal AS prior_ordinal
             FROM read_parquet(?,file_row_number=true,hive_partitioning=false) c
             LEFT JOIN accepted_keys k ON c.outcome='accepted' AND c.dataset=k.dataset AND c.record_id=k.record_id
-            LEFT JOIN prior p ON p.ordinal=k.ordinal ORDER BY c.file_row_number"""
+            ORDER BY current_ordinal"""
+        # Only ordinals cross the corpus-wide join/sort. Gather complete prior
+        # payloads for each output batch with the maintained row-group reader.
         # All lookup statements finish before opening the streaming result.
         reader = con.execute(query, [str(current)]).to_arrow_reader(batch_size=2000)
         count = 0
-        with pq.ParquetWriter(destination, RECEIPT_SCHEMA, compression='zstd') as writer:
-            for batch in reader:
+        with pq.ParquetFile(current) as source, \
+                pq.ParquetWriter(destination, RECEIPT_SCHEMA, compression='zstd') as writer:
+            expected_count = source.metadata.num_rows
+            for batch in source.iter_batches(batch_size=2000, columns=RECEIPT_SCHEMA.names, use_threads=False):
+                try:
+                    mapping = reader.read_next_batch()
+                except StopIteration as error:
+                    raise ValueError("Prior inheritance changed current receipt count") from error
+                if mapping.num_rows != batch.num_rows:
+                    raise ValueError("Prior inheritance changed current receipt count")
+                if mapping.column('current_ordinal').to_pylist() != list(range(count, count + batch.num_rows)):
+                    raise ValueError("Prior inheritance changed current receipt order")
+                prior, positions = _take_prior_rows(
+                    parquet_priors, file_ends, group_ends,
+                    mapping.column('prior_ordinal').to_pylist(), RECEIPT_SCHEMA,
+                )
+                prior_rows = dict(zip(positions, prior.to_pylist(), strict=True))
                 result = []
-                for row in batch.to_pylist():
-                    ordinal = row.pop('file_row_number')
-                    if ordinal != count:
-                        raise ValueError("Prior inheritance changed current receipt order")
+                for position, row in enumerate(batch.to_pylist()):
                     count += 1
-                    prior = {name: row.pop('prior_'+name) for name in RECEIPT_SCHEMA.names}
-                    matches = [prior] if prior['receipt_id'] is not None else []
+                    prior = prior_rows.get(position)
+                    matches = [prior] if prior is not None else []
                     if row['outcome'] == 'observed':
                         row = dict(metadata)
                     if matches:
@@ -87,7 +110,6 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
                         row['receipt_id'] = receipt_digest({k: v for k, v in row.items() if k != 'receipt_id'})
                     result.append(row)
                 writer.write_table(pa.Table.from_pylist(result, schema=RECEIPT_SCHEMA))
-        if count != pq.read_metadata(current).num_rows:
+        if count != expected_count or next(reader, None) is not None:
             raise ValueError("Prior inheritance changed current receipt count")
     return destination
-
