@@ -449,49 +449,86 @@ class MeasurementCache:
         cache_signatures = {p['artifact']['path']: p['artifact']['signature']
                             for p in [*source_projected, *target_projected, *source_artifacts, *target_artifacts]}
         source_files, target_files = [p['artifact']['path'] for p in source_artifacts], [p['artifact']['path'] for p in target_artifacts]
+        identity_qualified = bool(identity_population and identity_population['scope'] == 'full_selected_inputs'
+                                  and identity_population['rows'] == source['rows'] == identity_population['nonNullRows']
+                                  and identity_population['distinctKeys'] == source['rows']
+                                  and not identity_population['nullKeyRows'] and not identity_population['duplicateKeys']
+                                  and not sum(p['unusableSourceIdentityRows'] for p in source_artifacts))
+        # The earlier type gate admits only exact string/date/integer equality.
+        # These untransformed row keys preserve one occurrence per physical row;
+        # native uniqueness therefore also proves canonical key uniqueness.
+        native_columns = [recipe['parts'][0]['path'][0] for recipe in route['keys']] if spec.get('equality') == 'native_scalar' else []
+        native_rows = bool(native_columns and spec['mode'] == 'row' and not spec.get('candidates') and all(
+            recipe == navigation.key(navigation.part(column, row=True), pattern=r'[\s\S]*')
+            for recipe, column in zip(route['keys'], native_columns, strict=True)))
+        unique_rows = bool(native_rows and identity_qualified and all(p['rawReferences'] == p['sourceRows']
+                                                                     and not p['repeatedReferences'] for p in source_artifacts))
+        unique_source_keys = bool(unique_rows and sorted(native_columns) == sorted(source_identity))
+        unique_target_keys = bool(native_rows and target_population['scope'] == 'full_selected_inputs'
+                                  and target_population['rows'] == target['rows'] == target_population['nonNullRows']
+                                  and target_population['distinctKeys'] == target['rows']
+                                  and not target_population['nullKeyRows'] and not target_population['duplicateKeys']
+                                  and not sum(p['unsupportedTargetKeys'] for p in target_artifacts))
         with self._connection() as con:
             union = ' UNION ALL '.join(
                 f"SELECT {literal(item['member']['path'])} AS physical_member,* FROM read_parquet({literal(path)}, hive_partitioning=false)"
                 for item, path in zip(source_admitted, source_files, strict=True))
             con.execute('CREATE TEMP VIEW refs AS ' + union)
             con.read_parquet(target_files, hive_partitioning=False).create_view('targets')
-            con.execute('CREATE TEMP TABLE target_keys AS SELECT key_json,count(*) n FROM targets GROUP BY ALL')
+            con.execute('CREATE TEMP VIEW target_keys AS SELECT key_json,1::BIGINT n FROM targets' if unique_target_keys else
+                        'CREATE TEMP TABLE target_keys AS SELECT key_json,count(*) n FROM targets GROUP BY ALL')
             reference_counts = con.execute('''SELECT count(*) FILTER(WHERE r.key_json IS NOT NULL),
                 count(*) FILTER(WHERE t.n IS NOT NULL), count(*) FILTER(WHERE r.key_json IS NOT NULL AND t.n IS NULL),
                 count(*) FILTER(WHERE t.n>1)
                 FROM refs r LEFT JOIN target_keys t USING(key_json)''').fetchone()
-            # GROUP BY can spill; multiple filtered COUNT(DISTINCT) aggregates
-            # retain independent hash sets and exceed the same memory budget.
-            identity_counts = con.execute('''WITH source_flags AS (
-                SELECT r.source_identity, bool_or(t.n IS NOT NULL) has_match,
-                    bool_or(r.key_json IS NOT NULL) has_eligible,
-                    bool_or(r.key_json IS NOT NULL AND t.n IS NULL) has_missing,
-                    bool_or(coalesce(t.n>1,false)) has_ambiguous
-                FROM refs r LEFT JOIN target_keys t USING(key_json)
-                WHERE r.source_identity IS NOT NULL GROUP BY r.source_identity)
-                SELECT count(*) FILTER(WHERE has_match),count(*) FILTER(WHERE has_eligible),
-                    count(*) FILTER(WHERE has_missing),count(*) FILTER(WHERE has_ambiguous) FROM source_flags''').fetchone()
+            if unique_rows and reference_counts is not None:
+                identity_counts = (reference_counts[1], reference_counts[0], reference_counts[2], reference_counts[3])
+                self.work['unique_row_aggregations'] += 1
+            else:
+                # GROUP BY can spill; multiple filtered COUNT(DISTINCT) aggregates
+                # retain independent hash sets and exceed the same memory budget.
+                identity_counts = con.execute('''WITH source_flags AS (
+                    SELECT r.source_identity, bool_or(t.n IS NOT NULL) has_match,
+                        bool_or(r.key_json IS NOT NULL) has_eligible,
+                        bool_or(r.key_json IS NOT NULL AND t.n IS NULL) has_missing,
+                        bool_or(coalesce(t.n>1,false)) has_ambiguous
+                    FROM refs r LEFT JOIN target_keys t USING(key_json)
+                    WHERE r.source_identity IS NOT NULL GROUP BY r.source_identity)
+                    SELECT count(*) FILTER(WHERE has_match),count(*) FILTER(WHERE has_eligible),
+                        count(*) FILTER(WHERE has_missing),count(*) FILTER(WHERE has_ambiguous) FROM source_flags''').fetchone()
             counts = reference_counts + identity_counts if reference_counts is not None and identity_counts is not None else None
-            reverse = con.execute('''WITH source_identities AS (
-                SELECT key_json,source_identity FROM refs
-                WHERE key_json IS NOT NULL AND source_identity IS NOT NULL GROUP BY ALL),
-                identity_counts AS (SELECT key_json,count(*) source_keys FROM source_identities GROUP BY key_json),
-                physical_rows AS (SELECT key_json,physical_member,row_position FROM refs
-                    WHERE key_json IS NOT NULL GROUP BY ALL),
-                row_counts AS (SELECT key_json,count(*) source_rows FROM physical_rows GROUP BY key_json),
-                sources AS (SELECT key_json,count(*) n FROM refs WHERE key_json IS NOT NULL GROUP BY key_json)
-                SELECT coalesce(sum(t.n) FILTER(WHERE s.n IS NOT NULL),0),
-                coalesce(sum(t.n) FILTER(WHERE s.n IS NULL),0),coalesce(max(s.n),0),
-                coalesce(max(i.source_keys),0),coalesce(max(r.source_rows),0)
-                FROM target_keys t LEFT JOIN sources s USING(key_json)
-                LEFT JOIN identity_counts i USING(key_json) LEFT JOIN row_counts r USING(key_json)''').fetchone()
+            if unique_rows:
+                # A unique source native key occurs at most once; a broader FK
+                # still groups references, but does not regroup source identities.
+                sources_sql = ('SELECT key_json,1::BIGINT n FROM refs WHERE key_json IS NOT NULL' if unique_source_keys else
+                               'SELECT key_json,count(*) n FROM refs WHERE key_json IS NOT NULL GROUP BY key_json')
+                reverse = con.execute('''WITH sources AS (''' + sources_sql + ''')
+                    SELECT coalesce(sum(t.n) FILTER(WHERE s.n IS NOT NULL),0),
+                    coalesce(sum(t.n) FILTER(WHERE s.n IS NULL),0),coalesce(max(s.n),0),
+                    coalesce(max(s.n),0),coalesce(max(s.n),0)
+                    FROM target_keys t LEFT JOIN sources s USING(key_json)''').fetchone()
+            else:
+                reverse = con.execute('''WITH source_identities AS (
+                    SELECT key_json,source_identity FROM refs
+                    WHERE key_json IS NOT NULL AND source_identity IS NOT NULL GROUP BY ALL),
+                    identity_counts AS (SELECT key_json,count(*) source_keys FROM source_identities GROUP BY key_json),
+                    physical_rows AS (SELECT key_json,physical_member,row_position FROM refs
+                        WHERE key_json IS NOT NULL GROUP BY ALL),
+                    row_counts AS (SELECT key_json,count(*) source_rows FROM physical_rows GROUP BY key_json),
+                    sources AS (SELECT key_json,count(*) n FROM refs WHERE key_json IS NOT NULL GROUP BY key_json)
+                    SELECT coalesce(sum(t.n) FILTER(WHERE s.n IS NOT NULL),0),
+                    coalesce(sum(t.n) FILTER(WHERE s.n IS NULL),0),coalesce(max(s.n),0),
+                    coalesce(max(i.source_keys),0),coalesce(max(r.source_rows),0)
+                    FROM target_keys t LEFT JOIN sources s USING(key_json)
+                    LEFT JOIN identity_counts i USING(key_json) LEFT JOIN row_counts r USING(key_json)''').fetchone()
         if counts is None or reverse is None:
             raise ValueError('Relationship query returned no result')
-        identity_qualified = bool(identity_population and not identity_population['nullKeyRows'] and not identity_population['duplicateKeys']
-                                       and not sum(p['unusableSourceIdentityRows'] for p in source_artifacts))
         result = {'format': VERSION, 'status': 'complete', 'binding': dependency,
                   'route': {'id': original['id'], 'targetIndex': target_index},
                   'equality': 'canonical_navigation_words',
+                  'aggregationMethods': {'sourceRecords': 'unique_native_row' if unique_rows else 'grouped_occurrences',
+                                         'targetKeys': 'unique_native_keys' if unique_target_keys else 'grouped_keys',
+                                         'reverseSourceKeys': 'unique_native_keys' if unique_source_keys else 'grouped_keys'},
                   'sourceRows': source['rows'], 'targetRows': target['rows'],
                   'fieldStates': dict(sum((Counter(p['fieldStates']) for p in source_artifacts), Counter())),
                   'rawReferences': sum(p['rawReferences'] for p in source_artifacts),
