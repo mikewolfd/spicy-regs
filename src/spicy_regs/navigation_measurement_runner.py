@@ -60,7 +60,7 @@ def _identity(source, metadata, policies):
 
 def run_measurements(index, paths, cache: MeasurementCache, *, routes=(), affected_tables=(),
                      all_routes=False, extra_tables=None, max_route_input_bytes=256 * 1024**2,
-                     specs=None, metadata=None, policies=None):
+                     specs=None, metadata=None, policies=None, population_proofs=()):
     """Return one census entry per canonical target, and unchanged publisher proofs.
 
     Unrequested targets stay unrequested, unavailable counts stay unknown, and
@@ -80,6 +80,7 @@ def run_measurements(index, paths, cache: MeasurementCache, *, routes=(), affect
     policies = descriptors() if policies is None else policies
     selected = select_routes(specs, routes=routes, affected_tables=affected_tables, all_routes=all_routes)
     results, unavailable, census = [], [], []
+    supplied = [cache.capture_population_proof(path) for path in population_proofs]
     # Binding selection reads metadata only, and is shared by every touching route.
     bindings, binding_errors = {}, {}
     for table in {s['source'] for s in specs} | {
@@ -124,8 +125,21 @@ def run_measurements(index, paths, cache: MeasurementCache, *, routes=(), affect
                 if missing:
                     entry['missingMembers'] = missing
                     raise ValueError('Incomplete selected local member set: ' + ', '.join(missing))
-                phase = 'measurement'
+                phase = 'population_import'
                 before = cache.work.copy()
+                for binding, columns in ((source_binding, identity), (target_binding, target['columns'])):
+                    if not columns:
+                        continue
+                    matching = [proof for proof in supplied if any(
+                        isinstance(record, dict) and record.get('source') == binding['table']
+                        and isinstance(record.get('identityColumns'), list)
+                        and record['identityColumns'] == list(columns)
+                        for record in proof['sources'])]
+                    if len(matching) > 1:
+                        raise ValueError('Multiple supplied proofs name the same selected native key population')
+                    if matching:
+                        cache.import_population(binding, paths, columns, matching[0])
+                phase = 'measurement'
                 proof = cache.measure(index, paths, spec, i, source_identity=identity, extra_tables=extras)
                 entry.update(status='complete', counts={name: proof[name] for name in COUNTS},
                              proofDigest=digest(proof),
@@ -140,5 +154,6 @@ def run_measurements(index, paths, cache: MeasurementCache, *, routes=(), affect
                           'affectedTables': sorted(set(affected_tables)), 'selectedRoutes': sorted(selected)},
             'limits': {'routeInputBytes': max_route_input_bytes, 'memberInputBytes': cache.max_input_bytes,
                        'memberProjectedBytes': cache.max_projected_bytes},
+            'populationProofs': [{'sha256': proof['artifact']['sha256'], 'path': proof['artifact']['path']} for proof in supplied],
             'results': results, 'unavailable': unavailable, 'census': census,
             'statusCounts': dict(Counter(entry['status'] for entry in census)), 'work': dict(cache.work)}

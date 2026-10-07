@@ -19,6 +19,8 @@ def main(argv=None):
     parser.add_argument('--publication', type=Path, required=True)
     parser.add_argument('--members', type=Path, required=True)
     parser.add_argument('--extra-tables', type=Path)
+    parser.add_argument('--population-proof', action='append', type=Path, default=[],
+                        help='Explicit earlier full-native-identity report; repeatable, exact admitted member/key matches only')
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--route', action='append', default=[], help='Canonical navigation ID or scalar Join.name; repeatable')
@@ -35,7 +37,8 @@ def main(argv=None):
     try:
         result = run_measurements(index, paths, cache, routes=args.route,
                                   affected_tables=args.affected_table, all_routes=args.all,
-                                  extra_tables=extras, max_route_input_bytes=args.max_route_input_bytes)
+                                  extra_tables=extras, max_route_input_bytes=args.max_route_input_bytes,
+                                  population_proofs=args.population_proof)
     except ValueError as error:
         parser.error(str(error))
     args.output.parent.mkdir(parents=True, exist_ok=True)

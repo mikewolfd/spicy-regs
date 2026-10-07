@@ -14,6 +14,7 @@ import inspect
 import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import duckdb
@@ -128,6 +129,11 @@ class MeasurementCache:
                     or entry['sha256'] != digest(payload)):
                 return None
             artifacts = ([payload['artifact']] if payload.get('artifact') else []) + payload.get('occurrences', [])
+            populations = [payload]
+            if kind == 'result':
+                populations += [payload.get('sourceIdentity', {}).get('population') or {},
+                                payload.get('targetPopulation', {})]
+            artifacts += [p['populationProof']['artifact'] for p in populations if p.get('populationProof')]
             for artifact in artifacts:
                 if file_signature(Path(artifact['path'])) != artifact['signature']:
                     return None
@@ -217,6 +223,98 @@ class MeasurementCache:
                 self.work['member_projections'] += 1
             outputs.append(held)
         return outputs
+
+    def capture_population_proof(self, path):
+        """Capture one explicitly supplied earlier full-native-identity report."""
+        path = Path(path).absolute()
+        before = file_signature(path)
+        if path.stat().st_size > 8 * 1024**2:
+            raise ValueError('Population proof exceeds the explicit 8MiB report limit')
+        with path.open('rb') as stream:
+            raw = stream.read()
+        assert_local_members_unchanged({str(path): before})
+        document = json.loads(raw)
+        if not isinstance(document, dict) or not isinstance(document.get('sources'), list):
+            raise ValueError('Population proof requires explicit source identity records')
+        artifact = {'path': str(path), 'sha256': 'sha256:' + hashlib.sha256(raw).hexdigest(), 'signature': before}
+        return {'artifact': artifact, 'sources': document['sources'],
+                'recordSetDigest': digest(document['sources']), 'resourceScope': document.get('resourceScope')}
+
+    def import_population(self, binding, paths, columns, proof):
+        """Reuse earlier counts only after current exact member admission.
+
+        This accepts only complete non-null unique native key populations. It
+        does not claim that the earlier grouping ran under this cache's limits.
+        """
+        admitted = self.admit(binding, paths)
+        artifact = proof['artifact']
+        assert_local_members_unchanged({artifact['path']: artifact['signature']})
+        if digest(proof['sources']) != proof['recordSetDigest']:
+            raise ValueError('Captured population proof records changed')
+        candidates = [record for record in proof['sources'] if isinstance(record, dict)
+                      and record.get('source') == binding['table']]
+        if len(candidates) != 1:
+            raise ValueError('Population proof requires one exact source table record')
+        record, = candidates
+        keys = record.get('identityColumns')
+        if (not isinstance(keys, list) or not keys or any(not isinstance(k, str) for k in keys)
+                or len(set(keys)) != len(keys) or sorted(keys) != sorted(columns)
+                or not set(keys) <= set(dict(binding['schema']))):
+            raise ValueError('Population proof differs from the exact requested native key columns')
+        if (record.get('status') != 'verified-full-main-complete-source-identity'
+                or record.get('missingIdentityColumns') != []
+                or record.get('globalUniqueCompleteSourceIdentity') is not True
+                or record.get('globalUniqueNonNullCompleteSourceIdentity') is not True):
+            raise ValueError('Population proof is not a completed full non-null unique native identity population')
+        fields = ('sourceRows', 'completeIdentityAdmittedRows', 'completeIdentityNonNullRows',
+                  'distinctCompleteSourceIdentities', 'duplicateCompleteIdentityRows', 'sourceRowsWithIncompleteIdentity')
+        if (any(not count_value(record.get(field)) for field in fields)
+                or any(record[field] != binding['rows'] for field in fields[:4])
+                or any(record[field] for field in fields[4:])):
+            raise ValueError('Population proof counts do not establish the complete selected identity population')
+
+        def member_pin(member):
+            if not isinstance(member, dict):
+                raise ValueError('Population proof has an invalid member pin')
+            path = member.get('path')
+            if path is None:
+                if not isinstance(member.get('url'), str):
+                    raise ValueError('Population proof requires exact selected member locators')
+                url = urlsplit(member['url'])
+                if not url.netloc or url.scheme not in ('https', 'http') or url.query or url.fragment:
+                    raise ValueError('Population proof requires exact selected member locators')
+                path = url.path.lstrip('/')
+            if not isinstance(path, str) or not path:
+                raise ValueError('Population proof requires exact selected member locators')
+            return {'path': path, 'sha256': member.get('sha256'),
+                    'byteSize': member.get('byteSize'), 'rows': member.get('rows')}
+
+        selected = sorted(canonical_bytes(member_pin(member)) for member in binding['members'])
+        previous = record.get('sourcePin')
+        admissions = record.get('admissions')
+        if (not isinstance(previous, list) or not isinstance(admissions, list)
+                or not previous or len(previous) != len(admissions)
+                or selected != sorted(canonical_bytes(member_pin(m)) for m in previous)
+                or selected != sorted(canonical_bytes(member_pin(m.get('member'))) for m in admissions
+                                      if isinstance(m, dict))):
+            raise ValueError('Population proof differs from the complete selected member set')
+        # Exact member hashes seal the earlier physical schema; fresh admit
+        # checks that every current footer matches this selected schema.
+        assert_local_members_unchanged({item['path']: item['signature'] for item in admitted})
+        dependency = {'binding': binding, 'columns': sorted(columns),
+                      'implementation': digest([VERSION, duckdb.__version__, inspect.getsource(self.population)])}
+        held = self._read('population', dependency)
+        if held is not None:
+            return held
+        self.work['population_imports'] += 1
+        return self._write('population', dependency, {
+            'rows': binding['rows'], 'nonNullRows': binding['rows'], 'nullKeyRows': 0,
+            'distinctKeys': binding['rows'], 'duplicateKeys': 0,
+            'maximumRowsPerKey': 1 if binding['rows'] else 0, 'scope': 'full_selected_inputs',
+            'populationProof': {'authority': 'imported_existing_full_population', 'artifact': artifact,
+                                'sourceRecordDigest': digest(record), 'identityColumns': keys,
+                                'physicalSchema': binding['schema'], 'resourceScope': proof['resourceScope'],
+                                'execution': 'Earlier native identity grouping reused; no new grouping execution claimed.'}})
 
     def population(self, binding, admitted, columns):
         """Cache full selected non-null key populations independently of routes."""
