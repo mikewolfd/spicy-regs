@@ -20,7 +20,15 @@ on:
         type: string
         default: ubuntu-latest
       comments_original_pair:
-        description: 'Absolute sealed v1 pair on this runner, outside checkout; empty exports the catalog'
+        description: 'Absolute retained v1 pair outside checkout; sealed or accompanied by a captured descriptor'
+        type: string
+        default: ''
+      comments_captured_input:
+        description: 'Absolute validation-pending descriptor for the retained pair; requires exact digest'
+        type: string
+        default: ''
+      comments_captured_input_sha256:
+        description: 'Exact SHA-256 of the captured input descriptor'
         type: string
         default: ''
 concurrency:
@@ -42,3 +50,5 @@ jobs:
       comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
       comments_original_pair: ${{ inputs.comments_original_pair }}
+      comments_captured_input: ${{ inputs.comments_captured_input }}
+      comments_captured_input_sha256: ${{ inputs.comments_captured_input_sha256 }}
