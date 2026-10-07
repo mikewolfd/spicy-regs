@@ -38,9 +38,10 @@ def test_financial_discovery_defers_exact_rows_but_query_still_admits(tmp_path, 
     listed = _tool_data(mcp, 'list_sources', {})
     assert not restored
     assert listed['fec_release']['status_counts'] == {'compatible': len(specs)}
-    assert {entry['view'] for entry in listed['deferred_views']} >= {spec.view.name for spec in specs}
+    assert {name for entry in listed['deferred_views'] for name in entry['views']} >= {spec.view.name for spec in specs}
     described = _tool_data(mcp, 'describe_table', {'table': specs[0].view.name, 'detail': True})
     assert not restored
+    assert specs[0].view.name not in listed['unavailable_tables']
     assert described['available'] is False
     assert described['relationship']['status'] == 'deferred'
     assert described['metadata']['query_admission'] == 'pending_receipt_rows'

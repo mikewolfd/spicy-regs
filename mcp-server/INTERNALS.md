@@ -145,7 +145,11 @@ into the next one.
   selected source schemas and compare release declarations without restoring
   financial or citation rows. Receipt-dependent views return `status: deferred`
   and `query_admission: pending_receipt_rows`; `list_sources.deferred_views`
-  names them and gives the reason. Their output schema is not invented. Release
+  groups every deferred name by its identical reason/admission state. Discovery
+  uses concise view labels; `describe_table` retains full registered meanings,
+  identities, dependencies and purpose limits. Receipt families are listed once
+  by name; `describe_table('etl_receipts')` carries their selected generation/hash/
+  row pins and shared receipt fields. Their output schema is not invented. Release
   compatibility describes matching declarations, not completed row validation.
   `query_sql` builds its own connection and runs all exact admission guards
   before making those views queryable. Native local discovery still checks

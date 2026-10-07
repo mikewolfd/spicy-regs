@@ -2109,7 +2109,9 @@ def _tools() -> list[Tool]:
         means the file had moved, and rows is null.
         Discovery binds source schemas without restoring receipt-backed rows.
         deferred_views names views whose exact receipt admission remains pending
-        until query_sql builds its separate query connection. No output schema or
+        until query_sql builds its separate query connection, grouped by reason.
+        Relationship summaries are group labels; describe_table gives full meanings.
+        No output schema or
         execution claim is supplied for a deferred view. Listed source schemas
         are not a data or freshness audit. Call describe_table before querying a table: it gives
         columns, coverage caveats, joins, the live data version and the output
@@ -2128,7 +2130,10 @@ def _tools() -> list[Tool]:
         local = _connection_local_selection(cursor) if DATA_DIR is not None else None
         # A relationship family's occurrence, pair and field-state views share one summary; list it once.
         views: dict[str, list[str]] = {}
+        deferred: dict[tuple[str, str], list[str]] = {}
         for name, entry in relationships.items():
+            if entry["status"] == "deferred":
+                deferred.setdefault((entry["reason"], entry["metadata"]["query_admission"]), []).append(name)
             if name in available and entry["metadata"].get("view_role") != "child_query":
                 views.setdefault(entry["metadata"]["summary"], []).append(name)
 
@@ -2160,18 +2165,19 @@ def _tools() -> list[Tool]:
         return {
             **_source_details(cursor),
             "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
-            "relationship_views": [{"views": names, "summary": summary} for summary, names in views.items()],
-            "unavailable_tables": [name for name in (*TABLES, *relationships) if name not in available],
-            "deferred_views": [{"view": name, "reason": entry["reason"],
-                                "query_admission": entry["metadata"]["query_admission"]}
-                               for name, entry in relationships.items() if entry["status"] == "deferred"],
+            "relationship_views": [{"views": names, "summary": relationships[names[0]]["metadata"]["label"].removesuffix(" occurrences")}
+                                   for names in views.values()],
+            "relationship_view_details": "Summaries name view groups. Call describe_table for full meanings, identities, dependencies and purpose limits.",
+            "unavailable_tables": [name for name in (*TABLES, *relationships)
+                                   if name not in available and relationships.get(name, {}).get("status") != "deferred"],
+            "deferred_views": [{"views": names, "reason": reason, "query_admission": admission}
+                               for (reason, admission), names in deferred.items()],
             "etl_receipts": {
                 "available": "etl_receipts" in available,
                 "query_table": "etl_receipts" if "etl_receipts" in available else None,
                 "dataset_count": len(metadata.get("etl_receipts", {}).get("datasets", [])),
-                "details": "describe_table('etl_receipts') lists datasets and receipt columns.",
-                "members": [{"family": name, "prefix": family["prefix"], **family["etlReceipts"]}
-                            for name, family in _connection_index(cursor)["families"].items() if "etlReceipts" in family],
+                "details": "describe_table('etl_receipts') gives datasets, columns and every selected family's generation/hash/row pins.",
+                "members": [{"family": name} for name in _receipt_families(index, local)],
                 "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
             },
             "fec_release": _fec_release_reply(cursor),
@@ -2182,28 +2188,29 @@ def _tools() -> list[Tool]:
         """Return columns, meanings, identity, coverage and joins.
 
         Coverage is supported output, not population or freshness. columns
-        gives loaded fields and dictionary meanings (declared fields if unavailable);
-        schema_differences compares them. publication pins rows and coverage;
+        gives fields and meanings (declared if unavailable); schema_differences
+        compares loaded fields. publication pins rows and coverage;
         published_at is a pointer move, not a source read. last_object_write
         bounds that move from below.
-        inputs names recorded parents (none recorded does not mean none);
-        built_from sits beside live. input_table_current compares parent bytes;
+        inputs: the parents its producer recorded (none recorded is not none;
+        a read that bypassed the download helper is not recorded), built_from
+        beside live. input_table_current compares parent bytes;
         inputs_current is false if any lags, else null if unknown.
-        prior_generation is earlier output; snapshot_inputs names rulemaking sources.
+        prior_generation: earlier output; snapshot_inputs: rulemaking sources.
         qualification compares live/audited pins, date and disposition for the
-        ledger's publisher. not_in_ledger means absent from the bundled output ledger, not unevidenced.
+        ledger's publisher. not_in_ledger means absent from its ledger, not unevidenced.
         joins gives outgoing/incoming declarations. detail=true adds outgoing
         measurements and ledger statements; incoming measurements link to the
         child, retaining baselines. incoming_parent names the parent;
         incoming_parent_columns gives its complete key, otherwise parent_columns
         appears per entry. Missing reason means empty; floor_pct, no measured
         floor; expected_cardinality, unspecified; measured_via, measure the child.
-        detail=false lists omissions in detail.omitted. receipt_fields names
-        inputs accepted by read_receipt_fields. Source columns inherit meanings; other view columns use declared meanings or null.
+        detail=false: omissions in detail.omitted; receipt_fields names
+        read_receipt_fields inputs. Source fields inherit meanings; others use declarations or null.
         FEC release_compatibility is in publication (relationship if unavailable).
-        detail=false retains pins, reasons, dependency generations and receipt
-        count. Deferred views report pending_receipt_rows: pins may match before
-        row admission and output binding.
+        detail=false keeps pins, reasons, dependency generations and receipt count.
+        pending_receipt_rows means row admission/output binding is deferred;
+        matching pins do not establish execution.
         compatible means captured data, interpretation and consumer match
         the selected release, not current/net money or completeness. Financial
         eligibility applies to its named purpose.
