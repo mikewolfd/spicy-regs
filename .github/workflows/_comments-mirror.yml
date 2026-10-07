@@ -12,6 +12,9 @@ on:
       comments_runner:
         type: string
         default: ubuntu-latest
+      comments_original_pair:
+        type: string
+        default: ''
 
 env:
   # Called only by workflows that hold comments-catalog-write.
@@ -27,6 +30,31 @@ jobs:
     timeout-minutes: ${{ inputs.promote_v1 && 360 || 180 }}
 
     steps:
+      - name: Check retained original pair before checkout
+        id: retained_original
+        if: ${{ inputs.promote_v1 && inputs.comments_original_pair != '' }}
+        shell: bash
+        env:
+          COMMENTS_ORIGINAL_PAIR: ${{ inputs.comments_original_pair }}
+        run: |
+          literal_path() {
+            [[ ! "$1" =~ [[:cntrl:]] ]] || { echo 'Retained pair path contains control characters' >&2; exit 1; }
+            case "$1" in
+              *'*'*|*'?'*|*'['*|*']'*|*'{'*|*'}'*|*'('*|*')'*|*'\'*) echo 'Retained pair path contains glob or escape syntax' >&2; exit 1 ;;
+            esac
+          }
+          literal_path "$COMMENTS_ORIGINAL_PAIR"
+          [[ "$COMMENTS_ORIGINAL_PAIR" = /* ]] || { echo 'Retained pair must use an absolute path' >&2; exit 1; }
+          original="$(cd -- "$COMMENTS_ORIGINAL_PAIR" && pwd -P)"
+          literal_path "$original"
+          workspace="$(cd -- "$GITHUB_WORKSPACE" && pwd -P)"
+          case "$original/" in
+            "$workspace/"*) echo 'Retained pair must be outside the checkout workspace' >&2; exit 1 ;;
+          esac
+          test -f "$original/generation.json"
+          test -f "$original/export-complete.json"
+          printf 'path=%s\n' "$original" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -67,6 +95,7 @@ jobs:
         shell: bash
         env:
           TMPDIR: ${{ runner.temp }}
+          COMMENTS_ORIGINAL_PAIR: ${{ steps.retained_original.outputs.path || 'output/comments-original-v1' }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
@@ -109,7 +138,7 @@ jobs:
             fi
             measure \
               uv run --frozen python scripts/prepare_comments_selected_export.py \
-              --v1-source "$V1_SOURCE" --original-pair output/comments-original-v1 \
+              --v1-source "$V1_SOURCE" --original-pair "$COMMENTS_ORIGINAL_PAIR" \
               --output output/comments-selected --base-receipt output/comments-base-inputs.json $PROMOTED_ARGS
             exit 0
           fi
@@ -151,11 +180,23 @@ jobs:
           retention-days: 30
 
       - name: Retain exact original selected v1 export
-        if: ${{ always() && inputs.promote_v1 }}
+        if: ${{ always() && inputs.promote_v1 && inputs.comments_original_pair == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: comments-original-v1-${{ github.run_id }}
           path: output/comments-original-v1
+          retention-days: 30
+
+      - name: Retain declared members of the validated original pair
+        if: ${{ always() && inputs.promote_v1 && steps.retained_original.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-original-v1-${{ github.run_id }}
+          path: |
+            ${{ steps.retained_original.outputs.path }}/comments.parquet
+            ${{ steps.retained_original.outputs.path }}/etl_receipts.parquet
+            ${{ steps.retained_original.outputs.path }}/generation.json
+            ${{ steps.retained_original.outputs.path }}/export-complete.json
           retention-days: 30
 
       - name: Capture published base versions for dependent jobs

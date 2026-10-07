@@ -15,6 +15,10 @@ on:
         description: 'Linux/macOS runner label for comments; select verified export storage'
         type: string
         default: ubuntu-latest
+      comments_original_pair:
+        description: 'Absolute sealed v1 pair on this runner, outside checkout; empty exports the catalog'
+        type: string
+        default: ''
 concurrency:
   group: comments-catalog-write
   cancel-in-progress: false
@@ -32,3 +36,4 @@ jobs:
       skip_upload: ${{ inputs.skip_upload }}
       promote_v1: ${{ inputs.promote_v1 }}
       comments_runner: ${{ inputs.comments_runner }}
+      comments_original_pair: ${{ inputs.comments_original_pair }}
