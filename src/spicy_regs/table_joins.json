@@ -6848,6 +6848,42 @@
     {
       "child": "scorecard_member_links",
       "child_columns": [
+        "source_snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "The resolver recorded this literal source snapshot. Main navigation also requires the same scorecard edition; this association remains separate from the current business entity and the recorded official-target resolution. No capture ID is interpreted as a snapshot ID.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_item_links",
+      "child_columns": [
+        "source_snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "The resolver recorded this literal source snapshot. Main navigation also requires the same scorecard edition; this association remains separate from the current business entity and the recorded official-target resolution. No capture ID is interpreted as a snapshot ID.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "scorecard_member_links",
+      "child_columns": [
         "bioguide_id"
       ],
       "parent": "members",
@@ -14313,6 +14349,100 @@
       "ruleVersion": "source-navigation/1"
     },
     {
+      "id": "recorded_snapshot_scorecard_member_links_scorecard_snapshots",
+      "source": "scorecard_member_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_item_links_scorecard_snapshots",
+      "source": "scorecard_item_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
       "id": "resolved_scorecard_member_links_members",
       "source": "scorecard_member_links",
       "fields": [],
@@ -20099,7 +20229,7 @@
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "A body admitted against a recorded native parent and captured SHA-256. Current lookup must match opinion, cluster, native SHA-1 and offered URL together; it does not certify that the current publication is the recorded parent.",
+      "meaning": "Recorded capture and parent data qualify this text. A match requires the opinion ID, opinion group, fingerprint and offered URL together. A match in current data does not prove it was the original parent publication.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
