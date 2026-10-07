@@ -74,12 +74,16 @@ def test_court_preparation_refuses_changed_original_processing_before_publicatio
 
 
 def large_processing_opinions():
-    """Distinct retained receipt fields make the real old/native size difference visible."""
+    """A remaining receipt-only literal deliberately exercises the shrink guard."""
     import hashlib
+    from spicy_regs.court_subjects import RECEIPT_FIELDS, SUBJECT_SCHEMAS
 
+    assert 'local_path' in RECEIPT_FIELDS['court_opinions']
+    assert 'local_path' not in SUBJECT_SCHEMAS['court_opinions'].names
     rows = opinions()
     for number, row in enumerate(rows):
-        row['download_url'] = ''.join(hashlib.sha256(f'{number}:{i}'.encode()).hexdigest() for i in range(300))
+        row['local_path'] = ''.join(hashlib.sha256(f'{number}:{i}'.encode()).hexdigest() for i in range(300))
+        row['download_url'] = f'https://court.invalid/opinions/{row["opinion_id"]}.pdf'
     return rows
 
 
@@ -108,6 +112,9 @@ def test_complete_conversion_replaces_size_heuristic_with_exact_restoration(
         receipt = convert('court-opinions', work, publish=True)
     entry = publication.current_index(BASE)['families']['court-opinions']
     assert entry['tables']['court_opinions.parquet']['byteSize'] < old['tables']['court_opinions.parquet']['byteSize'] / 2
+    subject = pq.read_table(Path(receipt['generation']['directory']) / 'court_opinions.parquet')
+    assert 'local_path' not in subject.column_names
+    assert subject['download_url'].to_pylist() == [row['download_url'] for row in rows]
     assert receipt['read_back']['anonymous_read_rows'] == {'court_opinions': len(rows)}
     restored = next((work / 'read-back').rglob('processing.parquet'))
     assert pq.read_table(restored).to_pylist() == rows
