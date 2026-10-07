@@ -321,11 +321,14 @@ def ensure_native(con, record_type):
         require_initialized(con, record_type)
 
 
-def processing_table(con, record_type, *, where: str | None = None, in_transaction=False):
+def processing_table(con, record_type, *, where: str | None = None, in_transaction=False,
+                     selected_receipts: Path | None = None):
     """Return exact retained mapper observations after checking native subject joins.
 
     The receipt owns the original processing input. Native business columns are
     not converted back into strings or JSON to manufacture an older table shape.
+    A caller-owned ``selected_receipts`` file retains the original accepted
+    receipts from this same read for history inheritance, before rebinding.
     """
     from . import iceberg
     from contextlib import nullcontext
@@ -344,7 +347,7 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             if where:
                 write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
                            ids, pa.schema([('record_id', pa.string())]))
-            raw_receipts = work / 'selected-receipts.parquet'
+            raw_receipts = selected_receipts if selected_receipts is not None else work / 'selected-receipts.parquet'
             # Full reads also detect orphan receipts (for example an unpaired DELETE).
             # Scoped reads join only selected identities and avoid restoring unrelated agencies.
             selected_ids = (f" SEMI JOIN read_parquet('{iceberg._sql_str(str(ids))}') i USING (record_id)"
@@ -416,7 +419,9 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
             if expected_snapshot is not None and iceberg._read_snapshot(con, record_type) != expected_snapshot:
                 raise RuntimeError('Catalog snapshot changed after preparation; rerun the operation')
             prior_where = scope_sql if delete_scope else f'{key_sql} IN (SELECT {key_sql} FROM {source}) AND {scope_sql}'
-            prior = processing_table(con, record_type, where=prior_where, in_transaction=True)
+            selected_receipts = work / 'prior-receipts.parquet'
+            prior = processing_table(con, record_type, where=prior_where, in_transaction=True,
+                                     selected_receipts=selected_receipts)
             if expected_prior is not None:
                 expected_columns = _validate_source_columns(con, expected_prior, record_type.name)
                 expected_prior = f'(SELECT {expected_columns} FROM {expected_prior} WHERE {prior_where})'
@@ -433,9 +438,13 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                         for batch in reader for row in batch.to_pylist()), identities,
                        pa.schema([('record_id', pa.string()), (key, pa.string())]))
             prior_receipts = '_prior_receipts_' + uuid4().hex
+            # Reuse the exact originals already selected and admitted above.
+            # Rebound read receipts would manufacture an extra history entry.
             con.execute(f'CREATE TEMP TABLE {prior_receipts} AS SELECT i."{key}", r AS receipt '
-                        f'FROM {receipts_table()} r JOIN read_parquet(?) i USING (record_id) '
-                        "WHERE r.dataset=? AND r.outcome='accepted'", [str(identities), record_type.name])
+                        'FROM read_parquet(?) r JOIN read_parquet(?) i USING (record_id) '
+                        "WHERE r.dataset=? AND r.outcome='accepted'",
+                        [str(selected_receipts), str(identities), record_type.name])
+            selected_receipts.unlink()  # The local table now owns these prior values.
             subject, receipts = _stage(con, source, record_type.name, work, generation,
                                       prior_receipts=prior_receipts)
             native = '_native_replacement_' + uuid4().hex
