@@ -229,8 +229,13 @@ def _house_communication_key(identity):
         return natural_key(congress, kind, number)
 
     try:
-        parts = []
-        for name in ("congress", "communication_type", "number"):
+        congress = None if identity.get("congress") is None else positive(identity["congress"])
+        # Congress remains useful main context when another key component is
+        # refused. Validate its own route bounds before inspecting those fields.
+        validated(congress if congress is not None else 1, "ec", 1)
+        result["congress"] = congress
+        parts = [congress]
+        for name in ("communication_type", "number"):
             value = identity.get(name)
             parts.append(None if value is None else
                          value.lower() if name == "communication_type" and isinstance(value, str) else
@@ -239,7 +244,6 @@ def _house_communication_key(identity):
         # The maintained route validates even partially stated components.
         validated(congress if congress is not None else 1, kind if kind is not None else "ec",
                   number if number is not None else 1)
-        result["congress"] = congress
         constructed = validated(congress, kind, number) if all(p is not None for p in parts) else None
         if stated is not None:
             if not isinstance(stated, str) or not re.fullmatch(r"[1-9][0-9]*-[a-z]+-[1-9][0-9]*", stated, flags=re.ASCII):

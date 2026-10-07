@@ -212,6 +212,26 @@ def test_house_key_refusal_preserves_literal_id_and_event(tmp_path, changes, sta
     assert bool(row['communication_key_reason']) == (status != 'stated')
 
 
+@pytest.mark.parametrize('event_name', ['congress-detail-result', 'house-record-result'])
+@pytest.mark.parametrize('changes,expected_congress', [
+    ({'number': '01'}, 119),
+    ({'communication_type': 'bad'}, 119),
+    ({'congress': '0119'}, None),
+    ({'congress': 1000}, None),
+    ({'congress': True}, None),
+])
+def test_house_refused_key_preserves_only_valid_native_congress(tmp_path, event_name, changes, expected_congress):
+    event = {'event': event_name, 'table': 'house_communications', 'congress': '119',
+             'communication_type': 'ec', 'number': '2', 'read_outcome': 'failed', 'outcome': 'unread', **changes}
+    dataset = 'house_communications_detail_reads' if event_name == 'congress-detail-result' else 'house_record_enrichment_results'
+    subjects, receipts = write_recorded_outcomes(journal(tmp_path, [event]), tmp_path / 'out',
+        generation_id='g', tables=[dataset])
+    [row] = read_with_receipts(subjects, receipts, POLICIES[dataset], generation_id='g')
+    assert row['congress'] == expected_congress
+    assert row['communication_id'] is None and row['communication_key_status'] == 'malformed'
+    assert row['recorded_event'] == event
+
+
 @pytest.mark.parametrize('name', ['house_communications_detail_reads', 'house_record_enrichment_results'])
 def test_house_prior_v1_rederives_native_key_from_exact_recorded_event(tmp_path, name):
     from spicy_regs.earlier_receipt_policies import earlier_policies
