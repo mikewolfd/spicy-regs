@@ -187,3 +187,34 @@ def test_discovery_cache_age_does_not_restart_on_every_read(monkeypatch):
     finally:
         server._discovery_only.reset(token)
         server._reset_connection_cache()
+
+
+def test_old_receipt_only_discovery_is_hidden_without_payload_restore(tmp_path, monkeypatch):
+    from spicy_regs import etl_receipts
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+    from spicy_regs.selected_generations import SelectedDataset, remember_selection
+    from tests.test_fec_historical_policy_readback import old_pair
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    row = {'collection_id': 'old-collection', 'source_family': 'bulk', 'record_count': 1,
+           'conversion_inputs': {'collection_id': 'old-collection', 'source_family': 'bulk', 'record_count': 1}}
+    _, subject, receipt = old_pair(tmp_path / 'bundle', 'fec_collections', row)
+    assert subject is None
+    root = tmp_path / 'state'
+    remember_selection(root, [SelectedDataset('fec_collections', (), receipt, 'historical')])
+    def refuse_restore(*args, **kwargs):
+        pytest.fail('Discovery replayed receipt payloads or restored financial rows')
+    monkeypatch.setattr(etl_receipts, 'select_receipts', refuse_restore)
+    monkeypatch.setattr(etl_receipts, 'validate_receipt_bundle', refuse_restore)
+    monkeypatch.setattr(ReceiptAdapter, 'restore_originals', refuse_restore)
+    selection = local_data.local_selection(root, admit_rows=False)
+    assert 'fec_collections' not in selection.files
+    assert selection.native['fec_collections'].receipts == receipt
+    monkeypatch.setattr(server, 'DATA_DIR', root)
+    monkeypatch.setattr(server, 'TABLES', ())
+    mcp = server.build_server()
+    listed = _tool_data(mcp, 'list_sources', {})
+    assert 'fec_collections' not in {item['table'] for group in listed['subjects'] for item in group['tables']}
+    with pytest.raises(ToolError, match='Unknown table'):
+        _tool_data(mcp, 'describe_table', {'table': 'fec_collections'})
+    assert server._cached_connection is None
