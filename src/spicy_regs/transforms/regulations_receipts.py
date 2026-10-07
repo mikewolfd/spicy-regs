@@ -159,6 +159,19 @@ def read_internal(selected: ReceiptInput) -> Iterable[dict]:
         yield _processor_input(selected.dataset, row)
 
 
+def processing_schema(dataset, *, metadata=None, source_schema=None):
+    """The maintained restored Arrow schema, including the original field preservation rules."""
+    if source_schema is not None:
+        known = dict(SOURCE_COLUMNS[dataset])
+        if (dataset not in {"dockets", "documents", "federal_register", "fr_docket_links"}
+                or len(set(source_schema.names)) != len(source_schema.names)
+                or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
+            raise ValueError("Exact regulatory source schema differs from the declared input fields")
+    schema = (source_schema.remove_metadata() if source_schema is not None else
+              pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS[dataset]]))
+    return schema.with_metadata(metadata) if metadata else schema
+
+
 def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = False,
                          source_schema: pa.Schema | None = None) -> Path:
     """Bounded exact retained processor inputs, with qualified file metadata.
@@ -171,12 +184,7 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     ``bulk=False`` retains the complete row reader as the reference authority.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
-    if source_schema is not None:
-        known = dict(SOURCE_COLUMNS[selected.dataset])
-        if (selected.dataset not in {"dockets", "documents", "federal_register", "fr_docket_links"}
-                or len(set(source_schema.names)) != len(source_schema.names)
-                or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
-            raise ValueError("Exact regulatory source schema differs from the declared input fields")
+    processing_schema(selected.dataset, source_schema=source_schema)
     if bulk and selected.dataset in {'dockets', 'documents', 'federal_register', 'fr_docket_links'} and all(
             pq.read_schema(path).equals(subject_schema(selected.dataset)) for path in selected.subjects):
         from spicy_regs import etl_bulk, regulations_bulk
@@ -207,10 +215,7 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
             if held and any(value != held[0] for value in held):
                 raise ValueError("Empty input metadata differs across selected receipts")
             metadata = held[0] if held else {}
-    schema = (source_schema.remove_metadata() if source_schema is not None else
-              pa.schema([(name, TYPES[t]) for name, t in SOURCE_COLUMNS[selected.dataset]]))
-    if metadata:
-        schema = schema.with_metadata(metadata)
+    schema = processing_schema(selected.dataset, source_schema=source_schema, metadata=metadata)
 
     def original(row):
         raw = _processor_input(selected.dataset, row)

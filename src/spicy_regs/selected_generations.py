@@ -17,6 +17,24 @@ def _pin(path):
         return "sha256:" + stream_sha256(stream)
 
 
+def _member_pin(path, checked):
+    """Hash unique regular bytes once within this call/session; refuse concurrent mutation."""
+    from spicy_regs.local_data import file_signature
+
+    path = Path(path).absolute()
+    before = file_signature(path)
+    held = checked.get(path)
+    if held is not None:
+        if held[0] != before:
+            raise ValueError("Selected native member changed during its read session")
+        return held[1]
+    digest = _pin(path)
+    if file_signature(path) != before:
+        raise ValueError("Selected native member changed while hashing")
+    checked[path] = (before, digest)
+    return digest
+
+
 @dataclass(frozen=True)
 class SelectedDataset:
     dataset: str
@@ -35,6 +53,10 @@ def unique_build_directory(root: Path) -> Path:
 
 def remember_selection(root: Path, selections) -> None:
     """Pin immutable admitted members; mutable public convenience copies are never priors."""
+    _remember_selection(root, selections, {})
+
+
+def _remember_selection(root, selections, checked):
     directory = Path(root) / ".native-state"
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / "selection.json"
@@ -42,7 +64,7 @@ def remember_selection(root: Path, selections) -> None:
     for selected in selections:
 
         def member(path):
-            return {"path": str(Path(path).resolve()), "sha256": _pin(path)}
+            return {"path": str(Path(path).resolve()), "sha256": _member_pin(path, checked)}
 
         values[selected.dataset] = {
             "generation_id": selected.generation_id,
@@ -73,9 +95,21 @@ class SelectedInputs:
         pointer = self.root / ".native-state" / "selection.json"
         self.local = json.loads(pointer.read_text()) if self.index is None and pointer.exists() else {}
         self.cache = {}
+        self.checked = {}
+        self.fetched = {}
+
+    def member_pin(self, path):
+        """Return a byte pin from this captured session, checking that its bytes remain unchanged."""
+        digest = _member_pin(path, self.checked)
+        signature, _ = self.checked[Path(path).absolute()]
+        return {"sha256": digest, "byteSize": signature[2]}
 
     def select(self, dataset):
         if dataset in self.cache:
+            selected = self.cache[dataset]
+            for path in (*selected.subjects, selected.receipts,
+                         *((selected.key_index,) if selected.key_index is not None else ())):
+                _member_pin(path, self.checked)
             return self.cache[dataset]
         if self.index is None:
             value = self.local.get(dataset)
@@ -84,7 +118,7 @@ class SelectedInputs:
 
             def checked(member):
                 path = Path(member["path"])
-                if _pin(path) != member["sha256"]:
+                if _member_pin(path, self.checked) != member["sha256"]:
                     raise ValueError("Selected local native member changed")
                 return path
 
@@ -112,10 +146,44 @@ class SelectedInputs:
             directory.mkdir(parents=True, exist_ok=True)
 
             def fetch(member):
-                target = directory / member.key
+                from rulespec_artifacts import validate_object_key
+                from spicy_regs.local_data import file_signature
+
+                identity = (member.path, member.sha256, member.byte_size)
+                held = self.fetched.get(identity)
+                if held is not None:
+                    target, signature = held
+                    if file_signature(target) != signature:
+                        raise ValueError("Selected remote native member changed during its read session")
+                    return target
+                # All datasets of one captured generation share its receipt member.
+                # Its immutable object path preserves both family and generation.
+                key = validate_object_key(member.path, path="selectedMember")
+                target = self.directory / ".members" / key
                 target.parent.mkdir(parents=True, exist_ok=True)
-                if not publication.fetch_member(public_url, member, target, member.path):
+                downloaded = publication.fetch_member(public_url, member, target, member.path)
+                if not downloaded:
                     raise ValueError(f"{dataset}: selected native member unavailable")
+                if isinstance(downloaded, publication.DownloadedMember):
+                    from spicy_regs.local_data import file_state_from_stat
+                    if file_state_from_stat(target.lstat()) != downloaded.state:
+                        raise ValueError("Selected native member changed after download verification")
+                    digest = downloaded.sha256
+                else:
+                    # Injected fetch adapters must prove their final bytes too.
+                    digest = _member_pin(target, self.checked)
+                if digest != member.sha256:
+                    raise ValueError("Selected remote native member differs from its pin")
+                signature = file_signature(target)
+                if isinstance(downloaded, publication.DownloadedMember):
+                    if file_state_from_stat(target.lstat()) != downloaded.state:
+                        raise ValueError("Selected native member changed during verification handoff")
+                elif signature != self.checked[target.absolute()][0]:
+                    raise ValueError("Selected native member changed during adapter verification handoff")
+                if signature[2] != member.byte_size:
+                    raise ValueError("Selected remote native member differs from its byte size pin")
+                self.fetched[identity] = (target, signature)
+                self.checked[target.absolute()] = (signature, digest)
                 return target
 
             subjects = (
@@ -137,7 +205,7 @@ class SelectedInputs:
             from spicy_regs.receipt_key_index import check_reader
             with duckdb.connect() as con:
                 check_reader(con, str(result.key_index), result.key_index_descriptor,
-                             {"sha256": _pin(result.receipts), "byteSize": result.receipts.stat().st_size,
+                             {"sha256": _member_pin(result.receipts, self.checked), "byteSize": result.receipts.stat().st_size,
                               "rows": pq.ParquetFile(result.receipts).metadata.num_rows})
         self.cache[dataset] = result
         return result
@@ -145,7 +213,8 @@ class SelectedInputs:
 
 def remember_generation(root: Path, directory: Path, artifact) -> None:
     """Select every dataset from one already admitted immutable generation."""
-    from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
+    from rulespec_artifacts import LocalFileState, LocalMemberSource, iter_member_descriptors
+    from spicy_regs.local_data import file_signature
     from spicy_regs.sources.publication import member_table
 
     specification = artifact.root["spec"].get("etlReceipts")
@@ -153,6 +222,17 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
         return
     members = list(iter_member_descriptors(artifact, LocalMemberSource(directory)))
     selected = []
+    checked = {}
+    for member in members:
+        if member.object_key is None:
+            raise ValueError("Native generation member has no object key")
+        path = directory / member.object_key
+        state = (artifact.local_member_states or {}).get(member.object_key)
+        if state is not None:
+            signature = file_signature(path)
+            if LocalFileState.from_stat(path.lstat()) != state:
+                raise ValueError("Native generation changed after byte admission")
+            checked[path.absolute()] = (signature, member.sha256)
     for policy in specification["policies"]:
         dataset = policy["dataset"]
         subjects = []
@@ -167,4 +247,4 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
                             directory / specification["keyIndex"]["key"] if "keyIndex" in specification else None,
                             specification.get("keyIndex"))
         )
-    remember_selection(root, selected)
+    _remember_selection(root, selected, checked)

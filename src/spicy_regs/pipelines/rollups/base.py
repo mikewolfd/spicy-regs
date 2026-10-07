@@ -45,7 +45,7 @@ from contextlib import nullcontext
 from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Annotated, ClassVar
+from typing import Annotated, Any, ClassVar
 from uuid import uuid4
 
 from cyclopts import App, Parameter
@@ -123,7 +123,8 @@ class RollupPipeline(Pipeline):
         self.deferred_failure: BaseException | None = None
         self.receipt_generation_id = uuid4().hex
 
-    def run(self) -> None:
+    def run(self, *, read_operation=None) -> None:
+        self._conversion_read_operation = read_operation
         if not self.generation_tables:
             # Docket search is a browser gzip object, not a table family. Keep
             # its existing single-object path until that consumer is migrated.
@@ -170,6 +171,8 @@ class RollupPipeline(Pipeline):
         from rulespec_artifacts import publish_directory_no_replace
         from spicy_regs.generations import build_generation, output_keys, verify_generation
         from spicy_regs.sources import publication
+
+        read_operation = getattr(self, "_conversion_read_operation", None)
 
         output_dir = self.output_dir or (Path.cwd() / "output")
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -257,6 +260,8 @@ class RollupPipeline(Pipeline):
                 inputs=self.source_evidence.inputs() if self.source_evidence else (),
                 parents=parents,
                 partitioned=partitioned,
+                read_operation=read_operation,
+                canonical_root=generations if read_operation is not None else None,
                 **self.generation_kwargs(out_paths),
                 **(
                     {
@@ -270,7 +275,10 @@ class RollupPipeline(Pipeline):
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():
-                verify_generation(destination, expected_pin=artifact.pin)
+                if read_operation is None:
+                    verify_generation(destination, expected_pin=artifact.pin)
+                else:
+                    read_operation.admit_generation(destination, expected_pin=artifact.pin)
             else:
                 publish_directory_no_replace(directory, destination)
         if self.skip_upload:
@@ -279,8 +287,19 @@ class RollupPipeline(Pipeline):
             r2.require_credentials("Generation publication")
             if not public_url:
                 raise RuntimeError("Generation publication requires R2_PUBLIC_URL")
-            publication.publish_generation(
-                destination,
+            publish = publication.publish_generation
+            arguments: dict[str, Any] = {}
+            if read_operation is not None:
+                artifact, source = read_operation.verified_source(destination)
+                publish = publication._publish_verified_generation
+                arguments = {"artifact": artifact, "source": source,
+                             "upload_member": lambda prefix, key: publication._put_immutable(
+                                 r2.get_r2_client(), getenv("R2_BUCKET_NAME", "spicy-regs"),
+                                 prefix + "/" + key, destination / key)}
+            else:
+                arguments = {"directory": destination}
+            publish(
+                **arguments,
                 client=r2.get_r2_client(),
                 bucket=getenv("R2_BUCKET_NAME", "spicy-regs"),
                 prior_index=prior_index,

@@ -836,7 +836,7 @@ def test_the_laws_rollup_publishes_then_fails_the_run_on_an_olrc_access_refusal(
     assert rollup.olrc_access_refused(evidence) == blocked
 
     published = []
-    monkeypatch.setattr(rollup.LegislativeReceiptRollup, "run", lambda self: published.append(self.name))
+    monkeypatch.setattr(rollup.LegislativeReceiptRollup, "run", lambda self, **kwargs: published.append(self.name))
     pipeline = rollup.LawsRollup(output_dir=tmp_path, skip_upload=True)
     pipeline.source_evidence = evidence
     if blocked:

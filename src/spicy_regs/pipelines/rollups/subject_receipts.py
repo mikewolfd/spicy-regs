@@ -7,7 +7,6 @@ native subjects and one generation-bound receipt member; no public mirrors.
 from __future__ import annotations
 
 import inspect
-import hashlib
 import os
 import json
 import shutil
@@ -76,9 +75,13 @@ class SelectedPriors:
         )
         self.restored = {}
         self.selections = {}
+        self.processing_members = {}
 
     def get(self, dataset):
         if dataset in self.restored:
+            if self.restored[dataset] is not None:
+                self.selected.select(dataset)
+                self._check_processing(dataset)
             return self.restored[dataset]
         selected_policy = dataset_policy(dataset)
         selection = self.selected.select(dataset)
@@ -156,7 +159,18 @@ class SelectedPriors:
                 bulk=dataset in {"dockets", "documents", "federal_register", "fr_docket_links"},
             )
         self.restored[dataset] = output
+        members = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)
+        self.processing_members[dataset] = members
+        self._check_processing(dataset)
         return output
+
+    def _check_processing(self, dataset):
+        output = self.restored[dataset]
+        members = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)
+        if output.is_symlink() or members != self.processing_members[dataset]:
+            raise ValueError("Selected restored processing member set changed")
+        for path in members:
+            self.selected.member_pin(path)
 
     def download(self, key, target):
         source = self.get(key.removesuffix(".parquet"))
@@ -178,13 +192,14 @@ class SelectedPriors:
         subjects, receipts, generation = self.selections[dataset]
 
         def pin(path):
-            with path.open("rb") as stream:
-                digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-            return {"sha256": digest, "byteSize": path.stat().st_size}
+            return self.selected.member_pin(path)
 
+        processing = ({"members": [{"key": path.relative_to(source).as_posix(), **pin(path)}
+                                    for path in self.processing_members[dataset]]}
+                      if source.is_dir() else pin(source))
         binding = {"dataset": dataset, "generationId": generation,
                    "subjects": [pin(path) for path in subjects], "receipts": pin(receipts),
-                   "processing": pin(source)}
+                   "processing": processing}
         index = self.selected.index
         key = dataset + ".parquet"
         published = publication.table_pin(index, key) if index is not None and publication.table_owner(index, key) else None
@@ -260,16 +275,8 @@ class NativeReceiptLifecycle(RollupPipeline):
                 parents[key] = publication.table_pin(index, key)
             else:
                 for ordinal, path in enumerate(selection.subjects):
-                    with path.open("rb") as stream:
-                        parents[f"{dataset}/subjects/{ordinal}.parquet"] = {
-                            "sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
-                            "byteSize": path.stat().st_size,
-                        }
-            with selection.receipts.open("rb") as stream:
-                parents[f"{dataset}/etl_receipts.parquet"] = {
-                    "sha256": "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest(),
-                    "byteSize": selection.receipts.stat().st_size,
-                }
+                    parents[f"{dataset}/subjects/{ordinal}.parquet"] = prior.selected.member_pin(path)
+            parents[f"{dataset}/etl_receipts.parquet"] = prior.selected.member_pin(selection.receipts)
         self._primed_receipt_work = output_dir, private, prior
         return parents
 

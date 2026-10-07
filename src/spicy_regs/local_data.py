@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from os import stat_result
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -219,6 +220,11 @@ def _assert_exactly(directory: Path, files: tuple[Path, ...]) -> None:
     found = {path for path in directory.rglob("*") if path.is_symlink() or not path.is_dir()}
     if found != set(files) or any(path.is_symlink() or not path.is_file() for path in files):
         raise RuntimeError(f"Current download {directory.name}/ differs from its published members")
+
+
+def file_state_from_stat(stat: stat_result) -> tuple[int, int, int, int, int, int]:
+    """Bind a checked file descriptor to its exact ordinary local state, including mode."""
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_mode)
 
 
 def file_signature(path: Path) -> list[int]:

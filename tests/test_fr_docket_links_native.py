@@ -36,18 +36,19 @@ def test_retained_link_statements_restore_exactly_through_native_admission(tmp_p
     pq.write_table(pa.Table.from_pylist(rows, schema=schema), held)
     cls = conversion._rollup_class('fr-docket-links')
     assert cls is not None
-    built = conversion._convert_rollup(cls, {'tables': {'fr_docket_links.parquet': {}}},
-                                       {'fr_docket_links.parquet': held}, '', tmp_path / 'converted', [])
-    restored = built.restore('fr_docket_links')
-    assert pq.read_table(restored).equals(pq.read_table(held), check_metadata=True)
-    assert pq.read_schema(restored).equals(schema, check_metadata=True)
-    # Admission creates a separate receipt member; the public source marker remains literal text.
-    native = pq.read_table(built.generation / 'fr_docket_links.parquet')
-    assert native['link_source'].to_pylist() == [row['link_source'] for row in rows]
-    receipts = pq.read_table(built.generation / 'etl_receipts.parquet').to_pylist()
-    accepted = [row for row in receipts if row['outcome'] == 'accepted']
-    assert len(accepted) == len(rows)
-    assert len({row['record_id'] for row in accepted}) == len(rows)
+    with conversion.ConversionReadOperation() as operation:
+        built = conversion._convert_rollup(cls, {'tables': {'fr_docket_links.parquet': {}}},
+                                           {'fr_docket_links.parquet': held}, '', tmp_path / 'converted', [], operation,
+                                           conversion._original_states({'fr_docket_links.parquet': held}))
+        checked = built.compare_original('fr_docket_links', held)
+        assert not conversion._has_differences(checked)
+        # Admission creates a separate receipt member; the public source marker remains literal text.
+        native = pq.read_table(built.generation / 'fr_docket_links.parquet')
+        assert native['link_source'].to_pylist() == [row['link_source'] for row in rows]
+        receipts = pq.read_table(built.generation / 'etl_receipts.parquet').to_pylist()
+        accepted = [row for row in receipts if row['outcome'] == 'accepted']
+        assert len(accepted) == len(rows)
+        assert len({row['record_id'] for row in accepted}) == len(rows)
 
 
 def test_nullable_ordinal_keeps_document_identity_required_and_refusals_retained(tmp_path):

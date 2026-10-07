@@ -310,6 +310,22 @@ def _processing_rows(receipts: Path, dataset_policy: DatasetPolicy, generation_i
         yield receipt["processing_fields"]
 
 
+def retained_source_rows(dataset, dataset_policy, records):
+    """Restore the source spelling using the same mapping and ambiguity checks."""
+    seen = set()
+    for record in records:
+        raw = record[RAW]
+        if dataset_policy.receipt_only:
+            map_subject(dataset, raw)
+            identity = tuple(raw[k] for k in field_registry()[dataset]["identity_fields"])
+            if identity in seen:
+                raise ValueError("Ambiguous selected processing scope")
+            seen.add(identity)
+        elif recorded_subject(dataset, raw, record) != {k: v for k, v in record.items() if k != RAW}:
+            raise ValueError("Retained conversion input disagrees with its native subject")
+        yield raw
+
+
 def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
     """Rebuild exact source-owner inputs before any incremental/financial checks.
 
@@ -349,27 +365,11 @@ def restore_prior(bundle: Path, destination: Path) -> dict[str, Path]:
             # null versus absent JSON properties. File-state receipts preserve
             # processing footer metadata even for successful empty tables.
             def source_rows():
-                if dataset_policy.receipt_only:
-                    seen = set()
-                    for record in _processing_rows(dataset_receipts, dataset_policy, generation):
-                        raw = record[RAW]
-                        map_subject(dataset, raw)
-                        identity = tuple(raw[k] for k in field_registry()[dataset]["identity_fields"])
-                        if identity in seen:
-                            raise ValueError("Ambiguous selected processing scope")
-                        seen.add(identity)
-                        yield raw
-                else:
-                    for record in read_with_receipts(
-                        [bundle / p for p in manifest["subjects"][dataset]],
-                        [dataset_receipts],
-                        dataset_policy,
-                        generation_id=generation,
-                    ):
-                        raw = record[RAW]
-                        if recorded_subject(dataset, raw, record) != {k: v for k, v in record.items() if k != RAW}:
-                            raise ValueError("Retained conversion input disagrees with its native subject")
-                        yield raw
+                records = (_processing_rows(dataset_receipts, dataset_policy, generation)
+                           if dataset_policy.receipt_only else read_with_receipts(
+                               [bundle / p for p in manifest["subjects"][dataset]],
+                               [dataset_receipts], dataset_policy, generation_id=generation))
+                yield from retained_source_rows(dataset, dataset_policy, records)
 
             expected = iter(source_rows())
             for state in states:

@@ -501,10 +501,11 @@ def validate_receipt_row(receipt: Mapping, policies: Mapping[str, DatasetPolicy]
         raise ValueError("Receipt contains unclassified processing fields")
 
 
-def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True):
+def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True, retain_diagnostics=False):
     connection.execute(
         "CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
-        "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0)"
+        "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0"
+        + (", diagnostics BLOB" if retain_diagnostics else "") + ")"
     )
     connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
     validate_publisher_generation(generation_id)
@@ -517,7 +518,7 @@ def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain
             validate_receipt_row(receipt, policies, accepted_policies=accepted_policies)
             try:
                 connection.execute(
-                    "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0)",
+                    "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0" + (",?" if retain_diagnostics else "") + ")",
                     [
                         receipt[k]
                         for k in (
@@ -528,7 +529,8 @@ def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain
                             "receipt_id",
                             "outcome",
                         )
-                    ] + [zlib.compress(receipt["processing_json"].encode(), level=1) if retain_processing else None],
+                    ] + [zlib.compress(receipt["processing_json"].encode(), level=1) if retain_processing else None]
+                    + ([zlib.compress(receipt["diagnostic_json"].encode(), level=1)] if retain_diagnostics else []),
                 )
             except sqlite3.IntegrityError as exc:
                 raise ValueError("Duplicate or ambiguous receipt join") from exc

@@ -26,6 +26,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import re
 import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -33,7 +34,9 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
+from tempfile import mkstemp
 from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple
 
 from spicy_regs.runtime_bounds import checkpoint, remaining_timeout
@@ -488,8 +491,16 @@ def published_urls(base_url: str) -> dict[str, list[str]]:
     return urls
 
 
+@dataclass(frozen=True)
+class DownloadedMember:
+    """Byte verification tied to the actual final file, rather than a later path lookup."""
+    sha256: str
+    byte_size: int
+    state: tuple[int, int, int, int, int, int]
+
+
 def fetch_member(base_url: str, member: Member, local_path: Path, label: str | None = None, *,
-                 headers: Mapping[str, str] | None = None, timeout: float | None = None) -> bool:
+                 headers: Mapping[str, str] | None = None, timeout: float | None = None) -> DownloadedMember | bool:
     """Stream one table file to ``local_path`` through a sibling temp file, checked against its pin when it has one.
 
     ``False`` only when an unpinned (legacy) file is absent (HTTP 404). A missing pinned member, any other status, a
@@ -498,7 +509,9 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
     """
     label = label or member.path
     url = f"{base_url.rstrip('/')}/{member.path}"
-    temp_path = local_path.with_suffix(local_path.suffix + ".tmp")
+    from spicy_regs.local_data import file_state_from_stat
+
+    temp_path = None
     timeout = remaining_timeout(timeout)
     request: dict = {name: value for name, value in (("headers", headers), ("timeout", timeout)) if value is not None}
     digest, byte_size = hashlib.sha256(), 0
@@ -511,21 +524,35 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
                 return False
             if response.status_code != 200:
                 raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
-            with temp_path.open("wb") as out:
+            fd, temporary = mkstemp(prefix=local_path.name + ".", suffix=".tmp", dir=local_path.parent)
+            temp_path = Path(temporary)
+            with os.fdopen(fd, "wb") as out:
                 for chunk in response.iter_bytes():
                     checkpoint()
                     out.write(chunk)
                     digest.update(chunk)
                     byte_size += len(chunk)
-        if member.sha256 is not None and (
-                member.byte_size != byte_size or member.sha256 != "sha256:" + digest.hexdigest()):
-            raise RuntimeError(f"Published generation member differs from its pin: {label}")
+                actual_digest = "sha256:" + digest.hexdigest()
+                if member.sha256 is not None and (
+                        member.byte_size != byte_size or member.sha256 != actual_digest):
+                    raise RuntimeError(f"Published generation member differs from its pin: {label}")
+                out.flush()
+                written = file_state_from_stat(os.fstat(out.fileno()))
+                if written[2] != byte_size or file_state_from_stat(temp_path.lstat()) != written:
+                    raise RuntimeError(f"Downloaded member changed before adoption: {label}")
+                temp_path.replace(local_path)
+                state = file_state_from_stat(os.fstat(out.fileno()))
+                if state[:4] + state[5:] != written[:4] + written[5:]:
+                    raise RuntimeError(f"Downloaded member changed during adoption: {label}")
+                if file_state_from_stat(local_path.lstat()) != state:
+                    raise RuntimeError(f"Downloaded member replaced during adoption: {label}")
+                result = DownloadedMember(actual_digest, byte_size, state)
     except BaseException:
-        temp_path.unlink(missing_ok=True)
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
         raise
-    temp_path.replace(local_path)
     logger.info("Downloaded {} from R2", label)
-    return True
+    return result
 
 
 def parquet_scan(paths: Sequence[str]) -> str:

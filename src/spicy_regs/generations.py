@@ -28,19 +28,22 @@ def _table_info(path: Path) -> dict:
 
     Hive partitioning is off: a split member's ``col=value`` directory must not add a column its file lacks.
     """
-    with duckdb.connect() as con:
-        columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?, hive_partitioning = false)",
-                              [str(path)]).fetchall()
+    info = _table_footer_info(path)
     # A readable footer does not establish readable data pages. Decode every
     # column in bounded batches before qualifying these bytes for publication.
     with pq.ParquetFile(path) as parquet:
         rows = sum(batch.num_rows for batch in parquet.iter_batches(batch_size=2000))
         if rows != parquet.metadata.num_rows:
             raise ValueError(f"Parquet body/footer row mismatch: {path.name}")
-    return {
-        "columns": [[row[0], row[1]] for row in columns],
-        "rows": rows,
-    }
+    return info
+
+
+def _table_footer_info(path: Path) -> dict:
+    """Describe a footer; complete body decoding must be owned by the caller's admission."""
+    with duckdb.connect() as con:
+        columns = con.execute("DESCRIBE SELECT * FROM read_parquet(?, hive_partitioning = false)",
+                              [str(path)]).fetchall()
+    return {"columns": [[row[0], row[1]] for row in columns], "rows": pq.read_metadata(path).num_rows}
 
 
 def _check_partition(path: Path, partition: Mapping[str, str]) -> None:
@@ -92,9 +95,30 @@ def verify_generation(directory: Path, *, expected_pin=None):
 
 def verify_generation_source(source, table_info: Callable[[str], dict], *, expected_pin=None):
     """Apply the same artifact and table checks to local or pinned remote bytes."""
-    from rulespec_artifacts import admit_artifact, iter_member_descriptors
+    from spicy_regs.etl_receipts import validate_receipt_bundle
+
+    return _verify_generation_source(source, table_info, expected_pin=expected_pin,
+                                     admit_receipts=validate_receipt_bundle)
+
+
+def _verify_generation_source(source, table_info, *, expected_pin, admit_receipts):
+    """Same product checks with admission retained only by an explicit conversion owner."""
+    from rulespec_artifacts import admit_artifact
 
     artifact = admit_artifact(source, expected_pin=expected_pin)
+    try:
+        return _verify_admitted_generation(artifact, source, table_info, admit_receipts)
+    except BaseException:
+        if artifact.local_member_states is not None:
+            close = getattr(artifact.local_member_states, 'close', None)
+            if close is not None:
+                close()
+        raise
+
+
+def _verify_admitted_generation(artifact, source, table_info, admit_receipts):
+    from rulespec_artifacts import iter_member_descriptors
+
     root = artifact.root
     if root["kind"] != KIND:
         raise ValueError("Not a SpicyRegs rollup generation")
@@ -160,7 +184,7 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
     if receipt_spec:
         if receipt_members[0].record_count != receipt_spec['rows']:
             raise ValueError('Generation receipt member count differs from receipt declaration')
-        _verify_receipts(source, tables, table_members_only, receipt_spec, table_info)
+        _verify_receipts(source, tables, table_members_only, receipt_spec, table_info, admit_receipts)
     for member in table_members_only:
         key = member.object_key
         if key is None:
@@ -246,6 +270,8 @@ def build_generation(
     receipt_path: Path | None = None,
     receipt_policies: Sequence | None = None,
     receipt_generation_id: str | None = None,
+    read_operation=None,
+    canonical_root: Path | None = None,
 ):
     """Snapshot exactly one declared family into a new immutable artifact.
 
@@ -279,16 +305,17 @@ def build_generation(
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
         raise ValueError("Output keys must be plain Parquet filenames")
     directory.mkdir(parents=True, exist_ok=False)
+    table_info = _table_footer_info if read_operation is not None else _table_info
     tables, rows = {}, {}
     for key, path in sorted(zip(names, files)):
         if key in partitioned:
             columns = list(partitioned[key])
-            tables[key] = {**_copy_split(path, directory, columns, rows), "partitionColumns": columns}
+            tables[key] = {**_copy_split(path, directory, columns, rows, table_info=table_info), "partitionColumns": columns}
         else:
             if path.is_symlink() or not path.is_file():
                 raise ValueError(f"Output is not a regular file: {path.name}")
             shutil.copyfile(path, directory / key)
-            tables[key] = _table_info(directory / key)
+            tables[key] = table_info(directory / key)
             rows[key] = tables[key]["rows"]
         declared = (schemas or {}).get(Path(key).stem)
         if declared is not None and tables[key]["columns"] != [list(column) for column in declared]:
@@ -301,7 +328,7 @@ def build_generation(
         shutil.copyfile(receipt_path, directory / RECEIPT_KEY)
         receipt_spec = {"key": RECEIPT_KEY, "generationId": receipt_generation_id,
                         "policies": [policy.descriptor() for policy in receipt_policies],
-                        **_table_info(directory / RECEIPT_KEY)}
+                        **table_info(directory / RECEIPT_KEY)}
         rows[RECEIPT_KEY] = receipt_spec["rows"]
     elif receipt_policies is not None or receipt_generation_id is not None:
         raise ValueError("Receipt admission cannot omit the shared receipt member")
@@ -323,10 +350,24 @@ def build_generation(
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
         parents=parents, etl_receipts=receipt_spec,
     )
+    if read_operation is not None:
+        from rulespec_artifacts import ArtifactPin, parse_admitted_json, publish_directory_no_replace
+        if canonical_root is not None:
+            root = parse_admitted_json((directory / "artifact.json").read_bytes())
+            pin = ArtifactPin(root["logicalId"], root["artifactDigest"])
+            destination = canonical_root / pin.artifact_digest.removeprefix("sha256:")
+            if not destination.exists():
+                publish_directory_no_replace(directory, destination)
+            directory = destination
+        else:
+            pin = None
+        return read_operation.admit_generation(directory, expected_pin=pin)[0]
+    if canonical_root is not None:
+        raise ValueError("Canonical adoption requires an owned conversion read operation")
     return verify_generation(directory)
 
 
-def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str, int]) -> dict:
+def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str, int], *, table_info=_table_info) -> dict:
     """Copy one split table's members into ``directory`` under ``<table>/``; return its columns and summed rows.
 
     Each member's row count is recorded in ``rows`` by its object key.
@@ -346,7 +387,7 @@ def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str,
         key = f"{path.name}/{relative}"
         (directory / key).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(member, directory / key)
-        observed = _table_info(directory / key)
+        observed = table_info(directory / key)
         if info is not None and observed["columns"] != info["columns"]:
             raise ValueError(f"Members of a split table differ in columns: {key}")
         _check_partition(directory / key, dict(part.split("=", 1) for part in partition))
@@ -392,9 +433,9 @@ def _write_generation_metadata(
     (directory / "artifact.json").write_bytes(canonical_json_bytes(root))
 
 
-def _verify_receipts(source, tables, members, receipt_spec, table_info):
+def _verify_receipts(source, tables, members, receipt_spec, table_info, admit_receipts):
     """Recheck all row joins through the same local or pinned remote byte source."""
-    from spicy_regs.etl_receipts import DatasetPolicy, RECEIPT_KEY, validate_receipt_bundle
+    from spicy_regs.etl_receipts import DatasetPolicy, RECEIPT_KEY
     from spicy_regs.sources.publication import member_table
 
     if (not {"key", "generationId", "policies", "columns", "rows"} <= set(receipt_spec) <= {"key", "generationId", "policies", "columns", "rows", "keyIndex"}
@@ -410,5 +451,5 @@ def _verify_receipts(source, tables, members, receipt_spec, table_info):
     for member in members:
         subjects[member_table(member.object_key).removesuffix(".parquet")].append(
             lambda key=member.object_key: source.open(key))
-    validate_receipt_bundle(subjects, [lambda: source.open(RECEIPT_KEY)], policies,
-                            generation_id=receipt_spec["generationId"])
+    admit_receipts(subjects, [lambda: source.open(RECEIPT_KEY)], policies,
+                   generation_id=receipt_spec["generationId"])
