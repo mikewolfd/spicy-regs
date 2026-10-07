@@ -2187,8 +2187,8 @@ def _tools() -> list[Tool]:
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
         """Return columns, meanings, identity, coverage and joins.
 
-        Coverage is supported output, not population or freshness. columns
-        gives fields and meanings (declared if unavailable); schema_differences
+        Coverage uses the bundled output ledger, not population or freshness. columns
+        gives meanings (declared if unavailable); schema_differences
         compares loaded fields. publication pins rows and coverage;
         published_at is a pointer move, not a source read. last_object_write
         bounds that move from below.
