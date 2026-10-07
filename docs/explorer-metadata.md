@@ -224,3 +224,55 @@ partial measurements leave each direction unknown. Public lookup capabilities
 remain exact scans; measurement caches are neither browser row locators nor
 receipt indexes. Producing and supplying these measurements is explicit; the
 existing scheduled publisher does not start corpus scans.
+
+### Affected routes and a complete census
+
+The runner reads the maintained `joins_record()` declarations directly. Select
+named `--route` values, or repeat `--affected-table` to select both outgoing and
+incoming routes for changed tables. Use `--all` for a census of every canonical
+route target. These selections never replace a main table with a cheaper index
+or a receipt table.
+
+```sh
+PYTHONPATH=src python scripts/measure_source_navigation.py \
+  --publication selected-publication.json --members held-members.json \
+  --extra-tables selected-extra-tables.json \
+  --cache .navigation-measurements --output navigation-measurements.json \
+  --affected-table nominations --affected-table house_communications
+```
+
+Omit `--extra-tables` when only generation publications are involved. The member
+map associates each exact selected public member path with a held local file.
+For separate publications, supply the complete descriptor, its exact
+`publicationIdentity`, and `publicationSchema`; the runner does not infer these
+from filenames or a prior key-column projection.
+
+The output retains the publisher's `results` list and adds a `census` entry for
+every declared route target. Status is `complete`, `unavailable`,
+`not_requested`, or `not_applicable` for an external URL. Unavailable entries
+retain current source/target bindings, the recipe fingerprint, the failure
+stage and reason. Their counts stay null; a missing file is not zero references.
+Exit status 2 means at least one requested table route is unavailable. Keep
+that receipt for the release review rather than changing a baseline to pass.
+
+The default total input budget is 256 MiB per route across all selected source
+and target members. It is checked before opening data files, including when a
+table is split into small members. `--max-route-input-bytes` explicitly changes
+that total budget. Existing per-member input and projected-column budgets still
+apply. An unchanged larger historical proof remains historical evidence; this
+runner does not bypass its current admission budget to promote it.
+
+Keep the derived cache between owner runs. At unchanged member and rule pins,
+the cache performs no projection, occurrence expansion or result aggregation.
+A changed member rebuilds its own keys; a changed guard rebuilds the affected
+recipe. The runner adds no prior-state cache and never downloads source files.
+The receipt's per-route `work` and aggregate `work` show executed and reused
+stages.
+
+CI can run `tests/test_navigation_measurement_runner.py` with fixture members
+and read-only repository permissions. An owner release job can run the command
+against already-staged pinned members, retain the census as an artifact, and
+pass its `results` to `publish_explorer_metadata.py --measurements`. Do not add a
+scheduled full-corpus download. The existing exact-main schema gates remain
+required before metadata publication; production website and MCP checks remain
+separate release steps.
