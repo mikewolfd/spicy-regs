@@ -627,6 +627,13 @@ JOINS: tuple[Join, ...] = (
           'Matches the publisher identity and the exact source snapshot used for resolution. A newer source snapshot '
           'is not interchangeable.',
           expected_cardinality="one"),
+    *(_join(child, 'source_snapshot_id', 'scorecard_snapshots', 'snapshot_id',
+            0, 0, 'unmeasured',
+            'The resolver recorded this literal source snapshot. Main navigation also requires the same '
+            'scorecard edition; this association remains separate from the current business entity and '
+            'the recorded official-target resolution. No capture ID is interpreted as a snapshot ID.',
+            expected_cardinality="one")
+      for child in ('scorecard_member_links', 'scorecard_item_links')),
     _join('scorecard_member_links', 'bioguide_id',
           'members', 'bioguide_id',
           565, 0, 'scope',
