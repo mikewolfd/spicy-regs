@@ -2391,7 +2391,7 @@
       {
         "dataset": "member_vote_terms",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "vote_id",
           "member_key"
@@ -7121,6 +7121,7 @@
         "chamber",
         "bioguide_id",
         "vote_day",
+        "term_match",
         "term_index",
         "term_start",
         "term_end"

@@ -16889,6 +16889,11 @@
         "description": "The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date."
       },
       {
+        "column_name": "term_match",
+        "column_type": "VARCHAR",
+        "description": "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves."
+      },
+      {
         "column_name": "term_index",
         "column_type": "BIGINT",
         "description": "The matched term's `term_index` in `member_terms`; NULL unless matched."
@@ -27330,7 +27335,7 @@
       {
         "dataset": "member_vote_terms",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "vote_id",
           "member_key"

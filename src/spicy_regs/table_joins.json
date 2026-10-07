@@ -3741,55 +3741,6 @@
       }
     },
     {
-      "child": "member_vote_terms",
-      "child_columns": [
-        "bioguide_id",
-        "term_index"
-      ],
-      "parent": "member_terms",
-      "parent_columns": [
-        "bioguide_id",
-        "term_index"
-      ],
-      "kind": "complete",
-      "reason": "The builder selects one service term by the vote date and chamber. Unresolved or ambiguous terms remain NULL and are not joined. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
-      "measured_via": null,
-      "baseline_keys": 5884,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "member_vote_terms.bioguide_id+term_index -> member_terms.bioguide_id+term_index",
-        "keys": 5884,
-        "missing": 0,
-        "resolved_pct": 100,
-        "examples": [],
-        "child_input_rows": 10561417,
-        "child_nonnull_rows": 7385886,
-        "parent_input_rows": 45535,
-        "parent_distinct_keys": 45535,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 7385886,
-        "left_join_nonnull_rows": 7385886,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/member-vote-terms/7d8c7937359bcb7f835ea25a1886fe6862b290a154f07fe4f6e75860686b272b/member_vote_terms.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/members/5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b/member_terms.parquet"
-        ],
-        "measured_on": "2026-10-03",
-        "measured_expected_cardinality": "one",
-        "receipt": "docs/evidence/explorer-joins-2026-10-03.json",
-        "kind": "complete",
-        "source_evidence": [
-          "src/spicy_regs/transforms/build_member_vote_terms.py:_MATCH_SQL"
-        ]
-      }
-    },
-    {
       "child": "document_citations",
       "child_columns": [
         "document_key",
@@ -8259,6 +8210,55 @@
       }
     },
     {
+      "child": "member_vote_terms",
+      "child_columns": [
+        "bioguide_id",
+        "term_index"
+      ],
+      "parent": "member_terms",
+      "parent_columns": [
+        "bioguide_id",
+        "term_index"
+      ],
+      "kind": "complete",
+      "reason": "The builder selects one service term by the vote date and chamber. Unresolved or ambiguous terms remain NULL and are not joined. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
+      "measured_via": null,
+      "baseline_keys": 5884,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "member_vote_terms.bioguide_id+term_index -> member_terms.bioguide_id+term_index",
+        "keys": 5884,
+        "missing": 0,
+        "resolved_pct": 100,
+        "examples": [],
+        "child_input_rows": 10561417,
+        "child_nonnull_rows": 7385886,
+        "parent_input_rows": 45535,
+        "parent_distinct_keys": 45535,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 7385886,
+        "left_join_nonnull_rows": 7385886,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/member-vote-terms/7d8c7937359bcb7f835ea25a1886fe6862b290a154f07fe4f6e75860686b272b/member_vote_terms.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/members/5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b/member_terms.parquet"
+        ],
+        "measured_on": "2026-10-03",
+        "measured_expected_cardinality": "one",
+        "receipt": "docs/evidence/explorer-joins-2026-10-03.json",
+        "kind": "complete",
+        "source_evidence": [
+          "src/spicy_regs/transforms/build_member_vote_terms.py:_MATCH_SQL"
+        ]
+      }
+    },
+    {
       "child": "document_citations",
       "child_columns": [
         "document_kind",
@@ -9947,17 +9947,6 @@
         "parent_columns": [
           "vote_id",
           "member_key"
-        ]
-      },
-      {
-        "child_columns": [
-          "bioguide_id",
-          "term_index"
-        ],
-        "parent_table": "member_terms",
-        "parent_columns": [
-          "bioguide_id",
-          "term_index"
         ]
       }
     ],
@@ -15124,6 +15113,64 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The normalized original-filing mapper supplies the exact source layout identity. Rows from other source formats can have no definition key; this does not prove filing conformance. Parent keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "member_vote_terms.bioguide_id+term_index -> member_terms.bioguide_id+term_index",
+      "source": "member_vote_terms",
+      "fields": [],
+      "targets": [
+        {
+          "table": "member_terms",
+          "columns": [
+            "bioguide_id",
+            "term_index"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bioguide_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "term_index"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "0|[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "term_match"
+              ],
+              "from": "row",
+              "values": [
+                "half_open",
+                "inclusive_end"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The service term selected by the vote date and chamber. Only successful half-open or inclusive-end matches link; missing, ambiguous and noncanonical indices stay unsupported.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"

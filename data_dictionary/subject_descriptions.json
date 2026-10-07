@@ -3846,6 +3846,7 @@
       "chamber": "`house` or `senate`.",
       "bioguide_id": "The member's Bioguide id, as `member_votes` carries it: stated by the Clerk for the House from 2003, and resolved at the votes merge from the LIS id for the Senate and from the Clerk's printed label for a House row of 1990-2002. NULL when the LIS id or the label resolves to no one member; a `name:` key is never read as a person.",
       "vote_day": "The vote's day (YYYY-MM-DD) as the chamber printed it in Eastern time, read from `member_votes.vote_date` by the same rule as `roll_call_votes.vote_day`; NULL when the file prints no date.",
+      "term_match": "`half_open` (one term with start <= day < end), `inclusive_end` (none half-open, exactly one with the end day included), `ambiguous` (more than one term either way), `unmatched` (none), `unresolved_member`, or `undated` (the file prints no date, so no term is chosen). `undated` wins over `unresolved_member`; such a row still carries `bioguide_id` wherever the member resolves.",
       "term_index": "The matched term's `term_index` in `member_terms`; NULL unless matched.",
       "term_start": "The matched term's start date; NULL unless matched.",
       "term_end": "The matched term's end date; NULL unless matched."
