@@ -2222,7 +2222,7 @@
       {
         "dataset": "house_communications_detail_reads",
         "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
+        "policy_version": "navigation-read-outcomes/2",
         "identity_columns": [
           "generation_id",
           "attempt_id"
@@ -2234,7 +2234,7 @@
       {
         "dataset": "house_record_enrichment_results",
         "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
+        "policy_version": "navigation-read-outcomes/2",
         "identity_columns": [
           "generation_id",
           "attempt_id"
@@ -9205,7 +9205,12 @@
         "recorded_at",
         "shape_version",
         "field_states",
-        "source_witnesses"
+        "source_witnesses",
+        "communication_type",
+        "stated_communication_id",
+        "communication_key_status",
+        "communication_key_rule",
+        "communication_key_reason"
       ]
     },
     {
@@ -9236,7 +9241,11 @@
         "reason",
         "scope_packages",
         "scope_read_results",
-        "witnesses"
+        "witnesses",
+        "stated_communication_id",
+        "communication_key_status",
+        "communication_key_rule",
+        "communication_key_reason"
       ]
     },
     {

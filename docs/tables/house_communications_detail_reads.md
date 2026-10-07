@@ -24,12 +24,17 @@ Recorded House communication detail reads, including failed responses. A missing
 | `part_number` | `VARCHAR` | Literal nomination partition; no partition is inferred. |
 | `chamber` | `VARCHAR` | Source-stated chamber in the complete meeting identity. |
 | `event_id` | `VARCHAR` | Source-stated event identifier, scoped by Congress and chamber. |
-| `communication_id` | `VARCHAR` | Original main House communication identity. |
+| `communication_id` | `VARCHAR` | Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately. |
 | `source_url` | `VARCHAR` | Exact requested source URL recorded for this read, with credentials removed. |
 | `read_field` | `VARCHAR` | Detail or relationship field read by this attempt. |
 | `outcome` | `VARCHAR` | Recorded result; no attempt means unread, and completed empty responses remain separate from failure. |
 | `error_type` | `VARCHAR` | Recorded failure class; empty after a successful read. |
 | `recorded_at` | `VARCHAR` | UTC time the source journal recorded the attempt. |
 | `shape_version` | `VARCHAR` | Recorded source-shaping rule version. |
-| `field_states` | `STRUCT(field VARCHAR, state VARCHAR)[]` | Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown. |
-| `source_witnesses` | `STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]` | Retained response locators and exact body digests for this requested source read. |
+| `field_states` | `STRUCT(field VARCHAR, state VARCHAR)[]` | Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `source_witnesses` | `STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]` | Retained response locators and exact body digests for this requested source read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `communication_type` | `VARCHAR` | Publisher House communication type retained by the recorded event. |
+| `stated_communication_id` | `VARCHAR` | Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none. |
+| `communication_key_status` | `VARCHAR` | Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome. |
+| `communication_key_rule` | `VARCHAR` | Version of the maintained native-key validation rule; no title or date is used to construct a key. |
+| `communication_key_reason` | `VARCHAR` | Why the native key was refused; null when its source identity is valid. |

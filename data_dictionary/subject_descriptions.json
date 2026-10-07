@@ -4817,5 +4817,58 @@
       "source_url": "Original publisher URL supporting this observation.",
       "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page."
     }
+  },
+  "house_communications_detail_reads": {
+    "columns": {
+      "generation_id": "Generation that recorded this attempt; retained attempts keep their original generation.",
+      "attempt_id": "Recorded journal event identity within its generation.",
+      "source_table": "Main table whose source record was read.",
+      "congress": "Source record Congress as a native integer.",
+      "citation": "Literal nomination citation, including any partition suffix.",
+      "number": "Source record number in its original spelling.",
+      "part_number": "Literal nomination partition; no partition is inferred.",
+      "chamber": "Source-stated chamber in the complete meeting identity.",
+      "event_id": "Source-stated event identifier, scoped by Congress and chamber.",
+      "communication_id": "Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately.",
+      "source_url": "Exact requested source URL recorded for this read, with credentials removed.",
+      "read_field": "Detail or relationship field read by this attempt.",
+      "outcome": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure.",
+      "error_type": "Recorded failure class; empty after a successful read.",
+      "recorded_at": "UTC time the source journal recorded the attempt.",
+      "shape_version": "Recorded source-shaping rule version.",
+      "field_states": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "source_witnesses": "Retained response locators and exact body digests for this requested source read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "communication_type": "Publisher House communication type retained by the recorded event.",
+      "stated_communication_id": "Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none.",
+      "communication_key_status": "Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome.",
+      "communication_key_rule": "Version of the maintained native-key validation rule; no title or date is used to construct a key.",
+      "communication_key_reason": "Why the native key was refused; null when its source identity is valid."
+    }
+  },
+  "house_record_enrichment_results": {
+    "columns": {
+      "generation_id": "Generation that recorded this attempt; retained attempts keep their original generation.",
+      "attempt_id": "Recorded journal event identity within its generation.",
+      "communication_id": "Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately.",
+      "congress": "Source record Congress as a native integer.",
+      "communication_type": "Publisher communication type used in the complete identity.",
+      "number": "Source record number in its original spelling.",
+      "congressional_record_date": "Literal Record date stated by the communication source.",
+      "record_calendar_day": "Strictly parsed calendar day used to select Record issues.",
+      "outcome": "Recorded result; no attempt means unread, and completed empty responses remain separate from failure.",
+      "qualified_occurrences": "Number of qualifying printed entries in the selected scope.",
+      "complete_scope": "Whether every selected issue and required granule was completely read.",
+      "conflict_status": "Conflict, no-conflict, or not-checked under the recorded complete-scope result.",
+      "rule_version": "Exact rule used for the recorded source match.",
+      "recorded_at": "UTC time the source journal recorded the attempt.",
+      "reason": "Recorded reason a read or match could not proceed.",
+      "scope_packages": "Exact issue package IDs selected for this comparison. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "scope_read_results": "Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "witnesses": "Each printed match retains package, granule, body digest, marker, and selected input generation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "stated_communication_id": "Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none.",
+      "communication_key_status": "Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome.",
+      "communication_key_rule": "Version of the maintained native-key validation rule; no title or date is used to construct a key.",
+      "communication_key_reason": "Why the native key was refused; null when its source identity is valid."
+    }
   }
 }

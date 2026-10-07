@@ -24359,7 +24359,7 @@
       {
         "column_name": "communication_id",
         "column_type": "VARCHAR",
-        "description": "Original main House communication identity."
+        "description": "Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately."
       },
       {
         "column_name": "source_url",
@@ -24394,12 +24394,37 @@
       {
         "column_name": "field_states",
         "column_type": "STRUCT(field VARCHAR, state VARCHAR)[]",
-        "description": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+        "description": "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "source_witnesses",
         "column_type": "STRUCT(source_url VARCHAR, sha256 VARCHAR, capture_id VARCHAR)[]",
-        "description": "Retained response locators and exact body digests for this requested source read."
+        "description": "Retained response locators and exact body digests for this requested source read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "communication_type",
+        "column_type": "VARCHAR",
+        "description": "Publisher House communication type retained by the recorded event."
+      },
+      {
+        "column_name": "stated_communication_id",
+        "column_type": "VARCHAR",
+        "description": "Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none."
+      },
+      {
+        "column_name": "communication_key_status",
+        "column_type": "VARCHAR",
+        "description": "Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome."
+      },
+      {
+        "column_name": "communication_key_rule",
+        "column_type": "VARCHAR",
+        "description": "Version of the maintained native-key validation rule; no title or date is used to construct a key."
+      },
+      {
+        "column_name": "communication_key_reason",
+        "column_type": "VARCHAR",
+        "description": "Why the native key was refused; null when its source identity is valid."
       }
     ],
     "subject": "congress",
@@ -24433,7 +24458,7 @@
       {
         "column_name": "communication_id",
         "column_type": "VARCHAR",
-        "description": "Original main House communication identity."
+        "description": "Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately."
       },
       {
         "column_name": "congress",
@@ -24498,17 +24523,37 @@
       {
         "column_name": "scope_packages",
         "column_type": "VARCHAR[]",
-        "description": "Exact issue package IDs selected for this comparison."
+        "description": "Exact issue package IDs selected for this comparison. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "scope_read_results",
         "column_type": "STRUCT(package_id VARCHAR, outcome VARCHAR, marker VARCHAR, rule_version VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR, body_witnesses STRUCT(granule_id VARCHAR, sha256 VARCHAR, source_url VARCHAR)[])[]",
-        "description": "Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry."
+        "description": "Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "witnesses",
         "column_type": "STRUCT(record_package_id VARCHAR, record_granule_id VARCHAR, body_sha256 VARCHAR, body_url VARCHAR, marker VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR)[]",
-        "description": "Each printed match retains package, granule, body digest, marker, and selected input generation."
+        "description": "Each printed match retains package, granule, body digest, marker, and selected input generation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "stated_communication_id",
+        "column_type": "VARCHAR",
+        "description": "Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none."
+      },
+      {
+        "column_name": "communication_key_status",
+        "column_type": "VARCHAR",
+        "description": "Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome."
+      },
+      {
+        "column_name": "communication_key_rule",
+        "column_type": "VARCHAR",
+        "description": "Version of the maintained native-key validation rule; no title or date is used to construct a key."
+      },
+      {
+        "column_name": "communication_key_reason",
+        "column_type": "VARCHAR",
+        "description": "Why the native key was refused; null when its source identity is valid."
       }
     ],
     "subject": "congress",
@@ -27166,7 +27211,7 @@
       {
         "dataset": "house_communications_detail_reads",
         "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
+        "policy_version": "navigation-read-outcomes/2",
         "identity_columns": [
           "generation_id",
           "attempt_id"
@@ -27178,7 +27223,7 @@
       {
         "dataset": "house_record_enrichment_results",
         "receipt_only": false,
-        "policy_version": "navigation-read-outcomes/1",
+        "policy_version": "navigation-read-outcomes/2",
         "identity_columns": [
           "generation_id",
           "attempt_id"

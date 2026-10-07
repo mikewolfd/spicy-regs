@@ -17,7 +17,7 @@ Recorded attempts to match a House communication to an exact Congressional Recor
 | --- | --- | --- |
 | `generation_id` | `VARCHAR` | Generation that recorded this attempt; retained attempts keep their original generation. |
 | `attempt_id` | `VARCHAR` | Recorded journal event identity within its generation. |
-| `communication_id` | `VARCHAR` | Original main House communication identity. |
+| `communication_id` | `VARCHAR` | Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately. |
 | `congress` | `BIGINT` | Source record Congress as a native integer. |
 | `communication_type` | `VARCHAR` | Publisher communication type used in the complete identity. |
 | `number` | `VARCHAR` | Source record number in its original spelling. |
@@ -30,6 +30,10 @@ Recorded attempts to match a House communication to an exact Congressional Recor
 | `rule_version` | `VARCHAR` | Exact rule used for the recorded source match. |
 | `recorded_at` | `VARCHAR` | UTC time the source journal recorded the attempt. |
 | `reason` | `VARCHAR` | Recorded reason a read or match could not proceed. |
-| `scope_packages` | `VARCHAR[]` | Exact issue package IDs selected for this comparison. |
-| `scope_read_results` | `STRUCT(package_id VARCHAR, outcome VARCHAR, marker VARCHAR, rule_version VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR, body_witnesses STRUCT(granule_id VARCHAR, sha256 VARCHAR, source_url VARCHAR)[])[]` | Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry. |
-| `witnesses` | `STRUCT(record_package_id VARCHAR, record_granule_id VARCHAR, body_sha256 VARCHAR, body_url VARCHAR, marker VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR)[]` | Each printed match retains package, granule, body digest, marker, and selected input generation. |
+| `scope_packages` | `VARCHAR[]` | Exact issue package IDs selected for this comparison. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `scope_read_results` | `STRUCT(package_id VARCHAR, outcome VARCHAR, marker VARCHAR, rule_version VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR, body_witnesses STRUCT(granule_id VARCHAR, sha256 VARCHAR, source_url VARCHAR)[])[]` | Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `witnesses` | `STRUCT(record_package_id VARCHAR, record_granule_id VARCHAR, body_sha256 VARCHAR, body_url VARCHAR, marker VARCHAR, input_generation VARCHAR, input_processing_sha256 VARCHAR)[]` | Each printed match retains package, granule, body digest, marker, and selected input generation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `stated_communication_id` | `VARCHAR` | Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none. |
+| `communication_key_status` | `VARCHAR` | Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome. |
+| `communication_key_rule` | `VARCHAR` | Version of the maintained native-key validation rule; no title or date is used to construct a key. |
+| `communication_key_reason` | `VARCHAR` | Why the native key was refused; null when its source identity is valid. |
