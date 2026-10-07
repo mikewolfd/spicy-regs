@@ -98,7 +98,8 @@ def test_scorecard_recorded_snapshot_is_association_not_business_identity(tmp_pa
     from tests.test_scorecard_refresh import tables, edition
     from spicy_regs.scorecards.etl import SOURCE_NAMES, write_family, read_family
     from spicy_regs.scorecards.subject_shapes import IDENTITIES, subject_schema
-    from spicy_regs.table_joins import JOINS
+    from spicy_regs.explorer_navigation import declarations, target_keys
+    from spicy_regs.table_joins import JOINS, RETIRED_PROCESSING_JOINS
     raw=tables(edition('2025'))
     write_family(tmp_path,raw)
     assert read_family(tmp_path,SOURCE_NAMES)==raw
@@ -107,8 +108,15 @@ def test_scorecard_recorded_snapshot_is_association_not_business_identity(tmp_pa
     [snapshot]=pq.read_table(tmp_path/'scorecard_snapshots.parquet').to_pylist()
     assert card['snapshot_id']==snapshot['snapshot_id']
     assert {'source_snapshot_id','resolution_status','input_pins_json','candidates_json'} <= set(subject_schema('scorecard_item_links').names)
-    joins=[j for j in JOINS if j.child=='scorecard_items' and j.parent=='scorecard_snapshots']
-    assert len(joins)==1 and joins[0].child_columns==joins[0].parent_columns==('snapshot_id',)
+    assert not any(j.child=='scorecard_items' and j.parent=='scorecard_snapshots' for j in JOINS)
+    routes=[s for s in declarations(RETIRED_PROCESSING_JOINS)
+            if s['id']=='recorded_snapshot_scorecard_items_scorecard_snapshots']
+    assert len(routes)==1
+    target=routes[0]['targets'][0]
+    assert target['columns']==['snapshot_id','scorecard_id']
+    [item]=pq.read_table(tmp_path/'scorecard_items.parquet').to_pylist()
+    assert target_keys(target, {}, item)==[snapshot['snapshot_id'], snapshot['scorecard_id']]
+    assert target_keys(target, {}, dict(item,scorecard_id=None)) is None
 
 
 def test_gao_standalone_identifiers_and_source_route_do_not_infer_reports():
