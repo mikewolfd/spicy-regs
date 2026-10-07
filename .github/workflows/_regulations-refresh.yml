@@ -22,7 +22,7 @@ jobs:
   # (pipelines/docket_gaps.py). A failure here still lets the families publish
   # the served dockets; the refresh run shows the failure.
   docket-gaps:
-    if: ${{ !inputs.skip_upload }}
+    if: ${{ !inputs.skip_upload && !inputs.promote_v1 }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -49,7 +49,7 @@ jobs:
   # mirror captures base versions, so every dependent reads this sweep's snapshot.
   base-families:
     needs: docket-gaps
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && !inputs.promote_v1 }}
     strategy:
       fail-fast: false
       matrix:
@@ -67,6 +67,7 @@ jobs:
       timeout_minutes: 30
   mirror:
     needs: base-families
+    if: ${{ !cancelled() && (needs.base-families.result == 'success' || inputs.promote_v1) }}
     uses: ./.github/workflows/_comments-mirror.yml
     secrets: inherit
     with:
@@ -143,4 +144,13 @@ jobs:
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
-          uv run --frozen python scripts/check_comments_freshness.py --surface both
+          if [ "${{ inputs.promote_v1 }}" = "true" ]; then
+            uv run --frozen python scripts/check_comments_freshness.py --surface public
+            git fetch --no-tags --depth=1 origin e9dfd216dc999845ea94e6171afb41e0c9380a10
+            git worktree add --detach ../comments-check-v1 e9dfd216dc999845ea94e6171afb41e0c9380a10
+            COMMENTS_V1_CHECKOUT="$(cd ../comments-check-v1 && pwd)"
+            PYTHONPATH="$COMMENTS_V1_CHECKOUT/src" uv run --frozen python \
+              "$COMMENTS_V1_CHECKOUT/scripts/check_comments_freshness.py" --surface catalog
+          else
+            uv run --frozen python scripts/check_comments_freshness.py --surface both
+          fi

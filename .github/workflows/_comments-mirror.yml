@@ -61,6 +61,8 @@ jobs:
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
           if [ "${{ inputs.promote_v1 }}" = "true" ]; then
+            uv run --frozen python scripts/check_refresh_inputs.py capture \
+              --reuse-published-base --base-only --receipt output/comments-base-inputs.json
             git fetch --no-tags --depth=1 origin e9dfd216dc999845ea94e6171afb41e0c9380a10
             git worktree add --detach ../comments-export-v1 e9dfd216dc999845ea94e6171afb41e0c9380a10
             mkdir -p output
@@ -71,7 +73,7 @@ jobs:
             /usr/bin/time -v -o output/comments-resources.txt \
               uv run --frozen python scripts/prepare_comments_selected_export.py \
               --v1-source ../comments-export-v1 --original-pair output/comments-original-v1 \
-              --output output/comments-selected $PROMOTED_ARGS
+              --output output/comments-selected --base-receipt output/comments-base-inputs.json $PROMOTED_ARGS
             exit 0
           fi
           ARGS=""
@@ -93,6 +95,7 @@ jobs:
             output/comments-build.json
             output/comments-publication.json
             output/comments-resources.txt
+            output/comments-base-inputs.json
             output/comments-selected/comments-build.json
             output/comments-selected/comments-publication.json
             output/comments-selected/comments-exact-encoding.json
@@ -123,7 +126,12 @@ jobs:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
-          uv run --frozen python scripts/check_refresh_inputs.py capture
+          if [ "${{ inputs.promote_v1 }}" = "true" ]; then
+            uv run --frozen python scripts/check_refresh_inputs.py capture --reuse-published-base \
+              --base-receipt output/comments-base-inputs.json
+          else
+            uv run --frozen python scripts/check_refresh_inputs.py capture
+          fi
       - name: Retain refresh input versions
         if: ${{ !inputs.skip_upload }}
         uses: actions/upload-artifact@v4

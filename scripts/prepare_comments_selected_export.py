@@ -308,15 +308,30 @@ def main():
     parser.add_argument("--original-pair", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--base-receipt", type=Path)
     args = parser.parse_args()
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
+    if args.base_receipt is not None:
+        args.base_receipt = args.base_receipt.resolve()
     if args.publish and (os.getenv("GITHUB_ACTIONS") != "true"
             or os.getenv("SPICY_REGS_CATALOG_LOCK") != "comments-catalog-write"
             or not os.getenv("GITHUB_WORKFLOW_REF", "").startswith(
                 "mikewolfd/spicy-regs/.github/workflows/publish-comments-mirror.yml@")):
         raise RuntimeError("Publish requires the existing locked manual comments workflow")
+    def verify_base():
+        if args.base_receipt is None:
+            if args.publish:
+                raise ValueError("Prepared publication requires captured published base versions")
+            return
+        base = json.loads(args.base_receipt.read_text())
+        if base.get("reuse_published_base") is not True or base.get("base_only") is not True:
+            raise ValueError("Prepared publication requires an explicit earlier base-only capture")
+        subprocess.run([sys.executable, str(Path(__file__).with_name("check_refresh_inputs.py")),
+                        "verify", "--receipt", str(args.base_receipt)], check=True)
+
+    verify_base()
     reader = V1CatalogReader(args.v1_source)
     manifest_path = args.output / "comments-prepared-export.json"
     if manifest_path.exists():
@@ -346,6 +361,7 @@ def main():
     evidence = args.output / "comments-exact-encoding.json"
     evidence.write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n")
     if args.publish:
+        verify_base()
         from spicy_regs.pipelines.comments_mirror import publish_comments_mirror
         publish_comments_mirror(args.output, prepared_export=result,
                                 prepared_reader=reader)
