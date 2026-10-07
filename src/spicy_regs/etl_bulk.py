@@ -126,6 +126,14 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     return f"CASE WHEN {expression} IS NULL THEN '[\"null\",null]' ELSE {body} END"
 
 
+def _concat_sql(parts: list[str]) -> str:
+    """Balance nonempty ordered fragments, retaining ``||`` and its NULL propagation."""
+    while len(parts) > 1:
+        parts = [f"({parts[i]} || {parts[i + 1]})" if i + 1 < len(parts) else parts[i]
+                 for i in range(0, len(parts), 2)]
+    return parts[0]
+
+
 def record_json_sql(fields: Iterable[tuple[str, pa.DataType]], *, qualifier: str = "") -> str:
     """SQL text equal to ``exact_json`` of a mapping of the named columns (or of a struct's fields).
 
@@ -135,14 +143,19 @@ def record_json_sql(fields: Iterable[tuple[str, pa.DataType]], *, qualifier: str
     fields = list(fields)
     if len({name.casefold() for name, _ in fields}) != len(fields):
         raise NotImplementedError("No proven SQL spelling for field names that differ only by case")
-    pairs = [
-        _literal("[" + json.dumps(name, ensure_ascii=False) + ",")
-        + " || "
-        + exact_json_sql(qualifier + '"' + name.replace('"', '""') + '"', dtype)
-        + " || ']'"
-        for name, dtype in sorted(fields, key=lambda field: field[0])
-    ]
-    return "'[\"dict\",[' || " + " || ',' || ".join(pairs) + " || ']]'" if pairs else "'[\"dict\",[]]'"
+    if not fields:
+        return "'[\"dict\",[]]'"
+    parts = ["'[\"dict\",['"]
+    for index, (name, dtype) in enumerate(sorted(fields, key=lambda field: field[0])):
+        if index:
+            parts.append("','")
+        parts.extend((
+            _literal("[" + json.dumps(name, ensure_ascii=False) + ","),
+            exact_json_sql(qualifier + '"' + name.replace('"', '""') + '"', dtype),
+            "']'",
+        ))
+    parts.append("']]'")
+    return _concat_sql(parts)
 
 
 def digest_sql(text: str) -> str:
