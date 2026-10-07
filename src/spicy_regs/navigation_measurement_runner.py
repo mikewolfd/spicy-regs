@@ -132,6 +132,7 @@ def run_measurements(index, paths, cache: MeasurementCache, *, routes=(), affect
                         continue
                     matching = [proof for proof in supplied if any(
                         isinstance(record, dict) and record.get('source') == binding['table']
+                        and record.get('status') == 'verified-full-main-complete-source-identity'
                         and isinstance(record.get('identityColumns'), list)
                         and record['identityColumns'] == list(columns)
                         for record in proof['sources'])]

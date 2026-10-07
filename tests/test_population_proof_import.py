@@ -212,3 +212,40 @@ def test_nullable_qualified_native_proof_does_not_qualify_strict_nonnull_populat
         cache.import_population(binding, paths, ('id',), cache.capture_population_proof(path))
     assert not cache.work['population_imports']
     assert not list(cache.directory.glob('population-*.json'))
+
+
+@pytest.mark.parametrize('status', ['reused-exact-small-complete-identity', 'partial_scope', 'failed'])
+def test_runner_ineligible_report_does_not_invalidate_complete_native_measurement(tmp_path, status):
+    index, paths, spec = selection(tmp_path)
+    cache = MeasurementCache(tmp_path / 'cache')
+    baseline = run(index, paths, cache, [spec], all_routes=True)
+    path, record = supplied_proof(tmp_path, selected_binding(index, 'source'))
+    record.update(status=status, distinctCompleteSourceIdentities=0)
+    path.write_text(json.dumps({'sources': [record]}))
+    repeated = run(index, paths, cache, [spec], all_routes=True, population_proofs=[path])
+    assert repeated['results'] == baseline['results']
+    assert repeated['statusCounts'] == {'complete': 1}
+    assert repeated['census'][0]['work']['result_hits'] == 1
+    assert not cache.work['population_imports']
+    # With no held result, normal admission and measurement still run. The
+    # report's ineligible zero distinct count never lends population authority.
+    fresh = run(index, paths, MeasurementCache(tmp_path / 'fresh-cache'), [spec], all_routes=True, population_proofs=[path])
+    assert {key: value for key, value in fresh['results'][0].items() if key != 'occurrences'} == {
+        key: value for key, value in baseline['results'][0].items() if key != 'occurrences'}
+    assert fresh['work']['population_aggregations'] == 2
+    assert 'population_imports' not in fresh['work']
+
+
+def test_runner_claimed_complete_nullable_report_refuses_even_with_completed_native_result(tmp_path):
+    index, paths, spec = selection(tmp_path)
+    cache = MeasurementCache(tmp_path / 'cache')
+    assert run(index, paths, cache, [spec], all_routes=True)['statusCounts'] == {'complete': 1}
+    path, record = supplied_proof(tmp_path, selected_binding(index, 'source'))
+    record['maintainedNullableIdentityFields'] = ['id']
+    path.write_text(json.dumps({'sources': [record]}))
+    refused = run(index, paths, cache, [spec], all_routes=True, population_proofs=[path])
+    assert refused['statusCounts'] == {'unavailable': 1}
+    assert refused['unavailable'][0]['phase'] == 'population_import'
+    assert 'nullable' in refused['unavailable'][0]['reason']
+    assert not refused['results']
+    assert all(value is None for value in refused['census'][0]['counts'].values())
