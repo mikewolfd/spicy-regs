@@ -1027,6 +1027,10 @@ _PROCESSING_JOIN_FIELDS = {
 
 
 def _processing_join(join):
+    # The original snapshot baselines describe receipt-era inputs. Portable
+    # main recipes expose these associations only when both schemas publish them.
+    if join.child == "scorecard_snapshots" or join.parent == "scorecard_snapshots":
+        return True
     # Date evidence belongs to its dated_by namespace; bare ID equality would
     # route Register and agenda IDs into Regulations.gov documents.
     if join.child == "lifecycle_events" and join.parent == "documents":

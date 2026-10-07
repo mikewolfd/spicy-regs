@@ -256,6 +256,19 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                            meaning="Source-reported candidate relationship; all retained cycle observations remain available."))
     field_rules = json.loads(Path(__file__).with_name("fec_subject_fields.json").read_text())
     for join in processing_joins:
+        if join.child == "scorecard_snapshots" or join.parent == "scorecard_snapshots":
+            columns = join.parent_columns
+            fields = join.child_columns
+            # A snapshot is qualified by its edition as well as its literal ID.
+            if join.parent == "scorecard_snapshots":
+                columns += ("scorecard_id",)
+                fields += ("scorecard_id",)
+            specs.append(array("recorded_snapshot_" + join.child + "_" + join.parent,
+                               join.child, (), (route(join.parent, columns,
+                                   tuple(key(part(c, row=True)) for c in fields)),),
+                               meaning="Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+                               mode="row"))
+            continue
         if join.child in {"scorecard_member_links", "scorecard_item_links"} and join.parent in {
             "members", "congress_bills", "roll_call_votes", "amendments",
         }:

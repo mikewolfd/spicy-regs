@@ -158,9 +158,28 @@ def test_scorecard_recorded_url_is_not_a_capture_target_and_unresolved_has_no_ed
     resolved = recipe('resolved_scorecard_member_links_members')['targets'][0]
     assert target_keys(resolved, {}, {'bioguide_id': 'A000001', 'resolution_status': 'unresolved'}) is None
     assert target_keys(resolved, {}, {'bioguide_id': 'A000001', 'resolution_status': 'resolved'}) == ['A000001']
-    assert any(j.child == 'scorecard_member_ratings' and j.child_columns == ('snapshot_id',)
-               and j.parent == 'scorecard_snapshots' for j in JOINS)
+    snapshot = recipe('recorded_snapshot_scorecard_member_ratings_scorecard_snapshots')['targets'][0]
+    assert snapshot['columns'] == ['snapshot_id', 'scorecard_id']
+    assert target_keys(snapshot, {}, {'snapshot_id': 'snapshot:1', 'scorecard_id': 'edition:1'}) == ['snapshot:1', 'edition:1']
+    assert target_keys(snapshot, {}, {'snapshot_id': 'snapshot:1'}) is None
+    assert not any(j.child == 'scorecard_member_ratings' and j.parent == 'scorecard_snapshots' for j in JOINS)
     assert not any(t['table'].endswith('captures') for spec in declarations(RETIRED_PROCESSING_JOINS) for t in spec['targets'])
+
+
+def test_snapshot_connection_requires_published_main_fields_and_matching_edition(tmp_path):
+    s = recipe('recorded_snapshot_scorecard_member_ratings_scorecard_snapshots')
+    old = published_navigation([s], {
+        'scorecard_member_ratings': [('scorecard_id', 'VARCHAR')],
+    })[0]['targets'][0]
+    assert not old['sourceAvailable'] and not old['available']
+    index, paths = selected(tmp_path, [
+        ('scorecard_member_ratings', [{'scorecard_id': 's1', 'snapshot_id': 'snapshot:1'},
+                                     {'scorecard_id': 's2', 'snapshot_id': 'snapshot:1'}], None),
+        ('scorecard_snapshots', [{'scorecard_id': 's1', 'snapshot_id': 'snapshot:1'}], None),
+    ])
+    result = MeasurementCache(tmp_path/'cache').measure(index, paths, s)
+    assert (result['eligible'], result['matched'], result['missing'], result['ambiguous']) == (2, 1, 1, 0)
+    assert result['reverse']['matchedTargetRows'] == 1
 
 
 def test_standalone_sources_do_not_invent_gao_report_or_senate_person_identity():

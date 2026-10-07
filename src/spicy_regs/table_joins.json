@@ -2252,108 +2252,6 @@
       }
     },
     {
-      "child": "scorecards",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecards.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 4,
-        "child_nonnull_rows": 4,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 4,
-        "left_join_nonnull_rows": 4,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.297,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
-      "child": "scorecard_snapshots",
-      "child_columns": [
-        "scorecard_id"
-      ],
-      "parent": "scorecards",
-      "parent_columns": [
-        "scorecard_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_snapshots.scorecard_id -> scorecards.scorecard_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 4,
-        "child_nonnull_rows": 4,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 4,
-        "left_join_nonnull_rows": 4,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"scorecard_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"scorecard_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.246,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
       "child": "scorecard_methodologies",
       "child_columns": [
         "scorecard_id"
@@ -2405,57 +2303,6 @@
       }
     },
     {
-      "child": "scorecard_methodologies",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_methodologies.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 15,
-        "child_nonnull_rows": 15,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 15,
-        "left_join_nonnull_rows": 15,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_methodologies.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_methodologies.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.148,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
       "child": "scorecard_metrics",
       "child_columns": [
         "scorecard_id"
@@ -2496,57 +2343,6 @@
         "sql": "\n        WITH child_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metrics.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"scorecard_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"scorecard_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
         "expected_cardinality": "unspecified",
         "elapsed_seconds": 0.356,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
-      "child": "scorecard_metrics",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_metrics.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 16,
-        "child_nonnull_rows": 16,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 16,
-        "left_join_nonnull_rows": 16,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metrics.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metrics.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.178,
         "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
         "measured_on": "2026-10-04",
         "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
@@ -2662,57 +2458,6 @@
       }
     },
     {
-      "child": "scorecard_items",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_items.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 225,
-        "child_nonnull_rows": 225,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 225,
-        "left_join_nonnull_rows": 225,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_items.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_items.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.145,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
       "child": "scorecard_metric_items",
       "child_columns": [
         "scorecard_id"
@@ -2753,57 +2498,6 @@
         "sql": "\n        WITH child_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_items.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"scorecard_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"scorecard_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
         "expected_cardinality": "unspecified",
         "elapsed_seconds": 0.203,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
-      "child": "scorecard_metric_items",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 3,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_metric_items.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 3,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 227,
-        "child_nonnull_rows": 227,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 227,
-        "left_join_nonnull_rows": 227,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_items.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_items.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.151,
         "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
         "measured_on": "2026-10-04",
         "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
@@ -3027,57 +2721,6 @@
     {
       "child": "scorecard_metric_components",
       "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "empty",
-      "reason": "Full selected-input measurement on 2026-10-04; child table contains no rows.",
-      "measured_via": null,
-      "baseline_keys": 0,
-      "baseline_missing": 0,
-      "floor_pct": null,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_metric_components.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 0,
-        "missing": 0,
-        "resolved_pct": null,
-        "examples": [],
-        "child_input_rows": 0,
-        "child_nonnull_rows": 0,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 0,
-        "inner_join_rows": 0,
-        "left_join_nonnull_rows": 0,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_components.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_components.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.158,
-        "interpretation": "No non-null child keys in this publication; retains empty baseline. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
-      "child": "scorecard_metric_components",
-      "child_columns": [
         "scorecard_id",
         "parent_metric_id"
       ],
@@ -3233,57 +2876,6 @@
       }
     },
     {
-      "child": "scorecard_members",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_members.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 2102,
-        "child_nonnull_rows": 2102,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 2102,
-        "left_join_nonnull_rows": 2102,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_members.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_members.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.143,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
       "child": "scorecard_member_ratings",
       "child_columns": [
         "scorecard_id"
@@ -3324,57 +2916,6 @@
         "sql": "\n        WITH child_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_ratings.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"scorecard_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"scorecard_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
         "expected_cardinality": "unspecified",
         "elapsed_seconds": 0.273,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
-      "child": "scorecard_member_ratings",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_member_ratings.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 6754,
-        "child_nonnull_rows": 6754,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 6754,
-        "left_join_nonnull_rows": 6754,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_ratings.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_ratings.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.175,
         "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
         "measured_on": "2026-10-04",
         "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
@@ -3532,57 +3073,6 @@
         "sql": "\n        WITH child_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_item_results.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"scorecard_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"scorecard_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
         "expected_cardinality": "unspecified",
         "elapsed_seconds": 0.328,
-        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
-        "measured_on": "2026-10-04",
-        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
-        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
-        "measured_expected_cardinality": "one",
-        "source_evidence": [
-          "spicy_docs.schemas.TABLE_CONTRACTS"
-        ]
-      }
-    },
-    {
-      "child": "scorecard_member_item_results",
-      "child_columns": [
-        "snapshot_id"
-      ],
-      "parent": "scorecard_snapshots",
-      "parent_columns": [
-        "snapshot_id"
-      ],
-      "kind": "complete",
-      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
-      "measured_via": null,
-      "baseline_keys": 4,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": {
-        "join": "scorecard_member_item_results.snapshot_id -> scorecard_snapshots.snapshot_id",
-        "keys": 4,
-        "missing": 0,
-        "resolved_pct": 100.0,
-        "examples": [],
-        "child_input_rows": 43548,
-        "child_nonnull_rows": 43548,
-        "parent_input_rows": 4,
-        "parent_distinct_keys": 4,
-        "parent_duplicate_keys": 0,
-        "max_parent_multiplicity": 1,
-        "max_matched_parent_multiplicity": 1,
-        "inner_join_rows": 43548,
-        "left_join_nonnull_rows": 43548,
-        "scope": "full_selected_inputs",
-        "child_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_item_results.parquet"
-        ],
-        "parent_urls": [
-          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
-        ],
-        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_item_results.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
-        "expected_cardinality": "unspecified",
-        "elapsed_seconds": 0.336,
         "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
         "measured_on": "2026-10-04",
         "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
@@ -6730,6 +6220,516 @@
       "measurement": null
     },
     {
+      "child": "scorecards",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecards.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 4,
+        "child_nonnull_rows": 4,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 4,
+        "left_join_nonnull_rows": 4,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.297,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_snapshots",
+      "child_columns": [
+        "scorecard_id"
+      ],
+      "parent": "scorecards",
+      "parent_columns": [
+        "scorecard_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_snapshots.scorecard_id -> scorecards.scorecard_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 4,
+        "child_nonnull_rows": 4,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 4,
+        "left_join_nonnull_rows": 4,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"scorecard_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecards.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"scorecard_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"scorecard_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"scorecard_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.246,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_methodologies",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_methodologies.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 15,
+        "child_nonnull_rows": 15,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 15,
+        "left_join_nonnull_rows": 15,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_methodologies.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_methodologies.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.148,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_metrics",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_metrics.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 16,
+        "child_nonnull_rows": 16,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 16,
+        "left_join_nonnull_rows": 16,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metrics.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metrics.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.178,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_items",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_items.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 225,
+        "child_nonnull_rows": 225,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 225,
+        "left_join_nonnull_rows": 225,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_items.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_items.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.145,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_metric_items",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 3,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_metric_items.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 3,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 227,
+        "child_nonnull_rows": 227,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 227,
+        "left_join_nonnull_rows": 227,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_items.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_items.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.151,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_metric_components",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "empty",
+      "reason": "Full selected-input measurement on 2026-10-04; child table contains no rows.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_metric_components.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 0,
+        "missing": 0,
+        "resolved_pct": null,
+        "examples": [],
+        "child_input_rows": 0,
+        "child_nonnull_rows": 0,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 0,
+        "inner_join_rows": 0,
+        "left_join_nonnull_rows": 0,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_components.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_metric_components.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.158,
+        "interpretation": "No non-null child keys in this publication; retains empty baseline. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_members",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_members.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 2102,
+        "child_nonnull_rows": 2102,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 2102,
+        "left_join_nonnull_rows": 2102,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_members.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_members.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.143,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_member_ratings",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_member_ratings.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 6754,
+        "child_nonnull_rows": 6754,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 6754,
+        "left_join_nonnull_rows": 6754,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_ratings.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_ratings.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.175,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
+      "child": "scorecard_member_item_results",
+      "child_columns": [
+        "snapshot_id"
+      ],
+      "parent": "scorecard_snapshots",
+      "parent_columns": [
+        "snapshot_id"
+      ],
+      "kind": "complete",
+      "reason": "Full selected-input measurement on 2026-10-04; every non-null key resolves to one parent row.",
+      "measured_via": null,
+      "baseline_keys": 4,
+      "baseline_missing": 0,
+      "floor_pct": 100.0,
+      "expected_cardinality": "one",
+      "measurement": {
+        "join": "scorecard_member_item_results.snapshot_id -> scorecard_snapshots.snapshot_id",
+        "keys": 4,
+        "missing": 0,
+        "resolved_pct": 100.0,
+        "examples": [],
+        "child_input_rows": 43548,
+        "child_nonnull_rows": 43548,
+        "parent_input_rows": 4,
+        "parent_distinct_keys": 4,
+        "parent_duplicate_keys": 0,
+        "max_parent_multiplicity": 1,
+        "max_matched_parent_multiplicity": 1,
+        "inner_join_rows": 43548,
+        "left_join_nonnull_rows": 43548,
+        "scope": "full_selected_inputs",
+        "child_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_item_results.parquet"
+        ],
+        "parent_urls": [
+          "https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet"
+        ],
+        "sql": "\n        WITH child_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_member_item_results.parquet'], hive_partitioning = false)),\n             parent_input AS (SELECT \"snapshot_id\" FROM read_parquet(['https://data.spicygov.ai/generations/scorecards/8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109/scorecard_snapshots.parquet'], hive_partitioning = false)),\n             c AS (SELECT \"snapshot_id\" AS c0, count(*) AS child_rows\n                   FROM child_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             p AS (SELECT \"snapshot_id\" AS p0, count(*) AS parent_rows\n                   FROM parent_input WHERE \"snapshot_id\" IS NOT NULL\n                   GROUP BY ALL),\n             j AS (SELECT c0, child_rows, coalesce(parent_rows, 0) AS parent_rows\n                   FROM c LEFT JOIN p ON c.c0 = p.p0)\n        SELECT count(*) AS keys, count(*) FILTER (WHERE parent_rows=0) AS missing,\n               (list(concat_ws('|', c0) ORDER BY c0) FILTER (WHERE parent_rows=0))[1:3] AS examples,\n               (SELECT count(*) FROM child_input) AS child_input_rows,\n               coalesce(sum(child_rows),0) AS child_nonnull_rows,\n               (SELECT count(*) FROM parent_input) AS parent_input_rows,\n               (SELECT count(*) FROM p) AS parent_distinct_keys,\n               (SELECT count(*) FROM p WHERE parent_rows>1) AS parent_duplicate_keys,\n               coalesce((SELECT max(parent_rows) FROM p),0) AS max_parent_multiplicity,\n               coalesce(max(parent_rows),0) AS max_matched_parent_multiplicity,\n               coalesce(sum(child_rows*parent_rows),0) AS inner_join_rows,\n               coalesce(sum(child_rows*greatest(parent_rows,1)),0) AS left_join_nonnull_rows\n        FROM j",
+        "expected_cardinality": "unspecified",
+        "elapsed_seconds": 0.336,
+        "interpretation": "Every distinct non-null child composite key resolves in the complete published parent. Parent key is unique across all non-null keys in this publication.",
+        "measured_on": "2026-10-04",
+        "receipt": "docs/evidence/scorecard-source-joins-2026-10-04.json",
+        "method": "scripts/check_table_joins.py:measure: full selected immutable Parquet key columns, distinct non-null child composite keys, exact equality across every component, all parent rows counted to expose multiplicity. No sample or LIMIT. NULL-containing child keys excluded from resolution denominator and retained in row counts.",
+        "measured_expected_cardinality": "one",
+        "source_evidence": [
+          "spicy_docs.schemas.TABLE_CONTRACTS"
+        ]
+      }
+    },
+    {
       "child": "scorecard_member_links",
       "child_columns": [
         "scorecard_id",
@@ -9556,26 +9556,6 @@
         "parent_columns": [
           "publisher_id"
         ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
-        ]
-      }
-    ],
-    "scorecard_snapshots": [
-      {
-        "child_columns": [
-          "scorecard_id"
-        ],
-        "parent_table": "scorecards",
-        "parent_columns": [
-          "scorecard_id"
-        ]
       }
     ],
     "scorecard_methodologies": [
@@ -9587,15 +9567,6 @@
         "parent_columns": [
           "scorecard_id"
         ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
-        ]
       }
     ],
     "scorecard_metrics": [
@@ -9606,15 +9577,6 @@
         "parent_table": "scorecards",
         "parent_columns": [
           "scorecard_id"
-        ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
         ]
       },
       {
@@ -9638,15 +9600,6 @@
         "parent_columns": [
           "scorecard_id"
         ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
-        ]
       }
     ],
     "scorecard_metric_items": [
@@ -9657,15 +9610,6 @@
         "parent_table": "scorecards",
         "parent_columns": [
           "scorecard_id"
-        ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
         ]
       },
       {
@@ -9714,15 +9658,6 @@
       },
       {
         "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
-        ]
-      },
-      {
-        "child_columns": [
           "scorecard_id",
           "parent_metric_id"
         ],
@@ -9753,15 +9688,6 @@
         "parent_columns": [
           "scorecard_id"
         ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
-        ]
       }
     ],
     "scorecard_member_ratings": [
@@ -9772,15 +9698,6 @@
         "parent_table": "scorecards",
         "parent_columns": [
           "scorecard_id"
-        ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
         ]
       },
       {
@@ -9814,15 +9731,6 @@
         "parent_table": "scorecards",
         "parent_columns": [
           "scorecard_id"
-        ]
-      },
-      {
-        "child_columns": [
-          "snapshot_id"
-        ],
-        "parent_table": "scorecard_snapshots",
-        "parent_columns": [
-          "snapshot_id"
         ]
       },
       {
@@ -13943,6 +13851,463 @@
       "mode": "row",
       "candidates": false,
       "meaning": "A Schedule C2 guarantor names its Schedule C loan by transaction id within one filing; each of the 22 met exactly one loan, though a few other loan keys repeat. Measured 2026-10-03 through check_table_joins on fec-query 81453ac6…, fec-observations 9c289dfe…, fec-committees ce80d98e… and fec-candidate-history d9e9c233…; receipt mcp-chaos-2026-10-02/round6/impl-B/joins-measured-2026-10-03.json.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecards_scorecard_snapshots",
+      "source": "scorecards",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_snapshots_scorecards",
+      "source": "scorecard_snapshots",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecards",
+          "columns": [
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_methodologies_scorecard_snapshots",
+      "source": "scorecard_methodologies",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_metrics_scorecard_snapshots",
+      "source": "scorecard_metrics",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_items_scorecard_snapshots",
+      "source": "scorecard_items",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_metric_items_scorecard_snapshots",
+      "source": "scorecard_metric_items",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_metric_components_scorecard_snapshots",
+      "source": "scorecard_metric_components",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_members_scorecard_snapshots",
+      "source": "scorecard_members",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_member_ratings_scorecard_snapshots",
+      "source": "scorecard_member_ratings",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "recorded_snapshot_scorecard_member_item_results_scorecard_snapshots",
+      "source": "scorecard_member_item_results",
+      "fields": [],
+      "targets": [
+        {
+          "table": "scorecard_snapshots",
+          "columns": [
+            "snapshot_id",
+            "scorecard_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "scorecard_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
