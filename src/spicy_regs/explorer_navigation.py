@@ -256,6 +256,16 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                            meaning="Source-reported candidate relationship; all retained cycle observations remain available."))
     field_rules = json.loads(Path(__file__).with_name("fec_subject_fields.json").read_text())
     for join in processing_joins:
+        if (join.child, join.child_columns, join.parent, join.parent_columns) == (
+            'member_vote_terms', ('bioguide_id', 'term_index'), 'member_terms', ('bioguide_id', 'term_index')
+        ):
+            specs.append(array(join.name, join.child, (), (
+                route(join.parent, join.parent_columns,
+                      tuple(key(part(column, row=True), pattern=r'0|[1-9][0-9]*' if column == 'term_index' else '.+')
+                            for column in join.child_columns),
+                      guard('term_match', row=True, values=('half_open', 'inclusive_end'))),
+            ), mode='row', meaning='The service term selected by the vote date and chamber. Only successful half-open or inclusive-end matches link; missing, ambiguous and noncanonical indices stay unsupported.'))
+            continue
         if join.child == "scorecard_snapshots" or join.parent == "scorecard_snapshots":
             columns = join.parent_columns
             fields = join.child_columns

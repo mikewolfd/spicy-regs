@@ -75,5 +75,22 @@
     ],
     "receipt_only": false,
     "nullable_identity_fields": []
+  },
+  "member_vote_terms": {
+    "dataset": "member_vote_terms",
+    "policy_version": "congress-subjects/1",
+    "subject_schema": "/////9ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAgAAABwAQAAMAEAAAQBAADUAAAApAAAAGQAAAA0AAAABAAAAMD+//8AAAEFEAAAABwAAAAEAAAAAAAAAAgAAAB0ZXJtX2VuZAAAAAC0/v//7P7//wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAHRlcm1fc3RhcnQAAOD+//8Y////AAABAhAAAAAkAAAABAAAAAAAAAAKAAAAdGVybV9pbmRleAAACAAMAAgABwAIAAAAAAAAAUAAAABU////AAABBRAAAAAcAAAABAAAAAAAAAAIAAAAdm90ZV9kYXkAAAAASP///4D///8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAABiaW9ndWlkZV9pZAB0////rP///wAAAQUQAAAAGAAAAAQAAAAAAAAABwAAAGNoYW1iZXIAnP///9T///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABtZW1iZXJfa2V5AADI////EAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAABwAAAAEAAAAAAAAAAcAAAB2b3RlX2lkAAQABAAEAAAAAAAAAA==",
+    "identity_fields": [
+      "vote_id",
+      "member_key"
+    ],
+    "receipt_fields": [
+      "source_fields",
+      "source_metadata",
+      "source_schema",
+      "entry_kind"
+    ],
+    "receipt_only": false,
+    "nullable_identity_fields": []
   }
 }

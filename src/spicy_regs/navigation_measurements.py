@@ -473,9 +473,15 @@ class MeasurementCache:
         native_rows = bool(native_columns and spec['mode'] == 'row' and not spec.get('candidates') and all(
             recipe == navigation.key(navigation.part(column, row=True), pattern=r'[\s\S]*')
             for recipe, column in zip(route['keys'], native_columns, strict=True)))
-        unique_rows = bool(native_rows and identity_qualified and all(p['rawReferences'] == p['sourceRows']
-                                                                     and not p['repeatedReferences'] for p in source_artifacts))
-        unique_source_keys = bool(unique_rows and sorted(native_columns) == sorted(source_identity))
+        safe_identity_types = {'varchar', 'date', 'tinyint', 'smallint', 'integer', 'bigint',
+                               'utinyint', 'usmallint', 'uinteger', 'ubigint'}
+        unique_rows = bool(spec['mode'] == 'row' and not spec.get('candidates') and identity_qualified
+                         and all(duckdb.sqltype(dict(source['schema'])[column]).id in safe_identity_types
+                                 for column in source_identity)
+                         and all(p['rawReferences'] == p['sourceRows'] and not p['repeatedReferences'] for p in source_artifacts))
+        # A guarded or transformed flat row still emits one target tuple or
+        # refusal per qualified source record; it cannot infer key uniqueness.
+        unique_source_keys = bool(native_rows and unique_rows and sorted(native_columns) == sorted(source_identity))
         unique_target_keys = bool(native_rows and target_population['scope'] == 'full_selected_inputs'
                                   and target_population['rows'] == target['rows'] == target_population['nonNullRows']
                                   and target_population['distinctKeys'] == target['rows']
@@ -538,7 +544,7 @@ class MeasurementCache:
         result = {'format': VERSION, 'status': 'complete', 'binding': dependency,
                   'route': {'id': original['id'], 'targetIndex': target_index},
                   'equality': 'canonical_navigation_words',
-                  'aggregationMethods': {'sourceRecords': 'unique_native_row' if unique_rows else 'grouped_occurrences',
+                  'aggregationMethods': {'sourceRecords': ('unique_native_row' if native_rows else 'qualified_flat_row') if unique_rows else 'grouped_occurrences',
                                          'targetKeys': 'unique_native_keys' if unique_target_keys else 'grouped_keys',
                                          'reverseSourceKeys': 'unique_native_keys' if unique_source_keys else 'grouped_keys'},
                   'sourceRows': source['rows'], 'targetRows': target['rows'],

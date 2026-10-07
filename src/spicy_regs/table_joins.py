@@ -1046,6 +1046,12 @@ def _processing_join(join):
     # historical scalar baseline as lineage instead of publishing a second route.
     if join.child == 'native_legal_references' and join.parent == 'native_legal_reference_reads':
         return True
+    # The selected service term uses a guarded portable row recipe: processing
+    # keeps the native index as text while native subjects keep it as BIGINT.
+    if (join.child, join.child_columns, join.parent, join.parent_columns) == (
+        'member_vote_terms', ('bioguide_id', 'term_index'), 'member_terms', ('bioguide_id', 'term_index')
+    ):
+        return True
     # Resolver outputs require the recorded resolution status, not bare equality.
     # The same declarations supply guarded main-row navigation recipes.
     if join.child in {'scorecard_member_links', 'scorecard_item_links'} and join.parent in {

@@ -57,7 +57,7 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         IDENTITIES.get(dataset, ()),
         RECEIPT_FIELDS,
-        policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications"} else "congress-subjects/1",
+        policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications", "member_vote_terms"} else "congress-subjects/1",
         receipt_only=dataset in RECEIPT_ONLY,
     )
 
