@@ -306,8 +306,7 @@ try:
                 regulatory_catalog.write_rows(
                     (regulatory_catalog.rebind_receipt(row, generation_id=generation)
                      for batch in reader for row in batch.to_pylist()),
-                    pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA,
-                    batch_size=128)
+                    pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA)
             if pq.ParquetFile(pair / 'etl_receipts.parquet').metadata.num_rows != 26418079:
                 raise ValueError('Receipt recovery is not the complete selected population')
             for _ in regulatory_catalog.read_with_receipts(
