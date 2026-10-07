@@ -130,7 +130,7 @@ def _recorded_source_navigation() -> list[dict]:
         route("court_opinions", ("opinion_id", "cluster_id", "sha1", "download_url"),
               tuple(key(part(field, row=True)) for field in
                     ("opinion_id", "cluster_id", "native_sha1", "source_url")), *captured),
-    ), mode="row", meaning="A body admitted against a recorded native parent and captured SHA-256. Current lookup must match opinion, cluster, native SHA-1 and offered URL together; it does not certify that the current publication is the recorded parent."),
+    ), mode="row", meaning="Recorded capture and parent data qualify this text. A match requires the opinion ID, opinion group, fingerprint and offered URL together. A match in current data does not prove it was the original parent publication."),
         array("court_captured_source", "court_opinion_pdf_extractions", (), (
             route("@url", ("url",), (key(part("source_url", row=True)),), *captured),
         ), mode="row", meaning="The literal source URL recorded for this qualified body. Following the publisher URL does not retrieve or verify the retained capture.")]

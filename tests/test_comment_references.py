@@ -66,4 +66,4 @@ def test_native_parent_and_exact_source_observations_survive_catalog(tmp_path):
         native = pl.read_parquet(output)
         assert native["docket_id"].to_list() == [None]
         assert native["comment_on_document_id"].to_list() == ["ODNI-2009-0004-0001"]
-        assert "comment_reference_values_json" not in native.columns
+        assert native["comment_reference_values_json"].to_list() == [row["comment_reference_values_json"]]
