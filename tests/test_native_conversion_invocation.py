@@ -129,3 +129,51 @@ def test_actual_workflow_step_checks_both_artifact_paths_before_publication(tmp_
     assert (result.returncode == 0) == (change == "same"), result.stderr
     assert (tmp_path / "output/invocation/prepared-prior.json").exists() == (change == "same")
     assert receipt.read_bytes() == before
+
+
+@pytest.mark.parametrize("extra", [
+    ["cfr-sections"], ["--publish"], ["--publish-prepared", "conversion.json"], ["--rollback", "conversion.json"],
+])
+def test_resume_mode_cannot_acquire_or_publish_source_data(tmp_path, monkeypatch, extra):
+    from spicy_regs import native_conversion
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("Conflicting resume modes must refuse before opening a retained generation")
+
+    monkeypatch.setattr(native_conversion, "resume_prepared", unexpected)
+    monkeypatch.setattr(native_conversion, "convert", unexpected)
+    monkeypatch.setattr(native_conversion, "publish_prepared", unexpected)
+    monkeypatch.setattr(native_conversion, "rollback", unexpected)
+    arguments = ["--resume-generation", str(tmp_path / "generation"), "--work", str(tmp_path / "work"),
+                 "--allow", "cfr-sections", "--expect-main", "a" * 40, "--expect-spicy-docs", "0.56.0",
+                 "--expect-producer", "b" * 40, *extra]
+    with pytest.raises(SystemExit):
+        native_conversion.main(arguments)
+    assert not (tmp_path / "work").exists()
+
+
+def test_resume_invocation_preserves_the_explicit_producer_and_current_verifier(tmp_path, monkeypatch, capsys):
+    from spicy_regs import native_conversion
+
+    called = []
+    generation, work = tmp_path / "generation", tmp_path / "work"
+
+    def resume(directory, **kwargs):
+        called.append((directory, kwargs))
+        return {"family": "cfr-sections", "tables": {}, "receipt_outcomes": {"accepted": 2},
+                "generation": {"artifactDigest": "sha256:" + "c" * 64}, "published": None}
+
+    def rebuild(*args, **kwargs):
+        pytest.fail("Resume must not restart the writer")
+
+    monkeypatch.setattr(native_conversion, "resume_prepared", resume)
+    monkeypatch.setattr(native_conversion, "convert", rebuild)
+    assert native_conversion.main([
+        "--resume-generation", str(generation), "--work", str(work), "--allow", "cfr-sections,bill-family",
+        "--expect-main", "a" * 40, "--expect-spicy-docs", "0.56.0", "--expect-producer", "b" * 40,
+        "--remote", "fork",
+    ]) == 0
+    assert called == [(generation, {"work": work, "allowed": ["cfr-sections", "bill-family"],
+                                   "expected_main": "a" * 40, "expected_spicy_docs": "0.56.0",
+                                   "expected_producer": "b" * 40, "remote": "fork"})]
+    assert "not published" in capsys.readouterr().out

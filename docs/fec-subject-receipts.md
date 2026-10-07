@@ -3,7 +3,7 @@
 FEC family mapper outputs pass through `write_fec_subjects` before storage.
 The subject file contains business values and stable keys. The shared
 `etl_receipts.parquet` contains conversion inputs, source witnesses, parser
-outcomes, qualification evidence, and failed attempts.
+outcomes, private conversion evidence, and failed attempts. Main rows retain the source and qualification fields needed to inspect a relationship.
 
 The explicit field policies are in `src/spicy_regs/fec_subject_fields.json`.
 `fec_native_field_maps.json` declares names for flattened publisher properties.
@@ -13,9 +13,7 @@ from suffixes at runtime.
 
 Financial values stay exact decimals. Correction operations, reported measure
 roles, period bases, legal business statuses, and the publisher's historical
-amendment methodology remain business data. Parser and qualification statuses
-remain available to financial readers through receipts, except `amount_status`
-on the tables where its published value varies: there it is a subject column.
+amendment methodology remain business data. Source identity, authority, namespace, generation, definition and header context, and applicable qualification statuses are main columns. Exact amount parsing diagnostics remain separate from the published amounts.
 The separate legal identifiers `rm_id` and `rm_number` retain their meanings.
 
 Legal citations and subjects, agency organizations and dimensions, report
@@ -35,15 +33,15 @@ subject rows. An unknown column never disappears silently.
 `assemble_subject_table` accepts qualified `TypedInput` members. It verifies
 file digests, row membership, compatible schemas, and any declared source
 namespace partition before splitting the rows. Subject output uses ordinary
-Parquet membership. `source_namespace` is a subject column on the tables where
-its published value varies and a receipt field where every row has the same
-value; each table's entry in the field policies says which. The assembler
+Parquet membership. `source_namespace` stays in the main table where the mapper supplies it, including single-namespace populations. Each table's explicit policy states its fields. The assembler
 restores and compares every input cell when all inputs are admitted. Refused
 inputs make `full_rebuild_qualified` false.
 
-Filing definition layouts, definition evidence, header association checks, and
-agency mapping dispositions use receipt-only policies. They remain available
-through `read_fec_processing` and do not create empty subject tables.
+Filing definitions, definition evidence, header association checks and agency mapping dispositions have main logical rows. Their `observation_ordinal` identifies each observation within the selected generation, including repeated observations. Definition bodies and conversion inputs stay in receipts; the ordinal never supplies a missing publisher record identifier.
+
+For applicable financial/text inputs, pass `FilingAssociationInputs` to `assemble_subject_table`. It selects exact SHA-256 and row-count-pinned filing metadata and optional maintained header associations, plus source/target generation pins and admitted namespace-definition evidence. The maintained number/header rules produce one decision per source row. The assembly checks dependency bytes and compares every original mapper cell through receipt readback.
+
+`filing_association_status` and its source/target pins state the decision. Every matching filing observation remains listed; unresolved, conflicting and missing-context decisions do not create edges. Header witnesses from a different generation or locator cannot resolve. No association selects a latest filing, applies corrections, or changes an amount. Catalog, agency, legal and collection rows gain no generic filing key. Without explicitly selected dependencies, applicable rows state `not_evaluated`.
 
 ## Read financial and source evidence
 
@@ -90,3 +88,7 @@ there is no fallback to a different generation or to unqualified business rows.
 Restoration is lazy: unavailable release configurations do not scan receipt rows.
 `list_sources` and `describe_table` separately expose the shared receipt schema
 and dataset selectors.
+
+## Policy migration
+
+`fec-subject-receipts/2` changes the main schema. Replay exact selected mapper inputs through the maintained assembler and publish subjects and receipts together. Old native generations keep their original policy pins; they cannot be relabeled as version 2. Navigation metadata and serving admission must select the matching new generation before these fields are advertised as available.

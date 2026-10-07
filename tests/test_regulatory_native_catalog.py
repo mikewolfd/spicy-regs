@@ -55,7 +55,8 @@ def test_native_pair_and_processing_read(con):
     iceberg.replace_rows(con, COMMENT, 'source')
     columns = {r[0] for r in con.execute(f'DESCRIBE {iceberg._qualified(COMMENT)}').fetchall()}
     assert 'attachments' in columns and 'attachments_json' not in columns
-    assert 'text_extraction_status' not in columns
+    assert 'text_extraction_status' in columns
+    assert con.execute(f'SELECT text_extraction_status FROM {iceberg._qualified(COMMENT)}').fetchone() == (expected['text_extraction_status'],)
     assert con.execute(f"SELECT outcome,count(*) FROM {native.receipts_table()} GROUP BY 1 ORDER BY 1").fetchall() == [('accepted', 1), ('observed', 1)]
     processing = native.processing_table(con, COMMENT)
     actual = con.execute(f'SELECT * FROM {processing}').to_arrow_table().to_pylist()[0]

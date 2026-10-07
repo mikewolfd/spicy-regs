@@ -128,8 +128,8 @@ def test_fcc_proceedings_require_name_and_native_id_and_document_urls_are_offers
     assert target_keys(t,{'name':'26-189','id_proceeding':'1784669453334'}, {}) == ['26-189','1784669453334']
     assert target_keys(t,{'name':'26-189','id_proceeding':None}, {}) is None
     document_recipe=recipe('fcc_filing_documents')
-    assert document_recipe['receiptFields'] == ['native_fields_json', 'pdf_extraction_results_json']
-    assert document_recipe['elementPath'] == ['documents']
+    assert document_recipe['receiptFields'] == []
+    assert document_recipe['fields'] == ['documents']
     d=document_recipe['targets'][0]
     assert target_keys(d,{'src':'javascript:alert(1)'},{}) is None
     assert target_keys(d,{'src':'https://example.test/a.pdf'},{}) == ['https://example.test/a.pdf']
@@ -176,7 +176,7 @@ def test_invalid_equality_guard_is_refused_before_publication():
         validate_navigation([bad])
 
 
-def test_receipt_only_targets_use_a_published_legacy_table_when_its_key_exists():
+def test_legal_read_scope_is_available_only_when_its_main_table_exists():
     from spicy_regs.explorer_navigation import published_navigation
     spec = recipe('native_legal_read')
     schemas = {'native_legal_references': [('scope_id', 'VARCHAR')],
@@ -185,7 +185,9 @@ def test_receipt_only_targets_use_a_published_legacy_table_when_its_key_exists()
     assert target['table'] == 'native_legal_reference_reads'
     assert target['available'] is True
     del schemas['native_legal_reference_reads']
-    assert published_navigation([spec], schemas)[0]['targets'][0]['table'] == '@receipt:native_legal_reference_reads'
+    target = published_navigation([spec], schemas)[0]['targets'][0]
+    assert target['table'] == 'native_legal_reference_reads'
+    assert target['available'] is False
 
 
 def test_fec_source_row_retains_collection_and_source_content_identity():
@@ -193,3 +195,138 @@ def test_fec_source_row_retains_collection_and_source_content_identity():
     row = {'collection_id':'filings-f13-selected','source_record_id':'1010420180036115817','source_sha256':'sha256:'+'a'*64}
     assert target_keys(target,row,row) == list(row.values())
     assert target_keys(target,row,{**row,'source_sha256':None}) is None
+
+
+def test_detail_attempts_use_main_keys_and_house_native_identity():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('house_communications_detail_attempts')
+    target = spec['targets'][0]
+    assert target['table'] == 'house_communications_detail_reads'
+    assert target['columns'] == ['communication_id']
+    assert target_keys(target, {}, {'communication_id':'119-ec-2'}) == ['119-ec-2']
+    schemas = {'house_communications':[('communication_id','VARCHAR')],
+               'house_communications_detail_reads':[('communication_id','VARCHAR')]}
+    assert published_navigation([spec], schemas)[0]['targets'][0]['sourceAvailable']
+    assert target_keys(target, {}, {'congress':119,'number':2}) is None
+
+
+def test_financial_filing_routes_require_the_main_association_decision():
+    target = recipe('native_filing_fec_receipts')['targets'][0]
+    row = {'filing_key':'urn:fec:filing:official-fec:openfec-file-number:123',
+           'filing_association_status':'resolved_native_filing_key'}
+    assert target_keys(target, {}, row) == [row['filing_key']]
+    for status in (None, 'not_evaluated', 'unresolved', 'missing_target'):
+        assert target_keys(target, {}, dict(row, filing_association_status=status)) is None
+
+
+def test_polymorphic_fec_endpoints_preserve_type_native_id_and_cycle():
+    target = next(t for t in recipe('fec_relationship_object')['targets']
+                  if t['table']=='fec_candidate_history')
+    row = {'object_id':'H8CA12345','object_type':'candidate','cycle':2024,
+           'object_endpoint_status':'lookup_eligible'}
+    assert target_keys(target, {}, row) == ['H8CA12345','2024']
+    for changed in ({'cycle':None}, {'object_endpoint_status':'name_only'},
+                    {'object_type':'committee'}, {'object_endpoint_status':'no_edge_reported_none'}):
+        assert target_keys(target, {}, row | changed) is None
+
+
+def test_native_legal_nested_key_readiness_checks_inner_keys_and_outer_guards():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('native_legal_targets')
+    typ = 'STRUCT(target_table_selected VARCHAR, target_status VARCHAR, candidate_keys STRUCT(package_id VARCHAR, granule_id VARCHAR)[])[]'
+    schemas = {'native_legal_references':[('target_candidates',typ)],
+               'cfr_sections':[('package_id','VARCHAR'),('granule_id','VARCHAR')]}
+    targets = published_navigation([spec], schemas)[0]['targets']
+    cfr = next(t for t in targets if t['table']=='cfr_sections')
+    assert cfr['sourceAvailable'] and cfr['available']
+    assert {p['path'] for p in cfr['requiredElementFields']} == {
+        'target_table_selected','target_status','candidate_keys.package_id','candidate_keys.granule_id'}
+    schemas['native_legal_references'] = [('target_candidates',typ.replace('granule_id VARCHAR','different VARCHAR'))]
+    cfr = next(t for t in published_navigation([spec],schemas)[0]['targets'] if t['table']=='cfr_sections')
+    assert not cfr['sourceAvailable']
+
+
+def test_main_array_cannot_borrow_missing_row_context_or_receipt_fields():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('vote_amendments')
+    spec['receiptFields'] = ['congress', 'chamber', 'vote_id']
+    schemas = {'roll_call_votes': [('amendments', 'STRUCT(number VARCHAR)[]'),
+                                  ('congress', 'INTEGER'), ('chamber', 'VARCHAR')],
+               'amendments': [('amendment_id', 'VARCHAR')]}
+    published = published_navigation([spec], schemas)[0]
+    target = published['targets'][0]
+    assert published['available'] is False
+    assert target['sourceAvailable'] is False
+    assert target['available'] is True  # Target exists; the source route is disabled.
+    assert {p['path'] for p in target['requiredMainFields'] if p['status'] == 'missing'} == {'vote_id'}
+    assert not target['directions']['forward']['available']
+
+
+def test_nested_typed_dependency_disables_only_the_affected_route():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('vote_documents')
+    schemas = {'roll_call_votes': [('documents', 'STRUCT(type VARCHAR, congress INTEGER, number VARCHAR)[]')],
+               'congress_bills': [('bill_id', 'VARCHAR')],
+               'nominations': [('congress', 'INTEGER'), ('citation', 'VARCHAR')],
+               'treaties': [('treaty_id', 'VARCHAR')]}
+    assert all(t['sourceAvailable'] for t in published_navigation([spec], schemas)[0]['targets'])
+    schemas['roll_call_votes'] = [('documents', 'STRUCT(type VARCHAR, number VARCHAR)[]')]
+    result = published_navigation([spec], schemas)[0]
+    assert result['available'] is True
+    assert [t['sourceAvailable'] for t in result['targets']] == [False, False, True]
+    assert [t['directions']['forward']['available'] for t in result['targets']] == [False, False, True]
+
+
+def test_json_nested_dependencies_remain_explicit_runtime_guards():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('meeting_nominations')
+    schemas = {'committee_meetings': [('nomination_references_json', 'VARCHAR')],
+               'nominations': [('congress', 'INTEGER'), ('citation', 'VARCHAR')]}
+    result = published_navigation([spec], schemas,
+                                  {'nominations': ['congress', 'citation']})[0]
+    target = result['targets'][0]
+    assert result['available'] is True
+    assert target['completeKey'] is True
+    assert {p['status'] for p in target['requiredElementFields']} == {'runtime_checked'}
+    assert target['directions']['forward']['measurement'] == {'status': 'unknown', 'scope': 'unknown'}
+    assert target_keys(target, {'congress':119, 'number':14}, {}) is None
+
+
+def test_missing_source_and_private_receipt_target_have_explicit_dispositions():
+    from spicy_regs.explorer_navigation import published_navigation
+    spec = recipe('native_legal_read')
+    result = published_navigation([spec], {})[0]
+    assert result['available'] is False
+    assert result['targets'][0]['available'] is False
+    assert result['targets'][0]['table'] == 'native_legal_reference_reads'
+    assert result['targets'][0]['directions']['forward']['lookup']['status'] == 'unsupported'
+
+
+def test_struct_schema_parser_handles_quoted_and_nested_fields():
+    from spicy_regs.explorer_navigation import _path_status
+    typ = 'STRUCT("native key" STRUCT(id UBIGINT, "two, words" VARCHAR), other DECIMAL(18, 2))'
+    assert _path_status(typ, ['native key', 'id']) == 'published'
+    assert _path_status(typ, ['native key', 'two, words']) == 'published'
+    assert _path_status(typ, ['native key', 'missing']) == 'missing'
+
+
+def test_native_legal_target_declarations_are_unique_and_fcc_results_refuse_invalid_urls():
+    from spicy_regs.explorer_navigation import declarations, target_keys
+    specs = {s['id']: s for s in declarations()}
+    identities = [(t['table'], tuple(t['columns'])) for t in specs['native_legal_targets']['targets']]
+    assert len(identities) == len(set(identities))
+    target = specs['fcc_extraction_results']['targets'][0]
+    for url in ('https:///file.pdf', 'https://user:pass@example.org/file.pdf'):
+        assert target_keys(target, {'url': url, 'url_status': 'invalid'}, {}) is None
+    assert target_keys(target, {'url': 'https://example.org/file.pdf', 'url_status': 'usable'}, {}) == ['https://example.org/file.pdf']
+
+
+def test_scorecard_resolver_links_require_main_resolution_status():
+    from spicy_regs import table_joins
+    from spicy_regs.explorer_navigation import declarations, target_keys
+    specs = {s['id']: s for s in declarations(table_joins.RETIRED_PROCESSING_JOINS)}
+    target = specs['resolved_scorecard_item_links_congress_bills']['targets'][0]
+    for status in (None, 'ambiguous', 'unresolved'):
+        assert target_keys(target, {}, {'bill_id': '119-hr-1', 'resolution_status': status}) is None
+    assert target_keys(target, {}, {'bill_id': '119-hr-1', 'resolution_status': 'resolved'}) == ['119-hr-1']
+    assert not any(j.child == 'scorecard_item_links' and j.parent == 'congress_bills' for j in table_joins.JOINS)

@@ -4,7 +4,7 @@
 
 **Scorecard member item results**
 
-One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.
+One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.
 
 **Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
 
@@ -29,3 +29,7 @@ One publisher-reported member result for an item, with optional source-stated me
 | `counts_toward_metric` | `BOOLEAN` | Source-stated participation as true or false, or NULL when unstated. |
 | `adjustment_text` | `VARCHAR` | Source-stated adjustment, preserved as text; NULL when unstated. |
 | `reason_text` | `VARCHAR` | Source-stated reason, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

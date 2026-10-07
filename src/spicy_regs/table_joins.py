@@ -627,6 +627,13 @@ JOINS: tuple[Join, ...] = (
           'Matches the publisher identity and the exact source snapshot used for resolution. A newer source snapshot '
           'is not interchangeable.',
           expected_cardinality="one"),
+    *(_join(child, 'source_snapshot_id', 'scorecard_snapshots', 'snapshot_id',
+            0, 0, 'unmeasured',
+            'The resolver recorded this literal source snapshot. Main navigation also requires the same '
+            'scorecard edition; this association remains separate from the current business entity and '
+            'the recorded official-target resolution. No capture ID is interpreted as a snapshot ID.',
+            expected_cardinality="one")
+      for child in ('scorecard_member_links', 'scorecard_item_links')),
     _join('scorecard_member_links', 'bioguide_id',
           'members', 'bioguide_id',
           565, 0, 'scope',
@@ -1027,6 +1034,30 @@ _PROCESSING_JOIN_FIELDS = {
 
 
 def _processing_join(join):
+    # The original snapshot baselines describe receipt-era inputs. Portable
+    # main recipes expose these associations only when both schemas publish them.
+    if join.child == "scorecard_snapshots" or join.parent == "scorecard_snapshots":
+        return True
+    # Date evidence belongs to its dated_by namespace; bare ID equality would
+    # route Register and agenda IDs into Regulations.gov documents.
+    if join.child == "lifecycle_events" and join.parent == "documents":
+        return True
+    # Main read scopes use the maintained native_legal_read recipe. Keep the
+    # historical scalar baseline as lineage instead of publishing a second route.
+    if join.child == 'native_legal_references' and join.parent == 'native_legal_reference_reads':
+        return True
+    # The selected service term uses a guarded portable row recipe: processing
+    # keeps the native index as text while native subjects keep it as BIGINT.
+    if (join.child, join.child_columns, join.parent, join.parent_columns) == (
+        'member_vote_terms', ('bioguide_id', 'term_index'), 'member_terms', ('bioguide_id', 'term_index')
+    ):
+        return True
+    # Resolver outputs require the recorded resolution status, not bare equality.
+    # The same declarations supply guarded main-row navigation recipes.
+    if join.child in {'scorecard_member_links', 'scorecard_item_links'} and join.parent in {
+        'members', 'congress_bills', 'roll_call_votes', 'amendments',
+    }:
+        return True
     if join.child in _PROCESSING_TABLES or join.parent in _PROCESSING_TABLES:
         return True
     if join.child == "hearing_transcripts" and join.child_columns == ("bill_id",):
@@ -1040,7 +1071,7 @@ def _processing_join(join):
 def _native_join(join):
     def columns(table, names):
         return tuple(_NATIVE_JOIN_FIELDS.get((table, name), name) for name in names
-                     if (table, name) not in _NATIVE_SCOPE_FIELDS)
+                     if (table, name) not in _NATIVE_SCOPE_FIELDS or join.parent == "scorecard_snapshots")
     child, parent = columns(join.child, join.child_columns), columns(join.parent, join.parent_columns)
     if (child, parent) == (join.child_columns, join.parent_columns):
         return join

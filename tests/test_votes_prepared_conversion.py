@@ -74,13 +74,15 @@ def test_maintained_vote_preparation_and_publication_reuse(tmp_path, monkeypatch
 
 @pytest.mark.parametrize("change", ["order", "value", "metadata"])
 def test_vote_preparation_refuses_changed_restored_processing(tmp_path, monkeypatch, bucket, change):
-    publish_old(bucket, monkeypatch, tmp_path, "member-vote-terms", {"member_vote_terms": rows("member_vote_terms")})
+    old = publish_old(bucket, monkeypatch, tmp_path, "member-vote-terms", {"member_vote_terms": rows("member_vote_terms")})
     written = list(bucket.writes)
-    restore = subject_receipts.restore_processing_input
+    from spicy_regs.conversion_reads import _FamilyReader
+    compare = _FamilyReader.compare_original
+    intercepted = []
 
-    def changed_processing(*args, **kwargs):
-        path = restore(*args, **kwargs)
-        table = pq.read_table(path)
+    def changed_processing(reader, dataset, original, **kwargs):
+        intercepted.append(change)
+        table = pq.read_table(original)
         if change == "order":
             table = table.take(pa.array([1, 0]))
         elif change == "value":
@@ -88,10 +90,16 @@ def test_vote_preparation_refuses_changed_restored_processing(tmp_path, monkeypa
             table = table.set_column(index, table.schema.field(index), pa.array(["2025-01-24", "2025-01-23"]))
         else:
             table = table.replace_schema_metadata({**(table.schema.metadata or {}), b"changed": b"yes"})
-        pq.write_table(table, path)
-        return path
+        # Match the maintained native-conversion corruption controls: change
+        # real source bytes, then execute the actual streamed comparison.
+        pq.write_table(table, original)
+        return compare(reader, dataset, original, **kwargs)
 
-    monkeypatch.setattr(subject_receipts, "restore_processing_input", changed_processing)
-    with pytest.raises(conversion.ConversionRefused, match="Congress processing"):
+    monkeypatch.setattr(_FamilyReader, "compare_original", changed_processing)
+    reason = "schema or metadata" if change == "metadata" else "values, order or repetitions"
+    with pytest.raises(conversion.ConversionRefused, match=f"member_vote_terms does not restore.*{reason}") as refusal:
         convert("member-vote-terms", tmp_path / "prepared", publish=True)
+    assert intercepted == [change]
+    assert refusal.value.state == conversion.NOTHING_PUBLISHED
     assert bucket.writes == written
+    assert publication.current_index(BASE)["families"]["member-vote-terms"] == old

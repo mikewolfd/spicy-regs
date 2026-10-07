@@ -214,7 +214,7 @@ def test_actual_committee_producer_keeps_empty_read_checkpoints(tmp_path, monkey
     admit_bundle(tmp_path / "bundle2", tmp_path / "generation")
 
 
-def test_actual_native_reference_reader_emits_one_receipt_only_scope(tmp_path):
+def test_actual_native_reference_reader_emits_main_scopes_and_preserves_originals(tmp_path):
     from .test_native_legal_references import FIXTURES
     from spicy_regs.source_evidence import CaptureEvidence
     from spicy_regs.transforms.native_legal_references import build_native_legal_references
@@ -230,7 +230,8 @@ def test_actual_native_reference_reader_emits_one_receipt_only_scope(tmp_path):
     manifest = build_with_receipts(builder, tmp_path / "source", tmp_path / "bundle", generation_id="g")
     assert not any(manifest["refused_rows"].values())
     assert pq.read_metadata(tmp_path / "bundle/native_legal_references.parquet").num_rows == 33
-    assert manifest["subjects"]["native_legal_reference_reads"] == []
+    assert manifest["subjects"]["native_legal_reference_reads"] == ["native_legal_reference_reads.parquet"]
+    assert sorted(pq.read_table(tmp_path / "bundle/native_legal_reference_reads.parquet")["occurrence_count"].to_pylist()) == [2, 31]
     restored = restore_prior(tmp_path / "bundle", tmp_path / "prior")
     assert pq.read_metadata(restored["native_legal_reference_reads"]).num_rows == 2
 

@@ -2,4 +2,28 @@
 
 # `fec_collections`
 
-`fec_collections` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'fec_collections'`.
+**FEC collection runs**
+
+Scope, counts and outcomes of saved FEC collections. Links original source records to their collection; collection counts do not prove full source coverage.
+
+**Coverage.** Sampled. Selected FEC originals and queries retain their requested scope and outcome. Rows with NULL profile are caller coverage, refusal or context records, not parsed collections or successful empty queries. Profile `bulk` lists files rather than their rows. The fec_collection_cycles view gives cycles stated by bulk directory URLs. This metadata does not establish complete official FEC history. *(measured 2026-09-30)*
+
+- **Parquet file:** `fec_collections.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `collection_id` | `VARCHAR` | Caller-supplied label unique within the selected manifest. Join to fec_source_records.collection_id. |
+| `source_family` | `VARCHAR` | Caller-selected official FEC source-family identifier, checked against the inventory. Join to fec_source_catalog.source_family; this classification is not independently inferred from source content. |
+| `profile` | `VARCHAR` | Provider reader profile: committee, candidate, filing, legal, audit, bulk, positional, agency, agency-document, postgres or document. NULL for caller disposition/context rows, which were not parsed by a provider profile. |
+| `source_system_id` | `VARCHAR` | Provider identifier for the source system; NULL for caller disposition/context rows. |
+| `source_state_scope` | `VARCHAR` | Provider observation scope, such as observed-crawl; this does not imply a frozen publisher snapshot. |
+| `record_count` | `BIGINT` | Emitted source-record count as a decimal integer string. A metadata-only row emits zero; its unknown source population count remains NULL in receiverDisposition.sourceRecordCount. |
+| `relationship_count` | `BIGINT` | Number of relationship observations emitted from this collection, including explicit absence states rather than only positive edges. |
+| `record_outcome` | `VARCHAR` | Provider record outcome for parsed inputs. Metadata-only rows instead state retained_unparsed, refused, unresolved, inventory_only or selection_context; none means successful empty parsing. |
+| `requested_scope_json` | `VARCHAR` | JSON object preserving the query, source selection or bounds requested for this collection. |
+| `coverage_limits_json` | `VARCHAR` | JSON value preserving provider-stated coverage limits for the selected input. |
+| `collection_outcome_json` | `VARCHAR` | Complete provider outcome for parsed inputs, including tableFieldMapping and verified tableFieldDefinitions when selected. Optional callerContext holds separately hash-verified source/coverage facts. Metadata-only rows contain receiverDisposition and providerOutcome:null; they make no source parsing claim. |
+| `artifact_sha256` | `VARCHAR` | Digest of the verified provider source-release artifact; null for direct retained-query input that has no release artifact. |

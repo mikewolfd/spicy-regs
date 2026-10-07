@@ -33,6 +33,7 @@ def family_policies():
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy as identity_policy, REGISTRY
     from spicy_regs.transforms.fec_subject_receipts import dataset_policy as fec_policy
     from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
+    from spicy_regs.navigation_read_outcomes import POLICIES as navigation_outcomes
 
     result = {}
     def add(policy):
@@ -40,7 +41,7 @@ def family_policies():
         if old is not None and old.descriptor() != policy.descriptor():
             raise ValueError(f'Family policy conflict: {policy.dataset}')
         result[policy.dataset] = policy
-    for policy in (*courts.values(), *scorecards.values(), *government.values(), *shared_logs()):
+    for policy in (*courts.values(), *scorecards.values(), *government.values(), *navigation_outcomes.values(), *shared_logs()):
         add(policy)
     for name in INPUT_COLUMNS:
         add(congress_policy(name))

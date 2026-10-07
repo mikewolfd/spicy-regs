@@ -58,6 +58,35 @@ the size guard. A saved success report cannot supply the proof; prepared
 publication repeats the full checks while preserving the original seal and
 candidate bytes.
 
+Conversion uses one `ConversionReadOperation` for the complete native family.
+It admits the subject and receipt members once, holds their checked processing
+rows, and compares them directly with each retained original. Qualification
+does not write disposable restored Parquet files. The operation checks that
+members remain unchanged before reuse and rejects readers after it closes.
+Publication in the same process reuses the admitted bytes; anonymous readback
+downloads and independently admits the published generation. Download hashing
+and local artifact verification remain separate checks.
+
+If a writer completed its immutable generation but stopped before saving
+`conversion.json`, `--resume-generation` can qualify that generation without
+running the writer again. Its work directory must retain
+`captured-publication.v2.json`, the original inputs under `retained/`, and any
+required artifacts under `build/source-evidence/`. Pass the current clean main
+and installed wheel pins, the explicit family allow-list, and the historical
+`--expect-producer` commit. The command verifies the historical producer,
+shipped policy descriptors, native members, evidence, complete captured prior,
+and every original before creating the first preparation seal. It preserves
+the producer identity and records the current verifier separately. It does not
+publish; use `--publish-prepared` for the subsequent checked publication.
+
+```sh
+$UV run --frozen python scripts/convert_family_to_native.py \
+  --resume-generation "$RUN/bill-family/build/generations/<digest>" \
+  --work "$RUN/bill-family" --allow bill-family \
+  --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" \
+  --expect-producer <original-producer-commit> --remote <main-remote>
+```
+
 Each run writes `conversion.json` in its `--work` directory. It holds the
 captured entry and the generation the run intends to publish, and it is
 saved before the pointer write, so `--rollback` works even when the process

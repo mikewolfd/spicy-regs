@@ -23,14 +23,10 @@
       "voter_registration_amount",
       "voter_id_amount",
       "gotv_amount",
-      "generic_campaign_amount"
-    ],
-    "receipt": [
+      "generic_campaign_amount",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -41,6 +37,14 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "source_undefined_11",
       "source_undefined_12",
       "source_undefined_13",
@@ -75,10 +79,7 @@
       "total_amount_status",
       "transaction_date_raw",
       "transaction_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
       "submission_conformance_status",
       "source_internal_use",
       "voter_registration_amount_raw",
@@ -88,15 +89,13 @@
       "gotv_amount_raw",
       "gotv_amount_status",
       "generic_campaign_amount_raw",
-      "generic_campaign_amount_status",
-      "source_representation_role"
+      "generic_campaign_amount_status"
     ],
     "mapped": []
   },
   "fec_agency_mapping_dispositions": {
-    "receipt_only": true,
-    "keep": [],
-    "receipt": [
+    "receipt_only": false,
+    "keep": [
       "collection_id",
       "source_record_id",
       "native_kind",
@@ -104,7 +103,12 @@
       "reason",
       "target_record_ids_json"
     ],
-    "mapped": []
+    "receipt": [],
+    "mapped": [],
+    "observation_control": true,
+    "identity_fields": [
+      "observation_ordinal"
+    ]
   },
   "fec_agency_report_documents": {
     "receipt_only": false,
@@ -113,9 +117,7 @@
       "report_id",
       "url",
       "label",
-      "relation_type"
-    ],
-    "receipt": [
+      "relation_type",
       "identity_version",
       "mapping_version",
       "collection_id",
@@ -124,7 +126,9 @@
       "source_locator_json",
       "source_authority",
       "selection_evidence_sha256",
-      "source_url",
+      "source_url"
+    ],
+    "receipt": [
       "observed_at",
       "subrecord_pointer",
       "body_status",
@@ -138,9 +142,7 @@
       "record_id",
       "report_id",
       "text_kind",
-      "text"
-    ],
-    "receipt": [
+      "text",
       "identity_version",
       "mapping_version",
       "collection_id",
@@ -149,7 +151,9 @@
       "source_locator_json",
       "source_authority",
       "selection_evidence_sha256",
-      "source_url",
+      "source_url"
+    ],
+    "receipt": [
       "observed_at",
       "subrecord_pointer",
       "text_status",
@@ -173,9 +177,7 @@
       "fiscal_year",
       "period_start",
       "period_end",
-      "publication_date"
-    ],
-    "receipt": [
+      "publication_date",
       "identity_version",
       "mapping_version",
       "collection_id",
@@ -184,7 +186,9 @@
       "source_locator_json",
       "source_authority",
       "selection_evidence_sha256",
-      "source_url",
+      "source_url"
+    ],
+    "receipt": [
       "observed_at",
       "subrecord_pointer",
       "title_basis",
@@ -279,14 +283,10 @@
       "conduit_committee_id",
       "financial_grain",
       "levin_share",
-      "account_event_identifier"
-    ],
-    "receipt": [
+      "account_event_identifier",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -297,6 +297,14 @@
       "current_record_status",
       "filing_link_status",
       "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "allocation_basis_status",
       "total_amount_raw",
       "total_amount_status",
@@ -310,17 +318,13 @@
       "event_purpose_date_status",
       "transaction_date_raw",
       "transaction_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
       "submission_conformance_status",
       "source_space_holder",
       "source_internal_use",
       "aggregation_status",
       "levin_share_raw",
-      "levin_share_status",
-      "source_representation_role"
+      "levin_share_status"
     ],
     "mapped": []
   },
@@ -377,14 +381,10 @@
       "fundraising_activity_indicator",
       "exempt_activity_indicator",
       "direct_candidate_support_indicator",
-      "ratio_code"
-    ],
-    "receipt": [
+      "ratio_code",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -395,15 +395,20 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "aggregation_status",
       "actual_federal_support_amount_raw",
       "actual_federal_support_amount_status",
       "actual_nonfederal_support_amount_raw",
       "actual_nonfederal_support_amount_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
       "submission_conformance_status",
       "source_placeholder_2",
       "source_placeholder_3",
@@ -430,8 +435,7 @@
       "source_placeholder_24",
       "source_placeholder_25",
       "source_placeholder_26",
-      "source_internal_use",
-      "source_representation_role"
+      "source_internal_use"
     ],
     "mapped": []
   },
@@ -451,13 +455,10 @@
       "disposition",
       "currency",
       "supporting_document_record_id",
-      "amount"
-    ],
-    "receipt": [
+      "amount",
       "identity_version",
       "mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -465,7 +466,10 @@
       "source_pointer",
       "source_authority",
       "selection_evidence_sha256",
-      "query_completeness",
+      "query_completeness"
+    ],
+    "receipt": [
+      "mapping_reason_json",
       "amount_raw",
       "amount_status"
     ],
@@ -525,14 +529,10 @@
       "source_cycle",
       "bundled_amount",
       "semiannual_bundled_amount",
-      "transaction_date"
-    ],
-    "receipt": [
+      "transaction_date",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -543,6 +543,14 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "aggregation_status",
       "bundled_amount_raw",
       "bundled_amount_status",
@@ -550,12 +558,8 @@
       "semiannual_bundled_amount_status",
       "transaction_date_raw",
       "transaction_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -593,14 +597,10 @@
       "amount_status",
       "source_cycle",
       "amount",
-      "transaction_date"
-    ],
-    "receipt": [
+      "transaction_date",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -611,10 +611,14 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "amount_raw",
       "transaction_date_raw",
-      "transaction_date_status",
-      "source_representation_role"
+      "transaction_date_status"
     ],
     "mapped": []
   },
@@ -637,14 +641,10 @@
       "reporting_entity_id",
       "contributor_name",
       "reported_cycle",
-      "observation_grain"
-    ],
-    "receipt": [
+      "observation_grain",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -654,13 +654,17 @@
       "correction_applicability_status",
       "current_record_status",
       "filing_link_status",
+      "query_completeness",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "entity_reference_status",
       "amount_raw",
       "amount_status",
       "reported_count_status",
-      "query_completeness",
-      "contributor_identity_status",
-      "source_representation_role"
+      "contributor_identity_status"
     ],
     "mapped": [
       "dimensions_json"
@@ -745,14 +749,10 @@
       "conduit_zip",
       "source_amendment_code",
       "source_unlimited_spending",
-      "transaction_code"
-    ],
-    "receipt": [
+      "transaction_code",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -763,6 +763,14 @@
       "current_record_status",
       "filing_link_status",
       "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "amount_raw",
       "amount_status",
       "aggregate_general_election_amount_raw",
@@ -773,12 +781,8 @@
       "reported_aggregate_amount_status",
       "transaction_date_raw",
       "transaction_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -842,14 +846,10 @@
       "conduit_zip",
       "source_amendment_code",
       "source_original_transaction_id",
-      "source_supr_transaction_id"
-    ],
-    "receipt": [
+      "source_supr_transaction_id",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -860,6 +860,14 @@
       "current_record_status",
       "filing_link_status",
       "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "opening_balance_raw",
       "opening_balance_status",
       "closing_balance_raw",
@@ -872,12 +880,8 @@
       "period_start_status",
       "period_end_raw",
       "period_end_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -962,14 +966,10 @@
       "source_refund_or_excess_disposal",
       "communication_date",
       "financial_grain",
-      "reported_account_form"
-    ],
-    "receipt": [
+      "reported_account_form",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -979,21 +979,25 @@
       "correction_applicability_status",
       "current_record_status",
       "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "amount_raw",
       "amount_status",
       "transaction_date_raw",
       "transaction_date_status",
       "refunded_bundled_semiannual_amount_raw",
       "refunded_bundled_semiannual_amount_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
       "submission_conformance_status",
       "communication_date_raw",
       "communication_date_status",
-      "aggregation_status",
-      "source_representation_role"
+      "aggregation_status"
     ],
     "mapped": []
   },
@@ -1025,14 +1029,10 @@
       "allocated_candidate_amount",
       "disbursement_date",
       "communication_date",
-      "public_disbursement_date"
-    ],
-    "receipt": [
+      "public_disbursement_date",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1043,6 +1043,11 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "event_equivalence_status",
       "amount_aggregation_status",
       "amount_raw",
@@ -1054,15 +1059,13 @@
       "communication_date_raw",
       "communication_date_status",
       "public_disbursement_date_raw",
-      "public_disbursement_date_status",
-      "source_representation_role"
+      "public_disbursement_date_status"
     ],
     "mapped": []
   },
   "fec_filing_definition_evidence": {
-    "receipt_only": true,
-    "keep": [],
-    "receipt": [
+    "receipt_only": false,
+    "keep": [
       "target_table",
       "target_record_id",
       "target_generation_scope",
@@ -1077,25 +1080,34 @@
       "witness_sha256",
       "witness_locator_json"
     ],
-    "mapped": []
+    "receipt": [],
+    "mapped": [],
+    "observation_control": true,
+    "identity_fields": [
+      "observation_ordinal"
+    ]
   },
   "fec_filing_definitions": {
-    "receipt_only": true,
-    "keep": [],
-    "receipt": [
+    "receipt_only": false,
+    "keep": [
       "record_id",
       "family",
       "version",
       "form",
-      "workbook_sha256",
+      "workbook_sha256"
+    ],
+    "receipt": [
       "layout_json"
     ],
-    "mapped": []
+    "mapped": [],
+    "observation_control": true,
+    "identity_fields": [
+      "observation_ordinal"
+    ]
   },
   "fec_filing_header_associations": {
-    "receipt_only": true,
-    "keep": [],
-    "receipt": [
+    "receipt_only": false,
+    "keep": [
       "record_id",
       "policy_version",
       "target_table",
@@ -1123,7 +1135,12 @@
       "filing_observation_count",
       "filing_observation_ids"
     ],
-    "mapped": []
+    "receipt": [],
+    "mapped": [],
+    "observation_control": true,
+    "identity_fields": [
+      "observation_ordinal"
+    ]
   },
   "fec_filing_report_observations": {
     "receipt_only": false,
@@ -1154,14 +1171,10 @@
       "signed_date",
       "election_date",
       "source_amendment_date",
-      "effective_date"
-    ],
-    "receipt": [
+      "effective_date",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1172,9 +1185,14 @@
       "current_record_status",
       "filing_link_status",
       "definition_set_id",
-      "declared_format_version",
       "filing_header_record_id",
       "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
+      "declared_format_version",
       "submission_conformance_status",
       "definition_applicability_status",
       "aggregation_status",
@@ -1190,8 +1208,7 @@
       "source_amendment_date_status",
       "effective_date_raw",
       "effective_date_status",
-      "native_fields",
-      "source_representation_role"
+      "native_fields"
     ],
     "mapped": [
       "reported_measures"
@@ -1213,13 +1230,10 @@
       "source_cycle",
       "correction_operation",
       "currency",
-      "amount_kind"
-    ],
-    "receipt": [
+      "amount_kind",
       "identity_version",
       "mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1229,14 +1243,17 @@
       "current_record_status",
       "filing_link_status",
       "definition_set_id",
-      "declared_format_version",
       "filing_header_record_id",
       "filing_header_locator_json",
+      "correction_applicability_status",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "mapping_reason_json",
+      "declared_format_version",
       "submission_conformance_status",
       "value_mapping_version",
-      "correction_applicability_status",
-      "native_fields",
-      "source_representation_role"
+      "native_fields"
     ],
     "mapped": [
       "text_fragments"
@@ -1264,16 +1281,16 @@
       "amount",
       "reported_date",
       "period_start",
-      "period_end"
-    ],
-    "receipt": [
+      "period_end",
       "mapping_version",
       "collection_id",
       "source_authority",
       "source_url",
       "source_sha256",
       "context_sha256",
-      "source_context_pointer",
+      "source_context_pointer"
+    ],
+    "receipt": [
       "observed_at_json",
       "worksheet_member",
       "worksheet_sha256",
@@ -1320,14 +1337,10 @@
       "amount",
       "reported_aggregate_amount",
       "transaction_date",
-      "image_number"
-    ],
-    "receipt": [
+      "image_number",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1337,17 +1350,21 @@
       "correction_applicability_status",
       "current_record_status",
       "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "amount_raw",
       "reported_aggregate_amount_raw",
       "reported_aggregate_amount_status",
       "transaction_date_raw",
       "transaction_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -1418,14 +1435,10 @@
       "memo_text",
       "disbursement_date",
       "signed_date",
-      "financial_grain"
-    ],
-    "receipt": [
+      "financial_grain",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1435,6 +1448,14 @@
       "correction_applicability_status",
       "current_record_status",
       "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "spender_identity_status",
       "amount_raw",
       "amount_status",
@@ -1450,13 +1471,9 @@
       "disbursement_date_status",
       "signed_date_raw",
       "signed_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
       "submission_conformance_status",
-      "aggregation_status",
-      "source_representation_role"
+      "aggregation_status"
     ],
     "mapped": []
   },
@@ -1493,14 +1510,10 @@
       "source_cycle",
       "amount",
       "transaction_date",
-      "candidate_id"
-    ],
-    "receipt": [
+      "candidate_id",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1510,11 +1523,15 @@
       "correction_applicability_status",
       "current_record_status",
       "filing_link_status",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "amount_raw",
       "amount_status",
       "transaction_date_raw",
-      "transaction_date_status",
-      "source_representation_role"
+      "transaction_date_status"
     ],
     "mapped": []
   },
@@ -1535,13 +1552,10 @@
       "date_precision",
       "media_type",
       "source_association_kind",
-      "document_date"
-    ],
-    "receipt": [
+      "document_date",
       "identity_version",
       "mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1549,7 +1563,10 @@
       "source_pointer",
       "source_authority",
       "selection_evidence_sha256",
-      "query_completeness",
+      "query_completeness"
+    ],
+    "receipt": [
+      "mapping_reason_json",
       "document_identity_status",
       "title_status",
       "category_status",
@@ -1580,13 +1597,10 @@
       "amount_kind",
       "currency",
       "event_date",
-      "amount"
-    ],
-    "receipt": [
+      "amount",
       "identity_version",
       "mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1594,7 +1608,10 @@
       "source_pointer",
       "source_authority",
       "selection_evidence_sha256",
-      "query_completeness",
+      "query_completeness"
+    ],
+    "receipt": [
+      "mapping_reason_json",
       "event_date_raw",
       "event_date_status",
       "description_status",
@@ -1636,13 +1653,10 @@
       "final_determination_amount",
       "payment_amount",
       "reason_to_believe_fine_amount",
-      "treasury_referral_amount"
-    ],
-    "receipt": [
+      "treasury_referral_amount",
       "identity_version",
       "mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1651,10 +1665,13 @@
       "source_authority",
       "selection_evidence_sha256",
       "query_completeness",
+      "source_url"
+    ],
+    "receipt": [
+      "mapping_reason_json",
       "title_status",
       "description_status",
       "status_status",
-      "source_url",
       "source_url_status",
       "reported_cycle_status",
       "is_pending_status",
@@ -1698,13 +1715,10 @@
       "native_entity_id",
       "entity_namespace",
       "entity_type",
-      "document_record_id"
-    ],
-    "receipt": [
+      "document_record_id",
       "identity_version",
       "mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1712,7 +1726,10 @@
       "source_pointer",
       "source_authority",
       "selection_evidence_sha256",
-      "query_completeness",
+      "query_completeness"
+    ],
+    "receipt": [
+      "mapping_reason_json",
       "role_status",
       "reported_name_status",
       "native_entity_id_status",
@@ -1748,14 +1765,10 @@
       "employer",
       "occupation",
       "source_cycle",
-      "guaranteed_amount"
-    ],
-    "receipt": [
+      "guaranteed_amount",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1766,15 +1779,19 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "loan_link_status",
       "guaranteed_amount_raw",
       "guaranteed_amount_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -1835,14 +1852,10 @@
       "depository_established_date",
       "depository_authorization_date",
       "treasurer_signed_date",
-      "authorized_signed_date"
-    ],
-    "receipt": [
+      "authorized_signed_date",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1853,6 +1866,14 @@
       "current_record_status",
       "filing_link_status",
       "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "aggregation_status",
       "loan_amount_raw",
       "loan_amount_status",
@@ -1876,12 +1897,8 @@
       "treasurer_signed_date_status",
       "authorized_signed_date_raw",
       "authorized_signed_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -1951,14 +1968,10 @@
       "lender_candidate_name",
       "source_amendment_code",
       "source_original_transaction_id",
-      "source_supr_transaction_id"
-    ],
-    "receipt": [
+      "source_supr_transaction_id",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -1969,6 +1982,14 @@
       "current_record_status",
       "filing_link_status",
       "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "original_loan_amount_raw",
       "original_loan_amount_status",
       "outstanding_balance_raw",
@@ -1977,12 +1998,8 @@
       "payments_to_date_status",
       "incurred_date_raw",
       "incurred_date_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
-      "submission_conformance_status",
-      "source_representation_role"
+      "submission_conformance_status"
     ],
     "mapped": []
   },
@@ -1998,9 +2015,7 @@
       "reported_status",
       "status_basis",
       "questioned_costs",
-      "funds_for_better_use"
-    ],
-    "receipt": [
+      "funds_for_better_use",
       "identity_version",
       "mapping_version",
       "collection_id",
@@ -2009,7 +2024,9 @@
       "source_locator_json",
       "source_authority",
       "selection_evidence_sha256",
-      "source_url",
+      "source_url"
+    ],
+    "receipt": [
       "observed_at",
       "subrecord_pointer",
       "questioned_costs_raw",
@@ -2118,14 +2135,10 @@
       "contributor_candidate_office",
       "contributor_candidate_state",
       "contributor_candidate_district",
-      "reported_account_form"
-    ],
-    "receipt": [
+      "reported_account_form",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -2134,9 +2147,17 @@
       "selection_evidence_sha256",
       "correction_applicability_status",
       "current_record_status",
-      "date_status",
       "filing_link_status",
       "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
+      "date_status",
       "amount_raw",
       "contributor_aggregate_ytd_raw",
       "contributor_aggregate_ytd_status",
@@ -2144,13 +2165,9 @@
       "transaction_date_status",
       "reported_aggregate_amount_raw",
       "reported_aggregate_amount_status",
-      "definition_set_id",
       "declared_format_version",
-      "filing_header_record_id",
-      "filing_header_locator_json",
       "submission_conformance_status",
-      "aggregation_status",
-      "source_representation_role"
+      "aggregation_status"
     ],
     "mapped": []
   },
@@ -2169,9 +2186,7 @@
       "bound_value",
       "fiscal_year",
       "period_start",
-      "period_end"
-    ],
-    "receipt": [
+      "period_end",
       "identity_version",
       "mapping_version",
       "collection_id",
@@ -2181,12 +2196,14 @@
       "source_authority",
       "selection_evidence_sha256",
       "source_url",
+      "value_status",
+      "mapping_status"
+    ],
+    "receipt": [
       "observed_at",
       "subrecord_pointer",
       "raw_value",
-      "value_status",
-      "unit_status",
-      "mapping_status"
+      "unit_status"
     ],
     "mapped": [
       "definition_json",
@@ -2209,14 +2226,10 @@
       "period_basis",
       "source_cycle",
       "period_start",
-      "period_end"
-    ],
-    "receipt": [
+      "period_end",
       "identity_version",
       "mapping_version",
-      "value_mapping_version",
       "mapping_status",
-      "mapping_reason_json",
       "collection_id",
       "source_record_id",
       "source_sha256",
@@ -2226,12 +2239,16 @@
       "correction_applicability_status",
       "current_record_status",
       "filing_link_status",
+      "source_representation_role"
+    ],
+    "receipt": [
+      "value_mapping_version",
+      "mapping_reason_json",
       "entity_reference_status",
       "period_start_raw",
       "period_start_status",
       "period_end_raw",
-      "period_end_status",
-      "source_representation_role"
+      "period_end_status"
     ],
     "mapped": [
       "attributes_json",

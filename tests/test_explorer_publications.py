@@ -178,7 +178,8 @@ def test_separate_table_enables_composite_join_without_changing_main_identity(fi
                    "parent_columns": ["id", "edition"], "kind": "unmeasured"}
     bundle = build_bundle(index, extra_tables=extra, descriptions={"comments": {}, "dockets": {}},
                           registry={"sources": {}}, join_record={"joins": [declaration]}, audit={})
-    assert bundle["joins"] == [declaration]
+    assert len(bundle["joins"]) == 1
+    assert all(bundle["joins"][0][key] == value for key, value in declaration.items())
     assert bundle["omittedJoins"] == []
     assert bundle["publication"]["families"] == {"dockets": "sha256:" + "c" * 64}
     assert bundle["tables"]["comments"]["publicationIdentity"] == extra["comments"]["publicationIdentity"]

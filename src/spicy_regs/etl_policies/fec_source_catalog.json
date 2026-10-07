@@ -1,24 +1,16 @@
 {
   "dataset": "fec_source_catalog",
-  "policy_version": "fec-identity-context-receipts/1",
-  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-  "identity_fields": [],
+  "policy_version": "fec-identity-context-receipts/2",
+  "subject_schema": "/////5gCAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAsAAAAgAgAA2AEAAKwBAAB4AQAARAEAAAwBAADYAAAApAAAAGwAAAA4AAAABAAAABz+//8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb3ZlcmFnZV9ub3RlAAAAUP7//0z+//8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjYXRhbG9ndWVkX2F0AAAAgP7//3z+//8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABwcm92aWRlcl92ZXJzaW9uAAAAALT+//+w/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY2F0YWxvZ19zaGEyNTYAAOT+///g/v//AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAcmVmZXJlbmNlc19qc29uABT///8Q////AAABBRAAAAAkAAAABAAAAAAAAAASAAAAYnVsa19mYW1pbGllc19qc29uAABI////RP///wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAGluZGV4ZXNfanNvbgAAAAB4////dP///wAAAQUQAAAAIAAAAAQAAAAAAAAADwAAAGFwaV9yb3V0ZXNfanNvbgCo////pP///wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHRpdGxlAAAA0P///8z///8AAAEFEAAAACQAAAAEAAAAAAAAAA0AAABzb3VyY2VfZmFtaWx5AAAABAAEAAQAAAAQABQACAAGAAcADAAAABAAEAAAAAAAAQIQAAAALAAAAAQAAAAAAAAAEwAAAG9ic2VydmF0aW9uX29yZGluYWwACAAMAAgABwAIAAAAAAAAAUAAAAAAAAAA",
+  "identity_fields": [
+    "observation_ordinal"
+  ],
   "receipt_fields": [
-    "source_family",
-    "title",
-    "api_routes_json",
-    "indexes_json",
-    "bulk_families_json",
-    "references_json",
     "source_metadata_json",
-    "catalog_sha256",
-    "provider_version",
-    "catalogued_at",
-    "coverage_note",
     "conversion_inputs",
     "conversion_diagnostics",
     "source_input"
   ],
-  "receipt_only": true,
+  "receipt_only": false,
   "nullable_identity_fields": []
 }

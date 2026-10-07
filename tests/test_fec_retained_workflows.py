@@ -64,13 +64,15 @@ def test_real_release_and_capture_transfer_build_complete_generation(tmp_path, m
         "artifact.json",
         "members.json",
         "fec_relationships.parquet",
+        "fec_collections.parquet",
+        "fec_source_records.parquet",
         "etl_receipts.parquet",
     }
-    from spicy_regs.transforms.fec_identity_receipts import read_identity_processing
+    from spicy_regs.transforms.fec_identity_receipts import read_identity_rows
     root = json.loads((generation / "artifact.json").read_text())
     generation_id = root["spec"]["etlReceipts"]["generationId"]
-    records = list(read_identity_processing(generation, "fec_source_records", generation_id=generation_id))
-    collections = list(read_identity_processing(generation, "fec_collections", generation_id=generation_id))
+    records = list(read_identity_rows(generation, "fec_source_records", generation_id=generation_id))
+    collections = list(read_identity_rows(generation, "fec_collections", generation_id=generation_id))
     expected = _load_fixture_rows(tmp_path)
     assert [{key: row[key] for key in original} for row, original in zip(records, expected, strict=True)] == expected
     evidence = next(path for path in (FIXTURE / "release-blobs/sha256").iterdir() if is_zipfile(path))

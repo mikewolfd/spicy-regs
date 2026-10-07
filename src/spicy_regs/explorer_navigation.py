@@ -7,8 +7,12 @@ not read source rows. Existing source-occurrence SQL views remain available.
 from __future__ import annotations
 
 import re
+import json
+from datetime import date, datetime
+from pathlib import Path
 from collections.abc import Mapping
 from copy import deepcopy
+from functools import lru_cache
 
 
 def part(path: str, *, row: bool = False, transform: str | None = None) -> dict:
@@ -53,8 +57,96 @@ TREATY = route("treaties", ("congress_received", "number", "suffix"), (
 
 
 
+def _regulatory_navigation() -> list[dict]:
+    """Reuse native occurrence definitions; never pair independent memberships."""
+    from spicy_regs.relationship_views.regulations_native import ARRAYS
+
+    targets = {
+        "proceeding": ("proceedings", "proceeding_id", ".+"),
+        "regulations_docket": ("dockets", "docket_id", ".+"),
+        "rin": ("unified_agenda", "rin", r"[0-9]{4}-[A-Z0-9]{4}"),
+    }
+    selected = {"comment_period_proceedings", "comment_period_dockets", "comment_period_rins",
+                "document_additional_rins", "proceeding_dockets", "proceeding_rins",
+                "proceeding_federal_register", "federal_register_rins"}
+    specs = []
+    for name, source, _identity, field, kind, value in ARRAYS:
+        if name not in selected:
+            continue
+        if value != "item":
+            raise ValueError("Portable regulatory membership requires its native item")
+        if kind == "dated_federal_register":
+            target = _dated_register_target("", row=False)
+        else:
+            table, column, pattern = targets[kind]
+            target = route(table, (column,), (key(part(""), pattern=pattern),))
+        specs.append(array(name, source, (field,), (target,),
+                           meaning="Each independent native membership. Repeated occurrences remain visible; RINs return every selected agenda edition, with no latest choice or positional pairing."))
+    specs.append(array("comment_period_evidence", "comment_periods", ("evidence_occurrences",), (
+        route("documents", ("document_id",), (key(part("document_id")),),
+              guard("source", values=("documents.comment_end_date",)),
+              {**part("evidence_id"), "sameAs": part("document_id")}),
+        route("federal_register", ("document_number", "publication_date"), (
+            key(part("document_number"), pattern=r"[A-Za-z0-9._-]+"),
+            key(part("publication_date", transform="canonical-date"))),
+              guard("source", values=("federal_register.comments_close_on",)),
+              {**part("evidence_id", transform="fr-document-number"), "sameAs": part("document_number")},
+              {**part("evidence_id", transform="fr-publication-date"), "sameAs": part("publication_date")}),
+    ), meaning="Each retained window or quiet notice follows its own source namespace. A Register reference requires its native number and publication date; period opening and closing dates do not supply that identity."))
+    specs.append(array("lifecycle_date_evidence", "lifecycle_events", (), (
+        route("documents", ("document_id",), (key(part("document_id", row=True)),),
+              guard("dated_by", row=True, values=("regulations_gov",))),
+        _dated_register_target("document_id", row=True,
+                               guards=(guard("dated_by", row=True, values=("federal_register",)),)),
+        route("regulatory_agenda_items", ("agenda_item_id",), (key(part("document_id", row=True)),),
+              guard("dated_by", row=True, values=("unified_agenda",))),
+    ), mode="row", meaning="The source that supplied the event date routes document_id, independently of the source that supplied its stage. The event date and evidence_id never manufacture a target key."))
+    return specs
+
+
+def _dated_register_target(path: str, *, row: bool, guards: tuple = ()) -> dict:
+    return route("federal_register", ("document_number", "publication_date"), (
+        key(part(path, row=row, transform="fr-document-number")),
+        key(part(path, row=row, transform="fr-publication-date"))), *guards)
+
+
+def _recorded_source_navigation() -> list[dict]:
+    # The court writer admits this exact native tuple against the recorded
+    # selected parent. Lookup compares current main fields, not publication pins.
+    captured = (
+        {**part("sha1_matches", row=True, transform="native-boolean"), "values": ["true"]},
+        {**part("actual_sha1", row=True), "sameAs": part("native_sha1", row=True)},
+        guard("native_sha1", row=True, pattern=r"[a-f0-9]{40}"),
+        guard("source_sha256", row=True, pattern=r"sha256:[a-f0-9]{64}"),
+        guard("opinion_body_id", row=True, pattern=r"court-opinion-body:[a-f0-9]{64}"),
+        guard("opinion_id", row=True, pattern=NUM),
+        guard("cluster_id", row=True, pattern=NUM),
+        guard("source_url", row=True, pattern=r"https://[^\s]+"),
+        guard("parent_artifact_digest", row=True, pattern=r"(?:sha256:)?[a-f0-9]{64}"),
+        guard("parent_member_sha256", row=True, pattern=r"(?:sha256:)?[a-f0-9]{64}"),
+        guard("parent_member_byte_size", row=True, pattern=NUM),
+    )
+    specs = [array("court_captured_opinion", "court_opinion_pdf_extractions", (), (
+        route("court_opinions", ("opinion_id", "cluster_id", "sha1", "download_url"),
+              tuple(key(part(field, row=True)) for field in
+                    ("opinion_id", "cluster_id", "native_sha1", "source_url")), *captured),
+    ), mode="row", meaning="Recorded capture and parent data qualify this text. A match requires the opinion ID, opinion group, fingerprint and offered URL together. A match in current data does not prove it was the original parent publication."),
+        array("court_captured_source", "court_opinion_pdf_extractions", (), (
+            route("@url", ("url",), (key(part("source_url", row=True)),), *captured),
+        ), mode="row", meaning="The literal source URL recorded for this qualified body. Following the publisher URL does not retrieve or verify the retained capture.")]
+    # Derive the table set from maintained policies. Availability still requires
+    # the selected main schema to publish each association field.
+    for policy in sorted(Path(__file__).with_name("etl_policies").glob("scorecard*.json")):
+        source = json.loads(policy.read_text())["dataset"]
+        specs.append(array(source + "_recorded_source", source, (), (
+            route("@url", ("url",), (key(part("source_url", row=True), pattern=r"https://[^\s]+"),),
+                  guard("capture_id", row=True), guard("source_path", row=True)),
+        ), mode="row", meaning="The publisher URL associated with the recorded capture ID and source path. Capture IDs are opaque; this URL does not imply a public capture or extracted document target."))
+    return specs
+
+
 def declarations(processing_joins: tuple = ()) -> list[dict]:
-    """Explicit source relationships plus formerly receipt-only keys with selected receipt fallbacks."""
+    """Explicit source relationships; receipt fields retain inspection context only."""
     specs = [
         array("meeting_nominations", "committee_meetings", ("nomination_references_json",), (NOMINATION,),
               meaning="Nominations explicitly listed for this meeting; nomination partitions stay distinct."),
@@ -78,8 +170,10 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
               meaning="Match both the FCC proceeding name and native numeric ID; missing IDs remain unsupported."),
         array("fcc_filing_documents", "fcc_filings", ("documents",),
               (route("@url", ("url",), (key(part("src"), pattern=r"https://[^\s]+"),)),),
-              meaning="Document URLs offered by the FCC; offering a URL does not establish capture or extraction.",
-              receipt_fields=("native_fields_json", "pdf_extraction_results_json"), element_path=("documents",)),
+              meaning="Document URLs offered by the FCC; offering a URL does not establish capture or extraction."),
+        array("fcc_extraction_results", "fcc_filings", ("extraction_results",),
+              (route("@url", ("url",), (key(part("url"), pattern=r"https://[^\s]+"),), guard("url_status", values=("usable",))),),
+              meaning="Recorded extraction URLs. Status and digest describe retained results; public capture and text access remain unverified."),
         array("house_communication_record", "house_communications", (),
               (route("record_issues", ("package_id",), (key(part("record_package_id", row=True)),)),),
               meaning="The exact Congressional Record package that supplied this communication.",
@@ -90,13 +184,16 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
     ]
     for source, identity in (("nominations", ("congress", "citation")),
                              ("committee_meetings", ("congress", "chamber", "event_id")),
-                             ("house_communications", ("congress", "communication_type", "number"))):
+                             ("house_communications", ("communication_id",))):
         specs.append(array(source + "_detail_attempts", source, (),
-                           (route("@receipt:congress_acquisition", ("event", *identity),
-                                  (key({**part(""), "literal": "congress-detail-result"}),
-                                   *(key(part(column, row=True)) for column in identity))),),
+                           (route(source + "_detail_reads", identity,
+                                  tuple(key(part(column, row=True)) for column in identity)),),
                            meaning="Detail read attempts for this exact record. Read and failed attempts stay visible; no recorded attempt does not mean an empty response.",
                            mode="row"))
+    specs.append(array("house_record_enrichment_outcomes", "house_communications", (),
+                       (route("house_record_enrichment_results", ("communication_id",),
+                              (key(part("communication_id", row=True)),)),), mode="row",
+                       meaning="Recorded enrichment checks for this communication, including incomplete reads, conflicts and exact passage witnesses."))
     specs += [
         array("bill_related_bills", "congress_bills", ("related_bills", "related_bills_json"),
               (route("congress_bills", ("bill_id",),
@@ -137,51 +234,110 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
     legal_targets = [route(r.table, r.identity, tuple(key(part(c)) for c in r.identity),
                            guard("target_table_selected", values=(r.table,)),
                            guard("target_status", values=("found", "ambiguous")))
-                     for r in dict.fromkeys(ROUTES.values())]
+                     for r in {(r.table, r.identity): r for r in ROUTES.values()}.values()]
     specs.append(array("native_legal_targets", "native_legal_references", ("target_candidates", "target_candidates_json"), tuple(legal_targets),
                        receipt_fields=("target_candidates_json",),
                        candidates=True,
-                       meaning="Every recorded candidate identity, including ambiguous matches. Missing, unsupported and unchecked targets remain explicit."))
+                       meaning="Recorded candidate identities, including ambiguous matches. Links check the currently selected target table; recorded resolution and pins do not prove a current match. Missing, unsupported and unchecked outcomes remain visible."))
     specs.append(array("native_legal_read", "native_legal_references", (),
-                       (route("@receipt:native_legal_reference_reads", ("scope_id",), (key(part("scope_id", row=True)),)),),
+                       (route("native_legal_reference_reads", ("scope_id",), (key(part("scope_id", row=True)),)),),
                        meaning="The complete-read scope for this observed legal reference.", mode="row"))
+    for source, target, columns in (
+        ("committee_reports", "committee_report_read_outcomes", ("package_id",)),
+        ("document_citations", "document_citation_read_outcomes", ("document_kind", "document_key", "body_version_id")),
+    ):
+        specs.append(array(source + "_read_outcomes", source, (),
+                           (route(target, columns, tuple(key(part(column, row=True)) for column in columns)),),
+                           mode="row", meaning="Recorded reads for the exact document and body scope; no recorded row does not mean a successful empty read."))
     for source, field, target, column in (("fec_committee_observations", "candidate_ids_json", "fec_candidate_history", "candidate_id"),
                                            ("fec_committee_observations", "sponsor_candidate_ids_json", "fec_candidate_history", "candidate_id")):
         specs.append(array(source + "_" + field, source, (field, field.removesuffix("_json")),
                            (route(target, (column,), (key(part(""), pattern=r"[HSP][0-9A-Z]{8}"),)),),
                            meaning="Source-reported candidate relationship; all retained cycle observations remain available."))
-    from spicy_regs.subject_catalog import descriptors
-    policies = descriptors()
+    field_rules = json.loads(Path(__file__).with_name("fec_subject_fields.json").read_text())
     for join in processing_joins:
+        if (join.child, join.child_columns, join.parent, join.parent_columns) == (
+            'member_vote_terms', ('bioguide_id', 'term_index'), 'member_terms', ('bioguide_id', 'term_index')
+        ):
+            specs.append(array(join.name, join.child, (), (
+                route(join.parent, join.parent_columns,
+                      tuple(key(part(column, row=True), pattern=r'0|[1-9][0-9]*' if column == 'term_index' else '.+')
+                            for column in join.child_columns),
+                      guard('term_match', row=True, values=('half_open', 'inclusive_end'))),
+            ), mode='row', meaning='The service term selected by the vote date and chamber. Only successful half-open or inclusive-end matches link; missing, ambiguous and noncanonical indices stay unsupported.'))
+            continue
+        if join.child == "scorecard_snapshots" or join.parent == "scorecard_snapshots":
+            columns = join.parent_columns
+            fields = join.child_columns
+            # A snapshot is qualified by its edition as well as its literal ID.
+            if join.parent == "scorecard_snapshots":
+                columns += ("scorecard_id",)
+                fields += ("scorecard_id",)
+            specs.append(array("recorded_snapshot_" + join.child + "_" + join.parent,
+                               join.child, (), (route(join.parent, columns,
+                                   tuple(key(part(c, row=True)) for c in fields)),),
+                               meaning="Recorded association between this scorecard edition and its snapshot. Snapshot records retain capture roles and source order; these identifiers do not identify an official record.",
+                               mode="row"))
+            continue
+        if join.child in {"scorecard_member_links", "scorecard_item_links"} and join.parent in {
+            "members", "congress_bills", "roll_call_votes", "amendments",
+        }:
+            specs.append(array("resolved_" + join.child + "_" + join.parent, join.child, (),
+                               (route(join.parent, join.parent_columns,
+                                      tuple(key(part(c, row=True)) for c in join.child_columns),
+                                      guard("resolution_status", row=True, values=("resolved",))),),
+                               meaning="Recorded resolved identifier. This link checks current published data; the resolver's recorded input pins describe its original target.",
+                               mode="row"))
+            continue
         if not join.child.startswith("fec_"):
             continue
         # These are existing canonical declarations, not inferred matching names.
         guards = ()
         if join.child == "fec_record_evidence" and "target_record_id" in join.child_columns:
             guards = (guard("target_table", row=True, values=(join.parent,)),)
+        if join.parent == "fec_filings" and "filing_key" in field_rules.get(join.child, {}).get("keep", ()):
+            guards += (guard("filing_association_status", row=True, values=("resolved_native_filing_key",)),)
         specs.append(array("receipt_" + join.child + "_" + "_".join(join.child_columns) + "_" + join.parent,
-                           join.child, (), (route("@receipt:" + join.parent if policies.get(join.parent, {}).get("receipt_only") else join.parent, join.parent_columns,
+                           join.child, (), (route(join.parent, join.parent_columns,
                                                 tuple(key(part(c, row=True)) for c in join.child_columns), *guards),),
                            meaning=join.reason or "Retained source-record relationship; no current-record or financial-total qualification.",
-                           receipt_fields=join.child_columns, mode="row"))
+                           mode="row"))
     # These canonical collection relationships enumerate the typed observations.
     # A stored native filing_key is already the retained mapper's decision; browser
     # navigation keeps every metadata observation and makes no latest/current selection.
     filing_sources = {j.child for j in processing_joins if j.parent == "fec_collections"}
     for source in sorted(filing_sources - {"fec_source_records"}):
         specs.append(array("fec_source_row_" + source, source, (),
-                           (route("@receipt:fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
+                           (route("fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
                                   (key(part("collection_id", row=True)), key(part("source_record_id", row=True)),
                                    key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}"))),),
                            meaning="The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-                           receipt_fields=("collection_id", "source_record_id", "source_sha256"), mode="row"))
+                           mode="row"))
     for source in sorted(filing_sources):
-        if source == "fec_filings":
+        if "filing_key" not in field_rules.get(source, {}).get("keep", ()):
             continue
         specs.append(array("native_filing_" + source, source, (),
                            (route("fec_filings", ("filing_key",),
-                                  (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),)),),
+                                  (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),),
+                                  guard("filing_association_status", row=True, values=("resolved_native_filing_key",))),),
                            meaning="All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.", mode="row"))
+    for side in ("subject", "object"):
+        targets = tuple(route(table, (column, "cycle"),
+                              (key(part(side + "_id", row=True), pattern=pattern), key(part("cycle", row=True), pattern=NUM)),
+                              guard(side + "_type", row=True, values=(kind,)),
+                              guard(side + "_endpoint_status", row=True, values=("lookup_eligible",)))
+                        for kind, table, column, pattern in (
+                            ("candidate", "fec_candidate_history", "candidate_id", r"[HPS][A-Za-z0-9]{8}"),
+                            ("committee", "fec_committee_history", "committee_id", r"C[0-9]{8}")))
+        specs.append(array("fec_relationship_" + side, "fec_relationships", (), targets,
+                           mode="row", meaning="The retained entity type, native ID and stated cycle qualify this endpoint. Name-only, absent and unavailable-cycle results create no edge."))
+    specs.append(array("fec_relationship_source_record", "fec_relationships", (),
+                       (route("fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
+                              (key(part("collection_id", row=True)), key(part("source_record_id", row=True)),
+                               key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}")),
+                              guard("companion_status", row=True, values=("locator_coordinates_available",))),),
+                       mode="row", meaning="Literal retained source coordinates and digest; target existence does not establish verified source bytes."))
+    specs += _regulatory_navigation() + _recorded_source_navigation()
     return validate_navigation(deepcopy(specs))
 
 
@@ -192,6 +348,8 @@ def scalar(value):
         return value
     if isinstance(value, int) and not isinstance(value, bool) and -(2**63) <= value < 2**64:
         return str(value)
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value.isoformat()
     return None
 
 
@@ -208,6 +366,25 @@ def word(recipe, element, row):
         return recipe["literal"]
     value = at(row if recipe.get("from") == "row" else element, recipe["path"])
     transform = recipe.get("transform")
+    if transform == "native-boolean":
+        return str(value).lower() if type(value) is bool else None
+    if transform in {"fr-document-number", "fr-publication-date", "canonical-date"}:
+        if not isinstance(value, str):
+            return None
+        if transform == "canonical-date":
+            day, number = value, None
+        else:
+            match = re.fullmatch(r"([A-Za-z0-9._-]+)@([0-9]{4}-[0-9]{2}-[0-9]{2})", value)
+            if not match:
+                return None
+            number, day = match.groups()
+        try:
+            valid = date.fromisoformat(day).isoformat() == day
+        except ValueError:
+            return None
+        if not valid:
+            return None
+        return number if transform == "fr-document-number" else day
     if transform in {"partition", "partition-value"}:
         if value is not None and scalar(value) is None:
             return None
@@ -255,31 +432,124 @@ def target_keys(target, element, row):
     return values
 
 
-def published_navigation(specs, schemas):
-    """Resolve field aliases against this publication, retaining missing-target explanations."""
+def _recipes(target):
+    """Include equality guard dependencies as well as transformed key parts."""
+    return [*target["guards"],
+            *(g["sameAs"] for g in target["guards"] if "sameAs" in g),
+            *(p for k in target["keys"] for p in k["parts"])]
+
+
+@lru_cache(maxsize=256)
+def _struct_fields(typ):
+    """Reuse DuckDB's native type parser, without Arrow or reading source rows."""
+    from duckdb import InvalidInputException, sqltype
+
+    try:
+        parsed = sqltype(typ)
+    except InvalidInputException:
+        return None
+    return {name: str(dtype) for name, dtype in parsed.children} if parsed.id == "struct" else None
+
+
+def _path_status(typ, path):
+    """Typed paths are schema checked; JSON paths are checked on each occurrence."""
+    for name in path:
+        if typ.upper() in {"VARCHAR", "JSON"}:
+            return "runtime_checked"
+        fields = _struct_fields(typ)
+        if fields is None or name not in fields:
+            return "missing"
+        typ = fields[name]
+    return "published"
+
+
+def _dependencies(target, fields, selected_field, mode, *, candidates=False):
+    main, nested = {}, {}
+    if mode == "array":
+        main[selected_field or "<reference array>"] = (
+            "published" if selected_field else "missing")
+    for recipe in _recipes(target):
+        if "literal" in recipe:
+            continue
+        path = recipe["path"]
+        if recipe["from"] == "row":
+            name = ".".join(path)
+            main[name] = (_path_status(fields[path[0]], path[1:])
+                          if path and path[0] in fields else "missing")
+        elif mode == "array":
+            typ = fields.get(selected_field, "")
+            if typ.endswith("[]"):
+                element_type = typ[:-2]
+                if candidates and any(recipe is p for k in target["keys"] for p in k["parts"]):
+                    candidate_fields = _struct_fields(element_type)
+                    inner_type = (candidate_fields or {}).get("candidate_keys", "")
+                    status = _path_status(inner_type[:-2], path) if inner_type.endswith("[]") else "missing"
+                    path = ["candidate_keys", *path]
+                else:
+                    status = _path_status(element_type, path)
+            elif typ.upper() in {"VARCHAR", "JSON"}:
+                status = "runtime_checked"
+            else:
+                status = "missing"
+            nested[".".join(path) or "<element>"] = status
+    return ([{"path": name, "status": status} for name, status in sorted(main.items())],
+            [{"path": name, "status": status} for name, status in sorted(nested.items())])
+
+
+def directions(available, *, external=False):
+    """A declaration or historical baseline never proves current target uniqueness."""
+    return {direction: {
+        "available": available and not (external and direction == "reverse"),
+        "measurement": {"status": "unknown", "scope": "unknown"},
+        "lookup": {"status": ("external" if external else "scan")
+                   if available and not (external and direction == "reverse") else "unsupported",
+                   "scope": "selected_publication" if not external else "external_url",
+                   "requiresExactMatch": True},
+    } for direction in ("forward", "reverse")}
+
+
+def published_navigation(specs, schemas, identities=None):
+    """Admit only main-field routes and retain dispositions for unpublished sources.
+
+    Receipt fields describe separately inspectable evidence. They never recover
+    operational keys or make a source route available. Native nested fields bind
+    against selected schemas; JSON paths remain guarded per source occurrence.
+    """
+    identities = identities or {}
     result = []
     for original in specs:
-        if original["source"] not in schemas:
-            continue
         spec = deepcopy(original)
-        fields = {name for name, _ in schemas[spec["source"]]}
+        fields = dict(schemas.get(spec["source"], []))
         spec["field"] = next((name for name in spec["fields"] if name in fields), None)
-        row_fields = {p["path"][0] for t in spec["targets"] for p in
-                      [*t["guards"], *(p for k in t["keys"] for p in k["parts"])]
-                      if p["from"] == "row" and p["path"]}
-        spec["available"] = ((spec["mode"] == "row" and row_fields <= fields)
-                             or spec["field"] is not None or bool(spec["receiptFields"]))
-        if not spec["available"] and not spec["receiptFields"]:
-            spec["unavailableReason"] = "These source references have not been published yet."
         for target in spec["targets"]:
             if target["table"].startswith("@receipt:"):
                 dataset = target["table"].removeprefix("@receipt:")
-                if set(target["columns"]) <= {c[0] for c in schemas.get(dataset, [])}:
-                    # Older publications can still expose the exact declared evidence table.
+                if set(target["columns"]) <= set(dict(schemas.get(dataset, []))):
                     target["table"] = dataset
-            target["available"] = target["table"].startswith("@") or set(target["columns"]) <= {c[0] for c in schemas.get(target["table"], [])}
+            main, nested = _dependencies(target, fields, spec["field"], spec["mode"], candidates=spec["candidates"])
+            target["requiredMainFields"], target["requiredElementFields"] = main, nested
+            target["sourceAvailable"] = spec["source"] in schemas and all(
+                item["status"] != "missing" for item in [*main, *nested])
+            external = target["table"] == "@url"
+            target["requiredTargetFields"] = [
+                {"path": column, "status": "published" if external or column in
+                 dict(schemas.get(target["table"], [])) else "missing"}
+                for column in target["columns"]]
+            target["available"] = external or (target["table"] in schemas and all(
+                item["status"] == "published" for item in target["requiredTargetFields"]))
+            target["completeKey"] = bool(identities.get(target["table"])) and (
+                set(target["columns"]) == set(identities[target["table"]]))
+            target["directions"] = directions(target["available"] and target["sourceAvailable"], external=external)
+            if not target["sourceAvailable"]:
+                missing = [item["path"] for item in [*main, *nested] if item["status"] == "missing"]
+                target["sourceUnavailableReason"] = (
+                    "Required main source fields are not published: " + ", ".join(missing)
+                    if spec["source"] in schemas else "The source table is not published.")
             if not target["available"]:
                 target["unavailableReason"] = "The target table or its complete key is not published."
+        spec["available"] = any(t["sourceAvailable"] for t in spec["targets"])
+        if not spec["available"]:
+            spec["unavailableReason"] = "Required main source references are not published."
         result.append(spec)
     return result
 
@@ -297,7 +567,7 @@ def validate_navigation(specs):
             for recipe in [*target["guards"], *(g["sameAs"] for g in target["guards"] if "sameAs" in g), *(p for k in target["keys"] for p in k["parts"])]:
                 if recipe["from"] not in {"row", "element"} or not all(isinstance(p, str) for p in recipe["path"]):
                     raise ValueError("Invalid navigation field path")
-                if recipe.get("transform") not in {None, "lower", "bill-type", "nomination-citation", "partition", "partition-value", "senate-amendment", "hearing-congress", "vote-congress"}:
+                if recipe.get("transform") not in {None, "lower", "bill-type", "nomination-citation", "partition", "partition-value", "senate-amendment", "hearing-congress", "vote-congress", "native-boolean", "fr-document-number", "fr-publication-date", "canonical-date"}:
                     raise ValueError("Unknown navigation transform")
                 if "literal" in recipe and (not isinstance(recipe["literal"], str) or not 0 < len(recipe["literal"]) <= 4096 or recipe.get("transform")):
                     raise ValueError("Invalid navigation literal")

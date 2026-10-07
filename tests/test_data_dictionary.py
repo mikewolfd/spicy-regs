@@ -556,9 +556,9 @@ def test_a_view_points_at_a_receipt_in_at_most_one_sentence_too():
         fields = dd.receipt_pointers({"summary": spec.meaning, "columns": columns})
         assert len(fields) <= 1, (spec.name, fields)
         pointing |= {spec.name} if fields else set()
-    # Both read fcc_filings in its native form, so they exist only once it has receipts; its receipt holds the
-    # filing's and each document's fcc.gov address. A view added here needs the same two answers.
-    assert pointing == {"fcc_native_observations", "fcc_filing_artifacts"}
+    # Offered document URLs are now main fields. Native observation evidence
+    # still points once to retained receipts; artifacts need no receipt key.
+    assert pointing == {"fcc_native_observations"}
 
 
 # --------------------------------------------------------------------------- #
@@ -576,15 +576,16 @@ def test_every_hosted_column_has_prose():
 
 
 def test_hosted_prose_is_the_contract_prose_not_a_copy():
-    """Wheel prose remains authoritative except the repository's three enriched Record fields."""
+    """Wheel prose remains authoritative except explicitly enriched values and native count types."""
     from spicy_docs.schemas import TABLE_CONTRACTS
 
     descriptions = dd.load_descriptions()
     for table in set(dd.CONTRACT_TABLES) & set(dd.TABLES):
         source = dict(TABLE_CONTRACTS[table].descriptions)
-        if table == "house_communications":
+        if table in {"house_communications", "native_legal_reference_reads"}:
             enriched = dd.contract_column_prose(table)
-            fields = {"record_package_id", "record_granule_id", "record_entry_text"}
+            fields = ({"record_package_id", "record_granule_id", "record_entry_text"}
+                      if table == "house_communications" else {"source_bytes", "occurrence_count"})
             assert {field for field in source if source[field] != enriched[field]} == fields
             source.update({field: enriched[field] for field in fields})
         policy = dd.subject_policies().get(table)

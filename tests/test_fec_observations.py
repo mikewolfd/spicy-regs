@@ -295,7 +295,7 @@ def test_rollup_defaults_to_local_generation_and_publishes_complete_family(tmp_p
     FecObservationsRollup(manifest=manifest, output_dir=tmp_path / "outputs", skip_upload=False).run()
     index = publication.parse_index(store.objects[publication.INDEX_V2_KEY])
     family = index["families"]["fec-observations"]
-    assert set(family["tables"]) == {"fec_relationships.parquet"}
+    assert set(family["tables"]) == {"fec_relationships.parquet", "fec_collections.parquet", "fec_source_records.parquet"}
     assert set(family["etlReceipts"]["datasets"]) == {"fec_source_records", "fec_collections", "fec_relationships"}
     # Version-1 readers predate receipts, so the derived version-1 index omits them.
     assert publication.parse_index(store.objects[publication.INDEX_KEY]) == publication.derive_v1(index)

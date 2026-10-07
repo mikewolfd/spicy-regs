@@ -22,6 +22,9 @@ The rule-identity spine: one row per observed edge between a Regulations.gov doc
 | `cfr_part` | `VARCHAR` | The CFR part of `cfr_ref` (e.g. `60`). |
 | `cfr_section` | `VARCHAR` | The CFR section of `cfr_ref` when it names one; NULL for a part-level reference. |
 | `rin` | `VARCHAR` | Regulation Identifier Number the edge carries (e.g. `2060-AV16`); NULL on a CFR-only or citation edge. |
+| `source` | `VARCHAR` | The evidence class: `fr_cfr_ref`, `docket_rin`, `document_rin`, `document_fr_doc` or `docket_document_cites_action_notice`. |
+| `evidence_id` | `VARCHAR` | The least id of the records stating the edge: the docket for `docket_rin`, a dated Register record id (`number@YYYY-MM-DD`) for `fr_cfr_ref`, else a Regulations.gov document id. |
 | `first_seen` | `VARCHAR` | Earliest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`. |
 | `last_seen` | `VARCHAR` | Latest Eastern day any evidence for the edge is dated, `YYYY-MM-DD`. |
+| `fr_references_json` | `VARCHAR` | JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match). |
 | `fr_document_ids` | `VARCHAR[]` | Dated Federal Register document identities associated with this subject; no applicability inference is implied. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

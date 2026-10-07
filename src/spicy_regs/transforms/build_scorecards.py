@@ -46,7 +46,7 @@ TABLE_NAMES = (
     "scorecard_member_ratings",
     "scorecard_member_item_results",
 )
-OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES if name != "scorecard_snapshots")
+OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES)
 
 
 class NoScorecardsDue(RuntimeError):
@@ -185,7 +185,13 @@ def _prior_tables(
     if prior is None:
         return {name: [] for name in contracts}, {name: False for name in contracts}, None
     native = "etlReceipts" in prior
-    expected = set(OUTPUTS) if native else {name + ".parquet" for name in TABLE_NAMES}
+    if native:
+        from spicy_regs.scorecards.etl import admitted_read_policies
+        selected = admitted_read_policies(TABLE_NAMES, columns={
+            Path(key).stem: value["columns"] for key, value in prior["tables"].items()})
+        expected = {name + ".parquet" for name, policy in selected.items() if not policy.receipt_only}
+    else:
+        expected = set(OUTPUTS)
     if set(prior["tables"]) != expected:
         raise ScorecardRefreshError("Prior scorecard family does not contain the complete frozen table set")
     directory = output_dir / (".scorecard-prior-" + uuid4().hex)

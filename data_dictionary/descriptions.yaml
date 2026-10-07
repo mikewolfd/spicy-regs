@@ -46,12 +46,12 @@
 #
 # One page explains ETL receipts: data_dictionary/etl_receipts.md, rendered to
 # docs/tables/etl_receipts.md and served by describe_table('etl_receipts'). A
-# table's notes mention its receipt only where the receipt holds something a
-# reader wants (a source link, a column people queried), in one sentence, and
-# not at all before the table has published in the native layout (owner
-# decision, 2026-10-05). When a table converts: if its receipt holds such a
-# thing, add one sentence to its summary saying what the reader gets, ending
-# "is kept in its receipt; see etl_receipts."; otherwise add nothing.
+# table's notes mention its receipt only where it holds useful evidence, in
+# one sentence, and not before a native-layout publication (owner decision,
+# 2026-10-05). Describe fields in the current main schema as main fields;
+# distinguish earlier published schemas that kept them in receipts. A schema
+# declaration does not prove that its new fields have been published. Keep a
+# receipt pointer only for remaining evidence, ending "see etl_receipts.".
 # `spicy-regs-dict check` refuses a second sentence, and `check --source r2`
 # refuses one on a table the publication index shows published without
 # receipts (RECEIPT_POINTER in src/spicy_regs/data_dictionary.py).
@@ -1627,11 +1627,11 @@ tables:
       title, date, abstract and url on its own and upstream-copied rows, and
       only fills NULLs of those on rows another route supplied; its placeholder
       type and tag lists fill nothing. A row keeps the `source` that first
-      supplied it. The three counts are BIGINT. Each report's address on
-      gao.gov and the route it was read from (the former `url` and `source`
-      columns), and for a major-rule report why a `major_rule_` value is blank
-      and where in its letter each value was read, are kept in its receipt;
-      see etl_receipts.
+      supplied it. The three counts are BIGINT. The `/3` native schema
+      includes the product page in `url` and its collection route in `source`;
+      earlier schemas keep these fields in receipts. A major-rule report's
+      missing-value reasons and locations within its letter remain in its
+      receipt; see etl_receipts.
     columns:
       report_id: "GAO product id as gao.gov's product URL spells it (e.g. `gao-26-107974`, `t-rced-94-121`), lowercased. Primary key / dedup key. A GovInfo package id maps to that spelling (`GAOREPORTS-GAO-HEHS-00-73` is `hehs-00-73`, `GAOREPORTS-RCED-AIMD-94-221FS` is `rcedaimd-94-221fs`); a few keep GovInfo's spelling where the package id cannot recover gao.gov's."
       title: "Product title as the route states it; on a listing row, the teaser's label and heading joined as `label: heading`, which is how the feed titles the same products. The Month in Review cuts a long heading at about 200 characters and ends it `...`; where GAO's major-rule listing states that heading whole, the title is whole. A `gao_major_rule_listing` or `gao_major_rule_index` row's is `Federal Agency Major Rule Report: ` and the heading GAO's listing or the report's product page states, or the heading alone on the AIMD- and GGD- products. A few GovInfo titles are GovInfo's placeholder `GAO Report from` and the number. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells. GAO double-escapes some headings, so a few listing titles keep `&mdash;`, `&#151;` or `&amp;` literally, as GAO's page displays them; apply `html.unescape` when matching."
@@ -1705,8 +1705,8 @@ tables:
       spells it and its page: one teaser can name several B-numbers
       (`B-423916.2,B-423916.3`), and one B-number can have two pages released
       months apart (`b-331093` and `b-331093-0`). The address of the GAO listing
-      page each decision was read from (the former `listing_page` column) is
-      kept in its receipt; see etl_receipts. A
+      page each decision was read from is `listing_page` in the `/3` native
+      schema; earlier schemas keep it in receipts; see etl_receipts. A
       later walk refreshes the rows it lists; a run without one carries the
       table forward. A walk run given the local capture of the decision pages
       also reads each decision's page caption, which completes a number list
@@ -2250,6 +2250,8 @@ tables:
       native_fields_json: "Selected named native ECFS fields retained as JSON, preserving absent keys, nulls, empty arrays, objects and roles. SQL null in older output means unread legacy data; rebuilding is required. Not the complete API response."
       native_fields_sha256: "SHA-256 of the exact native_fields_json string; identifies retained field bytes, not the complete API response."
       pdf_extraction_results_json: "Outcomes for selected offered attachment URLs, retaining source SHA-256, page count and extraction status. Null when no attempt is retained. These selected attempts do not establish complete filing text coverage."
+      generation_id: "Selected main filing generation. Binds retained result observations to this filing version; it is not the original attempt time."
+      extraction_results: "Latest retained extraction results in source order: URL, status, body digest, page count, error and matching offered document positions. Null means no result was recorded; an empty list means the retained result list was empty. Repeated offers keep every position. Capture custody and extracted-text access remain unverified."
 
   # ---------------------------------------------------------------------------
   # Tables hosted from spicy-docs' table contracts.
@@ -4235,24 +4237,16 @@ tables:
     label: "Native legal-reference observations"
     subject: reference
     coverage: >-
-      Sampled. Observations from the complete retained eCFR Title 1, requested
-      as of 2026-08-10, and USC Title 1 release 119-103. Selected public target
-      tables resolve some occurrences; missing, unsupported and unqueried
-      targets remain explicit. Rows read before spicy-docs 0.52.0 name
-      native-legal-reference/002, the reading this repository ran; the next
-      build names /003, which re-spells target_candidates that held a
-      non-ASCII character and re-versions the text candidates citation rules
-      004 read, and moves no other value. Receipt:
-      native-legal-full-2026-09-27/resolved-verification.json.
+      Sampled. Selected retained U.S. Code and eCFR XML inputs only.
+      Read scopes state the edition, input digest and forms checked;
+      they do not establish source-wide completeness.
     summary: >-
-      Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations,
-      retaining source XML paths and digests. spicy-docs shapes each row and reads the
-      targets it names; this repository pins the inputs and looks each typed target up
-      in the target tables its manifest selects. Complete reads replace the selected
-      source/edition scope, including successful empty corrections. Candidate target
-      matches concern held classification rows, not independently acquired legal text.
-      Unparsed prose and unsupported forms remain visible; no universal extraction or
-      historical completeness is implied.
+      Original legal references and source passages with recorded target matches.
+      Inspect every candidate's complete keys, target pin, match count and reason.
+      Found, missing, ambiguous, unsupported and not-checked remain separate.
+      Source paths and interpretation rules stay visible. A complete read replaces
+      its selected source/edition scope, including a successful empty correction.
+      U.S. Code section matches identify held classification rows, not Code text.
     columns_from: spicy_docs
 
   court_opinion_pdf_extractions:
@@ -4268,10 +4262,10 @@ tables:
       native text fields and from the complete opinion index. Receipt:
       spicy-regs-court-cohort-20260927/bodies-receipt.json.
     summary: >-
-      Text from literally offered PDF URLs, tied to the selected opinion generation,
-      native body fingerprint, capture evidence and extractor version. A native digest
-      mismatch records a refusal without supplying text. Join opinion_id to court_opinions
-      and cluster_id to court_opinion_clusters; this table does not infer case-name identity.
+      Recorded PDF text for selected CourtListener opinions. Failed fingerprint or
+      extraction checks supply no text. Following an opinion requires published capture
+      and parent-publication evidence, plus its opinion ID, cluster ID, fingerprint and
+      source URL together. A shared digest alone does not identify the parent.
     columns:
       opinion_id: "Native CourtListener opinion ID selected for acquisition."
       cluster_id: "Native opinion cluster ID from that same held opinion row."
@@ -4292,16 +4286,14 @@ tables:
     category: processing_evidence
     row_unit: "source reads"
     measured_on: "2026-09-27"
-    label: "Legal reference extraction status"
+    label: "Legal reference read scopes"
     subject: reference
-    coverage: "Sampled. Explicit retained-input manifests only; not a source-wide acquisition or completeness ledger."
+    coverage: "Not a range. Completed reads of selected retained XML inputs; absent scopes remain unknown."
     summary: >-
-      Records successful bounded source reads even when they produce no observations.
-      Failed or incomplete inputs cannot replace prior output. Existing generation and
-      source-evidence artifacts retain earlier captures; the current row represents the
-      latest complete selected-shape read for its scope. Unsupported XML forms and
-      unknown editions remain explicit. spicy-docs shapes the row from the read this
-      repository ran.
+      Each input's latest completed read, including reads that found no observations.
+      Shows exact source scope, edition, XML and selection-manifest digests,
+      byte and observation counts, forms checked and forms left out.
+      Failed or incomplete inputs cannot replace prior results.
     columns_from: spicy_docs
 
   # Retained typed FEC observation tables. Schema support is separate from publication.
@@ -9659,7 +9651,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecards:
@@ -9670,7 +9662,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_snapshots:
@@ -9692,7 +9684,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_metrics:
@@ -9703,7 +9695,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_items:
@@ -9714,7 +9706,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_metric_items:
@@ -9725,7 +9717,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_metric_components:
@@ -9737,7 +9729,7 @@ tables:
       component-to-parent relationship. Complete edition reads replace that edition;
       failed or incomplete reads preserve prior observations.
     measured_on: "2026-10-04"
-    summary: "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_members:
@@ -9748,7 +9740,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_member_ratings:
@@ -9759,7 +9751,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_member_item_results:
@@ -9770,7 +9762,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_member_links:
@@ -9836,3 +9828,294 @@ tables:
       capture_id: "Source capture identifier carried through from the publisher fact."
       source_url: "Original publisher URL for the source fact."
       source_path: "Location of the source fact or reference within the captured document."
+
+  nominations_detail_reads:
+    label: Nomination source reads
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded nomination detail, committee, and hearing reads. A missing row means no recorded attempt; an empty response is a completed read.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      source_table: "Main table whose source record was read."
+      congress: "Source record Congress as a native integer."
+      citation: "Literal nomination citation, including any partition suffix."
+      number: "Source record number in its original spelling."
+      part_number: "Literal nomination partition; no partition is inferred."
+      chamber: "Source-stated chamber in the complete meeting identity."
+      event_id: "Source-stated event identifier, scoped by Congress and chamber."
+      communication_id: "Original main House communication identity."
+      source_url: "Exact requested source URL recorded for this read, with credentials removed."
+      read_field: "Detail or relationship field read by this attempt."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      error_type: "Recorded failure class; empty after a successful read."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      shape_version: "Recorded source-shaping rule version."
+      field_states: "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      source_witnesses: "Retained response locators and exact body digests for this requested source read."
+
+  committee_meetings_detail_reads:
+    label: Meeting source reads
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded committee-meeting detail reads and the field states the response supports. Cached meetings do not invent attempts.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      source_table: "Main table whose source record was read."
+      congress: "Source record Congress as a native integer."
+      citation: "Literal nomination citation, including any partition suffix."
+      number: "Source record number in its original spelling."
+      part_number: "Literal nomination partition; no partition is inferred."
+      chamber: "Source-stated chamber in the complete meeting identity."
+      event_id: "Source-stated event identifier, scoped by Congress and chamber."
+      communication_id: "Original main House communication identity."
+      source_url: "Exact requested source URL recorded for this read, with credentials removed."
+      read_field: "Detail or relationship field read by this attempt."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      error_type: "Recorded failure class; empty after a successful read."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      shape_version: "Recorded source-shaping rule version."
+      field_states: "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      source_witnesses: "Retained response locators and exact body digests for this requested source read."
+
+  house_communications_detail_reads:
+    label: House communication source reads
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded House communication detail reads, including failed responses. A missing attempt remains unread.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      source_table: "Main table whose source record was read."
+      congress: "Source record Congress as a native integer."
+      citation: "Literal nomination citation, including any partition suffix."
+      communication_type: "Publisher House communication type retained by the recorded event."
+      number: "Source record number in its original spelling."
+      part_number: "Literal nomination partition; no partition is inferred."
+      chamber: "Source-stated chamber in the complete meeting identity."
+      event_id: "Source-stated event identifier, scoped by Congress and chamber."
+      communication_id: "Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately."
+      stated_communication_id: "Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none."
+      communication_key_status: "Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome."
+      communication_key_rule: "Version of the maintained native-key validation rule; no title or date is used to construct a key."
+      communication_key_reason: "Why the native key was refused; null when its source identity is valid."
+      source_url: "Exact requested source URL recorded for this read, with credentials removed."
+      read_field: "Detail or relationship field read by this attempt."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      error_type: "Recorded failure class; empty after a successful read."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      shape_version: "Recorded source-shaping rule version."
+      field_states: "Each read field is stated, stated-empty, or source-not-stated; absent field evidence stays unknown."
+      source_witnesses: "Retained response locators and exact body digests for this requested source read."
+
+  house_record_enrichment_results:
+    label: House communication Record matches
+    category: processing_evidence
+    row_unit: read attempts
+    subject: congress
+    summary: Recorded attempts to match a House communication to an exact Congressional Record passage. Partial issue scopes cannot establish a match.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that recorded this attempt; retained attempts keep their original generation."
+      attempt_id: "Recorded journal event identity within its generation."
+      communication_id: "Usable House communication key: a validated stated ID or a key constructed from complete native Congress/type/number. Null after refusal; target existence and uniqueness are checked separately."
+      stated_communication_id: "Literal ID supplied by the original event, retained even when it conflicts or is malformed. Null when the event supplied none."
+      communication_key_status: "Key origin or refusal: stated, constructed, incomplete, malformed, or conflict. This does not change the recorded read outcome."
+      communication_key_rule: "Version of the maintained native-key validation rule; no title or date is used to construct a key."
+      communication_key_reason: "Why the native key was refused; null when its source identity is valid."
+      congress: "Source record Congress as a native integer."
+      communication_type: "Publisher communication type used in the complete identity."
+      number: "Source record number in its original spelling."
+      congressional_record_date: "Literal Record date stated by the communication source."
+      record_calendar_day: "Strictly parsed calendar day used to select Record issues."
+      outcome: "Recorded result; no attempt means unread, and completed empty responses remain separate from failure."
+      qualified_occurrences: "Number of qualifying printed entries in the selected scope."
+      complete_scope: "Whether every selected issue and required granule was completely read."
+      conflict_status: "Conflict, no-conflict, or not-checked under the recorded complete-scope result."
+      rule_version: "Exact rule used for the recorded source match."
+      recorded_at: "UTC time the source journal recorded the attempt."
+      reason: "Recorded reason a read or match could not proceed."
+      scope_packages: "Exact issue package IDs selected for this comparison."
+      scope_read_results: "Recorded package read results, exact selected input pins, and body digests, including complete scopes with no matching entry."
+      witnesses: "Each printed match retains package, granule, body digest, marker, and selected input generation."
+
+  committee_report_read_outcomes:
+    label: Committee report read results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded report and hearing package read results. Complete, pending, and refused remain separate.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      package_id: "Exact GovInfo package identity requested by the recorded read."
+      last_modified: "Publisher modification marker retained by the checkpoint."
+      outcome: "Recorded read result; pending and refused do not mean a completed empty read."
+      rule_version: "Exact recorded read rule, including the refused bound where retained."
+      observed_at: "UTC time the checkpoint was recorded."
+
+  document_citation_read_outcomes:
+    label: Document citation read results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Completed reads of specific document bodies. Zero findings means the body was read; a missing row means no recorded checkpoint.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      document_kind: "Maintained source document kind."
+      document_key: "Exact native document key translated by the maintained source-kind rule."
+      body_version_id: "Exact text digest in the native body-version identity."
+      text_sha256: "Retained text digest; this identifies text content, not original file bytes."
+      rule_set_version: "Citation rule set recorded by the completed read."
+      read_at: "Recorded time the citation read completed."
+      citation_rows: "Recorded number of findings; zero is a completed zero-finding read."
+      source_table: "Selected main source table."
+      input_family: "Selected source publication family."
+      input_generation: "Exact source generation read by the checkpoint."
+      input_sha256: "Retained selected input digest."
+
+  bill_family_document_file_outcomes:
+    label: Bill family file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  committee_reports_document_file_outcomes:
+    label: Committee reports file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  print_citations_document_file_outcomes:
+    label: Print citations file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  laws_document_file_outcomes:
+    label: Laws file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  native_legal_references_document_file_outcomes:
+    label: Native legal references file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."
+
+  senate_expenditures_document_file_outcomes:
+    label: Senate expenditures file conversion results
+    category: processing_evidence
+    row_unit: recorded results
+    subject: congress
+    summary: Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.
+    coverage: Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.
+    measured_on: "2026-10-06"
+    columns:
+      generation_id: "Generation that converted the retained producer outputs."
+      source_dataset: "Original producer dataset whose member was converted."
+      member_ordinal: "Original member position within the producer dataset."
+      relative_path: "Original member path relative to its producer dataset; empty partition states have none."
+      partitioned: "Whether the original producer output was partitioned."
+      row_count: "Recorded row count in the original producer member or successful empty state."
+      state: "Converted member, retained processing member, or successful empty partition."
+      original_byte_sha256: "Exact original physical member byte digest; empty partition states have none."
+      state_witness_sha256: "Digest of the recorded empty-state witness; this is not a physical file-byte digest."
+      source_schema: "Original member column names, types, and nullability."
+      source_metadata: "Original footer metadata as lossless base64 key and value pairs."
+      native_members: "Exact admitted native member mappings, including relative path, byte digest, size, and row count. Processing-only members have none."

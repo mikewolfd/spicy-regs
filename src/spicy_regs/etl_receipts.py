@@ -26,6 +26,8 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from spicy_regs.runtime_bounds import checkpoint
+
 ParquetInput = Path | Callable[[], AbstractContextManager[BinaryIO]]
 
 RECEIPT_KEY = "etl_receipts.parquet"
@@ -439,6 +441,7 @@ def _parquet(path):
 def _rows(path):
     with _parquet(path) as parquet:
         for batch in parquet.iter_batches(batch_size=2000):
+            checkpoint()
             yield from batch.to_pylist()
 
 
@@ -498,10 +501,11 @@ def validate_receipt_row(receipt: Mapping, policies: Mapping[str, DatasetPolicy]
         raise ValueError("Receipt contains unclassified processing fields")
 
 
-def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True):
+def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True, retain_diagnostics=False):
     connection.execute(
         "CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
-        "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0)"
+        "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0"
+        + (", diagnostics BLOB" if retain_diagnostics else "") + ")"
     )
     connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
     validate_publisher_generation(generation_id)
@@ -514,7 +518,7 @@ def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain
             validate_receipt_row(receipt, policies, accepted_policies=accepted_policies)
             try:
                 connection.execute(
-                    "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0)",
+                    "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0" + (",?" if retain_diagnostics else "") + ")",
                     [
                         receipt[k]
                         for k in (
@@ -525,7 +529,8 @@ def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain
                             "receipt_id",
                             "outcome",
                         )
-                    ] + [zlib.compress(receipt["processing_json"].encode(), level=1) if retain_processing else None],
+                    ] + [zlib.compress(receipt["processing_json"].encode(), level=1) if retain_processing else None]
+                    + ([zlib.compress(receipt["diagnostic_json"].encode(), level=1)] if retain_diagnostics else []),
                 )
             except sqlite3.IntegrityError as exc:
                 raise ValueError("Duplicate or ambiguous receipt join") from exc
@@ -554,11 +559,30 @@ def selected_subject_policy(policy: DatasetPolicy, paths: Sequence[ParquetInput]
     New generation admission remains strict against its declared policy. Only
     readers of already selected inputs use this explicit earlier-policy choice.
     """
+    if (not paths and policy.dataset == "native_legal_reference_reads"
+            and policy.policy_version == "legislative-documents/2"):
+        # Native scopes always write one main file, even for a successful
+        # empty table. No files therefore names the exact earlier receipt-only
+        # shape, never an invented empty current subject.
+        earlier = [p for p in receipt_policies(policy) if p.receipt_only]
+        if len(earlier) != 1:
+            raise ValueError("Native legal scope has no exact earlier receipt-only policy")
+        return earlier[0]
     selected = None
     for path in paths:
         with _parquet(path) as parquet:
             matches = [candidate for candidate in receipt_policies(policy)
                        if parquet.schema_arrow.equals(candidate.subject_schema)]
+        if len(matches) > 1 and all(
+            (candidate.identity_fields, candidate.nullable_identity_fields, candidate.receipt_only) ==
+            (matches[0].identity_fields, matches[0].nullable_identity_fields, matches[0].receipt_only)
+            for candidate in matches
+        ):
+            # Some migrations promote only receipt context already present in
+            # the native schema. Identical subject values and complete identity
+            # have identical hashes; each receipt still validates under its exact
+            # shipped version. No processing declaration is inferred here.
+            matches = [policy if policy in matches else matches[0]]
         if len(matches) != 1:
             raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
         if selected is not None and matches[0] != selected:
@@ -758,6 +782,7 @@ def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> P
                     if shared:
                         with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
                             for batch in parquet.iter_batches(batch_size=2000):
+                                checkpoint()
                                 batch.validate(full=True)
                                 selected = batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)]))
                                 if selected.num_rows:

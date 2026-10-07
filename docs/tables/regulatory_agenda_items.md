@@ -23,3 +23,4 @@ One row per Regulation Identifier Number: the durable Regulatory Agenda item a R
 | `latest_agenda_edition` | `VARCHAR` | The latest Unified Agenda edition listing the RIN, `YYYYMM`; NULL when no edition does. |
 | `first_seen` | `VARCHAR` | Earliest Eastern day any source dates the RIN: an Agenda edition or action date, a docket or document date, or a Register publication. |
 | `last_seen` | `VARCHAR` | Latest Eastern day any source dates the RIN. |
+| `unresolved_fr_references_json` | `VARCHAR` | JSON array of unresolved Register number references from the Register documents that state this RIN. |

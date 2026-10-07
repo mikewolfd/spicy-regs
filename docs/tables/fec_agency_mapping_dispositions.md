@@ -2,4 +2,23 @@
 
 # `fec_agency_mapping_dispositions`
 
-`fec_agency_mapping_dispositions` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'fec_agency_mapping_dispositions'`.
+**FEC agency processing results**
+
+Records whether each saved agency source record produced data, contained only structure, or could not be interpreted.
+
+**Coverage.** Sampled. Supported observations from retained agency XML, HTML and Word native observations. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+
+- **Parquet file:** `fec_agency_mapping_dispositions.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `native_kind` | `VARCHAR` | SpicyDocs native fact kind used to explain how this source record was mapped or explicitly classified. |
+| `disposition` | `VARCHAR` | Source-stated disposition or mapper classification at this table's grain; interpret with the adjacent reason or finding fields. |
+| `reason` | `VARCHAR` | Concrete reason for this observation's mapping or nondata disposition. |
+| `target_record_ids_json` | `VARCHAR` | JSON array of typed observation keys emitted from this native source record; empty output is explained by the disposition. |
+| `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |

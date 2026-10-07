@@ -102,7 +102,7 @@ def test_cfr_part_strings_do_not_lose_alpha_suffixes_or_printed_ranges():
     assert "citation_url" in shaped["raw_conversion_inputs"]["cfr_references_json"]
 
 
-def test_domain_status_and_dates_stay_but_extraction_status_moves():
+def test_domain_and_extraction_status_and_dates_are_main():
     shaped = shape_record(
         "documents",
         {
@@ -119,16 +119,17 @@ def test_domain_status_and_dates_stay_but_extraction_status_moves():
     assert shaped["reason_withdrawn"] == "Agency withdrew proposal"
     assert shaped["modify_date"] == "2026-01-01"
     assert shaped["text_extraction_status"] == "error"
-    assert "text_extraction_status" not in schema.names
+    assert "text_extraction_status" in schema.names
     assert "text_content" in schema.names
 
 
-def test_rule_targets_keep_witness_distinct_identity_without_exposing_source():
+def test_rule_targets_keep_witness_distinct_identity_and_source_namespace():
     base = {"docket_id": "D", "cfr_ref": "40-60", "rin": "1000-AA00"}
     a = shape_record("rule_targets", {**base, "source": "docket_rin"})
     b = shape_record("rule_targets", {**base, "source": "document_rin"})
     assert a["rule_target_id"] != b["rule_target_id"]
-    assert "source" not in subject_schema("rule_targets").names
+    assert "source" in subject_schema("rule_targets").names
+    assert a["source"] == "docket_rin" and b["source"] == "document_rin"
 
 
 def test_statistical_cells_keep_null_agency_and_estimand_fields():
@@ -151,11 +152,19 @@ def test_statistical_cells_keep_null_agency_and_estimand_fields():
 
 def test_each_assigned_table_has_explicit_columns_schema_and_identity():
     assert set(SOURCE_COLUMNS) == set(RECEIPT_COLUMNS) == set(IDENTITIES)
+    retained_source_facts = {
+        'comment_periods': {'unresolved_fr_references_json'},
+        'comments': {'comment_reference_values_json', 'pdf_extraction_results_json'},
+        'documents': {'pdf_extraction_results_json'},
+        'proceedings': {'fr_document_joins_json', 'unresolved_fr_references_json'},
+        'regulatory_agenda_items': {'unresolved_fr_references_json'},
+        'rule_targets': {'fr_references_json'},
+    }
     for table in SOURCE_COLUMNS:
         schema = subject_schema(table)
         assert set(IDENTITIES[table]) <= set(schema.names)
         assert not set(RECEIPT_COLUMNS[table]) & set(schema.names)
-        assert not any(f.name.endswith("_json") for f in schema)
+        assert {f.name for f in schema if f.name.endswith("_json")} == retained_source_facts.get(table, set())
         assert len(set(schema.names)) == len(schema)
 
 

@@ -3,8 +3,6 @@
 from pathlib import Path
 
 import pytest
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 from spicy_regs import native_conversion as conversion, regulations_bulk
 from spicy_regs.sources import publication
@@ -92,22 +90,33 @@ def test_regulatory_preparation_refuses_processing_changes_before_publication(tm
 
     publish_old(bucket, monkeypatch, tmp_path, "dockets", {"dockets": rows("dockets")})
     written = list(bucket.writes)
-    materialize = regulations_receipts.materialize_internal
+    intercepted = []
+    if change == "metadata":
+        from spicy_regs.conversion_reads import _FamilyReader
+        read = _FamilyReader.read_subjects
 
-    def changed_processing(*args, **kwargs):
-        path = materialize(*args, **kwargs)
-        table = pq.read_table(path)
-        if change == "order":
-            table = table.take(pa.array([1, 0]))
-        elif change == "value":
-            index = table.schema.get_field_index("title")
-            table = table.set_column(index, table.schema.field(index), pa.array(["changed", ""]))
-        else:
-            table = table.replace_schema_metadata({**(table.schema.metadata or {}), b"changed": b"yes"})
-        pq.write_table(table, path)
-        return path
+        def changed_metadata(reader, dataset):
+            for row in read(reader, dataset):
+                intercepted.append(change)
+                yield row | {"input_metadata": {b"changed": b"yes"}}
 
-    monkeypatch.setattr(regulations_receipts, "materialize_internal", changed_processing)
-    with pytest.raises(conversion.ConversionRefused, match="Regulatory processing"):
+        monkeypatch.setattr(_FamilyReader, "read_subjects", changed_metadata)
+        reason = "metadata"
+    else:
+        processing = regulations_receipts._processor_inputs
+
+        def changed_processing(dataset, admitted_rows):
+            restored = list(processing(dataset, admitted_rows))
+            intercepted.append(change)
+            if change == "order":
+                restored.reverse()
+            else:
+                restored[0]["title"] = "changed"
+            yield from restored
+
+        monkeypatch.setattr(regulations_receipts, "_processor_inputs", changed_processing)
+        reason = "values, order or repetitions"
+    with pytest.raises(conversion.ConversionRefused, match=f"dockets does not restore.*{reason}"):
         convert("dockets", tmp_path / "prepared", publish=True)
+    assert intercepted and set(intercepted) == {change}
     assert bucket.writes == written

@@ -114,7 +114,9 @@ def test_dictionary_retains_observation_grains_financial_limits_and_exact_eviden
     assert "value_operator and bound_value" in metadata["fec_report_metrics"]["summary"]
     assert "cancellation status" in metadata["fec_research_meeting_observations"]["summary"]
     receipt_only = {d["dataset"] for d in metadata["etl_receipts"]["datasets"] if d["receipt_only"]}
-    assert {"fec_record_evidence", "fec_source_records", "fec_research_response_outcomes"} <= receipt_only
+    logical_main = {"fec_record_evidence", "fec_source_records", "fec_research_response_outcomes"}
+    assert not logical_main & receipt_only
+    assert logical_main <= metadata.keys()
     assert receipt_only.isdisjoint(dd.TABLES)
 
 

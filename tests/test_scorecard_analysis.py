@@ -151,7 +151,7 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     assert member["bioguide_id"] == "X000001"
     assert item["bill_id"] == "119-hr-1"
     assert item["vote_id"] is None
-    assert "input_pins_json" not in item
+    assert json.loads(item["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
     item_receipt = read_family(output, LINK_NAMES)["scorecard_item_links"][0]
     assert json.loads(item_receipt["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
     sealed = tmp_path / "analysis-generation"
@@ -253,7 +253,9 @@ def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, 
     members, links = rollup.build(output)
     # Analysis uses only the selected inputs; it does not acquire official data again.
     assert calls == acquired
-    assert pq.read_table(members).num_rows == 0
+    assert pq.read_table(members).num_rows == 1
+    [main_person] = pq.read_table(members).to_pylist()
+    assert main_person["resolution_status"] == "unresolved" and main_person["bioguide_id"] is None
     reconstructed = read_family(output, LINK_NAMES)
     person = reconstructed["scorecard_member_links"][0]
     assert person["bioguide_id"] is None
@@ -261,7 +263,9 @@ def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, 
     observed = json.loads(person["source_context_json"])
     assert observed["member_name"] == source_people[0]["member_name"]
     assert observed["identifiers_json"] == source_people[0]["identifiers_json"]
-    assert all(row["item_id"] != "committee-motion" for row in pq.read_table(links).to_pylist())
+    [main_motion] = [row for row in pq.read_table(links).to_pylist() if row["item_id"] == "committee-motion"]
+    assert main_motion["resolution_status"] == "unresolved"
+    assert main_motion["vote_id"] is None and main_motion["bill_id"] is None
     linked = {row["item_id"]: row for row in reconstructed["scorecard_item_links"]}
     assert linked["committee-motion"]["vote_id"] is None
     assert linked["committee-motion"]["bill_id"] is None

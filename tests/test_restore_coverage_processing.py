@@ -58,7 +58,8 @@ def test_restores_receipt_only_reads_without_a_public_subject(tmp_path):
     raw, request = fixture(
         tmp_path,
         "document_citation_reads",
-        {"document_kind": "bill_section", "document_key": "original scope", "text_sha256": "sha256:" + "a" * 64},
+        {"document_kind": "bill_section", "document_key": '["hr1-119","is","GovInfo original label","1"]',
+         "text_sha256": "sha256:" + "a" * 64},
     )
     assert not request["subjects"]
     result = bridge.restore(request)

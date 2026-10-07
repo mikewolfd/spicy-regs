@@ -27,3 +27,18 @@ Source-stated roles and associations. Explicit absence states (a missing field, 
 | `value_status` | `VARCHAR` | Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge. |
 | `cycle` | `INTEGER` | Election cycle supplied for a bulk observation; current API observations may have no cycle. |
 | `candidate_election_year` | `INTEGER` | Candidate election year reported by the source when available. |
+| `subject_id_status` | `VARCHAR` | Identifier observation status: source_id_shape, invalid_source_id_shape or not_reported. Shape checks do not establish reference resolution. |
+| `object_id_status` | `VARCHAR` | Identifier observation status for object_id; a valid shape is not proof of a resolved reference. |
+| `source_sha256` | `VARCHAR` | Digest of the exact source bytes supporting this observation. |
+| `source_url` | `VARCHAR` | Source URL associated with the retained evidence. |
+| `source_locator_json` | `VARCHAR` | JSON source coordinates and field names; retained-input rollups also include collection_id and source_record_id for exact parent joins. |
+| `source_family` | `VARCHAR` | Mapper's native source family, such as a bulk layout or API record family. For an official catalogue join, use the parent fec_source_records.source_family. |
+| `observed_at` | `VARCHAR` | Evidence observation time when supplied; not an inferred effective date of the relationship. |
+| `collection_id` | `VARCHAR` | Collection identifier explicitly retained in this relationship's source locator; null when the coordinate is unavailable. |
+| `source_record_id` | `VARCHAR` | Individual source-record identifier explicitly retained in this relationship's locator. Together with collection_id and source_sha256 it identifies a source occurrence; no coordinate is invented. |
+| `subrecord_pointer` | `VARCHAR` | Literal source JSON pointer plus the explicitly recorded array field and element ordinal; null when unavailable. |
+| `source_ordinal` | `BIGINT` | Source-record ordinal explicitly retained in the source locator; null when absent or invalid. |
+| `companion_status` | `VARCHAR` | Whether the retained locator supplies collection and source-record coordinates. It does not establish a found or unique companion. |
+| `subject_endpoint_status` | `VARCHAR` | Subject lookup eligibility from its retained entity type, native identifier status and stated cycle. Unsupported or missing context produces no inferred edge. |
+| `object_endpoint_status` | `VARCHAR` | Object lookup eligibility from reported value status, retained entity type, native identifier status and stated cycle. Names and reported-none values never create identifier edges. |
+| `subrecord_ordinal` | `BIGINT` | Array-element ordinal explicitly retained in the source locator, preserving repeated references. |

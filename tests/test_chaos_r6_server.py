@@ -249,8 +249,8 @@ def test_published_at_names_what_was_observed(monkeypatch, instant, basis):
 def test_the_texts_say_inputs_are_what_the_producer_recorded(name):
     [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == name]
     text = " ".join((tool.description or "").split())  # a client reads the wrapped lines as one paragraph
-    assert "the parents its producer recorded (none recorded is not none; a read that bypassed the download helper is " \
-           "not recorded)" in text
+    assert "No recorded parents does not mean no inputs" in text
+    assert "reads bypassing the download helper are not recorded" in text
 
 
 # H1 (owner decision 2026-10-03, "refuse with the remedy" and "shrink replies"): rows are arrays under one column
@@ -415,7 +415,7 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
         mcp = server.build_server()
         listed = _tool_data(mcp, "list_sources", {})
         # Discovery contains row counts and a compact release identity, not describe_table's parent inventories.
-        # Exercise those fields directly instead of assigning it the description's 5,000-character reserve.
+        # Exercise these fields with a 2,000-character growth reserve; descriptions retain their 5,000-character reserve.
         # A signed 64-bit row count uses 19 characters versus NULL's 4, for every table at once. The two fixed-URL
         # exports also state their count basis. Both release statuses are included at their maximum count width.
         for subject in listed["subjects"]:
@@ -430,7 +430,15 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
             consumer=runtime_consumer("sha256:" + "b" * 64),
             status_counts={"compatible": len(server.FEC_QUALIFIED_VIEWS), "disabled": len(server.FEC_QUALIFIED_VIEWS)},
         )
-        assert _size(listed) <= server.REPLY_CHARS
+        assert _size(listed) <= server.REPLY_CHARS - 2_000
+        # Cold discovery can defer every qualified view. Names remain complete
+        # while the common admission reason is stated once per group.
+        qualified = [spec.view.name for spec in server.FEC_QUALIFIED_VIEWS]
+        listed["unavailable_tables"] = [name for name in listed["unavailable_tables"] if name not in qualified]
+        listed["deferred_views"] = [{"views": qualified, "query_admission": "pending_receipt_rows",
+                                    "reason": "Release pins match; exact receipt row and output schema admission remains pending."}]
+        listed["etl_receipts"]["members"] = [{"family": f"fixture-native-receipt-family-{n}"} for n in range(35)]
+        assert _size(listed) <= server.REPLY_CHARS - 2_000
         sizes = {}
         for name in [*server.TABLES, *server._connection_relationships(con.cursor())]:
             for detail in (False, True):

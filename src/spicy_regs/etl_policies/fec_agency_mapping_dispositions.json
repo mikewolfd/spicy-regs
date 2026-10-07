@@ -1,12 +1,14 @@
 {
   "dataset": "fec_agency_mapping_dispositions",
-  "policy_version": "fec-subject-receipts/1",
-  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-  "identity_fields": [],
+  "policy_version": "fec-subject-receipts/2",
+  "subject_schema": "/////8ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAcAAABcAQAAFAEAAOQAAAC0AAAAiAAAAEwAAAAEAAAA0P7//wAAAQIQAAAALAAAAAQAAAAAAAAAEwAAAG9ic2VydmF0aW9uX29yZGluYWwACAAMAAgABwAIAAAAAAAAAUAAAAAU////AAABBRAAAAAoAAAABAAAAAAAAAAWAAAAdGFyZ2V0X3JlY29yZF9pZHNfanNvbgAADP///0z///8AAAEFEAAAABgAAAAEAAAAAAAAAAYAAAByZWFzb24AADT///90////AAABBRAAAAAcAAAABAAAAAAAAAALAAAAZGlzcG9zaXRpb24AYP///6D///8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAABuYXRpdmVfa2luZACM////zP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9yZWNvcmRfaWQAAAAAwP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAkAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAAQABAAEAAAA",
+  "identity_fields": [
+    "observation_ordinal"
+  ],
   "receipt_fields": [
     "fec_conversion_inputs",
     "fec_input_columns"
   ],
-  "receipt_only": true,
+  "receipt_only": false,
   "nullable_identity_fields": []
 }

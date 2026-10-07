@@ -18,8 +18,21 @@ One obligation state as reported in a filing and period. Separates opening and c
 | Column | Type | Description |
 | --- | --- | --- |
 | `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
 | `correction_operation` | `VARCHAR` | Source-supported correction operation, when applicable; a positive amount in a deletion stream is not a new receipt or an inferred refund. |
+| `correction_applicability_status` | `VARCHAR` | Whether the captured correction can be applied to an evidenced base and target population; unresolved applicability prevents a qualified current total. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `filing_key` | `VARCHAR` | Nullable authority- and namespace-qualified filing-version key. Several retained observations can share it; group proven filing identity before joining. It does not by itself say whether the row's filing is held: where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`). `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number; `list_sources` names the views that exist. |
+| `filing_link_status` | `VARCHAR` | Always `unresolved` in this table, with `filing_key` NULL beside it: both are set when the row is mapped, before any filing is looked up, so neither says whether the row's filing is held. Where this table has a filing association view, that view decides it for each row (its `target_record_id` is this `record_id`; read its `association_status` and `filing_key`): `<table>_filing_associations` matches the filing's header record and `<table>_native_filing_associations` the FEC file number. `list_sources` names the views that exist. |
 | `currency` | `VARCHAR` | Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately. |
 | `amount_kind` | `VARCHAR` | Source-specific meaning of amount, such as a reported receipt, payment, balance or aggregate. It is not an aggregation permission. |
 | `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
@@ -42,6 +55,7 @@ One obligation state as reported in a filing and period. Separates opening and c
 | `original_source_record_id` | `VARCHAR` | Source-stated original record reference, preserved independently of this observation's source_record_id. |
 | `reported_cycle` | `VARCHAR` | Cycle exactly as reported in a native field; kept separate from the selection's source_cycle. |
 | `line_number` | `VARCHAR` | Literal report line reference from the source; not the physical row ordinal or a globally unique item key. |
+| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
 | `observation_grain` | `VARCHAR` | Source-defined meaning of this retained row, including aggregate rather than individual-transaction grains. |
 | `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
 | `opening_balance` | `DECIMAL(38,9)` | Exact decimal for the reported balance at the start of this period. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
@@ -60,6 +74,9 @@ One obligation state as reported in a filing and period. Separates opening and c
 | `creditor_debtor_street2` | `VARCHAR` | The creditor/debtor in the source-stated obligation direction's second reported street-address line. |
 | `creditor_debtor_zip` | `VARCHAR` | The creditor/debtor in the source-stated obligation direction's reported postal code, preserving leading zeroes. |
 | `obligation_direction` | `VARCHAR` | Source-supported direction of the debt obligation; do not infer creditor/debtor roles from names alone. |
+| `definition_set_id` | `VARCHAR` | Key of the pinned source layout in fec_filing_definitions. Join its definition evidence for exact workbook cells; the layout does not validate the submission. |
+| `filing_header_record_id` | `VARCHAR` | Source-record key of the actual file header. Resolve with collection_id and filing_header_locator_json in the source generation. |
+| `filing_header_locator_json` | `VARCHAR` | Exact native coordinates of the file-header witness, separate from the financial row's own locator. |
 | `source_committee_id` | `VARCHAR` | Literal committee reference; it is not substituted for the reporting party from the retained filing layout. |
 | `source_candidate_id` | `VARCHAR` | Literal candidate reference; it is not an inferred candidate association from the retained filing layout. |
 | `source_candidate_name` | `VARCHAR` | Literal candidate name from the retained filing layout. |
@@ -75,3 +92,11 @@ One obligation state as reported in a filing and period. Separates opening and c
 | `source_amendment_code` | `VARCHAR` | Literal native amendment code; it does not establish replacement scope from the retained filing layout. |
 | `source_original_transaction_id` | `VARCHAR` | Literal native original-transaction reference from the retained filing layout. |
 | `source_supr_transaction_id` | `VARCHAR` | Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout. |
+| `filing_association_status` | `VARCHAR` | The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing. |
+| `filing_association_policy` | `VARCHAR` | Version of the maintained filing association rule used for this decision. |
+| `filing_association_source_generation_pin` | `VARCHAR` | Exact selected source generation used for the filing association decision. |
+| `filing_association_target_generation_pin` | `VARCHAR` | Exact selected filing-metadata generation against which this association was checked. |
+| `filing_association_record_id` | `VARCHAR` | Identity of the admitted association witness; null when source context or a singular header witness is unavailable. |
+| `filing_association_referenced_key` | `VARCHAR` | Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified. |
+| `filing_association_target_count` | `BIGINT` | Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest. |
+| `filing_association_target_record_ids` | `VARCHAR[]` | Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

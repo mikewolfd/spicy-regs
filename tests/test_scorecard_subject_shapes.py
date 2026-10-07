@@ -29,7 +29,7 @@ def test_every_provider_and_resolver_field_is_explicitly_classified():
     actual = {name: set(c.columns) for name, c in SCORECARD_TABLES.items()}
     actual.update({name: set(columns) for name, columns in LINK_COLUMNS.items()})
     assert actual == {name: set(columns) for name, columns in SOURCE_COLUMNS.items()}
-    assert not DOMAIN_COLUMNS["scorecard_snapshots"]
+    assert DOMAIN_COLUMNS["scorecard_snapshots"] == SOURCE_COLUMNS["scorecard_snapshots"]
 
 
 @pytest.mark.parametrize("value", [None, "[]", '["alias","alias","last"]'])

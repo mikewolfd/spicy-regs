@@ -89,7 +89,16 @@ def _selects(spec: ArrayRelationship, pin: object) -> tuple[str, str, str]:
             CASE WHEN {valid} AND ({spec.target_expression}) IS NOT NULL
                  THEN 'not_checked' ELSE 'unsupported' END AS target_status,
             {provenance}{details}
-        FROM {source} s, json_each({array}) e"""
+        FROM (SELECT s.*, unnest(json_extract({array}, '$[*]')) AS _relationship_element,
+                generate_subscripts(json_extract({array}, '$[*]'),1)-1 AS _relationship_ordinal
+              FROM {source} s) s"""
+    # SELECT-list expansion retains duplicate/null positions without hashing
+    # every source row in json_each's correlated delimiter join. These are the
+    # only json_each fields the maintained array recipes consume.
+    occurrence_sql = (occurrence_sql
+                      .replace("e.key", "CAST(s._relationship_ordinal AS VARCHAR)")
+                      .replace("e.value", "s._relationship_element")
+                      .replace("e.type", "json_type(s._relationship_element)"))
     pair_sql = f"""SELECT DISTINCT {identity}, target_kind, target_key, target_status,
             source_table, source_field, source_publication_json, rule_version
         FROM {occurrences} WHERE parsing_status = 'valid' AND target_key IS NOT NULL"""

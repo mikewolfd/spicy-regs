@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from spicy_regs.runtime_bounds import checkpoint
+
 
 def processing_declarations():
     return json.loads(files("spicy_regs").joinpath("fec_processing_schemas.json").read_text())
@@ -89,10 +91,11 @@ class ReceiptAdapter:
 
     def selected_rows(self, table):
         """Read one dataset's exact native subjects and verified processing values."""
-        from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts, selected_subject_policy
+        from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts, selected_subject_policy, receipt_policies
         from .subject_catalog import descriptors
-        from .sources.publication import receipt_members, receipt_key_members, table_members
+        from .sources.publication import receipt_members, receipt_key_members, table_members, table_owner
 
+        checkpoint()
         self.require_selected((table,))
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
         owner, native = receipt_owner(self.index, table), self.local_native.get(table)
@@ -106,7 +109,7 @@ class ReceiptAdapter:
                 shared = directory / "shared.parquet"
                 self._fetch(receipt_members(self.index, dataset=table)[0], shared)
                 subjects = []
-                if not policy.receipt_only:
+                if not policy.receipt_only and table_owner(self.index, table + ".parquet") is not None:
                     for ordinal, member in enumerate(table_members(self.index, table + ".parquet")):
                         path = directory / f"subject-{ordinal}.parquet"
                         self._fetch(member, path)
@@ -132,11 +135,18 @@ class ReceiptAdapter:
                              {"sha256": identity["sha256"], "byteSize": identity["bytes"],
                               "rows": pq.ParquetFile(shared).metadata.num_rows})
             receipt = select_receipts(shared, directory / "receipt.parquet", dataset=table)
+            if not subjects and not policy.receipt_only:
+                historical = [p for p in receipt_policies(policy) if p.receipt_only]
+                if len(historical) != 1:
+                    raise ValueError("Selected dataset has no exact historical receipt-only policy")
+                policy = historical[0]
+            else:
+                policy = selected_subject_policy(policy, subjects)
             if policy.receipt_only:
                 yield from (row["processing_fields"] for row in read_attempts(
                     [receipt], policy, generation_id=generation, outcomes=frozenset({"observed"})))
             else:
-                yield from read_with_receipts(subjects, [receipt], selected_subject_policy(policy, subjects),
+                yield from read_with_receipts(subjects, [receipt], policy,
                                              generation_id=generation)
 
     def restore_originals(self, table, schema, original, *, prefix):
@@ -153,6 +163,7 @@ class ReceiptAdapter:
         try:
             batch = []
             for selected in self.selected_rows(table):
+                checkpoint()
                 batch.append(original(selected))
                 if len(batch) == 2000:
                     con.register(temporary, pa.Table.from_pylist(batch, schema=schema))
@@ -174,6 +185,7 @@ class ReceiptAdapter:
         from .etl_receipts import DatasetPolicy
         from .subject_catalog import descriptors
 
+        checkpoint()
         self.require_selected((table,))
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
         declaration = processing_declarations()[table]

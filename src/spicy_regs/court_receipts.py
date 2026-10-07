@@ -22,7 +22,7 @@ from spicy_regs.etl_receipts import (
 )
 
 POLICIES = {
-    name: DatasetPolicy(name, schema, IDENTITIES[name], RECEIPT_FIELDS[name], policy_version='courts/1')
+    name: DatasetPolicy(name, schema, IDENTITIES[name], RECEIPT_FIELDS[name], policy_version='courts/2' if name in {'court_opinions', 'court_opinion_pdf_extractions'} else 'courts/1')
     for name, schema in SUBJECT_SCHEMAS.items()
 }
 
@@ -173,28 +173,27 @@ def local_receipt_selection(path: Path) -> tuple[Path, str]:
 def read_court_rows(path: Path, *, dataset: str, receipt_path: Path | None = None,
                     generation_id: str | None = None) -> Iterable[dict]:
     """Internal processing read; a migrated row never falls back to missing evidence."""
-    if not pq.read_schema(path).equals(SUBJECT_SCHEMAS[dataset]):
-        raise ValueError('Court prior must use the native subject schema and selected receipts')
+    from spicy_regs.etl_receipts import selected_subject_policy
+    try:
+        selected_policy = selected_subject_policy(POLICIES[dataset], [path])
+    except ValueError as error:
+        raise ValueError('Court prior must use the native subject schema and selected receipts') from error
     if receipt_path is None:
         receipt_path, generation_id = local_receipt_selection(path)
     if generation_id is None:
         raise ValueError('Court internal read requires the selected receipt generation')
     with TemporaryDirectory(prefix='court-read-') as temporary:
         selected = select_receipts(receipt_path, Path(temporary) / 'etl_receipts.parquet', dataset=dataset)
-        yield from read_with_receipts([path], [selected], POLICIES[dataset], generation_id=generation_id)
+        yield from read_with_receipts([path], [selected], selected_policy, generation_id=generation_id)
 
 
-def restore_processing_input(path: Path, destination: Path, *, dataset: str, schema: pa.Schema,
-                             receipt_path: Path | None = None, generation_id: str | None = None) -> Path:
-    """Reconstruct the mapper's private merge columns, preserving exact raw literals."""
-    from spicy_regs.transforms.parquet_rows import write_rows
-
+def processing_rows(rows, *, dataset: str, schema: pa.Schema):
+    """Decode the maintained court mapper input from admitted exact matching rows."""
     names = tuple(schema.names)
     string_fields = tuple(field.name for field in schema if pa.types.is_string(field.type))
 
     def restored():
-        for row in read_court_rows(path, dataset=dataset, receipt_path=receipt_path,
-                                   generation_id=generation_id):
+        for row in rows:
             row = dict(row)
             row.update(row.get('conversion_inputs') or {})
             if dataset == 'court_dockets':
@@ -209,8 +208,18 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
                 if value is not None and not isinstance(value, str):
                     row[name] = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
             yield {name: row.get(name) for name in names}
-    return write_rows(restored(), destination, schema)
+    yield from restored()
 
+
+
+def restore_processing_input(path: Path, destination: Path, *, dataset: str, schema: pa.Schema,
+                             receipt_path: Path | None = None, generation_id: str | None = None) -> Path:
+    """Reconstruct the mapper's private merge columns, preserving exact raw literals."""
+    from spicy_regs.transforms.parquet_rows import write_rows
+
+    return write_rows(processing_rows(
+        read_court_rows(path, dataset=dataset, receipt_path=receipt_path, generation_id=generation_id),
+        dataset=dataset, schema=schema), destination, schema)
 
 def prior_receipt_selection(path: Path, *, dataset: str) -> tuple[Path | None, str | None]:
     """Select receipts from a local bundle or the same pinned publication as the prior."""

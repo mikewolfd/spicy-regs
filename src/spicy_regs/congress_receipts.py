@@ -57,7 +57,7 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         IDENTITIES.get(dataset, ()),
         RECEIPT_FIELDS,
-        policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications"} else "congress-subjects/1",
+        policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications", "member_vote_terms"} else "congress-subjects/1",
         receipt_only=dataset in RECEIPT_ONLY,
     )
 
@@ -262,6 +262,24 @@ def write_congress_dataset(
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
 
 
+def retained_source_rows(attempts, *, schema=None):
+    """Decode source rows and require the same retained footer on complete consumption."""
+    retained = None
+    for receipt in attempts:
+        data, diagnostic = receipt["processing_fields"], receipt["diagnostics"]
+        if data.get("entry_kind") == "table_metadata":
+            if retained is not None and retained != data:
+                raise ValueError("Congress input requires consistent retained source footers")
+            retained = data
+            if schema is not None and not schema.equals(
+                    pa.ipc.read_schema(pa.BufferReader(data["source_schema"])), check_metadata=True):
+                raise ValueError("Congress retained source schema or metadata changed")
+        elif data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused":
+            yield data["source_fields"]
+    if retained is None:
+        raise ValueError("Congress input requires consistent retained source footers")
+
+
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str,
     bulk: bool = False,
@@ -300,11 +318,8 @@ def restore_processing_input(
         # Source shapers use strings. Preserve discovered source columns and
         # absent columns by reading the exact retained input dictionaries.
         def original_rows():
-            for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-                data = receipt["processing_fields"]
-                diagnostic = receipt["diagnostics"]
-                if data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused":
-                    yield data["source_fields"]
+            yield from retained_source_rows(
+                read_attempts([scoped], selected, generation_id=generation_id), schema=schema)
 
         schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
         return write_rows(original_rows(), destination, schema)

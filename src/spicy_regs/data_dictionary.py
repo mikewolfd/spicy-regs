@@ -767,6 +767,13 @@ def contract_schemas() -> dict[str, list[tuple[str, str]]]:
 def contract_column_prose(table: str) -> dict[str, str]:
     """Source column prose, including this repository's added Record enrichment."""
     descriptions = dict(_contracts()[table].descriptions)
+    if table == "native_legal_reference_reads":
+        # The producer spells these counts as text; the public main table uses
+        # exact integers. Keep that storage meaning beside the source prose.
+        descriptions.update({
+            "source_bytes": "Exact retained XML byte count.",
+            "occurrence_count": "Number of observations produced by this completed selected-shape read, including zero.",
+        })
     if table == "house_communications":
         # SpicyDocs shapes publisher-decomposed rows with these slots empty.
         # This builder also fills them from a uniquely qualified printed entry.

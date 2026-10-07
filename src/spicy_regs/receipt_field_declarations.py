@@ -75,6 +75,7 @@ FAMILIES: tuple[tuple[str, str, Callable[[str], dict[str, tuple[str, ...]]]], ..
     ("fec-subject-receipts/", "FEC subject", _fec_subject),
     ("scorecards-etl-", "scorecards", _scorecards),
     ("courts/", "courts", lambda table: {}),
+    ("navigation-read-outcomes/", "source read outcomes", lambda table: {}),
 )
 
 

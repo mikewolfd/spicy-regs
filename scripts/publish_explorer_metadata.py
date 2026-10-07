@@ -134,6 +134,7 @@ def main() -> None:
     parser.add_argument("--publish", action="store_true", help="Write only explorer-metadata.v1.json to R2")
     parser.add_argument("--index", type=Path, help="Local version-2 publication index for an offline/read-only build")
     parser.add_argument("--output", type=Path, default=Path("output") / KEY)
+    parser.add_argument("--measurements", type=Path, help="Attach completed navigation measurements only when their exact current input/rule bindings match")
     parser.add_argument("--base-url", default=resolve_r2_base_url())
     args = parser.parse_args()
     if args.publish and args.index:
@@ -169,8 +170,19 @@ def main() -> None:
         return get_optional_public(url, INDEX_LIMIT) if allow_missing else get_public(url, INDEX_LIMIT)
     extra_tables = other_tables(index, args.base_url, read=read_publication, previous=previous)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    measurements = []
+    if args.measurements:
+        raw_measurements = args.measurements.read_bytes()
+        if len(raw_measurements) > METADATA_LIMIT:
+            raise ValueError("Navigation measurement receipt exceeds its reader limit")
+        measurement_receipt = json.loads(raw_measurements)
+        if not isinstance(measurement_receipt, dict):
+            raise ValueError("Navigation measurement receipt must be an object containing a results list")
+        measurements = measurement_receipt.get("results", [])
+        if not isinstance(measurements, list):
+            raise ValueError("Navigation measurement receipt must contain a results list")
     bundle = build_bundle(index, scorecard_publishers=scorecard_sources(index, args.base_url), source_revision=revision,
-                          extra_tables=extra_tables)
+                          extra_tables=extra_tables, measurements=measurements)
     encoded = canonical_bytes(bundle)
     if len(encoded) > METADATA_LIMIT:
         raise ValueError("Explorer metadata exceeds its reader limit")

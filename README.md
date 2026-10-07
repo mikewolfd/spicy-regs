@@ -379,8 +379,12 @@ See [FEC tables and child rows](docs/fec-query-views.md) for grains, evidence an
 `list_sources` returns each queryable table in `tables` with its label and
 coverage kind (`true_range`, `window`, `sampled`, `derived`, `not_a_range` or
 `empty`), the relationship views grouped under their shared summary, and
-declared names without a loaded view in `unavailable_tables`. Availability reflects the current cached
-connection, which normally refreshes after five minutes; it does not certify
+declared names without a loaded view in `unavailable_tables`. Discovery checks
+selected source schemas without restoring receipt-backed rows. `deferred_views`
+lists views whose exact receipt admission and output schema remain pending;
+`query_sql` validates those rows in a separate query connection. Matching FEC
+release declarations do not mean deferred views have executed. Availability
+reflects the current cached connection, which normally refreshes after five minutes; it does not certify
 population completeness or data freshness. `describe_table` returns the loaded
 columns, each with its dictionary meaning, plus declared row identifiers,
 coverage and data-quality notes, joins and the live `publication` pin.

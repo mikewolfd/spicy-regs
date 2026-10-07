@@ -1,7 +1,5 @@
 """Exercise the owned rollup entry point and its selected receipt prior."""
 
-from pathlib import Path
-
 import pyarrow.parquet as pq
 
 from spicy_regs.pipelines.rollups.laws import LawsRollup
@@ -44,12 +42,13 @@ def test_laws_rollup_runs_native_generation_with_verified_local_prior(tmp_path, 
     assert 1 not in [s.number for s in calls[1].selections]
 
 
-def test_senate_rollup_returns_one_native_path_and_runs_its_generation(tmp_path, monkeypatch):
+def test_senate_rollup_returns_native_subject_and_file_outcomes_in_one_generation(tmp_path, monkeypatch):
     from .test_senate_expenditures import _Reader, _listing, _granule, PACKAGE, PART_ONE, _Acquirer, _Extractor
     from spicy_regs.generations import verify_generation
     from spicy_regs.legislative_receipts import policy
     from spicy_regs.pipelines.rollups import senate_expenditures
     from spicy_regs.transforms.build_senate_expenditures import build_senate_expenditures
+    from spicy_regs.navigation_read_outcomes import FILE_POLICIES
 
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     monkeypatch.delenv("LEGISLATIVE_PRIOR_BUNDLE", raising=False)
@@ -68,15 +67,21 @@ def test_senate_rollup_returns_one_native_path_and_runs_its_generation(tmp_path,
     direct = tmp_path / "direct"
     direct.mkdir()
     built = pipeline.build(direct)
-    assert isinstance(built, Path)
-    assert built == direct / "senate_expenditures.parquet"
-    table = pq.read_table(built)
+    assert isinstance(built, tuple)
+    assert {path.name for path in built} == {"senate_expenditures.parquet", "senate_expenditures_document_file_outcomes.parquet"}
+    table = pq.read_table(direct / "senate_expenditures.parquet")
     assert table.num_rows > 0
     assert table.schema.equals(policy("senate_expenditures").subject_schema)
+    outcomes = pq.read_table(direct / "senate_expenditures_document_file_outcomes.parquet")
+    assert outcomes.schema.equals(FILE_POLICIES["senate_expenditures_document_file_outcomes"].subject_schema)
+    assert outcomes.num_rows > 0
+    assert sum(row["row_count"] for row in outcomes.to_pylist()) == table.num_rows
+    assert all(row["original_byte_sha256"] and row["native_members"] for row in outcomes.to_pylist())
 
     scheduled = tmp_path / "scheduled"
     senate_expenditures.SenateExpendituresRollup(output_dir=scheduled, skip_upload=True).run()
     [generation] = (scheduled / "generations").iterdir()
     artifact = verify_generation(generation)
     assert artifact.root["spec"]["etlReceipts"]["generationId"]
+    assert "senate_expenditures_document_file_outcomes.parquet" in artifact.root["spec"]["tables"]
     assert pq.read_table(scheduled / "senate_expenditures.parquet").equals(table)

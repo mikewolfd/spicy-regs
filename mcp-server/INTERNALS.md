@@ -137,9 +137,23 @@ into the next one.
 - **Only the refreshing caller waits.** Other callers keep the current
   connection while a rebuild runs (`_refreshing`). A failed refresh, such as a
   429 on a pointer or a member, logs and keeps the current connection until the
-  next TTL. Only a cold start, with nothing to serve, raises.
+  next TTL. Cold-start failures raise; request cancellation or deadline also
+  raises during a refresh while preserving the older pinned cache.
 - **Local mode rebuilds at every refresh**: its `current` link and member
   signatures are re-read at build.
+- **Discovery has a separate cache.** `list_sources` and `describe_table` bind
+  selected source schemas and compare release declarations without restoring
+  financial or citation rows. Receipt-dependent views return `status: deferred`
+  and `query_admission: pending_receipt_rows`; `list_sources.deferred_views`
+  groups every deferred name by its identical reason/admission state. Discovery
+  uses concise view labels; `describe_table` retains full registered meanings,
+  identities, dependencies and purpose limits. Receipt families are listed once
+  by name; `describe_table('etl_receipts')` carries their selected generation/hash/
+  row pins and shared receipt fields. Their output schema is not invented. Release
+  compatibility describes matching declarations, not completed row validation.
+  `query_sql` builds its own connection and runs all exact admission guards
+  before making those views queryable. Native local discovery still checks
+  held-byte pins and policy schemas, and reports pending receipt joins.
 - **Legacy comments files stay mutable.** Their views read the object current at
   each statement (the HEAD revalidates DuckDB's file cache), but the bound
   schema lasts until the pointers move. The build reads `comments-publication.json`
@@ -218,24 +232,27 @@ a client reads each row's values by the names in `columns`. One-row lookahead
 sets `truncated` only when `max_rows` actually omits a row. Validation refusals
 raise tool errors so MCP reports `isError: true` consistently.
 
-## The statement timeout
+## The request timeout
 
-**DuckDB has no `statement_timeout` parameter.** `SET statement_timeout=...`
-raises `Catalog Error: unrecognized configuration parameter` — this was a shipped
-runtime crash once, and `tests/test_mcp_server.py` guards the regression. The cap
-is a watchdog (`_statement_timeout`) that calls `cursor.interrupt()` and converts
-DuckDB's `InterruptException` into a `TimeoutError` so the cause is unambiguous.
+**DuckDB has no `statement_timeout` parameter.** Setting one raises a catalog
+error. `SPICY_REGS_STATEMENT_TIMEOUT` supplies a request budget instead: `790s`
+by default in code; the Cloudflare Worker passes `600s`.
 
-`SPICY_REGS_STATEMENT_TIMEOUT` defaults to `790s` in code. The active Cloudflare
-Worker passes `600s` to the container (see `deploy/cloudflare/worker/index.ts`).
-This is the application's cursor watchdog, not a measured platform or client
-request deadline. A client or outer runner can stop waiting earlier. The timer
-starts around the statement, after `query_sql` obtains its connection; it does
-not measure client startup, transport initialization, limiter wait or a cold
-connection build. The stdio entrypoint has no HTTP platform deadline.
+The budget begins before the tool enters the worker limiter. It covers cold
+connection locks, input hashing, remote streams, receipt admission and SQL.
+`runtime_bounds.RequestBound` carries one absolute deadline through these
+readers. Streaming and receipt batch checkpoints raise `TimeoutError`; remote
+HTTP timeouts use the remaining budget. Owned admission databases and each
+request's query cursor register for interruption. A cancelled/failed build
+closes its database and never enters the cache. Another request's cursor is
+not interrupted.
 
-Each tool call runs on its own worker thread and cursor, so the timer interrupts
-that cursor only, never a sibling call on the same connection.
+The async wrapper bounds caller waiting and signals cancellation when the
+client cancels. The worker stops at the next checkpoint or owned database
+interruption; this does not forcibly preempt arbitrary Python or OS file I/O.
+Direct internal statements outside an interactive request retain the original
+cursor watchdog for test/audit callers. These application bounds do not measure
+client startup, transport initialization or a platform deadline.
 
 For serialized local audits, bound lock acquisition separately from the client
 invocation and record attempt start, lock acquisition and terminal outcome in

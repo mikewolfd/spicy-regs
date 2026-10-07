@@ -27,7 +27,7 @@ from spicy_regs.etl_receipts import (
 )
 from .fec_native_subjects import FIELD_RULES, prepare_subject, subject_schema
 
-VERSION = "fec-subject-receipts/1"
+VERSION = "fec-subject-receipts/2"
 _CONVERSIONS = "fec_conversion_inputs"
 _INPUT_COLUMNS = "fec_input_columns"
 
@@ -39,16 +39,36 @@ def dataset_policy(table: str, input_schema: pa.Schema) -> DatasetPolicy:
     return DatasetPolicy(
         table,
         schema,
-        () if rule["receipt_only"] else ("record_id",),
+        tuple(rule.get("identity_fields", ("record_id",))),
         (_CONVERSIONS, _INPUT_COLUMNS),
         policy_version=VERSION,
         receipt_only=rule["receipt_only"],
     )
 
 
-def mapped_record(table: str, row: dict, policy: DatasetPolicy) -> dict:
+def mapped_record(table: str, row: dict, policy: DatasetPolicy, *, ordinal=None, association=None) -> dict:
     subject, processing = prepare_subject(table, row)
     values = {} if subject is None else {n: subject.get(n) for n in policy.subject_schema.names}
+    if "filing_association_status" in values:
+        values["filing_association_status"] = "not_evaluated"
+    if FIELD_RULES[table].get("observation_control"):
+        if type(ordinal) is not int or ordinal < 0:
+            raise ValueError("Public FEC control requires its generation-scoped observation ordinal")
+        values["observation_ordinal"] = ordinal
+    if association is not None:
+        # The exact pre-association mapper fields remain restorable. A derived
+        # decision never silently replaces already qualified source knowledge.
+        resolved = association.get("filing_key")
+        if row.get("filing_key") is not None and row["filing_key"] != resolved:
+            raise ValueError("Recorded filing key conflicts with the selected association")
+        processing = {**processing, "filing_key": row.get("filing_key")}
+        if "filing_link_status" in row:
+            processing["filing_link_status"] = row["filing_link_status"]
+        unknown = set(association) - set(policy.subject_schema.names) - {"filing_link_status"}
+        if unknown:
+            raise ValueError(f"Unclassified FEC association fields: {sorted(unknown)}")
+        values.update({name: value for name, value in association.items()
+                       if name in policy.subject_schema.names})
     return {**values, _CONVERSIONS: processing, _INPUT_COLUMNS: list(row)}
 
 
@@ -61,6 +81,7 @@ def write_fec_subjects(
     generation_id: str,
     context_for,
     batch_size: int = 2000,
+    associations_for=None,
 ):
     """Write actual mapper outputs and preserve failed conversion attempts.
 
@@ -77,12 +98,13 @@ def write_fec_subjects(
 
         def records():
             with failures_path.open("x", encoding="utf-8") as failed:
-                for ordinal, row in enumerate(rows):
+                selected = associations_for(rows) if associations_for else ((row, None) for row in rows)
+                for ordinal, (row, association) in enumerate(selected):
                     context = context_for(row, ordinal)
                     if not isinstance(context, ReceiptContext) or context.generation_id != generation_id:
                         raise ValueError("FEC context differs from the selected generation")
                     try:
-                        mapped = mapped_record(table, row, policy)
+                        mapped = mapped_record(table, row, policy, ordinal=ordinal, association=association)
                         # Check native values before write_dataset can expose any output.
                         split_record(policy, mapped, context)
                     except (ValueError, TypeError, pa.ArrowException) as error:
@@ -116,7 +138,9 @@ def read_fec_with_receipts(subject_paths, receipt_paths, policy, *, generation_i
     with select_receipts before this call. The shared reader checks the entire
     content/version/generation join before any row is returned.
     """
-    for row in read_with_receipts(subject_paths, receipt_paths, policy, generation_id=generation_id):
+    from spicy_regs.etl_receipts import selected_subject_policy
+    admitted = selected_subject_policy(policy, subject_paths)
+    for row in read_with_receipts(subject_paths, receipt_paths, admitted, generation_id=generation_id):
         conversion = row[_CONVERSIONS]
         original = {}
         for name in row[_INPUT_COLUMNS]:

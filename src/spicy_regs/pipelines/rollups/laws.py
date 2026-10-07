@@ -28,14 +28,14 @@ class LawsRollup(LegislativeReceiptRollup):
         return self.build_receipts(output_dir, build_laws, evidence=self.source_evidence)
 
 
-    def run(self) -> None:
+    def run(self, *, read_operation=None) -> None:
         """Publish the family, then fail the run if OLRC refused this run's Table III or classification read.
 
         The routes are keyless, so a 401/403 is the publisher blocking the read; the build journals it and publishes
         the rest (every row of the blocked table stands), and the failure here keeps the block visible on the run
         itself rather than only in the next night's ``check_source_refusals``.
         """
-        super().run()
+        super().run(read_operation=read_operation)
         blocked = olrc_access_refused(self.source_evidence) if self.source_evidence is not None else []
         if blocked:
             raise RuntimeError(

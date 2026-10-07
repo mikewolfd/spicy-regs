@@ -26,6 +26,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
@@ -77,7 +78,7 @@ def bulk_connection(directory: Path | None = None):
         with closing(duckdb.connect(str(root / "work.duckdb"), config={
             "threads": 4, "memory_limit": "4GB", "max_temp_directory_size": "32GB",
             "temp_directory": str(root / "spill"),
-        })) as con:
+        })) as con, bounded_connection(con):
             yield con, root
 
 
@@ -86,6 +87,7 @@ def _ordinal_file(con, query: str, parameters, path: Path) -> Iterator[int]:
     con.execute(f"COPY ({query}) TO {_literal(str(path))} (FORMAT PARQUET)", parameters)
     with pq.ParquetFile(path) as source:
         for batch in source.iter_batches(batch_size=_BATCH):
+            checkpoint()
             yield from batch.column(0).to_pylist()
 
 
@@ -255,7 +257,7 @@ def _receipt_insert_sql(policies: Mapping[str, DatasetPolicy], scoped: bool, *, 
         "INSERT INTO receipts SELECT n, dataset, generation_id, receipt_id, outcome,"
         " CASE WHEN outcome = 'accepted' THEN record_id END, CASE WHEN outcome = 'accepted' THEN subject_version END,"
         f" CASE WHEN outcome = 'accepted' THEN identity_json END, ({proven}) IS NOT TRUE"
-        + (", processing_json" if retain_processing else "") + " FROM (SELECT *,"
+        + (", processing_json, diagnostic_json" if retain_processing else "") + " FROM (SELECT *,"
         f" {receipt_json_sql()} AS body, {mapping_keys_sql('processing_json')} AS fields FROM source{selected})"
     )
 
@@ -299,6 +301,7 @@ def _numbered(
     def batches() -> Iterator[pa.RecordBatch]:
         first = start
         for batch in parquet.iter_batches(batch_size=_BATCH):
+            checkpoint()
             batch.validate(full=True)
             last = first + batch.num_rows
             kept = batch.num_rows
@@ -419,7 +422,7 @@ def _check_receipts(
     con.execute(
         "CREATE TABLE receipts (n BIGINT, dataset VARCHAR, generation_id VARCHAR, receipt_id VARCHAR, outcome VARCHAR,"
         " record_id VARCHAR, subject_version VARCHAR, identity_json VARCHAR, unproven BOOLEAN"
-        + (", processing_json VARCHAR" if retain_processing else "") + ")"
+        + (", processing_json VARCHAR, diagnostic_json VARCHAR" if retain_processing else "") + ")"
     )
     wanted = frozenset(policies) if scoped else None
     spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped, retain_processing=retain_processing), wanted=wanted)
@@ -583,58 +586,62 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id):
         raise NotBulkEligible("The row reader decides absent receipt inputs")
     with _validated_bundle({policy.dataset: subject_paths}, receipt_paths, [policy],
                            generation_id=generation_id, retain_processing=True) as con:
-        if not subject_paths:
-            return
-        start = 0
-        number = "n"
-        while number in {field.name.casefold() for field in policy.subject_schema}:
-            number += "_"
-        fields = ["\"" + field.name.replace('"', '""') + "\"" for field in policy.subject_schema]
-        subject_sql = "struct_pack(" + ", ".join(f"{name} := source.{name}" for name in fields) + ")"
-        record_id, version, identity = identity_sql(policy)
-        aliases = []
-        occupied = {field.name.casefold() for field in policy.subject_schema} | {number}
-        for name in ("_replay_id", "_replay_version", "_replay_identity", "_replay_reference"):
-            while name in occupied:
-                name += "_"
-            aliases.append(name)
-            occupied.add(name)
-        key_name, version_name, identity_name, reference_name = aliases
-        same = (f'CASE WHEN source."{reference_name}" IS NOT FALSE THEN NULL ELSE'
-                f' source."{key_name}" = s.record_id AND source."{version_name}" = s.version'
-                f' AND source."{identity_name}" = s.identity END')
-        for path in subject_paths:
-            with _parquet(path) as parquet:
-                if not parquet.schema_arrow.equals(policy.subject_schema):
-                    raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
-                read = [0, 0]
-                con.register("source", _numbered(parquet, start, number, None, read))
-                count = 0
-                try:
-                    query = (
-                        f'SELECT {subject_sql}, r.processing_json, {same}, s.record_id, s.version, s.identity'
-                        f' FROM (SELECT *, {record_id} AS "{key_name}", {version} AS "{version_name}",'
-                        f' {identity} AS "{identity_name}", {_subject_reference_sql(policy)} AS "{reference_name}"'
-                        f' FROM source) source JOIN subjects s ON source."{number}" = s.n AND NOT s.unproven'
-                        " JOIN receipts r ON s.dataset = r.dataset AND s.record_id = r.record_id"
-                        " AND s.version = r.subject_version AND s.identity = r.identity_json"
-                        f" AND r.outcome = 'accepted' ORDER BY source.\"{number}\""
-                    )
-                    for batch in con.execute(query).to_arrow_reader(_BATCH):
-                        raw = batch.column(0).to_pylist()
-                        subjects = _subjects(policy, raw)
-                        for subject, processing, matched, key, expected_version, expected_identity in zip(
-                            subjects, *(batch.column(i).to_pylist() for i in range(1, 6))
-                        ):
-                            if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
-                                raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
-                            count += 1
-                            yield subject | _unpack(json.loads(processing))
-                finally:
-                    con.unregister("source")
-                if read != [parquet.metadata.num_rows] * 2 or count != parquet.metadata.num_rows:
-                    raise ValueError("Receipt replay did not reconstruct every subject row")
-                start += count
+        yield from _replay_admitted_subjects(con, subject_paths, policy)
+
+
+def _replay_admitted_subjects(con, subject_paths, policy, *, start=0):
+    """Shared replay over already completely admitted state; no second admission."""
+    if not subject_paths:
+        return
+    number = "n"
+    while number in {field.name.casefold() for field in policy.subject_schema}:
+        number += "_"
+    fields = ["\"" + field.name.replace('"', '""') + "\"" for field in policy.subject_schema]
+    subject_sql = "struct_pack(" + ", ".join(f"{name} := source.{name}" for name in fields) + ")"
+    record_id, version, identity = identity_sql(policy)
+    aliases = []
+    occupied = {field.name.casefold() for field in policy.subject_schema} | {number}
+    for name in ("_replay_id", "_replay_version", "_replay_identity", "_replay_reference"):
+        while name in occupied:
+            name += "_"
+        aliases.append(name)
+        occupied.add(name)
+    key_name, version_name, identity_name, reference_name = aliases
+    same = (f'CASE WHEN source."{reference_name}" IS NOT FALSE THEN NULL ELSE'
+            f' source."{key_name}" = s.record_id AND source."{version_name}" = s.version'
+            f' AND source."{identity_name}" = s.identity END')
+    for path in subject_paths:
+        with _parquet(path) as parquet:
+            if not parquet.schema_arrow.equals(policy.subject_schema):
+                raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
+            read = [0, 0]
+            con.register("source", _numbered(parquet, start, number, None, read))
+            count = 0
+            try:
+                query = (
+                    f'SELECT {subject_sql}, r.processing_json, {same}, s.record_id, s.version, s.identity'
+                    f' FROM (SELECT *, {record_id} AS "{key_name}", {version} AS "{version_name}",'
+                    f' {identity} AS "{identity_name}", {_subject_reference_sql(policy)} AS "{reference_name}"'
+                    f' FROM source) source JOIN subjects s ON source."{number}" = s.n AND NOT s.unproven'
+                    " JOIN receipts r ON s.dataset = r.dataset AND s.record_id = r.record_id"
+                    " AND s.version = r.subject_version AND s.identity = r.identity_json"
+                    f" AND r.outcome = 'accepted' ORDER BY source.\"{number}\""
+                )
+                for batch in con.execute(query).to_arrow_reader(_BATCH):
+                    raw = batch.column(0).to_pylist()
+                    subjects = _subjects(policy, raw)
+                    for subject, processing, matched, key, expected_version, expected_identity in zip(
+                        subjects, *(batch.column(i).to_pylist() for i in range(1, 6))
+                    ):
+                        if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
+                            raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
+                        count += 1
+                        yield subject | _unpack(json.loads(processing))
+            finally:
+                con.unregister("source")
+            if read != [parquet.metadata.num_rows] * 2 or count != parquet.metadata.num_rows:
+                raise ValueError("Receipt replay did not reconstruct every subject row")
+            start += count
 
 
 def read_attempts(receipt_paths, policy, *, generation_id, outcomes):

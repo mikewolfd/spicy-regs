@@ -1,25 +1,15 @@
 {
   "dataset": "fec_collections",
-  "policy_version": "fec-identity-context-receipts/1",
-  "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-  "identity_fields": [],
+  "policy_version": "fec-identity-context-receipts/2",
+  "subject_schema": "/////+gCAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAwAAACEAgAAQAIAABQCAADcAQAApAEAAGABAAAgAQAA7AAAALAAAAB0AAAAOAAAAAQAAAC8/f//AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAYXJ0aWZhY3Rfc2hhMjU2AKz9///s/f//AAABBRAAAAAoAAAABAAAAAAAAAAXAAAAY29sbGVjdGlvbl9vdXRjb21lX2pzb24A5P3//yT+//8AAAEFEAAAACgAAAAEAAAAAAAAABQAAABjb3ZlcmFnZV9saW1pdHNfanNvbgAAAAAc/v//XP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFAAAAHJlcXVlc3RlZF9zY29wZV9qc29uAAAAAFT+//+U/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAcmVjb3JkX291dGNvbWUAAIT+///E/v//AAABAhAAAAAkAAAABAAAAAAAAAASAAAAcmVsYXRpb25zaGlwX2NvdW50AADI////AAAAAUAAAAAA////AAABAhAAAAAoAAAABAAAAAAAAAAMAAAAcmVjb3JkX2NvdW50AAAAAAgADAAIAAcACAAAAAAAAAFAAAAAQP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEgAAAHNvdXJjZV9zdGF0ZV9zY29wZQAANP///3T///8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzb3VyY2Vfc3lzdGVtX2lkAAAAAGj///+o////AAABBRAAAAAYAAAABAAAAAAAAAAHAAAAcHJvZmlsZQCQ////0P///wAAAQUQAAAAIAAAAAQAAAAAAAAADQAAAHNvdXJjZV9mYW1pbHkAAADA////EAAUAAgABgAHAAwAAAAQABAAAAAAAAEFEAAAACQAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAABAAEAAQAAAA=",
+  "identity_fields": [
+    "collection_id"
+  ],
   "receipt_fields": [
-    "collection_id",
-    "source_family",
-    "profile",
-    "source_system_id",
-    "source_state_scope",
-    "record_count",
-    "relationship_count",
-    "record_outcome",
-    "requested_scope_json",
-    "coverage_limits_json",
-    "collection_outcome_json",
-    "artifact_sha256",
     "conversion_inputs",
     "conversion_diagnostics",
     "source_input"
   ],
-  "receipt_only": true,
+  "receipt_only": false,
   "nullable_identity_fields": []
 }

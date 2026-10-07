@@ -116,6 +116,30 @@ descriptions still refresh. Malformed or never-documented keys fail validation.
 Valid joins with an unpublished endpoint are retained in
 `omittedJoins` with an explanation, and are excluded from actionable navigation.
 
+## Main-field navigation availability
+
+Each table may expose `recordIdentity`, the complete declared main row key from
+its dictionary or subject policy. `uniqueness: unknown` means this declaration
+has not proved that the selected target population is unique. Receipt-only
+policies do not supply main record identities.
+
+Navigation targets expose `requiredMainFields`, `requiredElementFields` and
+`requiredTargetFields`, with each path marked `published`, `runtime_checked` or
+`missing`. Native nested fields are checked against the selected STRUCT schema.
+JSON paths are checked by the shared key recipes for each occurrence. Missing
+row context, nested keys or target columns disable only the affected target.
+`receiptFields` remain inspection context and never make operational keys
+available. Unpublished sources and targets retain explicit dispositions.
+
+`directions.forward` and `.reverse` describe each route's availability,
+measurement scope and lookup capability. Unknown measurements stay unknown;
+a declared cardinality or a historical reference-only proof does not establish
+current complete-key uniqueness. Available ordinary routes use exact scans.
+`completeKey` only says the destination columns form its declared main identity;
+opening one record still requires an exact current lookup with one result.
+`retiredJoins` accounts for processing relationships excluded from operational
+navigation, alongside `omittedJoins` for currently unavailable scalar routes.
+
 ## Refresh and deployment
 
 The `Publish explorer metadata` workflow runs after dictionary changes on
@@ -170,3 +194,85 @@ bundled old join dictionary.
 Coverage text is documented scope, not an inferred date range. A missing or
 invalid table publication date stays unavailable; it must not be replaced by
 `generatedAt`, the source modification date or a backfill time.
+
+## Reusing navigation measurements
+
+`scripts/measure_source_navigation.py` measures named routes from the canonical
+registry using an explicit saved publication and a JSON map of its member paths
+to retained local files. It reads main data only and writes derived cache files
+and a measurement receipt. It does not refresh data or alter join baselines.
+
+Every member must pass SHA-256, byte-size, footer-row and exact-schema checks;
+member rows must sum to the selected table population. Unchanged local file
+signatures reuse prior byte admission while every footer is still checked.
+A changed member rebuilds that member's projected keys and guarded occurrences.
+Unchanged member projections remain reusable. Aggregate proofs bind every
+member, schema, generation, recipe and relevant implementation; changed rules
+reuse unaffected target populations. Partial or damaged cache outputs are misses.
+
+Counts distinguish occurrences, repeated references, physical source rows,
+qualified distinct source records and target-key multiplicity. Missing, null,
+duplicate or unsupported source identities prevent distinct-record claims.
+Complete target-key populations qualify uniqueness; reference-only observations
+do not. Native scalar joins refuse text/numeric coercion.
+
+The publisher accepts an optional `--measurements <receipt.json>`. It attaches
+counts only when the receipt reconciles and matches the current complete source
+and target bindings and unchanged recipe. Separate publications retain their
+exact file identities, including mutable ETags. Missing, stale, conflicting or
+partial measurements leave each direction unknown. Public lookup capabilities
+remain exact scans; measurement caches are neither browser row locators nor
+receipt indexes. Producing and supplying these measurements is explicit; the
+existing scheduled publisher does not start corpus scans.
+
+### Affected routes and a complete census
+
+The runner reads the maintained `joins_record()` declarations directly. Select
+named `--route` values, or repeat `--affected-table` to select both outgoing and
+incoming routes for changed tables. Use `--all` for a census of every canonical
+route target. These selections never replace a main table with a cheaper index
+or a receipt table.
+
+```sh
+PYTHONPATH=src python scripts/measure_source_navigation.py \
+  --publication selected-publication.json --members held-members.json \
+  --extra-tables selected-extra-tables.json \
+  --cache .navigation-measurements --output navigation-measurements.json \
+  --affected-table nominations --affected-table house_communications
+```
+
+Omit `--extra-tables` when only generation publications are involved. The member
+map associates each exact selected public member path with a held local file.
+For separate publications, supply the complete descriptor, its exact
+`publicationIdentity`, and `publicationSchema`; the runner does not infer these
+from filenames or a prior key-column projection.
+
+The output retains the publisher's `results` list and adds a `census` entry for
+every declared route target. Status is `complete`, `unavailable`,
+`not_requested`, or `not_applicable` for an external URL. Unavailable entries
+retain current source/target bindings, the recipe fingerprint, the failure
+stage and reason. Their counts stay null; a missing file is not zero references.
+Exit status 2 means at least one requested table route is unavailable. Keep
+that receipt for the release review rather than changing a baseline to pass.
+
+The default total input budget is 256 MiB per route across all selected source
+and target members. It is checked before opening data files, including when a
+table is split into small members. `--max-route-input-bytes` explicitly changes
+that total budget. Existing per-member input and projected-column budgets still
+apply. An unchanged larger historical proof remains historical evidence; this
+runner does not bypass its current admission budget to promote it.
+
+Keep the derived cache between owner runs. At unchanged member and rule pins,
+the cache performs no projection, occurrence expansion or result aggregation.
+A changed member rebuilds its own keys; a changed guard rebuilds the affected
+recipe. The runner adds no prior-state cache and never downloads source files.
+The receipt's per-route `work` and aggregate `work` show executed and reused
+stages.
+
+CI can run `tests/test_navigation_measurement_runner.py` with fixture members
+and read-only repository permissions. An owner release job can run the command
+against already-staged pinned members, retain the census as an artifact, and
+pass its `results` to `publish_explorer_metadata.py --measurements`. Do not add a
+scheduled full-corpus download. The existing exact-main schema gates remain
+required before metadata publication; production website and MCP checks remain
+separate release steps.

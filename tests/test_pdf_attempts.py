@@ -175,14 +175,14 @@ def catalog():
 
 
 @pytest.mark.parametrize("record_type", [DOCUMENT, COMMENT])
-def test_native_subjects_keep_pdf_diagnostics_in_receipts(catalog, record_type):
+def test_native_subjects_publish_pdf_outcomes_and_preserve_processing(catalog, record_type):
     row = {**dict.fromkeys(record_type.schema), record_type.dedup_key: 'retained'}
     catalog.register('source', pl.DataFrame([row], schema=record_type.schema).to_arrow())
     iceberg.replace_rows(catalog, record_type, 'source')
     iceberg._ensure_table(catalog, record_type)
     observed = catalog.execute(f"DESCRIBE {iceberg._qualified(record_type)}").fetchall()
     assert [column[0] for column in observed] == policy(record_type.name).subject_schema.names
-    assert FIELD not in [column[0] for column in observed]
+    assert dict((column[0], column[1]) for column in observed)[FIELD] == "VARCHAR"
     assert catalog.execute(
         f'SELECT "{record_type.dedup_key}", {FIELD} FROM {processing_table(catalog, record_type)}'
     ).fetchall() == [('retained', None)]
@@ -191,7 +191,7 @@ def test_native_subjects_keep_pdf_diagnostics_in_receipts(catalog, record_type):
 def test_incompatible_native_schema_refuses_without_replacing_data(catalog):
     iceberg._ensure_table(catalog, COMMENT)
     table = iceberg._qualified(COMMENT)
-    catalog.execute(f'ALTER TABLE {table} ADD COLUMN {FIELD} INTEGER')
+    catalog.execute(f'ALTER TABLE {table} ALTER COLUMN {FIELD} TYPE INTEGER')
     catalog.execute(f"INSERT INTO {table} (comment_id, {FIELD}) VALUES ('retained', 7)")
     with pytest.raises(ValueError, match='schema differs'):
         iceberg._ensure_table(catalog, COMMENT)
@@ -250,7 +250,8 @@ def test_catalog_mixed_pdf_results_survive_export_and_derived_text_update(catalo
         attempted,
     )
     exported = pl.read_parquet(iceberg._export_parquet(catalog, COMMENT, tmp_path))
-    assert FIELD not in exported.columns
+    assert exported.filter(pl.col("comment_id") == "C1")[FIELD].to_list() == [attempted]
+    assert exported.filter(pl.col("comment_id") == "C2")[FIELD].to_list() == [None]
     from spicy_regs.transforms.regulations_receipts import ReceiptInput, read_internal
     pair = tmp_path / '.catalog-pairs' / 'comments'
     generation = json.loads((pair / 'generation.json').read_text())['generation_id']

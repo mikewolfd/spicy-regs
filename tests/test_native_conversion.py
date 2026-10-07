@@ -44,6 +44,11 @@ DOCKET = {
 def bucket(monkeypatch):
     """The shared in-memory bucket, also answering the public reads the conversion makes outside the index."""
     store = install(monkeypatch)
+    fetch = publication.fetch_member
+    # The public API accepts an omitted diagnostic label; the shared older fixture requires one.
+    def fetch_member(base, member, target, label=None):
+        return fetch(base, member, target, label)
+    monkeypatch.setattr(publication, "fetch_member", fetch_member)
     monkeypatch.setenv("R2_BUCKET_NAME", BUCKET)
     monkeypatch.setenv("R2_ENDPOINT", "https://account.r2.invalid")
 
@@ -212,7 +217,9 @@ def test_families_of_one_source_convert_in_turn_and_roll_back_alone(tmp_path, mo
     families = publication.current_index(BASE)["families"]
     for family in receipts:
         entry = families[family]
-        assert entry == receipts[family]["published"]["entry"] and entry["etlReceipts"]["datasets"] == [family]
+        expected_datasets = [family, "nominations_detail_reads"] if family == "nominations" else [family]
+        assert entry == receipts[family]["published"]["entry"]
+        assert entry["etlReceipts"]["datasets"] == expected_datasets
         held = pq.read_table(receipts[family]["generation"]["directory"] + "/etl_receipts.parquet")
         assert set(held["generation_id"].to_pylist()) == {entry["etlReceipts"]["generationId"]}
         assert set(held["dataset"].to_pylist()) == {family, "congress_acquisition"}
@@ -453,14 +460,14 @@ def test_a_refused_pointer_write_reports_the_state_it_left(tmp_path, monkeypatch
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
     other = old | {"artifactDigest": "sha256:" + "c" * 64, "prefix": "generations/cfr-sections/" + "c" * 64}
-    real = publication.publish_generation
+    real = publication._publish_verified_generation
 
     def publish(*arguments, **options):
         index = publication.parse_index(bucket.objects[V2])
         bucket.objects[V2] = canonical_json_bytes({**index, "version": 2, "families": index["families"] | {"cfr-sections": other}})
         return real(*arguments, **options)
 
-    monkeypatch.setattr(publication, "publish_generation", publish)
+    monkeypatch.setattr(publication, "_publish_verified_generation", publish)
     work = tmp_path / "work"
     assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 1
     report = capsys.readouterr().err
@@ -471,7 +478,7 @@ def test_a_refused_pointer_write_reports_the_state_it_left(tmp_path, monkeypatch
     # The same refusal with the family untouched says nothing was published.
     bucket.objects[V2] = canonical_json_bytes({"format": publication.parse_index(bucket.objects[V2])["format"], "version": 2,
                                                "families": {"cfr-sections": old}})
-    monkeypatch.setattr(publication, "publish_generation",
+    monkeypatch.setattr(publication, "_publish_verified_generation",
                         lambda *_a, **_k: (_ for _ in ()).throw(publication.PublicationError("Refusing to shrink")))
     assert conversion.main(["cfr-sections", *COMMON, "--work", str(tmp_path / "again"), "--publish", "--expect-bucket", BUCKET]) == 1
     report = capsys.readouterr().err
@@ -839,17 +846,15 @@ def test_split_legislative_members_convert_and_restore_without_collapsing_partit
 ])
 def test_split_restoration_must_preserve_each_member_before_publication(tmp_path, monkeypatch, bucket, damage):
     """An unchanged union/count is insufficient: partition membership and each footer belong to the source."""
-    from dataclasses import replace
+    from spicy_regs.conversion_reads import _FamilyReader
 
     old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
     retained_first = tmp_path / "old/bill_sections/congress=118/part-000000.parquet"
-    real = conversion._convert_rollup
+    real = _FamilyReader.compare_original
 
-    def broken(*args, **kwargs):
-        built = real(*args, **kwargs)
-
-        def restore(dataset):
-            restored = built.restore(dataset)
+    def broken(reader, dataset, original, **kwargs):
+        def damage_input():
+            restored = original
             first = restored / "congress=118/part-000000.parquet"
             second = restored / "congress=119/part-000000.parquet"
             empty = restored / "congress=119/part-000001.parquet"
@@ -885,9 +890,9 @@ def test_split_restoration_must_preserve_each_member_before_publication(tmp_path
                 return first
             return restored
 
-        return replace(built, restore=restore)
+        return real(reader, dataset, damage_input(), **kwargs)
 
-    monkeypatch.setattr(conversion, "_convert_rollup", broken)
+    monkeypatch.setattr(_FamilyReader, "compare_original", broken)
     written = list(bucket.writes)
     with pytest.raises(conversion.ConversionRefused, match="does not restore") as refusal:
         convert("bill-family", tmp_path / "work", publish=True)
@@ -909,19 +914,19 @@ def test_split_layout_must_match_the_current_family_writer(tmp_path, monkeypatch
 
 
 def test_split_public_readback_checks_empty_member_and_reports_published_state(tmp_path, monkeypatch, bucket):
-    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.conversion_reads import ConversionReadOperation
 
     old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
-    real = SelectedPriors.get
+    real = ConversionReadOperation.admit_public_generation
 
-    def missing(self, dataset):
-        restored = real(self, dataset)
-        if "read-back" in restored.parts:
-            (restored / "congress=119/part-000001.parquet").unlink()
-        return restored
+    def missing(operation, base, index, family, directory):
+        entry = index["families"][family]
+        empty = next(member for member in entry["tables"]["bill_sections.parquet"]["members"] if member["rows"] == 0)
+        del bucket.objects[f"{entry['prefix']}/{empty['key']}"]
+        return real(operation, base, index, family, directory)
 
-    monkeypatch.setattr(SelectedPriors, "get", missing)
-    with pytest.raises(conversion.ConversionRefused, match="published native readback changed retained members") as refusal:
+    monkeypatch.setattr(ConversionReadOperation, "admit_public_generation", missing)
+    with pytest.raises(conversion.ConversionRefused) as refusal:
         convert("bill-family", tmp_path / "work", publish=True)
     assert "IS published" in refusal.value.state
     assert publication.current_index(BASE)["families"]["bill-family"] != old
@@ -974,7 +979,7 @@ def test_split_support_still_refuses_unlisted_physical_tables(tmp_path, monkeypa
 
     monkeypatch.setattr(conversion, "_convert_rollup", extra)
     written = list(bucket.writes)
-    with pytest.raises(conversion.ConversionRefused, match="physical tables.*differ from its declared tables"):
+    with pytest.raises(conversion.ConversionRefused, match="member changed after admission"):
         convert("bill-family", tmp_path / "work", publish=True)
     assert bucket.writes == written
     assert publication.current_index(BASE)["families"]["bill-family"] == old
@@ -984,7 +989,7 @@ def test_split_support_still_refuses_unlisted_physical_tables(tmp_path, monkeypa
     ("committee-reports", "committee_report_reads"),
     ("native-legal-references", "native_legal_reference_reads"),
 ])
-def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
+def test_checkpoint_source_rows_convert_and_restore_in_their_declared_main_shape(
         tmp_path, monkeypatch, bucket, family, read_dataset):
     """The complete family includes checkpoint reads even when no subject row was produced."""
     from spicy_regs import etl_policy_registry
@@ -997,9 +1002,10 @@ def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
     cls = conversion._rollup_class(family)
     reads_key = read_dataset + ".parquet"
     assert reads_key in cls.source_outputs
-    assert reads_key not in cls.outputs
-    assert reads_key in cls.receipt_only_tables
-    assert next(p for p in cls.receipt_policies if p.dataset == read_dataset).receipt_only
+    processing_only = read_dataset == "committee_report_reads"
+    assert (reads_key not in cls.outputs) == processing_only
+    assert (reads_key in cls.receipt_only_tables) == processing_only
+    assert next(p for p in cls.receipt_policies if p.dataset == read_dataset).receipt_only == processing_only
     reads = (row(read_dataset, package_id="CRPT-119hrpt1", outcome="complete", rule_version="r1")
              if read_dataset == "committee_report_reads" else row(
                  read_dataset, scope_id="scope", source_family="uscode", source_record_key="record",
@@ -1028,8 +1034,325 @@ def test_receipt_only_source_rows_convert_and_restore_without_public_subject(
                                 expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
     current = publication.current_index(BASE)
     entry = current["families"][family]
-    assert reads_key not in entry["tables"]
+    assert (reads_key not in entry["tables"]) == processing_only
     assert read_dataset in entry["etlReceipts"]["datasets"]
     restored = SelectedPriors(tmp_path / "anonymous", index=current, public_url=BASE).get(read_dataset)
     assert pq.read_table(restored).to_pylist() == source_reads
     assert pq.read_schema(restored).equals(pq.read_schema(tmp_path / "old" / reads_key), check_metadata=True)
+
+
+def test_conversion_compares_all_datasets_with_one_reader_per_actual_generation(tmp_path, monkeypatch, bucket):
+    """Every dataset uses the admitted stream; anonymous bytes get a fresh admission after releasing the local one."""
+    from contextlib import contextmanager
+
+    from spicy_regs import conversion_reads
+    from spicy_regs.congress_subjects import INPUT_COLUMNS
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors, SubjectReceiptRollup
+
+    class TwoDatasetRollup(SubjectReceiptRollup):
+        name = "bill-family"
+        inputs = ()
+        outputs = ("treaties.parquet", "nominations.parquet")
+
+        def build(self, output_dir):
+            pytest.fail("Conversion must reuse retained source inputs")
+
+    monkeypatch.setattr(conversion, "_rollup_class", lambda family, base=None: TwoDatasetRollup)
+    originals = {
+        "treaties": [dict.fromkeys(INPUT_COLUMNS["treaties"]) | {"treaty_id": "119-1", "congress_received": "119"}],
+        "nominations": [dict.fromkeys(INPUT_COLUMNS["nominations"]) | {"citation": "PN1-119", "congress": "119"}],
+    }
+    publish_old(bucket, monkeypatch, tmp_path, "bill-family", originals)
+    admissions, comparisons, active = [], [], []
+    open_reader = conversion_reads._open_family_reader
+    compare_original = conversion_reads._FamilyReader.compare_original
+
+    @contextmanager
+    def recorded_reader(*args, **kwargs):
+        assert not active, "Release the local reader before admitting the anonymous generation"
+        with open_reader(*args, **kwargs) as reader:
+            admissions.append(reader)
+            active.append(reader)
+            try:
+                yield reader
+            finally:
+                active.pop()
+
+    def compare(reader, dataset, original, **kwargs):
+        comparisons.append((reader, dataset))
+        return compare_original(reader, dataset, original, **kwargs)
+
+    def materialized(*args, **kwargs):
+        pytest.fail("Conversion must compare the complete admitted stream without a restored Parquet or EXCEPT ALL")
+
+    monkeypatch.setattr(conversion_reads, "_open_family_reader", recorded_reader)
+    monkeypatch.setattr(conversion_reads._FamilyReader, "compare_original", compare)
+    monkeypatch.setattr(SelectedPriors, "get", materialized)
+    monkeypatch.setattr(conversion, "_differences", materialized)
+    monkeypatch.setattr(conversion, "_table_differences", materialized)
+    receipt = convert("bill-family", tmp_path / "work", publish=True)
+
+    assert len(admissions) == 2, "One receipt admission locally and one for actual anonymous bytes"
+    assert [sorted(dataset for reader, dataset in comparisons if reader is admitted) for admitted in admissions] == [
+        sorted(originals), sorted(originals)]
+    assert not active
+    assert receipt["read_back"]["anonymous_read_rows"] == {name: len(rows) for name, rows in originals.items()}
+
+
+@pytest.mark.parametrize("interruption", ["absent", "unsealed"])
+def test_resume_proves_retained_generation_without_rebuilding_or_relabeling_the_producer(
+    tmp_path, monkeypatch, bucket, interruption,
+):
+    from pathlib import Path
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    prepared = convert("cfr-sections", tmp_path / "work")
+    work = tmp_path / "work"
+    receipt_path = work / conversion.RECEIPT
+    generation = Path(prepared["generation"]["directory"])
+    artifact = json.loads((generation / "artifact.json").read_bytes())
+    identity = artifact["producer"]["implementationId"]
+    original_bytes = {path.relative_to(generation): path.read_bytes() for path in generation.rglob("*") if path.is_file()}
+    if interruption == "absent":
+        receipt_path.unlink()
+    else:
+        for name in ("prepared", "tables", "policy_versions", "generation", "lineage", "receipt_outcomes", "published"):
+            prepared.pop(name, None)
+        receipt_path.write_text(json.dumps(prepared))
+    verifier = STATE | {"checkout": "ef" * 20, "main": "ef" * 20}
+    histories = []
+
+    def historical(root, producer, publisher):
+        histories.append((producer, publisher))
+        return identity, {"version": WHEEL, "wheels": [{"hash": PINNED_WHEEL["locked_sha256"]}]}
+
+    def rebuild(*args, **kwargs):
+        pytest.fail("Resuming a complete generation must not rerun its writer")
+
+    monkeypatch.setattr(conversion, "_historical_producer", historical)
+    monkeypatch.setattr(conversion, "_convert_rollup", rebuild)
+    before_writes = list(bucket.writes)
+    resumed = conversion.resume_prepared(
+        generation, work=work, allowed=["cfr-sections"], expected_main=verifier["main"],
+        expected_spicy_docs=WHEEL, expected_producer=MAIN, state=lambda remote: dict(verifier),
+    )
+
+    assert histories == [(MAIN, verifier["main"])]
+    assert resumed["producer"]["commit"] == MAIN
+    assert resumed["producer"]["implementationId"] == identity
+    assert resumed["source"] == verifier
+    assert resumed["source"]["checkout"] != resumed["producer"]["commit"]
+    assert resumed["captured"]["entry"] == old
+    assert resumed["tables"]["cfr_sections"] == {
+        "retained_rows": 2, "subject_rows": 2, "rows_only_in_restored": 0, "rows_only_in_retained": 0,
+        "columns_only_in_restored": [], "columns_only_in_retained": [], "type_changes": {}, "metadata_changes": [],
+    }
+    assert resumed["prepared"]["receiptDigest"] == conversion._prepared_digest(resumed)
+    assert resumed["published"] is None and bucket.writes == before_writes
+    assert {path.relative_to(generation): path.read_bytes() for path in generation.rglob("*") if path.is_file()} == original_bytes
+    assert json.loads(receipt_path.read_bytes()) == resumed
+
+
+@pytest.mark.parametrize("damage", ["producer", "wheel", "missing-member", "retained-values", "prior", "attempted"])
+def test_resume_refuses_changed_proof_inputs_without_sealing_or_writing_the_bucket(tmp_path, monkeypatch, bucket, damage):
+    from pathlib import Path
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    prepared = convert("cfr-sections", tmp_path / "work")
+    work = tmp_path / "work"
+    generation = Path(prepared["generation"]["directory"])
+    artifact = json.loads((generation / "artifact.json").read_bytes())
+    identity = artifact["producer"]["implementationId"]
+    locked = {"version": WHEEL, "wheels": [{"hash": PINNED_WHEEL["locked_sha256"]}]}
+    receipt_path = work / conversion.RECEIPT
+    receipt_path.unlink()
+    if damage == "producer":
+        identity += "-different-source"
+    elif damage == "wheel":
+        locked["wheels"][0]["hash"] = "sha256:" + "cd" * 32
+    elif damage == "missing-member":
+        (generation / "etl_receipts.parquet").unlink()
+    elif damage == "retained-values":
+        retained = work / "retained/cfr_sections.parquet"
+        rows = pq.ParquetFile(retained).read()
+        heading = rows.schema.get_field_index("heading")
+        pq.write_table(rows.set_column(heading, "heading", pa.array(["Changed", ""])), retained)
+    elif damage == "prior":
+        captured_path = work / "captured-publication.v2.json"
+        captured = json.loads(captured_path.read_bytes())
+        captured["families"]["cfr-sections"]["publishedAt"] = "2000-01-01T00:00:00Z"
+        captured_path.write_text(json.dumps(captured))
+    else:
+        receipt_path.write_text(json.dumps({"publish_attempt": {"outcome": "attempted"}}))
+    previous = receipt_path.read_bytes() if receipt_path.exists() else None
+    writes = list(bucket.writes)
+    monkeypatch.setattr(conversion, "_historical_producer", lambda *_: (identity, locked))
+
+    def rebuild(*args, **kwargs):
+        pytest.fail("An invalid resume must never restart its writer")
+
+    monkeypatch.setattr(conversion, "_convert_rollup", rebuild)
+    message = {
+        "producer": "producer source or installed locked runtime differs",
+        "wheel": "producer source or installed locked runtime differs",
+        "missing-member": "member|absent|missing|not found",
+        "retained-values": "retained member bytes changed",
+        "prior": "bind its captured complete prior",
+        "attempted": "unsealed generation with no publication attempt",
+    }[damage]
+    with pytest.raises(conversion.ConversionRefused, match=message):
+        conversion.resume_prepared(generation, work=work, allowed=["cfr-sections"], expected_main=MAIN,
+                                   expected_spicy_docs=WHEEL, expected_producer=MAIN, state=lambda remote: dict(STATE))
+    assert (receipt_path.read_bytes() if receipt_path.exists() else None) == previous
+    assert bucket.writes == writes
+    assert publication.current_index(BASE)["families"]["cfr-sections"] == old
+
+
+def test_historical_bill_membership_does_not_require_or_synthesize_new_navigation_status_tables(tmp_path, monkeypatch, bucket):
+    """Check completed writer metadata against current optional additions without altering the retained artifact."""
+    from copy import deepcopy
+    from pathlib import Path
+
+    old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
+    prepared = convert("bill-family", tmp_path / "work")
+    generation = Path(prepared["generation"]["directory"])
+    spec = json.loads((generation / "artifact.json").read_bytes())["spec"]
+    # Model the earlier metadata shape only. Complete historical bytes are checked by resume/admission tests.
+    status = "bill_family_document_file_outcomes"
+    spec["tables"].pop(status + ".parquet")
+    spec["etlReceipts"]["policies"] = [policy for policy in spec["etlReceipts"]["policies"]
+                                      if policy["dataset"] != status]
+    unchanged = deepcopy(spec)
+
+    conversion._check_prepared_membership("bill-family", old, spec)
+    assert spec == unchanged
+    assert status + ".parquet" not in spec["tables"]
+    assert status not in {policy["dataset"] for policy in spec["etlReceipts"]["policies"]}
+
+    missing_original = deepcopy(spec)
+    missing_original["tables"].pop("bill_sections.parquet")
+    with pytest.raises(conversion.ConversionRefused, match="subject membership differs"):
+        conversion._check_prepared_membership("bill-family", old, missing_original)
+    unexpected = deepcopy(spec)
+    unexpected["tables"]["unexpected.parquet"] = {}
+    with pytest.raises(conversion.ConversionRefused, match="subject membership differs"):
+        conversion._check_prepared_membership("bill-family", old, unexpected)
+    wrong_partition = deepcopy(old)
+    wrong_partition["tables"]["bill_sections.parquet"]["partitionColumns"] = ["bill_id"]
+    with pytest.raises(conversion.ConversionRefused, match="partition declaration differs"):
+        conversion._check_prepared_membership("bill-family", wrong_partition, spec)
+
+
+def test_original_changing_during_writer_refuses_without_rehashing_or_publication(tmp_path, monkeypatch, bucket):
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    build = conversion._convert_rollup
+
+    def changed(*args, **kwargs):
+        original = args[2]["cfr_sections.parquet"]
+        table = pq.ParquetFile(original).read()
+        heading = table.schema.get_field_index("heading")
+        pq.write_table(table.set_column(heading, "heading", pa.array(["Modified source", ""])), original)
+        return build(*args, **kwargs)
+
+    def rehash(*args, **kwargs):
+        pytest.fail("An original changed after its verified fetch must refuse through the held state guard")
+
+    monkeypatch.setattr(conversion, "_convert_rollup", changed)
+    monkeypatch.setattr(conversion, "_file_digest", rehash)
+    writes = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="Retained originals changed"):
+        convert("cfr-sections", tmp_path / "work", publish=True)
+    assert bucket.writes == writes
+    assert publication.current_index(BASE)["families"]["cfr-sections"] == old
+    receipt = tmp_path / "work" / conversion.RECEIPT
+    assert not receipt.exists() or "prepared" not in json.loads(receipt.read_bytes())
+
+
+def test_operation_exit_failure_after_publication_reports_uncertainty(tmp_path, monkeypatch, bucket):
+    from spicy_regs.conversion_reads import ConversionReadOperation
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    exit_operation = ConversionReadOperation.__exit__
+
+    def changed(operation, *args):
+        exit_operation(operation, *args)
+        raise ValueError("Generation state changed during operation exit")
+
+    monkeypatch.setattr(ConversionReadOperation, "__exit__", changed)
+    with pytest.raises(conversion.ConversionRefused, match="Generation state changed during operation exit") as refusal:
+        convert("cfr-sections", tmp_path / "work", publish=True)
+    assert "result is not known" in refusal.value.state
+    assert conversion.NOTHING_PUBLISHED not in refusal.value.state
+    stored_entry = publication.current_index(BASE)["families"]["cfr-sections"]
+    receipt = json.loads((tmp_path / "work" / conversion.RECEIPT).read_bytes())
+    assert stored_entry != old
+    assert stored_entry == receipt["published"]["entry"]
+    assert receipt["publish_attempt"]
+
+
+@pytest.mark.parametrize("difference", ["field-order", "nullability", "field-metadata"])
+def test_rollup_conversion_checks_the_actual_maintained_restoration_schema(tmp_path, monkeypatch, bucket, difference):
+    """A schema the scheduled reader cannot reproduce must refuse conversion, even when values still match."""
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.generations import build_generation
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+
+    table = pa.Table.from_pylist(CFR, schema=pa.schema([(column, pa.string()) for column in CFR[0]]))
+    if difference == "field-order":
+        table = table.select(list(reversed(table.column_names)))
+    else:
+        fields = list(table.schema)
+        fields[0] = (fields[0].with_nullable(False) if difference == "nullability"
+                     else fields[0].with_metadata({b"source-note": b"retain this field metadata"}))
+        table = table.cast(pa.schema(fields))
+    original = tmp_path / "old/cfr_sections.parquet"
+    original.parent.mkdir()
+    pq.write_table(table, original)
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        build_generation(tmp_path / "old-generation", family="cfr-sections", files=[original], expected_keys=[original.name])
+        index = publication.publish_generation(tmp_path / "old-generation", client=bucket, bucket=BUCKET,
+                                               prior_index=publication.current_index(BASE))
+    old = index["families"]["cfr-sections"]
+    writes = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="schema"):
+        convert("cfr-sections", tmp_path / "work", publish=True)
+
+    # Establish the expectation through the maintained scheduled reader, not a copied schema definition.
+    restored = SelectedPriors(tmp_path / "scheduled", root=tmp_path / "work/build", public_url="").get("cfr_sections")
+    assert not pq.read_schema(restored).equals(pq.read_schema(original), check_metadata=True)
+    assert bucket.writes == writes
+    assert publication.current_index(BASE)["families"]["cfr-sections"] == old
+
+
+def test_court_conversion_refuses_file_metadata_the_maintained_restore_cannot_reproduce(tmp_path, monkeypatch, bucket):
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.court_receipts import restore_processing_input
+    from spicy_regs.generations import build_generation
+
+    table = pa.Table.from_pylist([DOCKET], schema=pa.schema([(column, pa.string()) for column in DOCKET]))
+    table = table.replace_schema_metadata({b"source-note": b"keep this court file metadata"})
+    original = tmp_path / "old/court_dockets.parquet"
+    original.parent.mkdir()
+    pq.write_table(table, original)
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        build_generation(tmp_path / "old-generation", family="courtlistener", files=[original], expected_keys=[original.name])
+        index = publication.publish_generation(tmp_path / "old-generation", client=bucket, bucket=BUCKET,
+                                               prior_index=publication.current_index(BASE))
+    old = index["families"]["courtlistener"]
+    writes = list(bucket.writes)
+    with pytest.raises(conversion.ConversionRefused, match="schema|metadata"):
+        convert("courtlistener", tmp_path / "work", publish=True)
+
+    generation = tmp_path / "work/build/generation"
+    artifact = json.loads((generation / "artifact.json").read_bytes())
+    (tmp_path / "scheduled").mkdir()
+    restored = restore_processing_input(
+        generation / original.name, tmp_path / "scheduled/court_dockets.parquet", dataset="court_dockets",
+        schema=table.schema.remove_metadata(), receipt_path=generation / "etl_receipts.parquet",
+        generation_id=artifact["spec"]["etlReceipts"]["generationId"],
+    )
+    assert not pq.read_schema(restored).equals(pq.read_schema(original), check_metadata=True)
+    assert bucket.writes == writes
+    assert publication.current_index(BASE)["families"]["courtlistener"] == old

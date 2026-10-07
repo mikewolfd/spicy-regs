@@ -17,6 +17,7 @@ import re
 from urllib.parse import urlsplit
 
 from spicy_regs.table_joins import KINDS
+from spicy_regs.explorer_navigation import directions
 
 KEY = "explorer-metadata.v1.json"
 FORMAT = "spicy-regs-explorer-metadata"
@@ -105,7 +106,8 @@ def publication_descriptions(live: dict) -> dict:
 def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dict | None = None,
                  join_record: dict | None = None, audit: dict | None = None,
                  scorecard_publishers: list[dict] | None = None, source_revision: str = "unknown",
-                 generated_at: str | None = None, extra_tables: dict | None = None) -> dict:
+                 generated_at: str | None = None, extra_tables: dict | None = None,
+                 measurements: list[dict] | None = None) -> dict:
     """Pure construction and validation; reads committed dictionaries by default."""
     live = published_tables(index)
     extra_tables = {name: entry for name, entry in (extra_tables or {}).items() if name not in live}
@@ -132,7 +134,10 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         if not source.get("name") or not public_url(source.get("url", ""), allow_http=True):
             raise ValueError("Invalid published scorecard publisher")
 
-    tables = {}
+    from spicy_regs.subject_catalog import descriptors
+    policies = descriptors()
+    tables: dict[str, dict] = {}
+    record_identities: dict[str, list[str]] = {}
     for name, live_table in sorted(live.items()):
         description = deepcopy(known.get(name, {}))
         schema = live_table["schema"]
@@ -140,7 +145,12 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         # The live index owns field presence/types, including new undocumented fields.
         description["columns"] = [{**documented_columns.get(column, {}), "column_name": column,
                                    "column_type": typ} for column, typ in schema]
-        identity = description.get("identity_columns", [])
+        policy = policies.get(name, {})
+        identity = description.get("identity_columns", []) or (
+            policy.get("identity_fields", []) if policy.get("receipt_only") is False else [])
+        if (not isinstance(identity, list) or any(not isinstance(key, str) or not key for key in identity)
+                or len(set(identity)) != len(identity)):
+            raise ValueError(f"Invalid declared record identity: {name}")
         missing_identity = sorted(set(identity) - {column for column, _ in schema})
         if missing_identity:
             # A composite identity is indivisible; never advertise a partial key.
@@ -149,6 +159,10 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
                 "columns": identity, "missing_columns": missing_identity,
                 "reason": "Selected published schema does not expose the complete declared identity.",
             }
+        record_identities[name] = identity if not missing_identity else []
+        if identity and not missing_identity:
+            description["recordIdentity"] = {"columns": identity, "basis": "declared_main_key",
+                                             "uniqueness": "unknown"}
         family = live_table["family"]
         origin = {**registry.get("families", {}).get(family, {}), **registry.get("tables", {}).get(name, {})}
         source_entries = [deepcopy(sources[key]) for key in origin.get("sources", [])]
@@ -202,19 +216,56 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
             omitted.append({"child": join["child"], "parent": join["parent"],
                             "reason": f"Fields no longer published: {', '.join(missing_keys)}."})
             continue
-        joins.append(deepcopy(join))
+        exposed = deepcopy(join)
+        exposed["requiredFields"] = {
+            side: [{"path": column, "status": "published"} for column in join[f"{side}_columns"]]
+            for side in ("child", "parent")}
+        exposed["directions"] = directions(True)
+        exposed["completeKey"] = {
+            side: bool(record_identities[join[side]]) and
+            set(join[f"{side}_columns"]) == set(record_identities[join[side]])
+            for side in ("child", "parent")}
+        joins.append(exposed)
     # Availability belongs to this index, while the audit's evidence belongs to
     # its reviewed snapshot. A disappearing parent must not leave 'connected'.
     from spicy_regs.explorer_navigation import published_navigation
     navigation = published_navigation(join_record.get("navigation", []),
-                                      {name: entry["schema"] for name, entry in live.items()})
+                                      {name: entry["schema"] for name, entry in live.items()},
+                                      record_identities)
+    if measurements:
+        from spicy_regs.navigation_measurements import attached_directions, scalar_navigation
+        proofs = {}
+        for proof in measurements:
+            if not isinstance(proof, dict) or not isinstance(proof.get("route"), dict):
+                continue
+            route = proof["route"]
+            if (not isinstance(route.get("id"), str) or not isinstance(route.get("targetIndex"), int)
+                    or isinstance(route.get("targetIndex"), bool)):
+                continue
+            identity = route["id"], route["targetIndex"]
+            if identity in proofs and proofs[identity] != proof:
+                proofs[identity] = None  # Conflicting evidence never selects an arbitrary winner.
+            else:
+                proofs[identity] = proof
+        for spec in navigation:
+            for i, target in enumerate(spec["targets"]):
+                proof = proofs.get((spec["id"], i))
+                qualified = attached_directions(index, spec, i, proof, extra_tables) if proof else None
+                if qualified:
+                    target["directions"] = qualified
+        for join in joins:
+            spec = scalar_navigation(join)
+            proof = proofs.get((spec["id"], 0))
+            qualified = attached_directions(index, spec, 0, proof, extra_tables) if proof else None
+            if qualified:
+                join["directions"] = qualified
     receipt_fields = read_json("receipt_fields.json").get("tables", {})
     for name, table in tables.items():
         table["receiptIdentity"] = table.get("identity_columns", [])
         table["receiptContainers"] = receipt_fields.get(name, {}).get("containers", {})
         available = sum(join["child"] == name or join["parent"] == name for join in joins)
-        available += sum(spec["source"] == name and spec["available"] and any(t["available"] for t in spec["targets"])
-                         or spec["available"] and any(t["table"] == name and t["available"] for t in spec["targets"])
+        available += sum(spec["source"] == name and any(t["available"] and t["sourceAvailable"] for t in spec["targets"])
+                         or any(t["table"] == name and t["available"] and t["sourceAvailable"] for t in spec["targets"])
                          for spec in navigation)
         unavailable = [join for join in omitted if name in (join["child"], join["parent"])]
         reviewed = table.get("joinAudit", {})
@@ -234,13 +285,22 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
                                   "reason": "The reviewed connections are no longer declared for this publication."}
         if unavailable:
             table["unavailableJoins"] = unavailable
+    retired = [{"child": j["child"], "child_columns": j["child_columns"],
+                "parent": j["parent"], "parent_columns": j["parent_columns"],
+                "status": "retired_processing_relationship", "reason": j.get("reason", ""),
+                "directions": directions(False),
+                "requiredFields": {side: [
+                    {"path": column, "status": "published" if column in
+                     dict(live.get(j[side], {}).get("schema", [])) else "missing"}
+                    for column in j[f"{side}_columns"]] for side in ("child", "parent")}}
+               for j in join_record.get("processing_joins", [])]
     return {"format": FORMAT, "version": 1,
             "generatedAt": generated_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "sourceRevision": source_revision,
             "publication": {"sha256": "sha256:" + hashlib.sha256(canonical_bytes(index)).hexdigest(),
                             "families": {f: e["artifactDigest"] for f, e in index["families"].items()}},
             "extra_tables": extra_tables, "tables": tables, "joins": joins, "omittedJoins": omitted,
-            "navigation": navigation}
+            "navigation": navigation, "retiredJoins": retired}
 
 
 def canonical_bytes(value: dict) -> bytes:

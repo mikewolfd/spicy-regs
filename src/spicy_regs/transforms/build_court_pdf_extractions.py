@@ -84,10 +84,49 @@ def merge_extractions(prior: pa.Table, fresh: pa.Table) -> pa.Table:
     return pa.Table.from_pylist([rows[key] for key in sorted(rows)] + failures, schema=RAW_SCHEMA)
 
 
+def qualify_parent_opinions(parent: Mapping, paths: Sequence[Path], opinions: Sequence[Mapping]) -> None:
+    """Prove each requested observation belongs to all exact selected parent bytes.
+
+    URLs and digests are compared only after complete member hash/row admission.
+    A duplicate native ID never supplies a singular parent, even with equal values.
+    No acquisition, current pointer lookup or receipt decoding happens here.
+    """
+    declared = parent.get("tables", {}).get("court_opinions.parquet")
+    if not isinstance(declared, Mapping) or not paths:
+        raise ValueError("Exact selected parent opinion members are required")
+    members = declared.get("members") or [declared]
+    if len(paths) != len(members):
+        raise ValueError("Selected parent opinion member count differs")
+    wanted = {str(opinion.get("opinion_id")): opinion for opinion in opinions}
+    matches = {key: [] for key in wanted}
+    fields = ("opinion_id", "cluster_id", "download_url", "sha1")
+    for path, member in zip(paths, members):
+        before = path.stat()
+        def stamp(stat):
+            return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+        with path.open("rb") as body:
+            digest = "sha256:" + hashlib.file_digest(body, "sha256").hexdigest()
+        if digest != member.get("sha256") or before.st_size != member.get("byteSize"):
+            raise ValueError("Parent opinion bytes differ from selected publication")
+        parquet = pq.ParquetFile(path)
+        if parquet.metadata.num_rows != member.get("rows") or not set(fields) <= set(parquet.schema_arrow.names):
+            raise ValueError("Selected parent opinion rows or capture qualification fields differ")
+        for batch in parquet.iter_batches(columns=list(fields), batch_size=4096):
+            for row in batch.to_pylist():
+                if row["opinion_id"] in wanted:
+                    matches[row["opinion_id"]].append(row)
+        if stamp(before) != stamp(path.stat()):
+            raise ValueError("Selected parent opinion changed during qualification")
+    for key, opinion in wanted.items():
+        if len(matches[key]) != 1 or any(matches[key][0][field] != opinion.get(field) for field in fields):
+            raise ValueError("Requested opinion is missing, ambiguous or differs from selected native parent")
+
+
 def prepare_captured_opinions(
     output: Path, items: Sequence[tuple[Mapping[str, Any], Any]], *,
     read_snapshot: dict, public_url: str, max_records: int = 10,
     max_capture_bytes: int = 16 * 1024 * 1024,
+    parent_subjects: Sequence[Path] = (),
 ) -> dict:
     """Seal an explicit bounded cohort using existing generation/evidence APIs.
 
@@ -103,6 +142,7 @@ def prepare_captured_opinions(
         raise ValueError('Repeated opinion IDs require explicit version selection')
     if any(len(capture.body) > max_capture_bytes for _, capture in items):
         raise ValueError('Opinion capture exceeds its explicit byte bound')
+    qualify_parent_opinions(parent, parent_subjects, [opinion for opinion, _ in items])
     output.mkdir(parents=True, exist_ok=False)
     evidence = CaptureEvidence(output, FAMILY)
     evidence.inherit(read_snapshot, public_url=public_url)
@@ -145,7 +185,8 @@ def prepare_captured_opinions(
             generation_id = owner['etlReceipts']['generationId']
         prior_rows = read_court_rows(prior_path, dataset='court_opinion_pdf_extractions',
             receipt_path=receipt_path, generation_id=generation_id)
-        prior_table = pa.Table.from_pylist(list(prior_rows), schema=RAW_SCHEMA)
+        prior_table = pa.Table.from_pylist(
+            [dict(row, **(row.get("conversion_inputs") or {})) for row in prior_rows], schema=RAW_SCHEMA)
         table = merge_extractions(prior_table, table)
         evidence.event('preserving-extraction-merge', prior_sha256=digest, prior_rows=len(prior_table),
                        fresh_rows=len(rows), output_rows=len(table),

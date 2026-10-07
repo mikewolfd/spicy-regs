@@ -215,7 +215,8 @@ PROCESSING = {
     .split()),
     'member_party_affiliations': frozenset('input_sha256 start_status end_status source_path observed_at'.split()),
     'member_terms': frozenset('observed_at party_affiliations_state'.split()),
-    'member_vote_terms': frozenset('term_match'.split()),
+    # Navigation requires the writer's explicit successful/unresolved outcome.
+    'member_vote_terms': frozenset(),
     'member_votes': frozenset(''.split()),
     'members': frozenset('roster observed_at'.split()),
     'nominations': frozenset('url detail_read'.split()),

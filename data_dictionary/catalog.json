@@ -447,15 +447,11 @@
       {
         "dataset": "agenda_item_proceedings",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "relationship_id"
         ],
         "processing_fields": [
-          "source",
-          "evidence_id",
-          "evidence_uri",
-          "evidence_date",
           "method",
           "actor_id",
           "run_id",
@@ -592,6 +588,19 @@
           "source_metadata",
           "source_schema",
           "entry_kind"
+        ]
+      },
+      {
+        "dataset": "bill_family_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -747,18 +756,16 @@
       {
         "dataset": "comment_periods",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "comment_period_id"
         ],
         "processing_fields": [
-          "source",
           "method",
           "actor_id",
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "unresolved_fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -767,14 +774,11 @@
       {
         "dataset": "comments",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "comment_id"
         ],
         "processing_fields": [
-          "comment_reference_values_json",
-          "text_extraction_status",
-          "pdf_extraction_results_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -829,6 +833,30 @@
         ]
       },
       {
+        "dataset": "committee_meetings_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
+        "dataset": "committee_report_read_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "package_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "committee_report_reads",
         "receipt_only": true,
         "policy_version": "legislative-documents/1",
@@ -847,6 +875,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "committee_reports_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -974,22 +1015,11 @@
       {
         "dataset": "court_opinion_pdf_extractions",
         "receipt_only": false,
-        "policy_version": "courts/1",
+        "policy_version": "courts/2",
         "identity_columns": [
           "opinion_body_id"
         ],
         "processing_fields": [
-          "source_url",
-          "resolved_url",
-          "source_sha256",
-          "native_sha1",
-          "actual_sha1",
-          "sha1_matches",
-          "pdf_extraction_results_json",
-          "observed_at",
-          "extractor",
-          "extractor_version",
-          "parent_opinion_publication_json",
           "conversion_inputs",
           "raw_source_record",
           "source_observation"
@@ -998,13 +1028,11 @@
       {
         "dataset": "court_opinions",
         "receipt_only": false,
-        "policy_version": "courts/1",
+        "policy_version": "courts/2",
         "identity_columns": [
           "opinion_id"
         ],
         "processing_fields": [
-          "sha1",
-          "download_url",
           "local_path",
           "extracted_by_ocr",
           "date_created",
@@ -1108,6 +1136,20 @@
         ]
       },
       {
+        "dataset": "document_citation_read_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "document_kind",
+          "document_key",
+          "body_version_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "document_citation_reads",
         "receipt_only": true,
         "policy_version": "legislative-documents/1",
@@ -1135,14 +1177,11 @@
       {
         "dataset": "documents",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "document_id"
         ],
         "processing_fields": [
-          "file_url",
-          "text_extraction_status",
-          "pdf_extraction_results_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -1151,7 +1190,7 @@
       {
         "dataset": "fcc_filings",
         "receipt_only": false,
-        "policy_version": "government-sources/2",
+        "policy_version": "government-sources/3",
         "identity_columns": [
           "id_submission"
         ],
@@ -1173,7 +1212,7 @@
       {
         "dataset": "fec_account_transfers",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1184,9 +1223,11 @@
       },
       {
         "dataset": "fec_agency_mapping_dispositions",
-        "receipt_only": true,
-        "policy_version": "fec-subject-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-subject-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
           "fec_conversion_inputs",
           "fec_input_columns"
@@ -1195,7 +1236,7 @@
       {
         "dataset": "fec_agency_report_documents",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1207,7 +1248,7 @@
       {
         "dataset": "fec_agency_report_text",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1219,7 +1260,7 @@
       {
         "dataset": "fec_agency_reports",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1231,7 +1272,7 @@
       {
         "dataset": "fec_allocated_disbursements",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1243,7 +1284,7 @@
       {
         "dataset": "fec_allocation_bases",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1254,40 +1295,12 @@
       },
       {
         "dataset": "fec_api_response_controls",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
-          "record_id",
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
-          "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_url",
-          "source_pointer",
-          "query_completeness",
-          "registry_scope_status",
-          "response_field",
-          "response_field_role",
-          "value_status",
-          "api_version",
-          "parsing_status",
-          "page",
-          "per_page",
-          "reported_count",
-          "reported_pages",
-          "observed_count",
-          "is_count_exact",
-          "source_cycle",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1296,7 +1309,7 @@
       {
         "dataset": "fec_audit_findings",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1308,7 +1321,7 @@
       {
         "dataset": "fec_bundled_contributions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1320,54 +1333,24 @@
       {
         "dataset": "fec_candidate_api_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
           "cycles_json",
-          "cycles_status",
           "election_years_json",
-          "election_years_status",
           "election_districts_json",
-          "election_districts_status",
           "inactive_election_years_json",
-          "inactive_election_years_status",
-          "source_url",
-          "source_pointer",
-          "original_result_pointer",
-          "candidate_id_status",
-          "query_completeness",
           "active_through_raw",
-          "active_through_status",
           "candidate_inactive_raw",
-          "candidate_inactive_status",
           "has_raised_funds_raw",
-          "has_raised_funds_status",
           "federal_funds_flag_raw",
-          "federal_funds_flag_status",
           "first_file_date_raw",
-          "first_file_date_status",
           "last_file_date_raw",
-          "last_file_date_status",
           "last_f2_date_raw",
-          "last_f2_date_status",
-          "source_cycle",
           "district_number_raw",
-          "district_number_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1376,7 +1359,7 @@
       {
         "dataset": "fec_candidate_history",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "candidate_id",
           "cycle"
@@ -1389,25 +1372,12 @@
       },
       {
         "dataset": "fec_collection_selection",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
-          "record_id",
-          "policy_version",
-          "purpose",
-          "collection_id",
-          "source_generation_pin",
-          "source_sha256",
-          "source_member_name",
-          "selected_collection_id",
-          "selection_status",
-          "selection_reason",
-          "equivalence_evidence_sha256",
-          "current_record_status",
-          "correction_applicability_status",
-          "source_member_ordinal",
-          "source_observations",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1415,22 +1385,12 @@
       },
       {
         "dataset": "fec_collections",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "collection_id"
+        ],
         "processing_fields": [
-          "collection_id",
-          "source_family",
-          "profile",
-          "source_system_id",
-          "source_state_scope",
-          "record_count",
-          "relationship_count",
-          "record_outcome",
-          "requested_scope_json",
-          "coverage_limits_json",
-          "collection_outcome_json",
-          "artifact_sha256",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1439,7 +1399,7 @@
       {
         "dataset": "fec_committee_history",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "committee_id",
           "cycle"
@@ -1453,29 +1413,13 @@
       {
         "dataset": "fec_committee_master_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_url",
-          "history_scope_status",
-          "source_cycle",
           "cycle_raw",
-          "cycle_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1484,47 +1428,20 @@
       {
         "dataset": "fec_committee_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_url",
-          "source_pointer",
-          "original_result_pointer",
-          "query_completeness",
-          "registry_scope_status",
-          "committee_id_status",
           "cycles_json",
-          "cycles_status",
           "candidate_ids_json",
-          "candidate_ids_status",
           "sponsor_candidate_ids_json",
-          "sponsor_candidate_ids_status",
           "first_file_date_raw",
-          "first_file_date_status",
           "last_file_date_raw",
-          "last_file_date_status",
           "first_f1_date_raw",
-          "first_f1_date_status",
           "last_f1_date_raw",
-          "last_f1_date_status",
-          "source_cycle",
           "sponsor_candidate_list_json",
-          "sponsor_candidate_list_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1533,7 +1450,7 @@
       {
         "dataset": "fec_committees",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "committee_id"
         ],
@@ -1548,7 +1465,7 @@
       {
         "dataset": "fec_communication_costs",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1560,7 +1477,7 @@
       {
         "dataset": "fec_contribution_aggregates",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1572,7 +1489,7 @@
       {
         "dataset": "fec_coordinated_party_expenditures",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1584,7 +1501,7 @@
       {
         "dataset": "fec_debts",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1596,7 +1513,7 @@
       {
         "dataset": "fec_disbursements",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1608,7 +1525,7 @@
       {
         "dataset": "fec_electioneering_communications",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1619,9 +1536,11 @@
       },
       {
         "dataset": "fec_filing_definition_evidence",
-        "receipt_only": true,
-        "policy_version": "fec-subject-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-subject-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
           "fec_conversion_inputs",
           "fec_input_columns"
@@ -1629,9 +1548,11 @@
       },
       {
         "dataset": "fec_filing_definitions",
-        "receipt_only": true,
-        "policy_version": "fec-subject-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-subject-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
           "fec_conversion_inputs",
           "fec_input_columns"
@@ -1639,9 +1560,11 @@
       },
       {
         "dataset": "fec_filing_header_associations",
-        "receipt_only": true,
-        "policy_version": "fec-subject-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-subject-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
           "fec_conversion_inputs",
           "fec_input_columns"
@@ -1650,31 +1573,14 @@
       {
         "dataset": "fec_filing_links",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_pointer",
-          "filing_link_status",
-          "target_resolution_status",
           "replacement_mode",
           "membership_completeness",
-          "reference_status",
-          "source_cycle",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1683,7 +1589,7 @@
       {
         "dataset": "fec_filing_report_observations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1695,7 +1601,7 @@
       {
         "dataset": "fec_filing_text_observations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1707,60 +1613,26 @@
       {
         "dataset": "fec_filings",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_pointer",
-          "filing_link_status",
-          "filer_id_status",
-          "candidate_id_status",
-          "pdf_body_status",
-          "linked_original_body_status",
-          "query_completeness",
           "amendment_chain_json",
-          "amendment_scope_status",
-          "financial_fields_status",
           "receipt_date_raw",
-          "receipt_date_status",
           "filed_date_raw",
-          "filed_date_status",
           "coverage_start_date_raw",
-          "coverage_start_date_status",
           "coverage_end_date_raw",
-          "coverage_end_date_status",
           "update_date_raw",
-          "update_date_status",
           "load_timestamp_raw",
-          "load_timestamp_status",
-          "source_cycle",
           "load_timestamp",
           "pages_raw",
-          "pages_status",
           "report_year_raw",
-          "report_year_status",
           "reported_cycle_raw",
-          "reported_cycle_status",
           "election_year_raw",
-          "election_year_status",
           "is_amended_raw",
-          "is_amended_status",
           "most_recent_raw",
-          "most_recent_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1769,7 +1641,7 @@
       {
         "dataset": "fec_historical_ie_statistics",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1781,7 +1653,7 @@
       {
         "dataset": "fec_inaugural_donations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1793,7 +1665,7 @@
       {
         "dataset": "fec_independent_expenditures",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1805,7 +1677,7 @@
       {
         "dataset": "fec_intercommittee_transactions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1817,7 +1689,7 @@
       {
         "dataset": "fec_legal_documents",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1829,7 +1701,7 @@
       {
         "dataset": "fec_legal_events",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1841,7 +1713,7 @@
       {
         "dataset": "fec_legal_matters",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1853,7 +1725,7 @@
       {
         "dataset": "fec_legal_parties",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1865,7 +1737,7 @@
       {
         "dataset": "fec_loan_guarantors",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1877,7 +1749,7 @@
       {
         "dataset": "fec_loan_terms",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1889,7 +1761,7 @@
       {
         "dataset": "fec_loans",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1901,31 +1773,13 @@
       {
         "dataset": "fec_lobbyist_registrations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_pointer",
-          "committee_id_status",
-          "lobbyist_status",
-          "image_body_status",
           "filed_date_raw",
-          "filed_date_status",
-          "source_cycle",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -1934,7 +1788,7 @@
       {
         "dataset": "fec_oversight_recommendations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -1946,59 +1800,28 @@
       {
         "dataset": "fec_postgres_committee_history_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_url",
-          "history_scope_status",
-          "source_cycle",
           "cycle_raw",
-          "cycle_status",
           "qualifying_date_raw",
-          "qualifying_date_status",
           "first_file_date_raw",
-          "first_file_date_status",
           "last_file_date_raw",
-          "last_file_date_status",
           "last_f1_date_raw",
-          "last_f1_date_status",
           "last_cycle_has_financial_raw",
-          "last_cycle_has_financial_status",
           "last_cycle_has_activity_raw",
-          "last_cycle_has_activity_status",
           "is_active_raw",
-          "is_active_status",
           "convert_to_pac_flag_raw",
-          "convert_to_pac_flag_status",
           "former_candidate_election_year_raw",
-          "former_candidate_election_year_status",
           "first_f1_date_raw",
-          "first_f1_date_status",
           "cycles_json",
-          "cycles_status",
           "candidate_ids_json",
-          "candidate_ids_status",
           "cycles_has_financial_json",
-          "cycles_has_financial_status",
           "cycles_has_activity_json",
-          "cycles_has_activity_status",
           "sponsor_candidate_ids_json",
-          "sponsor_candidate_ids_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2007,30 +1830,13 @@
       {
         "dataset": "fec_quality_notices",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_namespace",
-          "source_pointer",
-          "committee_id_status",
-          "exclusion_status",
           "first_receipt_date_raw",
-          "first_receipt_date_status",
-          "source_cycle",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2039,7 +1845,7 @@
       {
         "dataset": "fec_receipts",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -2050,23 +1856,12 @@
       },
       {
         "dataset": "fec_record_evidence",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
-          "target_table",
-          "target_record_id",
-          "target_generation_scope",
-          "witness_generation_scope",
-          "witness_generation_pin",
-          "role",
-          "endpoint_kind",
-          "collection_id",
-          "source_record_id",
-          "context_column",
-          "context_pointer",
-          "witness_sha256",
-          "witness_locator_json",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2075,34 +1870,15 @@
       {
         "dataset": "fec_registration_statements",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "identity_version",
-          "mapping_version",
-          "mapping_status",
           "mapping_reason_json",
-          "collection_id",
-          "source_record_id",
-          "source_sha256",
-          "source_locator_json",
-          "source_authority",
-          "selection_evidence_sha256",
-          "source_representation_role",
-          "current_record_status",
-          "source_pointer",
-          "committee_id_status",
-          "candidate_id_status",
-          "affiliation_status",
           "receipt_date_raw",
-          "receipt_date_status",
-          "source_cycle",
           "election_year_raw",
-          "election_year_status",
           "report_year_raw",
-          "report_year_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2111,18 +1887,11 @@
       {
         "dataset": "fec_relationships",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "subject_id_status",
-          "object_id_status",
-          "source_family",
-          "source_sha256",
-          "source_url",
-          "observed_at",
-          "source_locator_json",
           "source_fields_json",
           "conversion_inputs",
           "conversion_diagnostics",
@@ -2132,7 +1901,7 @@
       {
         "dataset": "fec_report_metrics",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -2144,7 +1913,7 @@
       {
         "dataset": "fec_reported_financial_summaries",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/1",
+        "policy_version": "fec-subject-receipts/2",
         "identity_columns": [
           "record_id"
         ],
@@ -2155,17 +1924,13 @@
       },
       {
         "dataset": "fec_research_context_dispositions",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
-          "collection_id",
-          "mapping_status",
-          "mapping_reason",
-          "source_url",
-          "context_sha256",
           "outputs_json",
-          "source_fact_count",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2174,25 +1939,15 @@
       {
         "dataset": "fec_research_document_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "mapping_version",
-          "collection_id",
-          "source_authority",
-          "source_url",
-          "source_sha256",
-          "context_sha256",
-          "source_context_pointer",
           "observed_at_json",
           "source_created_at",
           "source_updated_at",
-          "body_status",
-          "fec_relationship_status",
           "evidence_use",
-          "page_count_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2201,26 +1956,15 @@
       {
         "dataset": "fec_research_filing_feed_items",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "mapping_version",
-          "collection_id",
-          "source_authority",
-          "source_url",
-          "source_sha256",
-          "context_sha256",
-          "source_context_pointer",
           "observed_at_json",
           "published_at_raw",
-          "current_record_status",
-          "source_label_status",
           "coverage_start_raw",
           "coverage_end_raw",
-          "parsing_status",
-          "filing_link_status",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2229,21 +1973,13 @@
       {
         "dataset": "fec_research_meeting_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "mapping_version",
-          "collection_id",
-          "source_authority",
-          "source_url",
-          "source_sha256",
-          "context_sha256",
-          "source_context_pointer",
           "observed_at_json",
           "dates_json",
-          "date_status",
           "links_json",
           "table_ordinal",
           "table_row",
@@ -2254,25 +1990,13 @@
       },
       {
         "dataset": "fec_research_response_outcomes",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
-          "record_id",
-          "mapping_version",
-          "collection_id",
-          "source_authority",
-          "source_url",
-          "source_sha256",
-          "context_sha256",
-          "source_context_pointer",
           "observed_at_json",
-          "profile_refusal",
-          "query_completeness",
-          "payload_shape",
-          "outcome_status",
-          "capture_disposition",
-          "observed_payload_records",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2281,20 +2005,12 @@
       {
         "dataset": "fec_research_source_pages",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "mapping_version",
-          "collection_id",
-          "source_authority",
-          "source_url",
-          "source_sha256",
-          "context_sha256",
-          "source_context_pointer",
           "observed_at_json",
-          "content_status",
           "links_json",
           "conversion_inputs",
           "conversion_diagnostics",
@@ -2304,27 +2020,15 @@
       {
         "dataset": "fec_retained_csv_observations",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "record_id"
         ],
         "processing_fields": [
-          "mapping_version",
-          "collection_id",
-          "source_authority",
-          "source_url",
-          "source_sha256",
-          "context_sha256",
-          "source_context_pointer",
           "observed_at_json",
           "amount_raw",
-          "amount_status",
           "date_raw",
-          "date_status",
           "native_row_locator_json",
-          "coverage_status",
-          "current_total_status",
-          "report_year_status",
           "source_row_ordinal",
           "conversion_inputs",
           "conversion_diagnostics",
@@ -2333,21 +2037,13 @@
       },
       {
         "dataset": "fec_source_catalog",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "observation_ordinal"
+        ],
         "processing_fields": [
-          "source_family",
-          "title",
-          "api_routes_json",
-          "indexes_json",
-          "bulk_families_json",
-          "references_json",
           "source_metadata_json",
-          "catalog_sha256",
-          "provider_version",
-          "catalogued_at",
-          "coverage_note",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -2355,23 +2051,14 @@
       },
       {
         "dataset": "fec_source_records",
-        "receipt_only": true,
-        "policy_version": "fec-identity-context-receipts/1",
-        "identity_columns": [],
-        "processing_fields": [
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
           "collection_id",
-          "source_family",
-          "profile",
           "source_record_id",
-          "committee_id",
-          "candidate_id",
-          "filing_id",
-          "legal_doc_id",
-          "audit_case_id",
-          "source_sha256",
-          "source_url",
-          "observed_at",
-          "source_locator_json",
+          "source_sha256"
+        ],
+        "processing_fields": [
           "metadata_json",
           "assets_json",
           "embedded_bodies_json",
@@ -2452,7 +2139,7 @@
       {
         "dataset": "gao_decisions",
         "receipt_only": false,
-        "policy_version": "government-sources/2",
+        "policy_version": "government-sources/3",
         "identity_columns": [
           "decision_number",
           "url"
@@ -2475,7 +2162,7 @@
       {
         "dataset": "gao_reports",
         "receipt_only": false,
-        "policy_version": "government-sources/2",
+        "policy_version": "government-sources/3",
         "identity_columns": [
           "report_id"
         ],
@@ -2533,6 +2220,30 @@
         ]
       },
       {
+        "dataset": "house_communications_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/2",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
+        "dataset": "house_record_enrichment_results",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/2",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "law_code_sections",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -2571,6 +2282,19 @@
         ]
       },
       {
+        "dataset": "laws_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "legislative_document_file_states",
         "receipt_only": true,
         "policy_version": "1",
@@ -2582,15 +2306,11 @@
       {
         "dataset": "lifecycle_events",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "lifecycle_event_id"
         ],
         "processing_fields": [
-          "source",
-          "dated_by",
-          "evidence_id",
-          "joined_by",
           "method",
           "actor_id",
           "run_id",
@@ -2671,7 +2391,7 @@
       {
         "dataset": "member_vote_terms",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "vote_id",
           "member_key"
@@ -2714,9 +2434,11 @@
       },
       {
         "dataset": "native_legal_reference_reads",
-        "receipt_only": true,
-        "policy_version": "legislative-documents/1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "legislative-documents/2",
+        "identity_columns": [
+          "scope_id"
+        ],
         "processing_fields": [
           "raw_source_row"
         ]
@@ -2724,7 +2446,7 @@
       {
         "dataset": "native_legal_references",
         "receipt_only": false,
-        "policy_version": "legislative-documents/1",
+        "policy_version": "legislative-documents/2",
         "identity_columns": [
           "scope_id",
           "body_version_id",
@@ -2732,6 +2454,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "native_legal_references_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -2750,9 +2485,21 @@
         ]
       },
       {
+        "dataset": "nominations_detail_reads",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "attempt_id"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "org_committee_links",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/1",
+        "policy_version": "fec-identity-context-receipts/2",
         "identity_columns": [
           "organization",
           "committee_id"
@@ -2782,9 +2529,22 @@
         ]
       },
       {
+        "dataset": "print_citations_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
+        ]
+      },
+      {
         "dataset": "proceedings",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "proceeding_id"
         ],
@@ -2794,8 +2554,6 @@
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "fr_document_joins_json",
-          "unresolved_fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2836,7 +2594,7 @@
       {
         "dataset": "regulatory_agenda_items",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "agenda_item_id"
         ],
@@ -2847,7 +2605,6 @@
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "unresolved_fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2883,19 +2640,16 @@
       {
         "dataset": "rule_targets",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "rule_target_id"
         ],
         "processing_fields": [
-          "source",
-          "evidence_id",
           "method",
           "actor_id",
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2936,25 +2690,13 @@
       {
         "dataset": "scorecard_item_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "item_id",
           "reference_id"
         ],
         "processing_fields": [
-          "source_snapshot_id",
-          "resolution_status",
-          "resolution_rule",
-          "rule_version",
-          "candidate_count",
-          "candidates_json",
-          "reason",
-          "source_context_json",
-          "input_pins_json",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2962,26 +2704,22 @@
       {
         "dataset": "scorecard_items",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "item_id"
         ],
         "processing_fields": [
           "references_json",
-          "source_url",
-          "source_path",
           "position_basis",
           "position_source_path",
-          "snapshot_id",
-          "capture_id",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_member_item_results",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "item_id",
@@ -2989,10 +2727,6 @@
           "result_id"
         ],
         "processing_fields": [
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -3000,43 +2734,26 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
         ],
         "processing_fields": [
-          "term_candidates_json",
-          "override_version",
-          "source_snapshot_id",
-          "resolution_status",
-          "resolution_rule",
-          "rule_version",
-          "candidate_count",
-          "candidates_json",
-          "reason",
-          "source_context_json",
-          "input_pins_json",
-          "capture_id",
-          "source_url",
-          "source_path",
+          "conversion_inputs",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_member_ratings",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-ratings-v3",
+        "policy_version": "scorecards-etl-ratings-v4",
         "identity_columns": [
           "scorecard_id",
           "metric_id",
           "publisher_member_key"
         ],
         "processing_fields": [
-          "source_url",
-          "source_path",
-          "snapshot_id",
-          "capture_id",
           "conversion_inputs",
           "raw_source"
         ]
@@ -3044,50 +2761,38 @@
       {
         "dataset": "scorecard_members",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
         ],
         "processing_fields": [
           "identifiers_json",
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_methodologies",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "methodology_id"
         ],
         "processing_fields": [
-          "capture_id",
-          "source_path",
-          "snapshot_id",
-          "source_url",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_metric_components",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "parent_metric_id",
           "component_metric_id"
         ],
         "processing_fields": [
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -3095,7 +2800,7 @@
       {
         "dataset": "scorecard_metric_items",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "metric_id",
@@ -3104,10 +2809,6 @@
         ],
         "processing_fields": [
           "position_basis",
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -3115,17 +2816,13 @@
       {
         "dataset": "scorecard_metrics",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "metric_id"
         ],
         "processing_fields": [
           "periods_json",
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -3133,59 +2830,39 @@
       {
         "dataset": "scorecard_publishers",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "publisher_id"
         ],
         "processing_fields": [
           "aliases_json",
           "observed_at",
-          "capture_id",
-          "source_url",
-          "source_path",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_snapshots",
-        "receipt_only": true,
-        "policy_version": "scorecards-etl-v1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "scorecards-etl-v2",
+        "identity_columns": [
+          "snapshot_id"
+        ],
         "processing_fields": [
-          "snapshot_id",
-          "scorecard_id",
-          "observed_at",
           "capture_ids_json",
-          "parser_version",
-          "methodology_digest",
-          "completeness_status",
-          "completeness_rule",
-          "source_declared_counts_json",
-          "parsed_counts_json",
-          "evidence_policy",
           "capture_roles_json",
-          "rendition_selection_rule",
-          "identity_rule_version",
-          "capture_id",
-          "source_url",
-          "source_path",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecards",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id"
         ],
         "processing_fields": [
           "periods_json",
-          "source_url",
           "observed_at",
-          "snapshot_id",
-          "capture_id",
-          "source_path",
           "raw_source"
         ]
       },
@@ -3249,6 +2926,19 @@
         ],
         "processing_fields": [
           "raw_source_row"
+        ]
+      },
+      {
+        "dataset": "senate_expenditures_document_file_outcomes",
+        "receipt_only": false,
+        "policy_version": "navigation-read-outcomes/1",
+        "identity_columns": [
+          "generation_id",
+          "source_dataset",
+          "member_ordinal"
+        ],
+        "processing_fields": [
+          "recorded_event"
         ]
       },
       {
@@ -3342,6 +3032,7 @@
         "modify_date",
         "comment_start_date",
         "comment_end_date",
+        "file_url",
         "attachments",
         "attachment_records",
         "fr_doc_num",
@@ -3349,6 +3040,8 @@
         "reason_withdrawn",
         "additional_rins",
         "text_content",
+        "text_extraction_status",
+        "pdf_extraction_results_json",
         "publisher_status",
         "removed_observed_at"
       ]
@@ -3367,6 +3060,7 @@
         "comment_on_document_id",
         "comment_on_object_id",
         "original_document_id",
+        "comment_reference_values_json",
         "agency_code",
         "first_name",
         "last_name",
@@ -3380,6 +3074,8 @@
         "receive_date",
         "attachments",
         "text_content",
+        "text_extraction_status",
+        "pdf_extraction_results_json",
         "subtype",
         "duplicate_comments",
         "comment_text"
@@ -3621,8 +3317,11 @@
         "cfr_part",
         "cfr_section",
         "rin",
+        "source",
+        "evidence_id",
         "first_seen",
         "last_seen",
+        "fr_references_json",
         "fr_document_ids"
       ]
     },
@@ -3647,6 +3346,8 @@
         "cfr_target_iris",
         "authority_refs",
         "fr_document_ids",
+        "fr_document_joins_json",
+        "unresolved_fr_references_json",
         "rins"
       ]
     },
@@ -3666,7 +3367,8 @@
         "observation_count",
         "latest_agenda_edition",
         "first_seen",
-        "last_seen"
+        "last_seen",
+        "unresolved_fr_references_json"
       ]
     },
     {
@@ -3682,7 +3384,11 @@
         "agenda_item_id",
         "rin",
         "proceeding_id",
-        "relationship_role"
+        "relationship_role",
+        "source",
+        "evidence_id",
+        "evidence_uri",
+        "evidence_date"
       ]
     },
     {
@@ -3700,8 +3406,11 @@
         "docket_ids",
         "open_date",
         "close_date",
+        "source",
         "opened_by_artifact_ids",
         "evidence_ids",
+        "evidence_occurrences",
+        "unresolved_fr_references_json",
         "anchor_kind",
         "register_close_date",
         "regulations_gov_close_date"
@@ -3753,6 +3462,10 @@
         "document_id",
         "stage",
         "event_date",
+        "source",
+        "dated_by",
+        "evidence_id",
+        "joined_by",
         "document_form",
         "anchor_role"
       ]
@@ -3909,6 +3622,81 @@
       ]
     },
     {
+      "table": "fec_source_catalog",
+      "label": "FEC source directory",
+      "row_unit": "sources",
+      "category": "reference_data",
+      "summary": "Source discovery metadata from SpicyDocs' official FEC inventory. Join source_family to fec_collections and fec_source_records to inspect which selected collections have been retained. The catalogue covers API, bulk, legal, agency and other official access paths; each has its own scope.",
+      "coverage": "Not a range. Every source family in the packaged SpicyDocs official FEC registry, with its official access routes. A listed route does not mean its records were acquired: fec_collections says what was.",
+      "kind": "not_a_range",
+      "measured_on": "2026-09-28",
+      "data_quality": null,
+      "columns": [
+        "observation_ordinal",
+        "source_family",
+        "title",
+        "api_routes_json",
+        "indexes_json",
+        "bulk_families_json",
+        "references_json",
+        "catalog_sha256",
+        "provider_version",
+        "catalogued_at",
+        "coverage_note"
+      ]
+    },
+    {
+      "table": "fec_collections",
+      "label": "FEC collection runs",
+      "row_unit": "collections",
+      "category": "processing_evidence",
+      "summary": "Scope, counts and outcomes of saved FEC collections. Links original source records to their collection; collection counts do not prove full source coverage.",
+      "coverage": "Sampled. Selected FEC originals and queries retain their requested scope and outcome. Rows with NULL profile are caller coverage, refusal or context records, not parsed collections or successful empty queries. Profile `bulk` lists files rather than their rows. The fec_collection_cycles view gives cycles stated by bulk directory URLs. This metadata does not establish complete official FEC history.",
+      "kind": "sampled",
+      "measured_on": "2026-09-30",
+      "data_quality": null,
+      "columns": [
+        "collection_id",
+        "source_family",
+        "profile",
+        "source_system_id",
+        "source_state_scope",
+        "record_count",
+        "relationship_count",
+        "record_outcome",
+        "requested_scope_json",
+        "coverage_limits_json",
+        "collection_outcome_json",
+        "artifact_sha256"
+      ]
+    },
+    {
+      "table": "fec_source_records",
+      "label": "Original FEC source records",
+      "row_unit": "source records",
+      "category": "source_data",
+      "summary": "Joinable metadata and retained source evidence across FEC families. collection_id joins fec_collections; source_family joins fec_source_catalog. Rows from different files and election cycles share this table, which has no cycle column: join collection_id to the fec_collection_cycles view for the cycle (2026 means 2025-2026) before comparing with a cycle's totals. A transaction's type, direction, other party, amount and memo flag are fields inside metadata_json (TRANSACTION_TP, OTHER_ID, CAND_ID, TRANSACTION_AMT, MEMO_CD). Native identifiers are lifted only when the provider reports them, and committee_id can join fec_committees. metadata_json and source_record_json preserve the complete provider record. PostgreSQL metadata additionally exposes named_fields from its verified schema; raw COPY fields, decoded NULLs and array text remain separate. Missing IDs remain missing.",
+      "coverage": "Sampled. The records of the selected collections in fec_collections, not complete FEC history. Inspect each collection's retained selection and source coordinates before combining observations. An archive's main file, date partitions and correction files can overlap; physical source rows are not a deduplicated transaction population.",
+      "kind": "sampled",
+      "measured_on": "2026-09-30",
+      "data_quality": "Memo, subtotal and attribution fields retain their source meaning. Their eligibility depends on the source family, retained definitions and analytic purpose; no blanket memo exclusion applies to every query. Joint fundraising transfer and attribution observations can overlap without carrying an exact source link between them. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.",
+      "columns": [
+        "collection_id",
+        "source_family",
+        "profile",
+        "source_record_id",
+        "committee_id",
+        "candidate_id",
+        "filing_id",
+        "legal_doc_id",
+        "audit_case_id",
+        "source_sha256",
+        "source_url",
+        "observed_at",
+        "source_locator_json"
+      ]
+    },
+    {
       "table": "fec_relationships",
       "label": "Source-reported FEC relationship observations",
       "category": "query_data",
@@ -3927,7 +3715,22 @@
         "object_name",
         "value_status",
         "cycle",
-        "candidate_election_year"
+        "candidate_election_year",
+        "subject_id_status",
+        "object_id_status",
+        "source_sha256",
+        "source_url",
+        "source_locator_json",
+        "source_family",
+        "observed_at",
+        "collection_id",
+        "source_record_id",
+        "subrecord_pointer",
+        "source_ordinal",
+        "companion_status",
+        "subject_endpoint_status",
+        "object_endpoint_status",
+        "subrecord_ordinal"
       ]
     },
     {
@@ -3941,10 +3744,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "form_type",
         "reporting_committee_id",
         "back_reference_transaction_id",
@@ -3958,10 +3775,41 @@
         "transferred_amount",
         "total_amount",
         "transaction_date",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "voter_registration_amount",
         "voter_id_amount",
         "gotv_amount",
-        "generic_campaign_amount"
+        "generic_campaign_amount",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
+      ]
+    },
+    {
+      "table": "fec_agency_mapping_dispositions",
+      "label": "FEC agency processing results",
+      "row_unit": "mapping results",
+      "category": "diagnostics",
+      "summary": "Records whether each saved agency source record produced data, contained only structure, or could not be interpreted.",
+      "coverage": "Sampled. Supported observations from retained agency XML, HTML and Word native observations. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "collection_id",
+        "source_record_id",
+        "native_kind",
+        "disposition",
+        "reason",
+        "target_record_ids_json",
+        "observation_ordinal"
       ]
     },
     {
@@ -3975,6 +3823,15 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_url",
         "report_id",
         "url",
         "label",
@@ -3992,6 +3849,15 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_url",
         "report_id",
         "text_kind",
         "text",
@@ -4009,6 +3875,15 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_url",
         "report_id",
         "report_type",
         "title",
@@ -4056,8 +3931,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -4088,6 +3976,7 @@
         "fundraising_activity_indicator",
         "general_voter_drive_indicator",
         "public_communication_indicator",
+        "query_completeness",
         "source_cycle",
         "total_amount",
         "federal_share",
@@ -4108,6 +3997,9 @@
         "event_identifier",
         "category_code",
         "transaction_date",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "source_purpose_event",
         "source_administrative_or_voter_drive_indicator",
         "source_additional_description",
@@ -4132,7 +4024,15 @@
         "conduit_committee_id",
         "financial_grain",
         "levin_share",
-        "account_event_identifier"
+        "account_event_identifier",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4146,10 +4046,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "form_type",
         "reporting_committee_id",
         "national_party_percentage",
@@ -4185,6 +4099,9 @@
         "source_cycle",
         "actual_federal_support_amount",
         "actual_nonfederal_support_amount",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "flat_minimum_federal_percentage",
         "federal_percentage",
         "nonfederal_percentage",
@@ -4195,7 +4112,59 @@
         "fundraising_activity_indicator",
         "exempt_activity_indicator",
         "direct_candidate_support_indicator",
-        "ratio_code"
+        "ratio_code",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
+      ]
+    },
+    {
+      "table": "fec_api_response_controls",
+      "label": "FEC API pagination and response status",
+      "row_unit": "response fields",
+      "category": "diagnostics",
+      "summary": "Pagination, reported totals and result counts from saved FEC API responses. A saved response does not prove that every page was collected.",
+      "coverage": "Sampled. Supported observations from retained committee and candidate API response controls. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "observation_ordinal",
+        "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "mapping_reason_json",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_url",
+        "source_pointer",
+        "query_completeness",
+        "registry_scope_status",
+        "response_field",
+        "response_field_role",
+        "value_status",
+        "api_version",
+        "parsing_status",
+        "page",
+        "per_page",
+        "reported_count",
+        "reported_pages",
+        "observed_count",
+        "is_count_exact",
+        "source_cycle"
       ]
     },
     {
@@ -4209,8 +4178,19 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_pointer",
+        "source_authority",
+        "selection_evidence_sha256",
         "matter_id",
         "matter_record_id",
+        "query_completeness",
         "finding_kind",
         "finding_status",
         "primary_category_id",
@@ -4235,10 +4215,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "form_type",
         "reporting_committee_id",
         "transaction_id",
@@ -4285,7 +4279,18 @@
         "source_cycle",
         "bundled_amount",
         "semiannual_bundled_amount",
-        "transaction_date"
+        "transaction_date",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4321,7 +4326,66 @@
         "election_years",
         "election_districts",
         "inactive_election_years",
-        "district_number"
+        "district_number",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "cycles_status",
+        "election_years_status",
+        "election_districts_status",
+        "inactive_election_years_status",
+        "source_url",
+        "source_pointer",
+        "original_result_pointer",
+        "candidate_id_status",
+        "query_completeness",
+        "active_through_status",
+        "candidate_inactive_status",
+        "has_raised_funds_status",
+        "federal_funds_flag_status",
+        "first_file_date_status",
+        "last_file_date_status",
+        "last_f2_date_status",
+        "source_cycle",
+        "district_number_status"
+      ]
+    },
+    {
+      "table": "fec_collection_selection",
+      "label": "FEC collection selection decisions",
+      "row_unit": "selection decisions",
+      "category": "processing_evidence",
+      "summary": "Records which saved files or snapshots a named selection policy chose. Selection alone does not establish current records or financial totals.",
+      "coverage": "Sampled. Supported observations from the proven retained individual-contribution main/date-partition representation selection. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "observation_ordinal",
+        "record_id",
+        "policy_version",
+        "purpose",
+        "collection_id",
+        "source_generation_pin",
+        "source_sha256",
+        "source_member_name",
+        "selected_collection_id",
+        "selection_status",
+        "selection_reason",
+        "equivalence_evidence_sha256",
+        "current_record_status",
+        "correction_applicability_status",
+        "source_member_ordinal",
+        "source_observations"
       ]
     },
     {
@@ -4350,7 +4414,23 @@
         "filing_frequency",
         "organization_type",
         "connected_organization_name",
-        "candidate_id"
+        "candidate_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_url",
+        "history_scope_status",
+        "source_cycle",
+        "cycle_status"
       ]
     },
     {
@@ -4398,7 +4478,34 @@
         "designated_agent_suffix",
         "designated_agent_title",
         "designated_agent_zip",
-        "sponsor_candidate_list"
+        "sponsor_candidate_list",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_url",
+        "source_pointer",
+        "original_result_pointer",
+        "query_completeness",
+        "registry_scope_status",
+        "committee_id_status",
+        "cycles_status",
+        "candidate_ids_status",
+        "sponsor_candidate_ids_status",
+        "first_file_date_status",
+        "last_file_date_status",
+        "first_f1_date_status",
+        "last_f1_date_status",
+        "source_cycle",
+        "sponsor_candidate_list_status"
       ]
     },
     {
@@ -4412,10 +4519,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "reporting_entity_id",
         "reporting_entity_name",
         "candidate_id",
@@ -4442,7 +4563,15 @@
         "amount_status",
         "source_cycle",
         "amount",
-        "transaction_date"
+        "transaction_date",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4456,8 +4585,21 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "aggregate_type",
         "candidate_native_id",
         "candidate_name",
@@ -4471,11 +4613,20 @@
         "reporting_entity_id",
         "contributor_name",
         "reported_cycle",
+        "query_completeness",
         "observation_grain",
         "size_of_contribution",
         "contributor_state",
         "state_name",
-        "zip_3"
+        "zip_3",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4489,8 +4640,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -4521,6 +4685,7 @@
         "subordinate_committee_id",
         "reported_cycle",
         "line_number",
+        "query_completeness",
         "source_cycle",
         "amount",
         "aggregate_general_election_amount",
@@ -4556,6 +4721,9 @@
         "candidate_suffix",
         "reported_aggregate_amount",
         "transaction_date",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "conduit_name",
         "conduit_street1",
         "conduit_street2",
@@ -4564,7 +4732,15 @@
         "conduit_zip",
         "source_amendment_code",
         "source_unlimited_spending",
-        "transaction_code"
+        "transaction_code",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4578,8 +4754,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -4602,6 +4791,7 @@
         "original_source_record_id",
         "reported_cycle",
         "line_number",
+        "query_completeness",
         "observation_grain",
         "source_cycle",
         "opening_balance",
@@ -4620,6 +4810,9 @@
         "creditor_debtor_street2",
         "creditor_debtor_zip",
         "obligation_direction",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "source_committee_id",
         "source_candidate_id",
         "source_candidate_name",
@@ -4634,7 +4827,15 @@
         "conduit_zip",
         "source_amendment_code",
         "source_original_transaction_id",
-        "source_supr_transaction_id"
+        "source_supr_transaction_id",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4648,8 +4849,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -4711,6 +4925,9 @@
         "conduit_zip",
         "account_reference",
         "refunded_bundled_semiannual_amount",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "transaction_code",
         "beneficiary_committee_street1",
         "beneficiary_committee_street2",
@@ -4725,7 +4942,15 @@
         "source_refund_or_excess_disposal",
         "communication_date",
         "financial_grain",
-        "reported_account_form"
+        "reported_account_form",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4739,10 +4964,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "reporting_entity_id",
         "reporting_entity_name",
         "candidate_id",
@@ -4763,7 +5002,109 @@
         "allocated_candidate_amount",
         "disbursement_date",
         "communication_date",
-        "public_disbursement_date"
+        "public_disbursement_date",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
+      ]
+    },
+    {
+      "table": "fec_filing_definition_evidence",
+      "label": "FEC filing layout source links",
+      "row_unit": "source references",
+      "category": "source_evidence",
+      "summary": "One exact association from a normalized filing definition to a source context witness. Resolves fec_filing_definitions.record_id to the actual workbook labels/rules at the captured context pointer. Source-record IDs are NULL for these context endpoints; no workbook cells are invented as source records.",
+      "coverage": "Sampled. Supported observations from verified retained filing specification workbook cells in collection context. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "target_table",
+        "target_record_id",
+        "target_generation_scope",
+        "witness_generation_scope",
+        "witness_generation_pin",
+        "role",
+        "endpoint_kind",
+        "collection_id",
+        "source_record_id",
+        "context_column",
+        "context_pointer",
+        "witness_sha256",
+        "witness_locator_json",
+        "observation_ordinal"
+      ]
+    },
+    {
+      "table": "fec_filing_definitions",
+      "label": "FEC filing layouts",
+      "row_unit": "filing layouts",
+      "category": "reference_data",
+      "summary": "One distinct pinned source layout with its literal family, version and form. Financial and narrative rows reference record_id through definition_set_id. The ordered fields and exact workbook cells define the source layout; consumer mapping versions and record-type selectors are separate, and neither layout identity nor mapping proves submission conformance.",
+      "coverage": "Sampled. Supported observations from normalized retained electronic, paper and Senate source layout definitions. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "record_id",
+        "family",
+        "version",
+        "form",
+        "workbook_sha256",
+        "observation_ordinal"
+      ]
+    },
+    {
+      "table": "fec_filing_header_associations",
+      "label": "FEC header-to-filing matches",
+      "row_unit": "association decisions",
+      "category": "source_evidence",
+      "summary": "One evidenced association decision for one retained original-file header observation. Retains all matching filing observations and explicit ambiguity. A source header, archive filename or image number is not treated as a native financial file number; association does not select an amendment or replacement scope. Resolve collection_id and source_record_id against fec_source_records in the captured source generation, using source_locator_json and source_sha256 to distinguish repeated witnesses. Stored or release-matched derived evidence routes preserve the same exact source coordinates.",
+      "coverage": "Sampled. Supported observations from retained original-file headers matched through supported captured original URLs to filing metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "record_id",
+        "policy_version",
+        "target_table",
+        "target_record_id",
+        "source_generation_pin",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_authority",
+        "source_locator_json",
+        "association_basis",
+        "association_status",
+        "referenced_filing_key",
+        "filing_key",
+        "selection_evidence_sha256",
+        "namespace_evidence_sha256",
+        "report_number_raw",
+        "header_record_id",
+        "header_locator_json",
+        "request_url",
+        "resolved_url",
+        "replacement_mode",
+        "membership_completeness",
+        "current_record_status",
+        "filing_observation_count",
+        "filing_observation_ids",
+        "observation_ordinal",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4781,7 +5122,24 @@
         "source_filing_record_id",
         "target_filing_key",
         "native_target_file_number",
-        "relation_type"
+        "relation_type",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_pointer",
+        "filing_link_status",
+        "target_resolution_status",
+        "reference_status",
+        "source_cycle"
       ]
     },
     {
@@ -4795,11 +5153,27 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "form_type",
         "reporting_committee_id",
         "reporting_candidate_id",
@@ -4821,7 +5195,15 @@
         "election_date",
         "source_amendment_date",
         "effective_date",
-        "reported_measures"
+        "reported_measures",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4835,8 +5217,23 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
         "source_namespace",
         "filing_key",
+        "filing_link_status",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "form_type",
         "reporting_committee_id",
         "transaction_id",
@@ -4845,7 +5242,15 @@
         "source_amendment_code",
         "text_record_kind",
         "source_cycle",
-        "text_fragments"
+        "text_fragments",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4901,7 +5306,41 @@
         "election_year",
         "is_amended",
         "most_recent",
-        "amendment_chain"
+        "amendment_chain",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_pointer",
+        "filing_link_status",
+        "filer_id_status",
+        "candidate_id_status",
+        "pdf_body_status",
+        "linked_original_body_status",
+        "query_completeness",
+        "amendment_scope_status",
+        "financial_fields_status",
+        "receipt_date_status",
+        "filed_date_status",
+        "coverage_start_date_status",
+        "coverage_end_date_status",
+        "update_date_status",
+        "load_timestamp_status",
+        "source_cycle",
+        "pages_status",
+        "report_year_status",
+        "reported_cycle_status",
+        "election_year_status",
+        "is_amended_status",
+        "most_recent_status"
       ]
     },
     {
@@ -4915,6 +5354,13 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
         "worksheet_name",
         "row_grain",
         "population",
@@ -4947,8 +5393,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -4977,7 +5436,18 @@
         "amount",
         "reported_aggregate_amount",
         "transaction_date",
-        "image_number"
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
+        "image_number",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -4991,8 +5461,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.\nThe bulk file is FEC's as filed, including a few single lines of billions of dollars that no committee plausibly spent: THE COMMITTEE OF 300 (C00874586) reports $9,778,412,568 in one line of its 24-hour report 1766664, exactly as its raw filing on docquery.fec.gov states it (checked 2026-10-03), not a sum of amended or memo lines. Review the largest rows before summing. On 2026-10-03 the original-filing rows came from the archives of 2026-06-08, 2026-06-09 and 2026-07-02.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -5054,7 +5537,18 @@
         "memo_text",
         "disbursement_date",
         "signed_date",
-        "financial_grain"
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
+        "financial_grain",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -5068,8 +5562,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -5097,7 +5604,15 @@
         "source_cycle",
         "amount",
         "transaction_date",
-        "candidate_id"
+        "candidate_id",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -5111,8 +5626,19 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_pointer",
+        "source_authority",
+        "selection_evidence_sha256",
         "matter_id",
         "matter_record_id",
+        "query_completeness",
         "document_id",
         "native_document_id",
         "parent_document_record_id",
@@ -5139,8 +5665,19 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_pointer",
+        "source_authority",
+        "selection_evidence_sha256",
         "matter_id",
         "matter_record_id",
+        "query_completeness",
         "event_type",
         "date_precision",
         "description",
@@ -5166,8 +5703,19 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_pointer",
+        "source_authority",
+        "selection_evidence_sha256",
         "matter_id",
         "matter_record_id",
+        "query_completeness",
         "matter_type",
         "source_namespace",
         "native_matter_id",
@@ -5175,6 +5723,7 @@
         "title",
         "description",
         "status",
+        "source_url",
         "committee_id",
         "candidate_id",
         "audit_id",
@@ -5222,8 +5771,19 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_pointer",
+        "source_authority",
+        "selection_evidence_sha256",
         "matter_id",
         "matter_record_id",
+        "query_completeness",
         "role",
         "reported_name",
         "native_entity_id",
@@ -5243,10 +5803,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "form_type",
         "reporting_committee_id",
         "transaction_id",
@@ -5267,7 +5841,18 @@
         "employer",
         "occupation",
         "source_cycle",
-        "guaranteed_amount"
+        "guaranteed_amount",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -5281,10 +5866,24 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
+        "source_namespace",
         "form_type",
         "reporting_committee_id",
         "transaction_id",
@@ -5334,7 +5933,18 @@
         "depository_established_date",
         "depository_authorization_date",
         "treasurer_signed_date",
-        "authorized_signed_date"
+        "authorized_signed_date",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -5348,8 +5958,21 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "currency",
         "amount_kind",
         "source_namespace",
@@ -5380,6 +6003,7 @@
         "memo_text",
         "reported_cycle",
         "line_number",
+        "query_completeness",
         "observation_grain",
         "source_cycle",
         "original_loan_amount",
@@ -5407,10 +6031,21 @@
         "lender_candidate_office",
         "lender_candidate_state",
         "lender_candidate_district",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "lender_candidate_name",
         "source_amendment_code",
         "source_original_transaction_id",
-        "source_supr_transaction_id"
+        "source_supr_transaction_id",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
       ]
     },
     {
@@ -5429,7 +6064,25 @@
         "image_url",
         "lobbyist_indicator",
         "filed_date",
-        "is_lobbyist"
+        "is_lobbyist",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_pointer",
+        "committee_id_status",
+        "lobbyist_status",
+        "image_body_status",
+        "filed_date_status",
+        "source_cycle"
       ]
     },
     {
@@ -5443,6 +6096,15 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_url",
         "report_id",
         "recommendation_native_id",
         "recommendation_key",
@@ -5539,7 +6201,38 @@
         "candidate_ids",
         "sponsor_candidate_ids",
         "cycles_has_financial",
-        "cycles_has_activity"
+        "cycles_has_activity",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_url",
+        "history_scope_status",
+        "source_cycle",
+        "cycle_status",
+        "qualifying_date_status",
+        "first_file_date_status",
+        "last_file_date_status",
+        "last_f1_date_status",
+        "last_cycle_has_financial_status",
+        "last_cycle_has_activity_status",
+        "is_active_status",
+        "convert_to_pac_flag_status",
+        "former_candidate_election_year_status",
+        "first_f1_date_status",
+        "cycles_status",
+        "candidate_ids_status",
+        "cycles_has_financial_status",
+        "cycles_has_activity_status",
+        "sponsor_candidate_ids_status"
       ]
     },
     {
@@ -5559,7 +6252,24 @@
         "filings_url",
         "notice_kind",
         "notice_scope",
-        "first_receipt_date"
+        "first_receipt_date",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_namespace",
+        "source_pointer",
+        "committee_id_status",
+        "exclusion_status",
+        "first_receipt_date_status",
+        "source_cycle"
       ]
     },
     {
@@ -5573,7 +6283,19 @@
       "data_quality": "Exact decimals preserve signs. Memo, subtotal and attribution flags require source-specific interpretation; successful mapping does not qualify current, gross or net totals. Keep reported balances, allocation totals/components, overlapping summaries and two-sided transfers at their declared grains. Quality notices do not automatically exclude records.",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "reporting_committee_id",
         "contributor_name",
         "contributor_type",
@@ -5598,6 +6320,7 @@
         "other_native_id",
         "transaction_election",
         "filing_key",
+        "filing_link_status",
         "source_cycle",
         "transaction_date",
         "amount",
@@ -5611,6 +6334,7 @@
         "account_type",
         "reported_cycle",
         "line_number",
+        "query_completeness",
         "contributor_aggregate_ytd",
         "back_reference_transaction_id",
         "back_reference_schedule",
@@ -5645,6 +6369,9 @@
         "conduit_zip",
         "account_reference",
         "reported_aggregate_amount",
+        "definition_set_id",
+        "filing_header_record_id",
+        "filing_header_locator_json",
         "transaction_code",
         "donor_committee_street1",
         "donor_committee_street2",
@@ -5664,7 +6391,42 @@
         "contributor_candidate_office",
         "contributor_candidate_state",
         "contributor_candidate_district",
-        "reported_account_form"
+        "reported_account_form",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
+      ]
+    },
+    {
+      "table": "fec_record_evidence",
+      "label": "FEC record source links",
+      "row_unit": "evidence links",
+      "category": "source_evidence",
+      "summary": "One explicit target-to-witness association with exact endpoint coordinates. Resolve the target table/key in its declared generation scope and the witness in its pinned source generation. Financial and filing-report primary/header/definition routes can be derived from their retained row addresses; this stored table alone is not a claim that all evidence routes have been materialized.",
+      "coverage": "Sampled. Supported observations from stored evidence for selected legal, agency, identity, API, context, history and narrative outputs. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "observation_ordinal",
+        "target_table",
+        "target_record_id",
+        "target_generation_scope",
+        "witness_generation_scope",
+        "witness_generation_pin",
+        "role",
+        "endpoint_kind",
+        "collection_id",
+        "source_record_id",
+        "context_column",
+        "context_pointer",
+        "witness_sha256",
+        "witness_locator_json"
       ]
     },
     {
@@ -5710,7 +6472,26 @@
         "form_type",
         "receipt_date",
         "election_year",
-        "report_year"
+        "report_year",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
+        "current_record_status",
+        "source_pointer",
+        "committee_id_status",
+        "candidate_id_status",
+        "affiliation_status",
+        "receipt_date_status",
+        "source_cycle",
+        "election_year_status",
+        "report_year_status"
       ]
     },
     {
@@ -5724,13 +6505,24 @@
       "data_quality": null,
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_url",
         "report_id",
         "metric_definition_id",
         "metric_label",
         "native_field",
+        "value_status",
         "value_operator",
         "unit",
         "period_basis",
+        "mapping_status",
         "value",
         "bound_value",
         "fiscal_year",
@@ -5754,8 +6546,21 @@
       "data_quality": "Two layouts repeat one figure. candidate-web-summary/1 holds a candidate's row from FEC's weball file and, for a current House or Senate campaign, an identical row from webl, a subset of weball; committee-summary-csv/1 repeats a committee's row once per linked candidate. Keep one row per layout, entity, cycle and period before summing (cycle 2026, measured 2026-10-03, with 2,949 identical candidate pairs and 70 committees repeated, every repeat identical).",
       "columns": [
         "record_id",
+        "identity_version",
+        "mapping_version",
+        "mapping_status",
+        "collection_id",
+        "source_record_id",
+        "source_sha256",
+        "source_locator_json",
+        "source_authority",
+        "selection_evidence_sha256",
+        "source_representation_role",
         "correction_operation",
+        "correction_applicability_status",
+        "current_record_status",
         "filing_key",
+        "filing_link_status",
         "summary_type",
         "source_namespace",
         "currency",
@@ -5803,7 +6608,35 @@
         "spec_election",
         "sponsor_name",
         "tres_nm",
-        "measures"
+        "measures",
+        "filing_association_status",
+        "filing_association_policy",
+        "filing_association_source_generation_pin",
+        "filing_association_target_generation_pin",
+        "filing_association_record_id",
+        "filing_association_referenced_key",
+        "filing_association_target_count",
+        "filing_association_target_record_ids"
+      ]
+    },
+    {
+      "table": "fec_research_context_dispositions",
+      "label": "FEC source processing results",
+      "row_unit": "processing results",
+      "category": "diagnostics",
+      "summary": "Records what processing a saved source file or request produced, including empty, refused and unsupported inputs.",
+      "coverage": "Sampled. Supported observations from selected retained source documentation, response, research and statistical contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "observation_ordinal",
+        "collection_id",
+        "mapping_status",
+        "mapping_reason",
+        "source_url",
+        "context_sha256",
+        "source_fact_count"
       ]
     },
     {
@@ -5826,7 +6659,17 @@
         "language",
         "page_count",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
+        "body_status",
+        "fec_relationship_status",
+        "page_count_status"
       ]
     },
     {
@@ -5851,7 +6694,18 @@
         "report_type",
         "coverage_start_date",
         "coverage_end_date",
-        "published_at"
+        "published_at",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
+        "current_record_status",
+        "source_label_status",
+        "parsing_status",
+        "filing_link_status"
       ]
     },
     {
@@ -5870,7 +6724,43 @@
         "reported_status",
         "dates",
         "links",
-        "date_kind"
+        "date_kind",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
+        "date_status"
+      ]
+    },
+    {
+      "table": "fec_research_response_outcomes",
+      "label": "FEC API request outcomes",
+      "row_unit": "response outcomes",
+      "category": "diagnostics",
+      "summary": "Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected.",
+      "coverage": "Sampled. Supported observations from selected rejected, empty or otherwise limited OpenFEC contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+      "kind": "sampled",
+      "measured_on": "2026-10-01",
+      "data_quality": null,
+      "columns": [
+        "observation_ordinal",
+        "record_id",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
+        "profile_refusal",
+        "query_completeness",
+        "payload_shape",
+        "outcome_status",
+        "capture_disposition",
+        "observed_payload_records"
       ]
     },
     {
@@ -5888,7 +6778,15 @@
         "title",
         "text",
         "content_scope",
-        "links"
+        "links",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
+        "content_status"
       ]
     },
     {
@@ -5922,7 +6820,19 @@
         "back_reference_schedule_name",
         "report_year",
         "amount",
-        "reported_date"
+        "reported_date",
+        "mapping_version",
+        "collection_id",
+        "source_authority",
+        "source_url",
+        "source_sha256",
+        "context_sha256",
+        "source_context_pointer",
+        "amount_status",
+        "date_status",
+        "coverage_status",
+        "current_total_status",
+        "report_year_status"
       ]
     },
     {
@@ -5958,7 +6868,7 @@
     {
       "table": "gao_reports",
       "label": "Government Accountability Office reports",
-      "summary": "One row per U.S. Government Accountability Office (GAO) report or testimony, keyed by GAO's own product id. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. `source` names the route of each row: the public GAO reports RSS feed, read daily by `build_gao_reports` (a ~25-item recent-products window, the only anonymous machine-readable listing of new products, so the table is an **append-only accumulator**); a one-time copy of upstream's rows for the weeks before the fork read the feed; explicit single-report repairs; and GovInfo's GAOREPORTS listing, a closed collection read once, each row then filled from its package's MODS; and GAO's own Month in Review and Annual Index and its two listings of major-rule reports, read from walks made outside the daily job. Deduped on `report_id`; a GovInfo or listing row never replaces a row already held. A later read of a held product merges cell by cell and never empties a cell. The R package copy is the lowest route: it adds only reports no row holds, and a later read by any other route takes its row over, with the package's cells filling only what that route leaves NULL. On a row already held the listing fills only a NULL `report_number`, makes whole a title its own row holds cut, and sets the Federal Agency Major Rule Report `product_type` on a report GAO's major-rule listings state. A major-rule report's letter and a product-page read each set their own columns on whatever row holds the report. The daily feed sets title, date, abstract and url on its own and upstream-copied rows, and only fills NULLs of those on rows another route supplied; its placeholder type and tag lists fill nothing. A row keeps the `source` that first supplied it. The three counts are BIGINT. Each report's address on gao.gov and the route it was read from (the former `url` and `source` columns), and for a major-rule report why a `major_rule_` value is blank and where in its letter each value was read, are kept in its receipt; see etl_receipts.",
+      "summary": "One row per U.S. Government Accountability Office (GAO) report or testimony, keyed by GAO's own product id. The federal oversight layer over the rulemakings this dataset tracks — GAO's audits, evaluations, and recommendations on how agencies implement laws and rules. `source` names the route of each row: the public GAO reports RSS feed, read daily by `build_gao_reports` (a ~25-item recent-products window, the only anonymous machine-readable listing of new products, so the table is an **append-only accumulator**); a one-time copy of upstream's rows for the weeks before the fork read the feed; explicit single-report repairs; and GovInfo's GAOREPORTS listing, a closed collection read once, each row then filled from its package's MODS; and GAO's own Month in Review and Annual Index and its two listings of major-rule reports, read from walks made outside the daily job. Deduped on `report_id`; a GovInfo or listing row never replaces a row already held. A later read of a held product merges cell by cell and never empties a cell. The R package copy is the lowest route: it adds only reports no row holds, and a later read by any other route takes its row over, with the package's cells filling only what that route leaves NULL. On a row already held the listing fills only a NULL `report_number`, makes whole a title its own row holds cut, and sets the Federal Agency Major Rule Report `product_type` on a report GAO's major-rule listings state. A major-rule report's letter and a product-page read each set their own columns on whatever row holds the report. The daily feed sets title, date, abstract and url on its own and upstream-copied rows, and only fills NULLs of those on rows another route supplied; its placeholder type and tag lists fill nothing. A row keeps the `source` that first supplied it. The three counts are BIGINT. The `/3` native schema includes the product page in `url` and its collection route in `source`; earlier schemas keep these fields in receipts. A major-rule report's missing-value reasons and locations within its letter remain in its receipt; see etl_receipts.",
       "coverage": "True range on GovInfo's archive and a window on recent products, with a gap between. The `govinfo` rows are every report and testimony in GovInfo's closed GAOREPORTS collection, issued from 1989-11-15 to 2008-09-18, less its Comptroller General decisions; GovInfo adds nothing later, and one history run adds them. Their abstract, topics, product type and report number come from each package's MODS, read in batches; a `govinfo` row whose `report_number` is NULL has not been read yet, or GovInfo serves no MODS for it. The `gao_rss` rows are what the daily job has read from GAO's recent-items feed since 2026-09-22 (its first read reached back to 2026-09-15); the feed lists only about 25 items, so a product published while the job was not reading is lost to it. The `upstream_copy` rows are the reports published from 2026-07-13 to 2026-09-14, copied once from upstream spicy-regs' own feed accumulator. The `gao_repair` rows were added one at a time by an explicit repair. The `gao_listing` rows are the products GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read, from 2009 on; a year or month the walk has not finished adds nothing. They are the GAO-numbered products and every Federal Agency Major Rule Report, which GAO numbered GAO- to February 2017 and B- from April 2017, keyed on its page. The major-rule reports before 2009 come from two more of GAO's listings, read with that walk. The `gao_major_rule_listing` rows are the reports its Congressional Review Act listing, \"Reports on Major Rules\", states and the Month in Review does not: GAO-numbered, from November 2000. The `gao_major_rule_index` rows are the OGC-numbered reports of April 1996 to November 2000, listed by GAO's own index of 2000-12-15 as the Internet Archive holds it and read from each report's product page. So every major-rule report from April 1996 on is here once a run has read those walks. Their `published_date` is GAO's issue date, the one date those listings state; a Month in Review row's is the release date, which can fall weeks later. A major-rule report the R package held becomes the listing's row. One GovInfo held first keeps GovInfo's row, its title included (GovInfo's placeholder on most), and takes only the Federal Agency Major Rule Report `product_type` and the `major_rule_` columns. The Congressional Review Act listing also states a few AIMD- and GGD- products of 1995 to 2000 that are no major-rule reports; they are ordinary rows with no `product_type`. The three `major_rule_` columns are read from each major-rule report's letter, on its product page or in its PDF as captured on 2026-10-04; a report listed after that capture is blank in them until a product-page read reads its letter. B-numbered legal decisions and Contract Appeals Board dockets are in `gao_decisions`; entries GAO gives no number are left out. Products issued from late 2008 to mid-2026 are absent unless a repair or a listing added them. The requester, recommendation, matters, page-count and subject-term columns come from the R package for the reports it lists; reports issued after its copy (package commit 6f61230, 2026-09-26) are blank in them. A read of the report's GAO product page fills the two counts, the page count and the subject terms where one is blank, newest reports first and a bounded number a run, and its values replace the package's. A report is not read on the day GAO releases it, and in its first week only where its page agrees with GAO's open recommendations (`gao_recommendations`). That read is built and switched off, so it has filled nothing; the page's own topic and agencies are not read into this table. The `gao_r_package` rows are the reports no other route held, copied once from the CetiAlphaFive/gao R package by Jack T. Rametta (GPL-3.0-or-later; commit 6f61230, `inst/extdata/gao_links.rds`). They run from 1922, mostly the 1970s to the 1990s, and carry no product type. Legal decisions there are left out.",
       "kind": "true_range",
       "measured_on": "2026-10-05",
@@ -5971,6 +6881,8 @@
         "abstract",
         "agencies",
         "topics",
+        "url",
+        "source",
         "product_type",
         "report_number",
         "requester_type",
@@ -6160,13 +7072,15 @@
         "author_str",
         "per_curiam",
         "joined_by_str",
-        "page_count"
+        "page_count",
+        "sha1",
+        "download_url"
       ]
     },
     {
       "table": "court_opinion_pdf_extractions",
       "label": "Selected court opinion PDF text",
-      "summary": "Text from literally offered PDF URLs, tied to the selected opinion generation, native body fingerprint, capture evidence and extractor version. A native digest mismatch records a refusal without supplying text. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters; this table does not infer case-name identity.",
+      "summary": "Recorded PDF text for selected CourtListener opinions. Failed fingerprint or extraction checks supply no text. Following an opinion requires published capture and parent-publication evidence, plus its opinion ID, cluster ID, fingerprint and source URL together. A shared digest alone does not identify the parent.",
       "coverage": "Sampled. Selected publisher PDFs acquired in one cohort. Each exact body matches its held CourtListener SHA-1 and has its own SHA-256 and extraction outcome. This is derived PDF text, separate from CourtListener native text fields and from the complete opinion index. Receipt: spicy-regs-court-cohort-20260927/bodies-receipt.json.",
       "kind": "sampled",
       "measured_on": "2026-09-27",
@@ -6175,7 +7089,22 @@
         "opinion_body_id",
         "opinion_id",
         "cluster_id",
-        "text_content"
+        "text_content",
+        "source_url",
+        "resolved_url",
+        "source_sha256",
+        "native_sha1",
+        "actual_sha1",
+        "pdf_extraction_results_json",
+        "observed_at",
+        "extractor",
+        "extractor_version",
+        "parent_opinion_publication_json",
+        "sha1_matches",
+        "parent_artifact_digest",
+        "parent_generation_id",
+        "parent_member_sha256",
+        "parent_member_byte_size"
       ]
     },
     {
@@ -6192,6 +7121,7 @@
         "chamber",
         "bioguide_id",
         "vote_day",
+        "term_match",
         "term_index",
         "term_start",
         "term_end"
@@ -6208,7 +7138,21 @@
       "columns": [
         "scorecard_id",
         "publisher_member_key",
-        "bioguide_id"
+        "bioguide_id",
+        "source_snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path",
+        "term_candidates_json",
+        "override_version",
+        "resolution_status",
+        "resolution_rule",
+        "rule_version",
+        "candidate_count",
+        "candidates_json",
+        "reason",
+        "source_context_json",
+        "input_pins_json"
       ]
     },
     {
@@ -6230,7 +7174,19 @@
         "roll_number",
         "vote_id",
         "bill_id",
-        "amendment_id"
+        "amendment_id",
+        "source_snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path",
+        "resolution_status",
+        "resolution_rule",
+        "rule_version",
+        "candidate_count",
+        "candidates_json",
+        "reason",
+        "source_context_json",
+        "input_pins_json"
       ]
     },
     {
@@ -6300,13 +7256,15 @@
         "bureaus",
         "text_data",
         "total_page_count",
-        "documents"
+        "documents",
+        "generation_id",
+        "extraction_results"
       ]
     },
     {
       "table": "scorecard_publishers",
       "label": "Scorecard publishers",
-      "summary": "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6317,13 +7275,16 @@
         "abbreviation",
         "aliases",
         "homepage_url",
-        "scorecard_index_url"
+        "scorecard_index_url",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecards",
       "label": "Scorecards",
-      "summary": "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6344,13 +7305,45 @@
         "periods",
         "methodology_url",
         "published_at_text",
-        "updated_at_text"
+        "updated_at_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ]
+    },
+    {
+      "table": "scorecard_snapshots",
+      "label": "Scorecard snapshots",
+      "summary": "One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+      "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+      "kind": "sampled",
+      "measured_on": "2026-10-03",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "scorecard_id",
+        "observed_at",
+        "capture_ids",
+        "parser_version",
+        "methodology_digest",
+        "completeness_status",
+        "completeness_rule",
+        "source_declared_counts_json",
+        "parsed_counts_json",
+        "evidence_policy",
+        "capture_roles",
+        "rendition_selection_rule",
+        "identity_rule_version",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_methodologies",
       "label": "Scorecard methodologies",
-      "summary": "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6363,13 +7356,17 @@
         "effective_at_text",
         "methodology_text",
         "methodology_url",
-        "disclosure_status"
+        "disclosure_status",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_metrics",
       "label": "Scorecard metrics",
-      "summary": "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6386,13 +7383,17 @@
         "periods",
         "is_primary",
         "scale_text",
-        "rank_population_text"
+        "rank_population_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_items",
       "label": "Scorecard items",
-      "summary": "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6411,13 +7412,17 @@
         "bill_citation_text",
         "amendment_citation_text",
         "references",
-        "publisher_position_text"
+        "publisher_position_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_metric_items",
       "label": "Scorecard metric items",
-      "summary": "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6432,13 +7437,17 @@
         "weight_text",
         "weight_number",
         "contribution_rule_text",
-        "counts_toward_metric"
+        "counts_toward_metric",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_metric_components",
       "label": "Scorecard metric components",
-      "summary": "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry, with rows only where an edition states how its metrics combine; most editions state no component-to-parent relationship. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations.",
       "kind": "sampled",
       "measured_on": "2026-10-04",
@@ -6449,13 +7458,17 @@
         "component_metric_id",
         "weight_text",
         "weight_number",
-        "combination_rule_text"
+        "combination_rule_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_members",
       "label": "Scorecard members",
-      "summary": "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6472,13 +7485,17 @@
         "party",
         "period_text",
         "eligibility_text",
-        "notes_text"
+        "notes_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_member_ratings",
       "label": "Scorecard member ratings",
-      "summary": "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6491,13 +7508,17 @@
         "value_number",
         "value_status_text",
         "rank_text",
-        "notes_text"
+        "notes_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
       "table": "scorecard_member_item_results",
       "label": "Scorecard member item results",
-      "summary": "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts.",
+      "summary": "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts.",
       "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
       "kind": "sampled",
       "measured_on": "2026-10-03",
@@ -6516,7 +7537,11 @@
         "eligibility_text",
         "counts_toward_metric",
         "adjustment_text",
-        "reason_text"
+        "reason_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7167,7 +8192,7 @@
     {
       "table": "gao_decisions",
       "label": "Government Accountability Office legal decisions",
-      "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). The address of the GAO listing page each decision was read from (the former `listing_page` column) is kept in its receipt; see etl_receipts. A later walk refreshes the rows it lists; a run without one carries the table forward. A walk run given the local capture of the decision pages also reads each decision's page caption, which completes a number list the listing cut and states the decided day; a later walk without the capture keeps what a page stated. `outcome` is read again from `decision_status` on every row each run, by spicy-docs' closed table of GAO's sentences, so a new table version reaches held rows without a re-read of the walk.",
+      "summary": "One row per GAO legal decision page, read from GAO's own listing of what it issued by month and year. A decision is keyed on its number as GAO spells it and its page: one teaser can name several B-numbers (`B-423916.2,B-423916.3`), and one B-number can have two pages released months apart (`b-331093` and `b-331093-0`). The address of the GAO listing page each decision was read from is `listing_page` in the `/3` native schema; earlier schemas keep it in receipts; see etl_receipts. A later walk refreshes the rows it lists; a run without one carries the table forward. A walk run given the local capture of the decision pages also reads each decision's page caption, which completes a number list the listing cut and states the decided day; a later walk without the capture keeps what a page stated. `outcome` is read again from `decision_status` on every row each run, by spicy-docs' closed table of GAO's sentences, so a new table version reaches held rows without a re-read of the walk.",
       "coverage": "True range from 2009 on: every legal decision GAO's own Month in Review and Annual Index list for each year or month a finished walk of those pages read: the B-numbered decisions (bid protests, appropriations law, vacancies letters, other decisions) and the Contract Appeals Board decisions GAO numbers as dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports, B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO gives no number are left out. A year or month the walk has not finished adds nothing, and a month with no listed decision adds nothing either; this table does not record which case a missing month is. A walk reads a year's listing (`month-in-review/2025?page=N`) or a month's (`month-in-review/2026/August`), as its scopes name, and the held rows came from year scopes for 2009-2025 and month scopes for 2026, so one listing page can span several months and `listing_page` names a scope, not a month. A month inside a year scope read, or before the newest month scope read, with no rows is a publisher zero (October 2025, when GAO was closed by the lapse in appropriations, is one); a month after the newest month scope is unread.",
       "kind": "true_range",
       "measured_on": "2026-10-03",
@@ -7179,6 +8204,8 @@
         "title",
         "topics",
         "url",
+        "listing_page",
+        "source",
         "released_date",
         "decided_date",
         "decision_status",
@@ -7921,8 +8948,8 @@
     {
       "table": "native_legal_references",
       "label": "Native legal-reference observations",
-      "summary": "Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, retaining source XML paths and digests. spicy-docs shapes each row and reads the targets it names; this repository pins the inputs and looks each typed target up in the target tables its manifest selects. Complete reads replace the selected source/edition scope, including successful empty corrections. Candidate target matches concern held classification rows, not independently acquired legal text. Unparsed prose and unsupported forms remain visible; no universal extraction or historical completeness is implied.",
-      "coverage": "Sampled. Observations from the complete retained eCFR Title 1, requested as of 2026-08-10, and USC Title 1 release 119-103. Selected public target tables resolve some occurrences; missing, unsupported and unqueried targets remain explicit. Rows read before spicy-docs 0.52.0 name native-legal-reference/002, the reading this repository ran; the next build names /003, which re-spells target_candidates that held a non-ASCII character and re-versions the text candidates citation rules 004 read, and moves no other value. Receipt: native-legal-full-2026-09-27/resolved-verification.json.",
+      "summary": "Original legal references and source passages with recorded target matches. Inspect every candidate's complete keys, target pin, match count and reason. Found, missing, ambiguous, unsupported and not-checked remain separate. Source paths and interpretation rules stay visible. A complete read replaces its selected source/edition scope, including a successful empty correction. U.S. Code section matches identify held classification rows, not Code text.",
+      "coverage": "Sampled. Selected retained U.S. Code and eCFR XML inputs only. Read scopes state the edition, input digest and forms checked; they do not establish source-wide completeness.",
       "kind": "sampled",
       "measured_on": "2026-09-27",
       "data_quality": null,
@@ -7932,17 +8959,49 @@
         "source_record_key",
         "edition",
         "body_version_id",
+        "source_locator",
         "occurrence_index",
+        "source_path",
+        "element_tag",
         "observation_kind",
         "href",
         "text",
         "text_runs",
         "cfr_title",
         "cfr_part",
+        "interpretation_status",
         "target_candidates",
+        "rule_version",
         "native_element_id",
         "native_idref",
         "native_class"
+      ]
+    },
+    {
+      "table": "native_legal_reference_reads",
+      "label": "Legal reference read scopes",
+      "row_unit": "source reads",
+      "category": "processing_evidence",
+      "summary": "Each input's latest completed read, including reads that found no observations. Shows exact source scope, edition, XML and selection-manifest digests, byte and observation counts, forms checked and forms left out. Failed or incomplete inputs cannot replace prior results.",
+      "coverage": "Not a range. Completed reads of selected retained XML inputs; absent scopes remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-09-27",
+      "data_quality": null,
+      "columns": [
+        "scope_id",
+        "source_family",
+        "source_record_key",
+        "edition",
+        "input_sha256",
+        "source_locator",
+        "source_bytes",
+        "occurrence_count",
+        "read_status",
+        "selected_shapes",
+        "unsupported_shapes",
+        "manifest_sha256",
+        "rule_version",
+        "body_version_id"
       ]
     },
     {
@@ -7991,6 +9050,333 @@
         "action_index",
         "date",
         "full_action_name"
+      ]
+    },
+    {
+      "table": "bill_family_document_file_outcomes",
+      "label": "Bill family file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "committee_meetings_detail_reads",
+      "label": "Meeting source reads",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded committee-meeting detail reads and the field states the response supports. Cached meetings do not invent attempts.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "source_table",
+        "congress",
+        "citation",
+        "number",
+        "part_number",
+        "chamber",
+        "event_id",
+        "communication_id",
+        "source_url",
+        "read_field",
+        "outcome",
+        "error_type",
+        "recorded_at",
+        "shape_version",
+        "field_states",
+        "source_witnesses"
+      ]
+    },
+    {
+      "table": "committee_report_read_outcomes",
+      "label": "Committee report read results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded report and hearing package read results. Complete, pending, and refused remain separate.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "package_id",
+        "last_modified",
+        "outcome",
+        "rule_version",
+        "observed_at"
+      ]
+    },
+    {
+      "table": "committee_reports_document_file_outcomes",
+      "label": "Committee reports file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "document_citation_read_outcomes",
+      "label": "Document citation read results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Completed reads of specific document bodies. Zero findings means the body was read; a missing row means no recorded checkpoint.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "document_kind",
+        "document_key",
+        "body_version_id",
+        "text_sha256",
+        "rule_set_version",
+        "read_at",
+        "citation_rows",
+        "source_table",
+        "input_family",
+        "input_generation",
+        "input_sha256"
+      ]
+    },
+    {
+      "table": "house_communications_detail_reads",
+      "label": "House communication source reads",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded House communication detail reads, including failed responses. A missing attempt remains unread.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "source_table",
+        "congress",
+        "citation",
+        "number",
+        "part_number",
+        "chamber",
+        "event_id",
+        "communication_id",
+        "source_url",
+        "read_field",
+        "outcome",
+        "error_type",
+        "recorded_at",
+        "shape_version",
+        "field_states",
+        "source_witnesses",
+        "communication_type",
+        "stated_communication_id",
+        "communication_key_status",
+        "communication_key_rule",
+        "communication_key_reason"
+      ]
+    },
+    {
+      "table": "house_record_enrichment_results",
+      "label": "House communication Record matches",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded attempts to match a House communication to an exact Congressional Record passage. Partial issue scopes cannot establish a match.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "communication_id",
+        "congress",
+        "communication_type",
+        "number",
+        "congressional_record_date",
+        "record_calendar_day",
+        "outcome",
+        "qualified_occurrences",
+        "complete_scope",
+        "conflict_status",
+        "rule_version",
+        "recorded_at",
+        "reason",
+        "scope_packages",
+        "scope_read_results",
+        "witnesses",
+        "stated_communication_id",
+        "communication_key_status",
+        "communication_key_rule",
+        "communication_key_reason"
+      ]
+    },
+    {
+      "table": "laws_document_file_outcomes",
+      "label": "Laws file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "native_legal_references_document_file_outcomes",
+      "label": "Native legal references file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "nominations_detail_reads",
+      "label": "Nomination source reads",
+      "row_unit": "read attempts",
+      "category": "processing_evidence",
+      "summary": "Recorded nomination detail, committee, and hearing reads. A missing row means no recorded attempt; an empty response is a completed read.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "attempt_id",
+        "source_table",
+        "congress",
+        "citation",
+        "number",
+        "part_number",
+        "chamber",
+        "event_id",
+        "communication_id",
+        "source_url",
+        "read_field",
+        "outcome",
+        "error_type",
+        "recorded_at",
+        "shape_version",
+        "field_states",
+        "source_witnesses"
+      ]
+    },
+    {
+      "table": "print_citations_document_file_outcomes",
+      "label": "Print citations file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
+      ]
+    },
+    {
+      "table": "senate_expenditures_document_file_outcomes",
+      "label": "Senate expenditures file conversion results",
+      "row_unit": "recorded results",
+      "category": "processing_evidence",
+      "summary": "Recorded original producer members and their exact native conversion mappings. Empty partition states have a state witness, without a physical file digest.",
+      "coverage": "Not a range. Recorded attempts or producer outputs in the selected generation only; absent checkpoints and unobserved responses remain unknown.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-06",
+      "data_quality": null,
+      "columns": [
+        "generation_id",
+        "source_dataset",
+        "member_ordinal",
+        "relative_path",
+        "partitioned",
+        "row_count",
+        "state",
+        "original_byte_sha256",
+        "state_witness_sha256",
+        "source_schema",
+        "source_metadata",
+        "native_members"
       ]
     }
   ]

@@ -89,7 +89,7 @@ def test_a_found_receipt_gives_decoded_plain_values_in_request_order(tmp_path, m
     family = server._connection_index(con.cursor())["families"]["fcc-filings"]
     assert reply["table"] == "fcc_filings" and reply["identity_fields"] == {"id_submission": "VARCHAR"}
     assert reply["receipts"] == {"family": "fcc-filings", "generation_id": GENERATION,
-                                 "artifact_digest": family["artifactDigest"], "policy_version": "government-sources/2"}
+                                 "artifact_digest": family["artifactDigest"], "policy_version": POLICIES["fcc_filings"].policy_version}
     assert [entry["key"] for entry in reply["keys"]] == [{"id_submission": "0427547924954"}, {"id_submission": "100"}]
     leading_zero, hundred = (entry["fields"] for entry in reply["keys"])
     assert leading_zero["filing_url"] == {"state": "stated", "value": "https://www.fcc.gov/ecfs/filing/0427547924954"}
@@ -156,9 +156,9 @@ def _fec_identity():
 def _fec_subject():
     from spicy_regs.transforms.fec_subject_receipts import mapped_record
 
-    row = {"record_id": "r1", "identity_version": "v1", "mapping_status": "mapped"}
+    row = {"record_id": "r1", "mapping_reason_json": '["source_status"]'}
     return ("fec_account_transfers", mapped_record("fec_account_transfers", row, POLICIES["fec_account_transfers"]),
-            {"identity_version": "v1", "mapping_status": "mapped"})
+            {"mapping_reason_json": '["source_status"]'})
 
 
 def _scorecards():
@@ -167,20 +167,23 @@ def _scorecards():
     raw = {**dict.fromkeys(SOURCE_COLUMNS["scorecard_member_ratings"]), "scorecard_id": "s", "metric_id": "m",
            "publisher_member_key": "k", "value_number": "87.50", "source_url": "https://publisher.test/score"}
     return ("scorecard_member_ratings", map_source_row("scorecard_member_ratings", raw),
-            {"value_number": "87.50", "source_url": "https://publisher.test/score"})
+            {"value_number": "87.50"})
 
 
 @pytest.mark.parametrize("family", [_government, _congress, _legislative, _regulations, _fec_identity, _fec_subject,
                                     _scorecards])
 def test_each_family_mapper_output_is_read_where_its_declaration_places_it(tmp_path, monkeypatch, family):
     table, record, expected = family()
-    one_family(tmp_path, monkeypatch, {table: [record]})
+    con = one_family(tmp_path, monkeypatch, {table: [record]})
     policy = POLICIES[table]
     key = {name: record[name] for name in policy.identity_fields}
     reply = call(table, [key], list(expected))
     assert reply["keys"] == [{"key": key, "receipt": "found", "fields": {
         name: {"state": "stated", "value": value} for name, value in expected.items()}}]
     assert reply["receipts"]["policy_version"] == policy.policy_version
+    if family is _scorecards:
+        assert con.execute('SELECT source_url FROM scorecard_member_ratings').fetchone() == ("https://publisher.test/score",)
+        assert "source_url" not in carried(table)
     # The declaration offers exactly the policy's receipt fields and what its mappings are registered to hold.
     assert set(policy.receipt_fields) <= set(carried(table))
     assert {container for container in carried(table).values() if container} <= set(policy.receipt_fields)
@@ -339,7 +342,7 @@ def test_receipts_under_another_identity_definition_are_refused_before_any_key_i
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
     assert "written under policy_version 'government-sources/9'" in message
     assert "whose row identity is id_submission (text), submission_type (text)" in message
-    assert "this server's policy ('government-sources/2') identifies a row by id_submission (text)" in message
+    assert f"this server's policy ('{installed.policy_version}') identifies a row by id_submission (text)" in message
 
 
 def test_record_ids_this_server_does_not_reproduce_are_refused_before_any_key_is_called_missing(tmp_path, monkeypatch):
@@ -353,7 +356,7 @@ def test_record_ids_this_server_does_not_reproduce_are_refused_before_any_key_is
 
     one_family(tmp_path, monkeypatch, {"fcc_filings": [fcc("100")]}, edit=another_digest)
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])
-    assert "written under policy_version 'government-sources/2' hold record ids this server does not reproduce" in message
+    assert f"written under policy_version '{POLICIES['fcc_filings'].policy_version}' hold record ids this server does not reproduce" in message
     assert "id_submission (text)" in message and "Every key would miss" in message
 
 
@@ -370,7 +373,7 @@ def test_every_version_a_member_holds_is_compared_and_one_differing_identity_ref
     _under(tmp_path, monkeypatch, [(installed, [fcc("100")]), (earlier, [fcc("200")])])
     reply = call("fcc_filings", [{"id_submission": "100"}, {"id_submission": "200"}], ["filing_url"])
     assert [entry["receipt"] for entry in reply["keys"]] == ["found", "found"]
-    assert reply["receipts"]["policy_version"] == ["government-sources/0", "government-sources/2"]
+    assert reply["receipts"]["policy_version"] == ["government-sources/0", installed.policy_version]
     typed = replace(installed, identity_fields=("id_submission", "total_page_count"), policy_version="government-sources/8")
     _under(tmp_path / "second", monkeypatch, [(installed, [fcc("100")]), (typed, [fcc("200", total_page_count="4")])])
     message = refused("fcc_filings", [{"id_submission": "100"}], ["filing_url"])

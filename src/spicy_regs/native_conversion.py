@@ -28,7 +28,6 @@ import sys
 import time
 import tomllib
 import zipfile
-from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import distribution, version
@@ -36,9 +35,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs.conversion_reads import ConversionReadOperation
 from spicy_regs.sources import publication, r2
 
 RECEIPT = "conversion.json"
@@ -222,17 +221,17 @@ def _prepared_implementation(source: Mapping, publisher: Mapping, expected_produ
 
 @dataclass(frozen=True)
 class _Built:
-    """One verified local generation and the two reads that prove it: restored locally, then from what is published."""
+    """One admitted generation and complete local and anonymous original comparisons."""
 
     generation: Path
     policies: Mapping[str, str]
-    restore: Callable[[str], Path]
+    compare_original: Callable[[str, Path], dict]
     read_published: Callable[[str, Mapping], int]
     evidence: tuple[Path, ...] = ()
     added_tables: frozenset[str] = frozenset()
     receipt_only_tables: frozenset[str] = frozenset()
-    #: Validate actual native court subjects separately from original processing input types.
-    declared: Callable[[str], pa.Schema] | None = None
+    read_operation: ConversionReadOperation | None = None
+    check_originals: Callable[[], None] | None = None
 
 
 def _rollup_class(family: str, base: type | None = None):
@@ -289,16 +288,18 @@ def _table_rows(path: Path) -> int:
     return sum(pq.ParquetFile(member).metadata.num_rows for member in _table_files(path).values())
 
 
-def _retain_table(base: str, captured: Mapping, key: str, directory: Path) -> Path:
+def _retain_table(base: str, captured: Mapping, key: str, directory: Path,
+                  original_pins: dict | None = None) -> Path:
     """Fetch every pinned member without collapsing its partition or changing its physical schema."""
     from spicy_regs.generations import _table_info
+    from spicy_regs.local_data import file_signature
 
     descriptor = publication.table_descriptor(captured, key)
     if descriptor is None:
         raise ConversionRefused(f"{key}: no captured table descriptor")
     split = "members" in descriptor
     table_path = directory / (key.removesuffix(".parquet") if split else key)
-    seen = set()
+    seen, signatures = set(), {}
     for member in publication.table_members(captured, key):
         relative = Path(member.key)
         if relative.is_absolute() or ".." in relative.parts or publication.member_table(member.key) != key:
@@ -310,16 +311,26 @@ def _retain_table(base: str, captured: Mapping, key: str, directory: Path) -> Pa
         target.parent.mkdir(parents=True, exist_ok=True)
         if not publication.fetch_member(base, member, target, member.path):
             raise ConversionRefused(f"{member.path} is not readable")
+        before = file_signature(target)
         observed = _table_info(target)
+        if file_signature(target) != before:
+            raise ConversionRefused(f"{key}: fetched member changed during its physical check")
+        name = member.key.removeprefix(key.removesuffix(".parquet") + "/") if split else member.key
+        signatures[name] = before
         if observed["rows"] != member.rows or observed["columns"] != descriptor["columns"]:
             raise ConversionRefused(f"{member.path}: retained physical schema or row count differs from its pin")
     if _table_rows(table_path) != descriptor["rows"]:
         raise ConversionRefused(f"{key}: retained member rows differ from the captured table")
+    if _original_states({key: table_path}) != {key: signatures}:
+        raise ConversionRefused(f"{key}: fetched member layout changed")
+    if original_pins is not None:
+        original_pins[key] = signatures
     return table_path
 
 
 def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, work: Path,
-                    handed_on: Sequence[Mapping]) -> _Built:
+                    handed_on: Sequence[Mapping], read_operation: ConversionReadOperation,
+                    original_pins: Mapping) -> _Built:
     """Run the family's rollup with its builder replaced by "return the retained tables"; everything after is its own."""
     from spicy_regs.pipelines.rollups.base import RollupPipeline
     if set(cls.source_outputs) != set(old["tables"]):
@@ -349,47 +360,67 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
         return pipeline.build_receipts(output_dir, retained_tables)
 
     pipeline.build = build
-    pipeline.run()
+    pipeline.run(read_operation=read_operation)
     (generation,) = (work / "build" / "generations").iterdir()
 
-    return _rollup_built(cls, generation, retained, base, work,
-                         (pipeline.source_evidence.artifact_dir,) if pipeline.source_evidence else ())
+    return _native_built(generation, retained, base, work,
+                         (pipeline.source_evidence.artifact_dir,) if pipeline.source_evidence else (), read_operation, original_pins)
 
 
-def _rollup_built(cls, generation: Path, retained: Mapping[str, Path], base: str, work: Path,
-                  evidence: tuple[Path, ...], selection_root: Path | None = None) -> _Built:
-    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+def _native_built(generation: Path, retained: Mapping[str, Path], base: str, work: Path,
+                  evidence: tuple[Path, ...], read_operation: ConversionReadOperation,
+                  original_pins: Mapping | None = None) -> _Built:
+    """Use the exact admitted policies and one family reader for every comparison."""
+    artifact, reader, _ = read_operation.admit_generation(generation)
+    spec = artifact.root["spec"]
+    receipt_only = frozenset(name + ".parquet" for name, policy in reader.policies.items() if policy.receipt_only)
+    added = frozenset(spec["tables"]) - set(retained)
+    public_reader = None
+    pinned_originals = _original_states(retained) if original_pins is None else original_pins
 
-    def exact(dataset: str, restored: Path) -> Path:
-        if cls.name in {"roll-call-votes", "member-vote-terms"}:
-            _check_processing_restore(retained[dataset + ".parquet"], restored, label="Congress")
-        return restored
+    def check_originals(key=None):
+        selected = retained if key is None else {key: retained[key]}
+        if _original_states(selected) != {name: pinned_originals[name] for name in selected}:
+            raise ConversionRefused("Retained originals changed during this conversion operation")
 
-    def restore(dataset: str) -> Path:
-        restored = SelectedPriors(work / "restored" / uuid4().hex,
-                                  root=selection_root or work / "build", public_url="").get(dataset)
-        return exact(dataset, restored)
+    check_originals()
+
+    def compare_admitted(admitted_reader, dataset: str, original: Path) -> dict:
+        # Only maintained base-family conversion explicitly restores the captured source schema.
+        if _regulatory_base_class(spec["family"]) is not None:
+            return admitted_reader.compare_original(dataset, original, source_schema=pq.read_schema(original))
+        return admitted_reader.compare_original(dataset, original)
+
+    def compare_original(dataset: str, original: Path) -> dict:
+        check_originals(dataset + ".parquet")
+        checked = compare_admitted(reader, dataset, original)
+        check_originals(dataset + ".parquet")
+        return checked
 
     def read_published(dataset: str, index: Mapping) -> int:
-        restored = exact(dataset, SelectedPriors(work / "read-back" / uuid4().hex, index=index, public_url=base).get(dataset))
-        original = retained[dataset + ".parquet"]
-        if original.is_dir() and _has_differences(_table_differences(restored, original)):
-            raise ValueError(f"{dataset}: published native readback changed retained members")
-        return _table_rows(restored)
+        nonlocal public_reader
+        if public_reader is None:
+            # Local proof is finished before admitting actual anonymous bytes.
+            read_operation.release_generation(generation)
+            remote, public_reader, _ = read_operation.admit_public_generation(
+                base, index, spec["family"], work / "read-back" / uuid4().hex)
+            if remote.pin != artifact.pin:
+                raise ConversionRefused("Anonymous generation differs from the admitted local generation")
+        check_originals(dataset + ".parquet")
+        check = compare_admitted(public_reader, dataset, retained[dataset + ".parquet"])
+        check_originals(dataset + ".parquet")
+        if _has_differences(check):
+            raise ConversionRefused(f"{dataset}: anonymous original comparison differs: {check}")
+        return _table_rows(retained[dataset + ".parquet"])
 
-    return _Built(
-        generation,
-        {policy.dataset: policy.policy_version for policy in cls.receipt_policies},
-        restore,
-        read_published,
-        evidence,
-        frozenset(cls.added_tables),
-        frozenset(cls.receipt_only_tables),
-    )
+    return _Built(generation, {name: policy.policy_version for name, policy in reader.policies.items()},
+                  compare_original, read_published, evidence, added, receipt_only,
+                  read_operation=read_operation, check_originals=check_originals)
 
 
 def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mapping[str, Path], base: str,
-                   work: Path, handed_on: Sequence[Mapping], retain_evidence: bool) -> _Built:
+                   work: Path, handed_on: Sequence[Mapping], retain_evidence: bool,
+                   read_operation: ConversionReadOperation, original_pins: Mapping) -> _Built:
     """Court tables: the shared court writer over each retained table, then the court generation admission."""
     from spicy_regs.court_receipts import (
         build_court_generation, finish_court_output,
@@ -416,7 +447,7 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
     try:
         build_court_generation(generation, family=family, files=list(subjects.values()),
                                publication_status="complete-family", read_snapshot=captured,
-                               inputs=evidence.inputs() if evidence else ())
+                               inputs=evidence.inputs() if evidence else (), read_operation=read_operation)
     except BaseException as error:
         if evidence:
             evidence.finish(error)
@@ -424,12 +455,13 @@ def _convert_court(family: str, old: Mapping, captured: Mapping, retained: Mappi
     if evidence:
         evidence.finish()
 
-    return _court_built(generation, subjects, retained, base, work, generation_id,
-                        (evidence.artifact_dir,) if evidence else ())
+    return _native_built(generation, retained, base, work,
+                        (evidence.artifact_dir,) if evidence else (), read_operation, original_pins)
 
 
 def _convert_regulatory_base(cls, captured: Mapping, retained: Mapping[str, Path], base: str,
-                             work: Path, handed_on: Sequence[Mapping], retain_evidence: bool) -> _Built:
+                             work: Path, handed_on: Sequence[Mapping], retain_evidence: bool,
+                   read_operation: ConversionReadOperation, original_pins: Mapping) -> _Built:
     from spicy_regs.generations import build_generation
     from spicy_regs.transforms.regulations_receipts import policy, write_held_dataset
 
@@ -458,7 +490,7 @@ def _convert_regulatory_base(cls, captured: Mapping, retained: Mapping[str, Path
             generation, family=cls.name, files=[subject], expected_keys=[cls.output],
             schemas=owner.generation_schemas(), read_snapshot=captured,
             inputs=evidence.inputs() if evidence else (), receipt_path=receipts,
-            receipt_policies=[policy(dataset)], receipt_generation_id=generation_id,
+            receipt_policies=[policy(dataset)], receipt_generation_id=generation_id, read_operation=read_operation,
         )
     except BaseException as error:
         if evidence:
@@ -466,96 +498,8 @@ def _convert_regulatory_base(cls, captured: Mapping, retained: Mapping[str, Path
         raise
     if evidence:
         evidence.finish()
-    return _regulatory_base_built(cls, generation, retained, base, work, generation_id,
-                                  (evidence.artifact_dir,) if evidence else ())
-
-
-def _check_processing_restore(original: Path, restored: Path, *, label: str) -> Path:
-    """Refuse any change in complete processing schema, metadata, ordered values or repetitions."""
-    from itertools import zip_longest
-
-    expected, actual = pq.ParquetFile(original), pq.ParquetFile(restored)
-    if not expected.schema_arrow.equals(actual.schema_arrow, check_metadata=True):
-        raise ValueError(f"{label} processing schema or metadata changed")
-    for before, after in zip_longest(expected.iter_batches(batch_size=1000), actual.iter_batches(batch_size=1000)):
-        if before is None or after is None or not before.equals(after):
-            raise ValueError(f"{label} processing values, order or repetitions changed")
-    return restored
-
-
-def _regulatory_base_built(cls, generation: Path, retained: Mapping[str, Path], base: str, work: Path,
-                           generation_id: str, evidence: tuple[Path, ...]) -> _Built:
-    from spicy_regs.selected_generations import SelectedInputs
-    from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal, policy
-
-    source_schema = pq.read_schema(retained[cls.output])
-    dataset = cls.output.removesuffix(".parquet")
-
-    def exact(restored: Path) -> Path:
-        return _check_processing_restore(retained[cls.output], restored, label="Regulatory")
-
-    def restore(name: str) -> Path:
-        if name != dataset:
-            raise ValueError("Regulatory prepared dataset differs from its maintained family")
-        return exact(materialize_internal(
-            ReceiptInput(dataset, (generation / cls.output,), generation / "etl_receipts.parquet", generation_id),
-            work / "restored" / uuid4().hex / cls.output, bulk=True, source_schema=source_schema,
-        ))
-
-    def read_published(name: str, index: Mapping) -> int:
-        if name != dataset:
-            raise ValueError("Regulatory published dataset differs from its maintained family")
-        directory = work / "read-back" / uuid4().hex
-        selected = SelectedInputs(directory, directory / "native", index=index, public_url=base).select(dataset)
-        if selected is None:
-            raise ValueError("Published regulatory input selection is absent")
-        restored = materialize_internal(
-            ReceiptInput(dataset, selected.subjects, selected.receipts, selected.generation_id),
-            directory / cls.output, bulk=True, source_schema=source_schema,
-        )
-        return _table_rows(exact(restored))
-
-    return _Built(generation, {dataset: policy(dataset).policy_version}, restore, read_published, evidence)
-
-
-def _court_built(generation: Path, subjects: Mapping[str, Path], retained: Mapping[str, Path], base: str,
-                 work: Path, generation_id: str, evidence: tuple[Path, ...]) -> _Built:
-    from spicy_regs.court_receipts import POLICIES, restore_processing_input
-    from spicy_regs.court_subjects import SUBJECT_SCHEMAS
-
-    def restore(dataset: str) -> Path:
-        target = work / "restored" / f"{dataset}.parquet"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # The court restore writes whatever schema it is handed, so this file takes the retained table's columns
-        # and types; its file metadata is dropped so that metadata the published table had shows as lost.
-        restored = restore_processing_input(subjects[dataset], target, dataset=dataset,
-                                            schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata(),
-                                            receipt_path=generation / "etl_receipts.parquet", generation_id=generation_id)
-        return _check_processing_restore(retained[dataset + ".parquet"], restored, label="Court")
-
-    def read_published(dataset: str, index: Mapping) -> int:
-        target = work / "read-back" / uuid4().hex / f"{dataset}.parquet"
-        target.parent.mkdir(parents=True)
-        (member,) = publication.table_members(index, dataset + ".parquet")
-        if not publication.fetch_member(base, member, target, member.path):
-            raise ConversionRefused(f"{dataset}: published subject is unavailable")
-        (receipt_member,) = publication.receipt_members(index, dataset=dataset)
-        receipts = target.parent / "etl_receipts.parquet"
-        if not publication.fetch_member(base, receipt_member, receipts, receipt_member.path):
-            raise ConversionRefused(f"{dataset}: published receipts are unavailable")
-        owner = publication.table_owner(index, dataset + ".parquet")
-        if owner is None:
-            raise ConversionRefused(f"{dataset}: no published subject owner")
-        selected = owner[1]["etlReceipts"]["generationId"]
-        restored = restore_processing_input(
-            target, target.parent / "processing.parquet", dataset=dataset,
-            schema=pq.read_schema(retained[dataset + ".parquet"]).remove_metadata(),
-            receipt_path=receipts, generation_id=selected,
-        )
-        return _table_rows(_check_processing_restore(retained[dataset + ".parquet"], restored, label="Court"))
-
-    return _Built(generation, {name: POLICIES[name].policy_version for name in subjects}, restore, read_published,
-                  evidence, declared=SUBJECT_SCHEMAS.__getitem__)
+    return _native_built(generation, retained, base, work,
+                                  (evidence.artifact_dir,) if evidence else (), read_operation, original_pins)
 
 
 def _differences(restored: Path, retained: Path) -> dict:
@@ -684,7 +628,12 @@ def _prepared_digest(receipt: Mapping) -> str:
 
 
 def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
-    artifact = json.loads((built.generation / "artifact.json").read_bytes())
+    if built.read_operation is None:
+        raise ConversionRefused("Preparation seal requires its active admitted operation")
+    if built.check_originals:
+        built.check_originals()
+    admitted, _ = built.read_operation.verified_source(built.generation)
+    artifact = admitted.root
     receipt["prepared"] = {
         "format": "spicy-regs-native-conversion-prepared", "version": 1,
         "generationPin": {key: artifact[key] for key in ("logicalId", "artifactDigest")},
@@ -709,11 +658,19 @@ def _prepared_refusal_state(receipt_path: Path) -> str:
             "another write.")
 
 
-def _retained_inputs(captured: Mapping, old: Mapping, work: Path) -> dict[str, Path]:
+def _original_states(retained: Mapping[str, Path]) -> dict:
+    from spicy_regs.local_data import file_signature
+
+    return {key: {name: file_signature(path) for name, path in _table_files(table).items()}
+            for key, table in retained.items()}
+
+
+def _retained_inputs(captured: Mapping, old: Mapping, work: Path) -> tuple[dict[str, Path], dict]:
     """Recheck retained bytes against publisher pins; no cached proof substitutes for these checks."""
     from spicy_regs.generations import _table_info
+    from spicy_regs.local_data import file_signature
 
-    retained = {}
+    retained, signatures = {}, {}
     for key, descriptor in old["tables"].items():
         path = _prepared_path(work, "retained/" + (key.removesuffix(".parquet") if "members" in descriptor else key))
         members = publication.table_members(captured, key)
@@ -721,25 +678,172 @@ def _retained_inputs(captured: Mapping, old: Mapping, work: Path) -> dict[str, P
                     for member in members}
         if set(_table_files(path)) != expected:
             raise ConversionRefused(f"{key}: retained member layout changed")
+        signatures[key] = {}
         for member in members:
             target = _prepared_path(work, "retained/" + member.key)
+            before = file_signature(target)
             if target.stat().st_size != member.byte_size or _file_digest(target) != member.sha256:
                 raise ConversionRefused(f"{key}: retained member bytes changed")
             observed = _table_info(target)
             if observed["columns"] != descriptor["columns"] or observed["rows"] != member.rows:
                 raise ConversionRefused(f"{key}: retained member schema or rows changed")
+            if file_signature(target) != before:
+                raise ConversionRefused(f"{key}: retained member changed during its byte check")
+            name = member.key.removeprefix(key.removesuffix(".parquet") + "/") if path.is_dir() else member.key
+            signatures[key][name] = before
         retained[key] = path
-    return retained
+    if _original_states(retained) != signatures:
+        raise ConversionRefused("Retained originals changed during admission")
+    return retained, signatures
+
+
+def _check_prepared_membership(family: str, old: Mapping, spec: Mapping) -> None:
+    """Qualify actual historical outputs against maintained family/partition declarations."""
+    from spicy_regs.court_receipts import POLICIES as court_policies
+
+    regulatory = _regulatory_base_class(family)
+    if regulatory is not None:
+        if set(old["tables"]) != {regulatory.output} or "members" in old["tables"][regulatory.output]:
+            raise ConversionRefused("Prepared regulatory family membership differs")
+        allowed_added = frozenset()
+    elif all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
+        if any("members" in table for table in old["tables"].values()):
+            raise ConversionRefused("Prepared court family has unsupported split members")
+        allowed_added = frozenset()
+    elif (cls := _rollup_class(family)) is not None:
+        if set(cls.source_outputs) != set(old["tables"]) or any(
+                ("members" in table) != (key in cls.partitioned) or "members" in table
+                and tuple(table["partitionColumns"]) != tuple(cls.partitioned[key])
+                for key, table in old["tables"].items()):
+            raise ConversionRefused("Prepared family membership or partition declaration differs")
+        allowed_added = frozenset(cls.added_tables)
+    else:
+        raise ConversionRefused("Prepared family has no maintained converter reader")
+    descriptors = {value["dataset"]: value for value in spec["etlReceipts"]["policies"]}
+    receipt_only = {name + ".parquet" for name, value in descriptors.items() if value["receipt_only"]}
+    expected = set(old["tables"]) - receipt_only
+    if not expected <= set(spec["tables"]) or set(spec["tables"]) - expected - allowed_added:
+        raise ConversionRefused("Prepared subject membership differs from the family's declared outputs")
+    if not {key.removesuffix(".parquet") for key in old["tables"]} <= set(descriptors):
+        raise ConversionRefused("Prepared original output has no admitted receipt policy")
+    for key, table in old["tables"].items():
+        if key in receipt_only:
+            continue
+        actual = spec["tables"][key]
+        if ("members" in table) != ("partitionColumns" in actual) or (
+                "members" in table and table["partitionColumns"] != actual["partitionColumns"]):
+            raise ConversionRefused("Prepared native partition declaration differs from captured inputs")
+
+
+def _prepared_evidence(generation_root: Mapping, family: str, evidence: tuple[Path, ...]) -> None:
+    from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
+
+    admitted = [verify_evidence(path) for path in evidence]
+    if ([{"role": INPUT_ROLE, **item.pin.as_dict()} for item in admitted]
+            != [item for item in generation_root["inputs"] if item["role"] == INPUT_ROLE]
+            or any(item.root["spec"]["family"] != family or item.root["inputs"] != [
+                value for value in generation_root["inputs"] if value["role"] == PRIOR_ROLE] for item in admitted)):
+        raise ConversionRefused("Prepared source evidence differs from the generation")
+
+
+def _receipt_producer_implementation(receipt: Mapping, now: Mapping, expected_producer: str | None) -> str:
+    producer = receipt.get("producer")
+    if producer is None:
+        return _prepared_implementation(receipt["source"], now, expected_producer)
+    if expected_producer is None or producer.get("commit") != expected_producer:
+        raise ConversionRefused("Resumed producer requires its exact --expect-producer commit")
+    identity, locked = _historical_producer(Path(__file__).resolve().parents[2], expected_producer, now["checkout"])
+    if (producer != {"commit": expected_producer, "implementationId": identity, "lockedSpicyDocs": locked}
+            or locked["version"] != now["pinned_spicy_docs"]
+            or locked["wheels"][0]["hash"] != now["spicy_docs_wheel"]["locked_sha256"]):
+        raise ConversionRefused("Resumed producer source or locked runtime differs")
+    return identity
+
+
+def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], expected_main: str,
+                    expected_spicy_docs: str, expected_producer: str, remote: str = "origin",
+                    state: Callable[[str], dict] | None = None) -> dict:
+    """Finish a retained writer's complete generation; never rerun its writer or publish it."""
+    from spicy_regs.generations import implementation_id
+    from spicy_regs.pipelines.rollups.base import RollupPipeline
+    from spicy_regs.source_evidence import INPUT_ROLE
+
+    state = state or source_state
+    work = work.resolve()
+    try:
+        now = state(remote)
+        _refuse_moved(now, main=expected_main, spicy_docs=expected_spicy_docs)
+        base = (os.getenv("R2_PUBLIC_URL") or "").rstrip("/")
+        if not base:
+            raise ConversionRefused("R2_PUBLIC_URL is not set")
+        receipt_path = work / RECEIPT
+        previous = json.loads(receipt_path.read_bytes()) if receipt_path.exists() else {}
+        if receipt_path.is_symlink() or any(key in previous for key in (
+                "prepared", "refused", "publish_attempt", "rollback_attempt", "rolled_back")) or previous.get("published"):
+            raise ConversionRefused("Resume requires an unsealed generation with no publication attempt")
+        captured = publication.parse_index(_prepared_path(work, "captured-publication.v2.json").read_bytes())
+        generation = _prepared_path(work, str(generation))
+        with ConversionReadOperation() as operation:
+            artifact, _, _ = operation.admit_generation(generation)
+            spec = artifact.root["spec"]
+            family = spec["family"]
+            if family not in allowed:
+                raise ConversionRefused(f"{family} is not in this run's allow-list")
+            old = captured["families"][family]
+            if (spec["publicationStatus"] != "complete-family" or spec["readSnapshot"] != captured
+                    or "etlReceipts" in old or previous.get("family", family) != family
+                    or previous.get("captured", {}).get("entry", old) != old):
+                raise ConversionRefused("Resume generation does not bind its captured complete prior")
+            identity, locked = _historical_producer(Path(__file__).resolve().parents[2], expected_producer, now["checkout"])
+            if (artifact.root["producer"]["implementationId"] != identity
+                    or artifact.root["producer"]["verifierImplementationId"] != identity
+                    or locked["version"] != now["pinned_spicy_docs"]
+                    or locked["wheels"][0]["hash"] != now["spicy_docs_wheel"]["locked_sha256"]
+                    or any(version(name) != value for name, value in spec["packages"].items())):
+                raise ConversionRefused("Retained producer source or installed locked runtime differs")
+            _check_prepared_membership(family, old, spec)
+            retained, original_pins = _retained_inputs(captured, old, work)
+            pins = {item["artifactDigest"] for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE}
+            evidence = tuple(path.parent for path in sorted((work / "build" / "source-evidence").glob("*/artifact/artifact.json"))
+                             if json.loads(path.read_bytes()).get("artifactDigest") in pins)
+            _prepared_evidence(artifact.root, family, evidence)
+            built = _native_built(generation, retained, base, work, evidence, operation, original_pins)
+            _, replaced = publication.load_family_root(base, old)
+            scheduled = _rollup_class(family, RollupPipeline)
+            retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
+            proof, problems, _ = _qualify_conversion(family, built, old, retained, replaced, retains,
+                                                    _handed_on(base, replaced))
+            if problems:
+                raise ConversionRefused(f"Retained generation does not qualify: {problems}")
+            if state(remote) != now:
+                raise ConversionRefused("Source or installed wheel moved during resume verification")
+            receipt = {"family": family, "started_at": _now(), "source": now, "public_url": base,
+                       "target": None, "captured": {"entry": old}, "published": None,
+                       "producer": {"commit": expected_producer, "implementationId": identity, "lockedSpicyDocs": locked},
+                       "preparation_verifier": {"source": now, "implementationId": implementation_id()}, **proof}
+            operation.verified_source(generation)
+            _seal_prepared(receipt, built, work)
+            _write_receipt(receipt_path, receipt)
+            return receipt
+    except (KeyError, TypeError, ValueError, OSError) as failure:
+        raise ConversionRefused(f"Retained conversion cannot be verified: {type(failure).__name__}: {failure}") from failure
 
 
 def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
                      expect_bucket: str, remote: str = "origin", state: Callable[[str], dict] | None = None,
-                     expected_producer: str | None = None) -> dict:
+                     expected_producer: str | None = None,
+                     read_operation: ConversionReadOperation | None = None) -> dict:
     """Publish one completed official dry run after rechecking its bytes and restoring its exact inputs again.
 
     The source writer never runs here. Separate field, server and coverage qualifications in the release package
     must name this receipt's exact artifact; their reports do not replace native admission or restoration.
     """
+    if read_operation is None:
+        with ConversionReadOperation() as operation:
+            return publish_prepared(receipt_path, allowed=allowed, expected_main=expected_main,
+                                    expected_spicy_docs=expected_spicy_docs, expect_bucket=expect_bucket,
+                                    remote=remote, state=state, expected_producer=expected_producer,
+                                    read_operation=operation)
     state = state or source_state
     work = receipt_path.parent
     try:
@@ -757,7 +861,7 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         family, base = receipt["family"], receipt["public_url"]
         if family not in allowed:
             raise ConversionRefused(f"{family} is not in this run's allow-list")
-        producer_implementation = _prepared_implementation(receipt["source"], now, expected_producer)
+        producer_implementation = _receipt_producer_implementation(receipt, now, expected_producer)
         if base != (os.getenv("R2_PUBLIC_URL") or "").rstrip("/"):
             raise ConversionRefused("Prepared public URL differs from R2_PUBLIC_URL")
         capture_path = _prepared_path(work, "captured-publication.v2.json")
@@ -770,11 +874,9 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         target = _target(expect_bucket, "Publishing a prepared conversion")
         if publication.stored_family(r2.get_r2_client(), target["bucket"], family) != old:
             raise ConversionRefused("Prepared family's complete captured entry changed; nothing was uploaded")
-        retained = _retained_inputs(captured, old, work)
-        from spicy_regs.generations import verify_generation
-
+        retained, original_pins = _retained_inputs(captured, old, work)
         generation = _prepared_path(work, receipt["generation"]["directory"])
-        artifact = verify_generation(generation)
+        artifact, _, _ = read_operation.admit_generation(generation)
         spec = artifact.root["spec"]
         if (artifact.pin.as_dict() != sealed["generationPin"]
                 or artifact.pin.artifact_digest != receipt["generation"]["artifactDigest"]
@@ -786,47 +888,11 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
                 or any(version(name) != value for name, value in spec["packages"].items())):
             raise ConversionRefused("Prepared generation, captured inputs, or implementation differs")
         evidence = tuple(_prepared_path(work, value) for value in sealed["evidenceDirectories"])
-        from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
-
-        admitted = [verify_evidence(path) for path in evidence]
-        if ([{"role": INPUT_ROLE, **item.pin.as_dict()} for item in admitted]
-                != [item for item in artifact.root["inputs"] if item["role"] == INPUT_ROLE]
-                or any(item.root["spec"]["family"] != family or item.root["inputs"] != [
-                    value for value in artifact.root["inputs"] if value["role"] == PRIOR_ROLE] for item in admitted)):
-            raise ConversionRefused("Prepared source evidence differs from the generation")
-        from spicy_regs.court_receipts import POLICIES as court_policies
+        _prepared_evidence(artifact.root, family, evidence)
         from spicy_regs.pipelines.rollups.base import RollupPipeline
 
-        regulatory = _regulatory_base_class(family)
-        if regulatory is not None and (set(old["tables"]) != {regulatory.output}
-                                       or "members" in old["tables"][regulatory.output]):
-            raise ConversionRefused("Prepared regulatory family membership differs")
-        if regulatory is not None:
-            built = _regulatory_base_built(regulatory, generation, retained, base, work,
-                                          spec["etlReceipts"]["generationId"], evidence)
-        elif all(key.removesuffix(".parquet") in court_policies for key in old["tables"]):
-            subjects = {key.removesuffix(".parquet"): generation / key for key in old["tables"]}
-            built = _court_built(generation, subjects, retained, base, work, spec["etlReceipts"]["generationId"], evidence)
-        elif (cls := _rollup_class(family)) is not None:
-            if set(cls.source_outputs) != set(old["tables"]) or any(
-                ("members" in table) != (key in cls.partitioned) or "members" in table
-                and tuple(table["partitionColumns"]) != tuple(cls.partitioned[key]) for key, table in old["tables"].items()
-            ):
-                raise ConversionRefused("Prepared family membership or partition declaration differs")
-            from spicy_regs.selected_generations import SelectedDataset, remember_selection
-
-            selection_root = work / "prepared-selection" / uuid4().hex
-            selections = []
-            for policy in cls.receipt_policies:
-                path = generation / (policy.dataset if "partitionColumns" in spec["tables"].get(policy.dataset + ".parquet", {})
-                                     else policy.dataset + ".parquet")
-                subjects = () if policy.receipt_only else tuple(_table_files(path).values())
-                selections.append(SelectedDataset(policy.dataset, subjects, generation / "etl_receipts.parquet",
-                                                  spec["etlReceipts"]["generationId"]))
-            remember_selection(selection_root, selections)
-            built = _rollup_built(cls, generation, retained, base, work, evidence, selection_root)
-        else:
-            raise ConversionRefused("Prepared family has no maintained converter reader")
+        _check_prepared_membership(family, old, spec)
+        built = _native_built(generation, retained, base, work, evidence, read_operation, original_pins)
         _, replaced = publication.load_family_root(base, old)
         scheduled = _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
@@ -847,8 +913,19 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
 
 def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: str, expected_spicy_docs: str,
             publish: bool = False, remote: str = "origin", state: Callable[[str], dict] | None = None,
-            expect_bucket: str | None = None) -> dict:
+            expect_bucket: str | None = None, read_operation: ConversionReadOperation | None = None) -> dict:
     """Convert ``family`` in ``work``; with ``publish``, move its pointer and read the result back anonymously."""
+    if read_operation is None:
+        try:
+            with ConversionReadOperation() as operation:
+                return convert(family, allowed=allowed, work=work, expected_main=expected_main,
+                               expected_spicy_docs=expected_spicy_docs, publish=publish, remote=remote,
+                               state=state, expect_bucket=expect_bucket, read_operation=operation)
+        except ValueError as failure:
+            receipt_path = work / RECEIPT
+            attempted = receipt_path.is_file() and json.loads(receipt_path.read_bytes()).get("publish_attempt")
+            failure_state = _uncertain_state("publish", receipt_path, expect_bucket) if attempted else NOTHING_PUBLISHED
+            raise ConversionRefused(f"{family}: {failure}", state=failure_state) from failure
     if family not in allowed:
         raise ConversionRefused(f"{family} is not in this run's allow-list ({', '.join(sorted(allowed)) or 'empty'})")
     work = work.resolve()
@@ -876,7 +953,10 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             raise ConversionRefused(f"{family} already carries ETL receipts: it is native")
         (work / "captured-publication.v2.json").write_text(json.dumps(captured, sort_keys=True), encoding="utf-8")
         receipt["captured"] = {"etag": before["etag"], "bytes": before["bytes"], "entry": old}
-        retained = {key: _retain_table(base, captured, key, work / "retained") for key in old["tables"]}
+        original_pins: dict = {}
+        retained = {key: _retain_table(base, captured, key, work / "retained", original_pins) for key in old["tables"]}
+        if _original_states(retained) != original_pins:
+            raise ConversionRefused("Retained originals changed during collection")
         from spicy_regs.court_receipts import POLICIES as court_policies
         from spicy_regs.pipelines.rollups.base import RollupPipeline
 
@@ -920,10 +1000,10 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         elapsed = time.monotonic()
         try:
             if regulatory is not None:
-                built = _convert_regulatory_base(regulatory, captured, retained, base, work, handed_on, retains)
+                built = _convert_regulatory_base(regulatory, captured, retained, base, work, handed_on, retains, read_operation, original_pins)
             else:
-                built = (_convert_court(family, old, captured, retained, base, work, handed_on, retains) if cls is None
-                         else _convert_rollup(cls, old, retained, base, work, handed_on))
+                built = (_convert_court(family, old, captured, retained, base, work, handed_on, retains, read_operation, original_pins) if cls is None
+                         else _convert_rollup(cls, old, retained, base, work, handed_on, read_operation, original_pins))
         except ValueError as refusal:  # how the writers refuse a row or a family they cannot classify
             raise ConversionRefused(f"{family}: {refusal}") from refusal
         receipt["convert_seconds"] = round(time.monotonic() - elapsed, 1)
@@ -952,9 +1032,11 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
 def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapping[str, Path],
                         replaced: Mapping, retains: bool, handed_on: Sequence[Mapping],
                         ) -> tuple[dict, list[str], publication.NativeConversionProof | None]:
-    artifact = json.loads((built.generation / "artifact.json").read_bytes())
-    outcomes = Counter(outcome for batch in pq.ParquetFile(built.generation / "etl_receipts.parquet").iter_batches(
-        columns=["outcome"]) for outcome in batch.column(0).to_pylist())
+    if built.read_operation is None:
+        raise ConversionRefused("Conversion qualification requires its active admitted reader")
+    admitted, reader, _ = built.read_operation.admit_generation(built.generation)
+    artifact = admitted.root
+    outcomes = reader.outcome_counts()
     tables, problems = {}, []
     if unconverted := {name: count for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES}:
         problems.append(f"receipts hold {unconverted}; every retained row must convert")
@@ -962,22 +1044,10 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         dataset = key.removesuffix(".parquet")
         subject = built.generation / (dataset if "members" in table else key)
         try:
-            restored = built.restore(dataset)
-            actual, original = _table_files(restored), _table_files(retained[key])
-            if restored.is_dir() != retained[key].is_dir() or actual.keys() != original.keys():
-                raise ValueError("Processing member layout changed")
-            for name in original:
-                _check_processing_restore(original[name], actual[name], label=dataset)
-            check = _table_differences(restored, retained[key]) | {"retained_rows": table["rows"]}
+            check = built.compare_original(dataset, retained[key]) | {"retained_rows": table["rows"]}
         except ValueError as unreadable:
             problems.append(f"{dataset} does not restore: {unreadable}")
             continue
-        if built.declared:
-            # Domain types belong to the native subject. The original processing types are checked by exact restore.
-            declared = built.declared(dataset)
-            if not subject.exists() or any(not pq.read_schema(member).equals(declared)
-                                           for member in _table_files(subject).values()):
-                problems.append(f"{dataset}: actual native subject schema differs from its declared court policy")
         if subject.exists():
             check["subject_rows"] = _table_rows(subject)
             if subject.is_dir():
@@ -1065,10 +1135,17 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
     receipt |= {"published": None, "publish_attempt": attempt}
     save()
     try:
-        index = publication.publish_generation(
-            built.generation, client=client, bucket=bucket, prior_index=captured, evidence_directories=built.evidence,
+        if built.read_operation is None:
+            raise ConversionRefused("Conversion publication requires its active verified read operation")
+        if built.check_originals:
+            built.check_originals()
+        admitted, source = built.read_operation.verified_source(built.generation)
+        index = publication._publish_verified_generation(
+            admitted, source, client=client, bucket=bucket, prior_index=captured, evidence_directories=built.evidence,
             added_tables=built.added_tables, receipt_only_tables=built.receipt_only_tables, exact_prior=exact_prior,
-            conversion_proof=conversion_proof)
+            conversion_proof=conversion_proof,
+            upload_member=lambda prefix, key: publication._put_immutable(
+                client, bucket, prefix + "/" + key, built.generation / key))
         entry = index["families"][family]
     except Exception as failure:
         # The publish call did not return. A conditional write whose response was lost has still moved the pointer,
@@ -1130,7 +1207,13 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         "anonymous_read_rows": read,
     }
     save()
-    wrong = [key for key, table in entry.get("tables", {}).items() if table["rows"] != old["tables"][key]["rows"]]
+    # Source rows were compared with the captured publication before admission.
+    # Added status tables have no old counterpart: read them back against the
+    # exact admitted generation, rather than indexing an absent old table.
+    expected_tables = artifact["spec"]["tables"]
+    wrong = sorted(set(entry.get("tables", {})) ^ set(expected_tables))
+    wrong += [key for key, table in entry.get("tables", {}).items()
+              if key in expected_tables and table["rows"] != expected_tables[key]["rows"]]
     wrong += [name for name, rows in read.items() if rows != old["tables"][name + ".parquet"]["rows"]]
     if entry.get("artifactDigest") != artifact["artifactDigest"] or "etlReceipts" not in entry or wrong:
         raise ConversionRefused(f"{family} does not read back as converted ({wrong or entry.get('artifactDigest')})",
@@ -1227,7 +1310,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--publish", action="store_true", help="Move the family's pointer; without it nothing is uploaded")
     parser.add_argument("--publish-prepared", type=Path, metavar="CONVERSION_JSON",
                         help="Recheck and publish one completed official dry run without rerunning its writer")
-    parser.add_argument("--expect-producer", help="Full retained producer commit for a prepared publication")
+    parser.add_argument("--resume-generation", type=Path, metavar="GENERATION",
+                        help="Verify and seal a retained complete generation without restarting its writer")
+    parser.add_argument("--expect-producer", help="Full retained producer commit for preparation or publication")
     parser.add_argument("--expect-bucket", help="The bucket --publish or --rollback may write to; any other is refused")
     parser.add_argument("--rollback", type=Path, metavar="RECEIPT", help="Restore the entry a conversion receipt captured")
     parser.add_argument("--discard-newer", action="store_true",
@@ -1235,10 +1320,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--env-file", type=Path, help="Read R2_* settings from this file; nothing is loaded implicitly")
     args = parser.parse_args(argv)
     if args.rollback and (args.family or args.allow or args.work or args.expect_main or args.expect_spicy_docs or args.publish_prepared
-                          or args.expect_producer or args.publish or args.remote != "origin"):
+                          or args.resume_generation or args.expect_producer or args.publish or args.remote != "origin"):
         parser.error("--rollback takes only --expect-bucket, --env-file and --discard-newer")
-    if args.expect_producer and not args.publish_prepared:
-        parser.error("--expect-producer belongs to --publish-prepared")
+    if args.expect_producer and not (args.publish_prepared or args.resume_generation):
+        parser.error("--expect-producer belongs to --publish-prepared or --resume-generation")
+    if args.resume_generation and (args.family or args.publish or args.publish_prepared):
+        parser.error("--resume-generation cannot rebuild or publish a family")
+    if args.resume_generation and not (args.work and args.allow and args.expect_main
+                                       and args.expect_spicy_docs and args.expect_producer):
+        parser.error("--resume-generation needs --work, --allow, --expect-main, --expect-spicy-docs and --expect-producer")
     if args.publish_prepared and (args.family or args.work or args.publish):
         parser.error("--publish-prepared cannot rebuild a family; omit FAMILY, --work and --publish")
     if (args.publish or args.publish_prepared or args.rollback) and not args.expect_bucket:
@@ -1262,7 +1352,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{done['family']}: found {done['rolled_back']['found']}; the pointer names "
                   f"{done['rolled_back']['entry']['artifactDigest']}")
             return 0
-        if args.publish_prepared:
+        if args.resume_generation:
+            done = resume_prepared(
+                args.resume_generation, work=args.work,
+                allowed=[name for value in args.allow for name in value.split(",") if name],
+                expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs,
+                expected_producer=args.expect_producer, remote=args.remote)
+        elif args.publish_prepared:
             if not (args.allow and args.expect_main and args.expect_spicy_docs):
                 parser.error("--publish-prepared needs --allow, --expect-main and --expect-spicy-docs")
             entered_prepared = True

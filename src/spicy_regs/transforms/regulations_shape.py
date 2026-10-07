@@ -90,6 +90,11 @@ NATIVE_FIELDS = {
         "regulation_id_numbers_json": ("regulation_id_numbers", STRINGS),
     },
     "comment_periods": {
+        "evidence_occurrences_json": ("evidence_occurrences", pa.list_(pa.struct([
+            ("source", S), ("role", S), ("evidence_id", S), ("source_ordinal", pa.int64()),
+            ("document_id", S), ("document_number", S), ("publication_date", S),
+            ("open_date", S), ("close_date", S), ("rins", STRINGS), ("rin_values_json", S),
+        ]))),
         "proceeding_ids_json": ("proceeding_ids", STRINGS),
         "rins_json": ("rins", STRINGS),
         "docket_ids_json": ("docket_ids", STRINGS),

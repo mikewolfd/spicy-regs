@@ -39,3 +39,33 @@ One candidate result occurrence in a retained API response. Provides the capture
 | `election_districts` | `VARCHAR[]` | Literal Native list of election district values supplied for this candidate observation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `inactive_election_years` | `INTEGER[]` | Literal Native list of inactive election years supplied by the API. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `district_number` | `BIGINT` | District number stated for the candidate, parsed as an integer without inferring a district. |
+| `identity_version` | `VARCHAR` | Version of the source-observation identity rule; it does not select a current or canonical record. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `mapping_status` | `VARCHAR` | Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_record_id` | `VARCHAR` | Native source-observation key within collection_id. Resolve with the source generation, exact locator and source digest, not this value alone. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `source_locator_json` | `VARCHAR` | Exact source row or subrecord coordinates, including available member, ordinal, byte span and field-definition references. Resolve in the pinned source generation. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `selection_evidence_sha256` | `VARCHAR` | Digest of the retained selection evidence used to authorize this mapper's source scope; not a financial inclusion decision. |
+| `source_representation_role` | `VARCHAR` | Selected source role such as snapshot, insertion or deletion. Amount signs and ordinary amendment flags do not establish correction applicability. |
+| `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
+| `source_namespace` | `VARCHAR` | Namespace identifying the native layout or identifier system. Similar numbers or field names across namespaces are not equivalent. |
+| `cycles_status` | `VARCHAR` | Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
+| `election_years_status` | `VARCHAR` | Source array state for election_years: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
+| `election_districts_status` | `VARCHAR` | Source array state for election_districts: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
+| `inactive_election_years_status` | `VARCHAR` | Source array state for inactive_election_years: source_missing, source_null, source_empty, reported or unsupported_array; arrays are independent and preserve order. |
+| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `source_pointer` | `VARCHAR` | Exact pointer within the provider-owned native record to the mapped value or metadata object. |
+| `original_result_pointer` | `VARCHAR` | Original API results-array pointer retained separately from the provider wrapper's pointer. |
+| `candidate_id_status` | `VARCHAR` | State or syntax check of the reported candidate ID; a valid shape is not a resolved identity. |
+| `query_completeness` | `VARCHAR` | Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query. |
+| `active_through_status` | `VARCHAR` | Interpretation of source active_through: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `candidate_inactive_status` | `VARCHAR` | Interpretation of source candidate_inactive: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `has_raised_funds_status` | `VARCHAR` | Interpretation of source has_raised_funds: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `federal_funds_flag_status` | `VARCHAR` | Interpretation of source federal_funds_flag: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `first_file_date_status` | `VARCHAR` | Interpretation of source first_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `last_file_date_status` | `VARCHAR` | Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `last_f2_date_status` | `VARCHAR` | Interpretation of source last_f2_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
+| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
+| `district_number_status` | `VARCHAR` | Conversion outcome for the district number: distinguishes a parsed value from missing, null, empty or unsupported source input. |

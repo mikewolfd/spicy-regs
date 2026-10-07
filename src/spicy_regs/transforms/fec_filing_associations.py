@@ -140,7 +140,7 @@ def _targets(result, targets, filer=None):
     )
 
 
-def associate_filing_numbers(rows, *, table, filings, source_generation_pin, namespace_evidence):
+def iter_filing_number_associations(rows, *, table, filings, source_generation_pin, namespace_evidence):
     """Associate a bounded typed batch using qualified native file-number fields.
 
     namespace_evidence maps supported mapper namespaces to retained official
@@ -148,7 +148,11 @@ def associate_filing_numbers(rows, *, table, filings, source_generation_pin, nam
     a digest's spelling alone is not evidence. Missing or invalid IDs stay visible.
     """
     by_key, _ = _index(filings)
-    result = []
+    yield from _number_associations(rows, table, by_key, source_generation_pin, namespace_evidence)
+
+
+def _number_associations(rows, table, by_key, source_generation_pin, namespace_evidence):
+    """Apply the same number rule with one selected metadata population."""
     for row in rows:
         item = _base(row, table, source_generation_pin, row["selection_evidence_sha256"], "native-file-number")
         namespace = row.get("source_namespace")
@@ -171,8 +175,118 @@ def associate_filing_numbers(rows, *, table, filings, source_generation_pin, nam
                 else:
                     filer = row.get(FILE_NUMBER_FILER_FIELDS[namespace])
                     _targets(item, by_key.get(item["referenced_filing_key"], []), filer)
-        result.append(item)
-    return result
+        yield item
+
+
+def associate_filing_numbers(rows, **kwargs):
+    """Bounded batch compatibility wrapper over the maintained streaming rule."""
+    return list(iter_filing_number_associations(rows, **kwargs))
+
+
+def association_records(rows, *, table, schema, filings, headers, source_generation_pin,
+                        target_generation_pin, namespace_evidence, check_resources):
+    """Publish one guarded decision per financial/text row in bounded batches.
+
+    Reuse the existing number and header rules. Neither rule chooses a latest
+    filing, applies corrections, or changes an amount. The original mapper row
+    remains separate so the receipt writer can restore it exactly.
+    """
+    import duckdb
+    from .fec_native_subjects import FIELD_RULES
+    from spicy_regs.relationship_views.fec_filing_associations import financial_header_association_sql
+
+    if table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]:
+        raise ValueError("Filing associations are inapplicable to this subject")
+    _digest(target_generation_pin)
+    by_key, _ = _index(filings)
+    header_witnesses = defaultdict(list)
+    for header in headers:
+        header_witnesses[tuple(header.get(k) for k in (
+            "record_id", "source_generation_pin", "collection_id", "source_sha256", "source_authority",
+            "header_record_id", "header_locator_json"))].append(header)
+        if header.get("association_status") == "resolved_native_filing_key":
+            candidates = by_key.get(header.get("filing_key"), [])
+            key, status = _resolve(candidates, header.get("source_authority"))
+            if (status != "resolved_native_filing_key" or key != header.get("filing_key")
+                    or sorted(header.get("filing_observation_ids") or []) != sorted(r["record_id"] for r in candidates)
+                    or header.get("filing_observation_count") != len(candidates)):
+                raise ValueError("Header association differs from selected complete filing witnesses")
+
+    def batches():
+        batch = []
+        for row in rows:
+            batch.append(row)
+            if len(batch) == 512:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    with duckdb.connect(config={"threads": 1, "memory_limit": "128MiB", "max_temp_directory_size": "0B"}) as con:
+        con.register("fec_filing_header_associations", pa.Table.from_pylist(headers, schema=ASSOCIATION_SCHEMA))
+        for batch in batches():
+            check_resources()
+            number_decisions = []
+            valid_rows, valid_indices = [], []
+            for index, row in enumerate(batch):
+                # A missing source coordinate is an unavailable association,
+                # never a synthetic source record or an invented witness ID.
+                try:
+                    _base(row, table, source_generation_pin, row["selection_evidence_sha256"], "native-file-number")
+                except (KeyError, ValueError, TypeError, AttributeError):
+                    number_decisions.append(dict(record_id=None, filing_key=None, referenced_filing_key=None,
+                        association_status="unresolved_source_context", filing_observation_count=None,
+                        filing_observation_ids=None))
+                else:
+                    number_decisions.append(None)
+                    valid_rows.append(row)
+                    valid_indices.append(index)
+            for index, decision in zip(valid_indices, _number_associations(
+                    valid_rows, table, by_key, source_generation_pin, namespace_evidence), strict=True):
+                number_decisions[index] = decision
+            header_decisions = {}
+            if any(row.get("filing_header_record_id") is not None for row in batch):
+                required = {"filing_header_record_id", "filing_header_locator_json"}
+                if not required <= set(schema.names):
+                    raise ValueError("Header lookup lacks its retained main identity and locator")
+                con.register(table, pa.Table.from_pylist(batch, schema=schema))
+                cursor = con.execute(financial_header_association_sql(table, source_generation_pin))
+                names = [column[0] for column in cursor.description]
+                for values in cursor.fetchall():
+                    decision = dict(zip(names, values, strict=True))
+                    rid = decision["target_record_id"]
+                    if rid in header_decisions:
+                        raise ValueError("Repeated source identity prevents a singular header decision")
+                    header_decisions[rid] = decision
+            for row, decision in zip(batch, number_decisions, strict=True):
+                if decision is None:
+                    raise ValueError("Selected source row lacks an association decision")
+                ids = decision["filing_observation_ids"]
+                count = decision["filing_observation_count"]
+                if (row.get("filing_header_record_id") is not None
+                        and decision["association_status"] != "unresolved_source_context"):
+                    decision = header_decisions[row["record_id"]]
+                    # Only the exact admitted header occurrence supplies its
+                    # observed target population. Absent/ambiguous headers
+                    # leave this unknown rather than manufacture zero matches.
+                    witnesses = header_witnesses.get((decision.get("association_record_id"), source_generation_pin,
+                        row.get("collection_id"), row.get("source_sha256"), row.get("source_authority"),
+                        row.get("filing_header_record_id"), row.get("filing_header_locator_json")), [])
+                    witness = witnesses[0] if len(witnesses) == 1 else None
+                    ids = witness["filing_observation_ids"] if witness is not None else None
+                    count = witness["filing_observation_count"] if witness is not None else None
+                yield row, dict(
+                    filing_key=decision.get("filing_key"),
+                    filing_link_status=decision["association_status"],
+                    filing_association_status=decision["association_status"],
+                    filing_association_policy=POLICY_VERSION,
+                    filing_association_source_generation_pin=source_generation_pin,
+                    filing_association_target_generation_pin=target_generation_pin,
+                    filing_association_record_id=decision.get("association_record_id", decision.get("record_id")),
+                    filing_association_referenced_key=decision.get("referenced_filing_key"),
+                    filing_association_target_count=count,
+                    filing_association_target_record_ids=ids,
+                )
 
 
 def associate_filing_headers(

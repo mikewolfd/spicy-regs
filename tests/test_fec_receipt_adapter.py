@@ -35,15 +35,14 @@ def test_restoration_preserves_subject_and_exact_financial_processing(tmp_path):
     with duckdb.connect() as con:
         con.register("fec_receipts", pq.read_table(subject))
         adapter = ReceiptAdapter(con, index, "unused", local_directory=subject.parent)
-        # mapping_status is held only by the receipt, so each query below runs only if its table reference was
-        # rebound to the restored relation. amount_status is a column of the public table too (owner decision,
-        # 2026-10-05) and could not show that: the public table would answer for it.
+        # The selected receipt still admits exact original processing values. Moving qualification
+        # fields to main rows does not bypass selected-generation validation.
         spec = SQLView("receipt_eligibility", {"fec_receipts": ("record_id", "amount_status", "mapping_status")},
                        lambda _: "SELECT record_id, amount_status, mapping_status FROM fec_receipts", "test", ("record_id",))
         prepared = adapter.prepare(spec, spec.query({}))
         assert con.execute(prepared.query({})).fetchall() == [(source_row()["record_id"], "exact", "mapped")]
         public = {r[0] for r in con.execute("DESCRIBE fec_receipts").fetchall()}
-        assert "mapping_status" not in public and {"amount_status", "source_namespace"} <= public
+        assert {"mapping_status", "amount_status", "source_namespace"} <= public
         assert con.execute("SELECT amount_status, source_namespace FROM fec_receipts").fetchall() == [
             ("exact", "fec-bulk-individual-contributions")]
         assert adapter.restore("fec_receipts") == adapter.restore("fec_receipts")
@@ -76,7 +75,7 @@ def test_bad_receipts_never_create_restored_relation(tmp_path, fault):
         assert con.execute("SHOW TABLES").fetchall() == []
 
 
-def test_navigation_restores_receipt_only_context_and_exact_relationship_witness(tmp_path):
+def test_navigation_restores_main_context_and_exact_relationship_witness(tmp_path):
     import json
 
     from spicy_regs.relationship_views.fec import FEC_VIEWS
@@ -107,7 +106,7 @@ def test_navigation_restores_receipt_only_context_and_exact_relationship_witness
         return {'sha256': value['sha256'], 'byteSize': value['bytes'], 'rows': pq.read_metadata(path).num_rows}
     index = {'families': {'fec-source': {
         'prefix': 'generations/fec-source/' + 'b' * 64, 'artifactDigest': 'sha256:' + 'b' * 64,
-        'tables': {'fec_relationships.parquet': descriptor(bundle / 'fec_relationships.parquet')},
+        'tables': {table+'.parquet':descriptor(bundle/(table+'.parquet')) for table in tables},
         'etlReceipts': {**descriptor(bundle / 'etl_receipts.parquet'), 'key': 'etl_receipts.parquet',
                         'generationId': 'g-nav', 'datasets': list(tables)},
     }}}
@@ -119,8 +118,8 @@ def test_navigation_restores_receipt_only_context_and_exact_relationship_witness
             con.execute(f'CREATE VIEW {spec.name} AS {prepared.query({})}')
         assert con.execute('SELECT cycle, cycle_status FROM fec_collection_cycles').fetchall() == [('2026', 'bulk_directory')]
         assert con.execute('SELECT target_status, recorded_digest_status FROM fec_relationship_evidence').fetchall() == [('found', 'matches')]
-        assert not (bundle / 'fec_collections.parquet').exists()
-        assert 'source_locator_json' not in pq.read_schema(bundle / 'fec_relationships.parquet').names
+        assert (bundle / 'fec_collections.parquet').exists()
+        assert 'source_locator_json' in pq.read_schema(bundle / 'fec_relationships.parquet').names
 
 
 def test_local_discovery_does_not_restore_unselected_published_fec_receipts(monkeypatch):
@@ -316,6 +315,9 @@ def _decision_observations():
         "fec_debts": with_twins(row("debt", definition_set_id=policy._DEBT_LAYOUT, **amounts(
             "opening_balance", "incurred_in_period", "paid_in_period", "closing_balance"))),
         "fec_allocated_disbursements": with_twins(row("allocated", definition_set_id=policy._ALLOCATION_LAYOUT, **allocated)),
+        "fec_electioneering_communications": with_twins(row("candidate-share",
+            source_namespace="fec-bulk-electioneering-candidate-disbursement-csv", reported_candidate_count="3",
+            **amount("allocated_candidate_amount", "33.33"))),
         "fec_reported_financial_summaries": with_twins(
             summary(TTL_CONTB="123", TTL_CONTB_REF="-5", NET_CONTB="128", TTL_RECEIPTS="150", TTL_DISB="90"),
             summary("candidate-web-summary/1", TTL_RECEIPTS="100", TTL_DISB="80", TRANS_FROM_AUTH="10", TRANS_TO_AUTH="2"),
@@ -375,8 +377,7 @@ def test_decision_views_read_the_returned_fields_from_the_subject_and_agree_with
     }
 
 
-#: Each file-number association view and the bulk layout its table's rows come from. fec_communication_costs is
-#: the control: its source namespace did not return, so the same view reads it from the receipt.
+#: Each file-number association view and the native layout its rows retain in the main table.
 _FILE_NUMBER_LAYOUTS = {
     "fec_receipts": "fec-bulk-individual-contributions",
     "fec_intercommittee_transactions": "fec-bulk-other-committee-transactions",
@@ -442,8 +443,8 @@ def test_no_other_kind_of_view_reads_a_returned_field():
     """A new reader of either field is a new place a value could be read twice or not at all: look at it."""
     reading = _reading(_qualified())
     assert {name for name in reading if not name.endswith("_decision")} == {
-        "fec_individual_snapshot_inclusion",
-        *(table + "_native_filing_associations" for table in _FILE_NUMBER_LAYOUTS if table != "fec_communication_costs"),
+        "fec_individual_snapshot_inclusion", "fec_filing_reference_resolution",
+        *(table + "_native_filing_associations" for table in _FILE_NUMBER_LAYOUTS),
     }
     # Views bound to the native tables themselves name their columns; none names either field.
     from spicy_regs.relationship_views import FEC_QUERY_VIEWS, SQL_RELATIONSHIP_VIEWS

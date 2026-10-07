@@ -9,9 +9,9 @@ from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
 
 
 class GovernmentReceiptRollup(RollupPipeline):
-    def run(self):
+    def run(self, *, read_operation=None):
         try:
-            return super().run()
+            return super().run(read_operation=read_operation)
         except Exception as error:
             # The shared runner seals CaptureEvidence first. Name that actual
             # artifact as the failed attempt's witness, preserving its redaction

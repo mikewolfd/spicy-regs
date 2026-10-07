@@ -26,3 +26,13 @@ One source document/case-reference metadata occurrence in retained context. Pres
 | `page_count` | `BIGINT` | Nonnegative exact page count reported by the discovery provider; no document-body acquisition is implied. |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | Provider-reported creation timestamp; distinct from source capture time. |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | Provider-reported update timestamp; distinct from source capture time. |
+| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
+| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
+| `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
+| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
+| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `body_status` | `VARCHAR` | Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content. |
+| `fec_relationship_status` | `VARCHAR` | Explicit resolution state of any FEC relationship; third-party metadata does not establish an FEC matter join. |
+| `page_count_status` | `VARCHAR` | Whether the document provider supplied an exact nonnegative integer page count, no value, or an invalid count. |
