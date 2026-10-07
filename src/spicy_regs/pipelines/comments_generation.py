@@ -43,5 +43,5 @@ def build_comments_generation(output_dir, result, snapshot):
                          expected_keys=("comments.parquet", "comments_index.parquet"),
                          parents={"catalog_comments": {"sha256": witness["sha256"], "byteSize": comments.stat().st_size}},
                          receipt_path=shared, receipt_policies=[policy("comments"), index_policy],
-                         receipt_generation_id=generation_id)
+                         receipt_generation_id=generation_id, adopt_owned_receipt=True)
     return directory

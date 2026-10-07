@@ -11,6 +11,7 @@ import functools
 import hashlib
 import re
 import shutil
+import stat
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
@@ -270,6 +271,7 @@ def build_generation(
     receipt_path: Path | None = None,
     receipt_policies: Sequence | None = None,
     receipt_generation_id: str | None = None,
+    adopt_owned_receipt: bool = False,
     read_operation=None,
     canonical_root: Path | None = None,
 ):
@@ -290,6 +292,12 @@ def build_generation(
     A successful empty table is a Parquet file with zero rows. An omitted
     output is a failure, never an empty success. No root is written until the
     complete set and all declared schemas have been inspected.
+
+    ``adopt_owned_receipt`` moves a caller-owned temporary receipt into this
+    generation instead of copying it. It requires a regular file on the same
+    filesystem. After the move, this directory retains the receipt even if
+    admission fails; callers must preserve the directory for recovery. Retained
+    source receipts use the default copy behavior.
     """
     from rulespec_artifacts import (
         LocalMemberSource,
@@ -300,6 +308,8 @@ def build_generation(
         raise ValueError("A generation's own prior is its prior-generation input, not a parent")
     expected, partitioned = set(expected_keys), dict(partitioned or {})
     names = output_keys(files, partitioned)
+    if adopt_owned_receipt and receipt_path is None:
+        raise ValueError("Owned receipt adoption requires a receipt file")
     if (not expected and receipt_path is None) or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
@@ -325,7 +335,15 @@ def build_generation(
         from spicy_regs.etl_receipts import RECEIPT_KEY
         if not receipt_policies or not receipt_generation_id or RECEIPT_KEY in tables:
             raise ValueError("Receipt admission needs policies and a generation identity")
-        shutil.copyfile(receipt_path, directory / RECEIPT_KEY)
+        if adopt_owned_receipt:
+            source_stat = receipt_path.lstat()
+            if not stat.S_ISREG(source_stat.st_mode):
+                raise ValueError("Owned receipt adoption requires a regular file without a symlink")
+            if source_stat.st_dev != directory.stat().st_dev:
+                raise ValueError("Owned receipt adoption requires the same filesystem")
+            receipt_path.rename(directory / RECEIPT_KEY)
+        else:
+            shutil.copyfile(receipt_path, directory / RECEIPT_KEY)
         receipt_spec = {"key": RECEIPT_KEY, "generationId": receipt_generation_id,
                         "policies": [policy.descriptor() for policy in receipt_policies],
                         **table_info(directory / RECEIPT_KEY)}
