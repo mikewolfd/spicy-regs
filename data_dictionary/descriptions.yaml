@@ -46,12 +46,12 @@
 #
 # One page explains ETL receipts: data_dictionary/etl_receipts.md, rendered to
 # docs/tables/etl_receipts.md and served by describe_table('etl_receipts'). A
-# table's notes mention its receipt only where the receipt holds something a
-# reader wants (a source link, a column people queried), in one sentence, and
-# not at all before the table has published in the native layout (owner
-# decision, 2026-10-05). When a table converts: if its receipt holds such a
-# thing, add one sentence to its summary saying what the reader gets, ending
-# "is kept in its receipt; see etl_receipts."; otherwise add nothing.
+# table's notes mention its receipt only where it holds useful evidence, in
+# one sentence, and not before a native-layout publication (owner decision,
+# 2026-10-05). Describe fields in the current main schema as main fields;
+# distinguish earlier published schemas that kept them in receipts. A schema
+# declaration does not prove that its new fields have been published. Keep a
+# receipt pointer only for remaining evidence, ending "see etl_receipts.".
 # `spicy-regs-dict check` refuses a second sentence, and `check --source r2`
 # refuses one on a table the publication index shows published without
 # receipts (RECEIPT_POINTER in src/spicy_regs/data_dictionary.py).
@@ -1627,11 +1627,11 @@ tables:
       title, date, abstract and url on its own and upstream-copied rows, and
       only fills NULLs of those on rows another route supplied; its placeholder
       type and tag lists fill nothing. A row keeps the `source` that first
-      supplied it. The three counts are BIGINT. Each report's address on
-      gao.gov and the route it was read from (the former `url` and `source`
-      columns), and for a major-rule report why a `major_rule_` value is blank
-      and where in its letter each value was read, are kept in its receipt;
-      see etl_receipts.
+      supplied it. The three counts are BIGINT. The `/3` native schema
+      includes the product page in `url` and its collection route in `source`;
+      earlier schemas keep these fields in receipts. A major-rule report's
+      missing-value reasons and locations within its letter remain in its
+      receipt; see etl_receipts.
     columns:
       report_id: "GAO product id as gao.gov's product URL spells it (e.g. `gao-26-107974`, `t-rced-94-121`), lowercased. Primary key / dedup key. A GovInfo package id maps to that spelling (`GAOREPORTS-GAO-HEHS-00-73` is `hehs-00-73`, `GAOREPORTS-RCED-AIMD-94-221FS` is `rcedaimd-94-221fs`); a few keep GovInfo's spelling where the package id cannot recover gao.gov's."
       title: "Product title as the route states it; on a listing row, the teaser's label and heading joined as `label: heading`, which is how the feed titles the same products. The Month in Review cuts a long heading at about 200 characters and ends it `...`; where GAO's major-rule listing states that heading whole, the title is whole. A `gao_major_rule_listing` or `gao_major_rule_index` row's is `Federal Agency Major Rule Report: ` and the heading GAO's listing or the report's product page states, or the heading alone on the AIMD- and GGD- products. A few GovInfo titles are GovInfo's placeholder `GAO Report from` and the number. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells. GAO double-escapes some headings, so a few listing titles keep `&mdash;`, `&#151;` or `&amp;` literally, as GAO's page displays them; apply `html.unescape` when matching."
@@ -1705,8 +1705,8 @@ tables:
       spells it and its page: one teaser can name several B-numbers
       (`B-423916.2,B-423916.3`), and one B-number can have two pages released
       months apart (`b-331093` and `b-331093-0`). The address of the GAO listing
-      page each decision was read from (the former `listing_page` column) is
-      kept in its receipt; see etl_receipts. A
+      page each decision was read from is `listing_page` in the `/3` native
+      schema; earlier schemas keep it in receipts; see etl_receipts. A
       later walk refreshes the rows it lists; a run without one carries the
       table forward. A walk run given the local capture of the decision pages
       also reads each decision's page caption, which completes a number list
@@ -9651,7 +9651,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One stable publisher identity; historical names remain on edition observations. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecards:
@@ -9662,7 +9662,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_snapshots:
@@ -9684,7 +9684,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source-stated rule set in an edition, scoped to chamber and cohort as stated. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_metrics:
@@ -9695,7 +9695,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher measurement for an explicit chamber, cohort and period in an edition. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_items:
@@ -9706,7 +9706,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher-identified action or scoring item; multiple actions on one bill remain separate. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_metric_items:
@@ -9717,7 +9717,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One item's participation in a metric under a particular source rule. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_metric_components:
@@ -9729,7 +9729,7 @@ tables:
       component-to-parent relationship. Complete edition reads replace that edition;
       failed or incomplete reads preserve prior observations.
     measured_on: "2026-10-04"
-    summary: "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source-stated relationship between a component metric and its parent metric. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_members:
@@ -9740,7 +9740,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source member occurrence/context in the edition, including ungraded or excluded members. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_member_ratings:
@@ -9751,7 +9751,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One source-reported metric value for a member; different grades, ranks and scores remain distinct measurements. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_member_item_results:
@@ -9762,7 +9762,7 @@ tables:
       edition reads replace that edition; failed or incomplete reads preserve prior
       observations. Coverage varies by publisher and historical source format.
     measured_on: "2026-10-03"
-    summary: "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The web address each row was read from on the publisher's site, and the place within it, are kept in its receipt; see etl_receipts."
+    summary: "One publisher-reported member result for an item, with optional source-stated metric participation. Metric-free grids require no fabricated measurement. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy. The current native schema includes the publisher's web address in `source_url` and the location within it in `source_path`; earlier schemas keep them in receipts; see etl_receipts."
     columns_from: spicy_docs
 
   scorecard_member_links:
