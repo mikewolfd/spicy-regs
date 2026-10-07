@@ -4,10 +4,11 @@ from .sql_views import SQLView
 
 
 def contacted_entities(publication):
-    return """SELECT s.filing_uuid, s.activity_index, ordinality - 1 AS source_ordinal,
+    return """SELECT filing_uuid, activity_index, source_ordinal,
         v.id AS target_key, v.name AS native_label, 'lda_government_entity' AS source_namespace
-        FROM lobbying_activities s,
-        UNNEST(s.government_entities) WITH ORDINALITY AS entities(v, ordinality)"""
+        FROM (SELECT filing_uuid, activity_index, unnest(government_entities) AS v,
+                generate_subscripts(government_entities,1)-1 AS source_ordinal
+              FROM lobbying_activities) elements"""
 
 
 LOBBYING_NATIVE_VIEWS = (
