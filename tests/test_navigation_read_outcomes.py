@@ -168,3 +168,87 @@ def test_paginated_source_digest_witnesses_ignore_only_credentials_and_page_offs
     ])
     _, row, _ = next(recorded_rows(path, generation_id="g"))
     assert [w["sha256"] for w in row["source_witnesses"]] == ["first", "second"]
+
+
+@pytest.mark.parametrize('event_name', ['congress-detail-result', 'house-record-result'])
+def test_house_complete_native_triple_constructs_key_without_inventing_attempt(tmp_path, event_name):
+    event = {'event': event_name, 'table': 'house_communications', 'congress': '119',
+             'communication_type': 'EC', 'number': 2, 'read_outcome': 'read', 'outcome': 'unread'}
+    dataset, row, retained = next(recorded_rows(journal(tmp_path, [event]), generation_id='original'))
+    assert row['communication_id'] == '119-ec-2'
+    assert row['communication_key_status'] == 'constructed' and row['stated_communication_id'] is None
+    assert row['communication_type'] == 'EC' and retained == event
+    subjects, receipts = write_recorded_outcomes(journal(tmp_path, [event]), tmp_path / 'out',
+        generation_id='original', tables=[dataset])
+    [restored] = read_with_receipts(subjects, receipts, POLICIES[dataset], generation_id='original')
+    assert restored['recorded_event'] == event and restored['attempt_id'] == 'journal:0'
+    assert restored['outcome'] == ('read' if event_name == 'congress-detail-result' else 'unread')
+
+
+@pytest.mark.parametrize('changes,status', [
+    ({'communication_id': '119-ec-2'}, 'stated'),
+    ({'communication_id': '119-ec-3'}, 'conflict'),
+    ({'communication_id': '119-ec-2', 'number': None}, 'stated'),
+    ({'number': None}, 'incomplete'),
+    ({'congress': '0119'}, 'malformed'), ({'congress': 0}, 'malformed'),
+    ({'congress': True}, 'malformed'), ({'congress': 119.0}, 'malformed'),
+    ({'congress': '１１９'}, 'malformed'), ({'congress': '119\n'}, 'malformed'),
+    ({'number': '02'}, 'malformed'), ({'number': '1e2'}, 'malformed'),
+    ({'number': True}, 'malformed'), ({'number': 0}, 'malformed'),
+    ({'communication_type': 'pom'}, 'malformed'), ({'communication_type': ' ec'}, 'malformed'),
+    ({'communication_type': True}, 'malformed'),
+    ({'communication_id': '119-EC-2'}, 'malformed'),
+    ({'communication_id': '119-ec-2', 'congress': 118, 'number': None}, 'conflict'),
+])
+def test_house_key_refusal_preserves_literal_id_and_event(tmp_path, changes, status):
+    event = {'event': 'house-record-result', 'congress': '119', 'communication_type': 'ec',
+             'number': '2', 'outcome': 'unread', **changes}
+    subjects, receipts = write_recorded_outcomes(journal(tmp_path, [event]), tmp_path / 'out',
+        generation_id='g', tables=['house_record_enrichment_results'])
+    [row] = read_with_receipts(subjects, receipts, POLICIES['house_record_enrichment_results'], generation_id='g')
+    assert row['communication_key_status'] == status and row['recorded_event'] == event
+    assert row['stated_communication_id'] == event.get('communication_id')
+    assert row['communication_id'] == ('119-ec-2' if status == 'stated' else None)
+    assert bool(row['communication_key_reason']) == (status != 'stated')
+
+
+@pytest.mark.parametrize('name', ['house_communications_detail_reads', 'house_record_enrichment_results'])
+def test_house_prior_v1_rederives_native_key_from_exact_recorded_event(tmp_path, name):
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
+    from spicy_regs.navigation_read_outcomes import DETAIL_SCHEMA
+
+    [old] = earlier_policies(POLICIES[name])
+    assert old.policy_version == 'navigation-read-outcomes/1'
+    if name == 'house_communications_detail_reads':
+        assert old.subject_schema == DETAIL_SCHEMA
+    event = {'event': 'congress-detail-result', 'table': 'house_communications', 'congress': '119',
+             'communication_type': 'ec', 'number': '2', 'read_outcome': 'read'}
+    if name == 'house_record_enrichment_results':
+        event = {**event, 'event': 'house-record-result', 'outcome': 'read'}
+    old_row = {**dict.fromkeys(old.subject_schema.names), 'generation_id': 'original',
+               'attempt_id': 'journal:7', 'congress': 119, 'number': '2', 'outcome': 'read'}
+    if 'source_table' in old_row:
+        old_row['source_table'] = 'house_communications'
+    subject, receipt = write_dataset([(old_row | {'recorded_event': event}, ReceiptContext('original', 'journal:7', 'old', [{'source_id': 'original-journal', 'sha256': 'sha256:' + 'a' * 64}]))], tmp_path / 'old', old)
+    assert subject is not None
+    prior = SelectedDataset(name, (subject,), receipt, 'original')
+    subjects, receipts = write_recorded_outcomes(None, tmp_path / 'next', generation_id='next',
+        tables=[name], priors={name: prior})
+    [row] = read_with_receipts(subjects, receipts, POLICIES[name], generation_id='next')
+    assert (row['generation_id'], row['attempt_id'], row['outcome']) == ('original', 'journal:7', 'read')
+    assert row['communication_id'] == '119-ec-2' and row['communication_key_status'] == 'constructed'
+    assert row['communication_type'] == 'ec' and row['recorded_event'] == event
+    for other in ('nominations_detail_reads', 'committee_meetings_detail_reads'):
+        assert POLICIES[other].subject_schema == DETAIL_SCHEMA
+        assert POLICIES[other].policy_version == 'navigation-read-outcomes/1'
+
+
+def test_house_repeated_recorded_attempts_remain_separate_rows(tmp_path):
+    event = {'event': 'house-record-result', 'congress': '119', 'communication_type': 'ec',
+             'number': '2', 'outcome': 'unread'}
+    subjects, receipts = write_recorded_outcomes(journal(tmp_path, [event, event]), tmp_path / 'out',
+        generation_id='g', tables=['house_record_enrichment_results'])
+    rows = list(read_with_receipts(subjects, receipts, POLICIES['house_record_enrichment_results'], generation_id='g'))
+    assert [r['communication_id'] for r in rows] == ['119-ec-2', '119-ec-2']
+    assert [r['attempt_id'] for r in rows] == ['journal:0', 'journal:1']

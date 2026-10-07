@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
 import pyarrow as pa
 
-from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, read_with_receipts, write_dataset
+from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, read_with_receipts, selected_subject_policy, write_dataset
 
 DETAIL_TABLES = {
     "nominations": "nominations_detail_reads",
@@ -34,6 +35,10 @@ DETAIL_SCHEMA = pa.schema([
 READ_TABLES = {"committee_report_reads": "committee_report_read_outcomes",
                "document_citation_reads": "document_citation_read_outcomes"}
 HOUSE_TABLE = "house_record_enrichment_results"
+HOUSE_KEY_FIELDS = [("stated_communication_id", S), ("communication_key_status", S),
+                   ("communication_key_rule", S), ("communication_key_reason", S)]
+HOUSE_DETAIL_SCHEMA = pa.schema([*DETAIL_SCHEMA, pa.field("communication_type", S),
+                                *(pa.field(name, kind) for name, kind in HOUSE_KEY_FIELDS)])
 HOUSE_SCHEMA = pa.schema([
     ("generation_id", S), ("attempt_id", S), ("communication_id", S),
     ("congress", INT), ("communication_type", S), ("number", S),
@@ -52,12 +57,16 @@ HOUSE_SCHEMA = pa.schema([
         ("body_sha256", S), ("body_url", S), ("marker", S),
         ("input_generation", S), ("input_processing_sha256", S),
     ]))),
+    *HOUSE_KEY_FIELDS,
 ])
 POLICIES: dict[str, DatasetPolicy] = {name: DatasetPolicy(name, DETAIL_SCHEMA, ("generation_id", "attempt_id"),
                               ("recorded_event",), policy_version="navigation-read-outcomes/1")
             for name in DETAIL_TABLES.values()}
+POLICIES[DETAIL_TABLES["house_communications"]] = DatasetPolicy(
+    DETAIL_TABLES["house_communications"], HOUSE_DETAIL_SCHEMA, ("generation_id", "attempt_id"),
+    ("recorded_event",), policy_version="navigation-read-outcomes/2")
 POLICIES[HOUSE_TABLE] = DatasetPolicy(HOUSE_TABLE, HOUSE_SCHEMA, ("generation_id", "attempt_id"),
-                                   ("recorded_event",), policy_version="navigation-read-outcomes/1")
+                                   ("recorded_event",), policy_version="navigation-read-outcomes/2")
 
 
 REPORT_READ_SCHEMA = pa.schema([
@@ -194,6 +203,62 @@ def _native_congress(value):
     raise ValueError("Recorded Congress outcome has no complete native Congress")
 
 
+def _house_communication_key(identity):
+    """Validate stated IDs and native triples using the maintained source route."""
+    from spicy_docs.schemas.tables import natural_key
+    from spicy_docs.sources.congress.listing import LIST_ROUTES, list_route_url
+
+    stated = identity.get("communication_id")
+    result = {"communication_id": None, "stated_communication_id": stated if isinstance(stated, str) else None,
+              "communication_key_status": "incomplete", "communication_key_rule": "house-communication-native-key/1",
+              "communication_key_reason": "Missing native Congress, communication type, or number", "congress": None,
+              "communication_type": identity.get("communication_type") if isinstance(identity.get("communication_type"), str) else None,
+              "number": str(identity["number"]) if type(identity.get("number")) is int else
+                        identity.get("number") if isinstance(identity.get("number"), str) else None}
+
+    def positive(value):
+        if type(value) is int and value > 0:
+            return value
+        if isinstance(value, str) and re.fullmatch(r"[1-9][0-9]*", value, flags=re.ASCII):
+            return int(value)
+        raise ValueError("Expected a canonical positive integer")
+
+    def validated(congress, kind, number):
+        list_route_url(LIST_ROUTES["house-communication-detail"], congress=congress,
+                       communication_type=kind, number=number)
+        return natural_key(congress, kind, number)
+
+    try:
+        parts = []
+        for name in ("congress", "communication_type", "number"):
+            value = identity.get(name)
+            parts.append(None if value is None else
+                         value.lower() if name == "communication_type" and isinstance(value, str) else
+                         positive(value) if name != "communication_type" else value)
+        congress, kind, number = parts
+        # The maintained route validates even partially stated components.
+        validated(congress if congress is not None else 1, kind if kind is not None else "ec",
+                  number if number is not None else 1)
+        result["congress"] = congress
+        constructed = validated(congress, kind, number) if all(p is not None for p in parts) else None
+        if stated is not None:
+            if not isinstance(stated, str) or not re.fullmatch(r"[1-9][0-9]*-[a-z]+-[1-9][0-9]*", stated, flags=re.ASCII):
+                raise ValueError("Stated communication ID is not canonical")
+            c, k, n = stated.split("-")
+            stated_parts = [positive(c), k, positive(n)]
+            validated(*stated_parts)
+            if any(p is not None and p != s for p, s in zip(parts, stated_parts)):
+                result.update(communication_key_status="conflict",
+                              communication_key_reason="Stated communication ID disagrees with native fields")
+                return result
+            result.update(communication_id=stated, communication_key_status="stated", communication_key_reason=None)
+        elif constructed is not None:
+            result.update(communication_id=constructed, communication_key_status="constructed", communication_key_reason=None)
+    except (ValueError, TypeError) as error:
+        result.update(communication_key_status="malformed", communication_key_reason=str(error))
+    return result
+
+
 def _source_request_key(value):
     """Same source request scope despite credential redaction and page offset."""
     if not isinstance(value, str):
@@ -223,9 +288,15 @@ def recorded_rows(journal: Path, *, generation_id: str):
                   "recorded_at": event.get("recorded_at")}
         if event.get("event") == "congress-detail-result" and event.get("table") in DETAIL_TABLES:
             identity = event.get("source_identity") or event
+            if event["table"] == "house_communications":
+                identity = event | identity
             row = common | {name: identity.get(name) for name in
                             ("citation", "number", "part_number", "chamber", "event_id", "communication_id")}
-            row.update(source_table=event["table"], congress=_native_congress(identity.get("congress")),
+            if event["table"] == "house_communications":
+                row.update(_house_communication_key(identity))
+            else:
+                row["congress"] = _native_congress(identity.get("congress"))
+            row.update(source_table=event["table"],
                        source_url=event.get("source_url"), read_field=event.get("read_field") or "detail",
                        outcome=event["read_outcome"], error_type=event.get("error_type"),
                        shape_version=event.get("shape_version"),
@@ -237,7 +308,7 @@ def recorded_rows(journal: Path, *, generation_id: str):
             yield DETAIL_TABLES[event["table"]], row, event
         elif event.get("event") == "house-record-result":
             row = common | {name: event.get(name) for name in HOUSE_SCHEMA.names if name not in common}
-            row["congress"] = _native_congress(event.get("congress"))
+            row.update(_house_communication_key(event))
             row["scope_read_results"] = []
             for package in event.get("scope_packages") or []:
                 scope = package_reads.get(package)
@@ -249,7 +320,6 @@ def recorded_rows(journal: Path, *, generation_id: str):
                         "input_processing_sha256": pin.get("processing", {}).get("sha256"),
                         "body_witnesses": [{"granule_id": body.get("granule_id"), "sha256": body.get("sha256"),
                                            "source_url": body.get("locator")} for body in scope.get("bodies", [])]})
-            # A historical event may not contain communication_id; do not reconstruct it from a label.
             row["witnesses"] = []
             for witness in event.get("witnesses", []):
                 entry, pin = witness["entry"], witness.get("input", {})
@@ -274,8 +344,14 @@ def write_recorded_outcomes(journal, directory, *, generation_id, tables, priors
             continue
         with selection.receipts.open("rb") as stream:
             prior_digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-        for recorded in read_with_receipts(selection.subjects, [selection.receipts], POLICIES[name],
+        prior_policy = selected_subject_policy(POLICIES[name], selection.subjects)
+        for recorded in read_with_receipts(selection.subjects, [selection.receipts], prior_policy,
                                             generation_id=selection.generation_id):
+            if name in (HOUSE_TABLE, DETAIL_TABLES["house_communications"]):
+                event = recorded["recorded_event"]
+                identity = event.get("source_identity") or event
+                identity = event | identity
+                recorded.update(_house_communication_key(identity))
             context = ReceiptContext(generation_id,
                 "inherited:" + recorded["generation_id"] + ":" + recorded["attempt_id"],
                 "navigation-read-outcomes/1", [{"source_id": "selected-outcomes", "source_uri": None,

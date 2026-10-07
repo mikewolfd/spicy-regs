@@ -54,10 +54,17 @@ def earlier_policies(policy):
             raise ValueError("Source-context migration changes a historical business identity")
         return (prior, *earlier_policies(prior))
     history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
-    if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2"}:
+    if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2", "navigation-read-outcomes/2"}:
+        if policy.policy_version == "navigation-read-outcomes/2":
+            expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+                "etl_policies/" + policy.dataset + ".json").read_text()))
+            if policy.descriptor() != expected.descriptor():
+                raise ValueError("Current House outcome policy differs from the exact declared policy")
         earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
         if earlier.identity_fields != policy.identity_fields or earlier.dataset != policy.dataset:
             raise ValueError("Navigation migration changes a historical identity")
+        if policy.policy_version == "navigation-read-outcomes/2" and earlier.policy_version != "navigation-read-outcomes/1":
+            raise ValueError("House outcome history differs from its declared policy")
         return (earlier,)
 
     if policy.dataset == "scorecard_member_ratings" and policy.policy_version in {
