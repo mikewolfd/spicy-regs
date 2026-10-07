@@ -7,6 +7,10 @@ on:
         description: 'Build and validate the mirror without publishing or refreshing consumers'
         type: boolean
         default: false
+      promote_v1:
+        description: 'Export the complete retained v1 catalog pair and publish declared v2 fields'
+        type: boolean
+        default: false
 concurrency:
   group: comments-catalog-write
   cancel-in-progress: false
@@ -22,3 +26,4 @@ jobs:
     secrets: inherit
     with:
       skip_upload: ${{ inputs.skip_upload }}
+      promote_v1: ${{ inputs.promote_v1 }}
