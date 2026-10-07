@@ -133,7 +133,13 @@ class MeasurementCache:
             if kind == 'result':
                 populations += [payload.get('sourceIdentity', {}).get('population') or {},
                                 payload.get('targetPopulation', {})]
-            artifacts += [p['populationProof']['artifact'] for p in populations if p.get('populationProof')]
+            imported = [p['populationProof'] for p in populations if p.get('populationProof')]
+            if imported:
+                guard = digest([VERSION, inspect.getsource(self.import_population)])
+                if any(proof.get('authority') != 'imported_existing_full_population'
+                       or proof.get('guardImplementation') != guard for proof in imported):
+                    return None
+            artifacts += [proof['artifact'] for proof in imported]
             for artifact in artifacts:
                 if file_signature(Path(artifact['path'])) != artifact['signature']:
                     return None
@@ -317,6 +323,7 @@ class MeasurementCache:
             'distinctKeys': binding['rows'], 'duplicateKeys': 0,
             'maximumRowsPerKey': 1 if binding['rows'] else 0, 'scope': 'full_selected_inputs',
             'populationProof': {'authority': 'imported_existing_full_population', 'artifact': artifact,
+                                'guardImplementation': digest([VERSION, inspect.getsource(self.import_population)]),
                                 'sourceRecordDigest': digest(record), 'identityColumns': keys,
                                 'physicalSchema': binding['schema'], 'resourceScope': proof['resourceScope'],
                                 'execution': 'Earlier native identity grouping reused; no new grouping execution claimed.'}})
@@ -577,6 +584,13 @@ def attached_directions(index, spec, target_index, proof, extra_tables=None):
     try:
         if proof.get('format') != VERSION or proof.get('status') != 'complete':
             return None
+        # Raw retained result files must meet the same imported-population
+        # admission rules as cache hits before qualifying public measurements.
+        for population in (proof.get('sourceIdentity', {}).get('population') or {}, proof.get('targetPopulation', {})):
+            imported = population.get('populationProof')
+            if imported and (imported.get('authority') != 'imported_existing_full_population' or
+                             imported.get('guardImplementation') != digest([VERSION, inspect.getsource(MeasurementCache.import_population)])):
+                return None
         source = selected_binding(index, spec['source'], extra_tables)
         target = selected_binding(index, spec['targets'][target_index]['table'], extra_tables)
         selected = navigation.published_navigation([spec], {source['table']: source['schema'], target['table']: target['schema']})[0]

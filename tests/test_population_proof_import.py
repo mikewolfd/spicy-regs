@@ -1,5 +1,8 @@
 """Explicit retained identity proofs reuse counts only for freshly admitted exact inputs."""
 from copy import deepcopy
+import inspect
+
+import duckdb
 import hashlib
 import json
 
@@ -7,7 +10,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.navigation_measurements import MeasurementCache, selected_binding
+from spicy_regs.navigation_measurements import VERSION, MeasurementCache, attached_directions, digest, selected_binding
 from tests.test_navigation_measurements import selection
 from tests.test_navigation_measurement_runner import run
 
@@ -249,3 +252,42 @@ def test_runner_claimed_complete_nullable_report_refuses_even_with_completed_nat
     assert 'nullable' in refused['unavailable'][0]['reason']
     assert not refused['results']
     assert all(value is None for value in refused['census'][0]['counts'].values())
+
+
+@pytest.mark.parametrize('side', ['source', 'target'])
+@pytest.mark.parametrize('marker', [None, 'sha256:' + 'c' * 64])
+def test_old_import_guard_cannot_qualify_population_or_derived_result_cache(tmp_path, side, marker):
+    index, paths, spec = selection(tmp_path)
+    cache = MeasurementCache(tmp_path / 'cache')
+    measured = cache.measure(index, paths, spec, source_identity=('id',))
+    binding = selected_binding(index, side)
+    proof_path, _ = supplied_proof(tmp_path, binding)
+    proof = cache.capture_population_proof(proof_path)
+    dependency = {'binding': binding, 'columns': ['id'],
+                  'implementation': digest([VERSION, duckdb.__version__, inspect.getsource(cache.population)])}
+    legacy = deepcopy(measured['sourceIdentity']['population'] if side == 'source' else measured['targetPopulation'])
+    legacy['populationProof'] = {'authority': 'imported_existing_full_population', 'artifact': proof['artifact']}
+    if marker is not None:
+        legacy['populationProof']['guardImplementation'] = marker
+    cache._write('population', dependency, legacy)
+    retained = deepcopy(measured)
+    if side == 'source':
+        retained['sourceIdentity']['population'] = legacy
+    else:
+        retained['targetPopulation'] = legacy
+    cache._write('result', measured['binding'], retained)
+    # Both standalone imported populations and source/target populations nested
+    # in results must reject missing or stale admission guard implementations.
+    assert cache._read('population', dependency) is None
+    assert cache._read('result', measured['binding']) is None
+    assert attached_directions(index, spec, 0, retained) is None
+    before = cache.work.copy()
+    population = cache.population(binding, cache.admit(binding, paths), ('id',))
+    assert 'populationProof' not in population
+    assert cache.work['population_aggregations'] == before['population_aggregations'] + 1
+    current = cache.measure(index, paths, spec, source_identity=('id',))
+    assert current == measured
+    assert attached_directions(index, spec, 0, current) is not None
+    assert cache.work['route_measurements'] == before['route_measurements'] + 1
+    # Ordinary native population entries remain valid across import guard changes.
+    assert cache._read('population', dependency) == population
