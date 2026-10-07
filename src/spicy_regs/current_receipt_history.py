@@ -67,9 +67,11 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
             metadata['witnesses'] = list(metadata_context.witnesses)
             metadata['diagnostic_json'] = exact_json(metadata_context.diagnostics)
             metadata['receipt_id'] = receipt_digest({k: v for k, v in metadata.items() if k != 'receipt_id'})
+        # Put acceptance inside an equality key so DuckDB can hash the join.
+        # Nonaccepted rows get NULL and retain their unmatched current receipt.
         query = """SELECT c.file_row_number AS current_ordinal, k.ordinal AS prior_ordinal
             FROM read_parquet(?,file_row_number=true,hive_partitioning=false) c
-            LEFT JOIN accepted_keys k ON c.outcome='accepted' AND c.dataset=k.dataset AND c.record_id=k.record_id
+            LEFT JOIN accepted_keys k ON CASE WHEN c.outcome='accepted' THEN c.dataset END=k.dataset AND c.record_id=k.record_id
             ORDER BY current_ordinal"""
         # Only ordinals cross the corpus-wide join/sort. Gather complete prior
         # payloads for each output batch with the maintained row-group reader.
