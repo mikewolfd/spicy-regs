@@ -9,6 +9,9 @@ on:
       promote_v1:
         type: boolean
         default: false
+      comments_runner:
+        type: string
+        default: ubuntu-latest
 
 env:
   # Called only by workflows that hold comments-catalog-write.
@@ -18,10 +21,10 @@ env:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.comments_runner }}
     # Unchanged snapshots verify object versions only. Changed snapshots scan
     # once into agency staging, sort each agency, then stream the monolith.
-    timeout-minutes: 180
+    timeout-minutes: ${{ inputs.promote_v1 && 360 || 180 }}
 
     steps:
       - name: Checkout
@@ -38,8 +41,32 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Publish comments mirror from the catalog
+      - name: Record actual export placement
         env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          mkdir -p output
+          uv run --frozen python - <<'PY'
+          import json, os, platform, shutil
+          from pathlib import Path
+          directory = Path('output').resolve()
+          temporary = Path(os.environ['TMPDIR']).resolve()
+          usage, temp_usage = shutil.disk_usage(directory), shutil.disk_usage(temporary)
+          receipt = {'directory': str(directory), 'platform': platform.platform(),
+                     'runnerName': os.environ['RUNNER_NAME'],
+                     'workflowRef': os.environ['GITHUB_WORKFLOW_REF'],
+                     'diskTotalBytes': usage.total, 'diskFreeBytes': usage.free,
+                     'temporaryDirectory': str(temporary),
+                     'temporaryDiskTotalBytes': temp_usage.total,
+                     'temporaryDiskFreeBytes': temp_usage.free}
+          Path('output/comments-placement.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt))
+          PY
+
+      - name: Publish comments mirror from the catalog
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
@@ -60,19 +87,29 @@ jobs:
           R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE }}
         run: |
           : "${R2_PUBLIC_URL:?Set the fork public data URL}"
+          mkdir -p output
+          measure() {
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              /usr/bin/time -l "$@" 2> >(tee output/comments-resources.txt >&2)
+            else
+              /usr/bin/time -v -o output/comments-resources.txt "$@"
+            fi
+          }
           if [ "${{ inputs.promote_v1 }}" = "true" ]; then
             uv run --frozen python scripts/check_refresh_inputs.py capture \
               --reuse-published-base --base-only --receipt output/comments-base-inputs.json
             git fetch --no-tags --depth=1 origin e9dfd216dc999845ea94e6171afb41e0c9380a10
-            git worktree add --detach ../comments-export-v1 e9dfd216dc999845ea94e6171afb41e0c9380a10
+            V1_PARENT="$(mktemp -d "$RUNNER_TEMP/comments-export-v1.XXXXXX")"
+            V1_SOURCE="$V1_PARENT/source"
+            git worktree add --detach "$V1_SOURCE" e9dfd216dc999845ea94e6171afb41e0c9380a10
             mkdir -p output
             PROMOTED_ARGS=""
             if [ "${{ inputs.skip_upload }}" != "true" ]; then
               PROMOTED_ARGS="--publish"
             fi
-            /usr/bin/time -v -o output/comments-resources.txt \
+            measure \
               uv run --frozen python scripts/prepare_comments_selected_export.py \
-              --v1-source ../comments-export-v1 --original-pair output/comments-original-v1 \
+              --v1-source "$V1_SOURCE" --original-pair output/comments-original-v1 \
               --output output/comments-selected --base-receipt output/comments-base-inputs.json $PROMOTED_ARGS
             exit 0
           fi
@@ -82,7 +119,7 @@ jobs:
           fi
           echo "Running: uv run python scripts/publish_comments_mirror.py $ARGS"
           mkdir -p output
-          /usr/bin/time -v -o output/comments-resources.txt \
+          measure \
             uv run --frozen python scripts/publish_comments_mirror.py $ARGS
 
       - name: Retain publication receipts and resource measurements
@@ -95,6 +132,7 @@ jobs:
             output/comments-build.json
             output/comments-publication.json
             output/comments-resources.txt
+            output/comments-placement.json
             output/comments-base-inputs.json
             output/comments-selected/comments-build.json
             output/comments-selected/comments-publication.json
