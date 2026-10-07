@@ -9,6 +9,9 @@ on:
       promote_v1:
         type: boolean
         default: false
+      comments_only:
+        type: boolean
+        default: false
       comments_runner:
         type: string
         default: ubuntu-latest
@@ -28,7 +31,7 @@ jobs:
   # (pipelines/docket_gaps.py). A failure here still lets the families publish
   # the served dockets; the refresh run shows the failure.
   docket-gaps:
-    if: ${{ !inputs.skip_upload && !inputs.promote_v1 }}
+    if: ${{ !inputs.skip_upload && !inputs.promote_v1 && !inputs.comments_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -55,7 +58,7 @@ jobs:
   # mirror captures base versions, so every dependent reads this sweep's snapshot.
   base-families:
     needs: docket-gaps
-    if: ${{ !cancelled() && !inputs.promote_v1 }}
+    if: ${{ !cancelled() && !inputs.promote_v1 && !inputs.comments_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -73,17 +76,18 @@ jobs:
       timeout_minutes: 30
   mirror:
     needs: base-families
-    if: ${{ !cancelled() && (needs.base-families.result == 'success' || inputs.promote_v1) }}
+    if: ${{ !cancelled() && (needs.base-families.result == 'success' || inputs.promote_v1 || inputs.comments_only) }}
     uses: ./.github/workflows/_comments-mirror.yml
     secrets: inherit
     with:
       skip_upload: ${{ inputs.skip_upload }}
       promote_v1: ${{ inputs.promote_v1 }}
+      comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
       comments_original_pair: ${{ inputs.comments_original_pair }}
   derived:
     needs: mirror
-    if: ${{ !inputs.skip_upload }}
+    if: ${{ !inputs.skip_upload && !inputs.comments_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -103,7 +107,7 @@ jobs:
   # reads upstream's copy, so the fork does not build one nobody reads.
   docket-search:
     needs: mirror
-    if: ${{ !inputs.skip_upload && vars.PUBLISH_DOCKET_SEARCH == 'true' }}
+    if: ${{ !inputs.skip_upload && !inputs.comments_only && vars.PUBLISH_DOCKET_SEARCH == 'true' }}
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
@@ -111,7 +115,7 @@ jobs:
       timeout_minutes: 60
   org-links:
     needs: mirror
-    if: ${{ !inputs.skip_upload }}
+    if: ${{ !inputs.skip_upload && !inputs.comments_only }}
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
@@ -119,6 +123,7 @@ jobs:
       timeout_minutes: 60
   rulemaking:
     needs: derived
+    if: ${{ !inputs.skip_upload && !inputs.comments_only }}
     uses: ./.github/workflows/materialize-rulemaking.yml
     secrets: inherit
   verify:
@@ -134,10 +139,12 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --frozen
       - uses: actions/download-artifact@v4
+        if: ${{ !inputs.comments_only }}
         with:
           name: regulations-refresh-inputs-${{ github.run_id }}
           path: output
       - name: Confirm dependent jobs used unchanged base versions
+        if: ${{ !inputs.comments_only }}
         env:
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
         run: |

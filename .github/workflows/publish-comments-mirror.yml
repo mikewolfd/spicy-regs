@@ -11,6 +11,10 @@ on:
         description: 'Export the complete retained v1 catalog pair and publish declared v2 fields'
         type: boolean
         default: false
+      comments_only:
+        description: 'Publish and check Comments without refreshing other consumers'
+        type: boolean
+        default: false
       comments_runner:
         description: 'Linux/macOS runner label for comments; select verified export storage'
         type: string
@@ -35,5 +39,6 @@ jobs:
     with:
       skip_upload: ${{ inputs.skip_upload }}
       promote_v1: ${{ inputs.promote_v1 }}
+      comments_only: ${{ inputs.comments_only }}
       comments_runner: ${{ inputs.comments_runner }}
       comments_original_pair: ${{ inputs.comments_original_pair }}
