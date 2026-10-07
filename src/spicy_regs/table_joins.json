@@ -3620,6 +3620,24 @@
       }
     },
     {
+      "child": "court_opinion_pdf_extractions",
+      "child_columns": [
+        "cluster_id"
+      ],
+      "parent": "court_opinion_clusters",
+      "parent_columns": [
+        "cluster_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "The native cluster ID recorded with the extraction identifies its opinion group. The guarded opinion relationship separately identifies the exact captured input. This direct group relationship has no complete selected-input baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
       "child": "court_citation_map",
       "child_columns": [
         "citing_opinion_id"
@@ -9894,6 +9912,17 @@
         "parent_table": "court_dockets",
         "parent_columns": [
           "cl_docket_id"
+        ]
+      }
+    ],
+    "court_opinion_pdf_extractions": [
+      {
+        "child_columns": [
+          "cluster_id"
+        ],
+        "parent_table": "court_opinion_clusters",
+        "parent_columns": [
+          "cluster_id"
         ]
       }
     ],

@@ -828,6 +828,12 @@ JOINS: tuple[Join, ...] = (
           'not a publisher-designated main case; independent publication changes can leave a missing docket. Parent '
           'keys were unique in the complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
           expected_cardinality="one"),
+    _join('court_opinion_pdf_extractions', 'cluster_id',
+          'court_opinion_clusters', 'cluster_id',
+          0, 0, 'unmeasured',
+          'The native cluster ID recorded with the extraction identifies its opinion group. The guarded '
+          'opinion relationship separately identifies the exact captured input. This direct group relationship '
+          'has no complete selected-input baseline yet.', expected_cardinality='one'),
     _join('court_opinion_pdf_extractions', ('opinion_id', 'native_sha1'),
           'court_opinions', ('opinion_id', 'sha1'),
           3, 0, 'complete',
