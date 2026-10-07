@@ -27,3 +27,7 @@ One publisher measurement for an explicit chamber, cohort and period in an editi
 | `is_primary` | `BOOLEAN` | Publisher primary-measure designation as true or false, or NULL when unstated. |
 | `scale_text` | `VARCHAR` | Source-stated scale, preserved as text; NULL when unstated. |
 | `rank_population_text` | `VARCHAR` | Source-stated rank population, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

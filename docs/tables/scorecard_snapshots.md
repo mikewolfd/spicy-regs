@@ -2,4 +2,33 @@
 
 # `scorecard_snapshots`
 
-`scorecard_snapshots` has no table of its own. What the pipeline recorded for it is kept only as receipts: the rows of [ETL receipts](etl_receipts.md) with `dataset = 'scorecard_snapshots'`.
+**Scorecard snapshots**
+
+One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.
+
+**Coverage.** Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format. *(measured 2026-10-03)*
+
+- **Parquet file:** `scorecard_snapshots.parquet`
+- **MCP `query_sql` support:** Configured; requires an available artifact.
+- **Publication status:** Not established by this schema page or its measurement date.
+- **Row count:** Not stated here; the MCP `describe_table` reply gives the live count under `publication`.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `scorecard_id` | `VARCHAR` | Stable source-layer scorecard id; no downstream identity resolution. |
+| `observed_at` | `VARCHAR` | UTC instant at which the supporting source response was observed. |
+| `capture_ids` | `VARCHAR[]` | Native list of opaque capture identifiers selected for this accepted snapshot. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `parser_version` | `VARCHAR` | Version of the publisher-specific reader used for this snapshot. |
+| `methodology_digest` | `VARCHAR` | Optional permitted digest of the source methodology; NULL when retention policy forbids it. |
+| `completeness_status` | `VARCHAR` | Complete for an accepted snapshot; failed attempts produce no source table rows. |
+| `completeness_rule` | `VARCHAR` | Publisher-specific proof that every required edition source and record was captured. |
+| `source_declared_counts_json` | `VARCHAR` | JSON object of counts explicitly stated by the publisher, not expected official roster sizes. |
+| `parsed_counts_json` | `VARCHAR` | JSON object of parsed table counts within this edition. |
+| `evidence_policy` | `VARCHAR` | Caller-selected public evidence policy: full, hash_only or metadata_only. |
+| `capture_roles` | `STRUCT(capture_id VARCHAR, "role" VARCHAR, field_groups VARCHAR[])[]` | Capture attribution by field group: exactly one primary source per group, plus corroborations. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `rendition_selection_rule` | `VARCHAR` | Versioned field-level selection of authoritative sources where alternate renditions differ. |
+| `identity_rule_version` | `VARCHAR` | Versioned rule assigning stable source member, item and edition keys. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

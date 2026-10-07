@@ -79,12 +79,8 @@
    "meanings": {
     "actor_id": "The builder that asserted the row, with its version (`spicy-regs:agenda-item-proceedings:v<n>`), bumped when its published rows change.",
     "asserted_at": "When that run asserted the row, as a UTC ISO 8601 instant.",
-    "evidence_date": "Eastern day of the evidence: the docket's or document's latest date, or the Register publication date.",
-    "evidence_id": "The reporting record, by `source`: a docket id, a Regulations.gov document id, or a dated Register record id (`number@YYYY-MM-DD`).",
-    "evidence_uri": "Public URL of that record on regulations.gov or federalregister.gov.",
     "method": "How the row was asserted; `deterministic` (computed by rule) throughout.",
     "run_id": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`).",
-    "source": "What reported the RIN: `docket_rin` (the docket), `document_rin` (a document's `additional_rins`) or `federal_register_rin` (a Register document).",
     "supersedes_id": "Id of a prior row this one continues; always NULL here."
    }
   },
@@ -632,6 +628,7 @@
      "source",
      "opened_by_artifact_ids_json",
      "evidence_ids_json",
+     "evidence_occurrences_json",
      "method",
      "actor_id",
      "run_id",
@@ -646,6 +643,7 @@
    "renamed": {
     "docket_ids_json": "docket_ids",
     "evidence_ids_json": "evidence_ids",
+    "evidence_occurrences_json": "evidence_occurrences",
     "opened_by_artifact_ids_json": "opened_by_artifact_ids",
     "proceeding_ids_json": "proceeding_ids",
     "rins_json": "rins"
@@ -660,9 +658,7 @@
     "proceeding_ids_json": "JSON array of the proceedings its notices belong to; `[]` when none resolves.",
     "rins_json": "JSON array of the RINs its records state and its proceedings hold.",
     "run_id": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`).",
-    "source": "The sources of the dates it takes, `+`-joined: `documents.comment_end_date` and `federal_register.comments_close_on`.",
-    "supersedes_id": "Id of a prior row this one continues; always NULL here.",
-    "unresolved_fr_references_json": "JSON array of unresolved Register number references attached to its evidence."
+    "supersedes_id": "Id of a prior row this one continues; always NULL here."
    }
   },
   "comments": {
@@ -697,10 +693,7 @@
     "attachments_json": "attachments"
    },
    "meanings": {
-    "attachments_json": "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree.",
-    "comment_reference_values_json": "JSON map containing only present source parent-reference fields, preserving null and empty values. {} means the source was read and fields were absent; SQL NULL means legacy or unread.",
-    "pdf_extraction_results_json": "Provenance of `text_content`. For `derived` rows, a JSON object `{comment_id, tool, available_tools, attachments:[{attachment, tool, key, size, etag, sha256}], only_in_other_tools}`: the primary tool (the first of `pypdf`, `pdfminer` with an object for the comment), every tool with an object for it, each attachment's tool, S3 key, listed size and ETag and the SHA-256 of the bytes read (null when the text was kept without re-reading them), and the attachment numbers taken from a tool other than the primary because the primary has no object for them (decision 41); those are in the text. A primary object that exists is kept even when blank. About 125 bytes plus 330 per attachment (31 KB at 92 attachments, the published maximum). Otherwise an ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL; SHA-256 identifies observed bytes, and no-bytes fetch failures have null digest/page count and a generic error. Null when neither is recorded.",
-    "text_extraction_status": "Where `text_content` came from, or why there is none. `derived` means Mirrulations' own extraction supplied it (see `pdf_extraction_results_json`); `ok` means Spicy Regs extracted text from at least one PDF, even if another failed; otherwise PDF outcomes prefer `error`, `encrypted`, then `empty`. Derived-data fills written before `derived` existed read `ok` until repaired. Null before an attempt or derived-text fill."
+    "attachments_json": "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree."
    }
   },
   "comments_index": {
@@ -1049,30 +1042,14 @@
     "source": "CourtListener's source value for the cluster; distinct from the ingest_source route."
    }
   },
-  "court_opinion_pdf_extractions": {
-   "meanings": {
-    "actual_sha1": "SHA-1 independently computed over captured bytes.",
-    "extractor": "Application extraction implementation identity.",
-    "extractor_version": "Installed pypdf distribution version.",
-    "native_sha1": "Body SHA-1 asserted by the selected native opinion row.",
-    "observed_at": "Provider capture observation time.",
-    "parent_opinion_publication_json": "Exact selected opinion family and its member metadata.",
-    "pdf_extraction_results_json": "URL, body SHA-256, status, page count and error for the selected attempt.",
-    "resolved_url": "Final response URL observed by the provider.",
-    "sha1_matches": "Whether the captured bytes match the native fingerprint, stored as text.",
-    "source_sha256": "SHA-256 of complete captured PDF bytes.",
-    "source_url": "Literal download_url offered by the selected opinion."
-   }
-  },
+  "court_opinion_pdf_extractions": {},
   "court_opinions": {
    "meanings": {
     "date_created": "Timestamp the publisher created the opinion record.",
     "date_modified": "Timestamp the publisher last modified the opinion record.",
-    "download_url": "Where the publisher obtained the original document, when recorded; no current accessibility claim. For court-website opinions the file name usually carries the lead docket number (a consolidated case lists two), the fallback key to court_dockets.docket_number.",
     "dump_date": "The CourtListener bulk export the row was copied from (ISO date).",
     "extracted_by_ocr": "Publisher flag for text extracted by OCR (`t` or `f`).",
-    "local_path": "Path of the original document in CourtListener's storage, not a SpicyRegs file.",
-    "sha1": "Publisher's SHA-1 of the original document; not a SpicyRegs capture digest."
+    "local_path": "Path of the original document in CourtListener's storage, not a SpicyRegs file."
    }
   },
   "court_parentheticals": {
@@ -1317,10 +1294,7 @@
    },
    "meanings": {
     "attachment_records_json": "Literal records from an explicitly read document attachment relationship, preserving attachment IDs, restrictions and alternative file formats. Null means the relationship was not read; an empty array means a validated complete read returned no attachments. A main document response alone cannot establish attachment absence.",
-    "attachments_json": "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained.",
-    "file_url": "URL of the document's primary downloadable rendition. Retained for backward compatibility; see `attachments_json` for the full list. Often null.",
-    "pdf_extraction_results_json": "Ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL. SHA-256 identifies observed bytes; no-bytes fetch failures have null digest/page count and a generic error. Null when no PDF attempt is recorded. Describes that attempt, not the provenance of older text retained after a failed overwrite.",
-    "text_extraction_status": "Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file."
+    "attachments_json": "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
    }
   },
   "fcc_filings": {
@@ -2898,9 +2872,7 @@
    },
    "meanings": {
     "b_numbers_json": "JSON array of the decision's B-numbers: the ones its page's File line states where the page was read, else the ones in `decision_number`, split on commas and semicolons. GAO's listing cuts a few long lists, ending them `et al` or where its number field is full, and a fragment it cut mid-number is left out; b_numbers_truncated says where the list here is still the cut one. `[]` for a docket- or P-numbered decision.",
-    "listing_page": "The first Month in Review or Annual Index page that listed the decision, as requested.",
     "outcome_rule": "The table that read outcome, `gao-decision-outcome/002`; NULL where outcome is NULL. A row read under an earlier table names that table.",
-    "source": "The route that supplied the row: `gao_listing` (GAO's own Month in Review and Annual Index).",
     "topics_json": "JSON array of GAO's headings the decision was listed under, in listed order."
    }
   },
@@ -2971,10 +2943,8 @@
     "major_rule_rins_json": "JSON array of every Regulation Identifier Number the letter of a Federal Agency Major Rule Report states for the rule or rules the report is on, each as `NNNN-LLNN` (e.g. `2040-AB75`), in the letter's order. The join key to `unified_agenda.rin` and to the entries of `federal_register.regulation_id_numbers`. The list is not paired with `major_rule_fr_citations_json`: entry k of one is not the RIN of entry k of the other, and a report on two rules often states one RIN for both, so take a rule's RIN beside its citation from `federal_register`. NULL on a row that is not a major-rule report or whose letter has not been read, and where the letter states none in that form: it names a docket, an FCC number or a ZRIN instead, or GAO mistyped it.",
     "requester_committees_json": "JSON array of the requesting congressional committees, as the R package extracted them from the report (e.g. `Committee on Armed Services (Senate)`). NULL where it states none, and on reports issued after its copy.",
     "requester_members_json": "JSON array of the requesting members of Congress, as the R package extracted them from the report's text, with its OCR errors kept (e.g. `Charles H. Percy (Senate)`). NULL where it states none, and on reports issued after its copy.",
-    "source": "The route that supplied the row: `gao_rss` (the daily feed), `upstream_copy` (copied once from upstream spicy-regs' published table), `gao_repair` (an explicit single-report repair), `govinfo` (GovInfo's GAOREPORTS listing), `gao_listing` (GAO's own Month in Review and Annual Index), `gao_major_rule_listing` (GAO's Congressional Review Act listing, \"Reports on Major Rules\"), `gao_major_rule_index` (GAO's index of 2000-12-15 of its 1996-2000 major-rule reports, and each report's product page) or `gao_r_package` (copied once from the CetiAlphaFive/gao R package by Jack T. Rametta, GPL-3.0-or-later).",
     "subject_terms_json": "JSON array of GAO's subject index terms for the product (e.g. `Cost control`, `Financial management`), finer than `topics_json`: the terms the report's GAO product page lists, as GAO spells them and in page order, where a page read has set it, else the R package's. GAO retags products, so the two can differ. NULL where neither states any.",
-    "topics_json": "JSON array of topics. A GovInfo row's is its MODS `subject/topic` terms in the record's order, GAO's own index terms, program names and places, kept as stated (a long name can arrive split in two); NULL where the MODS states none or is unread. A listing row's is GAO's own topic headings the product was listed under, as GAO spells them and in listed order; a `gao_major_rule_listing` or `gao_major_rule_index` row's is NULL, since those listings state no topic. The RSS feed carries no topic tags, so a feed or upstream-copied row is `[]`; NULL on repair rows. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells.",
-    "url": "The product's page on the route that supplied the row: the gao.gov product page for feed, upstream-copied, repair and every listing's rows, GovInfo's details page (composed from the package id) for GovInfo rows."
+    "topics_json": "JSON array of topics. A GovInfo row's is its MODS `subject/topic` terms in the record's order, GAO's own index terms, program names and places, kept as stated (a long name can arrive split in two); NULL where the MODS states none or is unread. A listing row's is GAO's own topic headings the product was listed under, as GAO spells them and in listed order; a `gao_major_rule_listing` or `gao_major_rule_index` row's is NULL, since those listings state no topic. The RSS feed carries no topic tags, so a feed or upstream-copied row is `[]`; NULL on repair rows. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells."
    }
   },
   "hearing_bill_links": {
@@ -3341,12 +3311,8 @@
    "meanings": {
     "actor_id": "The builder that asserted the row, with its version (`spicy-regs:lifecycle-events:v<n>`), bumped when its published rows change.",
     "asserted_at": "When that run asserted the row, as a UTC ISO 8601 instant.",
-    "dated_by": "Whose day `event_date` is, and so which kind of id `document_id` is: `federal_register`, `regulations_gov` (its upload) or `unified_agenda`.",
-    "evidence_id": "The proceedings stage event it came from: that record's own id, or `<agenda item id>@<edition>` for an Agenda withdrawal.",
-    "joined_by": "How the document joined the proceeding: `docket`, `fr_docket_link`, `fr_copy`, `specific_rin` or `agenda_rin`.",
     "method": "How the row was asserted; `deterministic` (computed by rule) throughout.",
     "run_id": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`).",
-    "source": "Who typed the stage: `federal_register` (for its copies too, wherever it states a type), `regulations_gov` or `unified_agenda`.",
     "supersedes_id": "Id of a prior row this one continues; always NULL here: events are recomputed each snapshot and continue no prior row. `proceedings.supersedes_id` differs: there a continuing proceeding names its own id."
    }
   },
@@ -3773,14 +3739,12 @@
     "cfr_target_iris_json": "The same CFR references as Rulespec identifiers (e.g. `urn:rkaf:us:cfr:40:60`).",
     "docket_ids_json": "JSON array of the Regulations.gov dockets the proceeding comprises; `[]` for a docket-less proceeding.",
     "fr_document_ids_json": "JSON array of the dated Federal Register record ids (`number@YYYY-MM-DD`) it holds.",
-    "fr_document_joins_json": "How each `fr_document_ids_json` document joined, in the same order: `{fr_document_id, joined_by}`, `joined_by` being `fr_docket_link`, `fr_copy`, `specific_rin` or `fr_document`.",
     "fr_document_numbers_json": "JSON array of the Federal Register document numbers it holds.",
     "method": "How the row was asserted; `deterministic` (computed by rule) throughout.",
     "rins_json": "JSON array of every RIN it holds, from its dockets, documents and Register documents.",
     "run_id": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`).",
     "stage_events_json": "JSON array of its stage events, one per staged document: `{effective_date, event_kind, evidence_id, joined_by, source, stage}`.",
-    "supersedes_id": "The prior generation's `proceeding_id` this proceeding continues, so equal to `proceeding_id` on a continuing row (the id carries over); NULL for a proceeding new in this generation.",
-    "unresolved_fr_references_json": "JSON array of Register number references it holds that resolve to no single record, each with its candidates and status."
+    "supersedes_id": "The prior generation's `proceeding_id` this proceeding continues, so equal to `proceeding_id` on a continuing row (the id carries over); NULL for a proceeding new in this generation."
    }
   },
   "public_activity_events": {
@@ -3877,8 +3841,7 @@
     "method": "How the row was asserted; `deterministic` (computed by rule) throughout.",
     "run_id": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`).",
     "scope_basis": "Why `scope_status` holds: `latest_agenda_priority_routine_and_frequent`, `one_evidence_linked_proceeding`, `zero_evidence_linked_proceedings` or `multiple_evidence_linked_proceedings`.",
-    "supersedes_id": "Id of a prior row this one continues; always NULL here, since an item's id is its RIN.",
-    "unresolved_fr_references_json": "JSON array of unresolved Register number references from the Register documents that state this RIN."
+    "supersedes_id": "Id of a prior row this one continues; always NULL here, since an item's id is its RIN."
    }
   },
   "report_sections": {
@@ -4029,11 +3992,8 @@
    "meanings": {
     "actor_id": "The builder that asserted the row, with its version (`spicy-regs:rule-targets:v<n>`), bumped when its published rows change.",
     "asserted_at": "When that run asserted the row, as a UTC ISO 8601 instant.",
-    "evidence_id": "The least id of the records stating the edge: the docket for `docket_rin`, a dated Register record id (`number@YYYY-MM-DD`) for `fr_cfr_ref`, else a Regulations.gov document id.",
-    "fr_references_json": "JSON array of the literal Federal Register number references behind the edge, each with the `status` saying how it resolved (`dated`, `single_candidate_in_input`, `ambiguous`, `missing`, or a folded or unpadded match).",
     "method": "How the row was asserted; `deterministic` (computed by rule) throughout.",
     "run_id": "The materialization run that built the snapshot (e.g. `rulemaking-20260927T062656Z`).",
-    "source": "The evidence class: `fr_cfr_ref`, `docket_rin`, `document_rin`, `document_fr_doc` or `docket_document_cites_action_notice`.",
     "supersedes_id": "Id of a prior row this one continues; always NULL here, since an edge has no id of its own."
    }
   },
@@ -4114,22 +4074,9 @@
     "conversion_inputs": [
      "congress",
      "session",
-     "roll_number"
+     "roll_number",
+     "candidate_count"
     ]
-   },
-   "meanings": {
-    "candidate_count": "Number of candidates, retained as decimal text.",
-    "candidates_json": "JSON array of candidate identifiers retained for review.",
-    "capture_id": "Source capture identifier carried through from the publisher fact.",
-    "input_pins_json": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table.",
-    "reason": "Explanation of the resolution outcome or refusal.",
-    "resolution_rule": "Exact matching rule that produced this disposition.",
-    "resolution_status": "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers.",
-    "rule_version": "Version of the deterministic resolver rules.",
-    "source_context_json": "Source identity and period context used by the resolver, retained as JSON.",
-    "source_path": "Location of the source fact or reference within the captured document.",
-    "source_snapshot_id": "Source snapshot used for resolution; require equality when joining to refreshed source facts.",
-    "source_url": "Original publisher URL for the source fact."
    }
   },
   "scorecard_items": {
@@ -4137,13 +4084,9 @@
     "references_json": "references"
    },
    "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
     "position_basis": "Whether a publisher position is explicit, inferred by its presentation, or absent.",
     "position_source_path": "Exact source locator supporting the publisher position.",
-    "references_json": "Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
+    "references_json": "Ordered source citation occurrences with occurrence_id, citation_text, kind and source_path."
    }
   },
   "scorecard_member_item_results": {
@@ -4152,30 +4095,13 @@
      "contribution_number",
      "counts_toward_metric"
     ]
-   },
-   "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
    }
   },
   "scorecard_member_links": {
-   "meanings": {
-    "candidate_count": "Number of candidates, retained as decimal text.",
-    "candidates_json": "JSON array of candidate identifiers retained for review.",
-    "capture_id": "Source capture identifier carried through from the publisher fact.",
-    "input_pins_json": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table.",
-    "override_version": "Version of an explicit member override, when used.",
-    "reason": "Explanation of the resolution outcome or refusal.",
-    "resolution_rule": "Exact matching rule that produced this disposition.",
-    "resolution_status": "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers.",
-    "rule_version": "Version of the deterministic resolver rules.",
-    "source_context_json": "Source identity and period context used by the resolver, retained as JSON.",
-    "source_path": "Location of the source fact or reference within the captured document.",
-    "source_snapshot_id": "Source snapshot used for resolution; require equality when joining to refreshed source facts.",
-    "source_url": "Original publisher URL for the source fact.",
-    "term_candidates_json": "JSON array recording the historical terms considered for the member match."
+   "containers": {
+    "conversion_inputs": [
+     "candidate_count"
+    ]
    }
   },
   "scorecard_member_ratings": {
@@ -4183,12 +4109,6 @@
     "conversion_inputs": [
      "value_number"
     ]
-   },
-   "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
    }
   },
   "scorecard_members": {
@@ -4196,32 +4116,15 @@
     "identifiers_json": "identifiers"
    },
    "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "identifiers_json": "Ordered source-supplied member identifiers, each with scheme and value.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
+    "identifiers_json": "Ordered source-supplied member identifiers, each with scheme and value."
    }
   },
-  "scorecard_methodologies": {
-   "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
-   }
-  },
+  "scorecard_methodologies": {},
   "scorecard_metric_components": {
    "containers": {
     "conversion_inputs": [
      "weight_number"
     ]
-   },
-   "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
    }
   },
   "scorecard_metric_items": {
@@ -4232,11 +4135,7 @@
     ]
    },
    "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "position_basis": "Whether a publisher position is explicit, inferred by its presentation, or absent.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
+    "position_basis": "Whether a publisher position is explicit, inferred by its presentation, or absent."
    }
   },
   "scorecard_metrics": {
@@ -4249,11 +4148,7 @@
     "periods_json": "periods"
    },
    "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "periods_json": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
+    "periods_json": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path."
    }
   },
   "scorecard_publishers": {
@@ -4262,10 +4157,17 @@
    },
    "meanings": {
     "aliases_json": "JSON array of publisher name aliases as stated by the source.",
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
-    "observed_at": "UTC instant at which the supporting source response was observed.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
+    "observed_at": "UTC instant at which the supporting source response was observed."
+   }
+  },
+  "scorecard_snapshots": {
+   "renamed": {
+    "capture_ids_json": "capture_ids",
+    "capture_roles_json": "capture_roles"
+   },
+   "meanings": {
+    "capture_ids_json": "JSON array of opaque capture identifiers selected for this accepted snapshot.",
+    "capture_roles_json": "Capture attribution by field group: exactly one primary source per group, plus corroborations."
    }
   },
   "scorecards": {
@@ -4273,12 +4175,8 @@
     "periods_json": "periods"
    },
    "meanings": {
-    "capture_id": "Opaque caller-issued identity of the source observation supporting this row.",
     "observed_at": "UTC instant at which the supporting source response was observed.",
-    "periods_json": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path.",
-    "snapshot_id": "Opaque identity of the complete accepted edition capture and parse.",
-    "source_path": "Source locator within the captured response, such as cell, JSON path or PDF page.",
-    "source_url": "Original publisher URL supporting this observation."
+    "periods_json": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path."
    }
   },
   "section_classifications": {

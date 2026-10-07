@@ -447,15 +447,11 @@
       {
         "dataset": "agenda_item_proceedings",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "relationship_id"
         ],
         "processing_fields": [
-          "source",
-          "evidence_id",
-          "evidence_uri",
-          "evidence_date",
           "method",
           "actor_id",
           "run_id",
@@ -760,18 +756,16 @@
       {
         "dataset": "comment_periods",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "comment_period_id"
         ],
         "processing_fields": [
-          "source",
           "method",
           "actor_id",
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "unresolved_fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -780,14 +774,11 @@
       {
         "dataset": "comments",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "comment_id"
         ],
         "processing_fields": [
-          "comment_reference_values_json",
-          "text_extraction_status",
-          "pdf_extraction_results_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -1024,22 +1015,11 @@
       {
         "dataset": "court_opinion_pdf_extractions",
         "receipt_only": false,
-        "policy_version": "courts/1",
+        "policy_version": "courts/2",
         "identity_columns": [
           "opinion_body_id"
         ],
         "processing_fields": [
-          "source_url",
-          "resolved_url",
-          "source_sha256",
-          "native_sha1",
-          "actual_sha1",
-          "sha1_matches",
-          "pdf_extraction_results_json",
-          "observed_at",
-          "extractor",
-          "extractor_version",
-          "parent_opinion_publication_json",
           "conversion_inputs",
           "raw_source_record",
           "source_observation"
@@ -1048,13 +1028,11 @@
       {
         "dataset": "court_opinions",
         "receipt_only": false,
-        "policy_version": "courts/1",
+        "policy_version": "courts/2",
         "identity_columns": [
           "opinion_id"
         ],
         "processing_fields": [
-          "sha1",
-          "download_url",
           "local_path",
           "extracted_by_ocr",
           "date_created",
@@ -1199,14 +1177,11 @@
       {
         "dataset": "documents",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "document_id"
         ],
         "processing_fields": [
-          "file_url",
-          "text_extraction_status",
-          "pdf_extraction_results_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2164,7 +2139,7 @@
       {
         "dataset": "gao_decisions",
         "receipt_only": false,
-        "policy_version": "government-sources/2",
+        "policy_version": "government-sources/3",
         "identity_columns": [
           "decision_number",
           "url"
@@ -2187,7 +2162,7 @@
       {
         "dataset": "gao_reports",
         "receipt_only": false,
-        "policy_version": "government-sources/2",
+        "policy_version": "government-sources/3",
         "identity_columns": [
           "report_id"
         ],
@@ -2331,15 +2306,11 @@
       {
         "dataset": "lifecycle_events",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "lifecycle_event_id"
         ],
         "processing_fields": [
-          "source",
-          "dated_by",
-          "evidence_id",
-          "joined_by",
           "method",
           "actor_id",
           "run_id",
@@ -2573,7 +2544,7 @@
       {
         "dataset": "proceedings",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "proceeding_id"
         ],
@@ -2583,8 +2554,6 @@
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "fr_document_joins_json",
-          "unresolved_fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2625,7 +2594,7 @@
       {
         "dataset": "regulatory_agenda_items",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "agenda_item_id"
         ],
@@ -2636,7 +2605,6 @@
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "unresolved_fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2672,19 +2640,16 @@
       {
         "dataset": "rule_targets",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "rule_target_id"
         ],
         "processing_fields": [
-          "source",
-          "evidence_id",
           "method",
           "actor_id",
           "run_id",
           "asserted_at",
           "supersedes_id",
-          "fr_references_json",
           "raw_conversion_inputs",
           "input_metadata",
           "raw_source_record"
@@ -2725,25 +2690,13 @@
       {
         "dataset": "scorecard_item_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "item_id",
           "reference_id"
         ],
         "processing_fields": [
-          "source_snapshot_id",
-          "resolution_status",
-          "resolution_rule",
-          "rule_version",
-          "candidate_count",
-          "candidates_json",
-          "reason",
-          "source_context_json",
-          "input_pins_json",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2751,26 +2704,22 @@
       {
         "dataset": "scorecard_items",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "item_id"
         ],
         "processing_fields": [
           "references_json",
-          "source_url",
-          "source_path",
           "position_basis",
           "position_source_path",
-          "snapshot_id",
-          "capture_id",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_member_item_results",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "item_id",
@@ -2778,10 +2727,6 @@
           "result_id"
         ],
         "processing_fields": [
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2789,43 +2734,26 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
         ],
         "processing_fields": [
-          "term_candidates_json",
-          "override_version",
-          "source_snapshot_id",
-          "resolution_status",
-          "resolution_rule",
-          "rule_version",
-          "candidate_count",
-          "candidates_json",
-          "reason",
-          "source_context_json",
-          "input_pins_json",
-          "capture_id",
-          "source_url",
-          "source_path",
+          "conversion_inputs",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_member_ratings",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-ratings-v3",
+        "policy_version": "scorecards-etl-ratings-v4",
         "identity_columns": [
           "scorecard_id",
           "metric_id",
           "publisher_member_key"
         ],
         "processing_fields": [
-          "source_url",
-          "source_path",
-          "snapshot_id",
-          "capture_id",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2833,50 +2761,38 @@
       {
         "dataset": "scorecard_members",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
         ],
         "processing_fields": [
           "identifiers_json",
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_methodologies",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "methodology_id"
         ],
         "processing_fields": [
-          "capture_id",
-          "source_path",
-          "snapshot_id",
-          "source_url",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_metric_components",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "parent_metric_id",
           "component_metric_id"
         ],
         "processing_fields": [
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2884,7 +2800,7 @@
       {
         "dataset": "scorecard_metric_items",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "metric_id",
@@ -2893,10 +2809,6 @@
         ],
         "processing_fields": [
           "position_basis",
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2904,17 +2816,13 @@
       {
         "dataset": "scorecard_metrics",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id",
           "metric_id"
         ],
         "processing_fields": [
           "periods_json",
-          "snapshot_id",
-          "capture_id",
-          "source_url",
-          "source_path",
           "conversion_inputs",
           "raw_source"
         ]
@@ -2922,59 +2830,39 @@
       {
         "dataset": "scorecard_publishers",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "publisher_id"
         ],
         "processing_fields": [
           "aliases_json",
           "observed_at",
-          "capture_id",
-          "source_url",
-          "source_path",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecard_snapshots",
-        "receipt_only": true,
-        "policy_version": "scorecards-etl-v1",
-        "identity_columns": [],
+        "receipt_only": false,
+        "policy_version": "scorecards-etl-v2",
+        "identity_columns": [
+          "snapshot_id"
+        ],
         "processing_fields": [
-          "snapshot_id",
-          "scorecard_id",
-          "observed_at",
           "capture_ids_json",
-          "parser_version",
-          "methodology_digest",
-          "completeness_status",
-          "completeness_rule",
-          "source_declared_counts_json",
-          "parsed_counts_json",
-          "evidence_policy",
           "capture_roles_json",
-          "rendition_selection_rule",
-          "identity_rule_version",
-          "capture_id",
-          "source_url",
-          "source_path",
           "raw_source"
         ]
       },
       {
         "dataset": "scorecards",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v1",
+        "policy_version": "scorecards-etl-v2",
         "identity_columns": [
           "scorecard_id"
         ],
         "processing_fields": [
           "periods_json",
-          "source_url",
           "observed_at",
-          "snapshot_id",
-          "capture_id",
-          "source_path",
           "raw_source"
         ]
       },
@@ -3144,6 +3032,7 @@
         "modify_date",
         "comment_start_date",
         "comment_end_date",
+        "file_url",
         "attachments",
         "attachment_records",
         "fr_doc_num",
@@ -3151,6 +3040,8 @@
         "reason_withdrawn",
         "additional_rins",
         "text_content",
+        "text_extraction_status",
+        "pdf_extraction_results_json",
         "publisher_status",
         "removed_observed_at"
       ]
@@ -3169,6 +3060,7 @@
         "comment_on_document_id",
         "comment_on_object_id",
         "original_document_id",
+        "comment_reference_values_json",
         "agency_code",
         "first_name",
         "last_name",
@@ -3182,6 +3074,8 @@
         "receive_date",
         "attachments",
         "text_content",
+        "text_extraction_status",
+        "pdf_extraction_results_json",
         "subtype",
         "duplicate_comments",
         "comment_text"
@@ -3423,8 +3317,11 @@
         "cfr_part",
         "cfr_section",
         "rin",
+        "source",
+        "evidence_id",
         "first_seen",
         "last_seen",
+        "fr_references_json",
         "fr_document_ids"
       ]
     },
@@ -3449,6 +3346,8 @@
         "cfr_target_iris",
         "authority_refs",
         "fr_document_ids",
+        "fr_document_joins_json",
+        "unresolved_fr_references_json",
         "rins"
       ]
     },
@@ -3468,7 +3367,8 @@
         "observation_count",
         "latest_agenda_edition",
         "first_seen",
-        "last_seen"
+        "last_seen",
+        "unresolved_fr_references_json"
       ]
     },
     {
@@ -3484,7 +3384,11 @@
         "agenda_item_id",
         "rin",
         "proceeding_id",
-        "relationship_role"
+        "relationship_role",
+        "source",
+        "evidence_id",
+        "evidence_uri",
+        "evidence_date"
       ]
     },
     {
@@ -3502,8 +3406,11 @@
         "docket_ids",
         "open_date",
         "close_date",
+        "source",
         "opened_by_artifact_ids",
         "evidence_ids",
+        "evidence_occurrences",
+        "unresolved_fr_references_json",
         "anchor_kind",
         "register_close_date",
         "regulations_gov_close_date"
@@ -3555,6 +3462,10 @@
         "document_id",
         "stage",
         "event_date",
+        "source",
+        "dated_by",
+        "evidence_id",
+        "joined_by",
         "document_form",
         "anchor_role"
       ]
@@ -6970,6 +6881,8 @@
         "abstract",
         "agencies",
         "topics",
+        "url",
+        "source",
         "product_type",
         "report_number",
         "requester_type",
@@ -7159,7 +7072,9 @@
         "author_str",
         "per_curiam",
         "joined_by_str",
-        "page_count"
+        "page_count",
+        "sha1",
+        "download_url"
       ]
     },
     {
@@ -7174,7 +7089,22 @@
         "opinion_body_id",
         "opinion_id",
         "cluster_id",
-        "text_content"
+        "text_content",
+        "source_url",
+        "resolved_url",
+        "source_sha256",
+        "native_sha1",
+        "actual_sha1",
+        "pdf_extraction_results_json",
+        "observed_at",
+        "extractor",
+        "extractor_version",
+        "parent_opinion_publication_json",
+        "sha1_matches",
+        "parent_artifact_digest",
+        "parent_generation_id",
+        "parent_member_sha256",
+        "parent_member_byte_size"
       ]
     },
     {
@@ -7207,7 +7137,21 @@
       "columns": [
         "scorecard_id",
         "publisher_member_key",
-        "bioguide_id"
+        "bioguide_id",
+        "source_snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path",
+        "term_candidates_json",
+        "override_version",
+        "resolution_status",
+        "resolution_rule",
+        "rule_version",
+        "candidate_count",
+        "candidates_json",
+        "reason",
+        "source_context_json",
+        "input_pins_json"
       ]
     },
     {
@@ -7229,7 +7173,19 @@
         "roll_number",
         "vote_id",
         "bill_id",
-        "amendment_id"
+        "amendment_id",
+        "source_snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path",
+        "resolution_status",
+        "resolution_rule",
+        "rule_version",
+        "candidate_count",
+        "candidates_json",
+        "reason",
+        "source_context_json",
+        "input_pins_json"
       ]
     },
     {
@@ -7318,7 +7274,10 @@
         "abbreviation",
         "aliases",
         "homepage_url",
-        "scorecard_index_url"
+        "scorecard_index_url",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7345,7 +7304,39 @@
         "periods",
         "methodology_url",
         "published_at_text",
-        "updated_at_text"
+        "updated_at_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
+      ]
+    },
+    {
+      "table": "scorecard_snapshots",
+      "label": "Scorecard snapshots",
+      "summary": "One complete accepted edition capture and parse; unsuccessful attempts remain in the run journal. Values and preferred actions belong to the named publisher. Source evidence defaults to metadata and hashes; original bodies are retained publicly only under an established redistribution policy.",
+      "coverage": "Sampled publisher editions selected by the scorecard source registry. Complete edition reads replace that edition; failed or incomplete reads preserve prior observations. Coverage varies by publisher and historical source format.",
+      "kind": "sampled",
+      "measured_on": "2026-10-03",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "scorecard_id",
+        "observed_at",
+        "capture_ids",
+        "parser_version",
+        "methodology_digest",
+        "completeness_status",
+        "completeness_rule",
+        "source_declared_counts_json",
+        "parsed_counts_json",
+        "evidence_policy",
+        "capture_roles",
+        "rendition_selection_rule",
+        "identity_rule_version",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7364,7 +7355,11 @@
         "effective_at_text",
         "methodology_text",
         "methodology_url",
-        "disclosure_status"
+        "disclosure_status",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7387,7 +7382,11 @@
         "periods",
         "is_primary",
         "scale_text",
-        "rank_population_text"
+        "rank_population_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7412,7 +7411,11 @@
         "bill_citation_text",
         "amendment_citation_text",
         "references",
-        "publisher_position_text"
+        "publisher_position_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7433,7 +7436,11 @@
         "weight_text",
         "weight_number",
         "contribution_rule_text",
-        "counts_toward_metric"
+        "counts_toward_metric",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7450,7 +7457,11 @@
         "component_metric_id",
         "weight_text",
         "weight_number",
-        "combination_rule_text"
+        "combination_rule_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7473,7 +7484,11 @@
         "party",
         "period_text",
         "eligibility_text",
-        "notes_text"
+        "notes_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7492,7 +7507,11 @@
         "value_number",
         "value_status_text",
         "rank_text",
-        "notes_text"
+        "notes_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -7517,7 +7536,11 @@
         "eligibility_text",
         "counts_toward_metric",
         "adjustment_text",
-        "reason_text"
+        "reason_text",
+        "snapshot_id",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {
@@ -8180,6 +8203,8 @@
         "title",
         "topics",
         "url",
+        "listing_page",
+        "source",
         "released_date",
         "decided_date",
         "decision_status",

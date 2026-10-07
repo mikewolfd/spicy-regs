@@ -29,3 +29,7 @@ One publisher-reported member result for an item, with optional source-stated me
 | `counts_toward_metric` | `BOOLEAN` | Source-stated participation as true or false, or NULL when unstated. |
 | `adjustment_text` | `VARCHAR` | Source-stated adjustment, preserved as text; NULL when unstated. |
 | `reason_text` | `VARCHAR` | Source-stated reason, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

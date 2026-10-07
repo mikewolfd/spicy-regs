@@ -25,3 +25,7 @@ One item's participation in a metric under a particular source rule. Values and 
 | `weight_number` | `DECIMAL(38,18)` | Optional exact decimal text for a source-stated weight; no inferred normalization. |
 | `contribution_rule_text` | `VARCHAR` | Source-stated contribution rule, preserved as text; NULL when unstated. |
 | `counts_toward_metric` | `BOOLEAN` | Source-stated participation as true or false, or NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

@@ -21,3 +21,7 @@ One source-stated relationship between a component metric and its parent metric.
 | `weight_text` | `VARCHAR` | Source-stated weight, preserved as text; NULL when unstated. |
 | `weight_number` | `DECIMAL(38,18)` | Optional exact decimal text for a source-stated weight; no inferred normalization. |
 | `combination_rule_text` | `VARCHAR` | Source-stated combination rule, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

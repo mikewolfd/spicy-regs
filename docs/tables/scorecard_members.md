@@ -27,3 +27,7 @@ One source member occurrence/context in the edition, including ungraded or exclu
 | `period_text` | `VARCHAR` | Source-stated period, preserved as text; NULL when unstated. |
 | `eligibility_text` | `VARCHAR` | Source-stated eligibility, preserved as text; NULL when unstated. |
 | `notes_text` | `VARCHAR` | Source-stated notes, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

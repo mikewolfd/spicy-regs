@@ -20,3 +20,7 @@ One row per piece of evidence that an agenda item tracks a proceeding: a docket,
 | `rin` | `VARCHAR` | The item's Regulation Identifier Number. |
 | `proceeding_id` | `VARCHAR` | The proceeding the item tracks; joins `proceedings.proceeding_id`. |
 | `relationship_role` | `VARCHAR` | The link's role; `agenda_tracks_proceeding` throughout. |
+| `source` | `VARCHAR` | What reported the RIN: `docket_rin` (the docket), `document_rin` (a document's `additional_rins`) or `federal_register_rin` (a Register document). |
+| `evidence_id` | `VARCHAR` | The reporting record, by `source`: a docket id, a Regulations.gov document id, or a dated Register record id (`number@YYYY-MM-DD`). |
+| `evidence_uri` | `VARCHAR` | Public URL of that record on regulations.gov or federalregister.gov. |
+| `evidence_date` | `VARCHAR` | Eastern day of the evidence: the docket's or document's latest date, or the Register publication date. |

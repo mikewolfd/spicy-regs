@@ -20,5 +20,9 @@ One row per staged document of a docketed proceeding: the events each `rulemakin
 | `document_id` | `VARCHAR` | The document, by `dated_by`: a dated Register record id (`number@YYYY-MM-DD`), a Regulations.gov document id, or an agenda item id (`urn:rkaf:us:rin:<rin>`). |
 | `stage` | `VARCHAR` | The stage the event records: `proposed`, `supplemental`, `final` or `withdrawn`. |
 | `event_date` | `DATE` | The event's day, from the source `dated_by` names. |
+| `source` | `VARCHAR` | Who typed the stage: `federal_register` (for its copies too, wherever it states a type), `regulations_gov` or `unified_agenda`. |
+| `dated_by` | `VARCHAR` | Whose day `event_date` is, and so which kind of id `document_id` is: `federal_register`, `regulations_gov` (its upload) or `unified_agenda`. |
+| `evidence_id` | `VARCHAR` | The proceedings stage event it came from: that record's own id, or `<agenda item id>@<edition>` for an Agenda withdrawal. |
+| `joined_by` | `VARCHAR` | How the document joined the proceeding: `docket`, `fr_docket_link`, `fr_copy`, `specific_rin` or `agenda_rin`. |
 | `document_form` | `VARCHAR` | Its stage refined by its title: `proposed`, `advance_proposed`, `comment_period`, `final`, `interim_final`, `direct_final`, `correction`, `supplemental` or `withdrawn`. |
 | `anchor_role` | `VARCHAR` | `proposal`, `final` or `withdrawal` when the lifecycle anchors on this document; NULL otherwise. |

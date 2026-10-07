@@ -21,3 +21,6 @@ One stable publisher identity; historical names remain on edition observations. 
 | `aliases` | `VARCHAR[]` | Native list of publisher name aliases as stated by the source. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `homepage_url` | `VARCHAR` | Source-stated homepage url, preserved as text; NULL when unstated. |
 | `scorecard_index_url` | `VARCHAR` | Source-stated scorecard index url, preserved as text; NULL when unstated. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

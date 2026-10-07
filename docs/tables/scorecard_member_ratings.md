@@ -23,3 +23,7 @@ One source-reported metric value for a member; different grades, ranks and score
 | `value_status_text` | `VARCHAR` | Source-stated value status, preserved as text; NULL when unstated. |
 | `rank_text` | `VARCHAR` | Source-stated rank, preserved as text; NULL when unstated. |
 | `notes_text` | `VARCHAR` | Source-stated notes, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |

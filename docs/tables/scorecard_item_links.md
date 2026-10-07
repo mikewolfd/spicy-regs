@@ -26,3 +26,15 @@ One resolution disposition per source item reference occurrence; a bill action d
 | `vote_id` | `VARCHAR` | Exact identifier in the pinned roll_call_votes input; NULL when no roll call resolves. |
 | `bill_id` | `VARCHAR` | Exact identifier in the pinned congress_bills input; NULL when no bill resolves. |
 | `amendment_id` | `VARCHAR` | Exact identifier in the pinned amendments input; NULL when no amendment resolves. |
+| `source_snapshot_id` | `VARCHAR` | Source snapshot used for resolution; require equality when joining to refreshed source facts. |
+| `capture_id` | `VARCHAR` | Source capture identifier carried through from the publisher fact. |
+| `source_url` | `VARCHAR` | Original publisher URL for the source fact. |
+| `source_path` | `VARCHAR` | Location of the source fact or reference within the captured document. |
+| `resolution_status` | `VARCHAR` | Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers. |
+| `resolution_rule` | `VARCHAR` | Exact matching rule that produced this disposition. |
+| `rule_version` | `VARCHAR` | Version of the deterministic resolver rules. |
+| `candidate_count` | `INTEGER` | Number of candidates, retained as decimal text. |
+| `candidates_json` | `VARCHAR` | JSON array of candidate identifiers retained for review. |
+| `reason` | `VARCHAR` | Explanation of the resolution outcome or refusal. |
+| `source_context_json` | `VARCHAR` | Source identity and period context used by the resolver, retained as JSON. |
+| `input_pins_json` | `VARCHAR` | Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table. |

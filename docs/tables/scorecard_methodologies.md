@@ -23,3 +23,7 @@ One source-stated rule set in an edition, scoped to chamber and cohort as stated
 | `methodology_text` | `VARCHAR` | Source-stated methodology, preserved as text; NULL when unstated. |
 | `methodology_url` | `VARCHAR` | Source-stated methodology url, preserved as text; NULL when unstated. |
 | `disclosure_status` | `VARCHAR` | Source-stated disclosure status, preserved as text; NULL when unstated. |
+| `snapshot_id` | `VARCHAR` | Opaque identity of the complete accepted edition capture and parse. |
+| `capture_id` | `VARCHAR` | Opaque caller-issued identity of the source observation supporting this row. |
+| `source_url` | `VARCHAR` | Original publisher URL supporting this observation. |
+| `source_path` | `VARCHAR` | Source locator within the captured response, such as cell, JSON path or PDF page. |
