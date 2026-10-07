@@ -46,13 +46,25 @@ class RollCallVotesRollup(RollupPipeline):
     retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
+        if self.source_evidence is not None:
+            self.source_evidence.event(
+                "vote-read-snapshot", publication=self.source_evidence.read_snapshot,
+                generation_id=self.receipt_generation_id,
+            )
+
         def builder(work, *, selected_input, **kwargs):
             try:
-                return build_roll_call_votes(work, selected_input=selected_input, **kwargs)
+                built = build_roll_call_votes(work, selected_input=selected_input, **kwargs)
             except ChamberListingRefused as refused:
                 # Seal the successful chamber and its receipts before the run reports the refusal.
                 self.deferred_failure = refused
-                return refused.outputs
+                built = refused.outputs
+            if self.source_evidence is not None:
+                # The receipt writer's private stage may be cleaned on failure.
+                # Keep its exact matched processing inputs in the existing audit.
+                for path in built:
+                    self.source_evidence.retain_file(path, stage="vote-processing-output", dataset=path.stem)
+            return built
 
         return self.build_receipts(output_dir, builder, max_votes=max_votes_from_env(), evidence=self.source_evidence)
 
