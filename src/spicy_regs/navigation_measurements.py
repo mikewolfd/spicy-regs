@@ -261,6 +261,11 @@ class MeasurementCache:
                 or len(set(keys)) != len(keys) or sorted(keys) != sorted(columns)
                 or not set(keys) <= set(dict(binding['schema']))):
             raise ValueError('Population proof differs from the exact requested native key columns')
+        # The older inventory permits declared nullable native key fields.
+        # Its non-null count excludes those fields, so it cannot qualify this
+        # cache's stricter all-key-fields-present population.
+        if record.get('maintainedNullableIdentityFields') != []:
+            raise ValueError('Population proof permits nullable or unspecified native identity fields')
         if (record.get('status') != 'verified-full-main-complete-source-identity'
                 or record.get('missingIdentityColumns') != []
                 or record.get('globalUniqueCompleteSourceIdentity') is not True

@@ -17,6 +17,7 @@ def supplied_proof(tmp_path, binding, columns=('id',), *, name='proof.json'):
              **{k: member[k] for k in ('sha256', 'rows', 'byteSize')}} for member in binding['members']]
     rows = binding['rows']
     record = {'source': binding['table'], 'identityColumns': list(columns), 'sourceRows': rows,
+              'maintainedNullableIdentityFields': [],
               'sourcePin': pins, 'admissions': [{'member': pin} for pin in pins],
               'status': 'verified-full-main-complete-source-identity', 'missingIdentityColumns': [],
               'completeIdentityAdmittedRows': rows, 'completeIdentityNonNullRows': rows,
@@ -56,7 +57,7 @@ def test_imported_population_reuses_existing_cache_shape_without_key_projection(
 
 @pytest.mark.parametrize('damage', ['pins', 'partial_members', 'extra_member', 'keys', 'counts', 'nulls',
                                   'duplicates', 'partial_scope', 'missing_keys', 'admissions', 'boolean_counts',
-                                  'duplicate_records', 'wrong_table'])
+                                  'duplicate_records', 'wrong_table', 'nullable_scope', 'unspecified_nullability'])
 def test_partial_or_mismatched_proof_never_borrows_counts(tmp_path, damage):
     index, paths, _ = selection(tmp_path, split=True)
     binding = selected_binding(index, 'source')
@@ -85,6 +86,10 @@ def test_partial_or_mismatched_proof_never_borrows_counts(tmp_path, damage):
         record['sourceRows'] = True
     if damage == 'wrong_table':
         record['source'] = 'other'
+    if damage == 'nullable_scope':
+        record['maintainedNullableIdentityFields'] = ['id']
+    if damage == 'unspecified_nullability':
+        record.pop('maintainedNullableIdentityFields')
     document = {'sources': [record, record] if damage == 'duplicate_records' else [record]}
     path.write_text(json.dumps(document))
     cache = MeasurementCache(tmp_path / 'cache')
@@ -190,3 +195,20 @@ def test_same_member_proof_does_not_lend_counts_to_other_keys_or_duplicate_sourc
     duplicate = run(index, paths, cache, [spec], all_routes=True, population_proofs=[first, second])
     assert duplicate['unavailable'][0]['phase'] == 'population_import'
     assert 'Multiple supplied proofs' in duplicate['unavailable'][0]['reason']
+
+
+def test_nullable_qualified_native_proof_does_not_qualify_strict_nonnull_population(tmp_path):
+    index, paths, _ = selection(tmp_path)
+    binding = selected_binding(index, 'source')
+    path, record = supplied_proof(tmp_path, binding)
+    # The retained FR report counts docket_source_ordinal as a permitted NULL
+    # despite its globalUniqueNonNullCompleteSourceIdentity flag. This fixture
+    # preserves that conflict between the declaration and claimed count scope.
+    record['maintainedNullableIdentityFields'] = ['id']
+    assert record['globalUniqueNonNullCompleteSourceIdentity'] is True
+    path.write_text(json.dumps({'sources': [record]}))
+    cache = MeasurementCache(tmp_path / 'cache')
+    with pytest.raises(ValueError, match='permits nullable'):
+        cache.import_population(binding, paths, ('id',), cache.capture_population_proof(path))
+    assert not cache.work['population_imports']
+    assert not list(cache.directory.glob('population-*.json'))
