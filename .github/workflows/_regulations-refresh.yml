@@ -9,6 +9,9 @@ on:
       promote_v1:
         type: boolean
         default: false
+      comments_runner:
+        type: string
+        default: ubuntu-latest
 env:
   # Called only by workflows that hold comments-catalog-write.
   # Read by spicy_regs.sources.iceberg: this run holds comments-catalog-write,
@@ -73,6 +76,7 @@ jobs:
     with:
       skip_upload: ${{ inputs.skip_upload }}
       promote_v1: ${{ inputs.promote_v1 }}
+      comments_runner: ${{ inputs.comments_runner }}
   derived:
     needs: mirror
     if: ${{ !inputs.skip_upload }}
