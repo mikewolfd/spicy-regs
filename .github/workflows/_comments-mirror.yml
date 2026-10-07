@@ -238,7 +238,7 @@ jobs:
           retention-days: 30
 
       - name: Retain declared members and descriptor of the retained original pair
-        if: ${{ always() && inputs.promote_v1 && steps.retained_original.outcome == 'success' }}
+        if: ${{ always() && inputs.promote_v1 && steps.retained_original.outcome == 'success' && steps.retained_original.outputs.path != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: comments-original-v1-${{ github.run_id }}
