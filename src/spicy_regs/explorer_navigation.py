@@ -57,6 +57,94 @@ TREATY = route("treaties", ("congress_received", "number", "suffix"), (
 
 
 
+def _regulatory_navigation() -> list[dict]:
+    """Reuse native occurrence definitions; never pair independent memberships."""
+    from spicy_regs.relationship_views.regulations_native import ARRAYS
+
+    targets = {
+        "proceeding": ("proceedings", "proceeding_id", ".+"),
+        "regulations_docket": ("dockets", "docket_id", ".+"),
+        "rin": ("unified_agenda", "rin", r"[0-9]{4}-[A-Z0-9]{4}"),
+    }
+    selected = {"comment_period_proceedings", "comment_period_dockets", "comment_period_rins",
+                "document_additional_rins", "proceeding_dockets", "proceeding_rins",
+                "proceeding_federal_register", "federal_register_rins"}
+    specs = []
+    for name, source, _identity, field, kind, value in ARRAYS:
+        if name not in selected:
+            continue
+        if value != "item":
+            raise ValueError("Portable regulatory membership requires its native item")
+        if kind == "dated_federal_register":
+            target = _dated_register_target("", row=False)
+        else:
+            table, column, pattern = targets[kind]
+            target = route(table, (column,), (key(part(""), pattern=pattern),))
+        specs.append(array(name, source, (field,), (target,),
+                           meaning="Each independent native membership. Repeated occurrences remain visible; RINs return every selected agenda edition, with no latest choice or positional pairing."))
+    specs.append(array("comment_period_evidence", "comment_periods", ("evidence_occurrences",), (
+        route("documents", ("document_id",), (key(part("document_id")),),
+              guard("source", values=("documents.comment_end_date",)),
+              {**part("evidence_id"), "sameAs": part("document_id")}),
+        route("federal_register", ("document_number", "publication_date"), (
+            key(part("document_number"), pattern=r"[A-Za-z0-9._-]+"),
+            key(part("publication_date", transform="canonical-date"))),
+              guard("source", values=("federal_register.comments_close_on",)),
+              {**part("evidence_id", transform="fr-document-number"), "sameAs": part("document_number")},
+              {**part("evidence_id", transform="fr-publication-date"), "sameAs": part("publication_date")}),
+    ), meaning="Each retained window or quiet notice follows its own source namespace. A Register reference requires its native number and publication date; period opening and closing dates do not supply that identity."))
+    specs.append(array("lifecycle_date_evidence", "lifecycle_events", (), (
+        route("documents", ("document_id",), (key(part("document_id", row=True)),),
+              guard("dated_by", row=True, values=("regulations_gov",))),
+        _dated_register_target("document_id", row=True,
+                               guards=(guard("dated_by", row=True, values=("federal_register",)),)),
+        route("regulatory_agenda_items", ("agenda_item_id",), (key(part("document_id", row=True)),),
+              guard("dated_by", row=True, values=("unified_agenda",))),
+    ), mode="row", meaning="The source that supplied the event date routes document_id, independently of the source that supplied its stage. The event date and evidence_id never manufacture a target key."))
+    return specs
+
+
+def _dated_register_target(path: str, *, row: bool, guards: tuple = ()) -> dict:
+    return route("federal_register", ("document_number", "publication_date"), (
+        key(part(path, row=row, transform="fr-document-number")),
+        key(part(path, row=row, transform="fr-publication-date"))), *guards)
+
+
+def _recorded_source_navigation() -> list[dict]:
+    # The court writer admits this exact native tuple against the recorded
+    # selected parent. Lookup compares current main fields, not publication pins.
+    captured = (
+        {**part("sha1_matches", row=True, transform="native-boolean"), "values": ["true"]},
+        {**part("actual_sha1", row=True), "sameAs": part("native_sha1", row=True)},
+        guard("native_sha1", row=True, pattern=r"[a-f0-9]{40}"),
+        guard("source_sha256", row=True, pattern=r"sha256:[a-f0-9]{64}"),
+        guard("opinion_body_id", row=True, pattern=r"court-opinion-body:[a-f0-9]{64}"),
+        guard("opinion_id", row=True, pattern=NUM),
+        guard("cluster_id", row=True, pattern=NUM),
+        guard("source_url", row=True, pattern=r"https://[^\s]+"),
+        guard("parent_artifact_digest", row=True, pattern=r"(?:sha256:)?[a-f0-9]{64}"),
+        guard("parent_member_sha256", row=True, pattern=r"(?:sha256:)?[a-f0-9]{64}"),
+        guard("parent_member_byte_size", row=True, pattern=NUM),
+    )
+    specs = [array("court_captured_opinion", "court_opinion_pdf_extractions", (), (
+        route("court_opinions", ("opinion_id", "cluster_id", "sha1", "download_url"),
+              tuple(key(part(field, row=True)) for field in
+                    ("opinion_id", "cluster_id", "native_sha1", "source_url")), *captured),
+    ), mode="row", meaning="A body admitted against a recorded native parent and captured SHA-256. Current lookup must match opinion, cluster, native SHA-1 and offered URL together; it does not certify that the current publication is the recorded parent."),
+        array("court_captured_source", "court_opinion_pdf_extractions", (), (
+            route("@url", ("url",), (key(part("source_url", row=True)),), *captured),
+        ), mode="row", meaning="The literal source URL recorded for this qualified body. Following the publisher URL does not retrieve or verify the retained capture.")]
+    # Derive the table set from maintained policies. Availability still requires
+    # the selected main schema to publish each association field.
+    for policy in sorted(Path(__file__).with_name("etl_policies").glob("scorecard*.json")):
+        source = json.loads(policy.read_text())["dataset"]
+        specs.append(array(source + "_recorded_source", source, (), (
+            route("@url", ("url",), (key(part("source_url", row=True), pattern=r"https://[^\s]+"),),
+                  guard("capture_id", row=True), guard("source_path", row=True)),
+        ), mode="row", meaning="The publisher URL associated with the recorded capture ID and source path. Capture IDs are opaque; this URL does not imply a public capture or extracted document target."))
+    return specs
+
+
 def declarations(processing_joins: tuple = ()) -> list[dict]:
     """Explicit source relationships; receipt fields retain inspection context only."""
     specs = [
@@ -226,6 +314,7 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                                key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}")),
                               guard("companion_status", row=True, values=("locator_coordinates_available",))),),
                        mode="row", meaning="Literal retained source coordinates and digest; target existence does not establish verified source bytes."))
+    specs += _regulatory_navigation() + _recorded_source_navigation()
     return validate_navigation(deepcopy(specs))
 
 
@@ -254,6 +343,25 @@ def word(recipe, element, row):
         return recipe["literal"]
     value = at(row if recipe.get("from") == "row" else element, recipe["path"])
     transform = recipe.get("transform")
+    if transform == "native-boolean":
+        return str(value).lower() if type(value) is bool else None
+    if transform in {"fr-document-number", "fr-publication-date", "canonical-date"}:
+        if not isinstance(value, str):
+            return None
+        if transform == "canonical-date":
+            day, number = value, None
+        else:
+            match = re.fullmatch(r"([A-Za-z0-9._-]+)@([0-9]{4}-[0-9]{2}-[0-9]{2})", value)
+            if not match:
+                return None
+            number, day = match.groups()
+        try:
+            valid = date.fromisoformat(day).isoformat() == day
+        except ValueError:
+            return None
+        if not valid:
+            return None
+        return number if transform == "fr-document-number" else day
     if transform in {"partition", "partition-value"}:
         if value is not None and scalar(value) is None:
             return None
@@ -436,7 +544,7 @@ def validate_navigation(specs):
             for recipe in [*target["guards"], *(g["sameAs"] for g in target["guards"] if "sameAs" in g), *(p for k in target["keys"] for p in k["parts"])]:
                 if recipe["from"] not in {"row", "element"} or not all(isinstance(p, str) for p in recipe["path"]):
                     raise ValueError("Invalid navigation field path")
-                if recipe.get("transform") not in {None, "lower", "bill-type", "nomination-citation", "partition", "partition-value", "senate-amendment", "hearing-congress", "vote-congress"}:
+                if recipe.get("transform") not in {None, "lower", "bill-type", "nomination-citation", "partition", "partition-value", "senate-amendment", "hearing-congress", "vote-congress", "native-boolean", "fr-document-number", "fr-publication-date", "canonical-date"}:
                     raise ValueError("Unknown navigation transform")
                 if "literal" in recipe and (not isinstance(recipe["literal"], str) or not 0 < len(recipe["literal"]) <= 4096 or recipe.get("transform")):
                     raise ValueError("Invalid navigation literal")

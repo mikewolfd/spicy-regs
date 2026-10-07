@@ -1027,6 +1027,10 @@ _PROCESSING_JOIN_FIELDS = {
 
 
 def _processing_join(join):
+    # Date evidence belongs to its dated_by namespace; bare ID equality would
+    # route Register and agenda IDs into Regulations.gov documents.
+    if join.child == "lifecycle_events" and join.parent == "documents":
+        return True
     # Main read scopes use the maintained native_legal_read recipe. Keep the
     # historical scalar baseline as lineage instead of publishing a second route.
     if join.child == 'native_legal_references' and join.parent == 'native_legal_reference_reads':
