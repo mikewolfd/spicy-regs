@@ -296,16 +296,20 @@ try:
                 raise ValueError('Native catalog has no qualified initialization receipt')
             if iceberg._read_pair_snapshot(con, rt) != snapshot:
                 raise RuntimeError('Selected pair changed before receipt recovery')
-            raw_receipts = stage / 'receipts.parquet'
-            regulatory_catalog._copy(con,
-                "SELECT * FROM " + regulatory_catalog.receipts_table() + " WHERE dataset='comments'",
-                raw_receipts, resources=ExportResources())
-            if pq.ParquetFile(raw_receipts).metadata.num_rows != 26418079:
+            # Stream the exact native selection into the maintained rebinder.
+            # Avoid COPY's raw intermediate and its second full disk pass.
+            # Row batches are targets; the owned process limit still bounds
+            # unusually wide rows and the native reader's allocations.
+            with con.execute(
+                "SELECT * FROM " + regulatory_catalog.receipts_table() + " WHERE dataset='comments'"
+            ).to_arrow_reader(batch_size=128) as reader:
+                regulatory_catalog.write_rows(
+                    (regulatory_catalog.rebind_receipt(row, generation_id=generation)
+                     for batch in reader for row in batch.to_pylist()),
+                    pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA,
+                    batch_size=128)
+            if pq.ParquetFile(pair / 'etl_receipts.parquet').metadata.num_rows != 26418079:
                 raise ValueError('Receipt recovery is not the complete selected population')
-            regulatory_catalog.write_rows(
-                (regulatory_catalog.rebind_receipt(row, generation_id=generation)
-                 for row in regulatory_catalog._rows(raw_receipts)),
-                pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA)
             for _ in regulatory_catalog.read_with_receipts(
                     [pair / 'comments.parquet'], [pair / 'etl_receipts.parquet'],
                     policy('comments'), generation_id=generation):
