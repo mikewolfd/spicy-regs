@@ -249,8 +249,8 @@ def test_published_at_names_what_was_observed(monkeypatch, instant, basis):
 def test_the_texts_say_inputs_are_what_the_producer_recorded(name):
     [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == name]
     text = " ".join((tool.description or "").split())  # a client reads the wrapped lines as one paragraph
-    assert "the parents its producer recorded (none recorded is not none; a read that bypassed the download helper is " \
-           "not recorded)" in text
+    assert "No recorded parents does not mean no inputs" in text
+    assert "reads bypassing the download helper are not recorded" in text
 
 
 # H1 (owner decision 2026-10-03, "refuse with the remedy" and "shrink replies"): rows are arrays under one column

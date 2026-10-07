@@ -2192,13 +2192,14 @@ def _tools() -> list[Tool]:
         compares loaded fields. publication pins rows and coverage;
         published_at is a pointer move, not a source read. last_object_write
         bounds that move from below.
-        inputs: the parents its producer recorded (none recorded is not none;
-        a read that bypassed the download helper is not recorded), built_from
-        beside live. input_table_current compares parent bytes;
-        inputs_current is false if any lags, else null if unknown.
+        inputs: recorded parents, with built_from beside live. No recorded
+        parents does not mean no inputs; reads bypassing the download helper
+        are not recorded. input_table_current compares parent bytes even if
+        its family moved for another table; inputs_current is false if any lag,
+        else null if unknown.
         prior_generation: earlier output; snapshot_inputs: rulemaking sources.
-        qualification compares live/audited pins, date and disposition for the
-        ledger's publisher. not_in_ledger means absent from its ledger, not unevidenced.
+        qualification compares live/audited pins, date and disposition.
+        not_in_ledger means absent from the publisher ledger, not unevidenced.
         joins gives outgoing/incoming declarations. detail=true adds outgoing
         measurements and ledger statements; incoming measurements link to the
         child, retaining baselines. incoming_parent names the parent;
@@ -2206,9 +2207,9 @@ def _tools() -> list[Tool]:
         appears per entry. Missing reason means empty; floor_pct, no measured
         floor; expected_cardinality, unspecified; measured_via, measure the child.
         detail=false: omissions in detail.omitted; receipt_fields names
-        read_receipt_fields inputs. Source fields inherit meanings; others use declarations or null.
+        read_receipt_fields inputs. Fields inherit source meanings or declarations.
         FEC release_compatibility is in publication (relationship if unavailable).
-        detail=false keeps pins, reasons, dependency generations and receipt count.
+        detail=false retains pins, reasons, generations and receipt count.
         pending_receipt_rows means row admission/output binding is deferred;
         matching pins do not establish execution.
         compatible means captured data, interpretation and consumer match
@@ -2327,9 +2328,9 @@ def _tools() -> list[Tool]:
         substring, lower() for case). Alias shared column names in joins. sql
         echoes the statement. publication gives each named table its live data
         version, pinned rows, published_at, coverage kind (a window or sample is
-        not the full history) and inputs: the parents its producer recorded
-        (none recorded is not none; a read that bypassed the download helper
-        is not recorded), as describe_table explains. Qualified-view pins keep
+        not the full history) and inputs: recorded parents. No recorded parents
+        does not mean no inputs; reads bypassing the download helper are not
+        recorded, as describe_table explains. Qualified-view pins keep
         the registered meaning and purpose limits even for SELECT value only;
         release compatible is not financial eligibility or current/net-money
         qualification. Call describe_table for full release evidence. Compare
