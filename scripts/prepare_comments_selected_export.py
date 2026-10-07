@@ -232,9 +232,11 @@ def assemble(pair: Path, output: Path):
     return result
 
 
-def export_v1(source_checkout: Path, pair: Path, *, retained_subject=None):
-    """Export in the historical interpreter; optionally reuse a checked subject."""
+def export_v1(source_checkout: Path, pair: Path, *, retained_subject=None, retained_receipts=None):
+    """Export in the historical interpreter; optionally admit checked retained bodies."""
     source_checkout, pair = Path(source_checkout).resolve(), Path(pair).resolve()
+    if retained_receipts is not None and retained_subject is None:
+        raise ValueError("Retained receipts require the matching retained subject")
     if (pair / "generation.json").exists():
         if not (pair / "export-complete.json").exists():
             raise ValueError("Earlier export lacks a sealed completion marker")
@@ -262,7 +264,8 @@ rt = RECORD_TYPES['comments']
 snapshot = iceberg.catalog_snapshot(rt)
 pair = Path(sys.argv[1])
 generation = 'catalog-comments-v1-' + str(snapshot.snapshot_id)
-held = json.loads(sys.argv[3]) if len(sys.argv) == 4 else None
+held = json.loads(sys.argv[3]) if len(sys.argv) >= 4 else None
+held_receipts = json.loads(sys.argv[4]) if len(sys.argv) == 5 else None
 if held is not None:
     if set(held) != {'path', 'sha256', 'byteSize', 'snapshot'} or held['snapshot'] != asdict(snapshot):
         raise ValueError('Retained subject does not name the exact selected pair')
@@ -275,6 +278,18 @@ if held is not None:
         raise ValueError('Retained subject bytes changed')
     if pq.ParquetFile(source).metadata.num_rows != 26418078:
         raise ValueError('Retained subject is not the full population')
+if held_receipts is not None:
+    if held is None or set(held_receipts) != {'path', 'sha256', 'byteSize', 'snapshot'} or held_receipts['snapshot'] != asdict(snapshot):
+        raise ValueError('Retained receipts do not name the exact selected pair')
+    receipt_source = Path(held_receipts['path'])
+    if not receipt_source.is_absolute() or receipt_source.is_symlink() or not receipt_source.is_file():
+        raise ValueError('Retained receipts must be an absolute regular file')
+    with receipt_source.open('rb') as original:
+        digest = hashlib.file_digest(original, 'sha256').hexdigest()
+    if digest != held_receipts['sha256'] or receipt_source.stat().st_size != held_receipts['byteSize']:
+        raise ValueError('Retained receipt bytes changed')
+    if pq.ParquetFile(receipt_source).metadata.num_rows != 26418079:
+        raise ValueError('Retained receipts are not the full population')
 con = iceberg._connect()
 try:
     if held is None and con.execute('SELECT count(*) FROM ' + regulatory_catalog.qualified(rt)).fetchone()[0] != 26418078:
@@ -300,19 +315,31 @@ try:
             # Avoid COPY's raw intermediate and its second full disk pass.
             # Row batches are targets; the owned process limit still bounds
             # unusually wide rows and the native reader's allocations.
-            with con.execute(
-                "SELECT * FROM " + regulatory_catalog.receipts_table() + " WHERE dataset='comments'"
-            ).to_arrow_reader(batch_size=128) as reader:
-                regulatory_catalog.write_rows(
-                    (regulatory_catalog.rebind_receipt(row, generation_id=generation)
-                     for batch in reader for row in batch.to_pylist()),
-                    pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA)
+            if held_receipts is not None:
+                os.link(receipt_source, pair / 'etl_receipts.parquet')
+            else:
+                with con.execute(
+                    "SELECT * FROM " + regulatory_catalog.receipts_table() + " WHERE dataset='comments'"
+                ).to_arrow_reader(batch_size=128) as reader:
+                    regulatory_catalog.write_rows(
+                        (regulatory_catalog.rebind_receipt(row, generation_id=generation)
+                         for batch in reader for row in batch.to_pylist()),
+                        pair / 'etl_receipts.parquet', regulatory_catalog.RECEIPT_SCHEMA)
             if pq.ParquetFile(pair / 'etl_receipts.parquet').metadata.num_rows != 26418079:
                 raise ValueError('Receipt recovery is not the complete selected population')
-            for _ in regulatory_catalog.read_with_receipts(
-                    [pair / 'comments.parquet'], [pair / 'etl_receipts.parquet'],
-                    policy('comments'), generation_id=generation):
-                pass
+            if held_receipts is not None:
+                from spicy_regs.etl_receipts import validate_receipt_bundle
+                # Complete admission is required; reconstructed processing rows
+                # are unused here. Keep only join fields in its temporary index.
+                validate_receipt_bundle(
+                    {'comments': [pair / 'comments.parquet']},
+                    [pair / 'etl_receipts.parquet'], [policy('comments')],
+                    generation_id=generation)
+            else:
+                for _ in regulatory_catalog.read_with_receipts(
+                        [pair / 'comments.parquet'], [pair / 'etl_receipts.parquet'],
+                        policy('comments'), generation_id=generation):
+                    pass
             if iceberg._read_pair_snapshot(con, rt) != snapshot:
                 raise RuntimeError('Selected pair changed during receipt recovery')
         (pair / 'generation.json').write_text(json.dumps({
@@ -335,6 +362,9 @@ for name in ('comments.parquet', 'etl_receipts.parquet'):
 if held is not None and members['comments.parquet'] != {
         'sha256': held['sha256'], 'byteSize': held['byteSize']}:
     raise ValueError('Retained subject changed during receipt recovery')
+if held_receipts is not None and members['etl_receipts.parquet'] != {
+        'sha256': held_receipts['sha256'], 'byteSize': held_receipts['byteSize']}:
+    raise ValueError('Retained receipts changed during admission')
 marker = Path(sys.argv[1]) / 'export-complete.json'
 temporary = marker.with_suffix('.tmp')
 with temporary.open('w') as output:
@@ -346,6 +376,8 @@ temporary.replace(marker)
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(source_checkout / "src")
     arguments = [] if retained_subject is None else [json.dumps(retained_subject)]
+    if retained_receipts is not None:
+        arguments.append(json.dumps(retained_receipts))
     subprocess.run([sys.executable, "-c", code, str(pair), V1_EXPORT_REVISION, *arguments], cwd=source_checkout,
                    env=environment, check=True)
 
