@@ -7,12 +7,13 @@ local main files only; receipt tables and acquisition are outside this adapter.
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import contextmanager
 from copy import deepcopy
 import hashlib
 import inspect
 import json
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from uuid import uuid4
 
 import duckdb
@@ -107,6 +108,14 @@ class MeasurementCache:
         self.max_projected_bytes = max_projected_bytes
         self.work = Counter()
 
+    @contextmanager
+    def _connection(self, *, preserve_order=False):
+        with TemporaryDirectory(prefix='measurement-spill-', dir=self.directory) as spill:
+            with duckdb.connect(config={'threads': 1, 'memory_limit': '256MiB',
+                                        'preserve_insertion_order': preserve_order,
+                                        'temp_directory': spill, 'max_temp_directory_size': '1GiB'}) as con:
+                yield con
+
     def _path(self, kind, dependency):
         return self.directory / (kind + '-' + digest(dependency).removeprefix('sha256:') + '.json')
 
@@ -197,7 +206,7 @@ class MeasurementCache:
                     raise ValueError('Projection exceeds explicit compressed-byte limit')
                 output = self._path('projection', dependency).with_suffix('.parquet')
                 temporary = output.with_suffix('.' + uuid4().hex + '.partial.parquet')
-                with duckdb.connect(config={'threads': 1, 'memory_limit': '256MiB'}) as con:
+                with self._connection(preserve_order=True) as con:
                     names = ','.join(quoted(c) for c in columns)
                     con.execute(f'COPY (SELECT {names} FROM read_parquet($input_file, hive_partitioning=false)) TO $output_file (FORMAT PARQUET)',
                                 {'input_file': item['path'], 'output_file': str(temporary)})
@@ -220,8 +229,8 @@ class MeasurementCache:
         paths = [p['artifact']['path'] for p in projections]
         names = ','.join(quoted(c) for c in columns)
         nonnull = ' AND '.join(quoted(c) + ' IS NOT NULL' for c in columns)
-        with duckdb.connect(config={'threads': 1, 'memory_limit': '256MiB'}) as con:
-            counts = con.execute(f'''WITH rows AS (SELECT {names} FROM read_parquet(?, hive_partitioning=false)),
+        with self._connection() as con:
+            counts = con.execute(f'''WITH rows AS NOT MATERIALIZED (SELECT {names} FROM read_parquet(?, hive_partitioning=false)),
               groups AS (SELECT {names},count(*) n FROM rows WHERE {nonnull} GROUP BY ALL)
               SELECT (SELECT count(*) FROM rows),(SELECT count(*) FROM rows WHERE {nonnull}),count(*),
               count(*) FILTER(WHERE n>1),coalesce(max(n),0) FROM groups''', [paths]).fetchone()
@@ -342,26 +351,42 @@ class MeasurementCache:
         cache_signatures = {p['artifact']['path']: p['artifact']['signature']
                             for p in [*source_projected, *target_projected, *source_artifacts, *target_artifacts]}
         source_files, target_files = [p['artifact']['path'] for p in source_artifacts], [p['artifact']['path'] for p in target_artifacts]
-        with duckdb.connect(config={'threads': 1, 'memory_limit': '256MiB'}) as con:
+        with self._connection() as con:
             union = ' UNION ALL '.join(
                 f"SELECT {literal(item['member']['path'])} AS physical_member,* FROM read_parquet({literal(path)}, hive_partitioning=false)"
                 for item, path in zip(source_admitted, source_files, strict=True))
             con.execute('CREATE TEMP VIEW refs AS ' + union)
             con.read_parquet(target_files, hive_partitioning=False).create_view('targets')
             con.execute('CREATE TEMP TABLE target_keys AS SELECT key_json,count(*) n FROM targets GROUP BY ALL')
-            counts = con.execute('''SELECT count(*) FILTER(WHERE r.key_json IS NOT NULL),
+            reference_counts = con.execute('''SELECT count(*) FILTER(WHERE r.key_json IS NOT NULL),
                 count(*) FILTER(WHERE t.n IS NOT NULL), count(*) FILTER(WHERE r.key_json IS NOT NULL AND t.n IS NULL),
-                count(*) FILTER(WHERE t.n>1), count(DISTINCT r.source_identity) FILTER(WHERE t.n IS NOT NULL),
-                count(DISTINCT r.source_identity) FILTER(WHERE r.key_json IS NOT NULL),
-                count(DISTINCT r.source_identity) FILTER(WHERE r.key_json IS NOT NULL AND t.n IS NULL),
-                count(DISTINCT r.source_identity) FILTER(WHERE t.n>1)
+                count(*) FILTER(WHERE t.n>1)
                 FROM refs r LEFT JOIN target_keys t USING(key_json)''').fetchone()
-            reverse = con.execute('''WITH sources AS (SELECT key_json,count(*) n,
-                count(DISTINCT source_identity) source_keys,
-                count(DISTINCT (physical_member,row_position)) source_rows FROM refs WHERE key_json IS NOT NULL GROUP BY ALL)
+            # GROUP BY can spill; multiple filtered COUNT(DISTINCT) aggregates
+            # retain independent hash sets and exceed the same memory budget.
+            identity_counts = con.execute('''WITH source_flags AS (
+                SELECT r.source_identity, bool_or(t.n IS NOT NULL) has_match,
+                    bool_or(r.key_json IS NOT NULL) has_eligible,
+                    bool_or(r.key_json IS NOT NULL AND t.n IS NULL) has_missing,
+                    bool_or(coalesce(t.n>1,false)) has_ambiguous
+                FROM refs r LEFT JOIN target_keys t USING(key_json)
+                WHERE r.source_identity IS NOT NULL GROUP BY r.source_identity)
+                SELECT count(*) FILTER(WHERE has_match),count(*) FILTER(WHERE has_eligible),
+                    count(*) FILTER(WHERE has_missing),count(*) FILTER(WHERE has_ambiguous) FROM source_flags''').fetchone()
+            counts = reference_counts + identity_counts if reference_counts is not None and identity_counts is not None else None
+            reverse = con.execute('''WITH source_identities AS (
+                SELECT key_json,source_identity FROM refs
+                WHERE key_json IS NOT NULL AND source_identity IS NOT NULL GROUP BY ALL),
+                identity_counts AS (SELECT key_json,count(*) source_keys FROM source_identities GROUP BY key_json),
+                physical_rows AS (SELECT key_json,physical_member,row_position FROM refs
+                    WHERE key_json IS NOT NULL GROUP BY ALL),
+                row_counts AS (SELECT key_json,count(*) source_rows FROM physical_rows GROUP BY key_json),
+                sources AS (SELECT key_json,count(*) n FROM refs WHERE key_json IS NOT NULL GROUP BY key_json)
                 SELECT coalesce(sum(t.n) FILTER(WHERE s.n IS NOT NULL),0),
                 coalesce(sum(t.n) FILTER(WHERE s.n IS NULL),0),coalesce(max(s.n),0),
-                coalesce(max(s.source_keys),0),coalesce(max(s.source_rows),0) FROM target_keys t LEFT JOIN sources s USING(key_json)''').fetchone()
+                coalesce(max(i.source_keys),0),coalesce(max(r.source_rows),0)
+                FROM target_keys t LEFT JOIN sources s USING(key_json)
+                LEFT JOIN identity_counts i USING(key_json) LEFT JOIN row_counts r USING(key_json)''').fetchone()
         if counts is None or reverse is None:
             raise ValueError('Relationship query returned no result')
         identity_qualified = bool(identity_population and not identity_population['nullKeyRows'] and not identity_population['duplicateKeys']
