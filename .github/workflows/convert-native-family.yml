@@ -108,9 +108,15 @@ jobs:
           set -euo pipefail
           mkdir -p output/logs
           WHEEL=$(uv run --frozen python -c 'from importlib.metadata import version; print(version("spicy-docs"))')
-          # Leave time for publication and artifact retention before the job deadline.
+          # A prepare-only Bill run needs original-row validation after its verified build.
+          # Evidence: https://github.com/mikewolfd/spicy-regs/actions/runs/37529267464
+          # Keep the six-hour job bound and artifact-retention room.
+          PREPARE_BUDGET=240m
+          if [ "$FAMILY" = bill-family ] && [ "$PUBLISH" = false ]; then
+            PREPARE_BUDGET=330m
+          fi
           /usr/bin/time -v -o output/logs/prepare-resources.txt \
-            timeout --signal=TERM --kill-after=30s 240m \
+            timeout --signal=TERM --kill-after=30s "$PREPARE_BUDGET" \
             uv run --frozen python scripts/convert_family_to_native.py "$FAMILY" \
               --allow "$FAMILY" --work "$GITHUB_WORKSPACE/output/native/$FAMILY" \
               --expect-main "$(git rev-parse HEAD)" --expect-spicy-docs "$WHEEL" --remote origin \
