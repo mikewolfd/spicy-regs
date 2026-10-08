@@ -60,6 +60,7 @@ class _RemoteGenerationSource:
         self.local = LocalMemberSource(directory)
         self.remote = _S3Members(client, bucket, staging_prefix)
         self.members = _member_map(staging_prefix, members)
+        self.observed_tables = {}
 
     def keys(self):
         """List all local and staged keys; a local/remote collision is refused so undeclared staging fails admission."""
@@ -92,7 +93,9 @@ class _RemoteGenerationSource:
             rows = sum(batch.num_rows for batch in parquet.iter_batches(batch_size=64, use_threads=False))
             if rows != parquet.metadata.num_rows:
                 raise ValueError(f"Parquet body/footer row mismatch: {key}")
-        return {"columns": [[row[0], row[1]] for row in columns], "rows": rows}
+        observed = {"columns": [[row[0], row[1]] for row in columns], "rows": rows}
+        self.observed_tables[key] = observed
+        return observed
 
 
 class _PublicGenerationSource(_RemoteGenerationSource):
@@ -108,6 +111,7 @@ class _PublicGenerationSource(_RemoteGenerationSource):
         self.local = LocalMemberSource(directory)
         self.base_url = base_url.rstrip("/")
         self.members = _member_map(prefix, members)
+        self.observed_tables = {}
 
     def keys(self):
         local = set(self.local.keys())
@@ -127,7 +131,7 @@ class _PublicGenerationSource(_RemoteGenerationSource):
                 yield stream
 
 
-def verify_public_generation(base_url, index, family, directory, *, bounded_receipts=False):
+def verify_public_generation(base_url, index, family, directory, *, bounded_receipts=False, observations=None):
     """Fully admit actual anonymous generation bytes while retaining only metadata locally."""
     from rulespec_artifacts import ArtifactPin, parse_admitted_json, sha256_digest, validate_object_key
     from spicy_regs.sources import publication, r2
@@ -157,14 +161,20 @@ def verify_public_generation(base_url, index, family, directory, *, bounded_rece
             members.append(StoredParquet(remote_key, member["byteSize"], member["sha256"],
                                          version["etag"], member["recordCount"]))
     source = _PublicGenerationSource(directory, base_url, entry["prefix"], members)
-    return _verify_remote(source, expected_pin=ArtifactPin(entry["logicalId"], entry["artifactDigest"]),
-                          bounded_receipts=bounded_receipts)
+    outcomes = {} if observations is not None else None
+    artifact = _verify_remote(source, expected_pin=ArtifactPin(entry["logicalId"], entry["artifactDigest"]),
+                              bounded_receipts=bounded_receipts, outcomes=outcomes)
+    if observations is not None:
+        observations.update(tables=source.observed_tables, outcomes=outcomes)
+    return artifact
 
 
-def _verify_remote(source, *, expected_pin=None, bounded_receipts=False):
+def _verify_remote(source, *, expected_pin=None, bounded_receipts=False, outcomes=None):
     """Admit the artifact, then require staged receipts to equal independently verified bytes."""
     from rulespec_artifacts import iter_member_descriptors
 
+    if outcomes is not None and not bounded_receipts:
+        raise ValueError("Outcome evidence requires the bounded complete receipt admission")
     if not bounded_receipts:
         artifact = verify_generation_source(source, source.table_info, expected_pin=expected_pin)
     else:
@@ -172,8 +182,13 @@ def _verify_remote(source, *, expected_pin=None, bounded_receipts=False):
         from spicy_regs.etl_bulk import _validated_bundle
         def admit_receipts(subjects, receipts, policies, *, generation_id):
             with _validated_bundle(subjects, receipts, policies, generation_id=generation_id,
-                                   threads=1, memory_limit="8GB", bounded_insert=True):
-                pass
+                                   threads=1, memory_limit="8GB", bounded_insert=True) as con:
+                if outcomes is not None:
+                    from spicy_regs.etl_receipts import OUTCOMES
+                    # Reuse the already admitted receipt table; never reread remote bodies for counts.
+                    counts = {name: 0 for name in sorted(OUTCOMES)}
+                    counts.update(con.execute("SELECT outcome, count(*) FROM receipts GROUP BY outcome").fetchall())
+                    outcomes.update(counts)
         artifact = _verify_generation_source(source, source.table_info, expected_pin=expected_pin,
                                              admit_receipts=admit_receipts)
     expected = set(artifact.root["spec"]["tables"])

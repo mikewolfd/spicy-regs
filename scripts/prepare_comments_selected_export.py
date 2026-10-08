@@ -434,15 +434,17 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA
     from spicy_regs.pipelines.comments_generation import stage_comments_remote
     from spicy_regs.pipelines.comments_mirror import _check_prepared_snapshot
+    from spicy_regs.public_url import resolve_r2_base_url
 
     output = Path(output)
     if output.exists() and any(output.iterdir()):
         raise FileExistsError("Partial remote preparation requires explicit recovery; refusing rebuild")
     output.mkdir(parents=True, exist_ok=True)
+    base_url = resolve_r2_base_url()
     record = {"format": "comments-remote-preparation/1", "status": "staging-unpublished",
-              "bucket": bucket, "stagingPrefix": staging_prefix,
+              "bucket": bucket, "stagingPrefix": staging_prefix, "baseUrl": base_url,
               "source": asdict(captured_snapshot), "published": False,
-              "priorIndex": publication.current_index(os.environ.get("R2_PUBLIC_URL", "https://data.spicygov.ai"))}
+              "priorIndex": publication.current_index(base_url)}
     result_path = output / "comments-remote-preparation.json"
 
     def save():
@@ -457,8 +459,7 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
             subject, receipt, index, predecessor = stage_comments_remote(
                 records, current, failures=failures, generation_id=generation_id, snapshot=snapshot,
                 output_dir=output, client=client, bucket=bucket, staging_prefix=staging_prefix,
-                max_bytes=max_bytes, previous_url=os.environ.get("R2_PUBLIC_URL", "https://data.spicygov.ai").rstrip("/")
-                + "/comments.parquet")
+                max_bytes=max_bytes, previous_url=base_url + "/comments.parquet")
             holder.update(subject=subject, receipt=receipt, index=index)
             record.update(status="remote-members-written-unpublished",
                           members=[asdict(member) for member in (subject, receipt, index)],

@@ -62,3 +62,9 @@ still need local scratch. Arrow batches, simultaneous upload buffers and Parquet
 footer metadata still use memory. This route removes complete local output and
 publication/readback copies; it does not establish a final resource peak or change
 the operational reserve, storage, memory or elapsed-time stop limits.
+The existing Navigation measurement cache still needs one genuine final
+Comments main file. Its single receiver uses the completed public member's
+actual size and digest; it runs after remote admission scratch closes and only
+when that copy fits above the existing reserve. Cache and route checks reuse
+that same file. No local full-generation directory or completed export seal is
+invented for this handoff.

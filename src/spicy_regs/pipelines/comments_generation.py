@@ -121,7 +121,9 @@ def publish_prepared_comments_remote(output_dir, *, client, bucket, reader, snap
     if {Path(member.key).name for member in members} != {
             "comments.parquet", "comments_index.parquet", "etl_receipts.parquet"}:
         raise ValueError("Remote Comments membership differs")
-    base = resolve_r2_base_url()
+    base = record["baseUrl"]
+    if base != resolve_r2_base_url():
+        raise ValueError("Remote preparation names a different public data authority")
 
     def guard():
         if prepared() != record:
