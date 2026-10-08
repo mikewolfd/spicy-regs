@@ -71,7 +71,7 @@ class NotBulkEligible(Exception):
 
 
 @dataclass(frozen=True)
-class RetainedScan:
+class _RetainedScan:
     """Custody-bound completed inserts; all remaining admission checks still run."""
 
     database: Path
@@ -82,6 +82,90 @@ class RetainedScan:
     subject_rows: int
     receipt_rows: int
     insert_sql_sha256: str
+
+
+def _retained_source15_scan(evidence, subject_paths, receipt_paths, earlier, generation_id):
+    """Qualify only the closed source15 inserts, without asserting admission."""
+    from spicy_regs.local_data import file_signature
+
+    path, expected_sha256 = evidence
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise ValueError("Retained scan evidence requires an absolute regular file")
+
+    def read_pin(pin):
+        member = Path(pin["path"])
+        before = file_signature(member)
+        if sha256(member.read_bytes()).hexdigest() != pin["sha256"]:
+            raise ValueError("Retained scan evidence changed")
+        value = json.loads(member.read_text())
+        if file_signature(member) != before:
+            raise ValueError("Retained scan evidence changed during verification")
+        return value
+
+    proof = read_pin({"path": str(path), "sha256": expected_sha256})
+    if proof["format"] != "comments-retained-source15-scan/1":
+        raise ValueError("Expected the explicit source15 scan recovery")
+    fixed = {
+        "terminal": "8d0747061c6be820ff2f9b20778416ab2ae14070854aefbe32dd7b55a486f719",
+        "launch": "adb06786c772078ba5abac27f961d85c134f8d4c79f58af101d2d0edce24783c",
+        "assessment": "3b24d33cee6ee3f05960b39846382d6c7d64e2a896aa830964cbc2010a2d8832",
+        "compatibility": "274428e79632cad55e6d48611d3a8a6ea96267dc57dddbaee40d85e66e59f999",
+    }
+    if any(proof[key]["sha256"] != digest for key, digest in fixed.items()):
+        raise ValueError("Retained scan must use the exact closed source15 evidence")
+    terminal, launch, assessment = (read_pin(proof[key]) for key in ("terminal", "launch", "assessment"))
+    compatibility = read_pin(proof["compatibility"])
+    if launch["capturedInput"]["sha256"] != "9d2195a26c197da500cbf003a442febb0cb9806d91301b2cd2676d7e67c06b1d":
+        raise ValueError("Retained source15 capture descriptor differs")
+    old_capture = read_pin(launch["capturedInput"])
+    revision = "3da6088cbad6e89944047dfb6d9bb4c3cf3a26a3"
+    expected_inputs = {Path(member["path"]) for member in old_capture["members"].values()}
+    if (set((*subject_paths, *receipt_paths)) != expected_inputs
+            or old_capture["metadata"]["generation_id"] != generation_id
+            or old_capture["metadata"]["policy"] != earlier.descriptor()
+            or old_capture["validationRevision"] != revision
+            or launch["source"]["checkout"] != revision or launch["source"]["main"] != revision
+            or launch["source"]["uncommitted"] or launch["source"]["untracked"]
+            or launch["helperSha256"] != "0997b0ffe84ed7e7574b783c6a2f21c174a2cdb117bbe03517c32e509f73a5f2"
+            or launch["bulkSha256"] != "90ac01c016325c41b9947bd11982d0d184732b27d61f32d961e8e7b543b265a6"
+            or terminal["freshLaunchProofSha256"] != proof["launch"]["sha256"]
+            or terminal["status"] != "FAILED_PRIVATE_COMMENTS_PREPARATION_SUPERVISION"
+            or terminal["exitCode"] != -15 or terminal["resourceBreach"] != "host disk reserve"
+            or terminal["remainingLiveOwnedProcesses"] != [] or any(terminal["ownedGroups"].values())
+            or terminal["processClosureError"] or terminal["supervisionError"]
+            or terminal["cleanupInspectionErrors"] or terminal["published"] is not False
+            or assessment["status"] != "STOPPED_SOURCE15_METADATA_AND_RECOVERY_ASSESSMENT"
+            or assessment["databaseSignaturesBefore"] != assessment["databaseSignaturesAfter"]
+            or compatibility["source15"] != revision
+            or compatibility["source15BulkSha256"] != launch["bulkSha256"]
+            or compatibility["insertSqlSha256"] != proof["insertSqlSha256"]
+            or compatibility["policy"] != earlier.descriptor()
+            or proof["insertSqlSha256"] != insert_sql_sha256(earlier)):
+        raise ValueError("Source15 scan, closure, inputs or compatible SQL differ")
+    database_states = {}
+    for held in assessment["databaseSignaturesAfter"]:
+        member = Path(held["path"])
+        expected = [held[key] for key in ("device", "inode", "byteSize", "mtimeNs", "ctimeNs")]
+        if file_signature(member) != expected:
+            raise ValueError("Retained source15 database custody changed")
+        database_states[member] = expected
+    database = next(member for member in database_states if member.name == "work.duckdb")
+    ordinals = database.parent / "unproven-subjects.parquet"
+    held = next(value for value in assessment["files"].values() if value["path"] == str(ordinals))
+    ordinal_state = [held[key] for key in ("device", "inode", "byteSize", "mtimeNs", "ctimeNs")]
+    with pq.ParquetFile(ordinals) as source:
+        reference_rows = source.metadata.num_rows
+    if (file_signature(ordinals) != ordinal_state
+            or reference_rows != 295
+            or assessment["databaseReadOnlyMetadata"]["tables"] != ["receipts", "subjects"]
+            or assessment["databaseReadOnlyMetadata"]["rowCountsFromStorageMetadata"]["receipts"]["sumSegmentRows"] != 26_418_079
+            or assessment["databaseReadOnlyMetadata"]["rowCountsFromStorageMetadata"]["subjects"]["sumSegmentRows"] != 26_418_373):
+        raise ValueError("Retained source15 completed inserts differ")
+    inputs = {Path(old_capture["members"][name]["path"]):
+              [state[key] for key in ("device", "inode", "byteSize", "mtimeNs", "ctimeNs")]
+              for name, state in ((name, member["custody"]) for name, member in old_capture["members"].items())}
+    return _RetainedScan(database, database_states, inputs, ordinals, ordinal_state,
+                        26_418_078, 26_418_079, proof["insertSqlSha256"])
 
 
 def insert_sql_sha256(policy):
@@ -609,7 +693,7 @@ def _check_retained_scan(con, scan, subjects, receipt_paths, policy, generation_
             if file_signature(path) != expected:
                 raise ValueError("Retained scan custody changed")
 
-    if (not isinstance(scan, RetainedScan) or policy.receipt_only
+    if (not isinstance(scan, _RetainedScan) or policy.receipt_only
             or len(subjects[policy.dataset]) != 1 or len(receipt_paths) != 1
             or set(scan.input_states) != set((*subjects[policy.dataset], *receipt_paths))
             or set(scan.database_states) != {scan.database, Path(str(scan.database) + ".wal")}
@@ -720,15 +804,35 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
             else:
                 if len(registered) != 1 or scoped or retain_processing or not bounded_insert:
                     raise ValueError("Retained scans require one ordinal-processing selection")
-                _check_retained_scan(con, retained_scan, subjects, receipt_paths,
-                                     next(iter(registered.values())), generation_id)
+                held_policy = next(iter(registered.values()))
+                retained_scan = _retained_source15_scan(retained_scan, subjects[held_policy.dataset],
+                                                        receipt_paths, held_policy, generation_id)
+                _check_retained_scan(con, retained_scan, subjects, receipt_paths, held_policy, generation_id)
         except duckdb.Error as error:
             raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error
-        yield con
+        try:
+            yield con
+        finally:
+            if retained_scan is not None:
+                from spicy_regs.local_data import file_signature
+                if any(file_signature(path) != state for path, state in retained_scan.database_states.items()):
+                    raise ValueError("Retained scan database custody changed during replay")
 
 
-def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False,
-                       retained_scan=None):
+def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False):
+    """Public reads always perform complete admission of the original inputs."""
+    yield from _read_with_receipts(subject_paths, receipt_paths, policy, generation_id=generation_id,
+                                  processing_by_ordinal=processing_by_ordinal)
+
+
+def _read_retained_source15(subject_paths, receipt_paths, policy, *, generation_id, evidence):
+    """Helper-only continuation; private admission verifies every pinned reuse proof."""
+    yield from _read_with_receipts(subject_paths, receipt_paths, policy, generation_id=generation_id,
+                                  processing_by_ordinal=True, retained_scan=evidence)
+
+
+def _read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False,
+                        retained_scan=None):
     """Replay completely admitted subjects in source order, with the exact stored processing JSON.
 
     Admission uses the same SQL checks and row-reference fallbacks as validate_bundle.
@@ -752,9 +856,6 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
         subject_paths = tuple(path.absolute() for path in subject_paths)
         receipt_paths = tuple(path.absolute() for path in receipt_paths)
         states = {path: file_signature(path) for path in (*subject_paths, *receipt_paths)}
-        if retained_scan is not None:
-            states.update(retained_scan.database_states)
-            states[retained_scan.unproven_subjects] = retained_scan.ordinal_state
 
     def check_sources():
         if not states:
