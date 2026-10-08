@@ -1,5 +1,31 @@
 # Capture original selected comments
 
+`prepare_comments_selected_export.prepare` keeps the original selected input
+pair and its byte pins. Its output receipts identify that pair and the original
+receipt, identify the output row and processor, and retain actual outcomes and
+diagnostics. They omit embedded source/conversion records and copied processing
+history. Promoted reference and extraction facts stay in the comments table.
+Both local and remote preparation use this same receipt shape.
+
+The original pair is the input table for replay; preserve it. The smaller output
+receipts are audit links, not a replacement input table. Exact-input readers
+such as `materialize_internal` still require the original selected receipts and
+refuse output receipts without a retained input. Querying comments,
+building the index, and complete subject/receipt admission use the native
+subject and its identity/version and do not require those embedded records.
+
+Future catalog writes retain one `raw_source_record` and file metadata because
+catalog replay and incremental processing actually consume that input. Both
+bulk and row readers use the maintained catalog normalizer for flat inputs or
+the same Regulations.gov projection for API inputs, and check that it reproduces
+the selected subject. They also read historical
+`raw_conversion_inputs`. New writes omit the second normalized copy and do not
+inherit earlier input payloads into diagnostics. When rebinding older receipts,
+the normalized copy is removed only after exact per-row equality proves it can
+be reproduced from the original; an unproven custom conversion remains explicit.
+Retirement receipts keep the actual retirement reason and predecessor identity
+without embedding another copy of the input history.
+
 Install `uv sync --frozen --extra comments-reader`, then use
 `uv run --frozen --extra comments-reader python -m scripts.capture_comments_current
 EXPECTED.json OUTPUT --namespace default --expected-runtime RUNTIME.json`. `EXPECTED.json` selects the complete nullable
