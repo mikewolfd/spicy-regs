@@ -23,9 +23,9 @@ import duckdb
 import pyarrow.parquet as pq
 
 from spicy_regs.duckdb_settings import ExportResources
-from spicy_regs.etl_bulk import _read_retained_source15, read_with_receipts
+from spicy_regs.etl_bulk import _read_promotion_rows
 from spicy_regs.etl_receipts import (
-    ReceiptContext, _rows, rebind_receipt,
+    ReceiptContext, _rows, inherit_receipt, rebind_receipt,
     selected_subject_policy, validate_receipt_bundle, write_dataset,
 )
 from spicy_regs.transforms.regulations_receipts import policy
@@ -215,7 +215,7 @@ Path(sys.argv[1]).write_text(json.dumps(result))
 
 
 def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None,
-            retained_scan=None, retained_scan_sha256=None):
+            retained_scan=None, retained_scan_sha256=None, native_only=False):
     """Keep the complete earlier pair and derive declared current subjects once."""
     pair, destination = Path(pair), Path(destination)
     sealed = (verify_original(pair) if captured_input is None else
@@ -229,6 +229,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
     if (earlier.policy_version != "regulations-native-v1"
             or current.policy_version != "regulations-native-v2"):
         raise ValueError("Expected exact declared earlier/current comments policies")
+    if native_only and (earlier.dataset != current.dataset or earlier.identity_fields != current.identity_fields
+            or earlier.nullable_identity_fields != current.nullable_identity_fields
+            or any(earlier.subject_schema.field(key) != current.subject_schema.field(key)
+                   for key in current.identity_fields)):
+        raise ValueError("Streaming history promotion requires unchanged subject identity fields")
     revision_field = "exportRevision" if captured_input is None else "captureRevision"
     if metadata.get("policy") != earlier.descriptor() or metadata.get(revision_field) != V1_EXPORT_REVISION:
         raise ValueError("Earlier export authority differs from the shipped historical policy")
@@ -254,11 +259,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         nonlocal count
         # Preserve the bulk failure and its cause instead of silently starting
         # a full-payload SQLite copy for this complete selected population.
-        rows = (_read_retained_source15([subjects], [receipts], earlier,
-                                       generation_id=metadata["generation_id"], evidence=scan)
-                if scan is not None else read_with_receipts([subjects], [receipts], earlier,
-                    generation_id=metadata["generation_id"], processing_by_ordinal=True))
-        for row in rows:
+        rows = _read_promotion_rows([subjects], [receipts], earlier,
+                                   generation_id=metadata["generation_id"], evidence=scan,
+                                   include_prior=native_only)
+        for item in rows:
+            row, prior = item if native_only else (item, None)
             # Promote the retained values directly. The earlier mapper remains
             # the authority for its normalized subject and its original record.
             for name in FIELDS:
@@ -274,6 +279,8 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
                   "locator": json.dumps(metadata["snapshot"], sort_keys=True),
                   "body_version": metadata["generation_id"]}],
             )
+            if native_only:
+                context = inherit_receipt(context, prior)
             yield row, context
             count += 1
 
@@ -303,11 +310,12 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
             records(), staged, current, batch_size=128,
             failures=(rebind_receipt(row, generation_id=generation) for row in _rows(attempts)),
         )
-        inherited = Path(temporary) / "inherited.parquet"
-        inherit_current_receipts(receipt, [receipts], inherited,
-                                 inherit_observations=False, require_unique_prior=True)
-        inherited.replace(receipt)
-        validate_receipt_bundle({"comments": [subject]}, [receipt], [current], generation_id=generation)
+        if not native_only:
+            inherited = Path(temporary) / "inherited.parquet"
+            inherit_current_receipts(receipt, [receipts], inherited,
+                                     inherit_observations=False, require_unique_prior=True)
+            inherited.replace(receipt)
+            validate_receipt_bundle({"comments": [subject]}, [receipt], [current], generation_id=generation)
         if captured_input is not None:
             _captured_descriptor(captured_input, captured_input_sha256)
             # Reuse byte identities verified at entry only while custody stays
@@ -345,19 +353,49 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
 
 
 def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sha256=None,
-             retained_scan=None, retained_scan_sha256=None):
+             retained_scan=None, retained_scan_sha256=None, native_only=False):
     """Use existing agency writers and index builder on the one derived artifact."""
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
-    from spicy_regs.transforms.partition_comments import (
-        assemble_comments, sort_comment_agencies, stage_comment_agencies,
-    )
     output = Path(output)
     subject, receipts, evidence = prepare(pair, output / ".catalog-pairs" / "comments",
                                          captured_input=captured_input,
                                          captured_input_sha256=captured_input_sha256,
-                                         retained_scan=retained_scan, retained_scan_sha256=retained_scan_sha256)
+                                         retained_scan=retained_scan, retained_scan_sha256=retained_scan_sha256,
+                                         native_only=native_only)
     resources = ExportResources()
+    if native_only:
+        # The native generation publishes the monolith and index. Keep one
+        # subject body; canonical preparation paths remain unchanged.
+        monolith = output / "comments.parquet"
+        os.link(subject, monolith)
+        partitions = output / "comments" / "agency"
+        with TemporaryDirectory(prefix="comments-native-index-", dir=output) as temporary, duckdb.connect() as con:
+            resources.configure(con, Path(temporary) / "spill")
+            con.from_parquet(str(monolith)).create_view("comments_export")
+            index = _build_comments_index(con, RECORD_TYPES["comments"], output,
+                                         source_sql="SELECT * FROM comments_export")
+    else:
+        monolith, index, partitions = _assemble_legacy(subject, output, resources)
+    result = {"comments": monolith, "index": index, "partitions": partitions,
+              "receipts": receipts, "generation": subject.parent / "generation.json"}
+    members = [monolith, index, receipts, result["generation"],
+               *sorted(partitions.glob("agency_code=*/part-0.parquet"))]
+    manifest = {"format": "comments-prepared-export/1", "source": evidence["snapshot"],
+                "derivation": evidence, "members": {
+                    path.relative_to(output).as_posix(): identity(path) for path in members}}
+    if native_only:
+        manifest["purpose"] = "native-generation"
+    result["manifest"] = output / "comments-prepared-export.json"
+    result["manifest"].write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def _assemble_legacy(subject, output, resources):
+    from spicy_regs.sources.iceberg import _build_comments_index
+    from spicy_regs.schemas.regulations import RECORD_TYPES
+    from spicy_regs.transforms.partition_comments import assemble_comments, sort_comment_agencies, stage_comment_agencies
+
     with TemporaryDirectory(prefix="comments-derived-sort-", dir=output) as temporary:
         temporary = Path(temporary)
         with duckdb.connect() as con:
@@ -373,16 +411,7 @@ def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sh
             con.from_parquet(str(monolith)).create_view("comments_export")
             index = _build_comments_index(con, RECORD_TYPES["comments"], output,
                                          source_sql="SELECT * FROM comments_export")
-    result = {"comments": monolith, "index": index, "partitions": partitions,
-              "receipts": receipts, "generation": subject.parent / "generation.json"}
-    members = [monolith, index, receipts, result["generation"],
-               *sorted(partitions.glob("agency_code=*/part-0.parquet"))]
-    manifest = {"format": "comments-prepared-export/1", "source": evidence["snapshot"],
-                "derivation": evidence, "members": {
-                    path.relative_to(output).as_posix(): identity(path) for path in members}}
-    result["manifest"] = output / "comments-prepared-export.json"
-    result["manifest"].write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    return result
+    return monolith, index, partitions
 
 
 def export_v1(source_checkout: Path, pair: Path, *, retained_subject=None, retained_receipts=None):
@@ -561,7 +590,10 @@ def main():
     parser.add_argument("--captured-input-sha256", help="Exact digest of that captured input descriptor")
     parser.add_argument("--retained-scan", type=Path, help="Exact closed source15 scan recovery evidence")
     parser.add_argument("--retained-scan-sha256", help="Exact digest of the retained scan evidence")
+    parser.add_argument("--native-only", action="store_true", help="Prepare only immutable native publication members")
     args = parser.parse_args()
+    if args.native_only and args.publish:
+        raise ValueError("Native-only preparation cannot publish the legacy mirrors")
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
@@ -624,7 +656,8 @@ def main():
                   "manifest": manifest_path}
         captured_snapshot = _pair_snapshot(sealed["metadata"]["snapshot"])
         observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
-        _validate_prepared_export(args.output, result, captured_snapshot)
+        if _validate_prepared_export(args.output, result, captured_snapshot) != args.native_only:
+            raise ValueError("Prepared output purpose differs from the requested operation")
     else:
         if args.output.exists() and any(args.output.iterdir()):
             raise FileExistsError("Partial prepared output requires explicit recovery; refusing rebuild")
@@ -636,7 +669,8 @@ def main():
             observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
         result = assemble(args.original_pair, args.output, captured_input=args.captured_input,
                           captured_input_sha256=args.captured_input_sha256,
-                          retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256)
+                          retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256,
+                          native_only=args.native_only)
         if args.captured_input is not None:
             manifest = json.loads(manifest_path.read_text())
             if manifest["source"] != asdict(captured_snapshot):
