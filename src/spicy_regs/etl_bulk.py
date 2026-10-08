@@ -67,7 +67,7 @@ class NotBulkEligible(Exception):
 
 
 @contextmanager
-def bulk_connection(directory: Path | None = None):
+def bulk_connection(directory: Path | None = None, *, threads: int = 4):
     """A private disk-backed DuckDB with bounded CPU, RAM and spill.
 
     Each operation owns its files. A second statement must never run while a
@@ -76,7 +76,7 @@ def bulk_connection(directory: Path | None = None):
     with TemporaryDirectory(prefix="etl-bulk-", dir=directory) as temp:
         root = Path(temp)
         with closing(duckdb.connect(str(root / "work.duckdb"), config={
-            "threads": 4, "memory_limit": "4GB", "max_temp_directory_size": "32GB",
+            "threads": threads, "memory_limit": "4GB", "max_temp_directory_size": "32GB",
             "temp_directory": str(root / "spill"),
         })) as con, bounded_connection(con):
             yield con, root
@@ -564,7 +564,8 @@ def validate_bundle(
 
 
 @contextmanager
-def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False):
+def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False,
+                      threads=4):
     """Keep the maintained admission tables alive for replay only after complete admission."""
     registered = _bundle_policies(subjects, receipt_paths, policies)
     if scoped and len(registered) > 1:
@@ -577,7 +578,7 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
                 _subject_insert_sql(policy, "n")
     except NotImplementedError as error:
         raise NotBulkEligible(str(error)) from error
-    with bulk_connection() as (con, temp):
+    with bulk_connection(threads=threads) as (con, temp):
         try:
             con.execute("SET preserve_insertion_order = false")
             _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped,
@@ -621,6 +622,8 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
     with _validated_bundle(
         {policy.dataset: subject_paths}, receipt_paths, [policy],
         generation_id=generation_id, retain_processing=not processing_by_ordinal,
+        # Wide receipt validation exhausted the 4GB budget with four concurrent threads.
+        threads=1 if processing_by_ordinal else 4,
     ) as con, ExitStack() as files:
         check_sources()
         processing_rows = None
