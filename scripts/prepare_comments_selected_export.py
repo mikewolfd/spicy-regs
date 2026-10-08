@@ -274,10 +274,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         with duckdb.connect() as con:
             ExportResources().configure(con, Path(temporary) / "spill")
             con.execute(
-                "COPY (SELECT * EXCLUDE(file_row_number) FROM read_parquet(?, "
+                "COPY (SELECT * EXCLUDE(file_row_number) FROM read_parquet($receipts, "
                 "file_row_number=true, hive_partitioning=false) "
                 "WHERE outcome<>'accepted' ORDER BY file_row_number) "
-                "TO ? (FORMAT PARQUET, COMPRESSION ZSTD)", [str(receipts), str(attempts)],
+                "TO $attempts (FORMAT PARQUET, COMPRESSION ZSTD)",
+                {"receipts": str(receipts), "attempts": str(attempts)},
             )
         # Keep fresh output private until full-history inheritance and admission
         # complete. The maintained ordinal lookup avoids a whole-payload SQLite
