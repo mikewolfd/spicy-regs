@@ -96,6 +96,25 @@ def test_a_remote_input_that_changes_during_the_build_is_refused(tmp_path, monke
     assert remote.objects == before
 
 
+def test_a_managed_input_that_changes_during_the_build_is_refused(tmp_path, monkeypatch, remote):
+    _Base(output_dir=tmp_path / "base", skip_upload=False).run()
+    snapshot = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])
+    _serve(monkeypatch, remote, [{"etag": '"v1"', "bytes": 10}, {"etag": '"v1"', "bytes": 10}])
+    build = _Derived.build
+
+    def change_parent(self, output_dir):
+        result = build(self, output_dir)
+        _Base(output_dir=tmp_path / "new-base", skip_upload=False).run()
+        return result
+
+    monkeypatch.setattr(_Derived, "build", change_parent)
+    with pytest.raises(pub.PublicationError, match="Managed parent changed"):
+        _Derived(output_dir=tmp_path / "derived", skip_upload=False).run()
+    current = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])
+    assert current["families"]["base"] != snapshot["families"]["base"]
+    assert "derived" not in current["families"]
+
+
 @pytest.mark.parametrize("parent", [
     {"sha256": "sha256:" + "0" * 64, "byteSize": 1, "family": "base", "artifactDigest": "sha256:" + "1" * 64},
     {"sha256": "sha256:" + "0" * 64, "byteSize": 1, "family": "base"},

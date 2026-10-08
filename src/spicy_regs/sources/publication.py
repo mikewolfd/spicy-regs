@@ -216,6 +216,40 @@ def table_entries(tables: Mapping, members) -> dict[str, dict]:
     return entries
 
 
+def generation_entry(artifact, members) -> dict:
+    """Describe a verified generation using its admitted member descriptors.
+
+    Publication and read-only recovery use the same immutable family fields;
+    only a successful pointer write adds ``publishedAt``.
+    """
+    from spicy_regs.subject_catalog import shared_receipt_logs
+
+    spec = artifact.root["spec"]
+    members = list(members)
+    try:
+        tables = (table_entries(spec["tables"],
+                                [m for m in members if m.object_key not in {"etl_receipts.parquet", "etl_receipts.keys.parquet"}])
+                  if spec["tables"] else {})
+    except ValueError as exc:
+        raise PublicationError(str(exc)) from exc
+    entry = {
+        "prefix": f"generations/{spec['family']}/{artifact.pin.artifact_digest.removeprefix('sha256:')}",
+        "logicalId": artifact.pin.logical_id,
+        "artifactDigest": artifact.pin.artifact_digest,
+        "tables": tables,
+    }
+    if "etlReceipts" in spec:
+        declared = spec["etlReceipts"]
+        receipt = next(m for m in members if m.object_key == "etl_receipts.parquet")
+        entry["etlReceipts"] = {
+            "key": receipt.object_key, "sha256": receipt.sha256, "byteSize": receipt.byte_size,
+            "rows": receipt.record_count, "columns": declared["columns"], "generationId": declared["generationId"],
+            "datasets": [p["dataset"] for p in declared["policies"] if p["dataset"] not in shared_receipt_logs()],
+            **({"keyIndex": declared["keyIndex"]} if "keyIndex" in declared else {}),
+        }
+    return entry
+
+
 def parse_index(raw: bytes) -> dict:
     """Validate the small mutable pointer without claiming payload verification.
 
@@ -1104,6 +1138,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     moved by another family's writer is reread and this family's entry merged
     onto it, which equals a first attempt made a moment later; a change to this
     family or its tables refuses as stale and never overwrites the other writer.
+    Managed parents must also remain current on every pointer attempt.
     Input provenance and semantic quality are separate checks.
     ``exact_prior`` also holds the captured publication timestamp unchanged on every pointer retry.
     ``conversion_proof`` replaces the byte-size heuristic only for original tables
@@ -1144,15 +1179,11 @@ def _publish_verified_generation(
     index, etag, bootstrap = _stored_index(client, bucket)
     exact_prior = exact_prior or conversion_proof is not None
     _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
+    _assert_parents_current(index, artifact.root["spec"].get("parents", {}))
     converted = _conversion_tables(conversion_proof, artifact, index["families"].get(family))
-    prefix = f"generations/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     members = list(iter_member_descriptors(artifact, source))
-    try:
-        tables = (table_entries(artifact.root["spec"]["tables"],
-                                [m for m in members if m.object_key not in {"etl_receipts.parquet", "etl_receipts.keys.parquet"}])
-                  if artifact.root["spec"]["tables"] else {})
-    except ValueError as exc:
-        raise PublicationError(str(exc)) from exc
+    entry = generation_entry(artifact, members)
+    prefix, tables = entry["prefix"], entry["tables"]
     # The guards run per table: a partition of a split table may legitimately shrink, but none may vanish,
     # since a build that forgot a partition would otherwise pass whenever the rest outweighs the shrink ratio.
     for key, table in tables.items():
@@ -1173,26 +1204,10 @@ def _publish_verified_generation(
     expected_tables = (set((old_family or {}).get("tables", {})) | set(added_tables)) - set(receipt_only_tables)
     if old_family is not None and set(tables) != expected_tables:
         raise PublicationError("Family membership changed; explicit migration is required")
-    entry: dict = {
-        "prefix": prefix,
-        "logicalId": artifact.pin.logical_id,
-        "artifactDigest": artifact.pin.artifact_digest,
-        "tables": tables,
-    }
     from spicy_regs.subject_catalog import shared_receipt_logs
     # ``datasets`` is the family's claim: every index reader gives each listed name one owning family. A shared log
     # is in the receipt member and in the generation's stated policies, and is claimed by no family.
     shared = shared_receipt_logs()
-    if "etlReceipts" in artifact.root["spec"]:
-        declared_receipt = artifact.root["spec"]["etlReceipts"]
-        receipt = next(m for m in members if m.object_key == "etl_receipts.parquet")
-        entry["etlReceipts"] = {"key": receipt.object_key, "sha256": receipt.sha256,
-                                "byteSize": receipt.byte_size, "rows": receipt.record_count,
-                                "columns": declared_receipt["columns"],
-                                "generationId": declared_receipt["generationId"],
-                                "datasets": [p["dataset"] for p in declared_receipt["policies"]
-                                             if p["dataset"] not in shared],
-                                **({"keyIndex": declared_receipt["keyIndex"]} if "keyIndex" in declared_receipt else {})}
     if old_family and "etlReceipts" in old_family and "etlReceipts" not in entry:
         raise PublicationError("Cannot publish a generation that drops required ETL receipts")
     # An entry written before logs were shared may still list one; ceasing to list it drops no ownership.
@@ -1242,6 +1257,7 @@ def _publish_verified_generation(
     # the index while version 2 was absent keeps that bootstrap read, so ``_write_v1`` can fold what a writer
     # predating version 2 published meanwhile.
     for _ in range(_POINTER_ATTEMPTS):
+        _assert_parents_current(index, artifact.root["spec"].get("parents", {}))
         # Stamped per attempt, so it is the instant this write moves the pointer. Replaying the generation already
         # current moves nothing, so its entry is kept as stored, with or without an instant.
         current = index["families"].get(family)
@@ -1335,6 +1351,16 @@ def _assert_family_unchanged(index: Mapping, prior_index: Mapping, family: str, 
     unchanged = current == before if exact else _generation_entry(current) == _generation_entry(before)
     if not unchanged:
         raise PublicationError("Family changed since the build read its inputs; rebuild before publishing")
+
+
+def _assert_parents_current(index: Mapping, parents: Mapping) -> None:
+    """Hold managed parents to the exact index used by the conditional write."""
+    from spicy_regs.generations import _check_parents
+
+    try:
+        _check_parents(parents, index)
+    except ValueError as exc:
+        raise PublicationError("Managed parent changed since the build read its inputs; rebuild before publishing") from exc
 
 
 def _merge_family(index: dict, family: str, entry: dict) -> tuple[dict, bytes]:

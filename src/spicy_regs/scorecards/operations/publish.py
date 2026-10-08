@@ -17,6 +17,7 @@ from pathlib import Path
 import subprocess
 
 from dotenv import load_dotenv
+from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
 
 from spicy_regs.generations import implementation_id, verify_generation
 from spicy_regs.sources import publication, r2
@@ -75,13 +76,12 @@ def main(argv=None):
     ):
         raise ValueError("Deployment account or bucket differs from the verified target")
     before, _, _ = publication._stored_index(client, bucket)
-    for key, pin in artifact.root["spec"].get("parents", {}).items():
-        if publication.table_pin(before, key) != pin:
-            raise ValueError("Analysis input changed after qualification; rebuild before publication")
     (args.output / "before.json").write_text(json.dumps(before, indent=2) + "\n")
     evidence = (Path(prepared["evidence_directory"]),) if prepared.get("evidence_directory") else ()
     if args.observe_only:
-        if before["families"].get(family, {}).get("artifactDigest") != artifact.pin.artifact_digest:
+        expected = publication.generation_entry(artifact, iter_member_descriptors(artifact, LocalMemberSource(directory)))
+        current = before["families"].get(family)
+        if current is None or {key: value for key, value in current.items() if key != "publishedAt"} != expected:
             raise ValueError("Candidate is not the currently published family; observation performs no writes")
         after = before
     else:
