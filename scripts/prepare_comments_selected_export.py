@@ -23,8 +23,9 @@ import duckdb
 import pyarrow.parquet as pq
 
 from spicy_regs.duckdb_settings import ExportResources
+from spicy_regs.etl_bulk import read_with_receipts
 from spicy_regs.etl_receipts import (
-    ReceiptContext, _rows, read_with_receipts, rebind_receipt,
+    ReceiptContext, _rows, rebind_receipt,
     selected_subject_policy, validate_receipt_bundle, write_dataset,
 )
 from spicy_regs.transforms.regulations_receipts import policy
@@ -245,8 +246,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
 
     def records():
         nonlocal count
+        # Preserve the bulk failure and its cause instead of silently starting
+        # a full-payload SQLite copy for this complete selected population.
         for row in read_with_receipts(
-            [subjects], [receipts], earlier, generation_id=metadata["generation_id"]
+            [subjects], [receipts], earlier, generation_id=metadata["generation_id"],
+            processing_by_ordinal=True,
         ):
             # Promote the retained values directly. The earlier mapper remains
             # the authority for its normalized subject and its original record.

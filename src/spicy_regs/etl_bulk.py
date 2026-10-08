@@ -18,7 +18,7 @@ import io
 import json
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import closing, contextmanager
+from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -588,21 +588,72 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
         yield con
 
 
-def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id):
+def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False):
     """Replay completely admitted subjects in source order, with the exact stored processing JSON.
 
     Admission uses the same SQL checks and row-reference fallbacks as validate_bundle.
     Replay never falls back after yielding: any truncated stream or changed input fails
     the read, so atomic processing writers cannot accept an incomplete population.
+    ``processing_by_ordinal`` keeps only admitted keys/ordinals in DuckDB and
+    gathers processing from guarded local receipts by bounded source row groups.
+    Groups can be reread across batches; this trades those reads for payload storage.
     """
     if not receipt_paths:
         raise NotBulkEligible("The row reader decides absent receipt inputs")
-    with _validated_bundle({policy.dataset: subject_paths}, receipt_paths, [policy],
-                           generation_id=generation_id, retain_processing=True) as con:
-        yield from _replay_admitted_subjects(con, subject_paths, policy)
+    if type(processing_by_ordinal) is not bool:
+        raise ValueError("processing_by_ordinal must be boolean")
+    states = {}
+    if processing_by_ordinal:
+        from spicy_regs.local_data import file_signature
+        if any(not isinstance(path, Path) for path in (*subject_paths, *receipt_paths)):
+            raise NotBulkEligible("Ordinal processing replay requires regular local Path inputs")
+        subject_paths = tuple(path.absolute() for path in subject_paths)
+        receipt_paths = tuple(path.absolute() for path in receipt_paths)
+        states = {path: file_signature(path) for path in (*subject_paths, *receipt_paths)}
+
+    def check_sources():
+        if not states:
+            return
+        checkpoint()
+        if any(file_signature(path) != state for path, state in states.items()):
+            raise ValueError("Ordinal processing source changed after selection")
+
+    with _validated_bundle(
+        {policy.dataset: subject_paths}, receipt_paths, [policy],
+        generation_id=generation_id, retain_processing=not processing_by_ordinal,
+    ) as con, ExitStack() as files:
+        check_sources()
+        processing_rows = None
+        if processing_by_ordinal:
+            from spicy_regs.receipt_history import _take_prior_rows
+            priors, file_ends, group_ends, offset = [], [], [], 0
+            for path in receipt_paths:
+                parquet = files.enter_context(_parquet(path))
+                priors.append(parquet)
+                ends, total = [], 0
+                for group in range(parquet.metadata.num_row_groups):
+                    total += parquet.metadata.row_group(group).num_rows
+                    ends.append(total)
+                group_ends.append(ends)
+                offset += parquet.metadata.num_rows
+                file_ends.append(offset)
+            schema = pa.schema([RECEIPT_SCHEMA.field("processing_json")])
+
+            def processing_rows(ordinals):
+                check_sources()
+                table, positions = _take_prior_rows(priors, file_ends, group_ends, ordinals, schema)
+                if positions != list(range(len(ordinals))):
+                    raise ValueError("Ordinal processing replay omitted a selected receipt")
+                values = table.column("processing_json").to_pylist()
+                check_sources()
+                return values
+
+        check_sources()
+        yield from _replay_admitted_subjects(con, subject_paths, policy, processing_rows=processing_rows)
+        check_sources()
 
 
-def _replay_admitted_subjects(con, subject_paths, policy, *, start=0):
+def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing_rows=None):
     """Shared replay over already completely admitted state; no second admission."""
     if not subject_paths:
         return
@@ -631,8 +682,9 @@ def _replay_admitted_subjects(con, subject_paths, policy, *, start=0):
             con.register("source", _numbered(parquet, start, number, None, read))
             count = 0
             try:
+                processing = "r.n" if processing_rows is not None else "r.processing_json"
                 query = (
-                    f'SELECT {subject_sql}, r.processing_json, {same}, s.record_id, s.version, s.identity'
+                    f'SELECT {subject_sql}, {processing}, {same}, s.record_id, s.version, s.identity'
                     f' FROM (SELECT *, {record_id} AS "{key_name}", {version} AS "{version_name}",'
                     f' {identity} AS "{identity_name}", {_subject_reference_sql(policy)} AS "{reference_name}"'
                     f' FROM source) source JOIN subjects s ON source."{number}" = s.n AND NOT s.unproven'
@@ -643,8 +695,11 @@ def _replay_admitted_subjects(con, subject_paths, policy, *, start=0):
                 for batch in con.execute(query).to_arrow_reader(_BATCH):
                     raw = batch.column(0).to_pylist()
                     subjects = _subjects(policy, raw)
+                    processing_values = batch.column(1).to_pylist()
+                    if processing_rows is not None:
+                        processing_values = processing_rows(processing_values)
                     for subject, processing, matched, key, expected_version, expected_identity in zip(
-                        subjects, *(batch.column(i).to_pylist() for i in range(1, 6))
+                        subjects, processing_values, *(batch.column(i).to_pylist() for i in range(2, 6))
                     ):
                         if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
                             raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
