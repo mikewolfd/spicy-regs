@@ -828,14 +828,14 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
                                   processing_by_ordinal=processing_by_ordinal)
 
 
-def _read_retained_source15(subject_paths, receipt_paths, policy, *, generation_id, evidence):
-    """Helper-only continuation; private admission verifies every pinned reuse proof."""
+def _read_promotion_rows(subject_paths, receipt_paths, policy, *, generation_id, evidence=None, include_prior=False):
+    """Helper-only replay, optionally carrying the admitted receipt for inheritance."""
     yield from _read_with_receipts(subject_paths, receipt_paths, policy, generation_id=generation_id,
-                                  processing_by_ordinal=True, retained_scan=evidence)
+                                  processing_by_ordinal=True, retained_scan=evidence, include_prior=include_prior)
 
 
 def _read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False,
-                        retained_scan=None):
+                        retained_scan=None, include_prior=False):
     """Replay completely admitted subjects in source order, with the exact stored processing JSON.
 
     Admission uses the same SQL checks and row-reference fallbacks as validate_bundle.
@@ -851,6 +851,8 @@ def _read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, 
         raise ValueError("processing_by_ordinal must be boolean")
     if retained_scan is not None and not processing_by_ordinal:
         raise ValueError("Retained scans require guarded ordinal processing")
+    if include_prior and not processing_by_ordinal:
+        raise ValueError("Promotion receipt replay requires guarded ordinals")
     states = {}
     if processing_by_ordinal:
         from spicy_regs.local_data import file_signature
@@ -891,23 +893,24 @@ def _read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, 
                 group_ends.append(ends)
                 offset += parquet.metadata.num_rows
                 file_ends.append(offset)
-            schema = pa.schema([RECEIPT_SCHEMA.field("processing_json")])
+            schema = RECEIPT_SCHEMA if include_prior else pa.schema([RECEIPT_SCHEMA.field("processing_json")])
 
             def processing_rows(ordinals):
                 check_sources()
                 table, positions = _take_prior_rows(priors, file_ends, group_ends, ordinals, schema)
                 if positions != list(range(len(ordinals))):
                     raise ValueError("Ordinal processing replay omitted a selected receipt")
-                values = table.column("processing_json").to_pylist()
+                values = table.to_pylist() if include_prior else table.column("processing_json").to_pylist()
                 check_sources()
                 return values
 
         check_sources()
-        yield from _replay_admitted_subjects(con, subject_paths, policy, processing_rows=processing_rows)
+        yield from _replay_admitted_subjects(con, subject_paths, policy, processing_rows=processing_rows,
+                                           include_prior=include_prior)
         check_sources()
 
 
-def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing_rows=None):
+def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing_rows=None, include_prior=False):
     """Shared replay over already completely admitted state; no second admission."""
     if not subject_paths:
         return
@@ -948,13 +951,17 @@ def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing
                 processing_values = batch.column(1).to_pylist()
                 if processing_rows is not None:
                     processing_values = processing_rows(processing_values)
-                for subject, processing, matched, key, expected_version, expected_identity in zip(
-                    subjects, processing_values, *(batch.column(i).to_pylist() for i in range(2, 6))
+                priors = processing_values if include_prior else [None] * len(processing_values)
+                if include_prior:
+                    processing_values = [receipt["processing_json"] for receipt in priors]
+                for subject, processing, prior, matched, key, expected_version, expected_identity in zip(
+                    subjects, processing_values, priors, *(batch.column(i).to_pylist() for i in range(2, 6))
                 ):
                     if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
                         raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
                     count += 1
-                    yield subject | _unpack(json.loads(processing))
+                    row = subject | _unpack(json.loads(processing))
+                    yield (row, prior) if include_prior else row
         return count
 
     for path in subject_paths:

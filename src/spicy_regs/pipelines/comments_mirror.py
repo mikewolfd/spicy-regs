@@ -53,6 +53,11 @@ def _validate_prepared_export(output_dir, result, snapshot):
                 or not path.resolve().is_relative_to(output_dir.resolve())):
             raise ValueError("Prepared comments member is outside its canonical output path")
     manifest = json.loads(canonical["manifest"].read_text())
+    if manifest.get("purpose") not in {None, "native-generation"}:
+        raise ValueError("Prepared comments publication purpose differs")
+    native_only = manifest.get("purpose") == "native-generation"
+    if native_only and canonical["partitions"].exists():
+        raise ValueError("Native-only preparation must not contain legacy agency files")
     derivation = json.loads(canonical["generation"].read_text())
     if (manifest.get("format") != "comments-prepared-export/1"
             or manifest.get("source") != asdict(snapshot)
@@ -85,6 +90,7 @@ def _validate_prepared_export(output_dir, result, snapshot):
             raise ValueError("Prepared comments bytes differ from their manifest")
     if pq.ParquetFile(canonical["comments"]).metadata.num_rows != 26_418_078:
         raise ValueError("Prepared comments population is incomplete")
+    return native_only
 
 
 def _seal_prepared_empty_replacements(output_dir, result, predecessor, receipt):
@@ -250,6 +256,7 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     resources = resources or ExportResources()
     rt = RECORD_TYPES["comments"]
     prepared = (prepared_export, prepared_reader, prepared_snapshot)
+    native_only = False
     if any(value is not None for value in prepared) and any(value is None for value in prepared):
         raise ValueError("Prepared export, historical reader and captured snapshot are required together")
     if prepared_export is not None and not skip_upload and (
@@ -268,7 +275,9 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
     else:
         snapshot = prepared_snapshot
         observed_snapshot = _check_prepared_snapshot(prepared_reader, snapshot)
-        _validate_prepared_export(output_dir, prepared_export, snapshot)
+        native_only = _validate_prepared_export(output_dir, prepared_export, snapshot)
+        if native_only and not skip_upload:
+            raise ValueError("Native-only preparation cannot replace the legacy mirrors")
     base_url = resolve_r2_base_url().rstrip("/")
     receipt = None
     if not skip_upload:
@@ -287,25 +296,29 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
         raise RuntimeError(f"Comments export has {n_rows:,} rows, below the {MIN_EXPECTED_ROWS:,} safety floor")
     previous_url = f"{base_url}/comments.parquet"
     predecessor = validate_export(output_dir, previous_url, resources=resources)
-    _retain_empty_agencies(result, predecessor, receipt)
-    if prepared_export is not None:
-        _seal_prepared_empty_replacements(output_dir, result, predecessor, receipt)
-    agency_files = sorted(result["partitions"].glob("agency_code=*/part-0.parquet"))
-    with TemporaryDirectory(prefix="comments-check-", dir=output_dir) as spill, duckdb.connect() as con:
-        resources.configure(con, Path(spill))
-        agency_comments(con, agency_files).create_view("partitions")
-        con.from_parquet(str(result["index"])).create_view("candidate_index")
-        con.from_parquet(str(result["comments"])).create_view("candidate")
-        errors = check_comments(con, "SELECT * FROM partitions", "SELECT * FROM candidate_index")
-        errors += check_retained_ids(con, "SELECT * FROM candidate", "SELECT * FROM partitions")
-        if errors:
-            raise RuntimeError("Invalid comments partitions: " + "; ".join(errors))
+    agency_files = []
+    if not native_only:
+        _retain_empty_agencies(result, predecessor, receipt)
+        if prepared_export is not None:
+            _seal_prepared_empty_replacements(output_dir, result, predecessor, receipt)
+        agency_files = sorted(result["partitions"].glob("agency_code=*/part-0.parquet"))
+        with TemporaryDirectory(prefix="comments-check-", dir=output_dir) as spill, duckdb.connect() as con:
+            resources.configure(con, Path(spill))
+            agency_comments(con, agency_files).create_view("partitions")
+            con.from_parquet(str(result["index"])).create_view("candidate_index")
+            con.from_parquet(str(result["comments"])).create_view("candidate")
+            errors = check_comments(con, "SELECT * FROM partitions", "SELECT * FROM candidate_index")
+            errors += check_retained_ids(con, "SELECT * FROM candidate", "SELECT * FROM partitions")
+            if errors:
+                raise RuntimeError("Invalid comments partitions: " + "; ".join(errors))
     build = {
         "format_version": FORMAT_VERSION, "source": asdict(snapshot),
         "resources": asdict(resources), "rows": n_rows, "predecessor_etag": predecessor.etag,
     }
     if prepared_export is not None:
         build["observed_source"] = asdict(observed_snapshot)
+    if native_only:
+        build["native_only"] = True
     (output_dir / "comments-build.json").write_text(json.dumps(build, indent=2, sort_keys=True) + "\n")
     generation_directory = build_comments_generation(output_dir, result, snapshot)
     if skip_upload:
