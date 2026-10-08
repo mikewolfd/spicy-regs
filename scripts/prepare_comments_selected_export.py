@@ -249,7 +249,8 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         # Preserve the bulk failure and its cause instead of silently starting
         # a full-payload SQLite copy for this complete selected population.
         for row in read_with_receipts(
-            [subjects], [receipts], earlier, generation_id=metadata["generation_id"]
+            [subjects], [receipts], earlier, generation_id=metadata["generation_id"],
+            processing_by_ordinal=True,
         ):
             # Promote the retained values directly. The earlier mapper remains
             # the authority for its normalized subject and its original record.
