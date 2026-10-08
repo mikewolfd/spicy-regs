@@ -60,6 +60,8 @@ _DEPTH = 8
 #: ``ReceiptContext``'s rule for a witness digest.
 _WITNESS_SHA256 = r"(?:sha256:)?[0-9a-f]{64}"
 _BATCH = 2_000
+#: Target logical Arrow bytes per opt-in INSERT; one larger row stays intact.
+_INSERT_BYTES = 16 * 1024 * 1024
 
 
 class NotBulkEligible(Exception):
@@ -333,6 +335,18 @@ def _numbered(
 Span = tuple[int, int, ParquetInput]
 
 
+def _insert_batches(batch: pa.RecordBatch) -> Iterator[pa.RecordBatch]:
+    """Ordered zero-copy slices; backing row-group buffers and one wide row can exceed the target."""
+    pending = [batch]
+    while pending:
+        piece = pending.pop()
+        if piece.num_rows > 1 and piece.nbytes > _INSERT_BYTES:
+            middle = piece.num_rows // 2
+            pending.extend((piece.slice(middle), piece.slice(0, middle)))
+        else:
+            yield piece
+
+
 def _scan(
     con: duckdb.DuckDBPyConnection,
     paths: Iterable[ParquetInput],
@@ -341,18 +355,30 @@ def _scan(
     *,
     number: str = "n",
     wanted: frozenset[str] | None = None,
+    bounded_insert: bool = False,
 ) -> list[Span]:
-    """Run ``insert`` once over each file, numbering rows on from ``start``; each file's row numbers and its input.
+    """Insert each file's rows with global ordinals and retain its row range and input.
 
     A stream that ends early loses rows without an error, so the rows decoded and the rows inserted are both counted.
+    ``bounded_insert`` finishes each small INSERT before the next slice; decoding,
+    validation and global ordinals still come from the same numbered reader.
     """
     spans = []
     for path in paths:
         with _parquet(path) as parquet:
             read = [0, 0]
-            con.register("source", _numbered(parquet, start, number, wanted, read))
-            [(inserted,)] = con.execute(insert).fetchall()
-            con.unregister("source")
+            with closing(_numbered(parquet, start, number, wanted, read)) as numbered:
+                sources = (
+                    (pa.Table.from_batches([piece]) for batch in numbered for piece in _insert_batches(batch))
+                    if bounded_insert else (numbered,)
+                )
+                inserted = 0
+                for source in sources:
+                    checkpoint()
+                    con.register("source", source)
+                    [(added,)] = con.execute(insert).fetchall()
+                    con.unregister("source")
+                    inserted += added
             if read != [parquet.metadata.num_rows, inserted]:
                 raise NotBulkEligible("DuckDB did not take every row the reader decoded")
             spans.append((start, start + parquet.metadata.num_rows, path))
@@ -426,6 +452,7 @@ def _check_receipts(
     scoped: bool,
     *,
     retain_processing: bool = False,
+    bounded_insert: bool = False,
 ) -> None:
     """``_load_receipts`` over whole columns: raise what it would at the first row, or schema, it refuses."""
     validate_publisher_generation(generation_id)
@@ -438,7 +465,8 @@ def _check_receipts(
         + (", processing_json VARCHAR, diagnostic_json VARCHAR" if retain_processing else "") + ")"
     )
     wanted = frozenset(policies) if scoped else None
-    spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped, retain_processing=retain_processing), wanted=wanted)
+    spans = _scan(con, paths, 0, _receipt_insert_sql(policies, scoped, retain_processing=retain_processing),
+                  wanted=wanted, bounded_insert=bounded_insert)
 
     repeats = (
         con.execute(_repeated_sql("receipt_id", "true")).fetchall()[0][0],
@@ -464,7 +492,8 @@ def _check_receipts(
 
 
 def _check_subjects(
-    con: duckdb.DuckDBPyConnection, subjects: Mapping[str, Sequence[ParquetInput]], policies: Mapping[str, DatasetPolicy], temp: Path
+    con: duckdb.DuckDBPyConnection, subjects: Mapping[str, Sequence[ParquetInput]], policies: Mapping[str, DatasetPolicy], temp: Path,
+    *, bounded_insert: bool = False,
 ) -> None:
     """``_joined_subjects`` over whole columns: raise what it would at the first subject, or schema, it refuses."""
     con.execute(
@@ -483,7 +512,8 @@ def _check_subjects(
         while number in {name.casefold() for name in policy.subject_schema.names}:
             number += "_"
         paths, stopped = _readable(paths, policy.subject_schema, f"Subject schema differs from policy: {dataset}")
-        spans = _scan(con, paths, start, _subject_insert_sql(policy, number), number=number)
+        spans = _scan(con, paths, start, _subject_insert_sql(policy, number), number=number,
+                      bounded_insert=bounded_insert)
         start = spans[-1][1] if spans else start
         unproven = "SELECT n FROM subjects WHERE unproven AND dataset = ? ORDER BY n"
         numbers = _ordinal_file(con, unproven, [dataset], temp / "unproven-subjects.parquet")
@@ -565,7 +595,7 @@ def validate_bundle(
 
 @contextmanager
 def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False,
-                      threads=4, memory_limit="4GB"):
+                      threads=4, memory_limit="4GB", bounded_insert=False):
     """Keep the maintained admission tables alive for replay only after complete admission."""
     registered = _bundle_policies(subjects, receipt_paths, policies)
     if scoped and len(registered) > 1:
@@ -582,8 +612,8 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
         try:
             con.execute("SET preserve_insertion_order = false")
             _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped,
-                            retain_processing=retain_processing)
-            _check_subjects(con, subjects, registered, temp)
+                            retain_processing=retain_processing, bounded_insert=bounded_insert)
+            _check_subjects(con, subjects, registered, temp, bounded_insert=bounded_insert)
         except duckdb.Error as error:
             raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error
         yield con
@@ -622,9 +652,10 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
     with _validated_bundle(
         {policy.dataset: subject_paths}, receipt_paths, [policy],
         generation_id=generation_id, retain_processing=not processing_by_ordinal,
-        # Wide receipt validation exhausted 4GB even with a single thread.
+        # Finish small INSERTs for wide receipts within the selected reader's budgets.
         threads=1 if processing_by_ordinal else 4,
         memory_limit="8GB" if processing_by_ordinal else "4GB",
+        bounded_insert=processing_by_ordinal,
     ) as con, ExitStack() as files:
         check_sources()
         processing_rows = None
