@@ -1,6 +1,7 @@
 """Explicit proxy selection preserves source bytes, policy and refusal boundaries."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -99,7 +100,6 @@ def test_missing_token_refuses_without_issuing_a_request(tmp_path, monkeypatch):
 def test_only_explicit_publisher_uses_proxy(tmp_path, monkeypatch):
     from contextlib import contextmanager
     from spicy_regs.scorecards import acquisition
-    from spicy_regs.transforms import build_scorecards
 
     used = []
 
@@ -114,7 +114,7 @@ def test_only_explicit_publisher_uses_proxy(tmp_path, monkeypatch):
         yield "direct"
 
     monkeypatch.setattr(acquisition, "zyte_fetch", selected)
-    monkeypatch.setattr(build_scorecards, "bounded_fetch", direct)
+    monkeypatch.setattr(acquisition, "bounded_fetch", direct)
     factory = fetch_for_publishers(["ijm"], max_bytes=40 * 1024**2, max_requests=5000)
     source = scope(tmp_path, monkeypatch)
     with factory(source) as fetch:
@@ -241,3 +241,44 @@ def test_direct_transport_captures_redirect_but_never_sends_selected_headers_to_
             fetch.request("https://publisher.example/table", request_headers={"X-Publisher-Role": "anonymous"})
     assert len(requests) == 1
     assert any(row["event"] == "capture" and row["stage"] == "redirect" for row in journal(source.root))
+
+
+@pytest.mark.parametrize("fault,reason,sends", [
+    ("overflow", "acquisition bound", 1), ("elapsed", "acquisition bound", 1),
+    ("post-redirect", "POST redirects", 1), ("no-location", "no location", 1),
+    ("redirect-limit", "redirect limit", 6),
+])
+def test_direct_transport_refuses_incomplete_or_unsupported_responses(tmp_path, monkeypatch, fault, reason, sends):
+    import httpx
+    from spicy_regs.scorecards import acquisition
+
+    source = scope(tmp_path, monkeypatch)
+    requests = []
+    redirected = fault in {"post-redirect", "no-location", "redirect-limit"}
+
+    def handler(request):
+        requests.append(request)
+        headers = {"Content-Type": "text/html"}
+        if redirected and fault != "no-location":
+            headers["Location"] = "/next"
+        return httpx.Response(302 if redirected else 200, headers=headers, stream=httpx.ByteStream(b"source body"))
+
+    original = httpx.Client
+    monkeypatch.setattr(acquisition.httpx, "Client", lambda **kwargs: original(
+        transport=httpx.MockTransport(handler), **kwargs))
+    if fault == "elapsed":
+        clock = iter([0, 91])
+        monkeypatch.setattr(acquisition, "time", SimpleNamespace(monotonic=lambda: next(clock)))
+    with acquisition.bounded_fetch(source, max_bytes=4 if fault == "overflow" else 100) as fetch:
+        with pytest.raises(acquisition.ScorecardRefreshError, match=reason):
+            if fault == "post-redirect":
+                fetch.request("https://publisher.example/graphql", method="POST", content=b"{}")
+            else:
+                fetch("https://publisher.example/table")
+    assert len(requests) == sends
+    events = journal(source.root)
+    assert not any(row["event"] == "capture" and row.get("stage") != "redirect" for row in events)
+    if fault in {"overflow", "elapsed", "post-redirect", "no-location"}:
+        failure = next(row for row in events if row["event"] == "capture-incomplete")
+        assert failure["response_complete"] is False
+        assert failure["body_retained"] is False

@@ -174,8 +174,6 @@ def fetch_for_publishers(publishers, *, browser_publishers=(), max_bytes=MAX_BYT
 
     @contextmanager
     def factory(source):
-        from spicy_regs.transforms.build_scorecards import bounded_fetch
-
         proxied = source.publisher_id in selected | browser_selected
         chosen = zyte_fetch if proxied else bounded_fetch
         options = {"browser_api": True} if source.publisher_id in browser_selected else {}
