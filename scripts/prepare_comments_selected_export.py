@@ -215,9 +215,13 @@ Path(sys.argv[1]).write_text(json.dumps(result))
 
 
 def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None,
-            retained_scan=None, retained_scan_sha256=None, native_only=False):
+            retained_scan=None, retained_scan_sha256=None, native_only=False, remote_writer=None):
     """Keep the complete earlier pair and derive declared current subjects once."""
     pair, destination = Path(pair), Path(destination)
+    if remote_writer is not None and not native_only:
+        raise ValueError("Remote preparation requires native-only output")
+    if remote_writer is not None and destination.exists():
+        raise FileExistsError(destination)
     sealed = (verify_original(pair) if captured_input is None else
               verify_captured(pair, captured_input, captured_input_sha256))
     metadata = sealed["metadata"]
@@ -306,10 +310,12 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         staged = Path(temporary) / "fresh"
         # This knob also bounds the wide Python input buffer. Output-only
         # batching would need a separate maintained writer setting.
-        subject, receipt = write_dataset(
-            records(), staged, current, batch_size=128,
-            failures=(rebind_receipt(row, generation_id=generation) for row in _rows(attempts)),
-        )
+        failures = (rebind_receipt(row, generation_id=generation) for row in _rows(attempts))
+        if remote_writer is None:
+            subject, receipt = write_dataset(records(), staged, current, batch_size=128, failures=failures)
+        else:
+            subject, receipt = remote_writer(records(), current, failures=failures,
+                                             generation_id=generation, snapshot=metadata["snapshot"])
         if not native_only:
             inherited = Path(temporary) / "inherited.parquet"
             inherit_current_receipts(receipt, [receipts], inherited,
@@ -326,8 +332,13 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
                        != sealed["capture"]["custody"]
                     or _validation_source() != validation_source):
                 raise ValueError("Captured inputs or validation source changed during preparation")
-        publish_directory_no_replace(staged, destination)
-        subject, receipt = destination / subject.name, destination / receipt.name
+        if remote_writer is None:
+            publish_directory_no_replace(staged, destination)
+            subject, receipt = destination / subject.name, destination / receipt.name
+        else:
+            # Only derivation metadata is local; remote receipts never masquerade
+            # as the canonical local body files or a completed local export.
+            destination.mkdir()
     if count != EXPECTED_ROWS:
         raise ValueError("Derived comments population differs from the captured population")
     evidence = {
@@ -412,6 +423,92 @@ def _assemble_legacy(subject, output, resources):
             index = _build_comments_index(con, RECORD_TYPES["comments"], output,
                                          source_sql="SELECT * FROM comments_export")
     return monolith, index, partitions
+
+
+def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
+                    reader, captured_snapshot, captured_input=None, captured_input_sha256=None,
+                    retained_scan=None, retained_scan_sha256=None):
+    """Prepare an unpublished remote generation, with small local derivation/control files."""
+    from spicy_regs.sources import publication
+    from spicy_regs.remote_generations import prepare_remote_generation
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+    from spicy_regs.pipelines.comments_generation import stage_comments_remote
+    from spicy_regs.pipelines.comments_mirror import _check_prepared_snapshot
+    from spicy_regs.public_url import resolve_r2_base_url
+
+    output = Path(output)
+    if output.exists() and any(output.iterdir()):
+        raise FileExistsError("Partial remote preparation requires explicit recovery; refusing rebuild")
+    output.mkdir(parents=True, exist_ok=True)
+    base_url = resolve_r2_base_url()
+    record = {"format": "comments-remote-preparation/1", "status": "staging-unpublished",
+              "bucket": bucket, "stagingPrefix": staging_prefix, "baseUrl": base_url,
+              "source": asdict(captured_snapshot), "published": False,
+              "priorIndex": publication.current_index(base_url)}
+    result_path = output / "comments-remote-preparation.json"
+
+    def save():
+        temporary = result_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+        temporary.replace(result_path)
+
+    save()
+    holder = {}
+    try:
+        def writer(records, current, *, failures, generation_id, snapshot):
+            subject, receipt, index, predecessor = stage_comments_remote(
+                records, current, failures=failures, generation_id=generation_id, snapshot=snapshot,
+                output_dir=output, client=client, bucket=bucket, staging_prefix=staging_prefix,
+                max_bytes=max_bytes, previous_url=base_url + "/comments.parquet")
+            holder.update(subject=subject, receipt=receipt, index=index)
+            record.update(status="remote-members-written-unpublished",
+                          members=[asdict(member) for member in (subject, receipt, index)],
+                          predecessor={"etag": predecessor.etag, "agencies": sorted(predecessor.agencies)})
+            save()
+            return subject, receipt
+
+        subject, receipt, evidence = prepare(
+            pair, output / ".catalog-pairs" / "comments", native_only=True, remote_writer=writer,
+            captured_input=captured_input, captured_input_sha256=captured_input_sha256,
+            retained_scan=retained_scan, retained_scan_sha256=retained_scan_sha256)
+        if evidence["snapshot"] != asdict(captured_snapshot) or subject.rows != EXPECTED_ROWS:
+            raise ValueError("Remote preparation differs from the complete captured source")
+        current, index_policy = policy("comments"), policy("comments_index")
+        schemas = {}
+        with duckdb.connect() as con:
+            for name, schema in (("comments", current.subject_schema),
+                                 ("comments_index", index_policy.subject_schema), ("etl_receipts", RECEIPT_SCHEMA)):
+                con.register("remote_schema", schema.empty_table())
+                schemas[name] = [(row[0], row[1]) for row in con.execute("DESCRIBE SELECT * FROM remote_schema").fetchall()]
+                con.unregister("remote_schema")
+        directory = output / ".comments-generations" / uuid4().hex
+        record.update(status="validating-remote-generation-unpublished", derivation=evidence,
+                      generationDirectory=str(directory))
+        save()
+        artifact = prepare_remote_generation(
+            directory, family="comments", client=client, bucket=bucket, staging_prefix=staging_prefix,
+            members=[subject, holder["index"], receipt],
+            expected_keys=("comments.parquet", "comments_index.parquet", "etl_receipts.parquet"),
+            schemas=schemas, read_snapshot=record["priorIndex"],
+            parents={"catalog_comments": {"sha256": subject.sha256, "byteSize": subject.byte_size}},
+            receipt_policies=[current, index_policy], receipt_generation_id=evidence["generation_id"],
+            bounded_receipts=True)
+        observed = _check_prepared_snapshot(reader, captured_snapshot)
+        if captured_input is not None:
+            _captured_descriptor(captured_input, captured_input_sha256)
+            if ({name: _regular_signature(Path(pair) / name) for name in evidence["original_pair"]["capture"]["custody"]}
+                    != evidence["original_pair"]["capture"]["custody"]
+                    or _validation_source() != evidence["historical_admission"]["source"]):
+                raise ValueError("Captured inputs or validation source changed during remote admission")
+        record.update(status="remote-generation-validated-unpublished",
+                      observedSnapshot=asdict(observed),
+                      artifactPin={"logicalId": artifact.pin.logical_id, "artifactDigest": artifact.pin.artifact_digest})
+        save()
+        return record
+    except BaseException as error:
+        record.update(status="failed-unpublished", errorType=type(error).__name__)
+        save()
+        raise
 
 
 def export_v1(source_checkout: Path, pair: Path, *, retained_subject=None, retained_receipts=None):
@@ -591,9 +688,16 @@ def main():
     parser.add_argument("--retained-scan", type=Path, help="Exact closed source15 scan recovery evidence")
     parser.add_argument("--retained-scan-sha256", help="Exact digest of the retained scan evidence")
     parser.add_argument("--native-only", action="store_true", help="Prepare only immutable native publication members")
+    parser.add_argument("--remote-staging-prefix", help="New unreferenced R2 prefix for native-only members")
+    parser.add_argument("--remote-max-bytes", type=int, default=64 * 1024**3,
+                        help="Maximum serialized bytes per remote member, including footer")
     args = parser.parse_args()
     if args.native_only and args.publish:
         raise ValueError("Native-only preparation cannot publish the legacy mirrors")
+    if args.remote_staging_prefix is not None and (
+            not args.native_only or args.captured_input is None or args.retained_scan is None
+            or not 0 < args.remote_max_bytes <= 64 * 1024**3):
+        raise ValueError("Remote native preparation requires captured inputs, retained scans and bounded output")
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
@@ -627,6 +731,18 @@ def main():
     verify_base()
     from spicy_regs.pipelines.comments_mirror import _check_prepared_snapshot, _validate_prepared_export
     reader = V1CatalogReader(args.v1_source)
+    if args.remote_staging_prefix is not None:
+        from spicy_regs.sources import r2
+        captured, _ = _captured_descriptor(args.captured_input, args.captured_input_sha256)
+        captured_snapshot = _pair_snapshot(captured["metadata"]["snapshot"])
+        _check_prepared_snapshot(reader, captured_snapshot)
+        assemble_remote(args.original_pair, args.output, client=r2.get_r2_client(),
+                        bucket=os.environ.get("R2_BUCKET_NAME", "spicy-regs"),
+                        staging_prefix=args.remote_staging_prefix, max_bytes=args.remote_max_bytes,
+                        reader=reader, captured_snapshot=captured_snapshot,
+                        captured_input=args.captured_input, captured_input_sha256=args.captured_input_sha256,
+                        retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256)
+        return
     observed_snapshot = None
     manifest_path = args.output / "comments-prepared-export.json"
     if manifest_path.exists():

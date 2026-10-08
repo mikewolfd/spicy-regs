@@ -338,6 +338,44 @@ def failure_receipt(
     return _receipt(policy, context, subject=None, processing=raw_fields, outcome=outcome, identity=identity)
 
 
+def _dataset_batches(records, policy, *, failures=(), batch_size=2000):
+    """Split one input stream into the same paired subject/receipt Arrow batches."""
+    if type(batch_size) is not int or batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    subjects, receipts, pending = [], [], []
+
+    def split_pending():
+        for row, _ in pending:
+            policy.check_fields(row)
+        held = [None] * len(pending) if policy.receipt_only else _subjects(policy, [row for row, _ in pending])
+        for (row, context), subject in zip(pending, held):
+            subject, receipt = _split(policy, row, context, subject)
+            if subject is not None:
+                subjects.append(subject)
+            receipts.append(receipt)
+        pending.clear()
+
+    def take():
+        subject = pa.Table.from_pylist(subjects, schema=policy.subject_schema) if subjects else None
+        receipt = pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA)
+        subjects.clear()
+        receipts.clear()
+        return subject, receipt
+
+    for record in records:
+        pending.append(record)
+        if len(receipts) + len(pending) >= batch_size:
+            split_pending()
+            yield take()
+    split_pending()
+    for receipt in failures:
+        receipts.append(receipt)
+        if len(receipts) >= batch_size:
+            yield take()
+    if receipts:
+        yield take()
+
+
 def write_dataset(
     records: Iterable[tuple[Mapping, ReceiptContext]],
     directory: Path,
@@ -373,42 +411,11 @@ def write_dataset(
                 else stack.enter_context(pq.ParquetWriter(subject_path, policy.subject_schema, compression="zstd"))
             )
             receipt_writer = stack.enter_context(pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression="zstd"))
-            subjects, receipts = [], []
-
-            def flush():
-                if subjects:
+            for subject, receipt in _dataset_batches(records, policy, failures=failures, batch_size=batch_size):
+                if subject is not None:
                     assert subject_writer is not None
-                    subject_writer.write_table(pa.Table.from_pylist(subjects, schema=policy.subject_schema))
-                    subjects.clear()
-                if receipts:
-                    receipt_writer.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA))
-                    receipts.clear()
-
-            pending: list[tuple[Mapping, ReceiptContext]] = []
-
-            def split_pending():
-                for row, _ in pending:
-                    policy.check_fields(row)
-                held = [None] * len(pending) if policy.receipt_only else _subjects(policy, [row for row, _ in pending])
-                for (row, context), subject in zip(pending, held):
-                    subject, receipt = _split(policy, row, context, subject)
-                    if subject is not None:
-                        subjects.append(subject)
-                    receipts.append(receipt)
-                pending.clear()
-
-            # One receipt per record, so a full batch of records fills the receipt batch exactly as one at a time did.
-            for record in records:
-                pending.append(record)
-                if len(receipts) + len(pending) >= batch_size:
-                    split_pending()
-                    flush()
-            split_pending()
-            for receipt in failures:
-                receipts.append(receipt)
-                if len(receipts) >= batch_size:
-                    flush()
-            flush()
+                    subject_writer.write_table(subject)
+                receipt_writer.write_table(receipt)
         if prior_receipts:
             carry_receipt_history(receipt_path, prior_receipts, receipt_path)
         validate_receipt_bundle(

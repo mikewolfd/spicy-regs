@@ -135,7 +135,7 @@ class PublicPredecessor:
 
 
 def validate_export(output_dir: Path, previous_url: str, *,
-                    resources: ExportResources | None = None) -> PublicPredecessor:
+                    resources: ExportResources | None = None, candidate_builder=None) -> PublicPredecessor:
     """Keep every prior ID; refuse a moving predecessor and inconsistent coverage."""
     resources = resources or ExportResources()
     before = r2.public_object_version(previous_url)
@@ -143,8 +143,13 @@ def validate_export(output_dir: Path, previous_url: str, *,
         raise RuntimeError("Prior comments mirror is missing; cannot verify its population")
     with TemporaryDirectory(prefix="comments-check-", dir=output_dir) as spill, duckdb.connect() as con:
         resources.configure(con, Path(spill))
-        con.from_parquet(str(output_dir / "comments.parquet")).create_view("candidate")
-        con.from_parquet(str(output_dir / "comments_index.parquet")).create_view("candidate_index")
+        if candidate_builder is None:
+            con.from_parquet(str(output_dir / "comments.parquet")).create_view("candidate")
+            con.from_parquet(str(output_dir / "comments_index.parquet")).create_view("candidate_index")
+        else:
+            # The remote writer supplies narrow, pinned candidate relations;
+            # every predecessor and health check below remains identical.
+            candidate_builder(con)
         con.from_parquet(previous_url).create_view("previous")
         errors = check_comments(con, "SELECT * FROM candidate", "SELECT * FROM candidate_index")
         errors += check_retained_ids(con, "SELECT * FROM previous", "SELECT * FROM candidate")

@@ -37,3 +37,34 @@ originals and earlier generations throughout qualification.
 See [generation publication](generation-publication.md). The storage experiment and
 its actual R2 copy/refusal receipts are retained under
 `~/Work/corpora/fork-execution-2026-09-21/court-body-remote-probe/`.
+
+## Comments native preparation
+
+`prepare_comments_selected_export.py --native-only --remote-staging-prefix <new-prefix>`
+uses the captured-input and retained-scan pins to admit the historical pair.
+The existing record splitter produces paired subject and receipt batches from
+one consumed stream. Context-managed instances of the maintained R2 writer
+store Comments and its receipts under the new, unpublished prefix. The same
+index builder reads pinned remote coordinate columns; index receipts join the
+open shared receipt stream. No complete body or combined receipt copy is local.
+
+`comments-remote-preparation.json` states the actual staging keys, upload pins,
+derivation, captured predecessor and validated artifact pin. It never claims
+canonical local body paths or a local export seal. Full remote generation
+admission hashes every member, decodes every page and validates current receipt
+coverage and retained history before it reports an unpublished complete generation.
+The publisher repeats source and predecessor checks immediately before each
+conditional pointer attempt. Anonymous readback uses pinned, seekable HTTP
+streams through the same generation verifier and keeps only artifact metadata local.
+
+Historical admission, narrow matching/index data and current receipt admission
+still need local scratch. Arrow batches, simultaneous upload buffers and Parquet
+footer metadata still use memory. This route removes complete local output and
+publication/readback copies; it does not establish a final resource peak or change
+the operational reserve, storage, memory or elapsed-time stop limits.
+The existing Navigation measurement cache still needs one genuine final
+Comments main file. Its single receiver uses the completed public member's
+actual size and digest; it runs after remote admission scratch closes and only
+when that copy fits above the existing reserve. Cache and route checks reuse
+that same file. No local full-generation directory or completed export seal is
+invented for this handoff.
