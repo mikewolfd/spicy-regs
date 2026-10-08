@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import contextmanager
 from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
-import time
 from types import SimpleNamespace
-from urllib.parse import urljoin, urlsplit
 from uuid import UUID, uuid4
 from os import getenv
 
 import httpx
 import pyarrow.parquet as pq
-from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_docs.transport.credentials import CredentialRefusedError
 
-from spicy_regs.scorecards.registry import REGISTRY, load_registry, select_sources
-from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, ScorecardTransportError, validate_limits
+from spicy_regs.scorecards.errors import NoScorecardsDue, ScorecardRefreshError
+from spicy_regs.scorecards.registry import REGISTRY, check_live_edition, load_registry, select_sources
+from spicy_regs.scorecards.acquisition import MAX_BYTES, MAX_REQUESTS, ScorecardTransportError, bounded_fetch, validate_limits
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.sources import r2
 from spicy_regs.scorecards.etl import (
@@ -30,31 +27,12 @@ from spicy_regs.scorecards.etl import (
     verified_receipt_download,
     source_failure_receipts,
     POLICIES,
+    SOURCE_NAMES,
 )
 from spicy_regs.etl_receipts import write_dataset
 
-TABLE_NAMES = (
-    "scorecard_publishers",
-    "scorecards",
-    "scorecard_snapshots",
-    "scorecard_methodologies",
-    "scorecard_metrics",
-    "scorecard_items",
-    "scorecard_metric_items",
-    "scorecard_metric_components",
-    "scorecard_members",
-    "scorecard_member_ratings",
-    "scorecard_member_item_results",
-)
+TABLE_NAMES = SOURCE_NAMES
 OUTPUTS = tuple(name + ".parquet" for name in TABLE_NAMES)
-
-
-class NoScorecardsDue(RuntimeError):
-    """Explicit successful no-op; do not create a new generation."""
-
-
-class ScorecardRefreshError(RuntimeError):
-    """No accepted scopes, or an integrity failure; no candidate generation."""
 
 
 def installed_provider():
@@ -82,98 +60,6 @@ def _fatal(error: BaseException) -> None:
         seen.add(id(current))
         current = current.__cause__ or current.__context__
 
-
-@contextmanager
-def bounded_fetch(source, *, max_bytes=MAX_BYTES, max_requests=MAX_REQUESTS):
-    """Bound exact HTTP payloads in memory, outside all workflow upload trees."""
-    validate_limits(max_bytes, max_requests)
-    count = 0
-    with httpx.Client(
-        timeout=httpx.Timeout(30, connect=10),
-        follow_redirects=False,
-        headers={"Accept-Encoding": "identity", "User-Agent": "SpicyRegs/scorecards"},
-    ) as client:
-
-        def request(url, *, method="GET", content=None, request_headers=None):
-            nonlocal count
-            if method not in {"GET", "POST"} or (content is not None) != (method == "POST"):
-                raise ScorecardRefreshError("Publisher request method and body disagree")
-            requested, current = url, url
-            host = urlsplit(url).hostname
-            # The CPAC publisher application explicitly configures this public
-            # GraphQL service over HTTP. The reader retains that source choice.
-            schemes = (
-                {"http", "https"}
-                if source.publisher_id == "cpac" and host == "production.data.conservative.org"
-                else {"https"}
-            )
-            started = time.monotonic()
-            for _ in range(6):
-                parsed = urlsplit(current)
-                if (
-                    parsed.scheme not in schemes
-                    or parsed.hostname not in {host, "www." + str(host), str(host).removeprefix("www.")}
-                    or parsed.username
-                    or parsed.password
-                    or parsed.port
-                    or (request_headers and parsed.hostname != host)
-                ):
-                    raise ScorecardRefreshError("Publisher redirect leaves the selected host")
-                if count >= max_requests:
-                    raise ScorecardRefreshError("Scorecard HTTP request budget exhausted")
-                count += 1
-                observed = datetime.now(UTC).isoformat()
-                raw = bytearray()
-                try:
-                    headers = {"Content-Type": "application/json"} if method == "POST" else {}
-                    if request_headers:
-                        headers.update(request_headers)
-                    if source.publisher_id == "cpac" and host == "production.data.conservative.org":
-                        # Public role declarations used by the publisher app,
-                        # not credentials or an administrative role.
-                        headers.update({"X-Hasura-Role": "anonymous", "X-Hasura-User-Id": "-1"})
-                    with client.stream(method, current, content=content, headers=headers) as response:
-                        for chunk in response.iter_raw():
-                            if len(raw) + len(chunk) > max_bytes or time.monotonic() - started > 90:
-                                raise ScorecardRefreshError("Source HTTP response exceeds its acquisition bound")
-                            raw.extend(chunk)
-                        capture = CapturedBodyResponse(
-                            requested,
-                            str(response.url),
-                            response.status_code,
-                            response.headers.get("content-type"),
-                            observed,
-                            bytes(raw),
-                            content_encoding=response.headers.get("content-encoding", "identity"),
-                            method=method,
-                            request_body=content,
-                        )
-                        if response.is_redirect:
-                            source.capture(capture, stage="redirect")
-                            if method == "POST":
-                                raise ScorecardRefreshError("Publisher POST redirects require an explicit source rule")
-                            location = response.headers.get("location")
-                            if not location:
-                                raise ScorecardRefreshError("Publisher redirect has no location")
-                            current = urljoin(current, location)
-                            continue
-                        return capture
-                except BaseException as error:
-                    source.event(
-                        "capture-incomplete",
-                        stage="http",
-                        error_type=type(error).__name__,
-                        response_complete=False,
-                        body_retained=False,
-                        requested_url=current,
-                        bytes_received=len(raw),
-                    )
-                    raise
-            raise ScorecardRefreshError("Publisher redirect limit exceeded")
-
-        from spicy_regs.scorecards.acquisition import RequestFetcher
-
-        yield RequestFetcher(request)
 
 
 def _prior_tables(
@@ -396,6 +282,8 @@ def build_scorecards(
                     and (not requested or e.scorecard_id in requested or e.edition_id in requested)
                 ]
                 for edition in selected:
+                    if Path(registry).resolve() == REGISTRY.resolve():
+                        check_live_edition(source, edition)
                     selected_editions.update({edition.scorecard_id, edition.edition_id} & requested)
                     if edition.publisher_id != source.publisher_id:
                         raise provider.refusal("Publisher listing escaped its selected identity")
@@ -480,7 +368,8 @@ def build_scorecards(
     for name, contract in provider.contracts.items():
         scope_column = "publisher_id" if name == "scorecard_publishers" else "scorecard_id"
         replaced = set(publisher_rows) if name == "scorecard_publishers" else set(accepted)
-        merged[name] = [row for row in prior_rows[name] if row[scope_column] not in replaced] + fresh[name]
+        merged[name] = [row for row in prior_rows[name] if row[scope_column] not in replaced]
+        merged[name].extend(fresh[name])
         current_keys = {contract.key(row) for row in fresh[name]}
         removed = [
             list(contract.key(row))

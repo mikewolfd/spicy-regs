@@ -1,0 +1,295 @@
+{
+  "SOURCE_COLUMNS": {
+    "scorecard_item_links": [
+      "scorecard_id",
+      "item_id",
+      "reference_id",
+      "source_reference_id",
+      "congress",
+      "chamber",
+      "session",
+      "roll_number",
+      "vote_id",
+      "bill_id",
+      "amendment_id",
+      "source_snapshot_id",
+      "resolution_status",
+      "resolution_rule",
+      "rule_version",
+      "candidate_count",
+      "candidates_json",
+      "reason",
+      "source_context_json",
+      "input_pins_json",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_items": [
+      "scorecard_id",
+      "item_id",
+      "publisher_item_id",
+      "item_kind_text",
+      "title",
+      "item_date_text",
+      "congress_text",
+      "chamber_text",
+      "session_text",
+      "roll_number_text",
+      "bill_citation_text",
+      "amendment_citation_text",
+      "references_json",
+      "source_url",
+      "source_path",
+      "publisher_position_text",
+      "position_basis",
+      "position_source_path",
+      "snapshot_id",
+      "capture_id"
+    ],
+    "scorecard_member_item_results": [
+      "scorecard_id",
+      "result_id",
+      "metric_id",
+      "item_id",
+      "participation_id",
+      "publisher_member_key",
+      "action_text",
+      "result_text",
+      "contribution_text",
+      "contribution_number",
+      "eligibility_text",
+      "counts_toward_metric",
+      "adjustment_text",
+      "reason_text",
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_member_links": [
+      "scorecard_id",
+      "publisher_member_key",
+      "bioguide_id",
+      "term_candidates_json",
+      "override_version",
+      "source_snapshot_id",
+      "resolution_status",
+      "resolution_rule",
+      "rule_version",
+      "candidate_count",
+      "candidates_json",
+      "reason",
+      "source_context_json",
+      "input_pins_json",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_member_ratings": [
+      "scorecard_id",
+      "metric_id",
+      "publisher_member_key",
+      "value_text",
+      "value_number",
+      "value_status_text",
+      "rank_text",
+      "notes_text",
+      "source_url",
+      "source_path",
+      "snapshot_id",
+      "capture_id"
+    ],
+    "scorecard_members": [
+      "scorecard_id",
+      "publisher_member_key",
+      "publisher_member_id",
+      "identifiers_json",
+      "member_name",
+      "chamber_text",
+      "state",
+      "district",
+      "party",
+      "period_text",
+      "eligibility_text",
+      "notes_text",
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_methodologies": [
+      "scorecard_id",
+      "methodology_id",
+      "chamber_text",
+      "cohort_text",
+      "effective_at_text",
+      "methodology_text",
+      "methodology_url",
+      "disclosure_status",
+      "capture_id",
+      "source_path",
+      "snapshot_id",
+      "source_url"
+    ],
+    "scorecard_metric_components": [
+      "scorecard_id",
+      "parent_metric_id",
+      "component_metric_id",
+      "weight_text",
+      "weight_number",
+      "combination_rule_text",
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_metric_items": [
+      "scorecard_id",
+      "metric_id",
+      "item_id",
+      "participation_id",
+      "methodology_id",
+      "publisher_position_text",
+      "position_basis",
+      "weight_text",
+      "weight_number",
+      "contribution_rule_text",
+      "counts_toward_metric",
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_metrics": [
+      "scorecard_id",
+      "metric_id",
+      "methodology_id",
+      "name",
+      "value_unit_text",
+      "chamber_text",
+      "cohort_text",
+      "period_text",
+      "periods_json",
+      "is_primary",
+      "scale_text",
+      "rank_population_text",
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_publishers": [
+      "publisher_id",
+      "name",
+      "abbreviation",
+      "aliases_json",
+      "homepage_url",
+      "scorecard_index_url",
+      "observed_at",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecard_snapshots": [
+      "snapshot_id",
+      "scorecard_id",
+      "observed_at",
+      "capture_ids_json",
+      "parser_version",
+      "methodology_digest",
+      "completeness_status",
+      "completeness_rule",
+      "source_declared_counts_json",
+      "parsed_counts_json",
+      "evidence_policy",
+      "capture_roles_json",
+      "rendition_selection_rule",
+      "identity_rule_version",
+      "capture_id",
+      "source_url",
+      "source_path"
+    ],
+    "scorecards": [
+      "scorecard_id",
+      "publisher_id",
+      "series_id",
+      "publisher_edition_key",
+      "publisher_name_text",
+      "title",
+      "edition_label_text",
+      "chamber_scope_text",
+      "year_text",
+      "congress_text",
+      "session_text",
+      "timespan_text",
+      "periods_json",
+      "source_url",
+      "methodology_url",
+      "published_at_text",
+      "updated_at_text",
+      "observed_at",
+      "snapshot_id",
+      "capture_id",
+      "source_path"
+    ]
+  },
+  "IDENTITIES": {
+    "scorecard_publishers": [
+      "publisher_id"
+    ],
+    "scorecards": [
+      "scorecard_id"
+    ],
+    "scorecard_snapshots": [
+      "snapshot_id"
+    ],
+    "scorecard_methodologies": [
+      "scorecard_id",
+      "methodology_id"
+    ],
+    "scorecard_metrics": [
+      "scorecard_id",
+      "metric_id"
+    ],
+    "scorecard_items": [
+      "scorecard_id",
+      "item_id"
+    ],
+    "scorecard_metric_items": [
+      "scorecard_id",
+      "metric_id",
+      "item_id",
+      "participation_id"
+    ],
+    "scorecard_metric_components": [
+      "scorecard_id",
+      "parent_metric_id",
+      "component_metric_id"
+    ],
+    "scorecard_members": [
+      "scorecard_id",
+      "publisher_member_key"
+    ],
+    "scorecard_member_ratings": [
+      "scorecard_id",
+      "metric_id",
+      "publisher_member_key"
+    ],
+    "scorecard_member_item_results": [
+      "scorecard_id",
+      "item_id",
+      "publisher_member_key",
+      "result_id"
+    ],
+    "scorecard_member_links": [
+      "scorecard_id",
+      "publisher_member_key"
+    ],
+    "scorecard_item_links": [
+      "scorecard_id",
+      "item_id",
+      "reference_id"
+    ]
+  }
+}

@@ -2,9 +2,7 @@
 
 from base64 import b64decode
 from hashlib import sha256
-import importlib.util
 import json
-from pathlib import Path
 import sys
 
 import pyarrow as pa
@@ -213,11 +211,7 @@ def test_published_partition_conversion_preserves_every_original_part_in_order(t
 
 
 def test_complete_analysis_preparation_converts_published_inputs_and_keeps_original_parent_pins(tmp_path, monkeypatch):
-    path = Path(__file__).parents[1] / "docs/research/scorecards/work/integration/deployment/prepare_analysis.py"
-    spec = importlib.util.spec_from_file_location("_convert_analysis_preparation", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    from spicy_regs.scorecards.operations import analysis as module
     store, index = legacy_analysis_inputs(tmp_path)
 
     from io import BytesIO

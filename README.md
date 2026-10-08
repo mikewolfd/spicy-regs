@@ -504,3 +504,5 @@ volunteer community using technology to serve the DC region.
 The source reader preserves nomination partitions, independent meeting references, FCC document offers and Congressional Record passages. Native receipt migrations admit exact recorded prior schemas; original source fields remain recoverable from receipts paired with the selected generation. Missing keys refuse navigation, and legal ambiguity retains every recorded candidate. FEC routes expose retained observations without selecting current amendments or combining money amounts.
 
 After changing source fields, run the focused navigation, Congress receipt and government shape checks, the dictionary check and generators, then full CI. Refresh only the affected rollup families. Metadata publication requires successful CI for the exact main revision and does not rescan unchanged comments or FEC records.
+
+Scorecard acquisition, publication and recovery: [production operations](docs/scorecards-production.md).

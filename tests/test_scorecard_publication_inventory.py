@@ -2,26 +2,18 @@
 
 from copy import deepcopy
 from hashlib import sha256
-import importlib.util
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+from spicy_regs.scorecards.operations import record
 
 
 @pytest.fixture
-def recorder(monkeypatch):
-    monkeypatch.syspath_prepend(str(SCRIPTS))
-    spec = importlib.util.spec_from_file_location("scorecard_publication_inventory", SCRIPTS / "record_scorecard_publication.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
+def recorder():
+    return record
 
 def inputs(tmp_path):
     qualified = dict(

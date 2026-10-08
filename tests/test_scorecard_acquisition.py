@@ -194,3 +194,50 @@ def test_public_app_headers_refuse_an_unselected_target_before_paid_request(tmp_
     with zyte_fetch(source, fetcher=fetcher) as fetch, pytest.raises(ScorecardTransportError, match="original API"):
         fetch.request(url, method="GET", content=None, request_headers={"X-API-Key": "synthetic-app-key"})
     assert fetcher.calls == []
+
+
+def test_direct_transport_uses_only_reader_selected_headers_and_exact_post_bytes(tmp_path, monkeypatch):
+    import httpx
+    from spicy_regs.scorecards import acquisition
+    source = scope(tmp_path, monkeypatch)
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, headers={"Content-Type": "application/json"},
+                              stream=httpx.ByteStream(b'{"data": {}}'))
+
+    original = httpx.Client
+    monkeypatch.setattr(acquisition.httpx, "Client", lambda **kwargs: original(
+        transport=httpx.MockTransport(handler), **kwargs))
+    with acquisition.bounded_fetch(source, max_requests=1) as fetch:
+        captured = fetch.request("http://publisher.example/graphql", method="POST", content=b'{"query":"literal"}',
+                                 request_headers={"X-Publisher-Role": "anonymous"})
+        assert captured.body == b'{"data": {}}'
+        assert captured.request_body == requests[0].content == b'{"query":"literal"}'
+        assert requests[0].headers["X-Publisher-Role"] == "anonymous"
+        assert "X-Hasura-Role" not in requests[0].headers
+        with pytest.raises(acquisition.ScorecardRefreshError, match="budget exhausted"):
+            fetch.request("http://publisher.example/graphql", method="POST", content=b'{}')
+    assert len(requests) == 1
+
+
+def test_direct_transport_captures_redirect_but_never_sends_selected_headers_to_other_host(tmp_path, monkeypatch):
+    import httpx
+    from spicy_regs.scorecards import acquisition
+    source = scope(tmp_path, monkeypatch)
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(302, headers={"Location": "https://www.publisher.example/table"},
+                              stream=httpx.ByteStream(b"redirect"))
+
+    original = httpx.Client
+    monkeypatch.setattr(acquisition.httpx, "Client", lambda **kwargs: original(
+        transport=httpx.MockTransport(handler), **kwargs))
+    with acquisition.bounded_fetch(source) as fetch:
+        with pytest.raises(acquisition.ScorecardRefreshError, match="selected host"):
+            fetch.request("https://publisher.example/table", request_headers={"X-Publisher-Role": "anonymous"})
+    assert len(requests) == 1
+    assert any(row["event"] == "capture" and row["stage"] == "redirect" for row in journal(source.root))

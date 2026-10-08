@@ -1,0 +1,23 @@
+name: Rollup — scorecard analysis
+# Routine refresh follows scorecards; this is the ordinary manual repair path.
+on:
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Build exact identity links without publication'
+        default: true
+        type: boolean
+concurrency:
+  group: scorecard-analysis-publication
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  run:
+    uses: ./.github/workflows/_rollup.yml
+    secrets: inherit
+    with:
+      command: run-rollup-scorecard-analysis
+      producer_ref: main
+      skip_upload: ${{ inputs.skip_upload }}
+      timeout_minutes: 180

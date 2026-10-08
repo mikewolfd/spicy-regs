@@ -5,6 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.63.0`: complete release wheel built from the scorecard production
+  refactor at `40927102`; SHA-256
+  `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4`.
+  CPAC selects its GraphQL headers in the source reader; HRC reuses shared private
+  qualification retention. Source shapes and existing publisher values remain
+  unchanged. See [production operations](../docs/scorecards-production.md).
+  Existing evidence pins and earlier wheels remain retained.
+
 - `spicy_docs-0.61.0`: tagged source `v0.61.0` at merge commit
   `76ec8628f608b1ed2080b8ef2a4a8c920af72c4f`. Its full tree equals the final
   CI-passed candidate `ceb3b7644f3d9af8ebf2d3f4c457873b15bb3e0f`.

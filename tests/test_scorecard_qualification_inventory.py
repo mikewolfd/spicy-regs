@@ -2,28 +2,14 @@
 
 from dataclasses import asdict
 from hashlib import sha256
-import importlib.util
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from spicy_docs.sources.scorecards import ScorecardEdition
 
 
-SPEC = importlib.util.spec_from_file_location(
-    "scorecard_qualifications", Path(__file__).resolve().parents[1] / "scripts/build_scorecard_qualifications.py"
-)
-assert SPEC is not None and SPEC.loader is not None
-qualifications = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(qualifications)
-INTEGRATIONS_SPEC = importlib.util.spec_from_file_location(
-    "scorecard_integrations", Path(__file__).resolve().parents[1] / "scripts/build_scorecard_integrations.py"
-)
-assert INTEGRATIONS_SPEC is not None and INTEGRATIONS_SPEC.loader is not None
-integrations = importlib.util.module_from_spec(INTEGRATIONS_SPEC)
-INTEGRATIONS_SPEC.loader.exec_module(integrations)
-
+from spicy_regs.scorecards.operations import inventory as integrations, qualifications
 
 def inputs(tmp_path, monkeypatch, *, complete=True, counts=None):
     corpus = tmp_path / "corpus"

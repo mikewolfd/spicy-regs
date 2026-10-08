@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-import hashlib
 from os import getenv
 from pathlib import Path
 from typing import ClassVar
 
+from spicy_regs.scorecards.inputs import stage_member
 from spicy_regs.scorecards.etl import LINK_NAMES, POLICIES, verified_receipt_download
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import publication
@@ -45,17 +45,15 @@ class ScorecardAnalysisRollup(RollupPipeline):
             paths[key.removesuffix(".parquet")] = []
             for member in members:
                 target = output_dir / member.key
-                if target.is_file():
-                    with target.open("rb") as stream:
-                        digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-                    if digest != member.sha256 or target.stat().st_size != member.byte_size:
-                        raise publication.PublicationError(f"Local analysis input differs from its pin: {member.key}")
-                else:
+                def fetch(selected, destination):
                     if not public_url:
                         raise publication.PublicationError("Missing analysis input and R2_PUBLIC_URL")
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    if not publication.fetch_member(public_url, member, target, key):
-                        raise publication.PublicationError(f"Missing pinned analysis input: {member.key}")
+                    return publication.fetch_member(public_url, selected, destination, key)
+
+                try:
+                    stage_member(member, target, fetch=fetch)
+                except ValueError:
+                    raise publication.PublicationError(f"Analysis input differs from its pin: {member.key}") from None
                 paths[key.removesuffix(".parquet")].append(target)
         source_owner = entries["scorecards"]
         if "etlReceipts" in source_owner:
