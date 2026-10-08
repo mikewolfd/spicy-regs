@@ -1,5 +1,19 @@
 # Capture original selected comments
 
+`prepare_comments_selected_export.prepare` keeps the original selected input
+pair and its byte pins. Its output receipts identify that pair and the original
+receipt, identify the output row and processor, and retain actual outcomes and
+diagnostics. They omit embedded source/conversion records and copied processing
+history. Promoted reference and extraction facts stay in the comments table.
+Both local and remote preparation use this same receipt shape.
+
+The original pair is the input table for replay; preserve it. The smaller output
+receipts are audit links, not a replacement input table. Exact-input readers
+such as `materialize_internal` still require the original selected receipts and
+refuse output receipts without `raw_conversion_inputs`. Querying comments,
+building the index, and complete subject/receipt admission use the native
+subject and its identity/version and do not require those embedded records.
+
 Install `uv sync --frozen --extra comments-reader`, then use
 `uv run --frozen --extra comments-reader python -m scripts.capture_comments_current
 EXPECTED.json OUTPUT --namespace default --expected-runtime RUNTIME.json`. `EXPECTED.json` selects the complete nullable

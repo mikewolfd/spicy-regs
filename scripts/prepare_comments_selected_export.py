@@ -25,8 +25,8 @@ import pyarrow.parquet as pq
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.etl_bulk import _read_promotion_rows
 from spicy_regs.etl_receipts import (
-    ReceiptContext, _rows, inherit_receipt, rebind_receipt,
-    selected_subject_policy, validate_receipt_bundle, write_dataset,
+    ReceiptContext, _digest, _rows, decode_exact_json, exact_json,
+    selected_subject_policy, write_dataset,
 )
 from spicy_regs.transforms.regulations_receipts import policy
 
@@ -259,15 +259,42 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
     available = {name: Counter() for name in FIELDS}
     count = 0
 
+    def context_for(prior, attempt_id, processor):
+        # The pinned original pair holds the inputs and historical receipts.
+        # Link to those bytes instead of embedding them again in every output.
+        diagnostics = decode_exact_json(prior["diagnostic_json"])
+        diagnostics = {key: value for key, value in diagnostics.items()
+                       if key not in {"retained_processing", "prior_receipts", "prior_receipt", "carried_from"}}
+        return ReceiptContext(
+            generation, attempt_id, processor,
+            [{"source_id": "selected-comments-v1", "source_uri": str(subjects),
+              "sha256": source_identity["sha256"],
+              "locator": json.dumps(metadata["snapshot"], sort_keys=True),
+              "body_version": metadata["generation_id"]},
+             {"source_id": "selected-comments-v1-receipts", "source_uri": str(receipts),
+              "sha256": receipt_identity["sha256"], "locator": prior["receipt_id"],
+              "body_version": prior["generation_id"]}],
+            diagnostics,
+        )
+
+    def carried_attempts(path):
+        for prior in _rows(path):
+            context = context_for(prior, prior["attempt_id"], prior["processor"])
+            # Keep the actual outcome, identity and failure facts. The original
+            # input remains available through the pinned receipt-file witness.
+            carried = dict(prior, generation_id=generation, witnesses=list(context.witnesses),
+                           processing_json=exact_json({}), diagnostic_json=exact_json(context.diagnostics))
+            carried["receipt_id"] = _digest({key: value for key, value in carried.items() if key != "receipt_id"})
+            yield carried
+
     def records():
         nonlocal count
         # Preserve the bulk failure and its cause instead of silently starting
         # a full-payload SQLite copy for this complete selected population.
         rows = _read_promotion_rows([subjects], [receipts], earlier,
                                    generation_id=metadata["generation_id"], evidence=scan,
-                                   include_prior=native_only)
-        for item in rows:
-            row, prior = item if native_only else (item, None)
+                                   include_prior=True)
+        for row, prior in rows:
             # Promote the retained values directly. The earlier mapper remains
             # the authority for its normalized subject and its original record.
             for name in FIELDS:
@@ -276,16 +303,8 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
                 row.setdefault(name, None)
             if set(row) != current.input_fields:
                 raise ValueError("Retained comments fields differ from current policy")
-            context = ReceiptContext(
-                generation, str(count), "comments-selected-policy-promotion/2",
-                [{"source_id": "selected-comments-v1", "source_uri": None,
-                  "sha256": source_identity["sha256"],
-                  "locator": json.dumps(metadata["snapshot"], sort_keys=True),
-                  "body_version": metadata["generation_id"]}],
-            )
-            if native_only:
-                context = inherit_receipt(context, prior)
-            yield row, context
+            context = context_for(prior, str(count), "comments-selected-policy-promotion/3")
+            yield {name: row[name] for name in current.subject_schema.names}, context
             count += 1
 
     # Select historical nonaccepted occurrences locally, retaining file order.
@@ -302,26 +321,18 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
                 "TO $attempts (FORMAT PARQUET, COMPRESSION ZSTD)",
                 {"receipts": str(receipts), "attempts": str(attempts)},
             )
-        # Keep fresh output private until full-history inheritance and admission
-        # complete. The maintained ordinal lookup avoids a whole-payload SQLite
-        # index, while inherit_receipt preserves witnesses and exact payloads.
-        from spicy_regs.current_receipt_history import inherit_current_receipts
+        # Admission still checks the whole subject/receipt pair before exposure.
+        # Original input/history stays in the pinned pair, not another rewrite.
         from rulespec_artifacts import publish_directory_no_replace
         staged = Path(temporary) / "fresh"
         # This knob also bounds the wide Python input buffer. Output-only
         # batching would need a separate maintained writer setting.
-        failures = (rebind_receipt(row, generation_id=generation) for row in _rows(attempts))
+        failures = carried_attempts(attempts)
         if remote_writer is None:
             subject, receipt = write_dataset(records(), staged, current, batch_size=128, failures=failures)
         else:
             subject, receipt = remote_writer(records(), current, failures=failures,
                                              generation_id=generation, snapshot=metadata["snapshot"])
-        if not native_only:
-            inherited = Path(temporary) / "inherited.parquet"
-            inherit_current_receipts(receipt, [receipts], inherited,
-                                     inherit_observations=False, require_unique_prior=True)
-            inherited.replace(receipt)
-            validate_receipt_bundle({"comments": [subject]}, [receipt], [current], generation_id=generation)
         if captured_input is not None:
             _captured_descriptor(captured_input, captured_input_sha256)
             # Reuse byte identities verified at entry only while custody stays
@@ -349,6 +360,7 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
                           "policy": earlier.descriptor()},
         "current_policy": current.descriptor(),
         "recorded_fields": {name: dict(values) for name, values in available.items()},
+        "receipt_inputs": "pinned-original-pair",
         "native_catalog_mutated": False,
     }
     if captured_input is not None:
