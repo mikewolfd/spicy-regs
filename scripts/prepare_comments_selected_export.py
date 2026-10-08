@@ -23,7 +23,7 @@ import duckdb
 import pyarrow.parquet as pq
 
 from spicy_regs.duckdb_settings import ExportResources
-from spicy_regs.etl_bulk import read_with_receipts
+from spicy_regs.etl_bulk import _read_retained_source15, read_with_receipts
 from spicy_regs.etl_receipts import (
     ReceiptContext, _rows, rebind_receipt,
     selected_subject_policy, validate_receipt_bundle, write_dataset,
@@ -214,7 +214,8 @@ Path(sys.argv[1]).write_text(json.dumps(result))
         return self._read(asdict(snapshot)) is True
 
 
-def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None):
+def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None,
+            retained_scan=None, retained_scan_sha256=None):
     """Keep the complete earlier pair and derive declared current subjects once."""
     pair, destination = Path(pair), Path(destination)
     sealed = (verify_original(pair) if captured_input is None else
@@ -240,6 +241,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         raise ValueError("The complete captured comments population is required")
     source_identity = sealed["members"]["comments.parquet"]
     receipt_identity = sealed["members"]["etl_receipts.parquet"]
+    scan = None
+    if retained_scan is not None:
+        if captured_input is None:
+            raise ValueError("Retained scans require the exact captured-input path")
+        scan = (Path(retained_scan), retained_scan_sha256, sealed["capture"]["descriptor"])
     generation = "comments-v2-" + uuid4().hex
     available = {name: Counter() for name in FIELDS}
     count = 0
@@ -248,10 +254,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         nonlocal count
         # Preserve the bulk failure and its cause instead of silently starting
         # a full-payload SQLite copy for this complete selected population.
-        for row in read_with_receipts(
-            [subjects], [receipts], earlier, generation_id=metadata["generation_id"],
-            processing_by_ordinal=True,
-        ):
+        rows = (_read_retained_source15([subjects], [receipts], earlier,
+                                       generation_id=metadata["generation_id"], evidence=scan)
+                if scan is not None else read_with_receipts([subjects], [receipts], earlier,
+                    generation_id=metadata["generation_id"], processing_by_ordinal=True))
+        for row in rows:
             # Promote the retained values directly. The earlier mapper remains
             # the authority for its normalized subject and its original record.
             for name in FIELDS:
@@ -330,11 +337,15 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         evidence["historical_admission"] = {"status": "validated", "source": validation_source,
             "policy": earlier.descriptor(), "generation_id": metadata["generation_id"],
             "members": sealed["members"], "capture_descriptor": sealed["capture"]["descriptor"]}
+        if retained_scan is not None:
+            evidence["historical_admission"]["retained_scan"] = {"path": str(retained_scan),
+                                                                 "sha256": retained_scan_sha256}
     (destination / "generation.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     return subject, receipt, evidence
 
 
-def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sha256=None):
+def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sha256=None,
+             retained_scan=None, retained_scan_sha256=None):
     """Use existing agency writers and index builder on the one derived artifact."""
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
@@ -344,7 +355,8 @@ def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sh
     output = Path(output)
     subject, receipts, evidence = prepare(pair, output / ".catalog-pairs" / "comments",
                                          captured_input=captured_input,
-                                         captured_input_sha256=captured_input_sha256)
+                                         captured_input_sha256=captured_input_sha256,
+                                         retained_scan=retained_scan, retained_scan_sha256=retained_scan_sha256)
     resources = ExportResources()
     with TemporaryDirectory(prefix="comments-derived-sort-", dir=output) as temporary:
         temporary = Path(temporary)
@@ -547,12 +559,18 @@ def main():
     parser.add_argument("--captured-input", type=Path,
                         help="Explicit captured-validation-pending pair descriptor; never an export seal")
     parser.add_argument("--captured-input-sha256", help="Exact digest of that captured input descriptor")
+    parser.add_argument("--retained-scan", type=Path, help="Exact closed source15 scan recovery evidence")
+    parser.add_argument("--retained-scan-sha256", help="Exact digest of the retained scan evidence")
     args = parser.parse_args()
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
     if (args.captured_input is None) != (args.captured_input_sha256 is None):
         raise ValueError("Captured input path and exact descriptor digest are required together")
+    if (args.retained_scan is None) != (args.retained_scan_sha256 is None):
+        raise ValueError("Retained scan path and exact evidence digest are required together")
+    if args.retained_scan is not None:
+        args.retained_scan = args.retained_scan.absolute()
     if args.captured_input is not None:
         # Keep the literal path so symlink custody is checked rather than resolved away.
         args.captured_input = args.captured_input.absolute()
@@ -617,7 +635,8 @@ def main():
             captured_snapshot = _pair_snapshot(captured["metadata"]["snapshot"])
             observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
         result = assemble(args.original_pair, args.output, captured_input=args.captured_input,
-                          captured_input_sha256=args.captured_input_sha256)
+                          captured_input_sha256=args.captured_input_sha256,
+                          retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256)
         if args.captured_input is not None:
             manifest = json.loads(manifest_path.read_text())
             if manifest["source"] != asdict(captured_snapshot):
