@@ -88,7 +88,7 @@ def _retained_source15_scan(evidence, subject_paths, receipt_paths, earlier, gen
     """Qualify only the closed source15 inserts, without asserting admission."""
     from spicy_regs.local_data import file_signature
 
-    path, expected_sha256 = evidence
+    path, expected_sha256, current_capture_pin = evidence
     if not isinstance(path, Path) or not path.is_absolute():
         raise ValueError("Retained scan evidence requires an absolute regular file")
 
@@ -118,6 +118,9 @@ def _retained_source15_scan(evidence, subject_paths, receipt_paths, earlier, gen
     if launch["capturedInput"]["sha256"] != "9d2195a26c197da500cbf003a442febb0cb9806d91301b2cd2676d7e67c06b1d":
         raise ValueError("Retained source15 capture descriptor differs")
     old_capture = read_pin(launch["capturedInput"])
+    current_capture = read_pin(current_capture_pin)
+    if dict(old_capture, validationRevision=current_capture["validationRevision"]) != current_capture:
+        raise ValueError("Retained source15 capture differs from the current selected descriptor")
     revision = "3da6088cbad6e89944047dfb6d9bb4c3cf3a26a3"
     expected_inputs = {Path(member["path"]) for member in old_capture["members"].values()}
     if (set((*subject_paths, *receipt_paths)) != expected_inputs

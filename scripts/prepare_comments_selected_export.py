@@ -245,7 +245,7 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
     if retained_scan is not None:
         if captured_input is None:
             raise ValueError("Retained scans require the exact captured-input path")
-        scan = (Path(retained_scan), retained_scan_sha256)
+        scan = (Path(retained_scan), retained_scan_sha256, sealed["capture"]["descriptor"])
     generation = "comments-v2-" + uuid4().hex
     available = {name: Counter() for name in FIELDS}
     count = 0
