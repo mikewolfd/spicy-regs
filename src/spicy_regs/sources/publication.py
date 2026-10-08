@@ -1126,6 +1126,7 @@ def _publish_verified_generation(
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
     receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
     conversion_proof: NativeConversionProof | None = None,
+    before_pointer=None,
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first."""
     from botocore.exceptions import BotoCoreError, ClientError
@@ -1246,6 +1247,8 @@ def _publish_verified_generation(
         current = index["families"].get(family)
         moved = current if _generation_entry(current) == entry else {**entry, "publishedAt": _instant()}
         updated, raw = _merge_family(index, family, moved)
+        if before_pointer is not None:
+            before_pointer()
         if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
             try:
                 _write_v1(client, bucket, bootstrap)

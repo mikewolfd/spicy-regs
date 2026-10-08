@@ -76,6 +76,46 @@ def open_pinned_s3(*, client: Any, bucket: str, key: str, etag: str) -> Iterator
         tracked.close()
 
 
+@contextmanager
+def open_pinned_http(url: str, *, etag: str) -> Iterator[io.BufferedIOBase]:
+    """Credentialless seekable reads with a version guard on every HTTP request."""
+    import requests
+    from smart_open import http
+
+    if not isinstance(etag, str) or not etag.strip():
+        raise ValueError("A nonempty ETag is required for pinned HTTP reads")
+
+    class ClosingSession:
+        def __init__(self, session):
+            self.session, self.response = session, None
+
+        def close(self):
+            if self.response is not None:
+                self.response.close()
+                self.response = None
+
+        def get(self, *args, **kwargs):
+            self.close()
+            self.response = self.session.get(*args, **kwargs)
+            self.response.raise_for_status()
+            if self.response.headers.get("ETag") != etag:
+                self.close()
+                raise ValueError("Public member changed during its pinned read")
+            return self.response
+
+    with requests.Session() as session:
+        session.trust_env = False  # No environment credentials or proxy auth in anonymous admission.
+        tracked = ClosingSession(session)
+        try:
+            with http.open(url, "rb", headers={"If-Match": etag, "Accept-Encoding": "identity"},
+                           session=tracked, buffer_size=READ_BUFFER_BYTES, timeout=120) as stream:
+                if not stream.seekable():
+                    raise ValueError("Public member does not support bounded seekable reads")
+                yield stream
+        finally:
+            tracked.close()
+
+
 class _HashingSink(io.RawIOBase):
     """Count and hash each accepted write without buffering a whole output file."""
 
@@ -105,20 +145,41 @@ class _HashingSink(io.RawIOBase):
         return written
 
 
-def write_remote_parquet(
+@dataclass
+class ParquetUpload:
+    """One open upload; its stored receipt exists only after successful closure."""
+
+    writer: pq.ParquetWriter
+    schema: pa.Schema
+    rows: int = 0
+    stored: StoredParquet | None = None
+
+    def write(self, batch: pa.Table | pa.RecordBatch) -> None:
+        if not isinstance(batch, (pa.Table, pa.RecordBatch)):
+            raise TypeError("Each Parquet batch must be an Arrow table or record batch")
+        if not batch.schema.equals(self.schema, check_metadata=True):
+            raise ValueError("Parquet batch schema differs from the declared schema")
+        if isinstance(batch, pa.RecordBatch):
+            self.writer.write_batch(batch)
+        else:
+            self.writer.write_table(batch)
+        self.rows += batch.num_rows
+
+
+@contextmanager
+def remote_parquet_writer(
     *,
     client: Any,
     bucket: str,
     key: str,
     schema: pa.Schema,
-    batches: Iterable[pa.Table | pa.RecordBatch],
     max_bytes: int,
-) -> StoredParquet:
+) -> Iterator[ParquetUpload]:
     """Write a new staging object; abort multipart state on body or close failure.
 
     The caller chooses a unique staging key. Conditional completion preserves
     an already-existing object. This helper never changes a publication index.
-    Memory is bounded by the supplied Arrow batch and a 64 MiB upload buffer;
+    Memory holds the supplied Arrow batch, a 64 MiB upload buffer and accumulated footer metadata;
     max_bytes limits serialized bytes, including headers and the final footer.
     """
     from smart_open import s3
@@ -143,19 +204,10 @@ def write_remote_parquet(
         ),
     )
     sink = _HashingSink(stream, max_bytes)
-    rows = 0
     try:
         with pq.ParquetWriter(sink, schema, compression="zstd") as writer:
-            for batch in batches:
-                if not isinstance(batch, (pa.Table, pa.RecordBatch)):
-                    raise TypeError("Each Parquet batch must be an Arrow table or record batch")
-                if not batch.schema.equals(schema, check_metadata=True):
-                    raise ValueError("Parquet batch schema differs from the declared schema")
-                if isinstance(batch, pa.RecordBatch):
-                    writer.write_batch(batch)
-                else:
-                    writer.write_table(batch)
-                rows += batch.num_rows
+            upload = ParquetUpload(writer, schema)
+            yield upload
         # smart_open's __exit__ does not terminate when its own close raises.
         # Keep explicit completion inside the same abort guard as Arrow writes.
         stream.close()
@@ -171,4 +223,15 @@ def write_remote_parquet(
     etag = head.get("ETag")
     if head.get("ContentLength") != sink.byte_size or not isinstance(etag, str) or not etag.strip():
         raise ValueError("Stored Parquet size or ETag differs from the completed upload")
-    return StoredParquet(key, sink.byte_size, "sha256:" + sink.digest.hexdigest(), etag, rows)
+    upload.stored = StoredParquet(key, sink.byte_size, "sha256:" + sink.digest.hexdigest(), etag, upload.rows)
+
+
+def write_remote_parquet(*, client: Any, bucket: str, key: str, schema: pa.Schema,
+                         batches: Iterable[pa.Table | pa.RecordBatch], max_bytes: int) -> StoredParquet:
+    """Consume a batch stream through the same bounded, create-only upload."""
+    with remote_parquet_writer(client=client, bucket=bucket, key=key, schema=schema,
+                               max_bytes=max_bytes) as upload:
+        for batch in batches:
+            upload.write(batch)
+    assert upload.stored is not None
+    return upload.stored

@@ -29,6 +29,21 @@ if TYPE_CHECKING:
     from spicy_regs.sources.remote_parquet import StoredParquet
 
 
+def _member_map(staging_prefix, members):
+    if not staging_prefix or staging_prefix != staging_prefix.strip("/"):
+        raise ValueError("A remote generation needs an explicit staging prefix")
+    result = {}
+    for member in members:
+        key = Path(member.key).name
+        if (member.key != staging_prefix + "/" + key or not key.endswith(".parquet")
+                or key in result or not member.etag):
+            raise ValueError("Staged table names or source pins are invalid")
+        result[key] = member
+    if not result:
+        raise ValueError("A remote generation cannot omit all tables")
+    return result
+
+
 class _RemoteGenerationSource:
     """Member source over staged remote Parquet plus local artifact metadata.
 
@@ -40,21 +55,11 @@ class _RemoteGenerationSource:
                  members: Sequence[StoredParquet]):
         from rulespec_artifacts import LocalMemberSource
 
-        if not staging_prefix or staging_prefix != staging_prefix.strip("/"):
-            raise ValueError("A remote generation needs an explicit staging prefix")
         self.directory = directory
         self.client, self.bucket, self.prefix = client, bucket, staging_prefix
         self.local = LocalMemberSource(directory)
         self.remote = _S3Members(client, bucket, staging_prefix)
-        self.members = {}
-        for member in members:
-            key = Path(member.key).name
-            if (member.key != staging_prefix + "/" + key or not key.endswith(".parquet")
-                    or key in self.members or not member.etag):
-                raise ValueError("Staged table names or source pins are invalid")
-            self.members[key] = member
-        if not self.members:
-            raise ValueError("A remote generation cannot omit all tables")
+        self.members = _member_map(staging_prefix, members)
 
     def keys(self):
         """List all local and staged keys; a local/remote collision is refused so undeclared staging fails admission."""
@@ -90,11 +95,87 @@ class _RemoteGenerationSource:
         return {"columns": [[row[0], row[1]] for row in columns], "rows": rows}
 
 
-def _verify_remote(source, *, expected_pin=None):
+class _PublicGenerationSource(_RemoteGenerationSource):
+    """Same verifier over declared public members, with no local table downloads.
+
+    Public manifests declare membership, as in the existing public conversion
+    reader. Public listing is unavailable; staged membership was checked before
+    publication. Every declared body is independently hashed and decoded here.
+    """
+
+    def __init__(self, directory, base_url, prefix, members):
+        from rulespec_artifacts import LocalMemberSource
+        self.local = LocalMemberSource(directory)
+        self.base_url = base_url.rstrip("/")
+        self.members = _member_map(prefix, members)
+
+    def keys(self):
+        local = set(self.local.keys())
+        if local & set(self.members):
+            raise ValueError("Public members collide with local artifact metadata")
+        yield from sorted(local | set(self.members))
+
+    @contextmanager
+    def open(self, key):
+        from spicy_regs.sources.remote_parquet import open_pinned_http
+        if key in self.members:
+            member = self.members[key]
+            with open_pinned_http(self.base_url + "/" + member.key, etag=member.etag) as stream:
+                yield stream
+        else:
+            with self.local.open(key) as stream:
+                yield stream
+
+
+def verify_public_generation(base_url, index, family, directory, *, bounded_receipts=False):
+    """Fully admit actual anonymous generation bytes while retaining only metadata locally."""
+    from rulespec_artifacts import ArtifactPin, parse_admitted_json, sha256_digest, validate_object_key
+    from spicy_regs.sources import publication, r2
+    from spicy_regs.sources.remote_parquet import StoredParquet
+
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=False)
+    entry = index["families"][family]
+    raw, root = publication.load_family_root(base_url, entry)
+    (directory / "artifact.json").write_bytes(raw)
+    members = []
+    for manifest in root["memberManifests"]:
+        key = validate_object_key(manifest["objectKey"], path="manifest.objectKey")
+        raw = publication._bounded_get(base_url.rstrip("/") + "/" + entry["prefix"] + "/" + key,
+                                       allow_missing=False, limit=publication.EVIDENCE_CONTROL_LIMIT)
+        if raw is None or sha256_digest(raw) != manifest["sha256"]:
+            raise ValueError("Public generation manifest differs from its pin")
+        target = directory / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+        for member in parse_admitted_json(raw)["members"]:
+            name = validate_object_key(member["objectKey"], path="member.objectKey")
+            remote_key = entry["prefix"] + "/" + name
+            version = r2.public_object_version(base_url.rstrip("/") + "/" + remote_key)
+            if version is None or version["bytes"] != member["byteSize"]:
+                raise ValueError("Public member is missing or differs in size")
+            members.append(StoredParquet(remote_key, member["byteSize"], member["sha256"],
+                                         version["etag"], member["recordCount"]))
+    source = _PublicGenerationSource(directory, base_url, entry["prefix"], members)
+    return _verify_remote(source, expected_pin=ArtifactPin(entry["logicalId"], entry["artifactDigest"]),
+                          bounded_receipts=bounded_receipts)
+
+
+def _verify_remote(source, *, expected_pin=None, bounded_receipts=False):
     """Admit the artifact, then require staged receipts to equal independently verified bytes."""
     from rulespec_artifacts import iter_member_descriptors
 
-    artifact = verify_generation_source(source, source.table_info, expected_pin=expected_pin)
+    if not bounded_receipts:
+        artifact = verify_generation_source(source, source.table_info, expected_pin=expected_pin)
+    else:
+        from spicy_regs.generations import _verify_generation_source
+        from spicy_regs.etl_bulk import _validated_bundle
+        def admit_receipts(subjects, receipts, policies, *, generation_id):
+            with _validated_bundle(subjects, receipts, policies, generation_id=generation_id,
+                                   threads=1, memory_limit="8GB", bounded_insert=True):
+                pass
+        artifact = _verify_generation_source(source, source.table_info, expected_pin=expected_pin,
+                                             admit_receipts=admit_receipts)
     expected = set(artifact.root["spec"]["tables"])
     if "etlReceipts" in artifact.root["spec"]:
         expected.add("etl_receipts.parquet")
@@ -114,6 +195,8 @@ def prepare_remote_generation(
     schemas: Mapping[str, list[tuple[str, str]]], read_snapshot: Mapping | None = None,
     carried_forward: Mapping[str, str] | None = None, publication_status: str = "complete-family", inputs=(),
     receipt_policies: Sequence | None = None, receipt_generation_id: str | None = None,
+    parents: Mapping[str, Mapping] | None = None,
+    bounded_receipts=False,
 ):
     """Create and fully verify the standard artifact using pinned remote tables.
 
@@ -152,16 +235,17 @@ def prepare_remote_generation(
         directory, family=family, tables=tables, members=descriptors, read_snapshot=read_snapshot,
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
         extra_packages=("pyarrow", "duckdb", "smart-open", "wrapt"), etl_receipts=receipt_spec,
+        parents=parents,
     )
-    return _verify_remote(source)
+    return _verify_remote(source, bounded_receipts=bounded_receipts)
 
 
 def verify_remote_generation(directory: Path, *, client, bucket: str, staging_prefix: str,
-                             members: Sequence[StoredParquet], expected_pin=None):
+                             members: Sequence[StoredParquet], expected_pin=None, bounded_receipts=False):
     """Re-admit exact staging bytes and decode all columns without local copies."""
     source = _RemoteGenerationSource(directory, client=client, bucket=bucket,
                                      staging_prefix=staging_prefix, members=members)
-    return _verify_remote(source, expected_pin=expected_pin)
+    return _verify_remote(source, expected_pin=expected_pin, bounded_receipts=bounded_receipts)
 
 
 def _copy_immutable(client, bucket: str, target: str, member: StoredParquet) -> None:
@@ -192,11 +276,13 @@ def publish_remote_generation(
     directory: Path, *, client, bucket: str, staging_prefix: str, members: Sequence[StoredParquet],
     prior_index: Mapping, evidence_directories: tuple[Path, ...] = (),
     added_tables: frozenset[str] = frozenset(), receipt_only_tables: frozenset[str] = frozenset(),
+    bounded_receipts=False,
+    expected_pin=None, before_pointer=None,
 ) -> dict:
     """Use the ordinary publication gates, promoting tables without local copies."""
     source = _RemoteGenerationSource(directory, client=client, bucket=bucket,
                                      staging_prefix=staging_prefix, members=members)
-    artifact = _verify_remote(source)
+    artifact = _verify_remote(source, expected_pin=expected_pin, bounded_receipts=bounded_receipts)
 
     def upload(prefix, key):
         target = prefix + "/" + key
@@ -208,4 +294,5 @@ def publish_remote_generation(
     return _publish_verified_generation(
         artifact, source, upload_member=upload, client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
+        before_pointer=before_pointer,
     )
