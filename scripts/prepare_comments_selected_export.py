@@ -23,7 +23,7 @@ import duckdb
 import pyarrow.parquet as pq
 
 from spicy_regs.duckdb_settings import ExportResources
-from spicy_regs.etl_bulk import read_with_receipts
+from spicy_regs.etl_bulk import RetainedScan, insert_sql_sha256, read_with_receipts
 from spicy_regs.etl_receipts import (
     ReceiptContext, _rows, rebind_receipt,
     selected_subject_policy, validate_receipt_bundle, write_dataset,
@@ -159,6 +159,75 @@ def _validation_source():
     return {"revision": revision, "members": {name: identity(path) for name, path in members.items()}}
 
 
+def _retained_source15_scan(path, expected_sha256, sealed, earlier):
+    """Qualify only the closed source15 inserts, without asserting admission."""
+    from spicy_regs.local_data import file_signature
+
+    def read_pin(pin):
+        member = Path(pin["path"])
+        before = _regular_signature(member)
+        if identity(member)["sha256"] != pin["sha256"]:
+            raise ValueError("Retained scan evidence changed")
+        value = json.loads(member.read_text())
+        if _regular_signature(member) != before:
+            raise ValueError("Retained scan evidence changed during verification")
+        return value
+
+    proof = read_pin({"path": str(path), "sha256": expected_sha256})
+    if proof["format"] != "comments-retained-source15-scan/1":
+        raise ValueError("Expected the explicit source15 scan recovery")
+    terminal, launch, assessment = (read_pin(proof[key]) for key in ("terminal", "launch", "assessment"))
+    compatibility = read_pin(proof["compatibility"])
+    old_capture, _ = _captured_descriptor(Path(launch["capturedInput"]["path"]), launch["capturedInput"]["sha256"])
+    revision = "3da6088cbad6e89944047dfb6d9bb4c3cf3a26a3"
+    old_pending = dict(old_capture, validationRevision=sealed["capture"]["validationRevision"])
+    current_pending, _ = _captured_descriptor(Path(sealed["capture"]["descriptor"]["path"]),
+                                             sealed["capture"]["descriptor"]["sha256"])
+    if (old_pending != current_pending or old_capture["validationRevision"] != revision
+            or launch["source"]["checkout"] != revision or launch["source"]["main"] != revision
+            or launch["source"]["uncommitted"] or launch["source"]["untracked"]
+            or launch["helperSha256"] != "0997b0ffe84ed7e7574b783c6a2f21c174a2cdb117bbe03517c32e509f73a5f2"
+            or launch["bulkSha256"] != "90ac01c016325c41b9947bd11982d0d184732b27d61f32d961e8e7b543b265a6"
+            or terminal["freshLaunchProofSha256"] != proof["launch"]["sha256"]
+            or terminal["status"] != "FAILED_PRIVATE_COMMENTS_PREPARATION_SUPERVISION"
+            or terminal["exitCode"] != -15 or terminal["resourceBreach"] != "host disk reserve"
+            or terminal["remainingLiveOwnedProcesses"] != [] or any(terminal["ownedGroups"].values())
+            or terminal["processClosureError"] or terminal["supervisionError"]
+            or terminal["cleanupInspectionErrors"] or terminal["published"] is not False
+            or assessment["status"] != "STOPPED_SOURCE15_METADATA_AND_RECOVERY_ASSESSMENT"
+            or assessment["databaseSignaturesBefore"] != assessment["databaseSignaturesAfter"]
+            or compatibility["source15"] != revision
+            or compatibility["source15BulkSha256"] != launch["bulkSha256"]
+            or compatibility["insertSqlSha256"] != proof["insertSqlSha256"]
+            or compatibility["policy"] != earlier.descriptor()
+            or proof["insertSqlSha256"] != insert_sql_sha256(earlier)):
+        raise ValueError("Source15 scan, closure, inputs or compatible SQL differ")
+    database_states = {}
+    for held in assessment["databaseSignaturesAfter"]:
+        member = Path(held["path"])
+        expected = [held[key] for key in ("device", "inode", "byteSize", "mtimeNs", "ctimeNs")]
+        if file_signature(member) != expected:
+            raise ValueError("Retained source15 database custody changed")
+        database_states[member] = expected
+    database = next(member for member in database_states if member.name == "work.duckdb")
+    ordinals = database.parent / "unproven-subjects.parquet"
+    held = next(value for value in assessment["files"].values() if value["path"] == str(ordinals))
+    ordinal_state = [held[key] for key in ("device", "inode", "byteSize", "mtimeNs", "ctimeNs")]
+    with pq.ParquetFile(ordinals) as source:
+        reference_rows = source.metadata.num_rows
+    if (file_signature(ordinals) != ordinal_state
+            or reference_rows != 295
+            or assessment["databaseReadOnlyMetadata"]["tables"] != ["receipts", "subjects"]
+            or assessment["databaseReadOnlyMetadata"]["rowCountsFromStorageMetadata"]["receipts"]["sumSegmentRows"] != EXPECTED_ROWS + 1
+            or assessment["databaseReadOnlyMetadata"]["rowCountsFromStorageMetadata"]["subjects"]["sumSegmentRows"] != EXPECTED_ROWS + 295):
+        raise ValueError("Retained source15 completed inserts differ")
+    inputs = {Path(old_capture["members"][name]["path"]):
+              [state[key] for key in ("device", "inode", "byteSize", "mtimeNs", "ctimeNs")]
+              for name, state in sealed["capture"]["custody"].items()}
+    return RetainedScan(database, database_states, inputs, ordinals, ordinal_state,
+                        EXPECTED_ROWS, EXPECTED_ROWS + 1, proof["insertSqlSha256"])
+
+
 def _pair_snapshot(value):
     """Decode a recorded pair without changing its original IDs."""
     from spicy_regs.sources.iceberg import CatalogPairSnapshot, CatalogSnapshot
@@ -214,7 +283,8 @@ Path(sys.argv[1]).write_text(json.dumps(result))
         return self._read(asdict(snapshot)) is True
 
 
-def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None):
+def prepare(pair: Path, destination: Path, *, captured_input=None, captured_input_sha256=None,
+            retained_scan=None, retained_scan_sha256=None):
     """Keep the complete earlier pair and derive declared current subjects once."""
     pair, destination = Path(pair), Path(destination)
     sealed = (verify_original(pair) if captured_input is None else
@@ -240,6 +310,11 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         raise ValueError("The complete captured comments population is required")
     source_identity = sealed["members"]["comments.parquet"]
     receipt_identity = sealed["members"]["etl_receipts.parquet"]
+    scan = None
+    if retained_scan is not None:
+        if captured_input is None:
+            raise ValueError("Retained scans require the exact captured-input path")
+        scan = _retained_source15_scan(retained_scan, retained_scan_sha256, sealed, earlier)
     generation = "comments-v2-" + uuid4().hex
     available = {name: Counter() for name in FIELDS}
     count = 0
@@ -251,6 +326,7 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         for row in read_with_receipts(
             [subjects], [receipts], earlier, generation_id=metadata["generation_id"],
             processing_by_ordinal=True,
+            retained_scan=scan,
         ):
             # Promote the retained values directly. The earlier mapper remains
             # the authority for its normalized subject and its original record.
@@ -330,11 +406,15 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
         evidence["historical_admission"] = {"status": "validated", "source": validation_source,
             "policy": earlier.descriptor(), "generation_id": metadata["generation_id"],
             "members": sealed["members"], "capture_descriptor": sealed["capture"]["descriptor"]}
+        if retained_scan is not None:
+            evidence["historical_admission"]["retained_scan"] = {"path": str(retained_scan),
+                                                                 "sha256": retained_scan_sha256}
     (destination / "generation.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     return subject, receipt, evidence
 
 
-def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sha256=None):
+def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sha256=None,
+             retained_scan=None, retained_scan_sha256=None):
     """Use existing agency writers and index builder on the one derived artifact."""
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
@@ -344,7 +424,8 @@ def assemble(pair: Path, output: Path, *, captured_input=None, captured_input_sh
     output = Path(output)
     subject, receipts, evidence = prepare(pair, output / ".catalog-pairs" / "comments",
                                          captured_input=captured_input,
-                                         captured_input_sha256=captured_input_sha256)
+                                         captured_input_sha256=captured_input_sha256,
+                                         retained_scan=retained_scan, retained_scan_sha256=retained_scan_sha256)
     resources = ExportResources()
     with TemporaryDirectory(prefix="comments-derived-sort-", dir=output) as temporary:
         temporary = Path(temporary)
@@ -547,12 +628,18 @@ def main():
     parser.add_argument("--captured-input", type=Path,
                         help="Explicit captured-validation-pending pair descriptor; never an export seal")
     parser.add_argument("--captured-input-sha256", help="Exact digest of that captured input descriptor")
+    parser.add_argument("--retained-scan", type=Path, help="Exact closed source15 scan recovery evidence")
+    parser.add_argument("--retained-scan-sha256", help="Exact digest of the retained scan evidence")
     args = parser.parse_args()
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
     if (args.captured_input is None) != (args.captured_input_sha256 is None):
         raise ValueError("Captured input path and exact descriptor digest are required together")
+    if (args.retained_scan is None) != (args.retained_scan_sha256 is None):
+        raise ValueError("Retained scan path and exact evidence digest are required together")
+    if args.retained_scan is not None:
+        args.retained_scan = args.retained_scan.absolute()
     if args.captured_input is not None:
         # Keep the literal path so symlink custody is checked rather than resolved away.
         args.captured_input = args.captured_input.absolute()
@@ -617,7 +704,8 @@ def main():
             captured_snapshot = _pair_snapshot(captured["metadata"]["snapshot"])
             observed_snapshot = _check_prepared_snapshot(reader, captured_snapshot)
         result = assemble(args.original_pair, args.output, captured_input=args.captured_input,
-                          captured_input_sha256=args.captured_input_sha256)
+                          captured_input_sha256=args.captured_input_sha256,
+                          retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256)
         if args.captured_input is not None:
             manifest = json.loads(manifest_path.read_text())
             if manifest["source"] != asdict(captured_snapshot):

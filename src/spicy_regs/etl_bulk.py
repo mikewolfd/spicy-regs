@@ -17,6 +17,8 @@ from __future__ import annotations
 import io
 import json
 import sqlite3
+from dataclasses import dataclass
+from hashlib import sha256
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
@@ -66,6 +68,26 @@ _INSERT_BYTES = 16 * 1024 * 1024
 
 class NotBulkEligible(Exception):
     """SQL has no proven way to decide this bundle, so ``validate_receipt_bundle`` must."""
+
+
+@dataclass(frozen=True)
+class RetainedScan:
+    """Custody-bound completed inserts; all remaining admission checks still run."""
+
+    database: Path
+    database_states: Mapping[Path, list[int]]
+    input_states: Mapping[Path, list[int]]
+    unproven_subjects: Path
+    ordinal_state: list[int]
+    subject_rows: int
+    receipt_rows: int
+    insert_sql_sha256: str
+
+
+def insert_sql_sha256(policy):
+    """Bind retained keys to the same receipt and subject insert expressions."""
+    expressions = [_receipt_insert_sql({policy.dataset: policy}, False), _subject_insert_sql(policy, "n")]
+    return sha256(json.dumps(expressions, ensure_ascii=False).encode()).hexdigest()
 
 
 @contextmanager
@@ -536,20 +558,30 @@ def _check_subjects(
                 break
         if stopped is not None:
             break
+    _check_subject_matches(con, stopped=stopped, before=before)
+
+
+def _check_subject_matches(con, *, stopped=None, before=None):
+    """Finish the wide join once, then check and replay its narrow ordinal map."""
     joined = (
         "FROM (SELECT * FROM subjects WHERE NOT unproven AND n < coalesce(?, n + 1)) AS s"
         " LEFT JOIN (SELECT * FROM receipts WHERE outcome = 'accepted') AS r ON s.dataset = r.dataset"
         " AND s.record_id = r.record_id AND s.version = r.subject_version AND s.identity = r.identity_json"
     )
+    con.execute(f"CREATE TABLE matched_subject_receipts AS SELECT s.n, s.dataset, r.n AS receipt {joined}", [before])
+    # Sorting after the join releases its wide key state. Ordered row groups let
+    # replay select a source batch without rescanning the complete map each time.
+    con.execute("CREATE TABLE subject_receipts AS SELECT * FROM matched_subject_receipts ORDER BY n")
+    con.execute("DROP TABLE matched_subject_receipts")
     [(total, matched, used)] = con.execute(
-        f"SELECT count(*), count(r.n), count(DISTINCT r.n) {joined}", [before]
+        "SELECT count(*), count(receipt), count(DISTINCT receipt) FROM subject_receipts"
     ).fetchall()
     if not total == matched == used:
         # The first subject with no accepted receipt, or whose receipt an earlier subject already took.
         [(dataset,)] = con.execute(
-            "SELECT arg_min(dataset, n) FROM (SELECT s.n, s.dataset, r.n AS receipt,"
-            f" row_number() OVER (PARTITION BY r.n ORDER BY s.n) AS turn {joined}) WHERE receipt IS NULL OR turn > 1",
-            [before],
+            "SELECT arg_min(dataset, n) FROM (SELECT n, dataset, receipt,"
+            " row_number() OVER (PARTITION BY receipt ORDER BY n) AS turn FROM subject_receipts)"
+            " WHERE receipt IS NULL OR turn > 1",
         ).fetchall()
         raise ValueError(f"Missing, ambiguous or reused subject receipt: {dataset}")
     if stopped is not None:
@@ -565,6 +597,76 @@ def _nested_nullable(dtype: pa.DataType) -> bool:
     if pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
         return dtype.value_field.nullable and _nested_nullable(dtype.value_type)
     return True
+
+
+def _check_retained_scan(con, scan, subjects, receipt_paths, policy, generation_id):
+    """Reuse exact closed scan tables read-only, then complete admission here."""
+    from spicy_regs.local_data import file_signature
+
+    def check_custody():
+        for path, expected in {**scan.database_states, **scan.input_states,
+                               scan.unproven_subjects: scan.ordinal_state}.items():
+            if file_signature(path) != expected:
+                raise ValueError("Retained scan custody changed")
+
+    if (not isinstance(scan, RetainedScan) or policy.receipt_only
+            or len(subjects[policy.dataset]) != 1 or len(receipt_paths) != 1
+            or set(scan.input_states) != set((*subjects[policy.dataset], *receipt_paths))
+            or set(scan.database_states) != {scan.database, Path(str(scan.database) + ".wal")}
+            or scan.insert_sql_sha256 != insert_sql_sha256(policy)):
+        raise ValueError("Retained scan differs from the selected reader inputs or SQL")
+    check_custody()
+    validate_publisher_generation(generation_id)
+    paths, stopped = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
+    if stopped is not None:
+        raise stopped
+    subject_paths, stopped = _readable(subjects[policy.dataset], policy.subject_schema,
+                                      f"Subject schema differs from policy: {policy.dataset}")
+    if stopped is not None:
+        raise stopped
+    with _parquet(paths[0]) as source:
+        if source.metadata.num_rows != scan.receipt_rows:
+            raise ValueError("Retained receipt population differs")
+    with _parquet(subject_paths[0]) as source:
+        if source.metadata.num_rows != scan.subject_rows:
+            raise ValueError("Retained subject population differs")
+    con.execute(f"ATTACH {_literal(str(scan.database))} AS retained_scan (READ_ONLY)")
+    con.execute("CREATE VIEW receipts AS SELECT * FROM retained_scan.receipts")
+    con.execute("CREATE VIEW subjects AS SELECT * FROM retained_scan.subjects")
+    with pq.ParquetFile(scan.unproven_subjects) as source:
+        if source.schema_arrow.names != ["n"]:
+            raise ValueError("Retained reference ordinals differ")
+        numbers = source.read().column("n").to_pylist()
+    if numbers != sorted(set(numbers)) or any(type(n) is not int or not 0 <= n < scan.subject_rows for n in numbers):
+        raise ValueError("Retained reference ordinals differ")
+    [(rows, unique, first, last, unproven)] = con.execute(
+        "SELECT count(*), count(DISTINCT n), min(n), max(n), count(*) FILTER (WHERE unproven) FROM receipts"
+    ).fetchall()
+    if (rows, unique, first, last, unproven) != (scan.receipt_rows, scan.receipt_rows, 0, scan.receipt_rows - 1, 0):
+        raise ValueError("Retained receipt scan is incomplete or requires the reference validator")
+    for key, where in (("receipt_id", "true"),
+                       ("dataset, record_id", "outcome = 'accepted' AND record_id IS NOT NULL")):
+        if con.execute(_repeated_sql(key, where)).fetchall() != [(None,)]:
+            raise ValueError("Duplicate or ambiguous receipt join")
+    [(rows, unique, first, last)] = con.execute(
+        "SELECT count(*), count(DISTINCT n), min(n), max(n) FROM subjects"
+    ).fetchall()
+    if (rows, unique, first, last) != (scan.subject_rows + len(numbers), scan.subject_rows, 0, scan.subject_rows - 1):
+        raise ValueError("Retained subject scan or reference corrections are incomplete")
+    if con.execute("SELECT n FROM subjects WHERE unproven ORDER BY n").fetchall() != [(n,) for n in numbers]:
+        raise ValueError("Retained subject reference ordinals differ")
+    expected = []
+    for picked, table in _held([(0, scan.subject_rows, subject_paths[0])], numbers):
+        for n, raw in zip(picked, table.to_pylist()):
+            subject = _subjects(policy, [raw])[0]
+            expected.append((n, policy.dataset, *subject_identity(policy, subject), False))
+    actual = con.execute("SELECT * FROM subjects WHERE NOT unproven AND n IN (SELECT unnest(?)) ORDER BY n",
+                         [numbers]).fetchall()
+    if actual != expected:
+        raise ValueError("Retained subject reference corrections differ")
+    check_custody()
+    _check_subject_matches(con)
+    check_custody()
 
 
 def validate_bundle(
@@ -595,7 +697,7 @@ def validate_bundle(
 
 @contextmanager
 def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False,
-                      threads=4, memory_limit="4GB", bounded_insert=False):
+                      threads=4, memory_limit="4GB", bounded_insert=False, retained_scan=None):
     """Keep the maintained admission tables alive for replay only after complete admission."""
     registered = _bundle_policies(subjects, receipt_paths, policies)
     if scoped and len(registered) > 1:
@@ -611,15 +713,22 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
     with bulk_connection(threads=threads, memory_limit=memory_limit) as (con, temp):
         try:
             con.execute("SET preserve_insertion_order = false")
-            _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped,
-                            retain_processing=retain_processing, bounded_insert=bounded_insert)
-            _check_subjects(con, subjects, registered, temp, bounded_insert=bounded_insert)
+            if retained_scan is None:
+                _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped,
+                                retain_processing=retain_processing, bounded_insert=bounded_insert)
+                _check_subjects(con, subjects, registered, temp, bounded_insert=bounded_insert)
+            else:
+                if len(registered) != 1 or scoped or retain_processing or not bounded_insert:
+                    raise ValueError("Retained scans require one ordinal-processing selection")
+                _check_retained_scan(con, retained_scan, subjects, receipt_paths,
+                                     next(iter(registered.values())), generation_id)
         except duckdb.Error as error:
             raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error
         yield con
 
 
-def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False):
+def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, processing_by_ordinal=False,
+                       retained_scan=None):
     """Replay completely admitted subjects in source order, with the exact stored processing JSON.
 
     Admission uses the same SQL checks and row-reference fallbacks as validate_bundle.
@@ -633,6 +742,8 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
         raise NotBulkEligible("The row reader decides absent receipt inputs")
     if type(processing_by_ordinal) is not bool:
         raise ValueError("processing_by_ordinal must be boolean")
+    if retained_scan is not None and not processing_by_ordinal:
+        raise ValueError("Retained scans require guarded ordinal processing")
     states = {}
     if processing_by_ordinal:
         from spicy_regs.local_data import file_signature
@@ -641,6 +752,9 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
         subject_paths = tuple(path.absolute() for path in subject_paths)
         receipt_paths = tuple(path.absolute() for path in receipt_paths)
         states = {path: file_signature(path) for path in (*subject_paths, *receipt_paths)}
+        if retained_scan is not None:
+            states.update(retained_scan.database_states)
+            states[retained_scan.unproven_subjects] = retained_scan.ordinal_state
 
     def check_sources():
         if not states:
@@ -656,6 +770,7 @@ def read_with_receipts(subject_paths, receipt_paths, policy, *, generation_id, p
         threads=1 if processing_by_ordinal else 4,
         memory_limit="8GB" if processing_by_ordinal else "4GB",
         bounded_insert=processing_by_ordinal,
+        retained_scan=retained_scan,
     ) as con, ExitStack() as files:
         check_sources()
         processing_rows = None
@@ -709,39 +824,56 @@ def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing
     same = (f'CASE WHEN source."{reference_name}" IS NOT FALSE THEN NULL ELSE'
             f' source."{key_name}" = s.record_id AND source."{version_name}" = s.version'
             f' AND source."{identity_name}" = s.identity END')
+
+    def replay(first, stop):
+        count = 0
+        processing = "m.receipt" if processing_rows is not None else "r.processing_json"
+        query = (
+            f'SELECT {subject_sql}, {processing}, {same}, s.record_id, s.version, s.identity'
+            f' FROM (SELECT *, {record_id} AS "{key_name}", {version} AS "{version_name}",'
+            f' {identity} AS "{identity_name}", {_subject_reference_sql(policy)} AS "{reference_name}"'
+            f' FROM source) source JOIN (SELECT * FROM subjects WHERE NOT unproven AND n >= ? AND n < ?) s'
+            f' ON source."{number}" = s.n'
+            ' JOIN (SELECT * FROM subject_receipts WHERE n >= ? AND n < ?) m ON s.n = m.n'
+            + (" JOIN receipts r ON r.n = m.receipt" if processing_rows is None else "")
+            + f' ORDER BY source."{number}"'
+        )
+        with closing(con.execute(query, [first, stop, first, stop]).to_arrow_reader(_BATCH)) as reader:
+            for batch in reader:
+                subjects = _subjects(policy, batch.column(0).to_pylist())
+                processing_values = batch.column(1).to_pylist()
+                if processing_rows is not None:
+                    processing_values = processing_rows(processing_values)
+                for subject, processing, matched, key, expected_version, expected_identity in zip(
+                    subjects, processing_values, *(batch.column(i).to_pylist() for i in range(2, 6))
+                ):
+                    if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
+                        raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
+                    count += 1
+                    yield subject | _unpack(json.loads(processing))
+        return count
+
     for path in subject_paths:
         with _parquet(path) as parquet:
             if not parquet.schema_arrow.equals(policy.subject_schema):
                 raise ValueError(f"Subject schema differs from policy: {policy.dataset}")
             read = [0, 0]
-            con.register("source", _numbered(parquet, start, number, None, read))
             count = 0
-            try:
-                processing = "r.n" if processing_rows is not None else "r.processing_json"
-                query = (
-                    f'SELECT {subject_sql}, {processing}, {same}, s.record_id, s.version, s.identity'
-                    f' FROM (SELECT *, {record_id} AS "{key_name}", {version} AS "{version_name}",'
-                    f' {identity} AS "{identity_name}", {_subject_reference_sql(policy)} AS "{reference_name}"'
-                    f' FROM source) source JOIN subjects s ON source."{number}" = s.n AND NOT s.unproven'
-                    " JOIN receipts r ON s.dataset = r.dataset AND s.record_id = r.record_id"
-                    " AND s.version = r.subject_version AND s.identity = r.identity_json"
-                    f" AND r.outcome = 'accepted' ORDER BY source.\"{number}\""
-                )
-                for batch in con.execute(query).to_arrow_reader(_BATCH):
-                    raw = batch.column(0).to_pylist()
-                    subjects = _subjects(policy, raw)
-                    processing_values = batch.column(1).to_pylist()
-                    if processing_rows is not None:
-                        processing_values = processing_rows(processing_values)
-                    for subject, processing, matched, key, expected_version, expected_identity in zip(
-                        subjects, processing_values, *(batch.column(i).to_pylist() for i in range(2, 6))
-                    ):
-                        if matched is False or matched is None and subject_identity(policy, subject) != (key, expected_version, expected_identity):
-                            raise ValueError(f"Missing, ambiguous or reused subject receipt: {policy.dataset}")
-                        count += 1
-                        yield subject | _unpack(json.loads(processing))
-            finally:
-                con.unregister("source")
+            with closing(_numbered(parquet, start, number, None, read)) as numbered:
+                # Ordinal replay finishes one source batch before the next. Its
+                # ORDER BY therefore never retains the complete wide subject file.
+                sources = (pa.Table.from_batches([batch]) for batch in numbered) if processing_rows is not None else (numbered,)
+                for source in sources:
+                    con.register("source", source)
+                    try:
+                        first = start + count
+                        stop = first + source.num_rows if processing_rows is not None else start + parquet.metadata.num_rows
+                        added = yield from replay(first, stop)
+                        if processing_rows is not None and added != source.num_rows:
+                            raise ValueError("Receipt replay did not reconstruct every source batch")
+                        count += added
+                    finally:
+                        con.unregister("source")
             if read != [parquet.metadata.num_rows] * 2 or count != parquet.metadata.num_rows:
                 raise ValueError("Receipt replay did not reconstruct every subject row")
             start += count
