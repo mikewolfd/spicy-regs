@@ -165,3 +165,11 @@ def test_resolved_legislative_numbers_are_native_and_replay_exactly():
     mapped = map_source_row("scorecard_item_links", before)
     assert (mapped["congress"], mapped["session"], mapped["roll_number"]) == (119, 1, 597)
     assert restore_source_row("scorecard_item_links", mapped) == before
+
+
+def test_shared_source_declarations_preserve_prior_columns_order_and_keys():
+    from pathlib import Path
+    from spicy_regs.scorecards.subject_shapes import SOURCE_COLUMNS, IDENTITIES
+    baseline = json.loads((Path(__file__).parent / "fixtures/scorecard_source_shapes_before_refactor.json").read_text())
+    assert {k: list(v) for k, v in SOURCE_COLUMNS.items()} == baseline["SOURCE_COLUMNS"]
+    assert {k: list(v) for k, v in IDENTITIES.items()} == baseline["IDENTITIES"]

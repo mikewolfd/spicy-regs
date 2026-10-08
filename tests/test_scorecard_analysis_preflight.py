@@ -1,8 +1,6 @@
 """A native input refusal must happen before any potentially large downloads."""
 
 from copy import deepcopy
-from pathlib import Path
-import importlib.util
 import sys
 
 import pytest
@@ -60,11 +58,7 @@ def test_preflight_requires_a_selected_receipt_generation(tmp_path):
 
 
 def test_preparation_script_uses_same_preflight_before_object_download(tmp_path, monkeypatch):
-    path = Path(__file__).parents[1] / "docs/research/scorecards/work/integration/deployment/prepare_analysis.py"
-    spec = importlib.util.spec_from_file_location("_analysis_preparation", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    from spicy_regs.scorecards.operations import analysis as module
     _, index = _inputs(tmp_path)
     fixture_owner(index, "members.parquet").pop("etlReceipts")
     client = object()

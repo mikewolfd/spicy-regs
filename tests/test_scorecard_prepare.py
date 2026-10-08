@@ -1,6 +1,5 @@
 """Preparation retains opaque observation IDs and checks all scopes before ETL."""
 
-import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -10,13 +9,9 @@ import pytest
 from spicy_regs.scorecards.extraction_replay import page_bytes
 from tests.test_scorecard_extraction_replay import page
 
+from spicy_regs.scorecards.operations import prepare as PREPARE
+
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location(
-    "prepare_scorecard_integrations", ROOT / "scripts/prepare_scorecard_integrations.py"
-)
-assert SPEC is not None and SPEC.loader is not None
-PREPARE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(PREPARE)
 
 
 def test_prepare_retains_canonical_pdf_id_and_hash_only_evidence(tmp_path, monkeypatch):

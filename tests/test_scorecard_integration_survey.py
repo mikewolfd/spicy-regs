@@ -2,20 +2,12 @@
 
 from copy import deepcopy
 from hashlib import sha256
-import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 
 
-SPEC = importlib.util.spec_from_file_location(
-    "scorecard_integrations", Path(__file__).resolve().parents[1] / "scripts/build_scorecard_integrations.py"
-)
-assert SPEC is not None and SPEC.loader is not None
-integrations = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(integrations)
-
+from spicy_regs.scorecards.operations import inventory as integrations
 
 @pytest.fixture
 def directory(tmp_path):

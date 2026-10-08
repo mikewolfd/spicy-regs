@@ -772,12 +772,14 @@ class _Items:
         # A literal item year (for example LCV's CSV Year preamble) qualifies
         # the roll against actual official dates. Edition years are not evidence
         # for an individual item, and calendar arithmetic cannot supply a session.
+        vote_candidates = {candidate["vote_id"] for candidate in candidates if "vote_id" in candidate}
         item_year = item.get("item_date_text") or ""
         if re.fullmatch(r"\d{4}", item_year) and chamber and roll and not bill_only and not committee:
             found = self.vote_calendar[item_year, chamber, roll]
             for vote, _, _, day in sorted(found, key=lambda value: value[0]["vote_id"]):
-                if not any(candidate.get("vote_id") == vote["vote_id"] for candidate in candidates):
+                if vote["vote_id"] not in vote_candidates:
                     candidates.append({"vote_id": vote["vote_id"], "vote_date": vote.get("vote_date"), "vote_day": day})
+                    vote_candidates.add(vote["vote_id"])
             eligible = [
                 entry
                 for entry in found
@@ -837,8 +839,9 @@ class _Items:
                 vote = self.votes.get(key)
                 if vote:
                     targets["vote_id"] = key
-                    if not any(candidate.get("vote_id") == key for candidate in candidates):
+                    if key not in vote_candidates:
                         candidates.append({"vote_id": key})
+                        vote_candidates.add(key)
                     if targets.get("bill_id") and vote.get("bill_id") and targets["bill_id"] != vote["bill_id"]:
                         conflicts.append("source_bill_conflicts_with_exact_roll_bill")
                     elif vote.get("bill_id") in self.bills:

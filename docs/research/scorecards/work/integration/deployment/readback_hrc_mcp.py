@@ -11,6 +11,8 @@ from pathlib import Path
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from spicy_regs.scorecards.operations.results import query_rows, write
+
 CARD = "hrc:118-final"
 SOURCE_COUNTS = " UNION ALL ".join(
     f"SELECT '{label}' AS kind,count(*) AS rows FROM {table} WHERE scorecard_id='{CARD}'"
@@ -39,26 +41,6 @@ FROM scorecard_member_ratings WHERE scorecard_id='{CARD}'"""
 FAMILY_RATINGS = """SELECT c.publisher_id,count(*) AS rows
 FROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id)
 GROUP BY c.publisher_id ORDER BY c.publisher_id"""
-
-
-def write(path, value):
-    path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
-
-
-def query_rows(body):
-    """Read either documented row representation without changing retained replies."""
-    columns = body["columns"]
-    if any(not isinstance(name, str) for name in columns) or len(set(columns)) != len(columns):
-        raise ValueError("Hosted query columns are ambiguous")
-    rows = []
-    for row in body["rows"]:
-        if isinstance(row, dict) and set(row) == set(columns):
-            rows.append(row)
-        elif isinstance(row, list) and len(row) == len(columns):
-            rows.append(dict(zip(columns, row, strict=True)))
-        else:
-            raise ValueError("Hosted query row does not match its columns")
-    return rows
 
 
 async def run(args):

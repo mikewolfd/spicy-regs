@@ -3,8 +3,15 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
+import time
+from urllib.parse import urljoin
+
+import httpx
+from spicy_docs.transport.captured import CapturedBodyResponse
 from typing import cast
 from urllib.parse import urlsplit
+
+from spicy_regs.scorecards.errors import ScorecardRefreshError
 
 from spicy_docs.sources.zyte import (
     BROWSER_HTML,
@@ -167,8 +174,6 @@ def fetch_for_publishers(publishers, *, browser_publishers=(), max_bytes=MAX_BYT
 
     @contextmanager
     def factory(source):
-        from spicy_regs.transforms.build_scorecards import bounded_fetch
-
         proxied = source.publisher_id in selected | browser_selected
         chosen = zyte_fetch if proxied else bounded_fetch
         options = {"browser_api": True} if source.publisher_id in browser_selected else {}
@@ -176,3 +181,86 @@ def fetch_for_publishers(publishers, *, browser_publishers=(), max_bytes=MAX_BYT
             yield fetch
 
     return factory
+
+
+@contextmanager
+def bounded_fetch(source, *, max_bytes=MAX_BYTES, max_requests=MAX_REQUESTS):
+    """Bound exact HTTP payloads in memory, outside all workflow upload trees."""
+    validate_limits(max_bytes, max_requests)
+    count = 0
+    with httpx.Client(
+        timeout=httpx.Timeout(30, connect=10),
+        follow_redirects=False,
+        headers={"Accept-Encoding": "identity", "User-Agent": "SpicyRegs/scorecards"},
+    ) as client:
+
+        def request(url, *, method="GET", content=None, request_headers=None):
+            nonlocal count
+            if method not in {"GET", "POST"} or (content is not None) != (method == "POST"):
+                raise ScorecardRefreshError("Publisher request method and body disagree")
+            requested, current = url, url
+            host = urlsplit(url).hostname
+            # The reader validates whether this exact URL permits HTTP before
+            # calling transport. Transport never infers a publisher exception.
+            schemes = {urlsplit(url).scheme} & {"http", "https"}
+            started = time.monotonic()
+            for _ in range(6):
+                parsed = urlsplit(current)
+                if (
+                    parsed.scheme not in schemes
+                    or parsed.hostname not in {host, "www." + str(host), str(host).removeprefix("www.")}
+                    or parsed.username
+                    or parsed.password
+                    or parsed.port
+                    or (request_headers and parsed.hostname != host)
+                ):
+                    raise ScorecardRefreshError("Publisher redirect leaves the selected host")
+                if count >= max_requests:
+                    raise ScorecardRefreshError("Scorecard HTTP request budget exhausted")
+                count += 1
+                observed = datetime.now(UTC).isoformat()
+                raw = bytearray()
+                try:
+                    headers = {"Content-Type": "application/json"} if method == "POST" else {}
+                    if request_headers:
+                        headers.update(request_headers)
+                    with client.stream(method, current, content=content, headers=headers) as response:
+                        for chunk in response.iter_raw():
+                            if len(raw) + len(chunk) > max_bytes or time.monotonic() - started > 90:
+                                raise ScorecardRefreshError("Source HTTP response exceeds its acquisition bound")
+                            raw.extend(chunk)
+                        capture = CapturedBodyResponse(
+                            requested,
+                            str(response.url),
+                            response.status_code,
+                            response.headers.get("content-type"),
+                            observed,
+                            bytes(raw),
+                            content_encoding=response.headers.get("content-encoding", "identity"),
+                            method=method,
+                            request_body=content,
+                        )
+                        if response.is_redirect:
+                            source.capture(capture, stage="redirect")
+                            if method == "POST":
+                                raise ScorecardRefreshError("Publisher POST redirects require an explicit source rule")
+                            location = response.headers.get("location")
+                            if not location:
+                                raise ScorecardRefreshError("Publisher redirect has no location")
+                            current = urljoin(current, location)
+                            continue
+                        return capture
+                except BaseException as error:
+                    source.event(
+                        "capture-incomplete",
+                        stage="http",
+                        error_type=type(error).__name__,
+                        response_complete=False,
+                        body_retained=False,
+                        requested_url=current,
+                        bytes_received=len(raw),
+                    )
+                    raise
+            raise ScorecardRefreshError("Publisher redirect limit exceeded")
+
+        yield RequestFetcher(request)

@@ -3,13 +3,16 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from hashlib import file_digest
+import json
 
 import yaml
-from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS
+from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS, get_adapter
 
 from spicy_regs.source_evidence import POLICIES
 
 REGISTRY = Path(__file__).with_name("sources.yaml")
+LIVE_QUALIFICATIONS = Path(__file__).with_name("live_qualifications.json")
 ADAPTERS = frozenset(ADAPTER_PUBLISHERS.values())
 CADENCES = {"daily": timedelta(days=1), "weekly": timedelta(days=7), "monthly": timedelta(days=30)}
 
@@ -84,6 +87,10 @@ def load_registry(path: Path = REGISTRY) -> tuple[ScorecardSource, ...]:
             raise RegistryError("Full evidence requires an explicit redistribution decision")
         seen.add(source.publisher_id)
         sources.append(source)
+    if path.resolve() == REGISTRY.resolve():
+        for source in sources:
+            if source.enabled:
+                live_qualification(source)
     return tuple(sources)
 
 
@@ -98,3 +105,29 @@ def select_sources(sources, *, publishers=(), historical_backfill=False):
     if historical_backfill and any(not source.historical_backfill for source in selected):
         raise RegistryError("Historical backfill is disabled for a selected source")
     return selected
+
+
+def live_qualification(source):
+    """Bind unattended activation to the reviewed reader, scope and evidence policy."""
+    document = json.loads(LIVE_QUALIFICATIONS.read_text())
+    if document.get("format_version") != "scorecard-qualified-live-refresh/1" or not isinstance(document.get("scopes"), list):
+        raise RegistryError("Unknown live scorecard qualification format")
+    matches = [row for row in document["scopes"] if row["qualification_id"] == source.qualification_id]
+    if len(matches) != 1:
+        raise RegistryError("Enabled live source lacks one recorded qualification")
+    row = matches[0]
+    adapter = get_adapter(source.adapter)
+    with Path(adapter.__file__).open("rb") as stream:
+        digest = file_digest(stream, "sha256").hexdigest()
+    if (row["publisher_id"] != source.publisher_id or row["reader_sha256"] != digest
+            or row["parser_version"] != adapter.parser_version
+            or row["completeness_status"] != "complete"
+            or row["evidence_policy"] != source.evidence_policy or row["rights_status"] != source.rights_status):
+        raise RegistryError("Enabled live source differs from its qualified reader or policy")
+    return row
+
+
+def check_live_edition(source, edition):
+    qualified = live_qualification(source)["edition"]
+    if any(getattr(edition, field, None) != value for field, value in qualified.items()):
+        raise RegistryError("Live edition differs from the qualified source scope")
