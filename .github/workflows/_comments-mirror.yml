@@ -24,6 +24,12 @@ on:
       comments_captured_input_sha256:
         type: string
         default: ''
+      comments_local_python:
+        type: string
+        default: ''
+      comments_local_python_sha256:
+        type: string
+        default: ''
 
 env:
   # Called only by workflows that hold comments-catalog-write.
@@ -41,12 +47,14 @@ jobs:
     steps:
       - name: Check retained original pair before checkout
         id: retained_original
-        if: ${{ inputs.promote_v1 || inputs.comments_captured_input != '' || inputs.comments_captured_input_sha256 != '' }}
+        if: ${{ inputs.promote_v1 || inputs.comments_captured_input != '' || inputs.comments_captured_input_sha256 != '' || inputs.comments_local_python != '' || inputs.comments_local_python_sha256 != '' }}
         shell: bash
         env:
           COMMENTS_ORIGINAL_PAIR: ${{ inputs.comments_original_pair }}
           COMMENTS_CAPTURED_INPUT: ${{ inputs.comments_captured_input }}
           COMMENTS_CAPTURED_INPUT_SHA256: ${{ inputs.comments_captured_input_sha256 }}
+          COMMENTS_LOCAL_PYTHON: ${{ inputs.comments_local_python }}
+          COMMENTS_LOCAL_PYTHON_SHA256: ${{ inputs.comments_local_python_sha256 }}
           PROMOTE_V1: ${{ inputs.promote_v1 }}
         run: |
           literal_path() {
@@ -63,6 +71,22 @@ jobs:
               echo 'Captured input requires its exact SHA-256 digest' >&2; exit 1;
             }
           fi
+          if [[ -n "$COMMENTS_LOCAL_PYTHON" || -n "$COMMENTS_LOCAL_PYTHON_SHA256" ]]; then
+            [[ -n "$COMMENTS_LOCAL_PYTHON" && -n "$COMMENTS_CAPTURED_INPUT" && "$PROMOTE_V1" = true ]] || {
+              echo 'Local Python requires complete captured-input promotion settings' >&2; exit 1;
+            }
+            [[ "$COMMENTS_LOCAL_PYTHON_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+              echo 'Local Python requires its exact executable SHA-256 digest' >&2; exit 1;
+            }
+            literal_path "$COMMENTS_LOCAL_PYTHON"
+            [[ "$COMMENTS_LOCAL_PYTHON" = /* && -f "$COMMENTS_LOCAL_PYTHON" && -x "$COMMENTS_LOCAL_PYTHON" && ! -L "$COMMENTS_LOCAL_PYTHON" ]] || {
+              echo 'Local Python must be an absolute regular executable' >&2; exit 1;
+            }
+            python_parent="$(cd -- "$(dirname "$COMMENTS_LOCAL_PYTHON")" && pwd -P)"
+            [[ "$python_parent/${COMMENTS_LOCAL_PYTHON##*/}" = "$COMMENTS_LOCAL_PYTHON" ]] || {
+              echo 'Local Python must use its canonical parent path' >&2; exit 1;
+            }
+          fi
           if [[ -z "$COMMENTS_ORIGINAL_PAIR" ]]; then
             exit 0
           fi
@@ -73,6 +97,9 @@ jobs:
           workspace="$(cd -- "$GITHUB_WORKSPACE" && pwd -P)"
           case "$original/" in
             "$workspace/"*) echo 'Retained pair must be outside the checkout workspace' >&2; exit 1 ;;
+          esac
+          case "$COMMENTS_LOCAL_PYTHON/" in
+            "$workspace/"*) echo 'Local Python must be outside the checkout workspace' >&2; exit 1 ;;
           esac
           if [[ -n "$COMMENTS_CAPTURED_INPUT" ]]; then
             literal_path "$COMMENTS_CAPTURED_INPUT"
@@ -103,9 +130,35 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: ${{ inputs.comments_local_python == '' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Qualify existing Python for captured inputs
+        if: ${{ inputs.comments_local_python != '' }}
+        shell: bash
+        env:
+          UV_PYTHON: ${{ inputs.comments_local_python }}
+          SPICY_REGS_CAPTURED_PYTHON_SHA256: ${{ inputs.comments_local_python_sha256 }}
+          UV_PYTHON_DOWNLOADS: never
+        run: |
+          : "${UV_PYTHON:?Captured inputs require an existing qualified Python}"
+          : "${SPICY_REGS_CAPTURED_PYTHON_SHA256:?Captured inputs require the Python executable digest}"
+          "$UV_PYTHON" - <<'PY'
+          import hashlib, os, sys
+          from pathlib import Path
+          executable = Path(sys.executable).resolve(strict=True)
+          selected = Path(os.environ['UV_PYTHON']).resolve(strict=True)
+          if (executable != selected or sys.version_info[:2] != (3, 12)
+                  or hashlib.sha256(executable.read_bytes()).hexdigest() != os.environ['SPICY_REGS_CAPTURED_PYTHON_SHA256']
+                  or os.environ.get('UV_PYTHON_DOWNLOADS') != 'never'):
+              raise SystemExit('Captured-input Python identity or download policy changed')
+          print(f'Qualified existing Python {sys.version.split()[0]} at {executable}')
+          PY
+          printf 'UV_PYTHON=%s\n' "$UV_PYTHON" >> "$GITHUB_ENV"
+          printf 'UV_PYTHON_DOWNLOADS=never\n' >> "$GITHUB_ENV"
+          printf 'UV_PROJECT_ENVIRONMENT=%s/.venv\n' "$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -238,7 +291,7 @@ jobs:
           retention-days: 30
 
       - name: Retain declared members and descriptor of the retained original pair
-        if: ${{ always() && inputs.promote_v1 && steps.retained_original.outcome == 'success' && steps.retained_original.outputs.path != '' }}
+        if: ${{ always() && inputs.promote_v1 && inputs.comments_captured_input == '' && steps.retained_original.outcome == 'success' && steps.retained_original.outputs.path != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: comments-original-v1-${{ github.run_id }}
@@ -247,7 +300,14 @@ jobs:
             ${{ steps.retained_original.outputs.path }}/etl_receipts.parquet
             ${{ steps.retained_original.outputs.path }}/generation.json
             ${{ steps.retained_original.outputs.path }}/export-complete.json
-            ${{ steps.retained_original.outputs.captured_path }}
+          retention-days: 30
+
+      - name: Retain captured original declaration
+        if: ${{ always() && inputs.promote_v1 && steps.retained_original.outcome == 'success' && steps.retained_original.outputs.captured_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-original-v1-declaration-${{ github.run_id }}
+          path: ${{ steps.retained_original.outputs.captured_path }}
           retention-days: 30
 
       - name: Capture published base versions for dependent jobs
