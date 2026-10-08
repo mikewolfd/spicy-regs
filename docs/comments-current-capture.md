@@ -16,12 +16,15 @@ subject and its identity/version and do not require those embedded records.
 
 Future catalog writes retain one `raw_source_record` and file metadata because
 catalog replay and incremental processing actually consume that input. Both
-bulk and row readers use the maintained catalog normalizer and check that it
-reproduces the selected subject. They also read historical
+bulk and row readers use the maintained catalog normalizer for flat inputs or
+the same Regulations.gov projection for API inputs, and check that it reproduces
+the selected subject. They also read historical
 `raw_conversion_inputs`. New writes omit the second normalized copy and do not
 inherit earlier input payloads into diagnostics. When rebinding older receipts,
 the normalized copy is removed only after exact per-row equality proves it can
-be reproduced from the original; an unproven conversion remains explicit.
+be reproduced from the original; an unproven custom conversion remains explicit.
+Retirement receipts keep the actual retirement reason and predecessor identity
+without embedding another copy of the input history.
 
 Install `uv sync --frozen --extra comments-reader`, then use
 `uv run --frozen --extra comments-reader python -m scripts.capture_comments_current

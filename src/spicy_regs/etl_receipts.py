@@ -832,10 +832,10 @@ def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
         # rather than storing the source and normalized row together.
         if (isinstance(processing.get("raw_source_record"), Mapping)
                 and isinstance(processing.get("raw_conversion_inputs"), Mapping)):
-            from spicy_regs.sources.regulatory_catalog import normalize_source_record
+            from spicy_regs.transforms.regulations_receipts import _comments_processor_input
             try:
-                normalized = normalize_source_record("comments", processing["raw_source_record"])
-            except (ValueError, TypeError, OverflowError):
+                normalized = _comments_processor_input(processing["raw_source_record"])
+            except (ValueError, TypeError, OverflowError, pa.ArrowException):
                 pass  # An unproven historical conversion remains explicit.
             else:
                 if exact_json(normalized) == exact_json(processing["raw_conversion_inputs"]):
@@ -1039,6 +1039,14 @@ class ReceiptLineage:
 
 def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict:
     """Retain a removed subject's evidence as an observed historical attempt."""
+    if receipt["dataset"] == "comments":
+        result = rebind_receipt(receipt, generation_id=generation_id)
+        diagnostics = {**comments_receipt_diagnostics(result), "retired_reason": reason,
+                       "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]}}
+        result = dict(result, outcome="observed", subject_version=None,
+                      attempt_id=receipt["attempt_id"] + ":retired", diagnostic_json=exact_json(diagnostics))
+        result["receipt_id"] = _digest({k: v for k, v in result.items() if k != "receipt_id"})
+        return result
     context = inherit_receipt(
         ReceiptContext(
             generation_id,

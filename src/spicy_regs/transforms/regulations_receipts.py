@@ -98,12 +98,19 @@ def _qualified_rows(selected: ReceiptInput) -> Iterable[dict]:
         )
 
 
+def _comments_processor_input(original):
+    """Replay the maintained API projection or flat catalog normalization."""
+    if "data" in original:
+        return _source_record_projection("comments")(original)
+    from spicy_regs.sources.regulatory_catalog import normalize_source_record
+    return normalize_source_record("comments", original)
+
+
 def _retained_processor_input(dataset, row):
     """Historical normalized input, or Comments' one retained original row."""
     value = row.get("raw_conversion_inputs")
     if dataset == "comments" and not isinstance(value, Mapping) and isinstance(row.get("raw_source_record"), Mapping):
-        from spicy_regs.sources.regulatory_catalog import normalize_source_record
-        value = normalize_source_record(dataset, row["raw_source_record"])
+        value = _comments_processor_input(row["raw_source_record"])
     if not isinstance(value, Mapping):
         raise ValueError(f"{dataset}: exact retained processor input is required")
     return dict(value)
@@ -140,11 +147,11 @@ def _processor_inputs(dataset, rows):
     admission belongs to the caller's maintained ``read_with_receipts`` read.
     """
     rows = list(rows)
-    raw = [_retained_processor_input(dataset, row) for row in rows]
     schema = subject_schema(dataset)
     if not all(_batch_equality_type(field.type) for field in schema):
         return [_processor_input(dataset, row) for row in rows]
     try:
+        raw = [_retained_processor_input(dataset, row) for row in rows]
         if any(not isinstance(value, Mapping) for value in raw):
             raise ValueError("Exact retained processor input is required")
         shaped = shape_records(dataset, raw)
@@ -251,6 +258,16 @@ def _shape_regulations_attempt(dataset: str, row: Mapping, context: ReceiptConte
     try:
         shaped = shape_record(dataset, project(row) if project is not None else row)
         if project is not None:
+            if dataset == "comments":
+                converted = shaped["raw_source_record"]
+                try:
+                    reproduced = _comments_processor_input(row)
+                except (ValueError, TypeError, OverflowError, pa.ArrowException):
+                    reproduced = None
+                if exact_json(reproduced) != exact_json(converted):
+                    # A custom projection is actual processing input when the
+                    # maintained mapper cannot reproduce it from the original.
+                    shaped["raw_conversion_inputs"] = converted
             shaped["raw_source_record"] = dict(row)
         if any(shaped.get(key) is None for key in declared.identity_fields
                if key not in declared.nullable_identity_fields):
@@ -516,14 +533,9 @@ def build_from_receipts(
         )
 
 
-def write_source_records(dataset: str, records: Iterable[tuple[Mapping, ReceiptContext]], destination: Path):
-    """Native Regulations.gov source/staging writer for base and attribute rows.
-
-    The caller supplies each captured raw record and its pinned context. Source
-    validation and projection refusals are retained. The original raw record is
-    processing evidence, and declared empty/null attachment lists stay distinct.
-    This is local staging; a catalog switch still needs paired transactional writes.
-    """
+@cache
+def _source_record_projection(dataset: str):
+    """The same Regulations.gov mapper for source writing and input replay."""
     import json
     from spicy_regs.schemas.regulations import RECORD_TYPES
     from spicy_regs.transforms.regulations_attributes import _projection_and_digest
@@ -598,7 +610,16 @@ def write_source_records(dataset: str, records: Iterable[tuple[Mapping, ReceiptC
             return row
     else:
         raise ValueError("Source staging supports only Regulations.gov base and attribute datasets")
-    return write_records(dataset, records, destination, project=mapper)
+    return mapper
+
+
+def write_source_records(dataset: str, records: Iterable[tuple[Mapping, ReceiptContext]], destination: Path):
+    """Stage captured Regulations.gov records with pinned context and refusals.
+
+    Comments retains the original API record once and replays this same mapper.
+    Empty/null attachment lists remain distinct. No catalog switch occurs here.
+    """
+    return write_records(dataset, records, destination, project=_source_record_projection(dataset))
 
 
 def build_native_rollup(name: str, inputs: Sequence[ReceiptInput], destination: Path, *, generation_id: str):
