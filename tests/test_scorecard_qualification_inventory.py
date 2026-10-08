@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from hashlib import sha256
 import json
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -164,6 +165,60 @@ def test_publication_observation_merges_by_exact_edition_without_duplicates(tmp_
     published.write_text(json.dumps(dict(editions=[published_record, published_record], readers={"lcv": "lcv"})))
     with pytest.raises(ValueError, match="repeats a scope"):
         qualifications.build(*args, observed_at="2026-10-04T04:00:00Z", published_ledger=published)
+
+
+@pytest.mark.parametrize("failure", ["later-source", "publication-ledger", "ledger-replace"])
+def test_failed_requalification_keeps_prior_ledger_and_referenced_bytes(tmp_path, monkeypatch, failure):
+    args = inputs(tmp_path, monkeypatch)
+    initial = qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")
+    directory, corpus = args[-1], args[2]
+    before_ledger = (directory / "integration_qualifications.json").read_bytes()
+    before_receipts = {row["receipt"]: (directory / row["receipt"]).read_bytes() for row in initial["editions"]}
+    plan = json.loads(args[0].read_bytes())
+    reference = json.loads((corpus / "reference.json").read_bytes())
+    reference["scorecard_snapshots"][0]["completeness_rule"] = "Updated complete roster reconciliation"
+    (corpus / "reference.json").write_text(json.dumps(reference))
+    plan["entries"][0]["reference_sha256"] = sha256((corpus / "reference.json").read_bytes()).hexdigest()
+    options = {}
+    if failure == "later-source":
+        (corpus / "refused.json").write_text(json.dumps(dict(status="refused")))
+        second = deepcopy(plan["entries"][0])
+        second["edition"]["edition_id"] = "later"
+        second.update(qualification_file="refused.json", qualification_sha256=sha256((corpus / "refused.json").read_bytes()).hexdigest())
+        plan["entries"].append(second)
+    elif failure == "publication-ledger":
+        published = tmp_path / "publications.json"
+        published.write_text(json.dumps(dict(editions=initial["editions"], readers=initial["readers"])))
+        options["published_ledger"] = published
+    else:
+        from spicy_regs.scorecards.operations import results
+
+        def refuse_replace(*args):
+            raise OSError("Interrupted ledger replacement")
+
+        monkeypatch.setattr(results.os, "replace", refuse_replace)
+    args[0].write_text(json.dumps(plan))
+    with pytest.raises((ValueError, OSError), match="Refused|unfinished|Interrupted"):
+        qualifications.build(args[0], sha256(args[0].read_bytes()).hexdigest(), *args[2:],
+                             observed_at="2026-10-08T04:00:00Z", **options)
+    assert (directory / "integration_qualifications.json").read_bytes() == before_ledger
+    for row in initial["editions"]:
+        assert (directory / row["receipt"]).read_bytes() == before_receipts[row["receipt"]]
+        assert integrations.read_receipt(directory, row)["qualified"] is True
+    assert not list(directory.glob(".*.tmp"))
+
+
+def test_successful_requalification_retains_old_immutable_evidence(tmp_path, monkeypatch):
+    args = inputs(tmp_path, monkeypatch)
+    initial = qualifications.build(*args, observed_at="2026-10-04T04:00:00Z")
+    plan = json.loads(args[0].read_bytes())
+    plan["entries"][0]["reference_max_bytes"] = 1024
+    args[0].write_text(json.dumps(plan))
+    current = qualifications.build(args[0], sha256(args[0].read_bytes()).hexdigest(), *args[2:],
+                                   observed_at="2026-10-08T04:00:00Z")
+    assert initial["editions"][0]["receipt"] != current["editions"][0]["receipt"]
+    for row in (*initial["editions"], *current["editions"]):
+        assert integrations.read_receipt(args[-1], row)["qualified"] is True
 
 
 def publication_observation(tmp_path, *, readback_status="independent_public_readback_passed", rating_count=1):

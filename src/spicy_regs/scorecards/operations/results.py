@@ -1,10 +1,23 @@
 """Lossless decoding and retention of ordinary hosted readback results."""
 
 import json
+import os
+from pathlib import Path
+from uuid import uuid4
+
+from spicy_docs.storage.publication import write_bytes_once
 
 
 def write(path, value):
-    path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+    """Keep the previous complete JSON until its replacement is durably written."""
+    path = Path(path)
+    raw = (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        write_bytes_once(temporary, raw)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def query_rows(body):

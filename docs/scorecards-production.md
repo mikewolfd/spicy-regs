@@ -30,6 +30,18 @@ optionally requires a clean named checkout. The authenticated result records the
 current verifier separately from the candidate's recorded producer packages;
 reading an older immutable candidate never rewrites its provenance.
 
+Read-only recovery compares the candidate's logical identity, table and receipt
+descriptors with the current family, in addition to its artifact digest. It can
+observe an already-published generation even if its parents later advance;
+publishing new analysis requires current parents on every conditional pointer
+attempt, including retries after an unrelated writer changes the index.
+
+Qualification records use immutable content-hash filenames. The command validates
+the full proposed batch before saving records and atomically replacing its ledger.
+A failed source or interrupted ledger update preserves the prior ledger and its
+referenced evidence. Publication bookkeeping uses the same atomic JSON writer and
+admits both current native snapshots and supported historical receipt-only ones.
+
 `prepare` and `prepare-analysis` accept repeated `--local-inputs` roots. They
 search only exact member locators, verify size and SHA-256, and link matching
 bytes into owned staging. Wrong cache generations are skipped. A corrupt staged

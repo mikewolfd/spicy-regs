@@ -9,9 +9,11 @@ import argparse
 from hashlib import sha256
 import json
 from pathlib import Path
-from urllib.parse import quote
 
 from spicy_docs.sources.scorecards import ADAPTER_PUBLISHERS, ScorecardEdition, get_adapter
+from spicy_docs.storage.publication import ImmutablePublicationError, write_bytes_once
+
+from spicy_regs.scorecards.operations.results import write
 
 from spicy_regs.scorecards.retained import (
     pinned_bytes,
@@ -24,7 +26,7 @@ from spicy_regs.scorecards.retained import (
 def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_ledger=None):
     plan = json.loads(pinned_bytes(plan_path, plan_sha256, max_bytes=2 * 1024**2))
     corpus = corpus.resolve()
-    editions, readers, api_observations = [], {}, []
+    editions, readers, api_observations, receipts = [], {}, [], {}
     target = directory / "qualifications"
     target.mkdir(parents=True, exist_ok=True)
 
@@ -96,14 +98,16 @@ def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_l
             receipt["retained_page_sha256"] = [page["sha256"] for page in entry["extraction_pages"]]
         if "reference_max_bytes" in entry:
             receipt["reference_max_bytes"] = entry["reference_max_bytes"]
-        path = target / (quote(edition.publisher_id, safe="-_") + "--" + quote(edition.edition_id, safe="-_") + ".json")
-        path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False) + "\n")
+        raw = (json.dumps(receipt, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        digest = sha256(raw).hexdigest()
+        path = target / (digest + ".json")
+        receipts[path] = raw
         record = dict(
             publisher_id=edition.publisher_id,
             scorecard_id=edition.scorecard_id,
             state="qualified",
             receipt=str(path.relative_to(directory)),
-            receipt_sha256=sha256(path.read_bytes()).hexdigest(),
+            receipt_sha256=digest,
         )
         editions.append(record)
         readers.setdefault(edition.publisher_id, entry["adapter"])
@@ -136,7 +140,13 @@ def build(plan_path, plan_sha256, corpus, directory, *, observed_at, published_l
     )
     if publication_pin is not None:
         ledger["publication_observations_sha256"] = publication_pin
-    (directory / "integration_qualifications.json").write_text(json.dumps(ledger, indent=2) + "\n")
+    for path, raw in receipts.items():
+        try:
+            write_bytes_once(path, raw)
+        except ImmutablePublicationError:
+            if path.read_bytes() != raw:
+                raise ValueError("Retain prior qualification evidence instead of overwriting different bytes") from None
+    write(directory / "integration_qualifications.json", ledger)
     return ledger
 
 

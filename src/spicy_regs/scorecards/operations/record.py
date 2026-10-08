@@ -14,10 +14,10 @@ import duckdb
 import pyarrow.parquet as pq
 
 from spicy_regs.scorecards.operations.inventory import read_receipt
-from spicy_regs.scorecards.operations.results import query_rows
+from spicy_regs.scorecards.operations.results import query_rows, write
 from spicy_regs.duckdb_settings import ExportResources
-from spicy_regs.etl_receipts import read_attempts, select_receipts
-from spicy_regs.scorecards.etl import POLICIES, SOURCE_NAMES
+from spicy_regs.etl_receipts import read_attempts, read_with_receipts, select_receipts
+from spicy_regs.scorecards.etl import SOURCE_NAMES, admitted_read_policies
 from spicy_regs.scorecards.subject_shapes import restore_source_row
 
 
@@ -70,7 +70,9 @@ def publication_proof(readback_root):
         or set(summary["counts"]) != set(SOURCE_NAMES)
     ):
         raise ValueError("Publication requires a passed complete source-family readback")
-    native_names = set(SOURCE_NAMES) - {"scorecard_snapshots"}
+    policies = admitted_read_policies(SOURCE_NAMES, columns={
+        key.removesuffix(".parquet"): value["columns"] for key, value in family["tables"].items()})
+    native_names = {name for name, policy in policies.items() if not policy.receipt_only}
     if set(family["tables"]) != {name + ".parquet" for name in native_names}:
         raise ValueError("Publication source-family table membership differs")
     members = {row["key"]: row for row in files["members"]}
@@ -111,12 +113,24 @@ def publication_proof(readback_root):
         with TemporaryDirectory(prefix="scorecard-publication-proof-") as temporary:
             selected = Path(temporary) / "snapshots.parquet"
             select_receipts(readback_root / "members/etl_receipts.parquet", selected, dataset="scorecard_snapshots")
-            for attempt in read_attempts(
-                [selected], POLICIES["scorecard_snapshots"], generation_id=family["etlReceipts"]["generationId"]
-            ):
-                if attempt["outcome"] != "observed":
-                    raise ValueError("Source snapshot publication contains an unfinished acquisition attempt")
-                row = restore_source_row("scorecard_snapshots", attempt["processing_fields"])
+            policy = policies["scorecard_snapshots"]
+            generation_id = family["etlReceipts"]["generationId"]
+
+            def complete_attempts():
+                for attempt in read_attempts([selected], policy, generation_id=generation_id):
+                    if attempt["outcome"] != ("observed" if policy.receipt_only else "accepted"):
+                        raise ValueError("Source snapshot publication contains an unfinished acquisition attempt")
+                    yield attempt["processing_fields"]
+
+            if policy.receipt_only:
+                snapshots = complete_attempts()
+            else:
+                for _ in complete_attempts():
+                    pass
+                snapshots = read_with_receipts(
+                    [readback_root / "members/scorecard_snapshots.parquet"], [selected], policy, generation_id=generation_id)
+            for native in snapshots:
+                row = restore_source_row("scorecard_snapshots", native)
                 scope = row["scorecard_id"]
                 publisher = publishers[scope]
                 if scope in scopes or row["completeness_status"] != "complete":
@@ -210,7 +224,7 @@ def promote(directory, proof):
     for record, _ in proposals:
         readers[record["publisher_id"]] = ledger["readers"][record["publisher_id"]]
     result = dict(schema_version="1", editions=[records[key] for key in sorted(records)], readers=readers)
-    (directory / "integration_publications.json").write_text(json.dumps(result, indent=2) + "\n")
+    write(directory / "integration_publications.json", result)
     return result
 
 
