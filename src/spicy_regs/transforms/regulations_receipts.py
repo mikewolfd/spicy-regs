@@ -98,10 +98,19 @@ def _qualified_rows(selected: ReceiptInput) -> Iterable[dict]:
         )
 
 
-def _processor_input(dataset, row):
+def _retained_processor_input(dataset, row):
+    """Historical normalized input, or Comments' one retained original row."""
     value = row.get("raw_conversion_inputs")
+    if dataset == "comments" and not isinstance(value, Mapping) and isinstance(row.get("raw_source_record"), Mapping):
+        from spicy_regs.sources.regulatory_catalog import normalize_source_record
+        value = normalize_source_record(dataset, row["raw_source_record"])
     if not isinstance(value, Mapping):
         raise ValueError(f"{dataset}: exact retained processor input is required")
+    return dict(value)
+
+
+def _processor_input(dataset, row):
+    value = _retained_processor_input(dataset, row)
     shaped = shape_record(dataset, value)
     schema = subject_schema(dataset)
     reproduced = pa.Table.from_pylist([shaped], schema=schema).to_pylist()[0]
@@ -131,7 +140,7 @@ def _processor_inputs(dataset, rows):
     admission belongs to the caller's maintained ``read_with_receipts`` read.
     """
     rows = list(rows)
-    raw = [row.get("raw_conversion_inputs") for row in rows]
+    raw = [_retained_processor_input(dataset, row) for row in rows]
     schema = subject_schema(dataset)
     if not all(_batch_equality_type(field.type) for field in schema):
         return [_processor_input(dataset, row) for row in rows]
@@ -250,7 +259,8 @@ def _shape_regulations_attempt(dataset: str, row: Mapping, context: ReceiptConte
         failed = ReceiptContext(context.generation_id, context.attempt_id, context.processor, context.witnesses,
                                 {**context.diagnostics, "error_type": type(error).__name__, "error": str(error)})
         return None, failure_receipt(declared, failed, outcome="refused", raw_fields={
-            "raw_conversion_inputs": dict(row), "input_metadata": dict(input_metadata or {})})
+            "raw_source_record" if dataset == "comments" else "raw_conversion_inputs": dict(row),
+            "input_metadata": dict(input_metadata or {})})
     shaped["input_metadata"] = dict(input_metadata or {})
     return shaped, None
 
@@ -282,7 +292,11 @@ def write_records(
     """
     declared = policy(dataset)
     with TemporaryDirectory(prefix="regulations-refusals-") as temp, ExitStack() as stack:
-        lineages = [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts]
+        # Comments retains its current original input once. Earlier catalog
+        # snapshots/selected generations hold earlier inputs; do not copy them
+        # into each new receipt's diagnostics.
+        lineages = ([] if dataset == "comments" else
+                    [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts])
         refusal_path = Path(temp) / "refused.parquet"
         writer = pq.ParquetWriter(refusal_path, RECEIPT_SCHEMA, compression="zstd")
         refused = []
@@ -366,7 +380,8 @@ def write_held_dataset(
                     "source_id": f"retained:{dataset}",
                     "source_uri": None,
                     "sha256": sha256(exact_json(row).encode()).hexdigest(),
-                    "locator": "receipt.values.raw_conversion_inputs (canonical exact_json)",
+                    "locator": ("receipt.values.raw_source_record (canonical exact_json)" if dataset == "comments" else
+                                "receipt.values.raw_conversion_inputs (canonical exact_json)"),
                     "body_version": None,
                 }
                 context = ReceiptContext(

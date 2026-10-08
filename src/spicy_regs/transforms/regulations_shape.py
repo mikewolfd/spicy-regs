@@ -359,17 +359,17 @@ def _validate(value, dtype, path):
 def _shape_record(dataset, row):
     """Return native fields plus explicitly declared receipt-only input fields.
 
-    An omitted source field stays omitted in raw_conversion_inputs; SQL NULL,
+    An omitted source field stays omitted in the retained input; SQL NULL,
     JSON null, empty lists, repeated list items and original key spelling are
-    distinguishable there. Subjects never carry this processing evidence.
+    distinguishable there. Comments retains raw_source_record once; other
+    datasets retain raw_conversion_inputs. Subjects hold the mapped values.
     """
     known = {c for c, _ in SOURCE_COLUMNS[dataset]}
     if unknown := set(row) - known:
         raise RegulationsShapeError(f"{dataset}: undeclared fields {sorted(unknown)}")
     shaped = {c: row[c] for c in RECEIPT_COLUMNS[dataset] if c in row}
-    # Preserve the exact processor input independently of the resulting subject.
-    # Incremental processors consume this retained observation directly.
-    shaped["raw_conversion_inputs"] = dict(row)
+    # Comments readers normalize the one original input when replaying it.
+    shaped["raw_source_record" if dataset == "comments" else "raw_conversion_inputs"] = dict(row)
     for name, _ in SOURCE_COLUMNS[dataset]:
         if name in RECEIPT_COLUMNS[dataset]:
             continue

@@ -3,9 +3,9 @@
 The shared regulations mapper remains the authority for attachment parsing and
 HTML text. SQL handles pass-through fields, receipt encoding and hashing. Every
 unsupported row goes back to the caller's reference writer in its source order.
-The catalog uses this writer only when incoming rows have no selected prior
-receipts. Replacements use the reference writer to preserve full witness and
-processing history. Verified processing reads can batch in either case.
+The catalog retains one original source input per current row. Replacements
+write the new input without embedding copies of earlier inputs. Verified
+processing reads normalize that input through the maintained catalog mapper.
 This module writes private files; catalog commits and publication stay with the
 catalog owner.
 """
@@ -91,7 +91,7 @@ def _segments(table: pa.Table):
 def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: DatasetPolicy,
                  generation_id: str, source_label: str,
                  row_attempt: Callable[[Mapping, int], tuple[dict | None, dict]]) -> int:
-    """Write a private catalog pair, preserving full original and normalized input.
+    """Write a private catalog pair, retaining the original input once.
 
     ``row_attempt`` runs the existing catalog normalizer and regulations writer.
     The returned number counts routed rows. The caller admits the completed pair
@@ -113,12 +113,11 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
         columns.append(f'{expression} AS "{name}"')
     attachment_type = dict(described_schema(policy.subject_schema))['attachments']
     fields = ', '.join('"' + field.name + '"' for field in policy.subject_schema)
-    normalized = etl_bulk.record_json_sql((name, TYPES[kind]) for name, kind in SOURCE_COLUMNS['comments'])
     processing = [(name, pa.string()) for name in policy.receipt_fields
                   if name not in {'raw_conversion_inputs', 'input_metadata', 'raw_source_record'}]
     # These field names are explicit policy decisions, and their order is exact_json's.
     pairs = [(name, etl_bulk.exact_json_sql('"' + name + '"', dtype)) for name, dtype in processing]
-    pairs.extend([('raw_conversion_inputs', '_normalized'), ('raw_source_record', '_raw'),
+    pairs.extend([('raw_source_record', '_raw'),
                   ('input_metadata', "'[\"dict\",[]]'" )])
     payload = "'[\"dict\",[' || " + " || ',' || ".join(
         _text('[' + json.dumps(name) + ',') + ' || ' + value + " || ']'" for name, value in sorted(pairs)
@@ -139,7 +138,7 @@ def write_bundle(source: Path, subjects: Path, receipts: Path, *, policy: Datase
     bounded AS (SELECT {bounded_columns}, _ordinal, _large FROM sized),
     read AS (SELECT *, {raw} AS _raw, {count_raw} AS _count_raw FROM bounded),
     normalized AS (SELECT {', '.join(columns)}, _ordinal, _large, _raw, _count_raw FROM read),
-    shaped AS (SELECT *, {normalized} AS _normalized, comments_attachments(attachments_json) AS _attachment,
+    shaped AS (SELECT *, comments_attachments(attachments_json) AS _attachment,
                html_text(comment) AS comment_text FROM normalized),
     subjects AS (SELECT *, CAST(CAST(_attachment.native AS JSON) AS {attachment_type}) AS attachments FROM shaped),
     receipt AS (SELECT {fields}, _ordinal, _large, _raw,
@@ -217,7 +216,8 @@ def _write_segment(table, sw, rw, fw, policy, row_attempt, original_row):
 def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, generation_id: str) -> int:
     """Restore catalog comments after complete admission and shared mapper proof.
 
-    The catalog retains normalized processor inputs plus complete original rows.
+    The catalog retains one original row; readers normalize it when needed.
+    Earlier receipts with explicit normalized inputs remain readable.
     Batch shaping uses the same mapper as _processor_input, followed by one Arrow
     conversion per batch. Any unproven value returns the whole pair to that row
     reader so it decides the exact first error. No destination appears until all
@@ -226,7 +226,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
     from tempfile import TemporaryDirectory
     from spicy_regs.etl_receipts import decode_exact_json, exact_json
     from spicy_regs.transforms.regulations_shape import RECEIPT_COLUMNS, shape_record
-    from spicy_regs.transforms.regulations_receipts import policy as selected_policy
+    from spicy_regs.transforms.regulations_receipts import policy as selected_policy, _retained_processor_input
 
     selected = selected_policy('comments')
     etl_bulk.validate_bundle({'comments': [subjects]}, [receipts], [selected], generation_id=generation_id)
@@ -255,7 +255,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
                     held = [decode_exact_json(value) for value in table['_processing'].to_pylist()]
                     if any(values.get('input_metadata') != {} for values in held):
                         raise etl_bulk.NotBulkEligible('Comments catalog restore requires empty processor metadata')
-                    raw = [values.get('raw_conversion_inputs') for values in held]
+                    raw = [_retained_processor_input('comments', values) for values in held]
                     if any(not isinstance(value, Mapping) for value in raw):
                         raise etl_bulk.NotBulkEligible('Comments exact retained processor input is required')
                     shaped = [shape_record('comments', value) for value in raw]

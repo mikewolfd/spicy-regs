@@ -802,12 +802,21 @@ def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> P
     return write_rows((row for row in _rows(path) if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)
 
 
+def comments_receipt_diagnostics(receipt: Mapping) -> dict:
+    """Actual Comments attempt facts without copied processing/history payloads."""
+    diagnostics = decode_exact_json(receipt["diagnostic_json"])
+    return {key: value for key, value in diagnostics.items()
+            if key not in {"retained_processing", "prior_receipts", "prior_receipt", "carried_from"}}
+
+
 def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
     """Carry exact prior processing evidence into a new selected generation.
 
     Does not reinterpret an old observation as a new acquisition. Original
     witnesses, processor, attempt and values stay intact; diagnostic lineage
-    records the prior receipt and generation. Admission still checks the row.
+    records the prior receipt and generation. Comments keeps current-input
+    witnesses and one predecessor reference without copying payload history;
+    an exactly reproducible normalized copy is omitted. Admission checks the row.
     """
     if not isinstance(generation_id, str) or not generation_id:
         raise ValueError("A carried receipt needs the new generation identity")
@@ -817,6 +826,39 @@ def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
         raise ValueError("Carried receipt digest differs from its contents")
     if generation_id == receipt["generation_id"]:
         return dict(receipt)
+    if receipt["dataset"] == "comments":
+        processing = decode_exact_json(receipt["processing_json"])
+        # Catalog replay needs one original input. Normalize it at read time,
+        # rather than storing the source and normalized row together.
+        if (isinstance(processing.get("raw_source_record"), Mapping)
+                and isinstance(processing.get("raw_conversion_inputs"), Mapping)):
+            from spicy_regs.sources.regulatory_catalog import normalize_source_record
+            try:
+                normalized = normalize_source_record("comments", processing["raw_source_record"])
+            except (ValueError, TypeError, OverflowError):
+                pass  # An unproven historical conversion remains explicit.
+            else:
+                if exact_json(normalized) == exact_json(processing["raw_conversion_inputs"]):
+                    processing.pop("raw_conversion_inputs")
+        witnesses = []
+        for witness in receipt["witnesses"]:
+            if (witness.get("source_uri") or "").startswith("receipt-processing:"):
+                continue
+            locator = witness.get("locator") or ""
+            if locator.startswith("receipt.values."):
+                name = locator.removeprefix("receipt.values.").split(" ", 1)[0]
+                if (name not in processing or hashlib.sha256(exact_json(processing[name]).encode()).hexdigest()
+                        != str(witness.get("sha256", "")).removeprefix("sha256:")):
+                    continue
+            witnesses.append(witness)
+        diagnostics = {**comments_receipt_diagnostics(receipt),
+                       "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]}}
+        updated = {**receipt, "generation_id": generation_id, "witnesses": witnesses,
+                   "processing_json": exact_json(processing), "diagnostic_json": exact_json(diagnostics)}
+        # Refuse if compacting removed the only verifiable source witness.
+        ReceiptContext(generation_id, receipt["attempt_id"], receipt["processor"], witnesses, diagnostics)
+        updated["receipt_id"] = _digest({k: v for k, v in updated.items() if k != "receipt_id"})
+        return updated
     diagnostics = _retain_history(
         receipt,
         {

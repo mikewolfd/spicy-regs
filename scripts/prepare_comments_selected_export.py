@@ -25,7 +25,7 @@ import pyarrow.parquet as pq
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.etl_bulk import _read_promotion_rows
 from spicy_regs.etl_receipts import (
-    ReceiptContext, _digest, _rows, decode_exact_json, exact_json,
+    ReceiptContext, _digest, _rows, comments_receipt_diagnostics, exact_json,
     selected_subject_policy, write_dataset,
 )
 from spicy_regs.transforms.regulations_receipts import policy
@@ -262,9 +262,7 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
     def context_for(prior, attempt_id, processor):
         # The pinned original pair holds the inputs and historical receipts.
         # Link to those bytes instead of embedding them again in every output.
-        diagnostics = decode_exact_json(prior["diagnostic_json"])
-        diagnostics = {key: value for key, value in diagnostics.items()
-                       if key not in {"retained_processing", "prior_receipts", "prior_receipt", "carried_from"}}
+        diagnostics = comments_receipt_diagnostics(prior)
         return ReceiptContext(
             generation, attempt_id, processor,
             [{"source_id": "selected-comments-v1", "source_uri": str(subjects),

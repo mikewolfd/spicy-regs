@@ -180,7 +180,7 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
     key = policy(dataset).identity_fields[0]
     source_query = f'SELECT * FROM {source}'
     has_prior = prior_receipts is not None and con.execute(f'SELECT 1 FROM {prior_receipts} LIMIT 1').fetchone() is not None
-    if has_prior:
+    if has_prior and dataset != 'comments':
         source_query = f'SELECT s.*, w.receipt AS _prior_receipt FROM {source} s LEFT JOIN {prior_receipts} w USING ("{key}")'
     # Reuse comments layout targets before its private receipt writer reads
     # these wide strings. Preserve the caller's connection and ordering settings.
@@ -196,7 +196,7 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
                        'locator': 'receipt.values.raw_source_record (canonical exact_json)',
                        'body_version': generation}
             context = ReceiptContext(generation, f'row:{i}', 'regulatory-catalog-native-v1', [witness])
-            if prior is not None:
+            if prior is not None and dataset != 'comments':
                 from spicy_regs.etl_receipts import inherit_receipt
                 context = inherit_receipt(context, prior)
             yield row, context
@@ -204,10 +204,9 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
     def normalized(row):
         return normalize_source_record(dataset, row)
     subject = receipts = None
-    # Initial comments acquisitions can batch safely. A replacement with prior
-    # receipts uses the existing writer, including its complete witness/history
-    # inheritance. Never replace that history with only a predecessor pointer.
-    if dataset == 'comments' and bulk and not has_prior:
+    # Comments stores the current original input once; prior catalog snapshots
+    # retain earlier inputs. Bulk and reference writers use the same mapper.
+    if dataset == 'comments' and bulk:
         from spicy_regs import comments_bulk, etl_bulk
         from spicy_regs.etl_receipts import exact_json
         from spicy_regs.transforms.regulations_receipts import map_regulations_attempt
