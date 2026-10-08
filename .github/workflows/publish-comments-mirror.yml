@@ -31,6 +31,14 @@ on:
         description: 'Exact SHA-256 of the captured input descriptor'
         type: string
         default: ''
+      comments_local_python:
+        description: 'Optional canonical existing Python executable for captured local inputs'
+        type: string
+        default: ''
+      comments_local_python_sha256:
+        description: 'Exact executable SHA-256; required with comments_local_python'
+        type: string
+        default: ''
 concurrency:
   group: comments-catalog-write
   cancel-in-progress: false
@@ -52,3 +60,5 @@ jobs:
       comments_original_pair: ${{ inputs.comments_original_pair }}
       comments_captured_input: ${{ inputs.comments_captured_input }}
       comments_captured_input_sha256: ${{ inputs.comments_captured_input_sha256 }}
+      comments_local_python: ${{ inputs.comments_local_python }}
+      comments_local_python_sha256: ${{ inputs.comments_local_python_sha256 }}
