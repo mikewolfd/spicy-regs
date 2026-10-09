@@ -39,10 +39,23 @@ qualify ownership, closure, resource capacity, original input custody, and the
 exact source release through the existing operational controls. No preparation
 or publication starts merely by writing this descriptor.
 
+The retained scan is optional. Supply both `--retained-scan` and
+`--retained-scan-sha256` only when the exact closed Source15 evidence and its
+files remain available. Otherwise omit both options: the maintained reader
+performs fresh receipt and subject admission from the original selected pair
+before replay. Fresh admission uses private temporary key and ordinal tables;
+it does not recreate the old Source15 custody proof. Preserve the captured input
+descriptor and digest, bind its validation revision to the actual clean source
+release, and qualify the restored runtime and owned temporary directory through
+the existing controls. This path still requires `--native-only`, captured input
+and bounded remote output. Its additional original-input reads and temporary
+storage require actual resource checks; no measured fit is implied.
+
 The maintained reader opens the preserved subject with an ETag condition on
 every request and checks its schema and row count. The original selected pair
-and retained scan are still read to reconstruct the missing receipt contexts
-and subject versions. Each resulting subject batch is compared with preserved
+is still read to reconstruct the missing receipt contexts and subject versions,
+using either fresh admission or the exact retained scan. Each resulting subject
+batch is compared with preserved
 rows in the same order, including all values, nulls, lists and repetitions.
 Short input, trailing input, or differing values refuses. This reconstruction
 is necessary receipt work; it is not an assertion that no original data is
