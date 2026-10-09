@@ -759,7 +759,8 @@ def main():
     parser.add_argument("--captured-input", type=Path,
                         help="Explicit captured-validation-pending pair descriptor; never an export seal")
     parser.add_argument("--captured-input-sha256", help="Exact digest of that captured input descriptor")
-    parser.add_argument("--retained-scan", type=Path, help="Exact closed source15 scan recovery evidence")
+    parser.add_argument("--retained-scan", type=Path,
+                        help="Optional exact closed source15 scan evidence; omit for fresh original-pair admission")
     parser.add_argument("--retained-scan-sha256", help="Exact digest of the retained scan evidence")
     parser.add_argument("--native-only", action="store_true", help="Prepare only immutable native publication members")
     parser.add_argument("--remote-staging-prefix", help="New unreferenced R2 prefix for native-only members")
@@ -772,9 +773,9 @@ def main():
     if args.native_only and args.publish:
         raise ValueError("Native-only preparation cannot publish the legacy mirrors")
     if args.remote_staging_prefix is not None and (
-            not args.native_only or args.captured_input is None or args.retained_scan is None
+            not args.native_only or args.captured_input is None
             or not 0 < args.remote_max_bytes <= 64 * 1024**3):
-        raise ValueError("Remote native preparation requires captured inputs, retained scans and bounded output")
+        raise ValueError("Remote native preparation requires native-only output, captured inputs and bounded output")
     if ((args.retained_remote_subject is None) != (args.retained_remote_subject_sha256 is None)
             or args.retained_remote_subject is not None and args.remote_staging_prefix is None):
         raise ValueError("Retained remote subject requires its descriptor pin and remote native preparation")
