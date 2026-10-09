@@ -63,9 +63,15 @@ processed. In the null-digest path the preserved rows supply the repacked
 output. Known-digest reuse keeps the existing encoded subject; the same full
 ordered comparison still runs while reconstructing its missing receipts.
 
-Index and health work reads one temporary, compressed Parquet projection of
-the actual pinned subject's `comment_id`, `agency_code`, `docket_id`, and
-`posted_date`. It preserves every row, duplicate, null and source value.
+Index and health work reads one temporary, compressed Parquet file containing
+`comment_id`, `agency_code`, `docket_id`, and `posted_date`. Preparation writes
+these columns from the same subject batches used for receipt reconstruction;
+retained subjects have already passed the full ordered comparison at that point.
+The shared Arrow coalescer writes the small replay batches into bounded row
+groups. This removes the later remote body scan for these columns while
+preserving every row, duplicate, null and source value. Staged schema and footer
+counts are still checked; full generation admission independently hashes and
+decodes the actual remote members before publication.
 DuckDB scans this reusable file through views instead of first storing the
 entire projected population in a candidate table. The maintained coordinate,
 index, identity, NULL-aware coverage and predecessor-ID checks remain unchanged.

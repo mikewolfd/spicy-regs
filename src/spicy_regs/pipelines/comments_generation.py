@@ -70,7 +70,7 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
     """
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _dataset_batches
     from spicy_regs.sources.remote_parquet import (
-        ROW_GROUP_ROWS, StoredParquet, remote_parquet_writer, open_pinned_s3, parquet_schema,
+        ParquetUpload, StoredParquet, remote_parquet_writer, open_pinned_s3, parquet_schema,
     )
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
@@ -97,10 +97,14 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
     with TemporaryDirectory(prefix="comments-validation-", dir=output_dir) as temporary, ExitStack() as preparation:
         scratch = Path(temporary)
         candidate_path = scratch / "candidate.parquet"
+        columns = ("comment_id", "agency_code", "docket_id", "posted_date")
+        schema = pa.schema([current.subject_schema.field(name) for name in columns])
         receipt_upload = preparation.enter_context(remote_parquet_writer(
             client=client, bucket=bucket, key=staging_prefix + "/etl_receipts.parquet",
             schema=RECEIPT_SCHEMA, max_bytes=max_bytes))
-        with ExitStack() as subject_output:
+        with ExitStack() as subject_output, \
+                pq.ParquetWriter(candidate_path, schema, compression="zstd") as projection_writer:
+            projection = ParquetUpload(projection_writer, schema)
             if not reuse_subject:
                 subject_upload = subject_output.enter_context(remote_parquet_writer(
                     client=client, bucket=bucket, key=staging_prefix + "/comments.parquet",
@@ -121,8 +125,12 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
                         raise ValueError("Retained Comments schema or population differs")
                     paired = _matched_subject_batches(parquet, paired, current.subject_schema, batch_size)
                 for subject, receipt in paired:
-                    if subject is not None and not reuse_subject:
-                        subject_upload.write(subject)
+                    if subject is not None:
+                        if not reuse_subject:
+                            subject_upload.write(subject)
+                        # Retained rows have already passed exact ordered comparison.
+                        # Share their arrays and coalesce the small replay batches.
+                        projection.write(pa.Table.from_arrays([subject[name] for name in columns], schema=schema))
                     receipt_upload.write(receipt)
                 if retained_subject is not None:
                     head = client.head_object(Bucket=bucket, Key=retained_subject["key"])
@@ -133,6 +141,7 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
                 # Release the old, potentially large footer before index work.
                 del parquet, stream
             del paired
+            projection.flush()
         subject = (StoredParquet(**retained_subject, sha256=retained_subject_sha256)
                    if reuse_subject else subject_upload.stored)
         assert subject is not None
@@ -140,21 +149,14 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
             on_subject(subject)
         if on_member is not None:
             on_member(subject)
-        columns = ("comment_id", "agency_code", "docket_id", "posted_date")
-        # A reusable compressed projection avoids DuckDB's full row materialization.
-        # Read actual pinned output once; preserve every row/null without deduplication.
+        # Keep the staged schema/footer checks without rereading the remote body.
+        # Complete generation admission still independently decodes every page.
         with open_pinned_s3(client=client, bucket=bucket, key=subject.key, etag=subject.etag) as stream, \
                 pq.ParquetFile(stream) as parquet:
             if not parquet.schema_arrow.equals(parquet_schema(current.subject_schema), check_metadata=True):
                 raise ValueError("Staged Comments schema differs")
-            schema = pa.schema([current.subject_schema.field(name) for name in columns])
-            rows = 0
-            with pq.ParquetWriter(candidate_path, schema, compression="zstd") as projection:
-                for batch in parquet.iter_batches(batch_size=ROW_GROUP_ROWS, columns=columns, use_threads=False):
-                    projection.write_batch(batch, row_group_size=ROW_GROUP_ROWS)
-                    rows += batch.num_rows
-            if rows != subject.rows or rows != parquet.metadata.num_rows:
-                raise ValueError("Staged Comments body/footer population differs")
+            if projection.rows != subject.rows or projection.rows != parquet.metadata.num_rows:
+                raise ValueError("Staged Comments and index-input populations differ")
 
         with duckdb.connect() as con:
             ExportResources().configure(con, scratch / "index-spill")
