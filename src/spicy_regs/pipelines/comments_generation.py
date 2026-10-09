@@ -1,5 +1,6 @@
 """Seal the comments mirror and its aggregate index with exact ETL receipts."""
 from dataclasses import asdict
+from contextlib import ExitStack
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -23,9 +24,41 @@ def _index_records(path, generation_id, witness):
                 ordinal += 1
 
 
+def _matched_subject_batches(parquet, paired, schema, batch_size):
+    """Repack preserved rows only after exact ordered agreement with receipt input.
+
+    The declared/readback schema check precedes this safe cast; the cast only
+    restores the serializer's structural LIST child names. Alignment handles
+    receipt-only attempts and different input row-group boundaries.
+    """
+    batches = iter(parquet.iter_batches(batch_size=batch_size, use_threads=False))
+    held, offset = None, 0
+    for subject, receipt in paired:
+        if subject is None:
+            yield subject, receipt
+            continue
+        parts, remaining = [], subject.num_rows
+        while remaining:
+            if held is None or offset == held.num_rows:
+                held, offset = next(batches, None), 0
+                if held is None:
+                    raise ValueError("Retained Comments subject ended before receipt input")
+            count = min(remaining, held.num_rows - offset)
+            parts.append(held.slice(offset, count))
+            offset += count
+            remaining -= count
+        restored = pa.Table.from_batches(parts).cast(schema, safe=True)
+        if not restored.equals(subject, check_metadata=True):
+            raise ValueError("Retained Comments values or order differ from receipt input")
+        yield restored, receipt
+    if (held is not None and offset != held.num_rows) or next(batches, None) is not None:
+        raise ValueError("Retained Comments subject has extra rows")
+
+
 def stage_comments_remote(records, current, *, failures, generation_id, snapshot,
                           output_dir, client, bucket, staging_prefix, max_bytes,
-                          previous_url, batch_size=128):
+                          previous_url, batch_size=128, retained_subject=None,
+                          on_subject=None):
     """Write both large members from one input pass, retaining only narrow index scratch.
 
     Returned upload receipts remain unpublished and require full generation
@@ -33,7 +66,7 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
     predecessor checks serve local and remote output.
     """
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _dataset_batches
-    from spicy_regs.sources.remote_parquet import remote_parquet_writer, open_pinned_s3
+    from spicy_regs.sources.remote_parquet import remote_parquet_writer, open_pinned_s3, parquet_schema
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
     from spicy_regs.pipelines.comments_mirror import validate_export
@@ -47,12 +80,38 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
                                schema=RECEIPT_SCHEMA, max_bytes=max_bytes) as receipt_upload:
         with remote_parquet_writer(client=client, bucket=bucket, key=staging_prefix + "/comments.parquet",
                                    schema=current.subject_schema, max_bytes=max_bytes) as subject_upload:
-            for subject, receipt in _dataset_batches(records, current, failures=failures, batch_size=batch_size):
-                if subject is not None:
-                    subject_upload.write(subject)
-                receipt_upload.write(receipt)
+            with ExitStack() as inputs:
+                paired = _dataset_batches(records, current, failures=failures, batch_size=batch_size)
+                if retained_subject is not None:
+                    head = client.head_object(Bucket=bucket, Key=retained_subject["key"])
+                    if (head.get("ETag") != retained_subject["etag"]
+                            or head.get("ContentLength") != retained_subject["byte_size"]):
+                        raise ValueError("Retained Comments subject version changed")
+                    stream = inputs.enter_context(open_pinned_s3(
+                        client=client, bucket=bucket, key=retained_subject["key"],
+                        etag=retained_subject["etag"]))
+                    parquet = inputs.enter_context(pq.ParquetFile(stream))
+                    if (not parquet.schema_arrow.equals(parquet_schema(current.subject_schema), check_metadata=True)
+                            or parquet.metadata.num_rows != retained_subject["rows"]):
+                        raise ValueError("Retained Comments schema or population differs")
+                    paired = _matched_subject_batches(parquet, paired, current.subject_schema, batch_size)
+                for subject, receipt in paired:
+                    if subject is not None:
+                        subject_upload.write(subject)
+                    receipt_upload.write(receipt)
+                if retained_subject is not None:
+                    head = client.head_object(Bucket=bucket, Key=retained_subject["key"])
+                    if (head.get("ETag") != retained_subject["etag"]
+                            or head.get("ContentLength") != retained_subject["byte_size"]):
+                        raise ValueError("Retained Comments subject changed during repacking")
+            if retained_subject is not None:
+                # Release the old, potentially large footer before index work.
+                del parquet, stream
+            del paired
         subject = subject_upload.stored
         assert subject is not None
+        if on_subject is not None:
+            on_subject(subject)
         columns = ("comment_id", "agency_code", "docket_id", "posted_date")
 
         def candidates(con):
@@ -60,7 +119,7 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
             # Pinned reads refuse a changed remote member on every request.
             with open_pinned_s3(client=client, bucket=bucket, key=subject.key, etag=subject.etag) as stream, \
                     pq.ParquetFile(stream) as parquet:
-                if not parquet.schema_arrow.equals(current.subject_schema, check_metadata=True):
+                if not parquet.schema_arrow.equals(parquet_schema(current.subject_schema), check_metadata=True):
                     raise ValueError("Staged Comments schema differs")
                 schema = pa.schema([current.subject_schema.field(name) for name in columns])
                 reader = pa.RecordBatchReader.from_batches(
