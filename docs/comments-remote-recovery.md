@@ -2,11 +2,16 @@
 
 Remote preparation can fail after the subject upload completes but before its
 receipt upload closes. The completed subject remains an unpublished input;
-missing receipt bytes cannot be inferred from it. Preparation records
-`completedSubject` as soon as its upload closes, before building the index.
-That checkpoint is not a complete generation or publication permission.
+missing receipt bytes cannot be inferred from it. Preparation records each
+closed member in `completedMembers` and keeps `completedSubject` for the
+subject. Each checkpoint follows successful upload completion and HEAD
+verification; the known-subject recovery mode records its existing pin after
+the ordered input comparison. Records are flushed before atomic replacement.
+Index and receipt uploads close before predecessor and health validation.
+These checkpoints remain unvalidated and unpublished, and never authorize
+publication or replace complete generation admission.
 
-For a completed subject without a persisted byte digest, pass
+For a completed subject, pass
 `--retained-remote-subject` and `--retained-remote-subject-sha256` to
 `scripts/prepare_comments_selected_export.py`, together with the existing
 remote native preparation options. The descriptor is a regular JSON file with
@@ -20,10 +25,16 @@ exactly these fields:
 | `originalMembers` | The exact captured input descriptor's `members` |
 | `subjectPolicy` | The unchanged current Comments policy descriptor |
 | `subject` | `key`, `etag`, `byte_size`, and `rows` for the completed staging input |
-| `subjectByteDigest` | `null`: no previous full byte digest is asserted |
+| `subjectByteDigest` | `null` for a digest-unknown repack input, or the exact recorded `sha256:<hex>` for a completed subject reused in place |
 
-Use a new, empty output staging prefix. The preserved input must use a
-distinct `staging/comments/<attempt>/comments.parquet` key. Before execution,
+With a null digest, use a new, empty output staging prefix. The preserved input
+must use a distinct `staging/comments/<attempt>/comments.parquet` key and is
+repacked as before. With an explicitly recorded digest, use that subject's
+existing staging prefix. It must contain exactly the pinned `comments.parquet`
+object, with no receipt/index object, extra object, or multipart upload. The
+subject is reused without writing or copying it; only the missing receipt and
+index outputs are created. An incomplete receipt upload cannot be reused.
+Before execution,
 qualify ownership, closure, resource capacity, original input custody, and the
 exact source release through the existing operational controls. No preparation
 or publication starts merely by writing this descriptor.
@@ -35,7 +46,19 @@ and subject versions. Each resulting subject batch is compared with preserved
 rows in the same order, including all values, nulls, lists and repetitions.
 Short input, trailing input, or differing values refuses. This reconstruction
 is necessary receipt work; it is not an assertion that no original data is
-processed. The preserved rows supply the repacked output.
+processed. In the null-digest path the preserved rows supply the repacked
+output. Known-digest reuse keeps the existing encoded subject; the same full
+ordered comparison still runs while reconstructing its missing receipts.
+
+Index and health work reads one temporary, compressed Parquet projection of
+the actual pinned subject's `comment_id`, `agency_code`, `docket_id`, and
+`posted_date`. It preserves every row, duplicate, null and source value.
+DuckDB scans this reusable file through views instead of first storing the
+entire projected population in a candidate table. The maintained coordinate,
+index, identity, NULL-aware coverage and predecessor-ID checks remain unchanged.
+The projection stays available until those checks finish. Aggregations and
+distinct-ID checks can still spill; scratch size and memory fit remain actual
+operational checks under the unchanged limits.
 
 The shared Arrow writer coalesces batches without converting them back to
 Python rows. It bounds a group by the row and logical-byte settings in

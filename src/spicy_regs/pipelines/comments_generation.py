@@ -3,12 +3,15 @@ from dataclasses import asdict
 from contextlib import ExitStack
 import json
 from pathlib import Path
+import re
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+import duckdb
 import pyarrow.parquet as pq
 import pyarrow as pa
 
+from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.etl_receipts import ReceiptContext, combine_receipts, write_dataset
 from spicy_regs.generations import build_generation
 from spicy_regs.sources.publication import file_identity
@@ -58,7 +61,7 @@ def _matched_subject_batches(parquet, paired, schema, batch_size):
 def stage_comments_remote(records, current, *, failures, generation_id, snapshot,
                           output_dir, client, bucket, staging_prefix, max_bytes,
                           previous_url, batch_size=128, retained_subject=None,
-                          on_subject=None):
+                          retained_subject_sha256=None, on_subject=None, on_member=None):
     """Write both large members from one input pass, retaining only narrow index scratch.
 
     Returned upload receipts remain unpublished and require full generation
@@ -66,20 +69,42 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
     predecessor checks serve local and remote output.
     """
     from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _dataset_batches
-    from spicy_regs.sources.remote_parquet import remote_parquet_writer, open_pinned_s3, parquet_schema
+    from spicy_regs.sources.remote_parquet import (
+        ROW_GROUP_ROWS, StoredParquet, remote_parquet_writer, open_pinned_s3, parquet_schema,
+    )
     from spicy_regs.sources.iceberg import _build_comments_index
     from spicy_regs.schemas.regulations import RECORD_TYPES
     from spicy_regs.pipelines.comments_mirror import validate_export
 
-    if (not staging_prefix or staging_prefix != staging_prefix.strip("/")
-            or client.list_objects_v2(Bucket=bucket, Prefix=staging_prefix + "/", MaxKeys=1).get("Contents")):
+    if not staging_prefix or staging_prefix != staging_prefix.strip("/"):
+        raise ValueError("Remote Comments needs an explicit attempt staging prefix")
+    reuse_subject = retained_subject_sha256 is not None
+    existing = client.list_objects_v2(Bucket=bucket, Prefix=staging_prefix + "/", MaxKeys=2)
+    if reuse_subject:
+        if (retained_subject is None or not isinstance(retained_subject_sha256, str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", retained_subject_sha256)
+                or retained_subject["key"] != staging_prefix + "/comments.parquet"
+                or not 0 < retained_subject["byte_size"] <= max_bytes
+                or existing.get("IsTruncated")
+                or [item["Key"] for item in existing.get("Contents", [])] != [retained_subject["key"]]
+                or client.list_multipart_uploads(
+                    Bucket=bucket, Prefix=staging_prefix + "/", MaxUploads=1).get("Uploads")):
+            raise ValueError("Known-digest recovery needs exactly its completed subject and no other outputs")
+    elif existing.get("Contents") or existing.get("IsTruncated"):
         raise ValueError("Remote Comments needs a new, empty attempt staging prefix")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    with remote_parquet_writer(client=client, bucket=bucket, key=staging_prefix + "/etl_receipts.parquet",
-                               schema=RECEIPT_SCHEMA, max_bytes=max_bytes) as receipt_upload:
-        with remote_parquet_writer(client=client, bucket=bucket, key=staging_prefix + "/comments.parquet",
-                                   schema=current.subject_schema, max_bytes=max_bytes) as subject_upload:
+    with TemporaryDirectory(prefix="comments-validation-", dir=output_dir) as temporary, ExitStack() as preparation:
+        scratch = Path(temporary)
+        candidate_path = scratch / "candidate.parquet"
+        receipt_upload = preparation.enter_context(remote_parquet_writer(
+            client=client, bucket=bucket, key=staging_prefix + "/etl_receipts.parquet",
+            schema=RECEIPT_SCHEMA, max_bytes=max_bytes))
+        with ExitStack() as subject_output:
+            if not reuse_subject:
+                subject_upload = subject_output.enter_context(remote_parquet_writer(
+                    client=client, bucket=bucket, key=staging_prefix + "/comments.parquet",
+                    schema=current.subject_schema, max_bytes=max_bytes))
             with ExitStack() as inputs:
                 paired = _dataset_batches(records, current, failures=failures, batch_size=batch_size)
                 if retained_subject is not None:
@@ -96,42 +121,46 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
                         raise ValueError("Retained Comments schema or population differs")
                     paired = _matched_subject_batches(parquet, paired, current.subject_schema, batch_size)
                 for subject, receipt in paired:
-                    if subject is not None:
+                    if subject is not None and not reuse_subject:
                         subject_upload.write(subject)
                     receipt_upload.write(receipt)
                 if retained_subject is not None:
                     head = client.head_object(Bucket=bucket, Key=retained_subject["key"])
                     if (head.get("ETag") != retained_subject["etag"]
                             or head.get("ContentLength") != retained_subject["byte_size"]):
-                        raise ValueError("Retained Comments subject changed during repacking")
+                        raise ValueError("Retained Comments subject changed during receipt reconstruction")
             if retained_subject is not None:
                 # Release the old, potentially large footer before index work.
                 del parquet, stream
             del paired
-        subject = subject_upload.stored
+        subject = (StoredParquet(**retained_subject, sha256=retained_subject_sha256)
+                   if reuse_subject else subject_upload.stored)
         assert subject is not None
         if on_subject is not None:
             on_subject(subject)
+        if on_member is not None:
+            on_member(subject)
         columns = ("comment_id", "agency_code", "docket_id", "posted_date")
+        # A reusable compressed projection avoids DuckDB's full row materialization.
+        # Read actual pinned output once; preserve every row/null without deduplication.
+        with open_pinned_s3(client=client, bucket=bucket, key=subject.key, etag=subject.etag) as stream, \
+                pq.ParquetFile(stream) as parquet:
+            if not parquet.schema_arrow.equals(parquet_schema(current.subject_schema), check_metadata=True):
+                raise ValueError("Staged Comments schema differs")
+            schema = pa.schema([current.subject_schema.field(name) for name in columns])
+            rows = 0
+            with pq.ParquetWriter(candidate_path, schema, compression="zstd") as projection:
+                for batch in parquet.iter_batches(batch_size=ROW_GROUP_ROWS, columns=columns, use_threads=False):
+                    projection.write_batch(batch, row_group_size=ROW_GROUP_ROWS)
+                    rows += batch.num_rows
+            if rows != subject.rows or rows != parquet.metadata.num_rows:
+                raise ValueError("Staged Comments body/footer population differs")
 
-        def candidates(con):
-            # This is narrow matching/index data, never a complete local body.
-            # Pinned reads refuse a changed remote member on every request.
-            with open_pinned_s3(client=client, bucket=bucket, key=subject.key, etag=subject.etag) as stream, \
-                    pq.ParquetFile(stream) as parquet:
-                if not parquet.schema_arrow.equals(parquet_schema(current.subject_schema), check_metadata=True):
-                    raise ValueError("Staged Comments schema differs")
-                schema = pa.schema([current.subject_schema.field(name) for name in columns])
-                reader = pa.RecordBatchReader.from_batches(
-                    schema, parquet.iter_batches(batch_size=2000, columns=columns, use_threads=False))
-                con.register("remote_comments", reader)
-                con.execute("CREATE TABLE candidate AS SELECT * FROM remote_comments")
-                con.unregister("remote_comments")
+        with duckdb.connect() as con:
+            ExportResources().configure(con, scratch / "index-spill")
+            con.from_parquet(str(candidate_path)).create_view("candidate")
             _build_comments_index(con, RECORD_TYPES["comments"], output_dir,
                                   source_sql="SELECT * FROM candidate")
-            con.from_parquet(str(output_dir / "comments_index.parquet")).create_view("candidate_index")
-
-        predecessor = validate_export(output_dir, previous_url, candidate_builder=candidates)
         index_policy = policy("comments_index")
         witness = {"source_id": "comments", "source_uri": None, "sha256": subject.sha256,
                    "locator": json.dumps(snapshot, sort_keys=True), "body_version": generation_id}
@@ -143,7 +172,21 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
                 assert index is not None
                 index_upload.write(index)
                 receipt_upload.write(receipt)
-    assert receipt_upload.stored is not None and index_upload.stored is not None
+        assert index_upload.stored is not None
+        if on_member is not None:
+            on_member(index_upload.stored)
+        # Close the receipts while retaining the projection for the checks below.
+        # ExitStack also retains ordinary abort behavior if earlier work fails.
+        preparation.close()
+        assert receipt_upload.stored is not None
+        if on_member is not None:
+            on_member(receipt_upload.stored)
+
+        def candidates(con):
+            con.from_parquet(str(candidate_path)).create_view("candidate")
+            con.from_parquet(str(output_dir / "comments_index.parquet")).create_view("candidate_index")
+
+        predecessor = validate_export(output_dir, previous_url, candidate_builder=candidates)
     return subject, receipt_upload.stored, index_upload.stored, predecessor
 
 

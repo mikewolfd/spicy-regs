@@ -436,7 +436,7 @@ def _assemble_legacy(subject, output, resources):
 
 
 def _retained_remote_subject(path, expected_sha256, *, bucket, captured, snapshot, staging_prefix):
-    """Read an explicit digest-unknown input pin, never a completed output receipt."""
+    """Bind either a digest-unknown repack input or one known completed subject."""
     before = _regular_signature(path)
     descriptor = identity(path)
     if (not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
@@ -450,18 +450,20 @@ def _retained_remote_subject(path, expected_sha256, *, bucket, captured, snapsho
             or value["format"] != "comments-remote-subject-recovery/1"
             or value["bucket"] != bucket or value["source"] != asdict(snapshot)
             or value["originalMembers"] != captured["members"]
-            or value["subjectPolicy"] != policy("comments").descriptor()
-            or value["subjectByteDigest"] is not None):
+            or value["subjectPolicy"] != policy("comments").descriptor()):
         raise ValueError("Retained remote subject recovery authority differs")
+    digest = value["subjectByteDigest"]
+    if digest is not None and (not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)):
+        raise ValueError("Retained subject byte digest must be null or its exact recorded SHA256")
     member = value["subject"]
     if (not isinstance(member, dict) or set(member) != {"key", "byte_size", "etag", "rows"}
             or not isinstance(member["key"], str)
             or not re.fullmatch(r"staging/comments/[0-9a-f]{32}/comments\.parquet", member["key"])
-            or member["key"] == staging_prefix + "/comments.parquet"
+            or (member["key"] == staging_prefix + "/comments.parquet") != (digest is not None)
             or type(member["byte_size"]) is not int or not 0 < member["byte_size"] <= 64 * 1024**3
             or type(member["rows"]) is not int or member["rows"] != EXPECTED_ROWS
             or not isinstance(member["etag"], str) or not member["etag"].strip()):
-        raise ValueError("Retained remote subject needs a distinct pinned complete input")
+        raise ValueError("Retained subject must match known-digest reuse or distinct digest-unknown repacking")
     return value, {"path": str(path), **descriptor}
 
 
@@ -492,22 +494,33 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
         recovery, recovery_pin = _retained_remote_subject(
             retained_remote_subject, retained_remote_subject_sha256, bucket=bucket, captured=captured,
             snapshot=captured_snapshot, staging_prefix=staging_prefix)
-        record["subjectRecovery"] = {"descriptor": recovery_pin, "input": recovery,
-                                     "meaning": "Pinned input bytes have no prior digest; full ordered values "
-                                                "must match rebuilt receipt input before new outputs qualify."}
+        record["subjectRecovery"] = {
+            "descriptor": recovery_pin, "input": recovery,
+            "meaning": ("Known completed subject is reused in place; missing receipts still require full ordered "
+                        "input comparison and independent generation admission."
+                        if recovery["subjectByteDigest"] is not None else
+                        "Pinned input bytes have no prior digest; full ordered values must match rebuilt receipt "
+                        "input before repacked outputs qualify."),
+        }
     result_path = output / "comments-remote-preparation.json"
 
     def save():
         temporary = result_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+        with temporary.open("w") as stream:
+            stream.write(json.dumps(record, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         temporary.replace(result_path)
 
     save()
     holder = {}
     try:
-        def subject_complete(subject):
-            record.update(status="remote-subject-written-unpublished", completedSubject=asdict(subject))
-            save()  # Preserve a completed produced-byte pin even if index/receipts later fail.
+        def member_complete(member):
+            record.setdefault("completedMembers", {})[Path(member.key).name] = asdict(member)
+            if Path(member.key).name == "comments.parquet":
+                record["completedSubject"] = asdict(member)
+            record["status"] = "remote-members-unvalidated-unpublished"
+            save()  # Each closed upload remains recoverable if a later check fails.
 
         def writer(records, current, *, failures, generation_id, snapshot):
             subject, receipt, index, predecessor = stage_comments_remote(
@@ -515,7 +528,8 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
                 output_dir=output, client=client, bucket=bucket, staging_prefix=staging_prefix,
                 max_bytes=max_bytes, previous_url=base_url + "/comments.parquet",
                 retained_subject=None if recovery is None else recovery["subject"],
-                on_subject=subject_complete)
+                retained_subject_sha256=None if recovery is None else recovery["subjectByteDigest"],
+                on_member=member_complete)
             if recovery is not None and _retained_remote_subject(
                     retained_remote_subject, retained_remote_subject_sha256, bucket=bucket, captured=captured,
                     snapshot=captured_snapshot, staging_prefix=staging_prefix) != (recovery, recovery_pin):
