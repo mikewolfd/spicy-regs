@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Buffer, Iterable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import io
 from typing import Any, cast
@@ -20,6 +20,19 @@ import pyarrow.parquet as pq
 READ_BUFFER_BYTES = 1024 * 1024
 READ_RANGE_BYTES = 8 * 1024 * 1024
 UPLOAD_PART_BYTES = 64 * 1024 * 1024
+ROW_GROUP_ROWS = 8192
+ROW_GROUP_BYTES = 8 * 1024 * 1024
+
+
+def parquet_schema(schema: pa.Schema) -> pa.Schema:
+    """The declared schema after the same maintained Parquet serialization.
+
+    Compliant LIST encoding names its structural child ``element``. Preserve
+    types, nullability and metadata when comparing that readback with a policy.
+    """
+    sink = pa.BufferOutputStream()
+    pq.write_metadata(schema, sink)
+    return pq.read_schema(pa.BufferReader(sink.getvalue()))
 
 
 @dataclass(frozen=True)
@@ -153,16 +166,33 @@ class ParquetUpload:
     schema: pa.Schema
     rows: int = 0
     stored: StoredParquet | None = None
+    _pending: list[pa.RecordBatch] = field(default_factory=list, repr=False)
+    _pending_rows: int = 0
+    _pending_bytes: int = 0
+
+    def flush(self) -> None:
+        """Write accumulated Arrow batches in order, without a Python row copy."""
+        if self._pending:
+            self.writer.write_table(pa.Table.from_batches(self._pending, schema=self.schema),
+                                    row_group_size=ROW_GROUP_ROWS)
+            self._pending.clear()
+            self._pending_rows = self._pending_bytes = 0
 
     def write(self, batch: pa.Table | pa.RecordBatch) -> None:
         if not isinstance(batch, (pa.Table, pa.RecordBatch)):
             raise TypeError("Each Parquet batch must be an Arrow table or record batch")
         if not batch.schema.equals(self.schema, check_metadata=True):
             raise ValueError("Parquet batch schema differs from the declared schema")
-        if isinstance(batch, pa.RecordBatch):
-            self.writer.write_batch(batch)
-        else:
-            self.writer.write_table(batch)
+        table = pa.Table.from_batches([batch]) if isinstance(batch, pa.RecordBatch) else batch
+        for part in table.to_batches(max_chunksize=ROW_GROUP_ROWS):
+            if self._pending and (self._pending_rows + part.num_rows > ROW_GROUP_ROWS
+                                  or self._pending_bytes + part.nbytes > ROW_GROUP_BYTES):
+                self.flush()
+            self._pending.append(part)
+            self._pending_rows += part.num_rows
+            self._pending_bytes += part.nbytes
+            if self._pending_rows >= ROW_GROUP_ROWS or self._pending_bytes >= ROW_GROUP_BYTES:
+                self.flush()
         self.rows += batch.num_rows
 
 
@@ -179,7 +209,10 @@ def remote_parquet_writer(
 
     The caller chooses a unique staging key. Conditional completion preserves
     an already-existing object. This helper never changes a publication index.
-    Memory holds the supplied Arrow batch, a 64 MiB upload buffer and accumulated footer metadata;
+    Arrow batches coalesce up to 8192 rows or 8 MiB of logical values; an
+    oversized supplied chunk flushes immediately. Slices can retain their
+    input buffers. Memory also holds the supplied batch, the 64 MiB upload
+    buffer and accumulated footer metadata;
     max_bytes limits serialized bytes, including headers and the final footer.
     """
     from smart_open import s3
@@ -208,6 +241,7 @@ def remote_parquet_writer(
         with pq.ParquetWriter(sink, schema, compression="zstd") as writer:
             upload = ParquetUpload(writer, schema)
             yield upload
+            upload.flush()
         # smart_open's __exit__ does not terminate when its own close raises.
         # Keep explicit completion inside the same abort guard as Arrow writes.
         stream.close()

@@ -435,9 +435,40 @@ def _assemble_legacy(subject, output, resources):
     return monolith, index, partitions
 
 
+def _retained_remote_subject(path, expected_sha256, *, bucket, captured, snapshot, staging_prefix):
+    """Read an explicit digest-unknown input pin, never a completed output receipt."""
+    before = _regular_signature(path)
+    descriptor = identity(path)
+    if (not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256)
+            or descriptor["sha256"] != expected_sha256):
+        raise ValueError("Retained remote subject descriptor differs from its pin")
+    value = json.loads(path.read_text())
+    if _regular_signature(path) != before:
+        raise ValueError("Retained remote subject descriptor changed during verification")
+    if (set(value) != {"format", "bucket", "source", "originalMembers", "subjectPolicy", "subject",
+                       "subjectByteDigest"}
+            or value["format"] != "comments-remote-subject-recovery/1"
+            or value["bucket"] != bucket or value["source"] != asdict(snapshot)
+            or value["originalMembers"] != captured["members"]
+            or value["subjectPolicy"] != policy("comments").descriptor()
+            or value["subjectByteDigest"] is not None):
+        raise ValueError("Retained remote subject recovery authority differs")
+    member = value["subject"]
+    if (not isinstance(member, dict) or set(member) != {"key", "byte_size", "etag", "rows"}
+            or not isinstance(member["key"], str)
+            or not re.fullmatch(r"staging/comments/[0-9a-f]{32}/comments\.parquet", member["key"])
+            or member["key"] == staging_prefix + "/comments.parquet"
+            or type(member["byte_size"]) is not int or not 0 < member["byte_size"] <= 64 * 1024**3
+            or type(member["rows"]) is not int or member["rows"] != EXPECTED_ROWS
+            or not isinstance(member["etag"], str) or not member["etag"].strip()):
+        raise ValueError("Retained remote subject needs a distinct pinned complete input")
+    return value, {"path": str(path), **descriptor}
+
+
 def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
                     reader, captured_snapshot, captured_input=None, captured_input_sha256=None,
-                    retained_scan=None, retained_scan_sha256=None):
+                    retained_scan=None, retained_scan_sha256=None,
+                    retained_remote_subject=None, retained_remote_subject_sha256=None):
     """Prepare an unpublished remote generation, with small local derivation/control files."""
     from spicy_regs.sources import publication
     from spicy_regs.remote_generations import prepare_remote_generation
@@ -455,6 +486,15 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
               "bucket": bucket, "stagingPrefix": staging_prefix, "baseUrl": base_url,
               "source": asdict(captured_snapshot), "published": False,
               "priorIndex": publication.current_index(base_url)}
+    recovery = recovery_pin = None
+    if retained_remote_subject is not None:
+        captured, _ = _captured_descriptor(captured_input, captured_input_sha256)
+        recovery, recovery_pin = _retained_remote_subject(
+            retained_remote_subject, retained_remote_subject_sha256, bucket=bucket, captured=captured,
+            snapshot=captured_snapshot, staging_prefix=staging_prefix)
+        record["subjectRecovery"] = {"descriptor": recovery_pin, "input": recovery,
+                                     "meaning": "Pinned input bytes have no prior digest; full ordered values "
+                                                "must match rebuilt receipt input before new outputs qualify."}
     result_path = output / "comments-remote-preparation.json"
 
     def save():
@@ -465,11 +505,21 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
     save()
     holder = {}
     try:
+        def subject_complete(subject):
+            record.update(status="remote-subject-written-unpublished", completedSubject=asdict(subject))
+            save()  # Preserve a completed produced-byte pin even if index/receipts later fail.
+
         def writer(records, current, *, failures, generation_id, snapshot):
             subject, receipt, index, predecessor = stage_comments_remote(
                 records, current, failures=failures, generation_id=generation_id, snapshot=snapshot,
                 output_dir=output, client=client, bucket=bucket, staging_prefix=staging_prefix,
-                max_bytes=max_bytes, previous_url=base_url + "/comments.parquet")
+                max_bytes=max_bytes, previous_url=base_url + "/comments.parquet",
+                retained_subject=None if recovery is None else recovery["subject"],
+                on_subject=subject_complete)
+            if recovery is not None and _retained_remote_subject(
+                    retained_remote_subject, retained_remote_subject_sha256, bucket=bucket, captured=captured,
+                    snapshot=captured_snapshot, staging_prefix=staging_prefix) != (recovery, recovery_pin):
+                raise ValueError("Retained subject recovery descriptor changed during repacking")
             holder.update(subject=subject, receipt=receipt, index=index)
             record.update(status="remote-members-written-unpublished",
                           members=[asdict(member) for member in (subject, receipt, index)],
@@ -701,6 +751,9 @@ def main():
     parser.add_argument("--remote-staging-prefix", help="New unreferenced R2 prefix for native-only members")
     parser.add_argument("--remote-max-bytes", type=int, default=64 * 1024**3,
                         help="Maximum serialized bytes per remote member, including footer")
+    parser.add_argument("--retained-remote-subject", type=Path,
+                        help="Explicit pinned completed remote subject to repack while rebuilding missing receipts")
+    parser.add_argument("--retained-remote-subject-sha256", help="Exact digest of that recovery descriptor")
     args = parser.parse_args()
     if args.native_only and args.publish:
         raise ValueError("Native-only preparation cannot publish the legacy mirrors")
@@ -708,6 +761,11 @@ def main():
             not args.native_only or args.captured_input is None or args.retained_scan is None
             or not 0 < args.remote_max_bytes <= 64 * 1024**3):
         raise ValueError("Remote native preparation requires captured inputs, retained scans and bounded output")
+    if ((args.retained_remote_subject is None) != (args.retained_remote_subject_sha256 is None)
+            or args.retained_remote_subject is not None and args.remote_staging_prefix is None):
+        raise ValueError("Retained remote subject requires its descriptor pin and remote native preparation")
+    if args.retained_remote_subject is not None:
+        args.retained_remote_subject = args.retained_remote_subject.absolute()
     args.v1_source = args.v1_source.resolve()
     args.original_pair = args.original_pair.resolve()
     args.output = args.output.resolve()
@@ -751,7 +809,9 @@ def main():
                         staging_prefix=args.remote_staging_prefix, max_bytes=args.remote_max_bytes,
                         reader=reader, captured_snapshot=captured_snapshot,
                         captured_input=args.captured_input, captured_input_sha256=args.captured_input_sha256,
-                        retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256)
+                        retained_scan=args.retained_scan, retained_scan_sha256=args.retained_scan_sha256,
+                        retained_remote_subject=args.retained_remote_subject,
+                        retained_remote_subject_sha256=args.retained_remote_subject_sha256)
         return
     observed_snapshot = None
     manifest_path = args.output / "comments-prepared-export.json"
