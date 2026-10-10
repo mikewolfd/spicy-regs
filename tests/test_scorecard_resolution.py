@@ -975,10 +975,16 @@ def test_partial_exact_bill_retains_candidates_without_operational_targets(tmp_p
     row = results["scorecard_item_links"][0]
     assert row["resolution_status"] == "unresolved"
     assert row["resolution_rule"] == "exact_bill_incomplete"
-    assert "incomplete_roll_identifiers" in row["reason"]
+    assert isinstance(row["reason"], str)
+    reason = row["reason"]
+    assert isinstance(reason, str)
+    assert "incomplete_roll_identifiers" in reason
     assert row["vote_id"] is row["bill_id"] is row["amendment_id"] is None
     assert (row["congress"], row["chamber"], row["roll_number"]) == ("118", "house", "4")
-    assert json.loads(row["candidates_json"]) == [{"bill_id": "118-hr-1"}]
+    assert isinstance(row["candidates_json"], str)
+    candidates_json = row["candidates_json"]
+    assert isinstance(candidates_json, str)
+    assert json.loads(candidates_json) == [{"bill_id": "118-hr-1"}]
     assert row["candidate_count"] == "1"
     assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.6"
     write_family(tmp_path, results, generation_id="partial-link-test")
