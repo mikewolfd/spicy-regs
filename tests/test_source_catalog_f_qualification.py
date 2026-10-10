@@ -346,3 +346,234 @@ def test_court_delta_final_body_drift_and_code_drift_fail(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match='selection/code differs'):
         runner.court_replay(manifest, tmp_path / 'code-drift')
     assert not (tmp_path / 'code-drift').exists()
+
+
+def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_decision=False, paginated=False, missing=False, continuation_drift=False):
+    from spicy_docs.sources.fcc_ecfs import proceedings_url
+    from spicy_docs.transport.captured import CapturedBodyResponse
+    from spicy_regs.source_evidence import CaptureEvidence
+    from spicy_regs.generations import build_generation
+    from spicy_regs.transforms.build_fcc_ecfs import _PROCEEDING_SCHEMA
+    from scripts.qualify_source_catalog_f import _fcc_rows, fcc_selection
+    documents = [
+        {"name": "24-89", "id_proceeding": "2", "date_proceeding_created": "2024-01-02", "description": "later", "bureau": {"name": "Media", "code": "MB"}},
+        {"name": "24-89", "id_proceeding": "1", "date_proceeding_created": "2024-01-01", "description": "original", "bureau": {"name": "Media", "code": "MB"}},
+        {"name": "25-12", "id_proceeding": "3", "date_proceeding_created": "2025-01-01", "description": "other", "bureau": {"name": "Media", "code": "MB"}},
+        {"id_proceeding": "4", "date_proceeding_created": "2024-01-01"},
+    ]
+    if paginated:
+        documents += [{"name": f"S{i:03d}", "id_proceeding": str(10+i), "date_proceeding_created": "2024-01-01", "bureau": {"name": "Media"}} for i in range(247)]
+    rows, decision = _fcc_rows(documents)
+    expected = [dict(row) for row in rows]
+    if mismatch:
+        expected[0]["description"] = "wrong"
+    output = tmp_path / "producer"
+    output.mkdir()
+    table = output / "fcc_proceedings.parquet"
+    pq.write_table(pa.Table.from_pylist(expected, schema=_PROCEEDING_SCHEMA), table)
+    evidence = CaptureEvidence(output, "fcc-proceedings")
+    evidence.event("selection", stage="fcc-proceedings", since="1990-01-01")
+    body = json.dumps({"proceeding": documents[:250], "aggregations": {"bureau_name": {"buckets": [{"doc_count": len(documents)-1}], "sum_other_doc_count": 0}}}).encode()
+    url = proceedings_url(created_from="1990-01-01", created_to="2026-10-09", limit=250, descending=False)
+    if drift:
+        url = url.replace("offset=0", "offset=250")
+    for _ in range(2 if extra else 1):
+        evidence.capture(CapturedBodyResponse(url, url, 200, "application/json", "2026-10-09T18:00:00Z", body), stage="fcc-proceedings-response")
+    if paginated and not missing:
+        second_url = url.replace("offset=0", "offset=500" if continuation_drift else "offset=250")
+        second_body = json.dumps({"proceeding": documents[250:], "aggregations": {"bureau_name": {"buckets": [{"doc_count": len(documents)-1}], "sum_other_doc_count": 0}}}).encode()
+        evidence.capture(CapturedBodyResponse(second_url, second_url, 200, "application/json", "2026-10-09T18:00:01Z", second_body), stage="fcc-proceedings-response")
+    if bad_decision:
+        decision["nameless_ids"] = []
+    evidence.event("proceeding-selection", **decision)
+    evidence.retain_file(table, stage="government-producer-output", dataset="fcc_proceedings")
+    artifact = evidence.seal(outcome="build-complete")
+    corpus = tmp_path / "corpus"
+    source_dir = corpus / "source-evidence" / artifact.pin.artifact_digest[7:]
+    source_dir.mkdir(parents=True)
+    for key in ("artifact.json", "members.json"):
+        shutil.copyfile(evidence.artifact_dir / key, source_dir / key)
+    blobs = corpus / "source-evidence/blobs/sha256"
+    blobs.mkdir(parents=True)
+    for member in json.loads((source_dir / "members.json").read_text())["members"]:
+        shutil.copyfile(evidence.artifact_dir / member["objectKey"], blobs / member["sha256"][7:])
+    generation_dir = tmp_path / "generation"
+    from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args
+    migrate_outputs((table,))
+    generation = build_generation(generation_dir, family="fcc-proceedings", files=[table], expected_keys=[table.name], inputs=evidence.inputs(), **generation_receipt_args((table,)))
+    target = corpus / "lineage/generations/fcc-proceedings" / generation.pin.artifact_digest[7:]
+    target.mkdir(parents=True)
+    shutil.copyfile(generation_dir / "artifact.json", target / "artifact.json")
+    manifest = tmp_path / "selection.json"
+    manifest.write_text(json.dumps(fcc_selection(corpus, generation.pin.artifact_digest)))
+    return manifest, corpus
+
+
+def test_fcc_selected_dated_refresh_exact_order_preference_and_roundtrip(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path)
+    selected = json.loads(manifest.read_text())
+    assert selected["until"] == "2026-10-09"
+    assert selected["publisher_upper_bound"] == "2026-10-10"
+    monkeypatch.setattr(socket.socket, "connect", lambda *a, **k: pytest.fail("network"))
+    result = fcc_replay(manifest, tmp_path / "candidate")
+    assert result["state"] == "qualified"
+    assert result["producer_comparison"]["ordered_rows_equal"]
+    assert result["native_candidate_raw_roundtrip"]["ordered_rows_equal"]
+    assert result["producer_decision"]["nameless_ids"] == ["4"]
+    assert result["producer_decision"]["repeated_names"] == ["24-89"]
+    retained = next((tmp_path / "candidate/.government-inputs").rglob("fcc_proceedings.parquet"))
+    raw = pq.read_table(retained).to_pylist()
+    assert [row["name"] for row in raw] == ["25-12", "24-89"]
+    assert raw[1]["description"] == "original"
+    assert len(result["capture_occurrences"]) == 1
+    assert result["decoded_source_reserved_bytes"] < selected["decoded_source_read_cap"]
+    with pytest.raises(FileExistsError):
+        fcc_replay(manifest, tmp_path / "candidate")
+
+
+@pytest.mark.parametrize("option,match", [("extra", "unused"), ("bad_decision", "selection differs")])
+def test_fcc_capture_or_decision_mismatch_keeps_failed_terminal(tmp_path, option, match):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path, **{option: True})
+    output = tmp_path / "failed"
+    with pytest.raises(ValueError, match=match):
+        fcc_replay(manifest, output)
+    assert json.loads((output / "qualification.json").read_text())["state"] == "error"
+
+
+def test_fcc_changed_producer_literal_does_not_qualify(tmp_path):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path, mismatch=True)
+    result = fcc_replay(manifest, tmp_path / "candidate")
+    assert result["state"] == "failed-source-only-recovery"
+    assert not result["producer_comparison"]["ordered_rows_equal"]
+
+
+def test_fcc_initial_offset_drift_refuses_selection(tmp_path):
+    with pytest.raises(ValueError, match="initial query differs"):
+        _fcc_fixture(tmp_path, drift=True)
+
+
+def test_fcc_manifest_end_date_drift_refuses_before_output(tmp_path):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path)
+    selected = json.loads(manifest.read_text())
+    selected["until"] = "2026-10-10"
+    manifest.write_text(json.dumps(selected))
+    with pytest.raises(ValueError, match="selection/code differs"):
+        fcc_replay(manifest, tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+
+
+def test_fcc_budget_refuses_before_body_open(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import FccRetainedArtifact
+    manifest, corpus = _fcc_fixture(tmp_path)
+    bounded = FccRetainedArtifact(corpus, json.loads(manifest.read_text())["artifact"])
+    bounded.read_allowance = 2
+    original = Path.open
+    def no_payload(path, *args, **kwargs):
+        if path.parent.name == "sha256":
+            pytest.fail("payload opened before budget refusal")
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", no_payload)
+    with pytest.raises(ValueError, match="pre-read budget"):
+        bounded.open("journal.jsonl")
+
+
+def test_fcc_multiple_pages_preserve_exact_occurrences(tmp_path):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path, paginated=True)
+    result = fcc_replay(manifest, tmp_path / "candidate")
+    assert result["state"] == "qualified"
+    assert len(result["capture_occurrences"]) == 2
+    assert result["source_documents"] == 251
+    assert result["producer_comparison"]["actual_rows"] == 249
+
+
+@pytest.mark.parametrize("option,match", [("missing", "uncaptured continuation"), ("continuation_drift", "request differs")])
+def test_fcc_missing_or_changed_continuation_refuses(tmp_path, option, match):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path, paginated=True, **{option: True})
+    with pytest.raises(ValueError, match=match):
+        fcc_replay(manifest, tmp_path / "failed")
+    assert json.loads((tmp_path / "failed/qualification.json").read_text())["state"] == "error"
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_fcc_corrupt_or_missing_body_refuses_with_terminal(tmp_path, missing):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, corpus = _fcc_fixture(tmp_path)
+    selected = json.loads(manifest.read_text())
+    body = corpus / "source-evidence/blobs/sha256" / selected["captures"][0]["event"]["sha256"][7:]
+    if missing:
+        body.unlink()
+    else:
+        body.write_bytes(b"corrupted")
+    with pytest.raises(Exception):
+        fcc_replay(manifest, tmp_path / "failed")
+    assert json.loads((tmp_path / "failed/qualification.json").read_text())["state"] == "error"
+
+
+def test_fcc_generation_label_cannot_hide_changed_metadata(tmp_path):
+    from scripts.qualify_source_catalog_f import fcc_selection
+    manifest, corpus = _fcc_fixture(tmp_path)
+    selected = json.loads(manifest.read_text())
+    root = Path(selected["metadata_pins"][0]["path"])
+    data = json.loads(root.read_text())
+    data["inputs"][0]["artifactDigest"] = "sha256:" + "0"*64
+    root.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="generation identity differs"):
+        fcc_selection(corpus, selected["selected_generation"])
+
+
+def test_fcc_final_capture_mutation_refuses(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    from spicy_regs.transforms import government_receipts
+    manifest, corpus = _fcc_fixture(tmp_path)
+    selected = json.loads(manifest.read_text())
+    original = government_receipts.migrate_outputs
+    def change_after_write(*args, **kwargs):
+        result = original(*args, **kwargs)
+        body = corpus / "source-evidence/blobs/sha256" / selected["captures"][0]["event"]["sha256"][7:]
+        body.write_bytes(b"changed after read")
+        return result
+    monkeypatch.setattr(government_receipts, "migrate_outputs", change_after_write)
+    with pytest.raises(ValueError, match="differs from declared bytes"):
+        fcc_replay(manifest, tmp_path / "failed")
+    assert json.loads((tmp_path / "failed/qualification.json").read_text())["state"] == "error"
+
+
+def test_fcc_output_creation_race_preserves_other_owner(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    manifest, _ = _fcc_fixture(tmp_path)
+    output = tmp_path / "candidate"
+    original = Path.mkdir
+    def competing_owner(path, *args, **kwargs):
+        if path == output:
+            original(path)
+            (path / "qualification.json").write_text("other owner")
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "mkdir", competing_owner)
+    with pytest.raises(FileExistsError):
+        fcc_replay(manifest, output)
+    assert (output / "qualification.json").read_text() == "other owner"
+
+
+def test_fcc_constructor_reserves_metadata_probe_bytes_before_read(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import FccRetainedArtifact
+    source, _ = _artifact(tmp_path, b"journal")
+    size = sum((source.directory / key).stat().st_size for key in ("artifact.json", "members.json"))
+    monkeypatch.setattr(Path, "open", lambda *a, **k: pytest.fail("opened beyond pre-read cap"))
+    with pytest.raises(ValueError, match="metadata exceeds pre-read budget"):
+        FccRetainedArtifact(tmp_path, source.digest, byte_budget=size)
+
+
+def test_fcc_metadata_growth_refuses_bounded_read(tmp_path, monkeypatch):
+    import io
+    from scripts.qualify_source_catalog_f import _fcc_metadata
+    metadata = tmp_path / "root.json"
+    metadata.write_bytes(b"{}")
+    monkeypatch.setattr(Path, "open", lambda *a, **k: io.BytesIO(b"{}x"))
+    with pytest.raises(ValueError, match="changed during bounded read"):
+        _fcc_metadata(metadata)

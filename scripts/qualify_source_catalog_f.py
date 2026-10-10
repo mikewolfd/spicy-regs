@@ -1,7 +1,7 @@
-"""Offline GAO history qualification over explicit retained capture selections.
+"""Offline qualification over explicit retained GAO, Court and FCC captures.
 
-This lane calls maintained GAO parsing, shaping, history folding and native
-receipt writers. It never fetches missing inputs or treats a baseline as a
+This lane calls maintained parsing, traversal, shaping and native receipt
+writers. It never fetches missing inputs or treats a baseline as a
 publisher capture. A failed comparison remains readable in its new directory.
 """
 from __future__ import annotations
@@ -455,6 +455,251 @@ def court_replay(manifest_path: Path, output: Path) -> dict:
         raise
 
 
+FCC_GENERATION = "sha256:7de59570ac98802f861d214ffa91b5a7d1fd3208c788c985a57ee9acb8880bbc"
+FCC_READ_BUDGET = 256 * 1024 * 1024
+
+
+def _fcc_metadata(path: Path, maximum: int = 1024 * 1024) -> bytes:
+    size = path.stat().st_size
+    if size > maximum:
+        raise ValueError("FCC metadata exceeds pre-read bound")
+    with path.open("rb") as stream:
+        data = stream.read(size + 1)
+    if len(data) != size:
+        raise ValueError("FCC metadata changed during bounded read")
+    return data
+
+
+class FccRetainedArtifact(RetainedArtifact):
+    """Reserve metadata and decoded reads before touching retained FCC bytes."""
+
+    def __init__(self, corpus: Path, digest: str, *, byte_budget: int = FCC_READ_BUDGET):
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise ValueError("Expected artifact SHA-256")
+        directory = corpus / "source-evidence" / digest[7:]
+        sizes = [(directory / key).stat().st_size for key in ("artifact.json", "members.json")]
+        metadata_bytes = sum(sizes)
+        if any(size > 1024 * 1024 for size in sizes) or metadata_bytes + 2 > byte_budget:
+            raise ValueError("FCC metadata exceeds pre-read budget")
+        self.corpus, self.digest, self.directory = corpus, digest, directory
+        self.root = json.loads(_fcc_metadata(directory / "artifact.json", sizes[0]))
+        manifests = self.root["memberManifests"]
+        if len(manifests) != 1 or manifests[0]["objectKey"] != "members.json":
+            raise ValueError("FCC capture requires one fixed member manifest")
+        self.metadata = {"artifact.json", "members.json"}
+        self.members = {}
+        for member in json.loads(_fcc_metadata(directory / "members.json", sizes[1]))["members"]:
+            key = member["objectKey"]
+            if key in self.members or key in self.metadata:
+                raise ValueError("FCC repeated or shadowed capture member")
+            self.members[key] = member
+        self.remaining = byte_budget
+        from rulespec_artifacts import expected_artifact_digest
+        if self.root.get("artifactDigest") != digest or expected_artifact_digest(self.root) != digest:
+            raise ValueError("FCC source metadata digest differs")
+        self.remaining -= metadata_bytes
+        self.read_allowance = byte_budget - metadata_bytes - 2
+        self.reserved_read_bytes = metadata_bytes + 2
+
+    def open(self, key: str):
+        size = ((self.directory / key).stat().st_size if key in self.metadata else self.members[key]["byteSize"])
+        if type(size) is not int or size < 0 or size + 1 > self.read_allowance:
+            raise ValueError("FCC decoded pre-read budget exceeded")
+        # Include one-byte drift probes and conservatively charge failed reads.
+        self.read_allowance -= size + 1
+        self.reserved_read_bytes += size + 1
+        if key in self.metadata:
+            data = _fcc_metadata(self.directory / key, size)
+            self.remaining -= len(data)
+            return io.BytesIO(data)
+        return super().open(key)
+
+
+def fcc_code_pins() -> dict:
+    from importlib import import_module
+    result = code_pins()
+    modules = ("spicy_docs.sources.fcc_ecfs", "spicy_docs.reading.paged_json",
+               "spicy_regs.transforms.build_fcc_ecfs")
+    result["files"] += [pin(Path(import_module(name).__file__)) for name in modules]
+    return result
+
+
+def fcc_selection(corpus: Path, generation: str = FCC_GENERATION) -> dict:
+    """Select one captured dated refresh without opening responses or baseline tables."""
+    from datetime import date, timedelta
+    from urllib.parse import parse_qs, urlsplit
+    from spicy_docs.sources.fcc_ecfs import proceedings_url
+
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", generation):
+        raise ValueError("Expected FCC generation SHA-256")
+    directory = corpus / "lineage/generations/fcc-proceedings" / generation[7:]
+    from rulespec_artifacts import expected_artifact_digest
+    root = json.loads(_fcc_metadata(directory / "artifact.json"))
+    if root["artifactDigest"] != generation or expected_artifact_digest(root) != generation:
+        raise ValueError("FCC generation identity differs")
+    sources = [ref["artifactDigest"] for ref in root["inputs"] if ref["role"] == "source-evidence"]
+    if len(sources) != 1:
+        raise ValueError("FCC refresh requires exactly one selected source artifact")
+    source = FccRetainedArtifact(corpus, sources[0], byte_budget=FCC_READ_BUDGET)
+    if source.root.get("spec", {}).get("family") != "fcc-proceedings":
+        raise ValueError("FCC source family differs")
+    events = source.journal()
+    captures = [{"journal_ordinal": i, "event": e} for i, e in enumerate(events) if e.get("event") == "capture"]
+    if not captures:
+        raise ValueError("FCC refresh has no captured requests")
+    ids = set()
+    for item in captures:
+        event = item["event"]
+        if (event.get("stage") != "fcc-proceedings-response" or event.get("method") != "GET"
+                or type(event.get("status_code")) is not int or event["status_code"] != 200
+                or event.get("response_complete") is not True or event.get("body_retained") is not True
+                or event.get("request_body") is not None or not event.get("capture_id")
+                or event["capture_id"] in ids or event.get("requested_url") != event.get("resolved_url")):
+            raise ValueError("FCC capture is incomplete, repeated or outside the selected operation")
+        ids.add(event["capture_id"])
+        url = urlsplit(event["requested_url"])
+        if url.scheme != "https" or url.netloc != "publicapi.fcc.gov" or url.path != "/ecfs/proceedings" or url.fragment:
+            raise ValueError("FCC capture endpoint differs")
+        query = parse_qs(url.query, strict_parsing=True)
+        if set(query) != {"date_proceeding_created", "sort", "limit", "offset"} or any(len(v) != 1 for v in query.values()):
+            raise ValueError("FCC capture has undeclared query scope")
+        member = source.members.get(event.get("blob_member"))
+        if (member is None or member.get("role") != "source-body" or member["sha256"] != event["sha256"]
+                or member["byteSize"] != event["byte_size"]):
+            raise ValueError("FCC capture/member pins differ")
+    first = captures[0]["event"]
+    query = parse_qs(urlsplit(first["requested_url"]).query)
+    window = re.fullmatch(r"\[gte\](\d{4}-\d{2}-\d{2})\[lte\](\d{4}-\d{2}-\d{2})", query["date_proceeding_created"][0])
+    if window is None or query["limit"] != ["250"]:
+        raise ValueError("FCC refresh requires the maintained 250-record initial window")
+    since, publisher_bound = window.groups()
+    until = (date.fromisoformat(publisher_bound) - timedelta(days=1)).isoformat()
+    if since != "1990-01-01" or proceedings_url(created_from=since, created_to=until, limit=250, descending=False) != first["requested_url"]:
+        raise ValueError("FCC initial query differs from the complete dated refresh")
+    selections = [e for e in events if e.get("event") == "selection"]
+    decisions = [e for e in events if e.get("event") == "proceeding-selection"]
+    outputs = [e for e in events if e.get("event") == "retained-file"]
+    outcomes = [e for e in events if e.get("event") == "build-outcome"]
+    if (len(selections) != 1 or selections[0].get("stage") != "fcc-proceedings" or selections[0].get("since") != since
+            or len(decisions) != 1 or decisions[0].get("selection_rule") != "earliest-created/latest-modified/most-populated/lowest-id"
+            or len(outputs) != 1 or outputs[0].get("dataset") != "fcc_proceedings"
+            or outputs[0].get("name") != "fcc_proceedings.parquet" or outputs[0].get("stage") != "government-producer-output"
+            or outputs[0].get("body_retained") is not True or outputs[0].get("response_complete") is not True
+            or len(outcomes) != 1 or outcomes[0].get("outcome") != "build-complete"):
+        raise ValueError("FCC refresh selection, decisions or producer output absent")
+    output_member = source.members.get(outputs[0].get("blob_member"))
+    if (output_member is None or output_member.get("role") != "source-body"
+            or output_member["sha256"] != outputs[0]["sha256"] or output_member["byteSize"] != outputs[0]["byte_size"]):
+        raise ValueError("FCC producer-output/member pins differ")
+    return {"format": "source-catalog-f-fcc-refresh/1", "family": "fcc-proceedings", "corpus": str(corpus.resolve()),
+            "selected_generation": generation, "artifact": sources[0], "captures": captures,
+            "since": since, "until": until, "publisher_upper_bound": publisher_bound,
+            "producer_decision": decisions[0], "producer_output": outputs[0],
+            "recorded_packages": next(e["packages"] for e in events if e.get("event") == "run"),
+            "metadata_pins": [pin(directory / "artifact.json")] + [pin(source.directory / k) for k in sorted(source.metadata)],
+            "code_pins": fcc_code_pins(), "decoded_source_read_cap": FCC_READ_BUDGET,
+            "scope": "Selected dated producer refresh and candidate native raw-record roundtrip only",
+            "limits": ["Historical baseline acquisition absent", "Historical native receipt inheritance not replayed",
+                       "No undated/full publisher population closure", "Recorded package compatibility requires exact replay evidence"]}
+
+
+def _fcc_rows(documents: list[dict]) -> tuple[list[dict], dict]:
+    """Match the maintained producer's grouping/order using its preference and shaper."""
+    from spicy_regs.transforms.build_fcc_ecfs import _docket_documents_in_preference, _shape_proceeding
+    if not documents:
+        raise ValueError("FCC empty whole refresh refuses")
+    by_name, nameless = {}, []
+    for document in documents:
+        name = document.get("name")
+        if isinstance(name, str) and name.strip():
+            by_name.setdefault(name, []).append(document)
+        else:
+            nameless.append(str(document.get("id_proceeding")))
+    rows = [_shape_proceeding(_docket_documents_in_preference(docs)[0]) for docs in by_name.values()]
+    rows.sort(key=lambda row: row["name"])
+    rows.sort(key=lambda row: row["date_created"] or "", reverse=True)
+    return rows, {"nameless_ids": nameless, "repeated_names": sorted(name for name, docs in by_name.items() if len(docs) > 1),
+                  "selection_rule": "earliest-created/latest-modified/most-populated/lowest-id"}
+
+
+def _fcc_replay(manifest_path: Path, output: Path, owned: list) -> dict:
+    from datetime import date
+    import httpx
+    from spicy_regs.transforms.build_fcc_ecfs import _fetch_fcc, _PROCEEDING_SCHEMA
+    from spicy_regs.transforms.government_receipts import migrate_outputs, POLICIES, _INHERITED
+    from spicy_regs.etl_receipts import read_with_receipts
+
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("format") != "source-catalog-f-fcc-refresh/1":
+        raise ValueError("Unsupported FCC refresh selection")
+    corpus = Path(manifest["corpus"])
+    if fcc_selection(corpus, manifest["selected_generation"]) != manifest:
+        raise ValueError("FCC selection/code differs from exact retained journals")
+    if _INHERITED.get():
+        raise ValueError("FCC refresh candidate must not inherit external receipt state")
+    output.mkdir(parents=True, exist_ok=False)
+    owned.append(True)
+    (output / "selection.json").write_bytes(manifest_path.read_bytes())
+    source = FccRetainedArtifact(corpus, manifest["artifact"], byte_budget=FCC_READ_BUDGET)
+    source.verify()
+    consumed = []
+    def held_response(request):
+        ordinal = len(consumed)
+        if ordinal >= len(manifest["captures"]):
+            raise ValueError("FCC replay requested an uncaptured continuation")
+        capture = manifest["captures"][ordinal]
+        event = capture["event"]
+        if request.method != event["method"] or str(request.url) != event["requested_url"] or request.content:
+            raise ValueError("FCC replay request differs from selected occurrence")
+        consumed.append(capture)
+        return httpx.Response(event["status_code"], stream=httpx.ByteStream(source.body(event)),
+                              headers={"content-type": event["content_type"]}, request=request)
+    documents = list(_fetch_fcc("proceedings", since=date.fromisoformat(manifest["since"]),
+                               until=date.fromisoformat(manifest["until"]), api_key="offline-fixture",
+                               transport=httpx.MockTransport(held_response)))
+    if len(consumed) != len(manifest["captures"]):
+        raise ValueError("FCC replay left selected capture occurrences unused")
+    rows, decision = _fcc_rows(documents)
+    if any(decision[key] != manifest["producer_decision"].get(key) for key in decision):
+        raise ValueError("FCC duplicate-document or nameless selection differs")
+    expected = pq.read_table(io.BytesIO(source.body(manifest["producer_output"]))).to_pylist()
+    comparison = compare_rows(expected, rows)
+    candidate = output / "fcc_proceedings.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=_PROCEEDING_SCHEMA), candidate, compression="zstd")
+    migration = migrate_outputs((candidate,))
+    restored = [row["raw_record"] for row in read_with_receipts(
+        [candidate], [Path(migration["receipt_path"])], POLICIES["fcc_proceedings"], generation_id=migration["generation_id"])]
+    roundtrip = compare_rows(rows, restored)
+    source.verify()
+    if fcc_selection(corpus, manifest["selected_generation"]) != manifest:
+        raise ValueError("FCC selection/code changed during replay")
+    passed = comparison["ordered_rows_equal"] and roundtrip["ordered_rows_equal"]
+    result = {"state": "qualified" if passed else "failed-source-only-recovery", "family": "fcc-proceedings",
+              "scope": manifest["scope"], "selected_generation": manifest["selected_generation"],
+              "artifact": manifest["artifact"], "logical_until": manifest["until"], "publisher_upper_bound": manifest["publisher_upper_bound"],
+              "capture_occurrences": [{"journal_ordinal": c["journal_ordinal"], "capture_id": c["event"]["capture_id"]} for c in consumed],
+              "source_documents": len(documents), "producer_decision": decision, "producer_comparison": comparison,
+              "native_candidate_raw_roundtrip": roundtrip, "outputs": [pin(candidate), pin(Path(migration["receipt_path"]))],
+              "decoded_source_successful_bytes": FCC_READ_BUDGET - source.remaining,
+              "decoded_source_reserved_bytes": source.reserved_read_bytes,
+              "code_pins": manifest["code_pins"], "limits": manifest["limits"], "production_actions": []}
+    (output / "qualification.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+def fcc_replay(manifest_path: Path, output: Path) -> dict:
+    if output.exists():
+        raise FileExistsError(output)
+    owned = []
+    try:
+        return _fcc_replay(manifest_path, output, owned)
+    except Exception as error:
+        if owned:
+            (output / "qualification.json").write_text(json.dumps({"state": "error", "family": "fcc-proceedings",
+                "error_type": type(error).__name__, "message": str(error), "production_actions": []}, indent=2) + "\n")
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -471,13 +716,24 @@ def main():
     court_run = commands.add_parser("replay-court-delta")
     court_run.add_argument("--manifest", type=Path, required=True)
     court_run.add_argument("--output", type=Path, required=True)
+    fcc_select = commands.add_parser("select-fcc-refresh")
+    fcc_select.add_argument("--corpus", type=Path, required=True)
+    fcc_select.add_argument("--generation", default=FCC_GENERATION)
+    fcc_select.add_argument("--manifest", type=Path, required=True)
+    fcc_run = commands.add_parser("replay-fcc-refresh")
+    fcc_run.add_argument("--manifest", type=Path, required=True)
+    fcc_run.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if args.command in {"select-gao", "select-court-delta"}:
+    if args.command == "select-fcc-refresh":
+        with args.manifest.open("x") as stream:
+            stream.write(json.dumps(fcc_selection(args.corpus, args.generation), indent=2) + "\n")
+    elif args.command in {"select-gao", "select-court-delta"}:
         value = selection(args.corpus) if args.command == "select-gao" else court_selection(args.corpus, args.artifact)
         with args.manifest.open("x") as stream:
             stream.write(json.dumps(value, indent=2) + "\n")
     else:
-        value = replay(args.manifest, args.output) if args.command == "replay-gao" else court_replay(args.manifest, args.output)
+        runners = {"replay-gao": replay, "replay-court-delta": court_replay, "replay-fcc-refresh": fcc_replay}
+        value = runners[args.command](args.manifest, args.output)
         print(json.dumps({"state": value["state"], "family": value["family"]}))
         if value["state"] != "qualified":
             raise SystemExit(1)
