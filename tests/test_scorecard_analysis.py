@@ -140,7 +140,10 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     output.mkdir()
     rollup = ScorecardAnalysisRollup(output_dir=output)
     parents = rollup._prime(output, index)
-    assert len(calls) == len(rollup.inputs) + 1 + 1 + len(OFFICIAL_COLUMNS)
+    # Every main member, including both bill partitions; source receipts and
+    # only the two official datasets requiring original processing context.
+    assert len(calls) == len(rollup.inputs) + 1 + 1 + 2
+    assert set(rollup._official_receipts) == {"members", "member_terms"}
 
     assert "tableDescriptorDigest" in parents["congress_bills.parquet"]
     assert "sha256" not in parents["congress_bills.parquet"]
@@ -167,17 +170,17 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     verify_generation(sealed)
     # A warm read validates bytes and needs no network.
     rollup._prime(output, index)
-    assert len(calls) == len(rollup.inputs) + 1 + 1 + len(OFFICIAL_COLUMNS)
+    assert len(calls) == len(rollup.inputs) + 1 + 1 + 2
 
 
-def test_analysis_reads_all_native_official_parts_through_selected_receipts(tmp_path, monkeypatch):
+def test_analysis_keeps_member_context_receipt_checked(tmp_path, monkeypatch):
     store, index = _inputs(tmp_path)
     _serve(monkeypatch, store)
     output = tmp_path / "analysis"
     output.mkdir()
     rollup = ScorecardAnalysisRollup(output_dir=output)
     rollup._prime(output, index)
-    assert set(rollup._official_receipts) == set(OFFICIAL_COLUMNS)
+    assert set(rollup._official_receipts) == {"members", "member_terms"}
     members, _ = rollup.build(output)
     assert pq.read_table(members).to_pylist()[0]["bioguide_id"] == "X000001"
     receipts, _ = rollup._official_receipts["member_terms"]
@@ -334,7 +337,7 @@ def test_analysis_requires_native_receipts_for_every_input(tmp_path, monkeypatch
     if missing == 'source':
         rollup._scorecard_source_receipt = None
     else:
-        rollup._official_receipts.pop('congress_bills')
+        rollup._official_receipts.pop('member_terms')
     with pytest.raises(ValueError, match='require.*native receipts'):
         rollup.build(output)
     assert not (output / 'scorecard_member_links.parquet').exists()
