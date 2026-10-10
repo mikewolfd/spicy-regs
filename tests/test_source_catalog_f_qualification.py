@@ -207,3 +207,142 @@ def test_final_catalog_drift_retains_terminal_error(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="Changed selected input"):
         replay(manifest, output)
     assert json.loads((output / "qualification.json").read_text())["state"] == "error"
+
+
+def _court_fixture(tmp_path, pages):
+    from spicy_docs.transport.captured import CapturedBodyResponse
+    from spicy_regs.source_evidence import CaptureEvidence
+    from scripts.qualify_source_catalog_f import court_selection
+    corpus, producer = tmp_path / 'corpus', tmp_path / 'producer'
+    corpus.mkdir()
+    producer.mkdir()
+    evidence = CaptureEvidence(producer, 'courtlistener')
+    for group in pages:
+        evidence.event('selection', stage='courtlistener', url=group[0][0], max_records=None)
+        for url, value in group:
+            evidence.capture(CapturedBodyResponse(url, url, 200, 'application/json',
+                '2026-10-09T18:42:37Z', json.dumps(value).encode()), stage='courtlistener-response')
+    artifact = evidence.seal(outcome='build-complete')
+    directory = corpus / 'source-evidence' / artifact.pin.artifact_digest[7:]
+    directory.mkdir(parents=True)
+    for key in ('artifact.json', 'members.json'):
+        shutil.copyfile(evidence.artifact_dir / key, directory / key)
+    blobs = corpus / 'source-evidence/blobs/sha256'
+    blobs.mkdir(parents=True)
+    for member in json.loads((directory / 'members.json').read_text())['members']:
+        shutil.copyfile(evidence.artifact_dir / member['objectKey'], blobs / member['sha256'][7:])
+    manifest = tmp_path / 'court-selection.json'
+    manifest.write_text(json.dumps(court_selection(corpus, artifact.pin.artifact_digest)))
+    return manifest, corpus
+
+
+COURT_URL = 'https://www.courtlistener.com/api/rest/v4/search/?type=r&order_by=dateFiled+asc&q=test'
+
+
+def _court_page(rows, *, next_url=None, count=None):
+    return {'results': rows, 'count': len(rows) if count is None else count, 'next': next_url}
+
+
+def test_court_delta_occurrences_empty_searches_and_refusals(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import court_replay
+    row = {'docket_id': 1, 'caseName': 'Case', 'party': ['b', None, 'a'], 'blocked': False,
+           'meta': {'score': {'bm25': 0.123456789}}}
+    malformed = {'docket_id': 2, 'party': {'bad': 'array'}}
+    third = {'docket_id': 3, 'party': [], 'blocked': True}
+    manifest, _ = _court_fixture(tmp_path, [[(COURT_URL, _court_page([row, malformed, third]))],
+        [(COURT_URL, _court_page([row]))], [(COURT_URL, _court_page([]))], [(COURT_URL, _court_page([]))]])
+    monkeypatch.setattr(socket.socket, 'connect', lambda *a, **k: pytest.fail('Network called'))
+    output = tmp_path / 'court-candidate'
+    result = court_replay(manifest, output)
+    assert result['state'] == 'qualified'
+    assert result['capture_occurrences'] == 4
+    assert result['groups'][0]['accepted'] == 2
+    assert result['groups'][0]['refused'] == 1
+    assert sum(r['source_occurrences'] for r in result['groups']) == 4
+    assert result['groups'][2]['complete_empty_search']
+    assert result['groups'][3]['complete_empty_search']
+    index = json.loads((output / 'group-000/occurrences.json').read_text())
+    assert [r['outcome'] for r in index] == ['accepted', 'refused', 'accepted']
+    assert [r['attempt_id'] for r in index] == [f'court_dockets:delta:{i}' for i in range(3)]
+    before = {str(p): pin(p) for p in output.rglob('*') if p.is_file()}
+    with pytest.raises(FileExistsError):
+        court_replay(manifest, output)
+    assert before == {str(p): pin(p) for p in output.rglob('*') if p.is_file()}
+
+
+@pytest.mark.parametrize('rows', [[{'docket_id': True}], [{'docket_id': 0}], [{}],
+                                 [{'docket_id': 1}, {'docket_id': 1}]])
+def test_court_delta_invalid_or_repeated_identity_fails(tmp_path, rows):
+    from scripts.qualify_source_catalog_f import court_replay
+    manifest, _ = _court_fixture(tmp_path, [[(COURT_URL, _court_page(rows))]])
+    output = tmp_path / 'candidate'
+    with pytest.raises(ValueError, match='docket identity'):
+        court_replay(manifest, output)
+    assert json.loads((output / 'qualification.json').read_text())['state'] == 'error'
+
+
+def test_court_delta_complete_multipage_and_cross_page_identity(tmp_path):
+    from scripts.qualify_source_catalog_f import court_replay
+    next_url = COURT_URL + '&cursor=next'
+    manifest, _ = _court_fixture(tmp_path, [[
+        (COURT_URL, _court_page([{'docket_id': 1}], next_url=next_url, count=2)),
+        (next_url, _court_page([{'docket_id': 2}], count=2))]])
+    assert court_replay(manifest, tmp_path / 'candidate')['state'] == 'qualified'
+    other = tmp_path / 'other'
+    other.mkdir()
+    manifest, _ = _court_fixture(other, [[
+        (COURT_URL, _court_page([{'docket_id': 1}], next_url=next_url, count=2)),
+        (next_url, _court_page([{'docket_id': 1}], count=2))]])
+    with pytest.raises(ValueError, match='docket identity'):
+        court_replay(manifest, other / 'candidate')
+
+
+@pytest.mark.parametrize('kind', ['missing', 'extra', 'count', 'cursor', 'bytes', 'manifest', 'empty'])
+def test_court_delta_drift_and_incomplete_capture_fail(tmp_path, kind):
+    from scripts.qualify_source_catalog_f import court_replay
+    next_url = COURT_URL + '&cursor=next'
+    pages = [[(COURT_URL, _court_page([{'docket_id': 1}]))]]
+    if kind == 'missing':
+        pages[0][0] = (COURT_URL, _court_page([{'docket_id': 1}], next_url=next_url, count=2))
+    elif kind == 'extra':
+        pages[0].append((next_url, _court_page([])))
+    elif kind == 'count':
+        pages[0][0] = (COURT_URL, _court_page([{'docket_id': 1}], count=2))
+    elif kind == 'empty':
+        pages[0][0] = (COURT_URL, _court_page([], next_url=next_url, count=0))
+    elif kind == 'cursor':
+        pages[0][0] = (COURT_URL, _court_page([{'docket_id': 1}], next_url=next_url, count=2))
+        pages[0].append((COURT_URL + '&cursor=wrong', _court_page([{'docket_id': 2}], count=2)))
+    manifest, corpus = _court_fixture(tmp_path, pages)
+    if kind == 'bytes':
+        item = json.loads(manifest.read_text())['groups'][0]['captures'][0]['event']
+        (corpus / 'source-evidence/blobs/sha256' / item['sha256'][7:]).write_bytes(b'changed')
+    elif kind == 'manifest':
+        data = json.loads(manifest.read_text())
+        data['groups'][0]['selection']['max_records'] = 1
+        manifest.write_text(json.dumps(data))
+    with pytest.raises(Exception):
+        court_replay(manifest, tmp_path / 'candidate')
+    if (tmp_path / 'candidate').exists():
+        assert json.loads((tmp_path / 'candidate/qualification.json').read_text())['state'] == 'error'
+
+
+def test_court_delta_final_body_drift_and_code_drift_fail(tmp_path, monkeypatch):
+    from scripts import qualify_source_catalog_f as runner
+    from spicy_regs import court_receipts
+    manifest, corpus = _court_fixture(tmp_path, [[(COURT_URL, _court_page([{'docket_id': 1}]))]])
+    original = court_receipts.write_court_rows
+    capture = json.loads(manifest.read_text())['groups'][0]['captures'][0]['event']
+    def drift_after_write(*args, **kwargs):
+        value = original(*args, **kwargs)
+        (corpus / 'source-evidence/blobs/sha256' / capture['sha256'][7:]).write_bytes(b'changed')
+        return value
+    monkeypatch.setattr(court_receipts, 'write_court_rows', drift_after_write)
+    output = tmp_path / 'candidate'
+    with pytest.raises(Exception):
+        runner.court_replay(manifest, output)
+    assert json.loads((output / 'qualification.json').read_text())['state'] == 'error'
+    monkeypatch.setattr(runner, 'court_code_pins', lambda: {'changed': True})
+    with pytest.raises(ValueError, match='selection/code differs'):
+        runner.court_replay(manifest, tmp_path / 'code-drift')
+    assert not (tmp_path / 'code-drift').exists()

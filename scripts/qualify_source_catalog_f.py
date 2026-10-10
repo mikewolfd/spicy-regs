@@ -273,6 +273,188 @@ def replay(manifest_path: Path, output: Path) -> dict:
         raise
 
 
+COURT_DELTA_ARTIFACT = "sha256:43757a506ac03cfc68d02d9edcf1ff101ab92a5ad5e696a9fd74ef81e4d7670a"
+
+
+def court_code_pins() -> dict:
+    from importlib import import_module
+    result = code_pins()
+    result["files"] += [pin(Path(import_module(name).__file__)) for name in (
+        "spicy_docs.sources.courtlistener.search", "spicy_docs.reading.paged_json",
+        "spicy_regs.sources.courtlistener", "spicy_regs.transforms.build_courtlistener",
+        "spicy_regs.court_receipts", "spicy_regs.court_subjects")]
+    return result
+
+
+def court_selection(corpus: Path, artifact: str = COURT_DELTA_ARTIFACT) -> dict:
+    """Pin selected query groups and every occurrence using metadata only."""
+    from spicy_docs.sources.courtlistener.search import COURTLISTENER
+    from urllib.parse import parse_qs, urlsplit
+    source = RetainedArtifact(corpus, artifact)
+    groups, ids = [], set()
+    events = source.journal()
+    for ordinal, event in enumerate(events):
+        if event.get("event") == "selection" and event.get("stage") == "courtlistener":
+            url = COURTLISTENER.check_url(event["url"])
+            if event.get("max_records") is not None or parse_qs(urlsplit(url).query).get("type") != ["r"]:
+                raise ValueError("Court delta requires uncapped RECAP search groups")
+            groups.append({"selection_ordinal": ordinal, "selection": event, "captures": []})
+        elif event.get("event") == "capture":
+            if (not groups or event.get("stage") != "courtlistener-response"
+                    or event.get("method") != "GET" or event.get("request_body") is not None
+                    or event.get("status_code") != 200 or event.get("response_complete") is not True
+                    or event.get("body_retained") is not True or event.get("evidence_policy") != "full"
+                    or event.get("content_encoding") != "identity"
+                    or event.get("resolved_url") != event.get("requested_url")):
+                raise ValueError("Court capture is not a complete retained GET observation")
+            COURTLISTENER.check_url(event["requested_url"])
+            identity = event.get("capture_id")
+            if not isinstance(identity, str) or not identity or identity in ids:
+                raise ValueError("Court capture occurrence needs a distinct identity")
+            ids.add(identity)
+            member = source.members[event["blob_member"]]
+            if member["sha256"] != event["sha256"] or member["byteSize"] != event["byte_size"]:
+                raise ValueError("Court capture and body member pins differ")
+            groups[-1]["captures"].append({"journal_ordinal": ordinal, "event": event})
+    if not groups or any(not group["captures"] for group in groups):
+        raise ValueError("Court selection has an empty or missing capture group")
+    if any(group["captures"][0]["event"]["requested_url"] != group["selection"]["url"] for group in groups):
+        raise ValueError("Court selection start differs from its first capture")
+    if not any(event.get("event") == "build-outcome" and event.get("outcome") == "build-complete" for event in events):
+        raise ValueError("Court acquisition lacks completed build observation")
+    captures = [c["event"] for group in groups for c in group["captures"]]
+    return {"format": "source-catalog-f-court-delta/1", "corpus": str(corpus.resolve()),
+            "artifact": artifact, "groups": groups,
+            "metadata_pins": [pin(source.directory / key) for key in sorted(source.metadata)],
+            "journal_member": source.members["journal.jsonl"],
+            "capture_occurrences": len(captures), "capture_occurrence_bytes": sum(c["byte_size"] for c in captures),
+            "unique_body_bytes": sum(source.members[key]["byteSize"] for key in {c["blob_member"] for c in captures}),
+            "code_pins": court_code_pins(), "scope": "Captured search delta only; no prior input or historical merge"}
+
+
+def _court_replay(manifest_path: Path, output: Path) -> dict:
+    import httpx
+    from spicy_docs.reading.paged_json import PagedJsonBudget
+    from spicy_docs.sources.courtlistener.search import CourtListenerSearchReader, is_exact_count
+    from spicy_regs.transforms.build_courtlistener import _shape
+    from spicy_regs.court_receipts import write_court_rows, read_court_rows, local_receipt_selection, POLICIES
+    from spicy_regs.court_subjects import normalize_court_row
+    from spicy_regs.etl_receipts import ReceiptContext, split_record, read_attempts
+
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("format") != "source-catalog-f-court-delta/1":
+        raise ValueError("Unsupported Court delta selection")
+    corpus = Path(manifest["corpus"])
+    if court_selection(corpus, manifest["artifact"]) != manifest:
+        raise ValueError("Court selection/code differs from exact retained journals")
+    output.mkdir(parents=True, exist_ok=False)
+    (output / "selection.json").write_bytes(manifest_path.read_bytes())
+    source = RetainedArtifact(corpus, manifest["artifact"], byte_budget=4_000_000)
+    source.verify()
+    results = []
+    for group_index, group in enumerate(manifest["groups"]):
+        consumed, shaped, occurrences, seen = [], [], [], set()
+        def held_response(request):
+            ordinal = len(consumed)
+            if ordinal >= len(group["captures"]):
+                raise ValueError("Court replay requested an uncaptured continuation")
+            capture = group["captures"][ordinal]
+            event = capture["event"]
+            if (request.method != event["method"] or str(request.url) != event["requested_url"]
+                    or request.content or "authorization" in request.headers):
+                raise ValueError("Court replay request differs from selected occurrence")
+            consumed.append(capture)
+            return httpx.Response(200, stream=httpx.ByteStream(source.body(event)),
+                                  headers={"content-type": event["content_type"]}, request=request)
+        with CourtListenerSearchReader(budget=PagedJsonBudget(1, 12 * 1024 * 1024, 30, 0),
+                                       transport=httpx.MockTransport(held_response)) as reader:
+            for page_index, page in enumerate(reader.search(group["selection"]["url"], max_pages=len(group["captures"]))):
+                if len(consumed) != page_index + 1:
+                    raise ValueError("Court replay page/capture occurrence differs")
+                if page.next_url is not None and not page.records:
+                    raise ValueError("Court continuation follows an empty page")
+                capture = consumed[-1]
+                for position, raw in enumerate(page.records):
+                    # Match the high-level CourtListenerReader identity guard;
+                    # the maintained page reader owns count/cursor validation.
+                    identity = raw.get("docket_id")
+                    if type(identity) is not int or identity <= 0 or identity in seen:
+                        raise ValueError("Court search has missing, invalid or repeated docket identity")
+                    seen.add(identity)
+                    observation = {"artifact": manifest["artifact"], "capture_id": capture["event"]["capture_id"],
+                                   "journal_ordinal": capture["journal_ordinal"], "result_position": position,
+                                   "group_index": group_index, "page_index": page_index}
+                    shaped.append({**_shape(dict(raw)), "source_observation": observation})
+                    occurrences.append(dict(observation))
+                if page.next_url is None and is_exact_count("r", page.declared_count) and len(seen) != page.declared_count:
+                    raise ValueError("Court terminal distinct count differs")
+        if len(consumed) != len(group["captures"]):
+            raise ValueError("Court replay left selected capture occurrences unused")
+        directory = output / f"group-{group_index:03d}"
+        generation = "court-delta-" + hashlib.sha256((manifest["artifact"] + str(group_index)).encode()).hexdigest()
+        witnesses = [{"source_id": c["event"]["capture_id"], "source_uri": c["event"]["requested_url"],
+                      "sha256": c["event"]["sha256"], "locator": str(c["journal_ordinal"]), "body_version": None}
+                     for c in consumed]
+        context = ReceiptContext(generation, "expected", "court-delta", witnesses, {})
+        accepted, refused = [], {}
+        for ordinal, row in enumerate(shaped):
+            try:
+                normalized = normalize_court_row("court_dockets", row)
+                split_record(POLICIES["court_dockets"], normalized, context)
+                accepted.append(normalized)
+            except (ValueError, TypeError, KeyError, pa.ArrowException):
+                refused[f"court_dockets:delta:{ordinal}"] = row
+        subject = write_court_rows("court_dockets", shaped, directory, witnesses=witnesses,
+                                   generation_id=generation, attempt_prefix="delta", diagnostics={"group_index": group_index})
+        receipts, receipt_generation = local_receipt_selection(subject)
+        restored = list(read_court_rows(subject, dataset="court_dockets"))
+        comparison = compare_rows(accepted, restored)
+        attempts = list(read_attempts([receipts], POLICIES["court_dockets"], generation_id=receipt_generation))
+        actual_refused = {a["attempt_id"]: a["processing_fields"]["raw_source_record"]
+                          for a in attempts if a["outcome"] == "refused"}
+        by_attempt = {a["attempt_id"]: a for a in attempts}
+        for ordinal, observation in enumerate(occurrences):
+            attempt_id = f"court_dockets:delta:{ordinal}"
+            attempt = by_attempt.get(attempt_id)
+            observation.update({"attempt_id": attempt_id, "receipt_id": attempt["receipt_id"] if attempt else None,
+                                "outcome": attempt["outcome"] if attempt else "missing"})
+        outcome_ok = (actual_refused == refused and len(attempts) == len(shaped)
+                      and {a["attempt_id"] for a in attempts} == {f"court_dockets:delta:{i}" for i in range(len(shaped))}
+                      and all(a["outcome"] in {"accepted", "refused"} for a in attempts))
+        step = {"group_index": group_index, "capture_ids": [c["event"]["capture_id"] for c in consumed],
+                "source_occurrences": len(shaped), "accepted": len(accepted), "refused": len(refused),
+                "complete_empty_search": not shaped, "comparison": comparison, "all_outcomes_match": outcome_ok,
+                "outputs": [pin(subject), pin(receipts)]}
+        (directory / "occurrences.json").write_text(json.dumps(occurrences, indent=2) + "\n")
+        results.append(step)
+        with (output / "progress.jsonl").open("a") as stream:
+            stream.write(json.dumps(step) + "\n")
+    source.verify()
+    if court_selection(corpus, manifest["artifact"]) != manifest:
+        raise ValueError("Court selection/code changed during replay")
+    passed = all(r["all_outcomes_match"] and r["comparison"]["ordered_rows_equal"] for r in results)
+    result = {"state": "qualified" if passed else "failed-delta-roundtrip", "task": "T14",
+              "family": "courtlistener-captured-delta", "artifact": manifest["artifact"], "groups": results,
+              "capture_occurrences": sum(len(r["capture_ids"]) for r in results),
+              "scope": "Exact held search delta parsing and new native subject/receipt roundtrip",
+              "limits": ["No prior input, merge or full historical docket proof", "Original receipt identities not recreated",
+                         "No bulk/API replacement, T14 completion, publication or baseline retirement"], "production_actions": []}
+    (output / "qualification.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+def court_replay(manifest_path: Path, output: Path) -> dict:
+    existed = output.exists()
+    try:
+        return _court_replay(manifest_path, output)
+    except Exception as error:
+        if not existed and output.is_dir() and not (output / "qualification.json").exists():
+            (output / "qualification.json").write_text(json.dumps({"state": "error", "task": "T14",
+                "family": "courtlistener-captured-delta", "error_type": type(error).__name__,
+                "selection_pin": pin(manifest_path), "production_actions": []}, indent=2) + "\n")
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -282,13 +464,20 @@ def main():
     run = commands.add_parser("replay-gao")
     run.add_argument("--manifest", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
+    court_select = commands.add_parser("select-court-delta")
+    court_select.add_argument("--corpus", type=Path, required=True)
+    court_select.add_argument("--artifact", default=COURT_DELTA_ARTIFACT)
+    court_select.add_argument("--manifest", type=Path, required=True)
+    court_run = commands.add_parser("replay-court-delta")
+    court_run.add_argument("--manifest", type=Path, required=True)
+    court_run.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "select-gao":
-        value = selection(args.corpus)
+    if args.command in {"select-gao", "select-court-delta"}:
+        value = selection(args.corpus) if args.command == "select-gao" else court_selection(args.corpus, args.artifact)
         with args.manifest.open("x") as stream:
             stream.write(json.dumps(value, indent=2) + "\n")
     else:
-        value = replay(args.manifest, args.output)
+        value = replay(args.manifest, args.output) if args.command == "replay-gao" else court_replay(args.manifest, args.output)
         print(json.dumps({"state": value["state"], "family": value["family"]}))
         if value["state"] != "qualified":
             raise SystemExit(1)
