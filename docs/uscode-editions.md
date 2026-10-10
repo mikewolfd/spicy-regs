@@ -53,3 +53,17 @@ witness references use content digests. Private archive paths remain in
 `selection.json` and `rebuild.json`; exclude those files from public artifact
 members. Publish only selected subject Parquet members and their fresh
 `etl_receipts.parquet`. Earlier path-bearing receipt history must not be inherited.
+
+Section-content output uses batches of at most64records through the maintained
+receipt writer. Bodies and complete source observations can contain large text,
+so a row-count bound does not establish a byte or process-memory bound. Edition
+and structure output keep the writer's default batching. Qualification still
+requires measured resource limits and independent content and receipt checks
+for the selected originals.
+
+All edition, structure and content outputs explicitly select the maintained
+reference row validator. This preserves complete schema, subject and receipt
+checks while avoiding the bulk validator's fixed DuckDB resource settings.
+It does not establish a process-memory bound; Parquet reading and normalization
+still batch rows. Resource qualification requires an independently supervised
+run of the exact selected inputs.

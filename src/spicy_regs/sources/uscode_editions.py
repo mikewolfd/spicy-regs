@@ -27,6 +27,9 @@ from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, combine_recei
 MAX_ARCHIVE_BYTES = 192 * 1024**2
 MAX_MEMBER_BYTES = 128 * 1024**2
 MAX_EXPANDED_BYTES = 2 * 1024**3
+# Content rows repeat large body/observation text during Arrow conversion.
+# This caps held records, not bytes or process memory.
+CONTENT_WRITE_BATCH_SIZE = 64
 
 EDITION_COLUMNS = (
     "edition_id",
@@ -333,7 +336,10 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                         item = json.loads(line)
                         yield item["row"], ReceiptContext(**item["context"])
 
-                subject, receipts = write_dataset(rows(), staged / table, policy)
+                write_options = {"batch_size": CONTENT_WRITE_BATCH_SIZE} if table == "uscode_edition_sections" else {}
+                subject, receipts = write_dataset(
+                    rows(), staged / table, policy, validation_backend="reference", **write_options
+                )
                 assert subject is not None
                 outputs[table] = {
                     "rows": counts[table],

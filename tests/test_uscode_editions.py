@@ -5,10 +5,13 @@ import io
 import json
 import zipfile
 
+from pathlib import Path
+
 import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.sources import uscode_editions as reader
+from spicy_regs.etl_receipts import validate_receipt_bundle
 from spicy_docs.sources.uscode import UsCodeSourceError
 from spicy_docs.sources.uscode.annual import ANNUAL_FIELDS
 
@@ -168,3 +171,73 @@ def test_late_unclosed_content_field_cannot_install_candidate(tmp_path):
         reader.build(pin, tmp_path / "output")
     assert not (tmp_path / "output").exists()
     assert not list(tmp_path.glob(".uscode-editions-*"))
+
+
+def test_content_conversion_never_writes_more_than_64_rows_and_keeps_every_occurrence(tmp_path, monkeypatch):
+    # Cross two full batches with differently sized body values and a final short batch.
+    bodies = ["body-" + str(i) + "-" + "x" * (i % 7 * 1000) for i in range(129)]
+    sections = "".join(
+        '<section identifier="/us/usc/t1/s' + str(i + 1) + '"><num>' + str(i + 1) + "</num>"
+        "<heading>Section " + str(i + 1) + "</heading><content>" + text + "</content></section>"
+        for i, text in enumerate(bodies)
+    )
+    original = XML.replace(
+        b'<section identifier="/us/usc/t1/s1"><num>1</num><heading>Section</heading><content>Text.</content>\n</section>',
+        sections.encode(),
+    )
+    pin = manifest(
+        tmp_path,
+        ({"kind": "release-point-title", "release_point": "119-103", "title": "01"}, zipped(("usc01.xml", original))),
+    )
+    observed = []
+    real_writer = pq.ParquetWriter
+
+    class RecordingWriter:
+        def __init__(self, path, *args, **kwargs):
+            self.path = Path(path)
+            self.writer = real_writer(path, *args, **kwargs)
+
+        def __enter__(self):
+            self.writer.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.writer.__exit__(*args)
+
+        def write_table(self, table, *args, **kwargs):
+            if self.path.name == "uscode_edition_sections.parquet":
+                observed.append(table.num_rows)
+            return self.writer.write_table(table, *args, **kwargs)
+
+    monkeypatch.setattr(pq, "ParquetWriter", RecordingWriter)
+    output = tmp_path / "candidate"
+    reader.build(pin, output)
+    assert observed and max(observed) <= 64
+    assert sum(observed) == len(bodies)
+    content = rows(output, "uscode_edition_sections")
+    assert [row["body_text"] for row in content] == bodies
+    assert [row["native_identifier"] for row in content] == ["/us/usc/t1/s" + str(i + 1) for i in range(129)]
+    assert len({row["observation_id"] for row in content}) == 129
+    assert all(row["source_context"] == "main-body-candidate" for row in content)
+    subjects = {name: [output / name / (name + ".parquet")] for name in reader.POLICIES}
+    validate_receipt_bundle(subjects, [output / "etl_receipts.parquet"], list(reader.POLICIES.values()))
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert len(receipts) == 1 + 130 + 129
+    assert str(tmp_path) not in str(receipts)
+
+
+def test_all_uscode_tables_select_reference_validation(tmp_path, monkeypatch):
+    from spicy_regs import etl_bulk
+
+    def unexpected_bulk(*args, **kwargs):
+        pytest.fail("U.S. Code output entered the bulk validator")
+
+    monkeypatch.setattr(etl_bulk, "validate_bundle", unexpected_bulk)
+    pin = manifest(
+        tmp_path,
+        ({"kind": "release-point-title", "release_point": "119-103", "title": "01"}, zipped(("usc01.xml", XML))),
+    )
+    output = tmp_path / "output"
+    result = reader.build(pin, output)
+    assert all(result["outputs"][name]["rows"] > 0 for name in reader.POLICIES)
+    assert rows(output, "uscode_edition_sections")[0]["body_text"] == "Text."
