@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.explorer_navigation import array, route, key, part, guard
-from spicy_regs.navigation_measurements import MeasurementCache
+from spicy_regs.navigation_measurements import MeasurementCache, attached_directions, qualify_exact_content
 from spicy_regs.native_types import described_schema
 from spicy_regs.sources.publication import table_members
 
@@ -349,3 +349,68 @@ def test_native_date_keys_compare_calendar_values_without_text_coercion(tmp_path
     paths[table_members(index, 'target.parquet')[0].path] = str(path)
     with pytest.raises(ValueError, match='types are incompatible'):
         cache.measure(index, paths, spec, source_identity=('day',))
+
+
+def carried(tmp_path, split=False):
+    index, paths, spec = selection(tmp_path, split=split)
+    proof = MeasurementCache(tmp_path / 'cache').measure(index, paths, spec, source_identity=('id',))
+    current = deepcopy(index)
+    family = current['families']['fixture']
+    family.update(prefix='generations/fixture/' + 'b' * 64, artifactDigest='sha256:' + 'b' * 64)
+    return current, spec, proof
+
+
+def test_exact_content_reuse_preserves_historical_binding(tmp_path):
+    current, spec, proof = carried(tmp_path)
+    before = deepcopy(proof)
+    assert attached_directions(current, spec, 0, proof) is None
+    qualified = qualify_exact_content(current, spec, 0, proof)
+    assert proof == before == qualified['historicalProof']
+    directions = attached_directions(current, spec, 0, qualified)
+    assert directions['forward']['measurement']['matched'] == proof['matched']
+    assert directions['forward']['measurement']['qualification'] == 'exact_content_reuse'
+    qualified['binding']['source']['pin']['sha256'] = 'sha256:' + 'c' * 64
+    assert attached_directions(current, spec, 0, qualified) is None
+
+
+@pytest.mark.parametrize('mutation', ['hash', 'size', 'rows', 'type', 'order', 'missing', 'duplicate', 'boolean'])
+def test_content_change_or_incomplete_member_set_refuses(tmp_path, mutation):
+    current, spec, proof = carried(tmp_path, split=True)
+    descriptor = current['families']['fixture']['tables']['source.parquet']
+    if mutation == 'hash':
+        descriptor['members'][0]['sha256'] = 'sha256:' + 'c' * 64
+    elif mutation == 'size':
+        descriptor['members'][0]['byteSize'] += 1
+        descriptor['byteSize'] += 1
+    elif mutation == 'rows':
+        descriptor['members'][0]['rows'] += 1
+        descriptor['rows'] += 1
+    elif mutation == 'type':
+        descriptor['columns'][0][1] = 'BIGINT'
+    elif mutation == 'order':
+        descriptor['members'].reverse()
+    elif mutation == 'missing':
+        descriptor['members'].pop()
+    elif mutation == 'duplicate':
+        descriptor['members'][1] = deepcopy(descriptor['members'][0])
+    else:
+        descriptor['members'][0]['rows'] = True
+    with pytest.raises((ValueError, KeyError, TypeError)):
+        qualify_exact_content(current, spec, 0, proof)
+
+
+@pytest.mark.parametrize('mutation', ['recipe', 'aggregation', 'counts', 'import', 'route', 'guard'])
+def test_historical_rules_and_counts_remain_strict(tmp_path, mutation):
+    current, spec, proof = carried(tmp_path)
+    if mutation in {'recipe', 'aggregation'}:
+        proof['binding'][mutation] = 'sha256:' + 'c' * 64
+    elif mutation == 'counts':
+        proof['matched'] += 1
+    elif mutation == 'import':
+        proof['targetPopulation']['populationProof'] = {'authority': 'bad', 'guardImplementation': 'bad'}
+    elif mutation == 'route':
+        proof['route']['targetIndex'] = 1
+    else:
+        spec['ruleVersion'] = 'new-rule'
+    with pytest.raises(ValueError):
+        qualify_exact_content(current, spec, 0, proof)

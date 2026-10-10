@@ -204,7 +204,8 @@ class MeasurementCache:
         outputs = []
         for item in admitted:
             # Content and schema own projection identity. A carried member in a
-            # new generation can reuse its projection but not an aggregate proof.
+            # new generation can reuse its projection. Aggregate counts require
+            # a separate exact-content qualification against the new binding.
             dependency = {'version': VERSION, 'member': {k: item['member'][k] for k in ('sha256', 'rows', 'byteSize')},
                           'schema': binding['schema'], 'columns': columns}
             held = self._read('projection', dependency)
@@ -585,7 +586,73 @@ def scalar_navigation(join):
     return spec
 
 
+def _content_identity(binding):
+    """Complete ordered content identity, excluding publication location only."""
+    schema, members = binding['schema'], binding['members']
+    if (not schema or len({column[0] for column in schema}) != len(schema)
+            or any(len(column) != 2 or not all(isinstance(v, str) and v for v in column) for column in schema)
+            or not count_value(binding['rows']) or not members
+            or len({member['path'] for member in members}) != len(members)):
+        raise ValueError('Incomplete or duplicate selected content')
+    for member in members:
+        checksum = member['sha256']
+        if (not isinstance(member['path'], str) or not member['path']
+                or not count_value(member['rows']) or not count_value(member['byteSize'])
+                or not isinstance(checksum, str) or len(checksum) != 71 or not checksum.startswith('sha256:')
+                or any(c not in '0123456789abcdef' for c in checksum[7:])):
+            raise ValueError('Invalid selected member content')
+    if sum(member['rows'] for member in members) != binding['rows']:
+        raise ValueError('Incomplete selected member rows')
+    return {'table': binding['table'], 'schema': schema, 'rows': binding['rows'],
+            'members': [{k: member[k] for k in ('sha256', 'byteSize', 'rows')} for member in members]}
+
+
+def qualify_exact_content(index, spec, target_index, historical_proof, extra_tables=None):
+    """Write a separate current qualification; retain the original proof unchanged.
+
+    Publication hashes are the authority for carried immutable content. This
+    performs no body admission or population scan and makes no such claim.
+    """
+    source = selected_binding(index, spec['source'], extra_tables)
+    target = selected_binding(index, spec['targets'][target_index]['table'], extra_tables)
+    old = historical_proof['binding']
+    if any(_content_identity(old[side]) != _content_identity(current)
+           for side, current in (('source', source), ('target', target))):
+        raise ValueError('Selected content changed; measurement is required')
+    if _verified_directions(spec, target_index, historical_proof, old['source'], old['target']) is None:
+        raise ValueError('Historical measurement does not qualify under current rules')
+    return {'format': VERSION, 'status': 'complete', 'authority': 'exact_content_reuse',
+            'binding': {**old, 'source': source, 'target': target}, 'route': deepcopy(historical_proof['route']),
+            'historicalProof': deepcopy(historical_proof), 'historicalDigest': digest(historical_proof),
+            'qualificationImplementation': digest([VERSION, inspect.getsource(_content_identity),
+                                                       inspect.getsource(qualify_exact_content)])}
+
+
 def attached_directions(index, spec, target_index, proof, extra_tables=None):
+    """Qualify exact current measurements or explicitly proven carried content."""
+    try:
+        source = selected_binding(index, spec['source'], extra_tables)
+        target = selected_binding(index, spec['targets'][target_index]['table'], extra_tables)
+        if proof.get('authority') == 'exact_content_reuse':
+            historical = proof['historicalProof']
+            expected = qualify_exact_content(index, spec, target_index, historical, extra_tables)
+            if proof != expected:
+                return None
+            directions = _verified_directions(spec, target_index, historical,
+                                               historical['binding']['source'], historical['binding']['target'])
+            if directions is not None:
+                for direction in directions.values():
+                    if 'measurement' in direction:
+                        direction['measurement'].update(proofDigest=digest(proof),
+                                                       qualification='exact_content_reuse',
+                                                       historicalProofDigest=proof['historicalDigest'])
+            return directions
+        return _verified_directions(spec, target_index, proof, source, target)
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+
+
+def _verified_directions(spec, target_index, proof, source, target):
     """Only a fully reconciled result with exact current bindings can qualify metadata."""
     try:
         if proof.get('format') != VERSION or proof.get('status') != 'complete':
@@ -597,8 +664,6 @@ def attached_directions(index, spec, target_index, proof, extra_tables=None):
             if imported and (imported.get('authority') != 'imported_existing_full_population' or
                              imported.get('guardImplementation') != digest([VERSION, inspect.getsource(MeasurementCache.import_population)])):
                 return None
-        source = selected_binding(index, spec['source'], extra_tables)
-        target = selected_binding(index, spec['targets'][target_index]['table'], extra_tables)
         selected = navigation.published_navigation([spec], {source['table']: source['schema'], target['table']: target['schema']})[0]
         columns = proof['sourceIdentity']['columns']
         expected = {'source': source, 'target': target, 'recipe': recipe_digest(selected, target_index, columns),
