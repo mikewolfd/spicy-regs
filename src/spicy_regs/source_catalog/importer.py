@@ -18,8 +18,18 @@ def encoded(value: object) -> str:
 
 
 class Importer:
-    def __init__(self, db, inputs: Inputs, config: dict):
+    def __init__(
+        self,
+        db,
+        inputs: Inputs,
+        config: dict,
+        *,
+        catalog_input: Path | None = None,
+        table_inputs_input: Path | None = None,
+    ):
         self.db, self.inputs, self.root = db, inputs, inputs.root
+        self.catalog_input = catalog_input
+        self.table_inputs_input = table_inputs_input
         self.bindings: dict[str, str] = {}
         self.families: dict[str, str] = {}
         self.artifacts: dict[str, set[str]] = {}
@@ -96,11 +106,45 @@ class Importer:
         )
 
     def tsv(self, name: str):
-        with self.inputs.pin(self.root / name).open(newline="") as stream:
-            yield from csv.DictReader(stream, delimiter="\t")
+        override = self.table_inputs_input if name == "table-inputs.tsv" else None
+        with self.inputs.pin(override or self.root / name).open(encoding="utf-8", newline="") as stream:
+            reader = csv.DictReader(stream, delimiter="\t", strict=bool(override))
+            if override:
+                fields = reader.fieldnames or []
+                if (
+                    len(fields) != len(set(fields))
+                    or any(not field.strip() for field in fields)
+                    or not {"table", "family"}.issubset(fields)
+                ):
+                    raise ValueError("Table-inputs overlay requires unique headers including table and family")
+            for row in reader:
+                if override and (
+                    None in row
+                    or any(value is None for value in row.values())
+                    or not row["table"].strip()
+                    or not row["family"].strip()
+                ):
+                    raise ValueError("Malformed table-inputs overlay row")
+                yield row
 
     def run(self) -> None:
-        catalog = self.inputs.json(self.root / "catalog.json")
+        catalog = self.inputs.json(self.catalog_input or self.root / "catalog.json")
+        if self.catalog_input:
+            if not isinstance(catalog, dict) or not isinstance(catalog.get("families"), dict):
+                raise ValueError("Catalog overlay requires an object with a families object")
+            if ("format" in catalog or "version" in catalog) and (
+                catalog.get("format") != "spicyregs-local-source-collection" or catalog.get("version") != 2
+            ):
+                raise ValueError("Unsupported catalog overlay format/version")
+            for family, data in catalog["families"].items():
+                if not isinstance(family, str) or not family.strip() or not isinstance(data, dict):
+                    raise ValueError("Malformed catalog overlay family")
+                for field in ["tables", "source_artifacts"]:
+                    values = data.get(field, [])
+                    if not isinstance(values, list) or any(
+                        not isinstance(value, str) or not value.strip() for value in values
+                    ):
+                        raise ValueError(f"Malformed catalog overlay {field}")
         self.generated_at = catalog.get("updated_at") or catalog.get("assembled_at") or self.generated_at
         for family, data in catalog.get("families", {}).items():
             cid = self.resolve(family, family=True)
@@ -356,7 +400,15 @@ class Importer:
                     self.evidence(target, kind, entry)
 
 
-def build(corpus: Path, output: Path, *, config: Path | None = None, discovery: Sequence[Path] = ()) -> dict:
+def build(
+    corpus: Path,
+    output: Path,
+    *,
+    config: Path | None = None,
+    discovery: Sequence[Path] = (),
+    catalog_input: Path | None = None,
+    table_inputs_input: Path | None = None,
+) -> dict:
     """Validate a complete temporary index before atomic activation."""
     output.parent.mkdir(parents=True, exist_ok=True)
     inputs = Inputs(corpus)
@@ -371,7 +423,13 @@ def build(corpus: Path, output: Path, *, config: Path | None = None, discovery: 
     db = connect(path)
     try:
         schema(db)
-        importer = Importer(db, inputs, configuration)
+        importer = Importer(
+            db,
+            inputs,
+            configuration,
+            catalog_input=catalog_input,
+            table_inputs_input=table_inputs_input,
+        )
         importer.run()
         for discovery_path in discovery:
             importer.discovery(inputs.json(discovery_path))

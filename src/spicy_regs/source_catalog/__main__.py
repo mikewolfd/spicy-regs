@@ -19,6 +19,10 @@ def main() -> None:
     create.add_argument("--corpus", type=Path, required=True)
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--config", type=Path)
+    create.add_argument("--catalog-input", type=Path, help="Pinned catalog inventory overlay; corpus stays unchanged")
+    create.add_argument(
+        "--table-inputs-input", type=Path, help="Pinned table dependency overlay; corpus stays unchanged"
+    )
     create.add_argument("--discovery", type=Path, action="append", default=[])
     publish = commands.add_parser("export")
     publish.add_argument("--index", type=Path, required=True)
@@ -42,7 +46,14 @@ def main() -> None:
             command.add_argument("--offset", type=int, default=0)
     args = parser.parse_args()
     if args.command == "build":
-        result = build(args.corpus, args.output, config=args.config, discovery=args.discovery)
+        result = build(
+            args.corpus,
+            args.output,
+            config=args.config,
+            discovery=args.discovery,
+            catalog_input=args.catalog_input,
+            table_inputs_input=args.table_inputs_input,
+        )
     elif args.command == "export":
         manifest = export(args.index, args.output, internal=args.internal, page_size=args.page_size)
         result = {

@@ -639,3 +639,147 @@ def test_matrix_preserves_scoped_relationships_and_cross_collection_policy(corpu
     assert rows["unknown"]["relationships"] == []
     assert rows["unknown"]["comparison"].startswith("unresolved")
     assert rows["bulk"]["period"]["kind"] == "unknown"
+
+
+def test_inventory_overlays_select_metadata_keep_canonical_objects_and_pins(corpus, tmp_path):
+    before = {name: (corpus / name).read_bytes() for name in ["catalog.json", "table-inputs.tsv", "sources.tsv"]}
+    catalog = json.loads(before["catalog.json"])
+    catalog["families"]["test"]["historical_baseline_notes"] = [{"table": "legacy.parquet"}]
+    catalog_path = write(tmp_path, "overlay/catalog.json", catalog)
+    table_path = tmp_path / "overlay/table-inputs.tsv"
+    table_path.write_text("table\tfamily\tbaseline_paths\nlegacy.parquet\ttest\tretained-baseline\n")
+    config = write(tmp_path, "config.json", {})
+    output = tmp_path / "candidate.sqlite"
+    result = build(corpus, output, config=config, catalog_input=catalog_path, table_inputs_input=table_path)
+    assert (
+        result["inputs"][str(catalog_path.resolve())]["sha256"]
+        == "sha256:" + hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+    )
+    assert (
+        result["inputs"][str(table_path.resolve())]["sha256"]
+        == "sha256:" + hashlib.sha256(table_path.read_bytes()).hexdigest()
+    )
+    assert str(corpus / "catalog.json") not in result["inputs"]
+    assert str(corpus / "table-inputs.tsv") not in result["inputs"]
+    assert str(corpus / "sources.tsv") in result["inputs"]
+    db = connect(output, readonly=True)
+    tables = [json.loads(row[0]) for row in db.execute("SELECT data FROM evidence WHERE kind='table_input'")]
+    assert [row["table"] for row in tables] == ["legacy.parquet"]
+    assert db.execute("SELECT count(*) FROM files WHERE local_path LIKE ?", (str(corpus) + "/%",)).fetchone()[0] > 0
+    assert db.execute("SELECT id FROM tables WHERE id='legacy'").fetchone() is None
+    db.close()
+    for name, data in before.items():
+        assert (corpus / name).read_bytes() == data
+    catalog["families"]["test"]["historical_baseline_notes"][0]["note"] = "new retained evidence"
+    write(tmp_path, "overlay/catalog.json", catalog)
+    other = build(
+        corpus, tmp_path / "other.sqlite", config=config, catalog_input=catalog_path, table_inputs_input=table_path
+    )
+    assert other["generation"] != result["generation"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [],
+        {},
+        {"families": []},
+        {"families": {"test": []}},
+        {"families": {"test": {"tables": "bad"}}},
+        {"families": {"test": {"source_artifacts": "bad"}}},
+        {"families": {}, "version": 999},
+        {"families": {}, "format": "unknown", "version": 2},
+    ],
+)
+def test_malformed_catalog_overlay_preserves_existing_output(corpus, tmp_path, value):
+    output = tmp_path / "active.sqlite"
+    config = write(tmp_path, "config.json", {})
+    build(corpus, output, config=config)
+    before = output.read_bytes()
+    overlay = write(tmp_path, "bad.json", value)
+    with pytest.raises(ValueError):
+        build(corpus, output, config=config, catalog_input=overlay)
+    assert output.read_bytes() == before
+    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "failed"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "table\ttable\tfamily\na\tb\ttest\n",
+        "table\tfamily\t\na\ttest\t\n",
+        "table\na\n",
+        "table\tfamily\na\n",
+        "table\tfamily\na\ttest\textra\n",
+        "table\tfamily\n\ttest\n",
+        'table\tfamily\n"unterminated\ttest\n',
+    ],
+)
+def test_malformed_table_overlay_refuses_activation(corpus, tmp_path, text):
+    overlay = tmp_path / "bad.tsv"
+    overlay.write_text(text)
+    config = write(tmp_path, "config.json", {})
+    output = tmp_path / "candidate.sqlite"
+    with pytest.raises((ValueError, csv.Error)):
+        build(corpus, output, config=config, table_inputs_input=overlay)
+    assert not output.exists()
+    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "failed"
+
+
+def test_missing_invalid_encoding_and_drifting_overlays_refuse(corpus, tmp_path, monkeypatch):
+    config = write(tmp_path, "config.json", {})
+    output = tmp_path / "candidate.sqlite"
+    with pytest.raises(FileNotFoundError):
+        build(corpus, output, config=config, catalog_input=tmp_path / "missing.json")
+    with pytest.raises(IsADirectoryError):
+        build(corpus, output, config=config, table_inputs_input=tmp_path)
+    overlay = tmp_path / "bad.tsv"
+    overlay.write_bytes(b"table\tfamily\n\xff\ttest\n")
+    with pytest.raises(UnicodeDecodeError):
+        build(corpus, output, config=config, table_inputs_input=overlay)
+    catalog = write(tmp_path, "selected.json", json.loads((corpus / "catalog.json").read_text()))
+    original = Inputs.check
+
+    def drift(self):
+        catalog.write_text(catalog.read_text() + " ")
+        original(self)
+
+    monkeypatch.setattr(Inputs, "check", drift)
+    with pytest.raises(RuntimeError, match="Input changed during build"):
+        build(corpus, output, config=config, catalog_input=catalog)
+    assert not output.exists()
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_overlay_cli_routes_selected_paths(corpus, tmp_path, monkeypatch, capsys):
+    import sys
+    from spicy_regs.source_catalog.__main__ import main
+
+    config = write(tmp_path, "config.json", {})
+    catalog = write(tmp_path, "selected.json", json.loads((corpus / "catalog.json").read_text()))
+    tables = tmp_path / "selected.tsv"
+    tables.write_bytes((corpus / "table-inputs.tsv").read_bytes())
+    output = tmp_path / "candidate.sqlite"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "source_catalog",
+            "build",
+            "--corpus",
+            str(corpus),
+            "--output",
+            str(output),
+            "--config",
+            str(config),
+            "--catalog-input",
+            str(catalog),
+            "--table-inputs-input",
+            str(tables),
+        ],
+    )
+    main()
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "validated"
+    assert str(catalog.resolve()) in result["inputs"]
+    assert str(tables.resolve()) in result["inputs"]
