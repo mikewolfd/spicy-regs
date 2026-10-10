@@ -2535,8 +2535,10 @@ def _tools() -> list[Tool]:
         says whether it was read). receipt_meaning and state_meaning define the
         words a reply uses; fields gives each field's meaning. receipts names
         the family or snapshot, receipt member, generation and policy version read. A lookup reads the
-        record id of every receipt of the table, so a table with more than
-        2,000,000 receipts is refused. A reply past the reply limit is refused
+        admitted receipt key index when the selected publication supplies one.
+        Without an index it reads the record id of every receipt of the table,
+        so a table with more than 2,000,000 receipts is refused. Missing keys
+        still require a bounded subject-table search. A reply past the reply limit is refused
         with how many keys fit.
         """
         cursor = _get_connection().cursor()

@@ -271,6 +271,7 @@ def build_generation(
     receipt_path: Path | None = None,
     receipt_policies: Sequence | None = None,
     receipt_generation_id: str | None = None,
+    receipt_index: tuple[Path, Mapping] | None = None,
     adopt_owned_receipt: bool = False,
     read_operation=None,
     canonical_root: Path | None = None,
@@ -298,6 +299,10 @@ def build_generation(
     filesystem. After the move, this directory retains the receipt even if
     admission fails; callers must preserve the directory for recovery. Retained
     source receipts use the default copy behavior.
+
+    ``receipt_index`` explicitly adopts an already built key sidecar and its
+    descriptor. Normal builds create no index. Full generation admission checks
+    its exact receipt binding and every position before this artifact can publish.
     """
     from rulespec_artifacts import (
         LocalMemberSource,
@@ -310,6 +315,8 @@ def build_generation(
     names = output_keys(files, partitioned)
     if adopt_owned_receipt and receipt_path is None:
         raise ValueError("Owned receipt adoption requires a receipt file")
+    if receipt_index is not None and receipt_path is None:
+        raise ValueError("Receipt index adoption requires a receipt file")
     if (not expected and receipt_path is None) or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
@@ -348,6 +355,15 @@ def build_generation(
                         "policies": [policy.descriptor() for policy in receipt_policies],
                         **table_info(directory / RECEIPT_KEY)}
         rows[RECEIPT_KEY] = receipt_spec["rows"]
+        if receipt_index is not None:
+            from spicy_regs.receipt_key_index import KEY as RECEIPT_INDEX_KEY
+            index_path, index_descriptor = receipt_index
+            if (index_path.is_symlink() or not index_path.is_file()
+                    or RECEIPT_INDEX_KEY in tables):
+                raise ValueError("Receipt index adoption requires a separate regular sidecar")
+            shutil.copyfile(index_path, directory / RECEIPT_INDEX_KEY)
+            receipt_spec["keyIndex"] = dict(index_descriptor)
+            rows[RECEIPT_INDEX_KEY] = table_info(directory / RECEIPT_INDEX_KEY)["rows"]
     elif receipt_policies is not None or receipt_generation_id is not None:
         raise ValueError("Receipt admission cannot omit the shared receipt member")
     from spicy_regs.etl_policy_registry import require_registered_receipts

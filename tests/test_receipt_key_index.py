@@ -126,33 +126,46 @@ def test_indexed_native_selection_lookup_through_locked_server_cursor(tmp_path, 
         mcp_server._build_connection()
 
 
-def test_reader_accepts_manually_admitted_indexed_generation_and_publication(tmp_path):
+def test_explicit_index_adoption_builds_and_publishes_verified_generation(tmp_path):
     from spicy_regs.etl_receipts import DatasetPolicy
     from spicy_regs.subject_catalog import descriptors
-    from spicy_regs.generations import build_generation, verify_generation, _write_generation_metadata
-    from rulespec_artifacts import LocalMemberSource, iter_member_descriptors, describe_member
+    from spicy_regs.generations import build_generation
     from spicy_regs.sources import publication as pub
     from tests.generation_fakes import Store
     subject, receipts, _ = fixture(tmp_path)
+    descriptor, _ = sidecar(receipts, tmp_path / KEY)
     directory = tmp_path / "generation"
     policy = DatasetPolicy.from_descriptor(descriptors()["fec_receipts"])
     artifact = build_generation(directory, family="fec-query", files=[subject], expected_keys=[subject.name],
-                                receipt_path=receipts, receipt_policies=[policy], receipt_generation_id="new-publisher")
-    specification = dict(artifact.root["spec"]["etlReceipts"])
-    key = directory / KEY
-    specification["keyIndex"], receipt = sidecar(directory / "etl_receipts.parquet", key)
-    source = LocalMemberSource(directory)
-    members = list(iter_member_descriptors(artifact, source))
-    members.append(describe_member(source, object_key=KEY, role="table", media_type="application/vnd.apache.parquet",
-                                   record_count=receipt["rows"]))
-    _write_generation_metadata(directory, family="fec-query", tables=artifact.root["spec"]["tables"], members=sorted(members, key=lambda m: m.object_key),
-                               etl_receipts=specification)
-    artifact = verify_generation(directory)
+                                receipt_path=receipts, receipt_policies=[policy], receipt_generation_id="new-publisher",
+                                receipt_index=(tmp_path / KEY, descriptor))
+    assert artifact.root["spec"]["etlReceipts"]["keyIndex"] == descriptor
     store = Store()
     index = pub.publish_generation(directory, client=store, bucket="b", prior_index=pub.empty_index())
-    assert index["families"]["fec-query"]["etlReceipts"]["keyIndex"] == specification["keyIndex"]
+    assert index["families"]["fec-query"]["etlReceipts"]["keyIndex"] == descriptor
     assert KEY not in index["families"]["fec-query"]["tables"]
     assert pub.parse_index(json.dumps(index).encode()) == index
+
+
+@pytest.mark.parametrize("damage", ["wrong_receipt", "wrong_position", "missing_receipt"])
+def test_generation_index_adoption_refuses_unpaired_or_invalid_map(tmp_path, damage):
+    from spicy_regs.etl_receipts import DatasetPolicy
+    from spicy_regs.subject_catalog import descriptors
+    from spicy_regs.generations import build_generation
+    subject, receipts, _ = fixture(tmp_path)
+    invalid_rows = None
+    if damage == "wrong_position":
+        row = pq.read_table(receipts).to_pylist()[0]
+        invalid_rows = [{**{name: row[name] for name, _ in COLUMNS[:-1]}, "row_number": 1}]
+    descriptor, _ = sidecar(receipts, tmp_path / KEY, rows=invalid_rows)
+    if damage == "wrong_receipt":
+        descriptor["receiptSha256"] = "sha256:" + "0" * 64
+    policy = DatasetPolicy.from_descriptor(descriptors()["fec_receipts"])
+    with pytest.raises(ValueError):
+        build_generation(tmp_path / "refused", family="fec-query", files=[subject], expected_keys=[subject.name],
+                         receipt_path=None if damage == "missing_receipt" else receipts,
+                         receipt_policies=[policy], receipt_generation_id="new-publisher",
+                         receipt_index=(tmp_path / KEY, descriptor))
 
 
 def many_receipts(tmp_path, monkeypatch):
@@ -234,3 +247,27 @@ def test_streamed_remote_sidecar_digest_size_and_cache(monkeypatch):
         _verify_bytes("https://fixture.test/changed/index", {**descriptor, "byteSize": 1})
     with pytest.raises(ValueError, match="exact byte pin"):
         _verify_bytes("https://fixture.test/bad/index", {**descriptor, "sha256": "sha256:" + "0" * 64})
+
+
+def test_full_reader_admission_memoizes_unchanged_signature_and_refuses_mutation(tmp_path):
+    _, receipts, _ = fixture(tmp_path)
+    key = tmp_path / KEY
+    descriptor, receipt = sidecar(receipts, key)
+    with duckdb.connect() as con:
+        class Trace:
+            def __init__(self):
+                self.metadata_queries = 0
+            def execute(self, sql, *args):
+                self.metadata_queries += ('DESCRIBE' in sql or 'parquet_' in sql)
+                con.execute(sql, *args)
+                return self
+            def __getattr__(self, name):
+                return getattr(con, name)
+        trace = Trace()
+        check_reader(trace, str(key), descriptor, receipt)
+        first = trace.metadata_queries
+        check_reader(trace, str(key), descriptor, receipt)
+        assert first == 3 and trace.metadata_queries == first
+        key.write_bytes(b'corrupt')
+        with pytest.raises(ValueError, match='corrupt or stale'):
+            check_reader(trace, str(key), descriptor, receipt)
