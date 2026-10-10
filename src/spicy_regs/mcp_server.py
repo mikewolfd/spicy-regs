@@ -701,6 +701,13 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 )
             ],
         )
+    # These newly declared subjects enter serving only through a managed
+    # generation or explicit local/rulemaking selection, never a bare legacy key.
+    managed_only = {
+        "administration_policy_bill_links", "administration_policy_statements",
+        "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
+        "table3_historical_records", "uscode_edition_structure", "uscode_editions",
+    }
     managed_names = [
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]
     ]
@@ -711,6 +718,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
         pinned = rulemaking["tables"].get(f"{name}.parquet") if rulemaking is not None and published is None else None
+        if local is None and name in managed_only and published is None and pinned is None:
+            continue
         if pinned is not None:
             paths = [pinned["remote_key"]]
         if local is not None:

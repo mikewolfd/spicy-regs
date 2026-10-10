@@ -16,12 +16,12 @@ Selected eCFR AUTH/SOURCE notes and U.S. Code href/source-credit observations, r
 | Column | Type | Description |
 | --- | --- | --- |
 | `scope_id` | `VARCHAR` | The input's replacement scope, `native_reference_scope_id` over source_family, source_record_key and edition; a complete read replaces every row of its scope, and a successful empty read clears it. |
-| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode` or `ecfr`, fixed by the shaper. |
+| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`, fixed by the shaper. |
 | `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
 | `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
 | `body_version_id` | `VARCHAR` | `sha256:` digest of the exact retained XML bytes the scanner read. |
 | `occurrence_index` | `BIGINT` | The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text. |
-| `observation_kind` | `VARCHAR` | `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note. |
+| `observation_kind` | `VARCHAR` | `native_reference` for a bill or law observation, `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note. |
 | `href` | `VARCHAR` | The element's href exactly as stated, an empty string when stated empty; NULL when absent, and on every source credit and note. |
 | `text` | `VARCHAR` | The complete decoded text of a source credit or note, whitespace kept; NULL on a native reference. |
 | `text_runs` | `VARCHAR[]` | An eCFR note's text split at element boundaries, as a Native list whose strings join to text; NULL on U.S. Code rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |

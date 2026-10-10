@@ -9836,3 +9836,216 @@ tables:
       capture_id: "Source capture identifier carried through from the publisher fact."
       source_url: "Original publisher URL for the source fact."
       source_path: "Location of the source fact or reference within the captured document."
+
+  administration_policy_bill_links:
+    label: Explicit administration policy bill links
+    subject: congress
+    summary: One source-stated bill link within one administration policy statement. Multiple bill links
+      remain separate; a link does not infer support, opposition or enacted-law identity.
+    coverage: Sampled. Explicit bill tokens in selected retained administration metadata; statements without
+      bill links remain in administration_policy_statements.
+    measured_on: '2026-10-10'
+    grain: One source-stated bill link within one administration policy statement. Multiple bill links remain
+      separate; a link does not infer support, opposition or enacted-law identity.
+    identity_columns:
+    - link_id
+    columns:
+      link_id: Reader identity of one explicit bill link within a statement.
+      statement_id: Reader identity of one statement observation within the pinned archive.
+      source_link_index: Position of this explicit bill token in the source statement.
+      congress: Congress number stated by the source; no current-Congress substitution.
+      bill: Source bill token retained verbatim.
+      native_bill_id: Original bill identifier from the archived metadata.
+      bill_id: Reader-normalized bill identifier; an explicit link, not inferred support or opposition.
+  administration_policy_statements:
+    label: Archived administration policy statements
+    subject: congress
+    summary: One source statement observation in pinned administration metadata. Unlinked and rescinded
+      statements remain separate; advertised PDFs are metadata references.
+    coverage: Sampled. Selected retained administration metadata only. Archive periods, literal dates and
+      source record order remain distinct; PDF holdings and broader publisher completeness require separate
+      evidence.
+    measured_on: '2026-10-10'
+    grain: One source statement observation in pinned administration metadata. Unlinked and rescinded statements
+      remain separate; advertised PDFs are metadata references.
+    identity_columns:
+    - statement_id
+    columns:
+      statement_id: Reader identity of one statement observation within the pinned archive.
+      source_record_id: Native statement record identifier, when stated.
+      archive_commit: Exact archive commit selecting the metadata.
+      administration: Source administration label.
+      source_record_index: Position of the statement in the ordered source metadata.
+      congress: Congress number stated by the source; no current-Congress substitution.
+      document_title: Source-stated document title.
+      date_issued: Source-stated issue date retained as text.
+      date_issued_status: Reader classification of the source date form; no fabricated date.
+      rescinded: Source-stated rescission status.
+      archived_pdf_url: Advertised archived PDF URL; does not prove retained PDF bytes.
+      source_uri: Public source metadata URL.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Time of this recorded source observation.
+      source_record_json: Complete native metadata record in lossless JSON.
+  ecfr_snapshot_sections:
+    label: Dated eCFR snapshot content nodes
+    subject: reference
+    summary: One native content node within a retained dated eCFR response, linked to its snapshot. Node
+      text, heading, XML position and attributes remain source observations.
+    coverage: Sampled. Native content nodes in selected retained dated snapshots. Missing source periods
+      and unselected titles remain outside the evidenced scope.
+    measured_on: '2026-10-10'
+    grain: One native content node within a retained dated eCFR response, linked to its snapshot. Node text,
+      heading, XML position and attributes remain source observations.
+    identity_columns:
+    - snapshot_id
+    - xml_position
+    columns:
+      snapshot_id: Reader identity of the dated source selection and original body digest.
+      xml_position: XML positional path of this node within the source snapshot.
+      kind: Native source node kind.
+      native_number: Source-stated node number.
+      part: Source-stated parent part.
+      heading: Source-stated heading, retaining absence separately from empty text.
+      text: Native node text within its recorded source context.
+      attributes_json: Native XML attributes retained as JSON.
+      byte_start: Source reader byte position, when available.
+  ecfr_snapshots:
+    label: Dated eCFR snapshot observations
+    subject: reference
+    summary: One original eCFR response observed under an explicit dated selection. Titles, parts and sections
+      retain the selection scope and publisher metadata.
+    coverage: Sampled. Selected dated original responses only. A retained response establishes its selected
+      source scope, not a complete historical eCFR census.
+    measured_on: '2026-10-10'
+    grain: One original eCFR response observed under an explicit dated selection. Titles, parts and sections
+      retain the selection scope and publisher metadata.
+    identity_columns:
+    - snapshot_id
+    columns:
+      snapshot_id: Reader identity of the dated source selection and original body digest.
+      snapshot_date: Source selection date.
+      selected_part: Caller-selected CFR part, when requested.
+      selected_section: Caller-selected CFR section, when requested.
+      source_sha256: SHA-256 of the original selected source bytes.
+      source_url: Public publisher URL identifying the selected original source.
+      native_metadata_json: Publisher metadata retained as JSON.
+      title: Source title number.
+      source_bytes: Decoded original source body size in bytes.
+      content_nodes: Number of content nodes observed in the selected source body.
+  federal_register_issues:
+    label: Historical Federal Register issue observations
+    subject: rulemaking
+    summary: One publisher issue metadata observation with advertised renditions and exact retained rendition
+      references. Issue metadata does not replace document text or complete granule history.
+    coverage: Sampled. Selected original issue metadata and retained renditions only; full issue document/granule
+      history requires separate acquisition and qualification.
+    measured_on: '2026-10-10'
+    grain: One publisher issue metadata observation with advertised renditions and exact retained rendition
+      references. Issue metadata does not replace document text or complete granule history.
+    identity_columns:
+    - issue_observation_id
+    columns:
+      issue_observation_id: Reader identity of the publisher package and original issue metadata digest.
+      package_id: Publisher Federal Register issue package identifier.
+      publication_date: Publisher-stated issue publication date.
+      source_sha256: SHA-256 of the original selected source bytes.
+      metadata_json: Complete native issue metadata retained as JSON.
+      retained_renditions_json: Exact retained rendition URLs, digests and byte sizes; advertised renditions
+        remain separate.
+      source_bytes: Decoded original source body size in bytes.
+  table3_historical_records:
+    label: Historical Table III classification placements
+    subject: reference
+    summary: One native act-record placement from an original Table III member. Blank labels, source order
+      and repeated placements retain their native meanings.
+    coverage: Sampled. Classification records in selected retained Table III history members. Classification
+      placements are not independently acquired legal text or a complete resolution claim.
+    measured_on: '2026-10-10'
+    grain: One native act-record placement from an original Table III member. Blank labels, source order
+      and repeated placements retain their native meanings.
+    identity_columns:
+    - member_sha256
+    - release_point
+    - act_key
+    - act_record_position
+    columns:
+      id: Reader identity of one native Table III act-record occurrence.
+      source_sha256: SHA-256 of the original selected source bytes.
+      member_sha256: SHA-256 of the exact decoded original archive member.
+      member_name: Original archive member name; source locator, not a local filesystem path.
+      release_point: Native release-point label selected for this observation.
+      act_key: Source act key; placements under one act remain separate.
+      act_native_id: Native act identifier.
+      act_number: Native act number.
+      congress: Congress number stated by the source; no current-Congress substitution.
+      act_date: Native act date retained as text.
+      statutes_at_large_volume: Native Statutes at Large volume.
+      act_native_sequence: Native act sequence label.
+      act_insertion: Native act insertion value.
+      act_format: Native act format value.
+      act_print_in_supplement: Native act supplement-print value.
+      act_include_in_online_release_point: Native act online-release inclusion value.
+      act_public_law: Native public-law label; blank labels remain meaningful source values.
+      record_native_id: Native classification record identifier.
+      record_native_sequence: Native classification record sequence label.
+      usc_key: Native Code key.
+      act_section: Native act-section label.
+      record_page: Native Statutes at Large page.
+      usc_title: Native Code title.
+      usc_section: Native Code section label.
+      status: Native classification status.
+      record_print_in_supplement: Native record supplement-print value.
+      usc_section_key: Reader Code-section key derived under the retained classification reading.
+      usc_place: Native Code placement label, including notes.
+      reader_version: Exact retained Table III reading version.
+      raw_source_row: Complete native act/record observation retained as JSON.
+      act_record_position: Position of this classification record within its act.
+      fragment_position: Position of the bounded source fragment.
+      fragment_record_position: Position of this record within its source fragment.
+  uscode_edition_structure:
+    label: Retained U.S. Code structural observations
+    subject: reference
+    summary: One native structural occurrence linked to its edition member. Source positions, labels, status
+      and native context remain distinct from section text.
+    coverage: Sampled. Native structural observations in selected annual XHTML and release-point USLM members.
+      Section-body coverage requires separate content qualification.
+    measured_on: '2026-10-10'
+    grain: One native structural occurrence linked to its edition member. Source positions, labels, status
+      and native context remain distinct from section text.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader identity of one native structural occurrence within its edition.
+      edition_id: Reader identity of one retained archive member and edition observation.
+      observation_kind: Native structure observation kind.
+      source_position: Original source byte range or XML path identifying this occurrence.
+      native_identifier: Identifier stated by the native source element.
+      native_label: Label stated by the native source element.
+      native_status: Status stated by the native source element.
+      source_observation_json: Complete native structural observation and source context retained as JSON.
+  uscode_editions:
+    label: Retained U.S. Code edition members
+    subject: reference
+    summary: One native annual or release-point archive member observed in its edition. Requested year,
+      native publication year, carried-forward state and appendices remain separate.
+    coverage: Sampled. Selected retained original archive members only; edition membership and source structure
+      do not establish complete section-body qualification.
+    measured_on: '2026-10-10'
+    grain: One native annual or release-point archive member observed in its edition. Requested year, native
+      publication year, carried-forward state and appendices remain separate.
+    identity_columns:
+    - edition_id
+    columns:
+      edition_id: Reader identity of one retained archive member and edition observation.
+      source_kind: Original annual XHTML or release-point USLM source kind.
+      requested_year: Annual year requested by the source selection; distinct from native publication year.
+      release_point: Native release-point label selected for this observation.
+      archive_sha256: SHA-256 of the retained original archive bytes.
+      member_name: Original archive member name; source locator, not a local filesystem path.
+      member_sha256: SHA-256 of the exact decoded original archive member.
+      member_bytes: Decoded archive member size in bytes.
+      title: Source title number.
+      native_publication_year: Publication year stated by this native member.
+      carried_forward: Reader-recorded carried-forward state of this archive member.
+      member_role: Native member role within its edition, including carried appendices.
+      metadata_json: Native edition/member metadata retained as JSON.

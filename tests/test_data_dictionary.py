@@ -17,6 +17,32 @@ from spicy_regs import data_dictionary as dd
 from spicy_regs.schemas.regulations import RECORD_TYPES
 
 
+def test_source_catalog_policy_descriptions_keep_selected_scope_and_native_fields():
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.receipt_field_declarations import container_fields
+
+    names = {
+        "administration_policy_statements", "administration_policy_bill_links",
+        "federal_register_issues", "ecfr_snapshots", "ecfr_snapshot_sections",
+        "table3_historical_records", "uscode_editions", "uscode_edition_structure",
+    }
+    descriptions, policies = dd.load_descriptions(), installed_policies()
+    for name in names:
+        entry, policy = descriptions[name], policies[name]
+        assert set(entry["columns"]) == set(policy.subject_schema.names)
+        assert entry["identity_columns"] == list(policy.identity_fields)
+        assert entry["coverage"].startswith("Sampled.")
+        assert dd.coverage_prose_errors(name, entry["coverage"]) == []
+        containers = container_fields(policy)
+        assert set(containers) <= set(policy.receipt_fields)
+    assert container_fields(policies["table3_historical_records"])["source_position"] == (
+        "member_sha256", "release_point", "act_key", "act_record_position",
+        "member_name", "fragment_position", "fragment_record_position", "record_native_id",
+    )
+    assert container_fields(policies["ecfr_snapshots"]) == {}
+    assert "uscode_edition_sections" not in policies
+
+
 def test_record_types_covered_by_expected_schemas():
     """Every core table exposes only its declared native subject fields."""
     expected = dd.expected_schemas()

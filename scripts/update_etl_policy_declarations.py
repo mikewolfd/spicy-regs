@@ -34,13 +34,20 @@ def family_policies():
     from spicy_regs.transforms.fec_subject_receipts import dataset_policy as fec_policy
     from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
 
+    from spicy_regs.sources.retained_collections import POLICIES as administration
+    from spicy_regs.transforms.historical_regulations import POLICIES as historical
+    from spicy_regs.sources.table3_history import POLICY as table3_history
+    from spicy_regs.sources.uscode_editions import POLICIES as editions
+
     result = {}
     def add(policy):
         old = result.get(policy.dataset)
         if old is not None and old.descriptor() != policy.descriptor():
             raise ValueError(f'Family policy conflict: {policy.dataset}')
         result[policy.dataset] = policy
-    for policy in (*courts.values(), *scorecards.values(), *government.values(), *shared_logs()):
+    for policy in (*courts.values(), *scorecards.values(), *government.values(), *shared_logs(),
+                   *administration.values(), *historical.values(), table3_history,
+                   *(policy for name, policy in editions.items() if name != "uscode_edition_sections")):
         add(policy)
     for name in INPUT_COLUMNS:
         add(congress_policy(name))

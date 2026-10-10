@@ -2996,12 +2996,12 @@
   "native_legal_references": {
     "columns": {
       "scope_id": "The input's replacement scope, `native_reference_scope_id` over source_family, source_record_key and edition; a complete read replaces every row of its scope, and a successful empty read clears it.",
-      "source_family": "The scanner family that read the input: `uscode` or `ecfr`, fixed by the shaper.",
+      "source_family": "The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`, fixed by the shaper.",
       "source_record_key": "The caller's record identity for the input, retained literally.",
       "edition": "The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename.",
       "body_version_id": "`sha256:` digest of the exact retained XML bytes the scanner read.",
       "occurrence_index": "The observation's zero-based position among the input's observations, both kinds counted together in the order the scanner reported them, as decimal text.",
-      "observation_kind": "`native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note.",
+      "observation_kind": "`native_reference` for a bill or law observation, `native_reference` or `source_credit` for a U.S. Code observation, `authority` (AUTH) or `source_note` (SOURCE) for an eCFR note.",
       "href": "The element's href exactly as stated, an empty string when stated empty; NULL when absent, and on every source credit and note.",
       "text": "The complete decoded text of a source credit or note, whitespace kept; NULL on a native reference.",
       "text_runs": "An eCFR note's text split at element boundaries, as a Native list whose strings join to text; NULL on U.S. Code rows. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
@@ -3571,6 +3571,140 @@
       "name": "Recipient name as recorded by USASpending (e.g. `LOCKHEED MARTIN CORP`). The name-resolution key.",
       "recipient_level": "Recipient rollup level: `P` (parent), `C` (child), or `R` (recipient, no parent in that attribution). USAspending keeps one figure per level, so one UEI can hold `R`, `P` and `C` rows at once, each the publisher's own current figure (NMLEHM4JTN15: `P` and `C` $674,040.31, `R` $4.43B, read 2026-10-02), and the levels do not sum: a `C` row's amount is the child's own awards, which can sit under more than one parent UEI, so a child can exceed the `P` row of its own UEI; the `P` and `C` rows of one UEI can also come from different reads, so compare `observed_at` before comparing amounts. The list's amounts can differ from the recipient profile page's (that UEI's `R` profile stated $611.8M on 2026-10-03).",
       "total_award_amount": "Trailing-12-month federal award dollars reported by the recipient list endpoint at the recipient's last read, as a numeric string (e.g. `63465270734.15`). The ranking's sort key. Retained rows outside the latest selection can carry older amounts; `observed_at` says when this amount was read."
+    }
+  },
+  "administration_policy_bill_links": {
+    "columns": {
+      "link_id": "Reader identity of one explicit bill link within a statement.",
+      "statement_id": "Reader identity of one statement observation within the pinned archive.",
+      "source_link_index": "Position of this explicit bill token in the source statement.",
+      "congress": "Congress number stated by the source; no current-Congress substitution.",
+      "bill": "Source bill token retained verbatim.",
+      "native_bill_id": "Original bill identifier from the archived metadata.",
+      "bill_id": "Reader-normalized bill identifier; an explicit link, not inferred support or opposition."
+    }
+  },
+  "administration_policy_statements": {
+    "columns": {
+      "statement_id": "Reader identity of one statement observation within the pinned archive.",
+      "source_record_id": "Native statement record identifier, when stated.",
+      "archive_commit": "Exact archive commit selecting the metadata.",
+      "administration": "Source administration label.",
+      "source_record_index": "Position of the statement in the ordered source metadata.",
+      "congress": "Congress number stated by the source; no current-Congress substitution.",
+      "document_title": "Source-stated document title.",
+      "date_issued": "Source-stated issue date retained as text.",
+      "date_issued_status": "Reader classification of the source date form; no fabricated date.",
+      "rescinded": "Source-stated rescission status.",
+      "archived_pdf_url": "Advertised archived PDF URL; does not prove retained PDF bytes.",
+      "source_uri": "Public source metadata URL.",
+      "source_sha256": "SHA-256 of the original selected source bytes.",
+      "observed_at": "Time of this recorded source observation.",
+      "source_record_json": "Complete native metadata record in lossless JSON."
+    }
+  },
+  "ecfr_snapshot_sections": {
+    "columns": {
+      "snapshot_id": "Reader identity of the dated source selection and original body digest.",
+      "xml_position": "XML positional path of this node within the source snapshot.",
+      "kind": "Native source node kind.",
+      "native_number": "Source-stated node number.",
+      "part": "Source-stated parent part.",
+      "heading": "Source-stated heading, retaining absence separately from empty text.",
+      "text": "Native node text within its recorded source context.",
+      "attributes_json": "Native XML attributes retained as JSON.",
+      "byte_start": "Source reader byte position, when available."
+    }
+  },
+  "ecfr_snapshots": {
+    "columns": {
+      "snapshot_id": "Reader identity of the dated source selection and original body digest.",
+      "snapshot_date": "Source selection date.",
+      "selected_part": "Caller-selected CFR part, when requested.",
+      "selected_section": "Caller-selected CFR section, when requested.",
+      "source_sha256": "SHA-256 of the original selected source bytes.",
+      "source_url": "Public publisher URL identifying the selected original source.",
+      "native_metadata_json": "Publisher metadata retained as JSON.",
+      "title": "Source title number.",
+      "source_bytes": "Decoded original source body size in bytes.",
+      "content_nodes": "Number of content nodes observed in the selected source body."
+    }
+  },
+  "federal_register_issues": {
+    "columns": {
+      "issue_observation_id": "Reader identity of the publisher package and original issue metadata digest.",
+      "package_id": "Publisher Federal Register issue package identifier.",
+      "publication_date": "Publisher-stated issue publication date.",
+      "source_sha256": "SHA-256 of the original selected source bytes.",
+      "metadata_json": "Complete native issue metadata retained as JSON.",
+      "retained_renditions_json": "Exact retained rendition URLs, digests and byte sizes; advertised renditions remain separate.",
+      "source_bytes": "Decoded original source body size in bytes."
+    }
+  },
+  "table3_historical_records": {
+    "columns": {
+      "id": "Reader identity of one native Table III act-record occurrence.",
+      "source_sha256": "SHA-256 of the original selected source bytes.",
+      "member_sha256": "SHA-256 of the exact decoded original archive member.",
+      "member_name": "Original archive member name; source locator, not a local filesystem path.",
+      "release_point": "Native release-point label selected for this observation.",
+      "act_key": "Source act key; placements under one act remain separate.",
+      "act_native_id": "Native act identifier.",
+      "act_number": "Native act number.",
+      "congress": "Congress number stated by the source; no current-Congress substitution.",
+      "act_date": "Native act date retained as text.",
+      "statutes_at_large_volume": "Native Statutes at Large volume.",
+      "act_native_sequence": "Native act sequence label.",
+      "act_insertion": "Native act insertion value.",
+      "act_format": "Native act format value.",
+      "act_print_in_supplement": "Native act supplement-print value.",
+      "act_include_in_online_release_point": "Native act online-release inclusion value.",
+      "act_public_law": "Native public-law label; blank labels remain meaningful source values.",
+      "record_native_id": "Native classification record identifier.",
+      "record_native_sequence": "Native classification record sequence label.",
+      "usc_key": "Native Code key.",
+      "act_section": "Native act-section label.",
+      "record_page": "Native Statutes at Large page.",
+      "usc_title": "Native Code title.",
+      "usc_section": "Native Code section label.",
+      "status": "Native classification status.",
+      "record_print_in_supplement": "Native record supplement-print value.",
+      "usc_section_key": "Reader Code-section key derived under the retained classification reading.",
+      "usc_place": "Native Code placement label, including notes.",
+      "reader_version": "Exact retained Table III reading version.",
+      "raw_source_row": "Complete native act/record observation retained as JSON.",
+      "act_record_position": "Position of this classification record within its act.",
+      "fragment_position": "Position of the bounded source fragment.",
+      "fragment_record_position": "Position of this record within its source fragment."
+    }
+  },
+  "uscode_edition_structure": {
+    "columns": {
+      "observation_id": "Reader identity of one native structural occurrence within its edition.",
+      "edition_id": "Reader identity of one retained archive member and edition observation.",
+      "observation_kind": "Native structure observation kind.",
+      "source_position": "Original source byte range or XML path identifying this occurrence.",
+      "native_identifier": "Identifier stated by the native source element.",
+      "native_label": "Label stated by the native source element.",
+      "native_status": "Status stated by the native source element.",
+      "source_observation_json": "Complete native structural observation and source context retained as JSON."
+    }
+  },
+  "uscode_editions": {
+    "columns": {
+      "edition_id": "Reader identity of one retained archive member and edition observation.",
+      "source_kind": "Original annual XHTML or release-point USLM source kind.",
+      "requested_year": "Annual year requested by the source selection; distinct from native publication year.",
+      "release_point": "Native release-point label selected for this observation.",
+      "archive_sha256": "SHA-256 of the retained original archive bytes.",
+      "member_name": "Original archive member name; source locator, not a local filesystem path.",
+      "member_sha256": "SHA-256 of the exact decoded original archive member.",
+      "member_bytes": "Decoded archive member size in bytes.",
+      "title": "Source title number.",
+      "native_publication_year": "Publication year stated by this native member.",
+      "carried_forward": "Reader-recorded carried-forward state of this archive member.",
+      "member_role": "Native member role within its edition, including carried appendices.",
+      "metadata_json": "Native edition/member metadata retained as JSON."
     }
   }
 }

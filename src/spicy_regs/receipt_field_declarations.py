@@ -63,6 +63,39 @@ def _scorecards(table: str) -> dict[str, tuple[str, ...]]:
     return {"conversion_inputs": tuple(name for name in DOMAIN_COLUMNS[table] if name in converted)}
 
 
+def _administration_policy(table: str) -> dict[str, tuple[str, ...]]:
+    from spicy_regs.sources.retained_collections import POLICIES
+
+    POLICIES[table]  # Refuse unknown datasets even under a known version prefix.
+    return {}  # The producer declares no receipt-only mappings.
+
+
+def _historical_regulations(table: str) -> dict[str, tuple[str, ...]]:
+    from spicy_regs.transforms.historical_regulations import POLICIES
+
+    POLICIES[table]
+    # selection_metadata is offered as a whole mapping by the policy. The
+    # producer has no maintained nested-field registry; do not invent one here.
+    return {}
+
+
+def _uscode_editions(table: str) -> dict[str, tuple[str, ...]]:
+    from spicy_regs.sources.uscode_editions import POLICIES
+
+    POLICIES[table]
+    return {}
+
+
+def _table3_history(table: str) -> dict[str, tuple[str, ...]]:
+    from spicy_regs.sources.table3_history import IDENTITY_FIELDS, POLICY, POSITION_FIELDS
+
+    if table != POLICY.dataset:
+        raise KeyError(table)
+    return {"source_position": tuple(dict.fromkeys((
+        *IDENTITY_FIELDS, "member_name", *POSITION_FIELDS, "record_native_id",
+    )))}
+
+
 #: Each policy family, by the prefix its policies' versions share, with the registry that names the fields its
 #: receipts hold inside a mapping. Courts keep conversion inputs too, under keys their mapper builds and no registry
 #: declares, so only their declared receipt fields are offered.
@@ -75,6 +108,10 @@ FAMILIES: tuple[tuple[str, str, Callable[[str], dict[str, tuple[str, ...]]]], ..
     ("fec-subject-receipts/", "FEC subject", _fec_subject),
     ("scorecards-etl-", "scorecards", _scorecards),
     ("courts/", "courts", lambda table: {}),
+    ("administration-policy-", "administration policy", _administration_policy),
+    ("historical-regulations-", "historical regulations", _historical_regulations),
+    ("uscode-editions-", "Code editions", _uscode_editions),
+    ("table3-historical", "historical Table III", _table3_history),
 )
 
 

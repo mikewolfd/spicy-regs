@@ -1,6 +1,8 @@
 {
  "basis": "Derived by spicy_regs.receipt_field_declarations from the installed policies, each family's field registry, the builders' read rules and the dictionary; regenerate with spicy-regs-dict generate.",
  "tables": {
+  "administration_policy_bill_links": {},
+  "administration_policy_statements": {},
   "agency_lifecycle_stats": {
    "containers": {
     "raw_conversion_inputs": [
@@ -1318,6 +1320,8 @@
     "text_extraction_status": "Aggregate PDF outcome: `ok` means at least one PDF supplied text, even if another failed; otherwise `error`, `encrypted`, or `empty` (no extractable text) in that order. Null before an attempt. See `pdf_extraction_results_json` for each file."
    }
   },
+  "ecfr_snapshot_sections": {},
+  "ecfr_snapshots": {},
   "fcc_filings": {
    "containers": {
     "raw_record": [
@@ -3872,6 +3876,7 @@
     }
    ]
   },
+  "federal_register_issues": {},
   "feed_summary": {
    "containers": {
     "raw_conversion_inputs": [
@@ -4647,7 +4652,7 @@
     "attributes_json": "Every attribute of the observed element, as a JSON object keyed by expanded name.",
     "element_tag": "The observed element's tag, its namespace expanded (`{http://xml.house.gov/schemas/uslm/1.0}ref`) where the input declares one.",
     "input_sha256": "`sha256:` digest of the exact retained XML bytes the scanner read.",
-    "interpretation_status": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction.",
+    "interpretation_status": "How the reading under rule_version read this observation: `native_section_href`, `native_statute_href`, `native_public_law_href` or `unsupported_href` for an href, `native_bill_usc_cite` for a qualified bill DTD cite, `partial_text_findings` or `no_qualified_text_findings` for text; it does not claim exhaustive extraction.",
     "rule_version": "`native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the scanners' selected shapes and the reading this row was produced under, comparable for equality only.",
     "source_locator": "Where the caller retained the input from, literally; not proof of acquisition time or edition.",
     "source_path": "The observed element's positional XPath in the input (`/*[1]/*[2]`), never a byte offset.",
@@ -5515,6 +5520,20 @@
     "text_sha256": "Digest of the page text this row's context was read from, and part of the identity. A page, table and row ordinal mean nothing without it: a re-extraction that finds one more ruled band moves every ordinal after it, and keying on the digest is what stops two extractions of one page from colliding on one identity and silently merging. It pins the text, not the table finder, so a change in the table finder alone is not visible here."
    }
   },
+  "table3_historical_records": {
+   "containers": {
+    "source_position": [
+     "member_sha256",
+     "release_point",
+     "act_key",
+     "act_record_position",
+     "member_name",
+     "fragment_position",
+     "fragment_record_position",
+     "record_native_id"
+    ]
+   }
+  },
   "table3_records": {
    "containers": {
     "raw_source_row": [
@@ -5657,6 +5676,8 @@
     "observed_at": "When the ranking response page this row was read from was captured (UTC, ISO 8601). NULL on a row carried from before per-row capture evidence, whose read time was not retained; a carried row never takes a later run's time.",
     "source_capture_sha256": "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
    }
-  }
+  },
+  "uscode_edition_structure": {},
+  "uscode_editions": {}
  }
 }
