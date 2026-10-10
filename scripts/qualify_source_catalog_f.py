@@ -1,0 +1,298 @@
+"""Offline GAO history qualification over explicit retained capture selections.
+
+This lane calls maintained GAO parsing, shaping, history folding and native
+receipt writers. It never fetches missing inputs or treats a baseline as a
+publisher capture. A failed comparison remains readable in its new directory.
+"""
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import gzip
+import hashlib
+import io
+import json
+from pathlib import Path
+import re
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+from rulespec_artifacts import ArtifactPin, admit_artifact
+
+
+def pin(path: Path) -> dict:
+    with path.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {"path": str(path.resolve()), "sha256": "sha256:" + digest,
+            "byteSize": path.stat().st_size}
+
+
+def assert_pin(path: Path, expected: dict) -> None:
+    actual = pin(path)
+    if any(actual[key] != expected[key] for key in ("sha256", "byteSize")):
+        raise ValueError(f"Changed selected input: {path}")
+
+
+class RetainedArtifact:
+    """Adapt the canonical compressed object store to maintained admission."""
+
+    def __init__(self, corpus: Path, digest: str, *, byte_budget: int = 256 * 1024 * 1024):
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise ValueError("Expected artifact SHA-256")
+        self.corpus, self.digest = corpus, digest
+        self.directory = corpus / "source-evidence" / digest[7:]
+        self.root = json.loads((self.directory / "artifact.json").read_text())
+        self.metadata = {"artifact.json"}
+        self.members = {}
+        self.remaining = byte_budget
+        for ref in self.root["memberManifests"]:
+            key = ref["objectKey"]
+            if key != "members.json":
+                raise ValueError("Unsupported capture manifest key")
+            self.metadata.add(key)
+            for member in json.loads((self.directory / key).read_text())["members"]:
+                if member["objectKey"] in self.members:
+                    raise ValueError("Repeated capture member")
+                self.members[member["objectKey"]] = member
+
+    def keys(self):
+        return sorted(self.metadata | self.members.keys())
+
+    def open(self, key: str):
+        if key in self.metadata:
+            path = self.directory / key
+            size = path.stat().st_size
+            if size > 1024 * 1024:
+                raise ValueError("Capture metadata exceeds bound")
+            data = path.read_bytes()
+        else:
+            member = self.members[key]
+            digest = member["sha256"]
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                raise ValueError("Invalid object digest")
+            if type(member["byteSize"]) is not int or not 0 <= member["byteSize"] <= 12 * 1024 * 1024:
+                raise ValueError("Capture member exceeds bound")
+            path = self.corpus / "source-evidence/blobs/sha256" / digest[7:]
+            if path.exists():
+                with path.open("rb") as stream:
+                    data = stream.read(member["byteSize"] + 1)
+            else:
+                with gzip.open(path.with_suffix(".gz"), "rb") as stream:
+                    data = stream.read(member["byteSize"] + 1)
+            if len(data) != member["byteSize"] or "sha256:" + hashlib.sha256(data).hexdigest() != digest:
+                raise ValueError("Retained object differs from declared bytes")
+        self.remaining -= len(data)
+        if self.remaining < 0:
+            raise ValueError("Retained read budget exceeded")
+        return io.BytesIO(data)
+
+    def verify(self):
+        return admit_artifact(self, expected_pin=ArtifactPin(self.root["logicalId"], self.digest))
+
+    def journal(self):
+        with self.open("journal.jsonl") as stream:
+            return [json.loads(line) for line in stream if line.strip()]
+
+    def body(self, event: dict) -> bytes:
+        key = event.get("blob_member")
+        if key is None:
+            matches = [name for name, member in self.members.items()
+                       if member["sha256"] == event["sha256"] and member["byteSize"] == event["byte_size"]]
+            if len(matches) != 1:
+                raise ValueError("Legacy capture requires one exact digest/size member")
+            key = matches[0]
+        member = self.members[key]
+        if member["sha256"] != event["sha256"] or member["byteSize"] != event["byte_size"]:
+            raise ValueError("Journal and member capture pins differ")
+        with self.open(key) as stream:
+            return stream.read()
+
+
+def compare_rows(expected: list[dict], actual: list[dict]) -> dict:
+    """Full value and duplicate-multiplicity equality; row order is separate."""
+    def encoded(rows):
+        return [json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows]
+    left, right = encoded(expected), encoded(actual)
+    missing, added = Counter(left) - Counter(right), Counter(right) - Counter(left)
+    return {"expected_rows": len(left), "actual_rows": len(right),
+            "missing_row_occurrences": sum(missing.values()), "added_row_occurrences": sum(added.values()),
+            "all_values_and_multiplicity_equal": not missing and not added,
+            "ordered_rows_equal": left == right}
+
+
+def code_pins() -> dict:
+    from importlib import import_module
+    from importlib.metadata import version
+    from spicy_regs.generations import source_digest
+    modules = [import_module(name) for name in (
+        "spicy_docs.sources.gao.recommendations", "spicy_docs.schemas.gao_recommendation_tables",
+        "spicy_docs.schemas.tables", "spicy_regs.etl_receipts",
+        "spicy_regs.transforms.build_gao_recommendations",
+        "spicy_regs.transforms.government_receipts", "spicy_regs.transforms.government_source_shapes")]
+    files = [Path(__file__), Path(__file__).parents[1] / "uv.lock"]
+    files += [Path(module.__file__) for module in modules]
+    package_code = {}
+    for name in ("spicy_regs", "spicy_docs", "rulespec_artifacts"):
+        directory = Path(import_module(name).__file__).parent
+        package_code[name] = {"path": str(directory),
+                              "source_sha256": source_digest(directory, (".py", ".json", ".xsd"))}
+    return {"files": [pin(path) for path in files], "package_code": package_code, "packages": {
+        name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts", "pyarrow", "duckdb")}}
+
+
+def selection(corpus: Path) -> dict:
+    """Resolve journals without reading publisher payloads or running producers."""
+    catalog = json.loads((corpus / "catalog.json").read_text())
+    family = catalog["families"]["gao-recommendations"]
+    generation = family["current_generation"]
+    root_path = corpus / "lineage/generations/gao-recommendations" / generation[7:] / "artifact.json"
+    root = json.loads(root_path.read_text())
+    selected_sources = [ref["artifactDigest"] for ref in root["inputs"] if ref["role"] == "source-evidence"]
+    if len(selected_sources) != 1:
+        raise ValueError("Selected GAO generation requires one source artifact")
+    captures = []
+    for digest in family["source_artifacts"]:
+        source = RetainedArtifact(corpus, digest)
+        events = source.journal()
+        export = [e for e in events if e.get("event") == "capture" and e.get("stage") == "gao-recommendations-export"]
+        fold = [e for e in events if e.get("event") == "fold" and e.get("stage") == "gao-recommendations-export"]
+        if len(export) != 1 or len(fold) != 1:
+            raise ValueError("Capture requires one complete export and fold observation")
+        capture = export[0]
+        legacy = "capture_id" not in capture and "evidence_policy" not in capture
+        if (capture.get("status_code") != 200 or capture.get("response_complete") is False
+                or (capture.get("response_complete") is not True and not legacy)):
+            raise ValueError("Export capture did not succeed completely")
+        outputs = [e for e in events if e.get("event") == "retained-file" and e.get("dataset") == "gao_recommendations"]
+        captures.append({"artifact": digest, "export": export[0], "fold": fold[0],
+                         "expected_outputs": outputs,
+                         "metadata_pins": [pin(source.directory / key) for key in sorted(source.metadata)]})
+    captures.sort(key=lambda item: (item["export"]["observed_at"], item["artifact"]))
+    if not captures or captures[-1]["artifact"] != selected_sources[0]:
+        raise ValueError("Selection contains captures beyond or outside the selected generation")
+    if len(captures[-1]["expected_outputs"]) != 1:
+        raise ValueError("Selected output requires exactly one retained producer output")
+    return {"format": "source-catalog-f-gao-selection/1", "family": "gao-recommendations",
+            "corpus": str(corpus.resolve()), "selected_generation": generation,
+            "selected_source_artifact": selected_sources[0], "catalog_pin": pin(corpus / "catalog.json"),
+            "generation_root_pin": pin(root_path), "captures": captures, "code_pins": code_pins(),
+            "coverage": "Explicit retained export history only; no live reads, no baseline injection"}
+
+
+def _replay(manifest_path: Path, output: Path) -> dict:
+    from spicy_docs.schemas.gao_recommendation_tables import GAO_RECOMMENDATIONS, shape_gao_recommendation
+    from spicy_docs.sources.gao.recommendations import parse_recommendations_export
+    from spicy_regs.transforms.build_gao_recommendations import fold
+    from spicy_regs.transforms.government_receipts import migrate_outputs, POLICIES
+    from spicy_regs.etl_receipts import read_with_receipts
+
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("format") != "source-catalog-f-gao-selection/1":
+        raise ValueError("Unsupported F selection")
+    corpus = Path(manifest["corpus"])
+    frozen = manifest["code_pins"]
+    if code_pins() != frozen:
+        raise ValueError("Code/package selection changed")
+    for item in [manifest["catalog_pin"], manifest["generation_root_pin"]]:
+        assert_pin(Path(item["path"]), item)
+    if selection(corpus) != manifest:
+        raise ValueError("Selection differs from exact canonical journals and target")
+    output.mkdir(parents=True, exist_ok=False)
+    (output / "selection.json").write_bytes(manifest_path.read_bytes())
+    history, steps = [], []
+    selected_expected = None
+    for item in manifest["captures"]:
+        source = RetainedArtifact(corpus, item["artifact"])
+        source.verify()
+        export = parse_recommendations_export(source.body(item["export"]))
+        before = len(history)
+        fresh = [shape_gao_recommendation(rec, status_as_of=export.status_as_of, as_of=export.as_of)
+                 for rec in export.recommendations]
+        history, retirement = fold(history, fresh)
+        step = {"artifact": item["artifact"], "export_sha256": item["export"]["sha256"],
+                "status_as_of": export.status_as_of, "source_rows": len(fresh), "prior_rows": before,
+                "recorded_prior_rows": item["fold"]["prior_rows"], "retirement": retirement,
+                "transport_completeness_flag": item["export"].get("response_complete"),
+                "payload_validation": "maintained whole-export parser and declared member digest/size"}
+        step["recorded_prior_population_matches"] = before == item["fold"]["prior_rows"]
+        for expected_output in item["expected_outputs"]:
+            expected = pq.read_table(io.BytesIO(source.body(expected_output))).to_pylist()
+            step["output_comparison"] = compare_rows(expected, history)
+            if item["artifact"] == manifest["selected_source_artifact"]:
+                selected_expected = expected
+        steps.append(step)
+        with (output / "progress.jsonl").open("a") as stream:
+            stream.write(json.dumps(step, sort_keys=True) + "\n")
+    if selected_expected is None:
+        raise ValueError("Selected expected output absent")
+    schema = pa.schema([(column, pa.string()) for column in GAO_RECOMMENDATIONS.columns])
+    candidate = output / "gao_recommendations.parquet"
+    pq.write_table(pa.Table.from_pylist(history, schema=schema), candidate, compression="zstd")
+    final_comparison = compare_rows(selected_expected, history)
+    migration = migrate_outputs((candidate,))
+    restored = [row["raw_record"] for row in read_with_receipts(
+        [candidate], [Path(migration["receipt_path"])], POLICIES["gao_recommendations"],
+        generation_id=migration["generation_id"])]
+    roundtrip = compare_rows(history, restored)
+    for item in manifest["captures"]:
+        for selected_pin in item["metadata_pins"]:
+            assert_pin(Path(selected_pin["path"]), selected_pin)
+    for item in [manifest["catalog_pin"], manifest["generation_root_pin"]]:
+        assert_pin(Path(item["path"]), item)
+    if code_pins() != frozen:
+        raise ValueError("Code/package selection changed during replay")
+    passed = (final_comparison["all_values_and_multiplicity_equal"]
+              and roundtrip["all_values_and_multiplicity_equal"]
+              and all(step["recorded_prior_population_matches"] for step in steps)
+              and all(step.get("output_comparison", {}).get("all_values_and_multiplicity_equal", True) for step in steps))
+    result = {"state": "qualified" if passed else "failed-source-only-recovery", "task": "T15",
+              "family": "gao-recommendations", "selected_generation": manifest["selected_generation"],
+              "steps": steps, "final_comparison": final_comparison, "native_receipt_roundtrip": roundtrip,
+              "outputs": [pin(candidate), pin(Path(migration["receipt_path"]))], "code_pins": frozen,
+              "scope": "Complete retained selected producer values and duplicate multiplicity; native candidate/receipt roundtrip",
+              "limits": ["Historical native receipt IDs are not recreated", "No publisher completeness or other family proof",
+                         "Baseline retirement requires reference migration and H acceptance"],
+              "production_actions": []}
+    (output / "qualification.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+def replay(manifest_path: Path, output: Path) -> dict:
+    """Preserve a terminal error for a newly created failed candidate only."""
+    existed = output.exists()
+    try:
+        return _replay(manifest_path, output)
+    except Exception as error:
+        if not existed and output.is_dir() and not (output / "qualification.json").exists():
+            failure = {"state": "error", "family": "gao-recommendations", "task": "T15",
+                       "error_type": type(error).__name__, "selection_pin": pin(manifest_path),
+                       "progress": str(output / "progress.jsonl"), "production_actions": [],
+                       "scope": "Incomplete replay; no source-only qualification"}
+            with (output / "qualification.json").open("x") as stream:
+                stream.write(json.dumps(failure, indent=2) + "\n")
+        raise
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    select = commands.add_parser("select-gao")
+    select.add_argument("--corpus", type=Path, required=True)
+    select.add_argument("--manifest", type=Path, required=True)
+    run = commands.add_parser("replay-gao")
+    run.add_argument("--manifest", type=Path, required=True)
+    run.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    if args.command == "select-gao":
+        value = selection(args.corpus)
+        with args.manifest.open("x") as stream:
+            stream.write(json.dumps(value, indent=2) + "\n")
+    else:
+        value = replay(args.manifest, args.output)
+        print(json.dumps({"state": value["state"], "family": value["family"]}))
+        if value["state"] != "qualified":
+            raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
