@@ -97,6 +97,7 @@ _FIXTURE_XML = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 def _read_fixture(edition: str = "202510") -> list[dict]:
     """Read the two-record fixture through a MockTransport serving ``edition``'s XML."""
+
     def respond(request: httpx.Request) -> httpx.Response:
         assert request.url.params["f"] == f"REGINFO_RIN_DATA_{edition}.xml"
         return httpx.Response(200, stream=httpx.ByteStream(_FIXTURE_XML), headers={"content-type": "application/xml"})
@@ -244,7 +245,8 @@ def test_the_series_runs_from_fall_1995_to_the_current_edition_without_unreadabl
     assert series[0] == "199510" and series[-1] == "202510"
     assert "2012" in series and "201210" not in series  # the publisher's one off-pattern file name
     assert not UNREADABLE_EDITIONS & set(series)
-    assert len(series) == 58  # every readable edition, measured 2026-09-26
+    assert len(series) == 60  # retained census with exact qualified 2004 repairs, 2026-10-10
+    assert {"200404", "200410"} <= set(series)
 
 
 def test_each_run_refreshes_the_current_edition_then_backfills_the_newest_missing():
@@ -254,7 +256,6 @@ def test_each_run_refreshes_the_current_edition_then_backfills_the_newest_missin
     assert fetch[:3] == ("202510", "202410", "202404")
     assert "2012" not in fetch  # held as its stated edition, 201210
     assert len(fetch) == 1 + BACKFILL_EDITIONS_PER_RUN
-
 
 
 def _report(status: int, body: str) -> httpx.MockTransport:
@@ -270,10 +271,12 @@ def test_the_newest_edition_is_the_newest_the_publisher_lists():
     assert unified_agenda.newest_edition(transport=_report(200, newer)) == "202604"
 
 
-@pytest.mark.parametrize(("status", "body"), [(503, "down"), (200, "<html>redesigned</html>"),
-                                             (200, "REGINFO_RIN_DATA_202410.xml")])
+@pytest.mark.parametrize(
+    ("status", "body"), [(503, "down"), (200, "<html>redesigned</html>"), (200, "REGINFO_RIN_DATA_202410.xml")]
+)
 def test_an_unreadable_or_older_edition_report_keeps_the_known_edition(status, body):
     assert unified_agenda.newest_edition(transport=_report(status, body)) == unified_agenda.DEFAULT_EDITION
+
 
 def test_the_legacy_2012_file_is_keyed_by_the_edition_its_records_state():
     body = _FIXTURE_XML.replace(b"<PUBLICATION_ID>202510</PUBLICATION_ID>", b"<PUBLICATION_ID>201210</PUBLICATION_ID>")
@@ -296,7 +299,7 @@ def test_the_backfill_completes_over_runs_and_keeps_every_prior_row(tmp_path, mo
     module = sys.modules["spicy_regs.transforms.build_unified_agenda"]
 
     class Reader:
-        def __init__(self, *, editions):
+        def __init__(self, *, editions, on_source=None):
             self.editions = editions
 
         def iter_records(self):
@@ -313,5 +316,5 @@ def test_the_backfill_completes_over_runs_and_keeps_every_prior_row(tmp_path, mo
         editions = set(pq.read_table(out)["agenda_edition"].to_pylist())
         counts.append(len(editions))
         out.replace(tmp_path / "_ua_prior.parquet")  # the next run's prior table
-    assert counts == [21, 41, 58, 58]
+    assert counts == [21, 41, 60, 60]
     assert editions == {"201210" if stem == "2012" else stem for stem in module.edition_series()}

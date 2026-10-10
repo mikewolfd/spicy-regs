@@ -367,7 +367,7 @@ def build(corpus: Path, output: Path, *, config: Path | None = None, discovery: 
     descriptor, temporary = tempfile.mkstemp(prefix=output.name + ".", suffix=".tmp", dir=output.parent)
     os.close(descriptor)
     path = Path(temporary)
-    report = {"format": "spicy-source-reconciliation", "version": 1, "status": "building"}
+    report: dict[str, object] = {"format": "spicy-source-reconciliation", "version": 1, "status": "building"}
     db = connect(path)
     try:
         schema(db)

@@ -147,8 +147,16 @@ Package installs opt in with
 The Unified Agenda reader uses SpicyDocs to fetch XML and read its fields;
 SpicyRegs still chooses table columns and derives timetable dates. An unavailable,
 malformed, or mismatched edition raises before yielding any of that edition's
-rows. The two malformed 2004 exports require a separately approved correction;
-this reader does not repair them.
+rows. The two retained 2004 exports use an exact-hash, exact-position correction
+with original and repaired digests retained. See the
+[Agenda source-only rebuild guide](docs/unified-agenda-retained-rebuild.md).
+
+Pinned originals also support separate local historical destinations:
+[Federal Register issues and dated eCFR snapshots](docs/historical-regulations.md),
+[complete Table III releases](docs/table3-historical-replay.md), and
+[U.S. Code editions and native structure](docs/uscode-editions.md).
+These commands produce receipt-bound local candidates; the published table
+registry changes only when a separate publication selects their outputs.
 
 CourtListener dump listing, source pins and CSV reading come from SpicyDocs.
 The reader preserves quoted empty strings separately from nulls and refuses

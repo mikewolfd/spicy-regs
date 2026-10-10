@@ -947,7 +947,7 @@
       "id": "family:unified-agenda",
       "title": "Unified agenda",
       "publisher": "RegInfo.gov Unified Agenda",
-      "description": "A baseline preserves table facts that the retained original-source history does not establish.",
+      "description": "Complete retained-source replay recovers the baseline native values and the omitted 2004 editions. The candidate is local; retained baseline references remain selected until publication and result-reading references migrate.",
       "source_names": [
         "unified-agenda"
       ],
@@ -5224,23 +5224,28 @@
       "id": "family:federal-register:destination:historical-issues",
       "collection_id": "family:federal-register",
       "tables": [
-        "federal_register"
+        "federal_register_issues"
       ],
       "family": "federal-register",
       "route_id": "family:federal-register:govinfo-fr-archive",
-      "status": "adapter-required",
-      "reason": "Future conditional issue destination only; this is not a selected input for existing federal_register records. Use archive issue units for historical content and preserve the special 1994 PDF/text formats. https://www.govinfo.gov/help/fr Existing table history still depends on its retained baseline; this choice does not establish source-only replay.",
-      "qualification_scope": "Scoped retained identity analysis; full source-only replay not demonstrated",
+      "status": "source-only-qualified-local",
+      "reason": "Implemented local issue-observation destination uses pinned GovInfo MODS and advertised rendition locators. Replay verified every selected issue observation. Sparse held dates do not establish continuous coverage. It does not split issue PDFs/XML into Federal Register documents or replace the existing document table.",
+      "qualification_scope": "Complete selected retained native issue metadata; no document-boundary or OCR claim",
       "applies_to_existing_destination": false,
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/historical-regulations/replay-validation.json",
+        "sha256": "f264b443c1cf4300d360052d85f739ef6e6cca142256a5c638c03b576a086a10"
       },
-      "policy_version": 1,
+      "policy_version": 2,
       "historical_lineage_unchanged": true,
-      "required_baselines": [
-        "rebuild-seeds/federal-register/a7be8d2924c02cb6f99572ca21a35999bd43344ab066aabfd2003b7f62904cc0",
-        "rebuild-seeds/federal-register/ed22329a9e1fa4358088f6c6fd78107fd67712d0b54ee88590629c1449bd5963"
+      "required_baselines": [],
+      "published": false,
+      "local_candidate_outputs": [
+        {
+          "table": "federal_register_issues",
+          "path": "metadata/historical-rebuilds/20261010/historical-regulations/retained-source-bundle-final/federal_register_issues/federal_register_issues.parquet",
+          "sha256": "861221bfdae27348df465579cd6d4252a57e11245d3581d2edaac06ab90d83ee"
+        }
       ]
     },
     {
@@ -5268,22 +5273,34 @@
       "id": "family:cfr-sections:destination:snapshots",
       "collection_id": "family:cfr-sections",
       "tables": [
-        "cfr_sections"
+        "ecfr_snapshots",
+        "ecfr_snapshot_sections"
       ],
       "family": "cfr-sections",
       "route_id": "family:cfr-sections:ecfr",
-      "status": "adapter-required",
-      "reason": "Future conditional snapshot destination only; this is not a selected input for the annual cfr_sections shape. Explicit dated eCFR needs distinct snapshot identity. Latest bulk cannot supply a requested historical date. https://www.ecfr.gov/reader-aids/using-ecfr/ecfr-changes-through-time Existing table history still depends on its retained baseline; this choice does not establish source-only replay.",
-      "qualification_scope": "Scoped retained identity analysis; full source-only replay not demonstrated",
+      "status": "source-only-qualified-local",
+      "reason": "Implemented local dated eCFR destinations preserve each explicit title/date selection and every native section/appendix occurrence. Independent parsing verifies native identities, paths, heading and text. Dates differ by title; latest bulk cannot substitute a requested date. Annual cfr_sections retains its separate baseline and metadata requirements.",
+      "qualification_scope": "Every native content occurrence in the selected retained dated title XML",
       "applies_to_existing_destination": false,
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/historical-regulations/replay-validation.json",
+        "sha256": "f264b443c1cf4300d360052d85f739ef6e6cca142256a5c638c03b576a086a10"
       },
-      "policy_version": 1,
+      "policy_version": 2,
       "historical_lineage_unchanged": true,
-      "required_baselines": [
-        "rebuild-seeds/cfr-sections/59a8c5f7224b76713f3fa7e65197a537bffe23318c76a656178bbee011f6ef3c"
+      "required_baselines": [],
+      "published": false,
+      "local_candidate_outputs": [
+        {
+          "table": "ecfr_snapshots",
+          "path": "metadata/historical-rebuilds/20261010/historical-regulations/retained-source-bundle-final/ecfr_snapshots/ecfr_snapshots.parquet",
+          "sha256": "e092018be34318fa1d6516b638ad3646622b6c4b7b6b8850771665533a14879f"
+        },
+        {
+          "table": "ecfr_snapshot_sections",
+          "path": "metadata/historical-rebuilds/20261010/historical-regulations/retained-source-bundle-final/ecfr_snapshot_sections/ecfr_snapshot_sections.parquet",
+          "sha256": "8eb523dd5980e7615ad101b3323b2f6e8b2dadc36082eab7d9e9348aabb1140a"
+        }
       ]
     },
     {
@@ -5294,17 +5311,25 @@
       ],
       "family": "unified-agenda",
       "route_id": "family:unified-agenda:agenda",
-      "status": "route-selected",
-      "reason": "Use explicit native edition/RIN identities for historical Agenda replay and refresh the explicitly listed newest edition. The two 2004 editions add 8,476 held identities through a declared historical repair; full field/table replay remains unproven. https://www.reginfo.gov/public/jsp/eAgenda/UA_HowTo.myjsp Existing table history still depends on its retained baseline; this choice does not establish source-only replay.",
-      "qualification_scope": "Scoped retained identity analysis; full source-only replay not demonstrated",
+      "status": "source-only-qualified-local",
+      "reason": "Use explicit native edition/RIN identities. The full retained source replay recovered every baseline native value and added the two repaired 2004 editions. Repairs apply only to exact original hashes and byte positions. Candidate is local and unpublished; retain the selected baseline until catalog/publication and result-reading references move.",
+      "qualification_scope": "Every selected retained edition; complete native baseline column comparison",
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/agenda/qualification.json",
+        "sha256": "dc6b93bc0087080c52646758f1056f9f6045bf30e8c090c77a30206671a2dde9"
       },
-      "policy_version": 1,
+      "policy_version": 2,
       "historical_lineage_unchanged": true,
       "required_baselines": [
         "rebuild-seeds/unified-agenda/8c85ffb1af57d958d6774b1618699770a30a3d8238246d017cbfa73b5a0ae994"
+      ],
+      "retirement_status": "qualified-retained-reference-required",
+      "local_candidate_outputs": [
+        {
+          "table": "unified_agenda",
+          "path": "metadata/historical-rebuilds/20261010/agenda/native/unified_agenda.parquet",
+          "sha256": "aa4f83bc0219d3e8eb1cf025f551bd3e17202a0b48968746931125ad0feb2b15"
+        }
       ]
     },
     {
@@ -5315,18 +5340,19 @@
       ],
       "family": "laws",
       "route_id": "family:laws:table3-bulk",
-      "status": "route-selected",
-      "reason": "Use pinned Table III bulk for public-law keys in requested Congresses UNION Congresses held by the laws table. Preserve the maintained scope and rejection of pre-1957 chapter identifiers. Keep pages and baseline for field comparison. The 23,171 additional source acts are source-only holdings, not destination omissions; wider historical use requires an explicit scope and adapter decision. The 119-37 four-row difference remains unresolved. Evidence: analysis.json Table III census and maintained _bulk_rows. Existing table history still depends on its retained baseline; this choice does not establish source-only replay.",
-      "qualification_scope": "Scoped retained identity analysis; full source-only replay not demonstrated",
+      "status": "normalized-source-replay-qualified-local",
+      "reason": "Pinned Table III bulk supplies public-law keys in the maintained requested/held Congress scope. Full-content comparison recovers all retained records after declared field normalization and identifies four omitted 119-37 rows with blank act-section labels. Both retained pages corroborate the bulk. Other laws tables still depend on the shared baseline; wider historical records have a separate destination.",
+      "qualification_scope": "Every retained selected act; multiplicity and ordered normalized content, with literal field differences retained",
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/table3/proof.json",
+        "sha256": "b755c61b8868aa1c8ccdb19d9ed287254d147367dc95942bdff28eb6de2cf92c"
       },
-      "policy_version": 1,
+      "policy_version": 2,
       "historical_lineage_unchanged": true,
       "required_baselines": [
         "rebuild-seeds/laws/c9d356616b509a39c1e11b1d1c43cddc067cfbab43fc7fab30728844687f9292"
-      ]
+      ],
+      "retirement_status": "retain-shared-baseline"
     },
     {
       "id": "family:laws:destination:classification",
@@ -5352,32 +5378,70 @@
     {
       "id": "family:laws:destination:code-current",
       "collection_id": "family:laws",
-      "tables": [],
+      "tables": [
+        "uscode_editions",
+        "uscode_edition_structure"
+      ],
       "family": "uscode",
       "route_id": "family:laws:uscode-release",
-      "status": "new-destination-required",
-      "reason": "Future separate Code content destination only. Existing law_sections stores enacted law text. Use the requested USLM release point for consolidated Code content and native references. https://raw.githubusercontent.com/usgpo/uslm/main/USLM-User-Guide.md",
-      "qualification_scope": "Scoped retained identity analysis; full source-only replay not demonstrated",
+      "status": "structure-source-only-qualified-local",
+      "reason": "Use the requested release-point XML corpus or explicitly selected title for contemporary Code edition structure. A later single-title release does not date the whole corpus. Implemented local edition and structure outputs preserve original archive/member identities; complete selected native position coverage is independently checked. Full section bodies remain in original members; normalized Code text extraction remains future work. These outputs do not replace enacted-law sections.",
+      "qualification_scope": "Selected archive members and native itempath/section/chapter observations; no normalized section-body extraction",
       "applies_to_existing_destination": false,
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
-      }
+        "path": "metadata/historical-rebuilds/20261010/uscode/verification.json",
+        "sha256": "36d403326e9f64814c15140ec4835d273a86196e9f83a6ce8c25fc5c7b85d3d0"
+      },
+      "policy_version": 2,
+      "required_baselines": [],
+      "historical_lineage_unchanged": true,
+      "published": false,
+      "local_candidate_outputs": [
+        {
+          "table": "uscode_editions",
+          "path": "metadata/historical-rebuilds/20261010/uscode/qualified-candidate/uscode_editions/uscode_editions.parquet",
+          "sha256": "09c9432676e6a0ef7b20568d75bfe4003685d9ca158071194f601f4f06945f6b"
+        },
+        {
+          "table": "uscode_edition_structure",
+          "path": "metadata/historical-rebuilds/20261010/uscode/qualified-candidate/uscode_edition_structure/uscode_edition_structure.parquet",
+          "sha256": "d28c2bace9563890b1f53273798bac60676d0361f78e37b2f4b491ec1037b19b"
+        }
+      ]
     },
     {
       "id": "family:laws:destination:code-historical",
       "collection_id": "family:laws",
-      "tables": [],
+      "tables": [
+        "uscode_editions",
+        "uscode_edition_structure"
+      ],
       "family": "uscode",
       "route_id": "family:laws:uscode-annual",
-      "status": "new-destination-required",
-      "reason": "Future separate Code edition destination only. Use annual XHTML for requested historical Code editions, preserving native year, enacted-through date and carried-forward appendices. https://raw.githubusercontent.com/usgpo/uslm/main/USLM-User-Guide.md",
-      "qualification_scope": "Scoped retained identity analysis; full source-only replay not demonstrated",
+      "status": "structure-source-only-qualified-local",
+      "reason": "Use annual XHTML for the requested historical Code edition. Preserve requested year, native publication year and carried appendices separately. Implemented local edition and structure outputs preserve original archive/member identities; complete selected native position coverage is independently checked. Full section bodies remain in original members; normalized Code text extraction remains future work. These outputs do not replace enacted-law sections.",
+      "qualification_scope": "Selected archive members and native itempath/section/chapter observations; no normalized section-body extraction",
       "applies_to_existing_destination": false,
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
-      }
+        "path": "metadata/historical-rebuilds/20261010/uscode/verification.json",
+        "sha256": "36d403326e9f64814c15140ec4835d273a86196e9f83a6ce8c25fc5c7b85d3d0"
+      },
+      "policy_version": 2,
+      "required_baselines": [],
+      "historical_lineage_unchanged": true,
+      "published": false,
+      "local_candidate_outputs": [
+        {
+          "table": "uscode_editions",
+          "path": "metadata/historical-rebuilds/20261010/uscode/qualified-candidate/uscode_editions/uscode_editions.parquet",
+          "sha256": "09c9432676e6a0ef7b20568d75bfe4003685d9ca158071194f601f4f06945f6b"
+        },
+        {
+          "table": "uscode_edition_structure",
+          "path": "metadata/historical-rebuilds/20261010/uscode/qualified-candidate/uscode_edition_structure/uscode_edition_structure.parquet",
+          "sha256": "d28c2bace9563890b1f53273798bac60676d0361f78e37b2f4b491ec1037b19b"
+        }
+      ]
     },
     {
       "id": "family:native-legal-references:destination:ecfr-occurrences",
@@ -6923,6 +6987,34 @@
       },
       "policy_version": 1,
       "historical_lineage_unchanged": true
+    },
+    {
+      "id": "family:laws:destination:table3-history",
+      "collection_id": "family:laws",
+      "tables": [
+        "table3_historical_records"
+      ],
+      "family": "laws",
+      "route_id": "family:laws:table3-bulk",
+      "status": "source-only-qualified-local",
+      "reason": "Implemented local historical destination reads the entire pinned Table III release, including historical chapter identities excluded from the current public-law table. Native record IDs, sequences, fragments, occurrence positions and source/member digests remain explicit. Every row witness was verified. Scope is the selected release, not publisher completeness.",
+      "qualification_scope": "Whole retained release 119-73 without the current public-law filter",
+      "qualification_input": {
+        "path": "metadata/historical-rebuilds/20261010/table3/proof.json",
+        "sha256": "b755c61b8868aa1c8ccdb19d9ed287254d147367dc95942bdff28eb6de2cf92c"
+      },
+      "policy_version": 1,
+      "required_baselines": [],
+      "applies_to_existing_destination": false,
+      "historical_lineage_unchanged": true,
+      "published": false,
+      "local_candidate_outputs": [
+        {
+          "table": "table3_historical_records",
+          "path": "metadata/historical-rebuilds/20261010/table3/receipt-bound-candidate/table3_historical_records.parquet",
+          "sha256": "1f3079c0ef8f84a36737b52f9aea57522d91a3d1518ad5b92dba7a8a17727e04"
+        }
+      ]
     }
   ],
   "relationships": [
@@ -7198,24 +7290,24 @@
       "kind": "retained-source-for-role",
       "from_id": "corpus:registry-real-data-sources-5e37bf4bba",
       "to_id": "family:unified-agenda:agenda",
-      "scope": "60 retained editions: native 199510\u2013202510; two repaired diagnostic editions",
-      "note": "The two 2004 editions contain 8,476 edition/RIN identities absent from the baseline. Each diagnostic repair replaces one invalid control byte, retaining original hashes. Evidence: analysis.json unified_agenda.",
+      "scope": "Complete selected retained editions, including exact-hash repairs to both 2004 originals",
+      "note": "Full native table replay preserves all baseline identities and values and adds the omitted 2004 edition/RIN identities. Original bytes and repair receipts remain retained. Candidate has not been published.",
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/agenda/qualification.json",
+        "sha256": "dc6b93bc0087080c52646758f1056f9f6045bf30e8c090c77a30206671a2dde9"
       }
     },
     {
       "id": "family:laws:qualified:table3-pages",
       "collection_id": "family:laws",
-      "kind": "overlap-with-unresolved-difference",
+      "kind": "normalized-overlap-with-stale-baseline-omissions",
       "from_id": "family:laws:table3-bulk",
       "to_id": "family:laws:table3-pages",
-      "scope": "38 held acts; one unresolved per-act record count",
-      "note": "All 38 baseline acts appear in bulk; 37 have matching counts and 119-37 has 110 versus 106. Counts do not establish field identity. Additional source acts are not omissions from the scoped destination. Evidence: analysis.json table3.",
+      "scope": "Every retained selected act; paired 119-37 native page captures",
+      "note": "All normalized baseline records recover from the pinned bulk release, with duplicate multiplicity and order checked. Both retained 119-37 pages match all 110 bulk records. Four meaningful blank-act-section records were omitted from the baseline; literal field differences remain explicit. The new historical destination separately includes source acts outside the current public-law scope.",
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/table3/proof.json",
+        "sha256": "b755c61b8868aa1c8ccdb19d9ed287254d147367dc95942bdff28eb6de2cf92c"
       }
     },
     {
@@ -8985,11 +9077,11 @@
       "collection_id": "family:unified-agenda",
       "route_id": "family:unified-agenda:agenda",
       "kind": "observed-retained-scope",
-      "label": "60 retained editions with native 199510\u2013202510;2004 repair required",
-      "basis": "analysis.json agenda native PUBLICATION_ID census",
+      "label": "Selected retained native editions 199510 through 202510, including both qualified 2004 originals",
+      "basis": "Complete source-only replay and native-column comparison",
       "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/regulatory/proposed-registry.json",
-        "sha256": "1c9789077e667093178d8a49213388441dcab0249a529833b195764e2274bf6f"
+        "path": "metadata/historical-rebuilds/20261010/agenda/qualification.json",
+        "sha256": "dc6b93bc0087080c52646758f1056f9f6045bf30e8c090c77a30206671a2dde9"
       }
     },
     {
@@ -9096,9 +9188,34 @@
       {
         "path": "metadata/catalog-relationships/20261010/other/proposed-registry.json",
         "sha256": "fc48fe30184c04c1e030fc6d3d94be5f661ac05625b2594d2557b5a9209a3ca7"
+      },
+      {
+        "path": "metadata/historical-rebuilds/20261010/agenda/qualification.json",
+        "sha256": "dc6b93bc0087080c52646758f1056f9f6045bf30e8c090c77a30206671a2dde9"
+      },
+      {
+        "path": "metadata/historical-rebuilds/20261010/table3/proof.json",
+        "sha256": "b755c61b8868aa1c8ccdb19d9ed287254d147367dc95942bdff28eb6de2cf92c"
+      },
+      {
+        "path": "metadata/historical-rebuilds/20261010/historical-regulations/replay-validation.json",
+        "sha256": "f264b443c1cf4300d360052d85f739ef6e6cca142256a5c638c03b576a086a10"
+      },
+      {
+        "path": "metadata/historical-rebuilds/20261010/historical-regulations/existing-destination-gaps.json",
+        "sha256": "cc3ca7eec6051bd29343a4c226fc26361118e62ce40d038837d6ad4401a15c90"
+      },
+      {
+        "path": "metadata/historical-rebuilds/20261010/uscode/verification.json",
+        "sha256": "36d403326e9f64814c15140ec4835d273a86196e9f83a6ce8c25fc5c7b85d3d0"
+      },
+      {
+        "path": "metadata/historical-rebuilds/20261010/baseline-retention.json",
+        "sha256": "6864a491c13194742ea70601b883aae18be41d7c55e45a630ae9a908e202a96c"
       }
     ],
-    "selection_authority": "Catalog planning choices only; pipeline acquisition and historical receipt lineage are unchanged.",
-    "integration_script_sha256": "f85a0ed84f959a678942c8a181fb249f64923aa67943549d07fd34c01026dfb4"
+    "selection_authority": "Catalog route choices and independently qualified local candidates; selected publication and historical receipt lineage remain unchanged.",
+    "integration_script_sha256": "f85a0ed84f959a678942c8a181fb249f64923aa67943549d07fd34c01026dfb4",
+    "historical_rebuild_integration_script_sha256": "ab5158e673154f3b82afd57423e93681fd2d58322108b0ad6d51eb488df48224"
   }
 }

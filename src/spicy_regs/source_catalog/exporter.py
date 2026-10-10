@@ -57,6 +57,8 @@ def validate_public(value: object) -> None:
     """Reject internal references or credentials even inside allowed text fields."""
     if isinstance(value, dict):
         for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("Public export keys must be strings")
             if key.lower() in {
                 "localpath",
                 "localpaths",
