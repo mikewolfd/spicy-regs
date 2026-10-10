@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .storage import connect, stable
+from .coverage import coverage
 
 
 def pick(value: dict, mapping: dict[str, str]) -> dict:
@@ -89,6 +90,103 @@ def write_json(path: Path, value: dict, *, internal: bool) -> None:
         return
     temporary.write_text(body)
     os.replace(temporary, path)
+
+
+def public_coverage(report: dict) -> dict:
+    """Publish only named measurement fields; raw scopes and proof paths stay private."""
+    result = {"completenessDenominator": None, "stages": {}}
+    scope_fields = {
+        "collection_id": "collectionId",
+        "table": "table",
+        "observation_id": "observationId",
+        "captured_at": "capturedAt",
+        "qualification_scope": "qualificationScope",
+    }
+
+    def safe_measurement_text(value):
+        return (
+            isinstance(value, str)
+            and bool(value.strip())
+            and safe_text(value) == value
+            and all(public_url(url) is not None for url in re.findall(r'https?://[^\s"<>]+', value))
+        )
+
+    for stage, data in report["stages"].items():
+        measurements = []
+        for item in data["measurements"]:
+            scope = item.get("scope")
+            # Removing a selected query from its scope would turn a narrow
+            # count into an apparent collection-wide measurement. Keep that
+            # measurement private until its full scope has a public form.
+            if (
+                not isinstance(scope, dict)
+                or not scope
+                or any(
+                    key not in scope_fields or (value is not None and not isinstance(value, str))
+                    for key, value in scope.items()
+                )
+            ):
+                continue
+            if any(value is not None and not safe_measurement_text(value) for value in scope.values()):
+                continue
+            period = item.get("period")
+            if period is not None and (
+                not isinstance(period, dict)
+                or not period
+                or any(
+                    key not in {"kind", "label", "start", "end"} or not isinstance(value, str)
+                    for key, value in period.items()
+                )
+            ):
+                continue
+            if period is not None and any(not safe_measurement_text(value) for value in period.values()):
+                continue
+            if any(
+                not safe_measurement_text(item[key])
+                for key in ("unit", "route_id", "version", "verification")
+                if item.get(key) is not None
+            ):
+                continue
+            clean = pick(
+                item,
+                {
+                    "count": "count",
+                    "unit": "unit",
+                    "route_id": "routeId",
+                    "version": "version",
+                    "verification": "evidenceBasis",
+                },
+            )
+            clean = {
+                key: safe_text(value) if isinstance(value, str) else value
+                for key, value in clean.items()
+                if isinstance(value, str) or (key == "count" and type(value) is int)
+            }
+            clean["scope"] = {
+                key: safe_text(value)
+                for key, value in pick(scope if isinstance(scope, dict) else {}, scope_fields).items()
+                if isinstance(value, str)
+            }
+            if not clean["scope"]:
+                continue
+            clean["period"] = (
+                {
+                    key: safe_text(value)
+                    for key, value in pick(
+                        period if isinstance(period, dict) else {},
+                        {"kind": "kind", "label": "label", "start": "start", "end": "end"},
+                    ).items()
+                    if isinstance(value, str)
+                }
+                if period
+                else None
+            )
+            measurements.append(clean)
+        result["stages"][stage] = {
+            "status": "scope-withheld" if data["measurements"] and not measurements else data["status"],
+            "measurements": measurements,
+        }
+    return result
 
 
 def export(index: Path, output: Path, *, internal: bool = False, page_size: int = 500) -> dict:
@@ -249,6 +347,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                 "planned": [],
                 "observations": [],
                 "relationships": [],
+                "coverage": public_coverage(coverage(db, cid)["collections"][0]),
             }
             mappings = {
                 "planned": {
@@ -258,6 +357,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                     "status": "status",
                     "reason": "reason",
                     "route_id": "routeId",
+                    "destination_ids": "destinationIds",
                 },
                 "observations": {
                     "id": "id",

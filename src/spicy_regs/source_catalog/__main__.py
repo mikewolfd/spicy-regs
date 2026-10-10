@@ -2,11 +2,14 @@
 
 import argparse
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .exporter import export
 from .importer import build
 from .storage import connect
+from .coverage import coverage
+from .refresh import compare, write_report
 
 
 def main() -> None:
@@ -22,7 +25,15 @@ def main() -> None:
     publish.add_argument("--output", type=Path, required=True)
     publish.add_argument("--internal", action="store_true")
     publish.add_argument("--page-size", type=int, default=500)
-    for name in ["query", "validate", "gap-report", "matrix"]:
+    refresh = commands.add_parser("compare-inventory")
+    refresh.add_argument("--previous", type=Path, required=True)
+    refresh.add_argument("--current", type=Path, required=True)
+    refresh.add_argument("--output", type=Path, required=True)
+    refresh.add_argument("--max-age-days", type=int, required=True)
+    refresh.add_argument("--owner", required=True)
+    refresh.add_argument("--previous-completion", type=Path)
+    refresh.add_argument("--current-completion", type=Path)
+    for name in ["query", "validate", "gap-report", "matrix", "coverage"]:
         command = commands.add_parser(name)
         command.add_argument("--index", type=Path, required=True)
         command.add_argument("--collection")
@@ -39,12 +50,25 @@ def main() -> None:
             "totals": manifest["totals"],
             "manifest": str(args.output / "manifest.json"),
         }
+    elif args.command == "compare-inventory":
+        result = compare(
+            args.previous,
+            args.current,
+            now=datetime.now(UTC),
+            max_age_days=args.max_age_days,
+            owner=args.owner,
+            previous_completion=args.previous_completion,
+            current_completion=args.current_completion,
+        )
+        write_report(args.output, result)
     else:
         db = connect(args.index, readonly=True)
         try:
             params = (args.collection,) if args.collection else ()
             where = " WHERE collection_id=?" if args.collection else ""
-            if args.command == "validate":
+            if args.command == "coverage":
+                result = coverage(db, args.collection)
+            elif args.command == "validate":
                 result = {
                     "integrity": db.execute("PRAGMA integrity_check").fetchone()[0],
                     "foreignKeys": [list(r) for r in db.execute("PRAGMA foreign_key_check")],

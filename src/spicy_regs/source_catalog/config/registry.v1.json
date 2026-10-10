@@ -1021,8 +1021,8 @@
     {
       "id": "declared:uscode",
       "title": "Capture the U.S. Code from its publisher",
-      "publisher": "Source-specific publisher; see retained workflow evidence",
-      "description": "Declared source reader; enumeration and possession are tracked independently. Coverage remains unknown until scoped evidence is linked.",
+      "publisher": "Office of the Law Revision Counsel",
+      "description": "Maintained U.S. Code acquisition declaration, linked to implemented release-point and annual edition-structure destinations. Selected native structure is locally qualified; section-body extraction and publication remain separate work. The declaration does not establish full publisher enumeration.",
       "source_names": [],
       "families": [],
       "tables": []
@@ -1039,11 +1039,16 @@
     {
       "id": "declared:administration-policy",
       "title": "Statements of Administration Policy",
-      "publisher": "Source-specific publisher; see retained workflow evidence",
-      "description": "Declared source reader; enumeration and possession are tracked independently. Coverage remains unknown until scoped evidence is linked.",
+      "publisher": "unitedstates/statements-of-administration-policy community archive",
+      "description": "All selected metadata records and explicit bill-link occurrences validated; archive-wide expected coverage and held PDF bodies unknown.",
       "source_names": [],
-      "families": [],
-      "tables": []
+      "families": [
+        "administration-policy"
+      ],
+      "tables": [
+        "administration_policy_statements",
+        "administration_policy_bill_links"
+      ]
     },
     {
       "id": "declared:inspectors-general-archive",
@@ -2475,14 +2480,14 @@
       "id": "declared:administration-policy:reader",
       "collection_id": "declared:administration-policy",
       "label": "administration-policy maintained reader",
-      "delivery_method": "source-repository",
+      "delivery_method": "archive",
       "lifecycle": "unknown",
-      "custodian": "third-party",
-      "content_behavior": "unknown",
+      "custodian": "community-archive",
+      "content_behavior": "commit-pinned-metadata",
       "periods": [],
-      "status": "reader-qualified-destination-unassigned",
-      "note": "Community archive metadata pinned by full Git commit and administration; explicit bill links and archived PDFs/UCSB links. Current White House statements and inferred stance differ; unique history not established. Evidence guide:administration-policy.md; scoped prior qualification does not verify current availability.",
-      "access_url": "https://github.com/unitedstates/statements-of-administration-policy",
+      "status": "scoped-qualified",
+      "note": "Use the pinned community-archive commit and exact selected metadata files. Statements and explicit bill links are locally qualified; publisher-wide coverage, political-position interpretation and PDF-body completeness are not established.",
+      "access_url": "https://github.com/unitedstates/statements-of-administration-policy/tree/2bdff048a85b1febd3c7fa85ab2b86426d2ef4fc/archive",
       "qualification_input": {
         "path": "metadata/catalog-relationships/20261010/other/proposed-registry.json",
         "sha256": "fc48fe30184c04c1e030fc6d3d94be5f661ac05625b2594d2557b5a9209a3ca7"
@@ -3073,56 +3078,133 @@
     {
       "id": "declared:sec-comments:destination",
       "collection_id": "declared:sec-comments",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "retention-only-destination-deferred",
+      "reason": "Retain discovery and join evidence; separate SEC rulemaking/comment-file tables remain deferred. Retained join measurements are not comment rows. Do not bind to Regulations.gov comments or dockets.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "declared:ferc:destination",
       "collection_id": "declared:ferc",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "retention-only-destination-deferred",
+      "reason": "Retain selected FERC search captures and docket sheets; native docket/document/file tables remain deferred. A selected first page does not prove all advertised hits or comment-only coverage. Preserve filing-date and creation-date selections separately.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "declared:cftc-comments:destination",
       "collection_id": "declared:cftc-comments",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "retention-only-destination-deferred",
+      "reason": "Retain scoped portal qualification and detail-filename refusal; native rule/comment/file tables remain deferred. Canonical identity and complete selected details require recovery and qualification. Pager/PDF-reader behavior alone does not prove comment-detail coverage.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "declared:usitc-edis:destination",
       "collection_id": "declared:usitc-edis",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "retention-only-destination-deferred",
+      "reason": "Retain bounded document/attachment ZIP qualification; investigation/document/attachment tables remain deferred. One selected document does not prove full investigation coverage; credentialed capture evidence remains private.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "declared:cbo:destination",
       "collection_id": "declared:cbo",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "implemented-existing-observations",
+      "reason": "Existing maintained CBO readers and bill-family destinations implement estimate and feed observations. G confirms the product disposition; source-field/rebuild qualification remains E work. Bind only identity-qualified CBO observations. BILLSTATUS archives and unrelated congressional budget ZIPs stay in their actual source families; a CBO-named folder is not a source binding.",
+      "tables": [
+        "cbo_cost_estimates",
+        "cbo_feed_items"
+      ],
+      "route_id": "family:bill-family:cbo-feeds",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "declared:uscode:destination",
       "collection_id": "declared:uscode",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "implemented-scoped-local",
+      "reason": "The OLRC acquisition guide and native edition proof identify consolidated U.S. Code. Implemented destinations retain current release-point XML and historical annual XHTML edition structure in uscode_editions and uscode_edition_structure. Keep their individual selection scopes and qualification pins; these are not enacted-law sections or Table III classifications. Normalized section bodies remain T09 work; local qualification does not establish publication or full publisher coverage.",
+      "tables": [
+        "uscode_editions",
+        "uscode_edition_structure"
+      ],
+      "destination_ids": [
+        "family:laws:destination:code-current",
+        "family:laws:destination:code-historical"
+      ],
+      "qualification_input": {
+        "path": "metadata/historical-rebuilds/20261010/uscode/verification.json",
+        "sha256": "36d403326e9f64814c15140ec4835d273a86196e9f83a6ce8c25fc5c7b85d3d0"
+      },
+      "qualification_scope": "Selected archive members and native itempath/section/chapter observations; no normalized section-body extraction",
+      "published": false
     },
     {
       "id": "declared:supreme-court:destination",
       "collection_id": "declared:supreme-court",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "retention-only-destination-deferred",
+      "reason": "Retain publisher term-index captures and revision links; a separate publisher index-observation destination remains deferred. Case names and dockets do not prove a CourtListener identity crosswalk.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "declared:administration-policy:destination",
       "collection_id": "declared:administration-policy",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "metadata-source-only-qualified-local",
+      "reason": "Implemented and independently reviewed selected community-archive metadata and explicit bill-link occurrences. Selected metadata completeness is qualified; archive-wide expected coverage and PDF body holdings remain unknown. These local tables do not imply inferred policy positions or selected publication. See the pinned qualification for the exact selected source commit and candidate generation.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/bindings-proposed.json",
+        "sha256": "5f1c0ace25a2b4d53c21dc9d8f160a2c07fcb49df72ca4a64832961eace08f75"
+      },
+      "family": "administration-policy",
+      "tables": [
+        "administration_policy_statements",
+        "administration_policy_bill_links"
+      ],
+      "qualification_input": {
+        "path": "metadata/source-catalog-program/20261010/G/policy-v4-validation.json",
+        "sha256": "5f1f740eb1fc5ea629529f4e0967e085a727d3d735cff31d23b44b381e8db694"
+      },
+      "qualification_scope": "All selected metadata records and explicit bill-link occurrences validated; archive-wide expected coverage and held PDF bodies unknown.",
+      "local_candidate_outputs": [
+        {
+          "table": "administration_policy_statements",
+          "path": "metadata/source-catalog-program/20261010/G/candidates/policy-v4/administration_policy_statements/administration_policy_statements.parquet",
+          "sha256": "sha256:fed72fb0e8156ef568fe111a86c1a97596f4250f55a204823ee29a779bd1f0e4",
+          "rows": 5656
+        },
+        {
+          "table": "administration_policy_bill_links",
+          "path": "metadata/source-catalog-program/20261010/G/candidates/policy-v4/administration_policy_bill_links/administration_policy_bill_links.parquet",
+          "sha256": "sha256:f2daff4ef88a1d1e1b36ed4859e8adae6ecce56af3c0df9e35da1328c27cd2ad",
+          "rows": 5682
+        }
+      ],
+      "published": false,
+      "route_id": "declared:administration-policy:reader"
     },
     {
       "id": "declared:inspectors-general-archive:destination",
       "collection_id": "declared:inspectors-general-archive",
-      "status": "unassigned",
-      "reason": "Declared acquisition capability; attach retained observations and assign a destination after scope review."
+      "status": "retention-only-destination-deferred",
+      "reason": "Retain historical inspector-general archive material; separate report-metadata tables remain deferred until canonical archive selection qualifies. Preserve path/report/publication dates and unreleased-report distinctions. Do not bind generic report downloads to GAO or CRS.",
+      "disposition_input": {
+        "path": "metadata/source-catalog-program/20261010/G/decisions.md",
+        "sha256": "e7aeac75b21ac137d5723d7a1f0e4143281e6e47d8f09fdd863255695cdaca04"
+      }
     },
     {
       "id": "policy:agency_lifecycle_stats",
@@ -5341,7 +5423,7 @@
       "family": "laws",
       "route_id": "family:laws:table3-bulk",
       "status": "normalized-source-replay-qualified-local",
-      "reason": "Pinned Table III bulk supplies public-law keys in the maintained requested/held Congress scope. Full-content comparison recovers all retained records after declared field normalization and identifies four omitted 119-37 rows with blank act-section labels. Both retained pages corroborate the bulk. Other laws tables still depend on the shared baseline; wider historical records have a separate destination.",
+      "reason": "Pinned Table III bulk reconstructs selected normalized source records under the maintained requested/held Congress scope. A verified that the current live selection already contains the four recovered records and additional acts. Preserve its exact selected generation; an older local candidate must not replace it. The dependent law placement join retains unmatched keys under its established scope floor, so a baseline pass does not establish complete relationship coverage. Other laws tables still depend on the shared baseline; wider historical records have a separate destination.",
       "qualification_scope": "Every retained selected act; multiplicity and ordered normalized content, with literal field differences retained",
       "qualification_input": {
         "path": "metadata/historical-rebuilds/20261010/table3/proof.json",
@@ -5352,7 +5434,22 @@
       "required_baselines": [
         "rebuild-seeds/laws/c9d356616b509a39c1e11b1d1c43cddc067cfbab43fc7fab30728844687f9292"
       ],
-      "retirement_status": "retain-shared-baseline"
+      "retirement_status": "retain-shared-baseline",
+      "current_publication_observation": {
+        "artifact_digest": "sha256:b549af20fb865d82708787dfe27ec738eac4e61ae1cb13597141eae2c558e6cd",
+        "subject_rows": 2983,
+        "qualification_input": {
+          "path": "metadata/source-catalog-program/20261010/A/table3-live-qualification.json",
+          "sha256": "12f76fc168f1eae8c49d766935f24ef6fc6eb0990cbbba805aca3d33cfb6fa25"
+        },
+        "source_witness_input": {
+          "path": "metadata/source-catalog-program/20261010/A/table3-current-source-witness.json",
+          "sha256": "50c1c2ecc3377589094b26a023a482760090f03a7989ffe3750322958f308e61"
+        },
+        "law_placement_keys": 2778,
+        "law_placement_unmatched_keys": 557,
+        "relationship_coverage": "baseline scope-floor pass; incomplete relationships"
+      }
     },
     {
       "id": "family:laws:destination:classification",
@@ -9168,7 +9265,20 @@
     "https://api.open.fec.gov/v1/legal/search/": "family:fec-query:openfec",
     "https://api.open.fec.gov/v1/committees/": "family:fec-query:openfec"
   },
-  "observations": [],
+  "observations": [
+    {
+      "id": "B:table3-current-live-join-limits",
+      "collection_id": "family:laws",
+      "route_id": "family:laws:table3-bulk",
+      "status": "current-publication-source-and-receipt-qualified-scoped",
+      "scope": "Exact A-selected Table III publication sha256:b549af20fb865d82708787dfe27ec738eac4e61ae1cb13597141eae2c558e6cd",
+      "note": "All 2983 current selected Table III rows bind to retained source and receipts under declared normalization. The law placement join has 557 unmatched keys of 2778 distinct selected child keys; its baseline scope-floor pass is not complete relationship coverage. Preserve this current selected generation.",
+      "qualification_input": {
+        "path": "metadata/source-catalog-program/20261010/A/table3-live-qualification.json",
+        "sha256": "12f76fc168f1eae8c49d766935f24ef6fc6eb0990cbbba805aca3d33cfb6fa25"
+      }
+    }
+  ],
   "qualification": {
     "version": 1,
     "observed_at": "2026-10-10",
