@@ -860,7 +860,7 @@ def test_explicit_edition_congress_qualifies_only_the_unstated_measure_context(f
     assert row[target] == identifier and row["congress"] == "118"
     assert row["vote_id"] is row["session"] is row["roll_number"] is None
     assert row["resolution_rule"].endswith("_edition_congress")
-    assert row["rule_version"] == "scorecard-resolution-v1.5"
+    assert row["rule_version"] == "scorecard-resolution-v1.6"
     assert "explicit_edition_congress_for_measure" in row["reason"]
     context = json.loads(row["source_context_json"])
     assert context["item"].get("congress_text") is None
@@ -963,3 +963,43 @@ def test_edition_context_does_not_qualify_measure_beside_a_separate_roll_referen
     rows = edition_measure({"references_json": json.dumps(refs)})
     assert rows[0]["bill_id"] is None
     assert "edition_congress_not_used_with_sibling_vote_context" in rows[0]["reason"]
+
+
+def test_partial_exact_bill_retains_candidates_without_operational_targets(tmp_path):
+    from spicy_regs.scorecards.etl import LINK_NAMES, read_family, write_family
+    from spicy_regs.scorecards.resolution import RULE_VERSION
+
+    source = sources(items=[fact(item_id="partial-roll", congress_text="118", chamber_text="House",
+                                 roll_number_text="4", bill_citation_text="H.R. 1")])
+    results = resolve_scorecard_links(source, official(), pins())
+    row = results["scorecard_item_links"][0]
+    assert row["resolution_status"] == "unresolved"
+    assert row["resolution_rule"] == "exact_bill_incomplete"
+    assert "incomplete_roll_identifiers" in row["reason"]
+    assert row["vote_id"] is row["bill_id"] is row["amendment_id"] is None
+    assert (row["congress"], row["chamber"], row["roll_number"]) == ("118", "house", "4")
+    assert json.loads(row["candidates_json"]) == [{"bill_id": "118-hr-1"}]
+    assert row["candidate_count"] == "1"
+    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.6"
+    write_family(tmp_path, results, generation_id="partial-link-test")
+    assert read_family(tmp_path, LINK_NAMES, generation_id="partial-link-test") == results
+
+
+@pytest.mark.parametrize("status", ["unresolved", "ambiguous", "conflict"])
+def test_nonresolved_mixed_targets_preserve_all_exact_candidate_evidence(status):
+    from spicy_regs.scorecards.resolution import qualified_item_targets
+
+    targets = {"bill_id": "118-hr-1", "vote_id": "118-house-1-4", "amendment_id": "118-hamdt-3"}
+    candidates = [{"vote_id": "118-house-1-4", "vote_date": "3-Jan-2023"}]
+    direct, retained = qualified_item_targets(status, targets, candidates)
+    assert direct == {}
+    assert retained == [candidates[0], {"bill_id": "118-hr-1"}, {"amendment_id": "118-hamdt-3"}]
+    assert targets["bill_id"] == "118-hr-1" and len(candidates) == 1
+
+
+def test_unknown_amendment_does_not_publish_an_otherwise_exact_bill_target():
+    row = item_link(congress_text="118", bill_citation_text="H.R. 1", amendment_citation_text="H.Amdt. 99")[0]
+    assert row["resolution_status"] == "unresolved"
+    assert row["bill_id"] is row["amendment_id"] is None
+    assert {"bill_id": "118-hr-1"} in json.loads(row["candidates_json"])
+    assert "unknown" in row["reason"]
