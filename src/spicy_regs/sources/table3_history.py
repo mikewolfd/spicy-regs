@@ -21,7 +21,7 @@ from spicy_docs.schemas.law_tables import usc_section_place
 from spicy_docs.sources.uscode import iter_act_fragments, read_table3_bulk_member
 from spicy_docs.sources.uscode.table3 import parse_act_fragment
 
-READER_VERSION = "table3-historical/1"
+READER_VERSION = "table3-historical-public/2"
 MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
 MAX_MEMBER_BYTES = 192 * 1024 * 1024
 MAX_FRAGMENT_BYTES = 4 * 1024 * 1024
@@ -150,6 +150,8 @@ def replay(archive: Path, output: Path, *, expected_sha256: str, release_point: 
         "identity_fields": list(IDENTITY_FIELDS),
         "scope": "All records in this exact retained member; no publisher completeness or publication claim",
     }
+    generation = digest(json.dumps([READER_VERSION, expected_sha256, release_point], separators=(",", ":")).encode())
+    receipt["generation"] = generation
     try:
         with archive.open("rb") as stream:
             body = stream.read(MAX_ARCHIVE_BYTES + 1)
@@ -176,13 +178,13 @@ def replay(archive: Path, output: Path, *, expected_sha256: str, release_point: 
                     )
                 }
                 context = ReceiptContext(
-                    expected_sha256,
+                    generation,
                     row["id"],
                     READER_VERSION,
                     [
                         {
                             "source_id": expected_sha256,
-                            "source_uri": str(archive.resolve()),
+                            "source_uri": expected_sha256,
                             "sha256": expected_sha256,
                             "locator": json.dumps(position, sort_keys=True),
                             "body_version": release_point,

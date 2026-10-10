@@ -10,6 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
+from urllib.parse import urlsplit
 
 import pyarrow as pa
 
@@ -22,19 +23,45 @@ def _schema(strings, integers=()):
 
 SCHEMAS = {
     "federal_register_issues": _schema(
-        ("issue_observation_id", "package_id", "publication_date", "source_sha256", "metadata_json",
-         "retained_renditions_json"), ("source_bytes",)),
+        (
+            "issue_observation_id",
+            "package_id",
+            "publication_date",
+            "source_sha256",
+            "metadata_json",
+            "retained_renditions_json",
+        ),
+        ("source_bytes",),
+    ),
     "ecfr_snapshots": _schema(
-        ("snapshot_id", "snapshot_date", "selected_part", "selected_section", "source_sha256",
-         "source_url", "native_metadata_json"), ("title", "source_bytes", "content_nodes")),
+        (
+            "snapshot_id",
+            "snapshot_date",
+            "selected_part",
+            "selected_section",
+            "source_sha256",
+            "source_url",
+            "native_metadata_json",
+        ),
+        ("title", "source_bytes", "content_nodes"),
+    ),
     "ecfr_snapshot_sections": _schema(
-        ("snapshot_id", "xml_position", "kind", "native_number", "part", "heading", "text",
-         "attributes_json"), ("byte_start",)),
+        ("snapshot_id", "xml_position", "kind", "native_number", "part", "heading", "text", "attributes_json"),
+        ("byte_start",),
+    ),
 }
 POLICIES = {
-    name: DatasetPolicy(name, schema, ("snapshot_id", "xml_position") if name.endswith("sections") else
-                        ("snapshot_id",) if name == "ecfr_snapshots" else ("issue_observation_id",),
-                        ("selection_metadata",), policy_version="historical-regulations-v1")
+    name: DatasetPolicy(
+        name,
+        schema,
+        ("snapshot_id", "xml_position")
+        if name.endswith("sections")
+        else ("snapshot_id",)
+        if name == "ecfr_snapshots"
+        else ("issue_observation_id",),
+        ("selection_metadata",),
+        policy_version="historical-regulations-public-v2",
+    )
     for name, schema in SCHEMAS.items()
 }
 
@@ -47,12 +74,26 @@ def _digest(body):
     return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
+def _publisher_url(value):
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname not in {"www.govinfo.gov", "govinfo.gov"}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("issue rendition requires a public GovInfo publisher URL")
+    return value
+
+
 def _read(spec, base, maximum):
     path = base / spec["path"]
     encoding = spec.get("encoding", "identity")
     if encoding not in {"identity", "gzip"}:
         raise ValueError("unsupported retained storage encoding")
-    with (gzip.open(path, "rb") if encoding == "gzip" else path.open("rb")) as stream:
+    with gzip.open(path, "rb") if encoding == "gzip" else path.open("rb") as stream:
         body = stream.read(maximum + 1)
     if len(body) > maximum or _digest(body) != spec["sha256"] or len(body) != spec["bytes"]:
         raise ValueError("retained original digest or decoded byte bound differs")
@@ -81,7 +122,8 @@ def build_historical_regulations(manifest: Path, output: Path) -> Path:
         raise ValueError("selection requires 1..1000 originals")
     if output.exists():
         raise FileExistsError(output)
-    generation = _digest(raw)
+    manifest_digest = _digest(raw)
+    generation = _digest(_json(["historical-regulations-public-v2", manifest_digest]).encode())
     seen = set()
 
     def records(dataset):
@@ -92,27 +134,42 @@ def build_historical_regulations(manifest: Path, output: Path) -> Path:
             if (dataset.startswith("federal_register")) != (kind == "fr-issue"):
                 continue
             body = _read(spec, manifest.parent, 256 * 1024 * 1024)
-            witness = {"source_id": spec["sha256"], "source_uri": str(manifest.parent / spec["path"]),
-                       "sha256": spec["sha256"], "locator": spec.get("source_url")}
-            context = ReceiptContext(generation, f"{dataset}:{ordinal}", "historical-regulations-v1",
-                                     [witness, {"source_id": "selection-manifest", "source_uri": str(manifest),
-                                                "sha256": generation}])
-            metadata = {key: value for key, value in spec.items() if key not in {"path", "encoding"}}
+            witness = {"source_id": spec["sha256"], "source_uri": spec["sha256"], "sha256": spec["sha256"]}
+            context = ReceiptContext(
+                generation,
+                f"{dataset}:{ordinal}",
+                "historical-regulations-public-v2",
+                [
+                    witness,
+                    {"source_id": "selection-manifest", "source_uri": manifest_digest, "sha256": manifest_digest},
+                ],
+            )
+            metadata = {"kind": kind, "source_sha256": spec["sha256"], "source_bytes": len(body)}
             if kind == "fr-issue":
                 from spicy_docs.sources.federal_register.issues import read_fr_issue
 
                 facts = read_fr_issue(body, package_id=spec["package_id"])
+                for rendition in facts["renditions"]:
+                    _publisher_url(rendition["url"])
                 retained = []
                 for original in spec.get("retained_renditions", []):
                     if original["source_url"] not in {rendition["url"] for rendition in facts["renditions"]}:
                         raise ValueError("retained rendition URL is not advertised by this issue")
                     _read(original, manifest.parent, 256 * 1024 * 1024)
-                    retained.append({key: value for key, value in original.items() if key not in {"path", "encoding"}})
+                    retained.append(
+                        {"source_url": original["source_url"], "sha256": original["sha256"], "bytes": original["bytes"]}
+                    )
+                metadata.update(package_id=facts["package_id"], retained_renditions=retained)
                 identity = _digest(_json([spec["package_id"], facts["source_sha256"]]).encode())
-                row = {"issue_observation_id": identity, "package_id": facts["package_id"],
-                       "publication_date": facts["publication_date"], "source_sha256": facts["source_sha256"],
-                       "source_bytes": facts["source_bytes"], "metadata_json": _json(facts),
-                       "retained_renditions_json": _json(retained)}
+                row = {
+                    "issue_observation_id": identity,
+                    "package_id": facts["package_id"],
+                    "publication_date": facts["publication_date"],
+                    "source_sha256": facts["source_sha256"],
+                    "source_bytes": facts["source_bytes"],
+                    "metadata_json": _json(facts),
+                    "retained_renditions_json": _json(retained),
+                }
                 if (dataset, identity) in seen:
                     raise ValueError("repeated issue observation")
                 seen.add((dataset, identity))
@@ -123,6 +180,7 @@ def build_historical_regulations(manifest: Path, output: Path) -> Path:
 
                 request = EcfrSelection(**spec["selection"])
                 facts, nodes = read_ecfr_snapshot(body, selection=request, final_url=spec["source_url"])
+                metadata.update(selection=asdict(request), source_url=facts["source_url"])
                 identity = _digest(_json([asdict(request), spec["sha256"]]).encode())
                 if (dataset, identity) in seen:
                     raise ValueError("repeated dated snapshot observation")
@@ -145,11 +203,20 @@ def build_historical_regulations(manifest: Path, output: Path) -> Path:
             receipts.append(receipt)
         combine_receipts(receipts, stage / "etl_receipts.parquet")
         (stage / "selection.json").write_bytes(raw)
-        (stage / "bundle.json").write_text(_json({"format": "spicy-historical-regulations-bundle", "version": 1,
-                                                "generation": generation,
-                                                "policies": [policy.descriptor() for policy in POLICIES.values()],
-                                                "outcome": "complete-selected-inputs", "source_count": len(sources)}))
+        (stage / "bundle.json").write_text(
+            _json(
+                {
+                    "format": "spicy-historical-regulations-bundle",
+                    "version": 1,
+                    "generation": generation,
+                    "policies": [policy.descriptor() for policy in POLICIES.values()],
+                    "outcome": "complete-selected-inputs",
+                    "source_count": len(sources),
+                }
+            )
+        )
         from rulespec_artifacts import publish_directory_no_replace
+
         publish_directory_no_replace(stage, output)
     return output
 

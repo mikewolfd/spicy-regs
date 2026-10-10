@@ -22,11 +22,20 @@ release point.
 chapter observations. Each row links to its member, original byte span or XML
 position, literal identifier, label, status and complete reader observation.
 Annual itempaths can describe ranges, stubs or nonsections; the adapter does not
-expand them into invented sections. Full section bodies remain in the original
-members. This destination does not replace enacted-law text or provide a complete
-normalized Code text model.
+expand them into invented sections.
 
-Both tables use `DatasetPolicy` and row receipts. The build verifies original
+`uscode_edition_sections` adds section content from the same selected originals.
+It links each section occurrence to its edition and source position and retains
+the complete content-reader observation. Annual named fields preserve byte
+spans and separate statutory body, source credits and notes. XML fields preserve
+positional XPath, ancestry and literal child text. Quoted sections nested in
+notes retain explicit source context. Missing body fields yield null; explicit
+empty fields yield empty text. Unknown XML children remain separate with issues.
+See SpicyDocs' `docs/sources/uscode-section-bodies.md` for exact reader semantics.
+These destinations do not replace enacted-law text or determine legal status;
+original members retain exact markup.
+
+The tables use `DatasetPolicy` and row receipts. The build verifies original
 archive hashes, reader identity and selected input stability, stages provisional
 rows privately, and installs the output only after all archives succeed. It
 refuses an existing output directory and retains a `rebuild.json` containing
@@ -38,3 +47,9 @@ published table registry until a separate publication selects their outputs.
 The shared source catalog records their route choices and qualification evidence.
 See `../../docs/historical-source-rebuilds-2026-10-10.md` in the workspace for the
 retained corpus qualification and baseline decisions.
+
+The `uscode-editions-public-v2` recipe creates fresh row receipts whose archive
+witness references use content digests. Private archive paths remain in
+`selection.json` and `rebuild.json`; exclude those files from public artifact
+members. Publish only selected subject Parquet members and their fresh
+`etl_receipts.parquet`. Earlier path-bearing receipt history must not be inherited.

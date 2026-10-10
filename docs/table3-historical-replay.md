@@ -61,3 +61,9 @@ maintained page reader's earlier fix `6c1269f5` and current bulk mapper already
 preserve those rows. Two independently retained page captures corroborate the
 bulk sequence. This workflow acquires no new bytes, publishes nothing, and
 retires no baseline.
+
+The `table3-historical-public/2` recipe creates a fresh generation from the
+recipe, archive digest and release point. Public archive witnesses use content
+digests. The local `receipt.json` retains the physical source path and remains
+private; select only the subject and fresh ETL receipt Parquet members for a
+public artifact. Earlier path-bearing receipt history must not be inherited.

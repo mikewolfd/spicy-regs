@@ -21,7 +21,7 @@ from tempfile import TemporaryDirectory
 import pyarrow as pa
 
 from spicy_docs.sources.uscode import ReleasePoint, TitleSelection
-from spicy_docs.sources.uscode import annual, archive, structure
+from spicy_docs.sources.uscode import annual, archive, structure, section_bodies
 from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, combine_receipts, write_dataset
 
 MAX_ARCHIVE_BYTES = 192 * 1024**2
@@ -53,9 +53,20 @@ STRUCTURE_COLUMNS = (
     "native_status",
     "source_observation_json",
 )
+CONTENT_COLUMNS = (
+    "observation_id",
+    "edition_id",
+    "source_kind",
+    "source_position",
+    "native_identifier",
+    "source_context",
+    "body_text",
+    "source_observation_json",
+)
 SCHEMAS = {
     "uscode_editions": pa.schema([(name, pa.string()) for name in EDITION_COLUMNS]),
     "uscode_edition_structure": pa.schema([(name, pa.string()) for name in STRUCTURE_COLUMNS]),
+    "uscode_edition_sections": pa.schema([(name, pa.string()) for name in CONTENT_COLUMNS]),
 }
 POLICIES = {
     name: DatasetPolicy(
@@ -63,7 +74,7 @@ POLICIES = {
         schema,
         ("edition_id",) if name == "uscode_editions" else ("observation_id",),
         (),
-        policy_version="uscode-editions-v1",
+        policy_version="uscode-editions-public-v2",
     )
     for name, schema in SCHEMAS.items()
 }
@@ -129,7 +140,7 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
     if output_dir.exists():
         raise FileExistsError("U.S. Code output generation already exists")
     code_pins = _code_pins()
-    generation = _identity("uscode-editions-v1", _digest(raw_manifest), code_pins)
+    generation = _identity("uscode-editions-public-v2", _digest(raw_manifest), code_pins)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     counts = {name: 0 for name in SCHEMAS}
     inputs, selections = [], set()
@@ -173,9 +184,9 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                     context = ReceiptContext(
                         generation,
                         edition_id,
-                        "uscode-editions-v1",
+                        "uscode-editions-public-v2",
                         [
-                            {"source_id": archive_hash, "sha256": archive_hash, "source_uri": str(path.resolve())},
+                            {"source_id": archive_hash, "sha256": archive_hash, "source_uri": archive_hash},
                             {"source_id": edition_id, "sha256": entry.sha256, "locator": entry.name},
                         ],
                     )
@@ -229,6 +240,43 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                                 "source_observation_json": _json(asdict(value)),
                             },
                             context,
+                        )
+
+                    def section_content(value) -> None:
+                        if kind == "annual":
+                            position = "bytes:" + ":".join(str(v) for v in value.structure.itempath_span)
+                            identifier = value.structure.usckey
+                            source_context = "annual-section-itempath"
+                        else:
+                            position = value.element.source_xpath
+                            identifier = value.element.attributes.get("identifier")
+                            source_context = value.context
+                        emit(
+                            "uscode_edition_sections",
+                            {
+                                "observation_id": _identity(edition_id, "section-content", position),
+                                "edition_id": edition_id,
+                                "source_kind": kind,
+                                "source_position": position,
+                                "native_identifier": identifier,
+                                "source_context": source_context,
+                                "body_text": value.body_text,
+                                "source_observation_json": _json(asdict(value)),
+                            },
+                            context,
+                        )
+
+                    if kind == "annual":
+                        section_bodies.scan_annual_section_bodies(
+                            member_body,
+                            on_section=section_content,
+                            max_bytes=MAX_MEMBER_BYTES,
+                        )
+                    else:
+                        section_bodies.scan_xml_section_bodies(
+                            member_body,
+                            on_section=section_content,
+                            max_bytes=MAX_MEMBER_BYTES,
                         )
 
                     if kind == "annual":
@@ -311,7 +359,7 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
             "python": platform.python_version(),
             "baseline_inputs": [],
             "outputs": outputs,
-            "scope": "Complete selected archive admission and native section/chapter observations. Annual itempaths include nonsections, ranges and stubs. Full text remains in original members; no section-body extraction, normalized legal status or publisher-wide completeness claim.",
+            "scope": "Complete selected archive admission and native section/chapter observations. Annual itempaths include nonsections, ranges and stubs. Section content preserves native fields and source context; markup remains in original members. No normalized legal status or publisher-wide completeness claim.",
         }
         (staged / "selection.json").write_bytes(raw_manifest)
         (staged / "rebuild.json").write_text(json.dumps(receipt, indent=2) + "\n")

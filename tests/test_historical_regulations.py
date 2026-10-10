@@ -6,7 +6,7 @@ import json
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.etl_receipts import validate_receipt_bundle
+from spicy_regs.etl_receipts import validate_receipt_bundle, decode_exact_json
 from spicy_regs.transforms.historical_regulations import POLICIES, build_historical_regulations
 
 XML = b'<ECFR><DIV1 TYPE="TITLE" N="1"><HEAD>Title 1</HEAD><DIV5 TYPE="PART" N="18"><DIV8 TYPE="SECTION" N="18.1"><P>Literal text</P></DIV8></DIV5></DIV1></ECFR>'
@@ -16,11 +16,24 @@ def selection(tmp_path, *, body=XML, digest=None):
     source = tmp_path / "original.xml"
     source.write_bytes(body)
     manifest = tmp_path / "selection.json"
-    manifest.write_text(json.dumps({"format": "spicy-historical-regulations", "version": 1, "sources": [{
-        "kind": "ecfr-snapshot", "path": source.name, "bytes": len(body),
-        "sha256": digest or "sha256:" + hashlib.sha256(body).hexdigest(),
-        "selection": {"title": 1, "date": "2026-08-10"},
-        "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2026-08-10/title-1.xml"}]}))
+    manifest.write_text(
+        json.dumps(
+            {
+                "format": "spicy-historical-regulations",
+                "version": 1,
+                "sources": [
+                    {
+                        "kind": "ecfr-snapshot",
+                        "path": source.name,
+                        "bytes": len(body),
+                        "sha256": digest or "sha256:" + hashlib.sha256(body).hexdigest(),
+                        "selection": {"title": 1, "date": "2026-08-10"},
+                        "source_url": "https://www.ecfr.gov/api/versioner/v1/full/2026-08-10/title-1.xml",
+                    }
+                ],
+            }
+        )
+    )
     return manifest
 
 
@@ -30,8 +43,11 @@ def test_source_only_bundle_and_receipts(tmp_path):
     assert rows[0]["text"] == "Literal text" and rows[0]["part"] == "18"
     snapshots = pq.read_table(bundle / "ecfr_snapshots/ecfr_snapshots.parquet").to_pylist()
     assert rows[0]["snapshot_id"] == snapshots[0]["snapshot_id"]
-    validate_receipt_bundle({name: [bundle / name / (name + ".parquet")] for name in POLICIES},
-                           [bundle / "etl_receipts.parquet"], list(POLICIES.values()))
+    validate_receipt_bundle(
+        {name: [bundle / name / (name + ".parquet")] for name in POLICIES},
+        [bundle / "etl_receipts.parquet"],
+        list(POLICIES.values()),
+    )
     with pytest.raises(FileExistsError):
         build_historical_regulations(tmp_path / "selection.json", bundle)
 
@@ -53,3 +69,65 @@ def test_same_scope_with_omitted_nulls_refuses_duplicates(tmp_path):
     with pytest.raises(ValueError, match="repeated dated snapshot"):
         build_historical_regulations(manifest, tmp_path / "duplicates")
     assert not (tmp_path / "duplicates").exists()
+
+
+def test_public_receipts_allowlist_selection_metadata_and_content_address_originals(tmp_path):
+    manifest = selection(tmp_path)
+    selected = json.loads(manifest.read_text())
+    selected["private"] = {"path": "/Users/private/manifest"}
+    selected["sources"][0]["debug"] = {"path": "/Users/private/nested"}
+    selected["sources"][0]["retained_renditions"] = [{"path": "/Users/private/unselected"}]
+    manifest.write_text(json.dumps(selected))
+    bundle = build_historical_regulations(manifest, tmp_path / "bundle")
+    receipts = pq.read_table(bundle / "etl_receipts.parquet").to_pylist()
+    encoded = json.dumps(receipts)
+    assert "/Users/private" not in encoded and str(tmp_path) not in encoded
+    raw = manifest.read_bytes()
+    source_digest = selected["sources"][0]["sha256"]
+    manifest_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+    for row in receipts:
+        assert row["witnesses"][0]["source_uri"] == source_digest
+        assert row["witnesses"][1]["source_uri"] == manifest_digest
+        assert row["generation_id"] != manifest_digest
+        assert row["policy_version"] == "historical-regulations-public-v2"
+        processing = decode_exact_json(row["processing_json"])
+        assert "debug" not in json.dumps(processing)
+    assert (bundle / "selection.json").read_bytes() == raw
+
+
+def test_nested_retained_rendition_paths_do_not_enter_subject_or_receipts(tmp_path):
+    body = b"""<mods xmlns="http://www.loc.gov/mods/v3"><titleInfo><title>Federal Register</title></titleInfo>
+<originInfo><dateIssued>1939-11-17</dateIssued></originInfo><extension><accessId>FR-1939-11-17</accessId>
+<collectionCode>FR</collectionCode></extension><location><url>https://www.govinfo.gov/content/pkg/FR-1939-11-17/pdf/FR-1939-11-17.pdf</url></location></mods>"""
+    (tmp_path / "mods.xml").write_bytes(body)
+    rendition = b"%PDF retained selection test"
+    (tmp_path / "file.pdf").write_bytes(rendition)
+    spec = {
+        "kind": "fr-issue",
+        "path": "mods.xml",
+        "bytes": len(body),
+        "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
+        "package_id": "FR-1939-11-17",
+        "retained_renditions": [
+            {
+                "path": "file.pdf",
+                "bytes": len(rendition),
+                "sha256": "sha256:" + hashlib.sha256(rendition).hexdigest(),
+                "source_url": "https://www.govinfo.gov/content/pkg/FR-1939-11-17/pdf/FR-1939-11-17.pdf",
+                "private": {"path": "/Users/private/rendition"},
+            }
+        ],
+    }
+    manifest = tmp_path / "selection.json"
+    manifest.write_text(json.dumps({"format": "spicy-historical-regulations", "version": 1, "sources": [spec]}))
+    output = build_historical_regulations(manifest, tmp_path / "bundle")
+    subject = pq.read_table(output / "federal_register_issues/federal_register_issues.parquet").to_pylist()
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert "/Users/private" not in json.dumps(subject + receipts)
+    retained = json.loads(subject[0]["retained_renditions_json"])
+    assert set(retained[0]) == {"source_url", "sha256", "bytes"}
+    validate_receipt_bundle(
+        {name: [output / name / (name + ".parquet")] for name in POLICIES},
+        [output / "etl_receipts.parquet"],
+        list(POLICIES.values()),
+    )

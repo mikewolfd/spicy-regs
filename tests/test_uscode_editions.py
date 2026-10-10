@@ -81,9 +81,14 @@ def test_annual_editions_keep_carried_year_sidecars_and_unexpanded_native_labels
     observation = json.loads(records[0]["source_observation_json"])
     assert observation["bracketed"] and observation["parts"][0]["range_end"] == "3"
     assert records[0]["native_status"] is None
+    content = rows(output, "uscode_edition_sections")
+    assert len(content) == 2 and all(r["body_text"] is None for r in content)
+    assert {r["edition_id"] for r in content} == {r["edition_id"] for r in records}
     assert result["baseline_inputs"] == []
     receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
-    assert len(receipts) == 5 and all(r["generation_id"] == result["generation"] for r in receipts)
+    assert len(receipts) == 7 and all(r["generation_id"] == result["generation"] for r in receipts)
+    assert str(tmp_path) not in json.dumps(receipts)
+    assert all(r["witnesses"][0]["source_uri"] == result["inputs"][0]["sha256"] for r in receipts)
     repeated = reader.build(pin, tmp_path / "second")
     assert repeated["generation"] == result["generation"]
     assert repeated["outputs"] == result["outputs"]
@@ -102,6 +107,10 @@ def test_release_point_xml_keeps_own_edition_and_native_positions(tmp_path):
     assert {r["observation_kind"] for r in records} == {"xml-section", "xml-chapter"}
     assert {r["native_identifier"] for r in records} == {"/us/usc/t1/s1", "/us/usc/t1/ch1"}
     assert all(r["source_position"].startswith("/*[1]") for r in records)
+    content = rows(output, "uscode_edition_sections")
+    assert len(content) == 1 and content[0]["body_text"] == "Text."
+    assert content[0]["native_identifier"] == "/us/usc/t1/s1"
+    assert content[0]["source_context"] == "main-body-candidate"
 
 
 def test_late_invalid_member_cannot_activate_partial_output(tmp_path):
@@ -148,5 +157,14 @@ def test_changed_transitive_reader_refuses_candidate(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="reader changed"):
         reader.build(pin, tmp_path / "output")
     assert reads == 2
+    assert not (tmp_path / "output").exists()
+    assert not list(tmp_path.glob(".uscode-editions-*"))
+
+
+def test_late_unclosed_content_field_cannot_install_candidate(tmp_path):
+    source = zipped(("2016usc01.htm", annual(2016, tail="<!-- field-start:statute -->Unclosed")))
+    pin = manifest(tmp_path, ({"kind": "annual", "year": 2016}, source))
+    with pytest.raises(UsCodeSourceError, match="unclosed"):
+        reader.build(pin, tmp_path / "output")
     assert not (tmp_path / "output").exists()
     assert not list(tmp_path.glob(".uscode-editions-*"))

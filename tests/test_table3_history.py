@@ -71,5 +71,8 @@ def test_replay_writes_new_candidate_and_refuses_overwrite(tmp_path):
         assert position["act_record_position"] == row["act_record_position"]
         assert item["witnesses"][1]["sha256"] == row["member_sha256"]
         assert item["attempt_id"] == row["id"]
+        assert item["witnesses"][0]["source_uri"] == digest(body)
+        assert item["generation_id"] == receipt["generation"] != digest(body)
+        assert str(tmp_path) not in json.dumps(item)
     with pytest.raises(FileExistsError):
         replay(source, output, expected_sha256=digest(body), release_point="119-73")

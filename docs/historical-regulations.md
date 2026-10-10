@@ -32,9 +32,9 @@ All selected sources must finish before the requested output directory becomes
 visible. A digest mismatch, unsupported source, wrong native identity or capped
 read refuses the whole selection. Existing directories are never replaced.
 The bundle includes the exact selection, policy descriptors and combined
-generation-bound receipts. Its receipt generation is the SHA-256 of the exact
-selection manifest: it identifies that selected input scope, not a code build
-or public publication generation. External validation receipts pin the reader,
+generation-bound receipts. Its receipt generation combines the `historical-regulations-public-v2` recipe
+with the SHA-256 of the exact selection manifest. It identifies the selected
+input scope and receipt recipe, not a public publication generation. External validation receipts pin the reader,
 adapter and dependency code separately. Original MODS/XML and the manifest
 each have an exact-digest witness; pinned rendition metadata stays traceable
 through the manifest. Empty tables mean no selected source of that kind;
@@ -47,3 +47,12 @@ proof applies to these new selected-input destinations. Existing
 their baselines until their original API/edition input histories are recovered
 and separately replayed. Issue metadata and a dated snapshot cannot fill those
 missing inputs.
+
+Public row receipts use original content digests as witness references. Private
+filesystem paths remain in `selection.json`; publish only explicitly selected
+subject and receipt Parquet members. Keep every other local file outside the
+public artifact. Selection metadata admits only the defined
+source fields, and retained rendition metadata admits only publisher URL, digest
+and decoded size. Reader observations preserve native publisher text. Create
+fresh receipts for this recipe; inheriting old path-bearing receipt history
+would retain those earlier private witnesses.
