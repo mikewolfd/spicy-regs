@@ -2,7 +2,7 @@
 
 `NativeLegalReferencesRollup` builds `native_legal_references.parquet` and
 `native_legal_reference_reads.parquet` from an explicit local manifest. It uses
-SpicyDocs' CFR and U.S. Code scanners and the ordinary rollup generation and
+SpicyDocs' CFR, U.S. Code, bill and law scanners and the ordinary rollup generation and
 source-evidence lifecycle. It makes no acquisition requests.
 
 ```sh
@@ -38,7 +38,7 @@ their contracts, replacing each scope a complete read covers.
 ## Input selection and evidence
 
 Each `sources` entry requires a local `path`, exact `sha256:` digest,
-`source_family` (`ecfr` or `uscode`), `source_record_key`, `source_locator`, and
+`source_family` (`ecfr`, `uscode`, `bill` or `law`), `source_record_key`, `source_locator`, and
 `edition` (a literal or explicit JSON null). Relative paths resolve against the
 manifest directory. The manifest, exact XML bytes and optional target bytes
 enter the existing `CaptureEvidence` blob store and journal. Events say
@@ -148,3 +148,43 @@ the same JSON); 51 text candidates in 31 eCFR notes name citation rules `004`
 where the published rows name `003`; nothing else differs, and the lookup
 resolves the same 19 occurrences. The republish is the publication lane's.
 Receipt: `~/Work/corpora/fork-execution-2026-09-21/regs-adopt-052/native/rebuild-compare.json`.
+
+## Retained bill and law adapters
+
+The replay also accepts `source_family` values `bill` and `law`. Bill DTD
+`external-xref` elements preserve `legal-doc` and `parsable-cite` as literal
+attributes; they never acquire a fabricated href. Bill and law USLM href/ref
+observations preserve their original namespace, attributes and positional
+ancestry. Each family has its own source/record/edition replacement scope.
+
+For bill DTD references, only an unqualified `external-xref` with
+`legal-doc="usc"` and an exact `usc/<title>/<section>` spelling yields a Code
+section candidate. Subsection tails, ranges, contradictory document labels and
+unknown namespaces remain untyped. In bill/law inputs, GPO USLM `ref` hrefs use
+the existing exact USC/public-law/Statutes-at-Large grammar. These additions name
+`native-legislative-exact-reference/001`; existing U.S. Code and eCFR readings
+remain unchanged. The original XML retains the element text; occurrence rows
+retain the native reference attributes rather than claiming a text extraction.
+
+`qualification.kind="bill-dtd-xml"` checks the native bill and printing against
+`congress`, `bill_type`, `number` and `package_id`. The source record key is the
+complete `BILLS-...` package ID, and `edition` is its validated printing version,
+not a date. Other bill XML dialects remain local scanner inputs until an owner
+identity validator qualifies them. Inert external DTD declarations are accepted
+without loading them; internal entities and malformed XML refuse.
+
+`qualification.kind="law-native-xml"` checks `congress`, `law_kind` (public or
+private) and `number` against the law's native metadata and citable form. Its
+record key is `<congress>-<public|private>-<number>`. Law `edition` stays null:
+approval and processing dates do not establish an edition. `supporting_evidence`
+can retain pinned original journals beside either input; native identity
+validation alone does not establish historical acquisition time.
+
+Both adapters retain the existing source/total byte, observation and replacement
+bounds. Law source credits and unmarked prose are outside the selected forms.
+Successful empty scans replace only their exact scope; malformed or capped reads
+replace nothing. Adapter qualification covers only the named complete inputs.
+Per-table bill/law rebuilds, pre-bulk history and full congressional coverage
+require their own evidence; see the Stream E execution ledger. Local source
+journals and qualification facts can contain private paths and must pass the
+release lane's public-field review before publication.

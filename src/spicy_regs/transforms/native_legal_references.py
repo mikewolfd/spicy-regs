@@ -16,6 +16,7 @@ import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from functools import partial
 from typing import Any
 
 from spicy_docs.interpretation.native_legal_references import interpret_native_references
@@ -24,12 +25,15 @@ from spicy_docs.schemas.native_reference_rows import (
     NATIVE_LEGAL_REFERENCES,
     native_reference_scope_id,
     shape_ecfr_note,
+    shape_legislative_reference,
     shape_native_reference_read,
     shape_uscode_reference,
     shape_uscode_source_credit,
 )
 from spicy_docs.sources.cfr.authority import scan_ecfr_authority_notes
 from spicy_docs.sources.uscode.references import scan_uscode_references
+from spicy_docs.sources.congress.native_references import scan_bill_references
+from spicy_docs.sources.govinfo.native_references import scan_law_references
 
 from spicy_regs.citation_resolution import ROUTES, resolve_citations
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceContext
@@ -109,7 +113,7 @@ def build_native_legal_references(
             snapshots[table] = {"status": "retained_file", "sha256": _digest(body)}
         for spec in sources:
             family, record, edition = spec["source_family"], spec["source_record_key"], spec["edition"]
-            if family not in {"ecfr", "uscode"} or not isinstance(record, str) or not record:
+            if family not in {"ecfr", "uscode", "bill", "law"} or not isinstance(record, str) or not record:
                 raise ValueError("source family and nonblank record identity required")
             if edition is not None and (not isinstance(edition, str) or not edition):
                 raise ValueError("edition must be a nonblank literal or explicit null")
@@ -168,13 +172,17 @@ def build_native_legal_references(
                         on_source=lambda o: admit(o, shape_ecfr_note),
                         max_observations=10_000,
                     )
-                else:
+                elif family == "uscode":
                     scan_uscode_references(
                         body,
                         on_reference=lambda o: admit(o, shape_uscode_reference),
                         on_source_credit=lambda o: admit(o, shape_uscode_source_credit),
                         max_observations=10_000,
                     )
+                else:
+                    scanner = scan_bill_references if family == "bill" else scan_law_references
+                    shaper = partial(shape_legislative_reference, source_family=family)
+                    scanner(body, on_reference=lambda o: admit(o, shaper), max_observations=10_000)
             except Exception as error:
                 evidence.refusal(error, stage="native-legal-reference:" + scope)
                 raise

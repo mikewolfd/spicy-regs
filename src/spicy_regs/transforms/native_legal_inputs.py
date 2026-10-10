@@ -12,6 +12,9 @@ from typing import Callable
 from spicy_docs.sources.cfr import EcfrSelection, ecfr_xml_locator, validate_ecfr_xml
 from spicy_docs.sources.uscode import ReleasePoint, TitleSelection, title_xml_locator
 from spicy_docs.sources.uscode.archive import read_title_archive
+from spicy_docs.sources.govinfo.uslm import PublicLawSelection, public_law_xml_locator, validate_public_law_xml
+from spicy_docs.sources.congress.bill_status import BillIdentity
+from spicy_docs.sources.congress.bill_text import bill_xml_locator, validate_bill_text
 
 
 def qualify_source(spec: dict, body: bytes, read: Callable[[dict], bytes], retain: Callable) -> dict | None:
@@ -67,6 +70,36 @@ def qualify_source(spec: dict, body: bytes, read: Callable[[dict], bytes], retai
             "member": asdict(result.entry),
             "release_point": result.release_point,
             "edition_basis": "native docPublicationName and exact validated ZIP membership",
+        }
+    elif kind == "bill-dtd-xml":
+        request = BillIdentity(selection["congress"], selection["bill_type"], selection["number"])
+        package = selection["package_id"]
+        locator = bill_xml_locator(request, package)
+        metadata = validate_bill_text(
+            body,
+            identity=request,
+            package_id=package,
+            final_url=locator,
+            max_bytes=16 * 1024 * 1024,
+        )
+        if (spec["source_family"], spec["source_record_key"], spec["source_locator"]) != ("bill", package, locator):
+            raise ValueError("bill source identity differs from validated native printing")
+        if spec["edition"] != metadata.version_code:
+            raise ValueError("bill edition must name the validated printing version")
+        facts = {"kind": kind, "metadata": asdict(metadata), "identity_basis": "native bill and printing version"}
+    elif kind == "law-native-xml":
+        request = PublicLawSelection(selection["congress"], selection["law_kind"], selection["number"])
+        locator = public_law_xml_locator(request)
+        metadata = validate_public_law_xml(body, selection=request, final_url=locator, max_bytes=16 * 1024 * 1024)
+        record = f"{request.congress}-{request.kind}-{request.number}"
+        if (spec["source_family"], spec["source_record_key"], spec["source_locator"]) != ("law", record, locator):
+            raise ValueError("law source identity differs from validated native selection")
+        if spec["edition"] is not None:
+            raise ValueError("law edition must remain null; approval/processing dates are not editions")
+        facts = {
+            "kind": kind,
+            "metadata": asdict(metadata),
+            "identity_basis": "native Congress, kind, number and citable form; no new acquisition claimed",
         }
     else:
         raise ValueError("unsupported native input qualification")
