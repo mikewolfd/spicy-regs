@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.5"
+RULE_VERSION = "scorecard-resolution-v1.6"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -140,6 +140,17 @@ _CHAMBERS = {
     "senator": "senate",
     "us senate": "senate",
 }
+
+
+def qualified_item_targets(status: str, targets: Mapping, candidates: Sequence[Mapping]) -> tuple[dict, list[dict]]:
+    """Keep exact partial evidence among candidates; direct keys require a resolved association."""
+    retained = [dict(candidate) for candidate in candidates]
+    if status == "resolved":
+        return dict(targets), retained
+    for field, value in targets.items():
+        if value is not None and not any(candidate.get(field) == value for candidate in retained):
+            retained.append({field: value})
+    return {}, retained
 
 
 def _json(value: object) -> str:
@@ -882,8 +893,8 @@ class _Items:
             rule += "_incomplete"
         if not has_roll:
             reasons.append("no_roll_selected_from_bill_or_amendment_alone")
+        targets, candidates = qualified_item_targets(status, targets, candidates)
         if conflicts:
-            targets = {}
             congress = chamber = session = roll = None
         output = {
             "congress": None if conflicts else congress or edition_measure_congress,
