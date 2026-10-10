@@ -62,6 +62,7 @@ docs = [
 build-historical-regulations = "spicy_regs.transforms.historical_regulations:main"
 build-table3-history = "spicy_regs.sources.table3_history:main"
 build-uscode-editions = "spicy_regs.sources.uscode_editions:main"
+audit-uscode-editions = "spicy_regs.sources.uscode_editions_audit:main"
 run-rollup-scorecards = "spicy_regs.pipelines.rollups.scorecards:app"
 run-rollup-scorecard-analysis = "spicy_regs.pipelines.rollups.scorecard_analysis:app"
 materialize-rulemaking = "spicy_regs.pipelines.rulemaking_dataset:app"
