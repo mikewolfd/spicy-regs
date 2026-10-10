@@ -86,6 +86,7 @@ def build_scorecard_analysis(
     source_generation_id: str | None = None,
     official_receipts: Mapping[str, tuple[Path, str]] | None = None,
     receipt_generation_id: str | None = None,
+    projected_official_index: Mapping | None = None,
 ) -> tuple[Path, Path]:
     """Resolve already verified inputs; the rollup owns download and generation pins.
 
@@ -111,13 +112,25 @@ def build_scorecard_analysis(
     )
     if not source["scorecards"]:
         raise ValueError("An empty scorecard corpus cannot qualify an analysis generation")
-    if official_receipts is None or set(official_receipts) != set(OFFICIAL_TABLES):
+    from spicy_regs.scorecards.analysis_inputs import (
+        PROJECTED_NATIVE_OFFICIAL_TABLES, read_published_native_resolver_rows,
+    )
+    projected = PROJECTED_NATIVE_OFFICIAL_TABLES if projected_official_index is not None else frozenset()
+    if projected_official_index is not None:
+        from spicy_regs.sources import publication
+        if any(input_pins[name] != publication.table_pin(projected_official_index, name + ".parquet")
+               for name in projected):
+            raise ValueError("Projected resolver inputs differ from their selected publication pins")
+    if official_receipts is None or set(official_receipts) != set(OFFICIAL_TABLES) - projected:
         raise ValueError("Every official analysis input requires its selected native receipts")
     from spicy_regs.congress_receipts import CongressInput
 
     official = {}
     with TemporaryDirectory(prefix="scorecard-official-inputs-") as temporary:
         for name in OFFICIAL_TABLES:
+            if name in projected:
+                official[name] = read_published_native_resolver_rows(projected_official_index, name, input_paths[name])
+                continue
             receipts, generation_id = official_receipts[name]
             selected = CongressInput(tuple(input_paths[name]), receipts, generation_id)
             path = selected.materialize(name, Path(temporary) / (name + ".parquet"))
@@ -143,6 +156,10 @@ def build_scorecard_analysis(
             for name, rows in results.items()
         },
         "scope": "Exact identity links for the stated inputs; published publisher ratings remain unchanged.",
+        "official_input_representations": {
+            name: "complete_pinned_native_main_fields" if name in projected else "receipt_checked_original_source_fields"
+            for name in OFFICIAL_TABLES
+        },
     }
     (output_dir / "scorecard-analysis-qualification.json").write_text(json.dumps(receipt, indent=2) + "\n")
     return paths[0], paths[1]

@@ -13,6 +13,46 @@ from spicy_regs.scorecards.resolution import OFFICIAL_COLUMNS
 from spicy_regs.sources import publication
 
 
+PROJECTED_NATIVE_OFFICIAL_TABLES = frozenset({"congress_bills", "amendments", "roll_call_votes"})
+
+
+def read_published_native_resolver_rows(snapshot, name, paths):
+    """Read complete pinned main fields when the resolver needs no processing fields.
+
+    Member aliases and term observations still use the receipt-backed reader:
+    native structs cannot distinguish an omitted source property from null.
+    This path admits exact native schemas, bytes and populations, and does not
+    claim to revalidate source receipts or reconstruct the original source row.
+    """
+    from spicy_regs.congress_receipts import policy
+    from spicy_regs.local_data import file_signature
+    if name not in PROJECTED_NATIVE_OFFICIAL_TABLES:
+        raise ValueError("Resolver main-field reads are not qualified for: " + name)
+    owner = publication.table_owner(snapshot, name + ".parquet")
+    if owner is None or name not in owner[1].get("etlReceipts", {}).get("datasets", ()):
+        raise ValueError("Resolver main-field reads require a selected native publication")
+    members = publication.table_members(snapshot, name + ".parquet")
+    if not paths or len(paths) != len(members):
+        raise ValueError("Resolver main-field reads require every selected member")
+    rows = []
+    for path, member in zip(paths, members, strict=True):
+        before = file_signature(path)
+        with path.open("rb") as stream:
+            digest = "sha256:" + file_digest(stream, "sha256").hexdigest()
+        if digest != member.sha256 or path.stat().st_size != member.byte_size:
+            raise ValueError("Resolver main input differs from its selected immutable pin")
+        with pq.ParquetFile(path) as source:
+            if not source.schema_arrow.equals(policy(name).subject_schema, check_metadata=False):
+                raise ValueError("Resolver main input differs from its exact native schema")
+            for batch in source.iter_batches(batch_size=2000, columns=list(OFFICIAL_COLUMNS[name])):
+                rows.extend(batch.to_pylist())
+        if file_signature(path) != before:
+            raise ValueError("Resolver main input changed during its read")
+    if len(rows) != owner[1]["tables"][name + ".parquet"]["rows"]:
+        raise ValueError("Resolver main input differs from the complete selected population")
+    return rows
+
+
 def _rows(paths):
     for path in paths:
         with pq.ParquetFile(path) as reader:

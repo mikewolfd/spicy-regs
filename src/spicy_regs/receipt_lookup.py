@@ -24,8 +24,9 @@ from spicy_regs.subject_catalog import descriptors
 TOOL = "read_receipt_fields"
 MAX_KEYS = 100
 #: The most receipts whose record ids a lookup scans to find its keys, and the most subject rows it searches for a
-#: key no receipt holds (owner decision 2026-10-05). No published member is ordered by record id, so the scan is
-#: the only way in. Measured the same day on the public bucket: sam_entities' 797,525 receipts cost one lookup
+#: key no receipt holds (owner decision 2026-10-05). A declared, admitted receipt key index avoids the receipt
+#: scan; subject searches for missing keys retain this bound. Measured the same day on the public bucket:
+#: sam_entities' 797,525 receipts cost one lookup
 #: 28.6 MiB in 800 range requests.
 SCAN_ROW_BOUND = 2_000_000
 
@@ -162,6 +163,44 @@ def tables_with_receipts(index: Mapping, local: Mapping | None, base_url: str,
                   and selected_member(index, local, base_url, table, snapshot) is not None)
 
 
+def _selected_index(index: Mapping, local: Mapping | None, base_url: str, table: str,
+                    member: Member, rows: int) -> tuple[str, Mapping, Mapping] | None:
+    """The admitted sidecar paired with this exact receipt selection, never another generation's index."""
+    from pathlib import Path
+    from spicy_regs.sources.publication import table_owner
+
+    native = (local or {}).get("native", {}).get(table)
+    if native is not None:
+        descriptor = native.get("key_index_descriptor")
+        location = native.get("key_index")
+        if (descriptor is None) != (location is None):
+            raise ValueError("Selected native receipt index declaration is incomplete")
+        if descriptor is None:
+            return None
+        # The local selection reader admitted these paired bytes before constructing the connection.
+        receipt = {"sha256": descriptor["receiptSha256"], "byteSize": Path(member.location).stat().st_size,
+                   "rows": rows}
+        return location, descriptor, receipt
+    owner = table_owner(index, f"{table}.parquet")
+    if owner is None:
+        return None
+    family, entry = owner
+    receipt = entry.get("etlReceipts", {})
+    descriptor = receipt.get("keyIndex")
+    if descriptor is None:
+        return None
+    if family != member.family or receipt.get("sha256") != member.sha256:
+        raise ValueError("Selected receipt index belongs to another receipt member")
+    path = f"{entry['prefix']}/{descriptor['key']}"
+    if local is None:
+        location = f"{base_url.rstrip('/')}/{path}"
+    else:
+        location = local.get("receipt_indexes", {}).get(path)
+        if location is None:
+            raise ValueError("Declared receipt key index is absent from the local selection")
+    return location, descriptor, receipt
+
+
 class _Group(NamedTuple):
     """One row group of a receipt member: its rows' position and the footer's bounds on two columns."""
 
@@ -180,7 +219,7 @@ class _Group(NamedTuple):
 #: read twice.
 _FOOTERS: dict[tuple[str, str], tuple[_Group, ...]] = {}
 #: What a pinned member's receipts state for a dataset (:func:`_stated_identities`), by (location, sha256, dataset).
-_STATED: dict[tuple[str, str, str], dict[str, tuple[str, list]]] = {}
+_STATED: dict[tuple, dict[str, tuple[str, list]]] = {}
 
 
 def _cached(cache: dict, key: tuple, pinned: bool, read: Callable[[], Any]) -> Any:
@@ -514,16 +553,44 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
     groups = _footer(cursor, member)
     candidates = [i for i, group in enumerate(groups) if _within(group.datasets, table)]
     receipts = sum(groups[i].rows for i in candidates)
+    selected_index = _selected_index(index, local, base_url, table, member, sum(group.rows for group in groups))
     # Decided from the footer alone, before any row is read: the member this refuses is the largest there is.
-    if receipts > SCAN_ROW_BOUND:
+    if selected_index is None and receipts > SCAN_ROW_BOUND:
         raise ValueError(
             f"{TOOL} is not available for {table}: a lookup reads the record id of every receipt of the table, "
             f"and it has {receipts:,}, over the {SCAN_ROW_BOUND:,}-receipt bound. describe_table's notes say "
             "which of its receipt values a row's own columns give.")
-    stated = _stated_identities(cursor, member, groups, candidates, table)
+    if selected_index is None:
+        stated = _stated_identities(cursor, member, groups, candidates, table)
+    else:
+        from spicy_regs.receipt_key_index import identity_samples
+
+        location, descriptor, receipt = selected_index
+        def indexed_identities():
+            rows = identity_samples(cursor, member.location, location, descriptor, receipt, dataset=table)
+            return {row["policy_version"]: (row["record_id"], _unpack(json.loads(row["identity_json"])))
+                    for row in rows}
+        # Admission precedes all receipt reads. Local indexes retain mutation checks
+        # on every call; immutable remote pins share the whole-version statement.
+        from spicy_regs.receipt_key_index import check_reader
+        check_reader(cursor, location, descriptor, receipt)
+        stated = _cached(_STATED, (member.location, member.sha256 or "", table, location,
+                                   descriptor["sha256"], descriptor["byteSize"]),
+                         member.sha256 is not None and location.startswith(("https://", "http://")),
+                         indexed_identities)
     _refuse_other_identity(policy, stated)
     record_ids = [subject_identity(policy, key)[0] for key in typed]
-    found = _accepted(cursor, member, groups, candidates, table, list(dict.fromkeys(record_ids)))
+    unique_ids = list(dict.fromkeys(record_ids))
+    if selected_index is None:
+        found = _accepted(cursor, member, groups, candidates, table, unique_ids)
+    else:
+        from spicy_regs.receipt_key_index import lookup_receipts
+
+        location, descriptor, receipt = selected_index
+        indexed = lookup_receipts(cursor, member.location, location, descriptor, receipt,
+                                  dataset=table, record_ids=unique_ids)
+        found = {record_id: [row["processing_json"] for row in rows]
+                 for record_id, rows in zip(unique_ids, indexed, strict=True) if rows}
     unheld = [key for key, record_id in zip(typed, record_ids, strict=True) if record_id not in found]
     in_table = _held_keys(cursor, policy, list({json.dumps(key): key for key in unheld}.values())) if unheld else set()
     entries, absent = [], set()

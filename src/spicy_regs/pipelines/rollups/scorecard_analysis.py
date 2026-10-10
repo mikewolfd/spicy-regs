@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.scorecards.inputs import stage_member
+from spicy_regs.scorecards.analysis_inputs import PROJECTED_NATIVE_OFFICIAL_TABLES
 from spicy_regs.scorecards.etl import LINK_NAMES, POLICIES, verified_receipt_download
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import publication
@@ -34,6 +35,7 @@ class ScorecardAnalysisRollup(RollupPipeline):
         if snapshot is None:
             raise publication.PublicationError("Scorecard analysis requires a captured publication index")
         entries = analysis_input_entries(snapshot)
+        self._scorecard_projected_official_index = snapshot
         public_url = getenv("R2_PUBLIC_URL")
         parents, paths = {}, {}
         for key in self.inputs:
@@ -62,6 +64,8 @@ class ScorecardAnalysisRollup(RollupPipeline):
             )
             self._scorecard_source_generation = source_owner["etlReceipts"]["generationId"]
         for name in OFFICIAL_TABLES:
+            if name in PROJECTED_NATIVE_OFFICIAL_TABLES:
+                continue
             owner = entries[name]
             if "etlReceipts" in owner:
                 receipt = verified_receipt_download(
@@ -83,6 +87,7 @@ class ScorecardAnalysisRollup(RollupPipeline):
             source_generation_id=self._scorecard_source_generation,
             official_receipts=self._official_receipts,
             receipt_generation_id=self.receipt_generation_id,
+            projected_official_index=self._scorecard_projected_official_index,
         )
 
 
