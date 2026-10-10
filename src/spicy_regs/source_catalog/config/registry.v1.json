@@ -7112,6 +7112,91 @@
           "sha256": "1f3079c0ef8f84a36737b52f9aea57522d91a3d1518ad5b92dba7a8a17727e04"
         }
       ]
+    },
+    {
+      "id": "family:committee-reports:historical:committee-report-reads",
+      "collection_id": "family:committee-reports",
+      "table": "committee_report_reads",
+      "family": "committee-reports",
+      "status": "held-readable-historical-rebuild-unproven",
+      "reason": "Independent historical baseline table is retained and readable. It is not an alias of current committee_report_read_outcomes and is not a current publication destination. Source-only recovery and historical processing provenance remain unproved.",
+      "published": false,
+      "applies_to_existing_destination": false,
+      "required_baselines": [
+        "rebuild-seeds/committee-reports/925b245110c59ae3a605da56c0ac95fdb79a75aa74c0ecb21868af8398bb07b5"
+      ],
+      "historical_lineage_unchanged": true,
+      "historical_dependency_input": {
+        "path": "metadata/source-catalog-program/20261010/H/committee-report-reads-proposed-correction.json",
+        "sha256": "00f840e5af9e5d7d617bde556f64f0503529243d276198e3304be3b1e80a7daf"
+      },
+      "historical_member": {
+        "path": "rebuild-seeds/committee-reports/925b245110c59ae3a605da56c0ac95fdb79a75aa74c0ecb21868af8398bb07b5/committee_report_reads.parquet",
+        "sha256": "a40e7f8c21c33fd683c1aae0edf22ac23867911ff722ab5b45681060458cd275",
+        "bytes": 2514,
+        "rows": 124
+      }
+    },
+    {
+      "id": "family:gao-recommendations:destination:selected-history-candidate",
+      "collection_id": "family:gao-recommendations",
+      "tables": [
+        "gao_recommendations"
+      ],
+      "family": "gao-recommendations",
+      "route_id": "family:gao-recommendations:gao-open-export",
+      "status": "selected-history-qualified-local",
+      "reason": "Pinned ordered retained exports reproduce selected GAO producer values and duplicate multiplicity, with a new native candidate and receipt roundtrip. Producer row order differs. Historical native subject bytes and receipt identities were not compared or recreated; no whole-family coverage or baseline-retirement qualification. The selected historical publication context is not this candidate publication.",
+      "qualification_scope": "Selected ordered retained recommendation exports; full producer values and duplicate multiplicity plus new native receipt roundtrip; historical native equivalence and whole-family coverage unproved",
+      "qualification_input": {
+        "path": "metadata/source-catalog-program/20261010/F/gao-replay-isolated-v1/qualification.json",
+        "sha256": "b80b30e567604546e34a8cdbb85def2903bf807acbf54b4b82ce984b41bb9d79"
+      },
+      "review_input": {
+        "path": "metadata/source-catalog-program/20261010/F/reviews/results-gao/verdict.json",
+        "sha256": "37cd0250a36244b5c3ca26682e9d3bd5f8875e46ee795cc94a6e480c13bc9b48"
+      },
+      "resource_input": {
+        "path": "metadata/source-catalog-program/20261010/F/gao-run-result-v1.json",
+        "sha256": "ae437bca4c5d1564a5ffd67e27df1a865d2be0570c910b570836020ec93a8073"
+      },
+      "published": false,
+      "applies_to_existing_destination": false,
+      "historical_lineage_unchanged": true,
+      "selected_generation_context": "sha256:0241b8ab5a3662d39292f2d08ccfb81d8d7f0d75e1f1e765b2fc423a4c04d8b0",
+      "local_candidate_outputs": [
+        {
+          "table": "gao_recommendations",
+          "path": "metadata/source-catalog-program/20261010/F/gao-replay-isolated-v1/gao_recommendations.parquet",
+          "sha256": "b1b583426435ee6ab5cb3ed69d6ce64ce93d9d8ba26b8e66f87b8cf515d5142c",
+          "rows": 5463
+        }
+      ]
+    },
+    {
+      "id": "family:laws:pilot:annual-1994-content",
+      "collection_id": "family:laws",
+      "tables": [
+        "uscode_editions",
+        "uscode_edition_structure",
+        "uscode_edition_sections"
+      ],
+      "family": "uscode",
+      "route_id": "family:laws:uscode-annual",
+      "status": "failed-resource-cap-unqualified",
+      "reason": "Selected annual 1994 content pilot stopped when sampled aggregate memory exceeded its allocation. No installed candidate or independent content qualification exists; extraction progress and provisional scratch outputs are not proof. Existing separate structure qualification remains unchanged.",
+      "published": false,
+      "applies_to_existing_destination": false,
+      "failure_input": {
+        "path": "metadata/source-catalog-program/20261010/D/annual1994-pilot-v1/run-result.json",
+        "sha256": "634435239031c878471d12448604cb3314cb0af54a852a5047fa1d47c7918cfb"
+      },
+      "review_input": {
+        "path": "metadata/source-catalog-program/20261010/D/annual1994-pilot-v1/review/resource-failure-verdict.json",
+        "sha256": "cb40ecd8b8f68b13f68509f271b01936770c9b7bde664b03d94f1739c3787d4b"
+      },
+      "local_candidate_outputs": [],
+      "historical_lineage_unchanged": true
     }
   ],
   "relationships": [
@@ -9277,6 +9362,23 @@
         "path": "metadata/source-catalog-program/20261010/A/table3-live-qualification.json",
         "sha256": "12f76fc168f1eae8c49d766935f24ef6fc6eb0990cbbba805aca3d33cfb6fa25"
       }
+    },
+    {
+      "id": "family:cfr-sections:observed-traversal:CFR-2025-title1-vol1",
+      "collection_id": "family:cfr-sections",
+      "route_id": "family:cfr-sections:cfr",
+      "status": "observed-traversal-complete-stability-unqualified",
+      "scope": "GovInfo CFR-2025-title1-vol1 selected package granules only",
+      "declared_count": 400,
+      "observed_count": 400,
+      "inventory_stable": false,
+      "confirmed_removal_eligible": false,
+      "note": "Selected observed traversal is complete within this package response, but publisher population stability and historical equivalence remain unproved. Self-comparison demonstrates proof binding and stability refusal; no update or removal is established.",
+      "traversal_input": {
+        "path": "metadata/source-catalog-program/20261010/C/B-source-bound-traversal-handoff.json",
+        "sha256": "cb63ab597f8e8df101cca47cedfbb3b1a5c42b2903918a2532979f7f86446e6b"
+      },
+      "historical_lineage_unchanged": true
     }
   ],
   "qualification": {

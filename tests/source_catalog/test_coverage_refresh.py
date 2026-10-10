@@ -364,3 +364,48 @@ def test_declared_code_links_preserve_structure_only_scope():
         assert destinations[ident]["qualification_input"] == declared["qualification_input"]
     assert declared["published"] is False
     assert "no normalized section-body extraction" in declared["qualification_scope"]
+
+
+def test_post_integration_registry_preserves_scoped_authorities(index):
+    registry = json.loads(
+        (Path(__file__).parents[2] / "src/spicy_regs/source_catalog/config/registry.v1.json").read_text()
+    )
+    planned = {item["id"]: item for item in registry["planned"]}
+    historical = planned["family:committee-reports:historical:committee-report-reads"]
+    failed = planned["family:laws:pilot:annual-1994-content"]
+    candidate = planned["family:gao-recommendations:destination:selected-history-candidate"]
+    assert historical["historical_member"]["rows"] == 124
+    assert historical["table"] == "committee_report_reads"
+    assert failed["status"] == "failed-resource-cap-unqualified"
+    assert failed["local_candidate_outputs"] == []
+    for item in [historical, failed, candidate]:
+        assert item["published"] is False
+        index.execute("INSERT INTO evidence VALUES(?,?,?,?)", (item["id"], "code", "planned", json.dumps(item)))
+    result = coverage(index)["collections"][0]
+    assert result["stages"]["published"]["status"] == "unknown"
+    measurements = result["stages"]["processed"]["measurements"]
+    assert len(measurements) == 1
+    assert measurements[0]["count"] == 5463
+    assert measurements[0]["scope"]["table"] == "gao_recommendations"
+    assert "historical native equivalence" in measurements[0]["scope"]["qualification_scope"]
+    observed = next(
+        item
+        for item in registry["observations"]
+        if item["id"] == "family:cfr-sections:observed-traversal:CFR-2025-title1-vol1"
+    )
+    assert observed["inventory_stable"] is False
+    assert observed["confirmed_removal_eligible"] is False
+
+
+def test_complete_observed_traversal_without_stability_never_confirms_removal(tmp_path):
+    old = snapshot(tmp_path / "old.json", [("gone", "Gone")])
+    new = snapshot(tmp_path / "new.json", [], observation="fresh")
+    old_proof = completion(tmp_path / "old-proof.json", old)
+    new_proof = completion(tmp_path / "new-proof.json", new)
+    value = json.loads(new_proof.read_text())
+    value["status"] = "observed-traversal-complete-stability-unqualified"
+    value["inventory_stable"] = False
+    write(new_proof, value)
+    report = compare_now(old, new, previous_completion=old_proof, current_completion=new_proof)
+    assert report["removed"] == []
+    assert report["not_seen_unconfirmed"] == ["gone"]
