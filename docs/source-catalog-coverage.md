@@ -92,3 +92,33 @@ and source-details view display scoped measurements. Public release and
 deployed readback remain A's dependency. Internal
 coverage reports contain evidence references and must not be published as
 public exports without the existing field allowlist and privacy checks.
+
+## Retained publication observations
+
+Select a retained response explicitly with `build --publication-observation
+<selection.json>`. This additive input uses format
+`spicy-retained-publication-selection`, version `1`: a credential-free
+`publication_url` and exact `path`, `sha256` and
+`bytes` pins for `publication`, `headers`, `capture`, `row_bindings`, and optional
+`evidence_inputs`. The importer checks the successful digest-matched capture,
+HTTP Date, complete descriptor bindings and selected historical inventory.
+Every selected input contributes to the new catalog generation.
+
+The resulting collection detail can include `publicationObservations`. Each
+observation records the response digest, family artifact digest and prefix,
+individual table or partition member identities, and three separate times:
+client capture time, family `publishedAt`, and server HTTP Date. Partitioned
+tables retain member keys, partition values and digests; they have no invented
+aggregate member digest. The reader validates this optional field and the
+existing detail request loads it. Older details remain readable.
+
+Historical inventory tables and coverage measurements remain intact. An exact
+family and table association locates the retained observation; it does not
+verify member content, establish current live status, qualify source coverage
+or choose an active release. Unqualified associations receive a separate
+`publication:<family>` collection. In particular, serving `comments` and
+inventory `comments-mirror` remain separate until their owner qualifies an
+association. Court's accepted processing delta remains independent evidence;
+a retained Court publication does not establish the full historical merge or
+qualify that delta for publication. The coordinator owns any future release
+selection and canonical inventory changes.

@@ -24,6 +24,7 @@ def main() -> None:
         "--table-inputs-input", type=Path, help="Pinned table dependency overlay; corpus stays unchanged"
     )
     create.add_argument("--discovery", type=Path, action="append", default=[])
+    create.add_argument("--publication-observation", type=Path, action="append", default=[])
     publish = commands.add_parser("export")
     publish.add_argument("--index", type=Path, required=True)
     publish.add_argument("--output", type=Path, required=True)
@@ -51,6 +52,7 @@ def main() -> None:
             args.output,
             config=args.config,
             discovery=args.discovery,
+            publication_observations=args.publication_observation,
             catalog_input=args.catalog_input,
             table_inputs_input=args.table_inputs_input,
         )

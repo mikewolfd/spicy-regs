@@ -783,3 +783,252 @@ def test_overlay_cli_routes_selected_paths(corpus, tmp_path, monkeypatch, capsys
     assert result["status"] == "validated"
     assert str(catalog.resolve()) in result["inputs"]
     assert str(tables.resolve()) in result["inputs"]
+
+
+def publication_selection(tmp_path, *, cross_family=False, partitioned=False):
+    """A retained response and independently pinned capture, never a live fetch."""
+    from spicy_regs.source_catalog.storage import digest
+
+    family = "comments" if cross_family else "test"
+    descriptor = {"byteSize": 4, "rows": 2, "sha256": "sha256:" + "c" * 64}
+    if partitioned:
+        descriptor.pop("sha256")
+        descriptor["partitionColumns"] = ["year"]
+        descriptor["members"] = [
+            {
+                "key": "test/year=2026/part.parquet",
+                "byteSize": 4,
+                "rows": 2,
+                "sha256": "sha256:" + "d" * 64,
+                "partition": {"year": "2026"},
+            }
+        ]
+    publication = write(
+        tmp_path,
+        "publication.json",
+        {
+            "format": "spicy-regs-publication",
+            "version": 2,
+            "families": {
+                family: {
+                    "artifactDigest": "sha256:" + "b" * 64,
+                    "prefix": "generations/test/" + "b" * 64,
+                    "publishedAt": "2026-10-10T01:36:31Z",
+                    "tables": {"test.parquet": descriptor},
+                }
+            },
+        },
+    )
+    headers = tmp_path / "headers.txt"
+    headers.write_text("HTTP/2 200\ndate: Sat, 10 Oct 2026 19:54:12 GMT\n")
+
+    def pin(path):
+        return {"path": str(path), "sha256": digest(path), "bytes": path.stat().st_size}
+
+    capture_at = "2026-10-10T19:54:12.354210+00:00"
+    capture = write(
+        tmp_path,
+        "capture.json",
+        {
+            "observed_at": capture_at,
+            "observations": [
+                {
+                    "exit_code": 0,
+                    "bytes": publication.stat().st_size,
+                    "sha256": digest(publication).removeprefix("sha256:"),
+                    "url": "https://public.example/publication.json",
+                }
+            ],
+        },
+    )
+    bindings = write(
+        tmp_path,
+        "bindings.json",
+        {
+            "format": "B-successor-retained-publication-row-bindings",
+            "version": 1,
+            "publication_input": pin(publication),
+            "header_input": pin(headers),
+            "client_capture_at": capture_at,
+            "response_http_date": {"utc": "2026-10-10T19:54:12+00:00"},
+            "rows": [
+                {
+                    "publication_family": family,
+                    "table": "test.parquet",
+                    "artifact_digest": "sha256:" + "b" * 64,
+                    "artifact_prefix": "generations/test/" + "b" * 64,
+                    "member_sha256": descriptor.get("sha256"),
+                    "member_bytes": 4,
+                    "member_rows": 2,
+                    "partition_members": descriptor.get("members"),
+                    "partition_columns": descriptor.get("partitionColumns"),
+                    "family_published_at": "2026-10-10T01:36:31Z",
+                    "descriptor_locator": ["families", family, "tables", "test.parquet"],
+                    "v4_inventory_bindings": [
+                        {"collection_id": "family:test", "inventory_family": "test", "artifact_digest": "sha256:output"}
+                    ],
+                }
+            ],
+        },
+    )
+    return write(
+        tmp_path,
+        "selection.json",
+        {
+            "format": "spicy-retained-publication-selection",
+            "version": 1,
+            "publication_url": "https://public.example/publication.json",
+            "publication": pin(publication),
+            "headers": pin(headers),
+            "capture": pin(capture),
+            "row_bindings": pin(bindings),
+            "evidence_inputs": [],
+        },
+    )
+
+
+@pytest.mark.parametrize("cross_family,partitioned", [(False, False), (True, False), (False, True)])
+def test_retained_publication_preserves_inventory_and_scoped_coverage(corpus, tmp_path, cross_family, partitioned):
+    from spicy_regs.source_catalog.coverage import coverage
+
+    config = write(tmp_path, "config.json", {"collections": [{"id": "family:test", "families": ["test"]}]})
+    original = tmp_path / "original.sqlite"
+    build(corpus, original, config=config)
+    with connect(original, readonly=True) as db:
+        old_tables = [tuple(row) for row in db.execute("SELECT * FROM tables ORDER BY 1")]
+        old_coverage = coverage(db, "family:test")
+    selection = publication_selection(tmp_path, cross_family=cross_family, partitioned=partitioned)
+    output = tmp_path / "selected.sqlite"
+    result = build(corpus, output, config=config, publication_observations=[selection])
+    with connect(output, readonly=True) as db:
+        assert [tuple(row) for row in db.execute("SELECT * FROM tables ORDER BY 1")] == old_tables
+        selected_coverage = coverage(db, "family:test")
+        selected_coverage.pop("catalog_generation")
+        old_coverage.pop("catalog_generation")
+        assert selected_coverage == old_coverage
+    assert str(selection.resolve()) in result["inputs"]
+    manifest = export(output, tmp_path / "public")
+    cid = "publication:comments" if cross_family else "family:test"
+    entry = next(item for item in manifest["collections"] if item["id"] == cid)
+    detail = json.loads((tmp_path / "public" / entry["detailPath"]).read_text())
+    observation = detail["publicationObservations"][0]
+    assert observation["associationStatus"] == ("unqualified" if cross_family else "exact-family")
+    assert observation["captureAt"] != observation["serverDate"] != observation["familyPublishedAt"]
+    assert observation["artifactDigest"] == "sha256:" + "b" * 64
+    assert ("members" in observation["tables"][0]) == partitioned
+    if cross_family:
+        historical = next(item for item in manifest["collections"] if item["id"] == "family:test")
+        assert "publicationObservations" not in json.loads((tmp_path / "public" / historical["detailPath"]).read_text())
+    validate_public(detail)
+
+
+@pytest.mark.parametrize(
+    "fault", ["pin", "capture", "descriptor", "inventory", "duplicate", "missing", "partition", "timestamp"]
+)
+def test_retained_publication_rejects_invalid_selection_atomically(corpus, tmp_path, fault):
+    from spicy_regs.source_catalog.storage import digest
+
+    config = write(tmp_path, "config.json", {"collections": [{"id": "family:test", "families": ["test"]}]})
+    output = tmp_path / "active.sqlite"
+    build(corpus, output, config=config)
+    before = output.read_bytes()
+    selection_path = publication_selection(tmp_path, partitioned=fault == "partition")
+    selection = json.loads(selection_path.read_text())
+    if fault == "pin":
+        selection["publication"]["sha256"] = "sha256:" + "f" * 64
+    else:
+        key = "capture" if fault in ["capture", "timestamp"] else "row_bindings"
+        path = tmp_path / ("capture.json" if fault in ["capture", "timestamp"] else "bindings.json")
+        value = json.loads(path.read_text())
+        if fault == "timestamp":
+            value["observed_at"] = "2026-10-10 19:54:12+00:00"
+        elif fault == "capture":
+            value["observations"][0]["bytes"] += 1
+        elif fault == "descriptor":
+            value["rows"][0]["member_rows"] += 1
+        elif fault == "inventory":
+            value["rows"][0]["v4_inventory_bindings"][0]["inventory_family"] = "other"
+        elif fault == "duplicate":
+            value["rows"].append(value["rows"][0])
+        elif fault == "missing":
+            value["rows"] = []
+        elif fault == "partition":
+            value["rows"][0]["partition_members"][0]["rows"] += 1
+        path.write_text(json.dumps(value))
+        selection[key] = {"path": str(path), "sha256": digest(path), "bytes": path.stat().st_size}
+    selection_path.write_text(json.dumps(selection))
+    with pytest.raises(ValueError):
+        build(corpus, output, config=config, publication_observations=[selection_path])
+    assert output.read_bytes() == before
+    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "failed"
+
+
+def test_identical_publication_bytes_keep_distinct_client_captures(corpus, tmp_path):
+    from spicy_regs.source_catalog.storage import digest
+
+    config = write(tmp_path, "config.json", {"collections": [{"id": "family:test", "families": ["test"]}]})
+    first = publication_selection(tmp_path)
+    selection = json.loads(first.read_text())
+    capture = json.loads((tmp_path / "capture.json").read_text())
+    bindings = json.loads((tmp_path / "bindings.json").read_text())
+    capture["observed_at"] = bindings["client_capture_at"] = "2026-10-11T19:54:12+00:00"
+    for key, name, value in [
+        ("capture", "later-capture.json", capture),
+        ("row_bindings", "later-bindings.json", bindings),
+    ]:
+        path = write(tmp_path, name, value)
+        selection[key] = {"path": str(path), "sha256": digest(path), "bytes": path.stat().st_size}
+    later = write(tmp_path, "later-selection.json", selection)
+    output = tmp_path / "captures.sqlite"
+    build(corpus, output, config=config, publication_observations=[first, later, first])
+    with connect(output, readonly=True) as db:
+        observations = [
+            json.loads(row[0]) for row in db.execute("SELECT data FROM evidence WHERE kind='publication_observation'")
+        ]
+    assert len(observations) == 2
+    assert len({item["id"] for item in observations}) == 2
+    assert {item["captureAt"] for item in observations} == {
+        "2026-10-10T19:54:12.354210+00:00",
+        "2026-10-11T19:54:12+00:00",
+    }
+
+
+def test_retained_publication_requires_selected_response_url(corpus, tmp_path):
+    config = write(tmp_path, "config.json", {"collections": [{"id": "family:test", "families": ["test"]}]})
+    selection_path = publication_selection(tmp_path)
+    selection = json.loads(selection_path.read_text())
+    selection["publication_url"] = "https://other.example/publication.json"
+    selection_path.write_text(json.dumps(selection))
+    with pytest.raises(ValueError, match="digest-matched response"):
+        build(corpus, tmp_path / "refused.sqlite", config=config, publication_observations=[selection_path])
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["https://user:password@example.invalid/path", "https://public.invalid/?token=private", "/Users/private/label"],
+)
+def test_retained_publication_partition_labels_fail_closed_for_private_values(value):
+    from spicy_regs.source_catalog.exporter import public_publication
+
+    item = {
+        "id": "publication:test",
+        "tables": [
+            {
+                "table": "test.parquet",
+                "rows": 1,
+                "bytes": 1,
+                "partitionColumns": ["label"],
+                "members": [
+                    {
+                        "key": "test/part.parquet",
+                        "sha256": "sha256:" + "a" * 64,
+                        "rows": 1,
+                        "bytes": 1,
+                        "partition": {"label": value},
+                    }
+                ],
+            }
+        ],
+    }
+    with pytest.raises(ValueError):
+        public_publication(item)

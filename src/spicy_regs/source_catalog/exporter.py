@@ -92,6 +92,54 @@ def write_json(path: Path, value: dict, *, internal: bool) -> None:
     os.replace(temporary, path)
 
 
+def public_publication(item: dict) -> dict:
+    """Keep retained identities; discard all unrelated internal evidence fields."""
+    clean = pick(
+        item,
+        {
+            key: key
+            for key in [
+                "id",
+                "family",
+                "captureAt",
+                "familyPublishedAt",
+                "serverDate",
+                "responseSha256",
+                "artifactDigest",
+                "artifactPrefix",
+                "associationStatus",
+            ]
+        },
+    )
+    clean["tables"] = []
+    for table in item["tables"]:
+        member = pick(table, {key: key for key in ["table", "bytes", "rows", "sha256", "partitionColumns"]})
+        if "members" in table:
+            member["members"] = [
+                pick(part, {key: key for key in ["key", "sha256", "bytes", "rows", "partition"]})
+                for part in table["members"]
+            ]
+        clean["tables"].append(member)
+
+    def check(value):
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                if re.search(r"credential|token|password|secret", key, re.I):
+                    raise ValueError("Private publication metadata field")
+                check(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                check(nested)
+        elif isinstance(value, str):
+            for url in re.findall(r"https?://[^\s\"\']+", value):
+                if public_url(url) is None:
+                    raise ValueError("Private URL in publication metadata")
+
+    check(clean)
+    validate_public(clean)
+    return clean
+
+
 def public_coverage(report: dict) -> dict:
     """Publish only named measurement fields; raw scopes and proof paths stay private."""
     result = {"completenessDenominator": None, "stages": {}}
@@ -349,6 +397,9 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                 "relationships": [],
                 "coverage": public_coverage(coverage(db, cid)["collections"][0]),
             }
+            publications = [item for kind, item in evidence if kind == "publication_observation"]
+            if publications:
+                detail["publicationObservations"] = [public_publication(item) for item in publications]
             mappings = {
                 "planned": {
                     "id": "id",

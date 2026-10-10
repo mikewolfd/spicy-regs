@@ -6,6 +6,10 @@ import csv
 import hashlib
 import json
 import os
+import re
+from datetime import datetime
+from email.utils import parsedate_to_datetime
+from urllib.parse import urlsplit
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -321,6 +325,209 @@ class Importer:
                         self.file(cid, reference, item, context=extra, reference=reference)
         self.evidence(None, "corpus_catalog", {k: v for k, v in catalog.items() if k not in ["families", "lineage"]})
 
+    def publication_observation(self, selection: dict) -> None:
+        """Retain a digest-bound publication capture without replacing inventory or coverage."""
+        if selection.get("format") != "spicy-retained-publication-selection" or selection.get("version") != 1:
+            raise ValueError("Unsupported retained publication selection")
+
+        def pinned(pin):
+            path = self.inputs.pin(Path(pin["path"]))
+            if self.inputs.pins[str(path)] != {"sha256": pin["sha256"], "bytes": pin["bytes"]}:
+                raise ValueError("Retained publication input pin mismatch")
+            return path
+
+        def timestamp(value):
+            if (
+                not isinstance(value, str)
+                or not re.fullmatch(
+                    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+                    value,
+                )
+                or datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is None
+            ):
+                raise ValueError("Timezone-qualified publication timestamp required")
+            return value
+
+        def digest(value):
+            if not isinstance(value, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", value):
+                raise ValueError("Invalid publication digest")
+            return value
+
+        def relative(value):
+            if (
+                not isinstance(value, str)
+                or not value
+                or re.search(r"[\\%?#:]", value)
+                or any(part in ("", ".", "..") for part in value.split("/"))
+            ):
+                raise ValueError("Invalid publication member path")
+            return value
+
+        def count(value):
+            if type(value) is not int or value < 0:
+                raise ValueError("Invalid publication member count")
+            return value
+
+        publication_url = selection["publication_url"]
+        parsed_url = urlsplit(publication_url)
+        if (
+            parsed_url.scheme not in ["http", "https"]
+            or not parsed_url.netloc
+            or parsed_url.username
+            or parsed_url.password
+            or parsed_url.query
+            or parsed_url.fragment
+        ):
+            raise ValueError("Credential-free publication URL required")
+        publication_pin = selection["publication"]
+        publication = self.inputs.json(pinned(publication_pin))
+        capture = self.inputs.json(pinned(selection["capture"]))
+        bindings = self.inputs.json(pinned(selection["row_bindings"]))
+        headers = pinned(selection["headers"]).read_text()
+        for pin in selection.get("evidence_inputs", []):
+            pinned(pin)
+        if publication.get("format") != "spicy-regs-publication" or publication.get("version") != 2:
+            raise ValueError("Unsupported retained publication response")
+        captured_at = timestamp(capture["observed_at"])
+        matches = [
+            item
+            for item in capture["observations"]
+            if item.get("exit_code") == 0
+            and item.get("url") == publication_url
+            and "sha256:" + item.get("sha256", "").removeprefix("sha256:") == publication_pin["sha256"]
+            and item.get("bytes") == publication_pin["bytes"]
+        ]
+        if len(matches) != 1:
+            raise ValueError("Publication capture must bind one successful digest-matched response")
+        dates = re.findall(r"^date:\s*(.+)$", headers, re.I | re.M)
+        if len(dates) != 1:
+            raise ValueError("One retained HTTP Date required")
+        server_date = timestamp(parsedate_to_datetime(dates[0].strip()).isoformat())
+        if bindings.get("format") != "B-successor-retained-publication-row-bindings" or bindings.get("version") != 1:
+            raise ValueError("Unsupported publication row bindings")
+        if (
+            bindings.get("publication_input") != publication_pin
+            or bindings.get("header_input") != selection["headers"]
+            or bindings.get("response_http_date", {}).get("utc") != server_date
+        ):
+            raise ValueError("Publication binding response identity mismatch")
+        if bindings.get("client_capture_at") != captured_at:
+            raise ValueError("Publication binding capture time mismatch")
+        rows = {(row["publication_family"], row["table"]): row for row in bindings["rows"]}
+        if len(rows) != len(bindings["rows"]):
+            raise ValueError("Duplicate publication row binding")
+        seen = set()
+        for family, data in publication["families"].items():
+            artifact = digest(data["artifactDigest"])
+            prefix = relative(data["prefix"])
+            published_at = timestamp(data["publishedAt"])
+            tables = []
+            for table, descriptor in data["tables"].items():
+                relative(table)
+                key = (family, table)
+                seen.add(key)
+                row = rows.get(key)
+                expected = {
+                    "artifact_digest": artifact,
+                    "artifact_prefix": prefix,
+                    "member_sha256": descriptor.get("sha256"),
+                    "member_bytes": descriptor["byteSize"],
+                    "member_rows": descriptor["rows"],
+                    "partition_members": descriptor.get("members"),
+                    "partition_columns": descriptor.get("partitionColumns"),
+                    "family_published_at": published_at,
+                    "descriptor_locator": ["families", family, "tables", table],
+                }
+                if row is None or any(row.get(field) != value for field, value in expected.items()):
+                    raise ValueError("Publication row binding does not match retained descriptor")
+                current = [
+                    {
+                        "collection_id": item["collection_id"],
+                        "inventory_family": item["family"],
+                        "artifact_digest": json.loads(item["data"]).get("artifact_digest"),
+                    }
+                    for item in self.db.execute(
+                        "SELECT * FROM tables WHERE id=? ORDER BY collection_id", (table.removesuffix(".parquet"),)
+                    )
+                ]
+                if row.get("v4_inventory_bindings") != current:
+                    raise ValueError("Publication binding does not match selected historical inventory")
+                member = {"table": table, "bytes": count(descriptor["byteSize"]), "rows": count(descriptor["rows"])}
+                if "members" in descriptor:
+                    if "sha256" in descriptor or not descriptor["members"]:
+                        raise ValueError("Partitioned publication must identify individual members")
+                    columns = descriptor["partitionColumns"]
+                    if (
+                        not isinstance(columns, list)
+                        or not columns
+                        or len(set(columns)) != len(columns)
+                        or any(not isinstance(column, str) or not column for column in columns)
+                    ):
+                        raise ValueError("Invalid publication partition columns")
+                    for part in descriptor["members"]:
+                        if set(part["partition"]) != set(columns) or any(
+                            not isinstance(value, str) for value in part["partition"].values()
+                        ):
+                            raise ValueError("Invalid publication partition values")
+                    member["partitionColumns"] = columns
+                    member["members"] = [
+                        {
+                            "key": relative(part["key"]),
+                            "sha256": digest(part["sha256"]),
+                            "partition": part["partition"],
+                            "bytes": count(part["byteSize"]),
+                            "rows": count(part["rows"]),
+                        }
+                        for part in descriptor["members"]
+                    ]
+                    if len({part["key"] for part in member["members"]}) != len(member["members"]):
+                        raise ValueError("Duplicate publication partition member")
+                    if (
+                        sum(part["bytes"] for part in member["members"]) != member["bytes"]
+                        or sum(part["rows"] for part in member["members"]) != member["rows"]
+                    ):
+                        raise ValueError("Publication partition totals do not reconcile")
+                else:
+                    member["sha256"] = digest(descriptor["sha256"])
+                tables.append(member)
+            cid = self.families.get(family)
+            family_rows = [row for row in bindings["rows"] if row["publication_family"] == family]
+            associated = (
+                bool(cid)
+                and bool(family_rows)
+                and all(
+                    row["v4_inventory_bindings"]
+                    and all(
+                        item["inventory_family"] == family and item["collection_id"] == cid
+                        for item in row["v4_inventory_bindings"]
+                    )
+                    for row in family_rows
+                )
+            )
+            if not associated:
+                cid = "publication:" + family
+                self.collection(
+                    cid, "Retained publication: " + family, {"mapping_status": "unqualified-publication-association"}
+                )
+            self.evidence(
+                cid,
+                "publication_observation",
+                {
+                    "id": "publication:" + stable(cid, publication_pin["sha256"], family, captured_at),
+                    "family": family,
+                    "captureAt": captured_at,
+                    "familyPublishedAt": published_at,
+                    "serverDate": server_date,
+                    "responseSha256": publication_pin["sha256"],
+                    "artifactDigest": artifact,
+                    "artifactPrefix": prefix,
+                    "associationStatus": "exact-family" if associated else "unqualified",
+                    "tables": tables,
+                },
+            )
+        if seen != set(rows):
+            raise ValueError("Publication bindings must cover the complete retained response")
+
     def discovery(self, value: dict) -> None:
         if value.get("format") != "spicy-source-discovery" or value.get("version") != 1:
             raise ValueError("Unsupported discovery format")
@@ -406,6 +613,7 @@ def build(
     *,
     config: Path | None = None,
     discovery: Sequence[Path] = (),
+    publication_observations: Sequence[Path] = (),
     catalog_input: Path | None = None,
     table_inputs_input: Path | None = None,
 ) -> dict:
@@ -433,6 +641,8 @@ def build(
         importer.run()
         for discovery_path in discovery:
             importer.discovery(inputs.json(discovery_path))
+        for selection_path in publication_observations:
+            importer.publication_observation(inputs.json(selection_path))
         for row in db.execute("""SELECT id FROM collections WHERE EXISTS
             (SELECT 1 FROM files WHERE files.collection_id=collections.id)
             AND NOT EXISTS (SELECT 1 FROM tables WHERE tables.collection_id=collections.id)
