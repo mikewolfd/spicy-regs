@@ -10,6 +10,7 @@ import sys
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import duckdb
 import pyarrow as pa
@@ -1103,6 +1104,7 @@ def test_indexed_local_selection_full_reply_parity(tmp_path, monkeypatch, select
     index_path = entry['prefix'] + '/' + entry['etlReceipts']['keyIndex']['key']
     receipt_location = str(tmp_path / receipt_path)
     index_location = str(tmp_path / index_path)
+    local: dict[str, Any]
     if selection == 'download':
         local = {'selected_tables': ['fcc_filings'], 'receipt_members': {receipt_path: receipt_location},
                  'receipt_indexes': {index_path: index_location}}
@@ -1143,6 +1145,7 @@ def test_local_declared_index_missing_refuses_without_scan(tmp_path, monkeypatch
     con = one_family(tmp_path, monkeypatch, {'fcc_filings': [fcc('100')]})
     _, entry = _add_selected_index(con)
     path = entry['prefix'] + '/' + entry['etlReceipts']['key']
+    local: dict[str, Any]
     if selection == 'download':
         local = {'selected_tables': ['fcc_filings'],
                  'receipt_members': {path: str(Path(server.R2_BASE_URL) / path)}, 'receipt_indexes': {}}

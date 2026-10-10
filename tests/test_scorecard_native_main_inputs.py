@@ -19,6 +19,7 @@ def native_selection(tmp_path, name, records):
     columns = tuple(dict.fromkeys((*OFFICIAL_COLUMNS[name], *(records[0] if records else ()))))
     pq.write_table(pa.Table.from_pylist(records, schema=pa.schema([(c, pa.string()) for c in columns])), raw)
     subject, receipts = write_congress_dataset(raw, tmp_path / 'native', dataset=name, generation_id='test-native')
+    assert subject is not None
     generation = tmp_path / 'generation'
     build_generation(generation, family='official', files=[subject], expected_keys=[name + '.parquet'],
                      receipt_path=receipts, receipt_policies=[policy(name)], receipt_generation_id='test-native')
