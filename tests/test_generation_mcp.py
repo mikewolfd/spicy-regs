@@ -9,6 +9,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+# Capture native DuckDB before the connection fixture patches its shared module.
+import spicy_regs.native_types  # noqa: F401
 from spicy_regs import data_dictionary as dd
 from spicy_regs import mcp_server
 from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline

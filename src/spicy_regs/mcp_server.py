@@ -650,6 +650,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     """
     from spicy_regs.sources.publication import COMMENTS_EXPORT_TABLES, parquet_scan, table_descriptor, table_members
 
+    if DATA_DIR is None and os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS"):
+        raise RuntimeError("DocSpec exports require an explicit SPICY_REGS_DATA_DIR")
     if DATA_DIR is None and _resolve_catalog_config() is not None:
         raise RuntimeError(
             "MCP catalog reads require dynamic file access, which this restricted SQL server refuses; "
@@ -680,7 +682,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     if rulemaking is not None:
         con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(rulemaking)])
-    if local is not None and (local.is_download or local.native):
+    if local is not None and (local.is_download or local.native or local.docspec):
         con.execute("CREATE TABLE _spicy_local_selection (snapshot VARCHAR)")
         con.execute(
             "INSERT INTO _spicy_local_selection VALUES (?)",
@@ -689,6 +691,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                     {
                         "directory": str(local.directory),
                         "signatures": signatures,
+                        "docspec": local.docspec,
+                        "docspec_configuration": local.docspec_configuration,
                         "selected_tables": list(local.files),
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
                         "receipt_indexes": {name: str(path) for name, path in local.receipt_indexes.items()},
@@ -746,7 +750,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
             if local is None and published is None and pinned is None and name in COMMENTS_EXPORT_TABLES:
                 exports.append(name)
         except duckdb.Error as exc:
-            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native))
+            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native or local.docspec))
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
             # build, so a refresh keeps the connection it would replace instead of serving one without the table.
             absent = local is not None or (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404)
@@ -992,6 +996,8 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         managed.update({name: {"status": "native_selected", "generation_id": value["generation_id"],
                                "verification": "Selected bytes and exact receipt joins verified; file changes checked around statements."}
                         for name, value in local.get("native", {}).items()})
+    if local is not None:
+        managed.update(local.get("docspec", {}))
     receipt_families = _receipt_families(index, local)
     if "etl_receipts" in available and receipt_families:
         managed["etl_receipts"] = {"status": "managed_receipts", "families": receipt_families}
@@ -1266,7 +1272,8 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
         elif name in exports:
             pin |= exports[name]
         declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
-        pins[name] = {**pin, "coverage": declared.get("kind")}
+        # A DocSpec snapshot does not establish the dictionary's population coverage.
+        pins[name] = {**pin, "coverage": None if pin["status"] == "docspec_immutable_export" else declared.get("kind")}
     return pins
 
 
@@ -1344,6 +1351,15 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
 def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
     """``current`` while its remote pointers have not moved; otherwise a new connection."""
     if DATA_DIR is not None:
+        selected = _connection_local_selection(current)
+        if selected is not None and selected.get("docspec"):
+            from spicy_regs.docspec_exports import binding_unchanged
+            from spicy_regs.local_data import assert_local_members_unchanged
+
+            configured = os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS")
+            if configured == selected["docspec_configuration"]["path"] and binding_unchanged(selected["docspec_configuration"]):
+                assert_local_members_unchanged(selected["signatures"])
+                return current
         return _build_connection()
     publication = _read_publication()
     if publication != _pinned_publication(current):

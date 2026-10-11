@@ -411,6 +411,28 @@ loads no remote tables or catalog, and needs no network extensions. Responses
 identify the local source directory. An invalid directory is refused rather
 than silently switching sources. The SQL write guard also applies in local mode.
 
+For an immutable DocSpec export, optionally set
+`SPICY_REGS_DOCSPEC_EXPORTS=/absolute/path/bindings.json` with that explicit
+local directory. The caller-trusted JSON document has `version: 1`, an absolute
+`binary` path to DocSpec, a literal loopback `metadata_url` such as
+`http://127.0.0.1:8080`, and `tables` mapping each application table name to
+`{"file": "comments.parquet", "export": <complete canonical ExportPin>}`.
+Each local file may be bound once. Only these named local files enter the connection; managed download/native
+selection modes cannot share the directory. Admission compares the expected
+pin and exact source release through the configured producer, then uses the
+existing native `hash` command once to check the local file. Unchanged bindings
+keep the admitted connection across refresh checks, with ordinary file-change
+guards around queries. The producer stays running; hashing opens no Engine.
+
+Replies identify `docspec_immutable_export` and retain the exact export and
+release-level evidence reference. That reference is separate from SpicyRegs
+ETL receipts, grants no SQL access to evidence files, and supplies no invented
+row-to-receipt mapping or population-coverage claim. Callers authorize disclosure
+of the pin and its references and retain the referenced evidence independently.
+The first end-to-end qualification covers BIGINT/VARCHAR values; other application
+type representations and remote distribution need their own qualification.
+Default local-directory behavior is unchanged when this setting is absent.
+
 For the FEC source inventory, selected retained collections and relationship
 evidence, see [FEC integration](docs/fec-integration.md). The
 [FEC gap register](docs/fec-gaps.md) tracks remaining work, owners and completion

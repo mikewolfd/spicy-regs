@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -29,6 +30,9 @@ class LocalSelection:
 
     native: dict = field(default_factory=dict)
     native_signatures: dict = field(default_factory=dict)
+    docspec: dict = field(default_factory=dict)
+    docspec_signatures: dict = field(default_factory=dict)
+    docspec_configuration: dict = field(default_factory=dict)
 
     @property
     def receipts(self) -> dict[str, Path]:
@@ -95,6 +99,18 @@ def local_selection(output_dir: Path) -> LocalSelection:
     a saved selection remains an explicit, unqualified local Parquet workspace.
     """
     root = output_dir.expanduser().absolute()
+    configured = os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS")
+    if configured:
+        configuration = Path(configured)
+        if not configuration.is_absolute() or configuration.is_symlink() or not configuration.is_file():
+            raise RuntimeError("DocSpec binding must name an explicit regular configuration file")
+        if any((root / marker).exists() or (root / marker).is_symlink()
+               for marker in ("current", "download.json", ".native-state/selection.json")):
+            raise RuntimeError("DocSpec exports require a separate explicit local directory")
+        from spicy_regs.docspec_exports import local_exports
+
+        return local_exports(root.resolve(strict=True), configuration)
+
     if (root / ".native-state" / "selection.json").exists():
         if (root / "current").exists() or (root / "current").is_symlink() or (root / "download.json").exists():
             raise RuntimeError("Ambiguous local selection: use the explicit download batch or a separate native build root")
@@ -200,6 +216,9 @@ def file_signature(path: Path) -> list[int]:
 def verify_local_members(selection: LocalSelection) -> dict[str, list[int]]:
     """Rehash managed bytes once, every member file of a split table included; return a change guard per file."""
     signatures = {}
+    if selection.docspec:
+        assert_local_members_unchanged(selection.docspec_signatures)
+        return dict(selection.docspec_signatures)
     if selection.native:
         assert_local_members_unchanged(selection.native_signatures)
         return dict(selection.native_signatures)
