@@ -577,3 +577,64 @@ def test_fcc_metadata_growth_refuses_bounded_read(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "open", lambda *a, **k: io.BytesIO(b"{}x"))
     with pytest.raises(ValueError, match="changed during bounded read"):
         _fcc_metadata(metadata)
+
+
+def test_retained_member_protocol_keyword_keeps_decoded_byte_charge(tmp_path):
+    body = b'{"event":"capture"}\n'
+    source, _ = _artifact(tmp_path, body)
+    remaining = source.remaining
+    with source.open(object_key="journal.jsonl") as stream:
+        assert stream.read() == body
+    assert source.remaining == remaining - len(body)
+
+
+@pytest.mark.parametrize("present,value", [(False, None), (True, None), (True, ""), (True, 123)])
+def test_module_path_refuses_missing_or_invalid_source_origin(present, value):
+    from types import ModuleType
+    from scripts.qualify_source_catalog_f import _module_path
+
+    module = ModuleType("qualification_fixture")
+    if present:
+        setattr(module, "__file__", value)
+    with pytest.raises(ValueError, match="module source-file path"):
+        _module_path(module)
+
+
+def test_module_path_keeps_exact_declared_path_without_reading_it(tmp_path, monkeypatch):
+    from types import ModuleType
+    from scripts.qualify_source_catalog_f import _module_path
+
+    module = ModuleType("qualification_fixture")
+    module.__file__ = str(tmp_path / "unopened.py")
+    monkeypatch.setattr(Path, "open", lambda *a, **k: pytest.fail("module path opened"))
+    assert _module_path(module) == tmp_path / "unopened.py"
+
+
+def test_comparison_keeps_complete_counts_multiplicity_and_order():
+    left = [{"id": "same", "value": None}, {"id": "same", "value": ""}]
+    assert compare_rows(left, list(reversed(left))) == {
+        "expected_rows": 2, "actual_rows": 2, "missing_row_occurrences": 0,
+        "added_row_occurrences": 0, "all_values_and_multiplicity_equal": True, "ordered_rows_equal": False,
+    }
+    assert compare_rows(left, [left[0], left[0]]) == {
+        "expected_rows": 2, "actual_rows": 2, "missing_row_occurrences": 1,
+        "added_row_occurrences": 1, "all_values_and_multiplicity_equal": False, "ordered_rows_equal": False,
+    }
+
+
+def test_fcc_member_protocol_keyword_preserves_pre_read_reservation(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import FccRetainedArtifact
+
+    manifest, corpus = _fcc_fixture(tmp_path)
+    source = FccRetainedArtifact(corpus, json.loads(manifest.read_text())["artifact"])
+    size = (source.directory / "members.json").stat().st_size
+    allowance, reserved, remaining = source.read_allowance, source.reserved_read_bytes, source.remaining
+    with source.open(object_key="members.json") as stream:
+        assert len(stream.read()) == size
+    assert source.read_allowance == allowance - size - 1
+    assert source.reserved_read_bytes == reserved + size + 1
+    assert source.remaining == remaining - size
+    source.read_allowance = 0
+    monkeypatch.setattr(Path, "open", lambda *a, **k: pytest.fail("opened beyond pre-read cap"))
+    with pytest.raises(ValueError, match="pre-read budget"):
+        source.open(object_key="journal.jsonl")

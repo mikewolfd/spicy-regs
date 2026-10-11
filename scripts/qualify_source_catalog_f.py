@@ -14,10 +14,45 @@ import io
 import json
 from pathlib import Path
 import re
+from types import ModuleType
+from typing import Any, TypedDict
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from rulespec_artifacts import ArtifactPin, admit_artifact
+
+
+class RowComparison(TypedDict):
+    expected_rows: int
+    actual_rows: int
+    missing_row_occurrences: int
+    added_row_occurrences: int
+    all_values_and_multiplicity_equal: bool
+    ordered_rows_equal: bool
+
+
+class CourtGroupResult(TypedDict):
+    group_index: int
+    capture_ids: list[str]
+    source_occurrences: int
+    accepted: int
+    refused: int
+    complete_empty_search: bool
+    comparison: RowComparison
+    all_outcomes_match: bool
+    outputs: list[dict]
+
+
+class CaptureOccurrence(TypedDict):
+    journal_ordinal: int
+    event: dict[str, Any]
+
+
+def _module_path(module: ModuleType) -> Path:
+    filename = getattr(module, "__file__", None)
+    if not isinstance(filename, str) or not filename:
+        raise ValueError("Qualification requires a module source-file path")
+    return Path(filename)
 
 
 def pin(path: Path) -> dict:
@@ -58,7 +93,8 @@ class RetainedArtifact:
     def keys(self):
         return sorted(self.metadata | self.members.keys())
 
-    def open(self, key: str):
+    def open(self, object_key: str):
+        key = object_key
         if key in self.metadata:
             path = self.directory / key
             size = path.stat().st_size
@@ -108,7 +144,7 @@ class RetainedArtifact:
             return stream.read()
 
 
-def compare_rows(expected: list[dict], actual: list[dict]) -> dict:
+def compare_rows(expected: list[dict], actual: list[dict]) -> RowComparison:
     """Full value and duplicate-multiplicity equality; row order is separate."""
     def encoded(rows):
         return [json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows]
@@ -130,10 +166,10 @@ def code_pins() -> dict:
         "spicy_regs.transforms.build_gao_recommendations",
         "spicy_regs.transforms.government_receipts", "spicy_regs.transforms.government_source_shapes")]
     files = [Path(__file__), Path(__file__).parents[1] / "uv.lock"]
-    files += [Path(module.__file__) for module in modules]
+    files += [_module_path(module) for module in modules]
     package_code = {}
     for name in ("spicy_regs", "spicy_docs", "rulespec_artifacts"):
-        directory = Path(import_module(name).__file__).parent
+        directory = _module_path(import_module(name)).parent
         package_code[name] = {"path": str(directory),
                               "source_sha256": source_digest(directory, (".py", ".json", ".xsd"))}
     return {"files": [pin(path) for path in files], "package_code": package_code, "packages": {
@@ -279,7 +315,7 @@ COURT_DELTA_ARTIFACT = "sha256:43757a506ac03cfc68d02d9edcf1ff101ab92a5ad5e696a9f
 def court_code_pins() -> dict:
     from importlib import import_module
     result = code_pins()
-    result["files"] += [pin(Path(import_module(name).__file__)) for name in (
+    result["files"] += [pin(_module_path(import_module(name))) for name in (
         "spicy_docs.sources.courtlistener.search", "spicy_docs.reading.paged_json",
         "spicy_regs.sources.courtlistener", "spicy_regs.transforms.build_courtlistener",
         "spicy_regs.court_receipts", "spicy_regs.court_subjects")]
@@ -351,7 +387,7 @@ def _court_replay(manifest_path: Path, output: Path) -> dict:
     (output / "selection.json").write_bytes(manifest_path.read_bytes())
     source = RetainedArtifact(corpus, manifest["artifact"], byte_budget=4_000_000)
     source.verify()
-    results = []
+    results: list[CourtGroupResult] = []
     for group_index, group in enumerate(manifest["groups"]):
         consumed, shaped, occurrences, seen = [], [], [], set()
         def held_response(request):
@@ -421,7 +457,7 @@ def _court_replay(manifest_path: Path, output: Path) -> dict:
         outcome_ok = (actual_refused == refused and len(attempts) == len(shaped)
                       and {a["attempt_id"] for a in attempts} == {f"court_dockets:delta:{i}" for i in range(len(shaped))}
                       and all(a["outcome"] in {"accepted", "refused"} for a in attempts))
-        step = {"group_index": group_index, "capture_ids": [c["event"]["capture_id"] for c in consumed],
+        step: CourtGroupResult = {"group_index": group_index, "capture_ids": [c["event"]["capture_id"] for c in consumed],
                 "source_occurrences": len(shaped), "accepted": len(accepted), "refused": len(refused),
                 "complete_empty_search": not shaped, "comparison": comparison, "all_outcomes_match": outcome_ok,
                 "outputs": [pin(subject), pin(receipts)]}
@@ -501,7 +537,8 @@ class FccRetainedArtifact(RetainedArtifact):
         self.read_allowance = byte_budget - metadata_bytes - 2
         self.reserved_read_bytes = metadata_bytes + 2
 
-    def open(self, key: str):
+    def open(self, object_key: str):
+        key = object_key
         size = ((self.directory / key).stat().st_size if key in self.metadata else self.members[key]["byteSize"])
         if type(size) is not int or size < 0 or size + 1 > self.read_allowance:
             raise ValueError("FCC decoded pre-read budget exceeded")
@@ -520,7 +557,7 @@ def fcc_code_pins() -> dict:
     result = code_pins()
     modules = ("spicy_docs.sources.fcc_ecfs", "spicy_docs.reading.paged_json",
                "spicy_regs.transforms.build_fcc_ecfs")
-    result["files"] += [pin(Path(import_module(name).__file__)) for name in modules]
+    result["files"] += [pin(_module_path(import_module(name))) for name in modules]
     return result
 
 
@@ -544,7 +581,7 @@ def fcc_selection(corpus: Path, generation: str = FCC_GENERATION) -> dict:
     if source.root.get("spec", {}).get("family") != "fcc-proceedings":
         raise ValueError("FCC source family differs")
     events = source.journal()
-    captures = [{"journal_ordinal": i, "event": e} for i, e in enumerate(events) if e.get("event") == "capture"]
+    captures: list[CaptureOccurrence] = [{"journal_ordinal": i, "event": e} for i, e in enumerate(events) if e.get("event") == "capture"]
     if not captures:
         raise ValueError("FCC refresh has no captured requests")
     ids = set()
