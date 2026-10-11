@@ -4,7 +4,7 @@ The existing builder produces native edition, structure and section tables with 
 
 ## Inputs and scope
 
-Supply a candidate directory, the exact selection manifest used to build it, and an explicit expected annual year. Initial supported qualification covers one selected annual HTML archive from 1994 or 1995. The manifest year must match the expected year. XML release points and multiple archives require separate qualification work.
+Supply a candidate directory, the exact selection manifest used to build it, and an explicit expected annual year. Supported audit year scope covers one selected annual HTML archive from 1994, 1995 or 2000. Year-scope support does not establish that an original archive or installed runtime has passed complete qualification. The manifest year must match the expected year. XML release points and multiple archives require separate qualification work.
 
 The auditor derives expectations from original ZIP bytes, native comments, its own field stack and standard HTML parser events. Maintained components supply output schemas and receipt protocol checks. The auditor never calls the producer, acquisition readers or section readers to derive source expectations.
 
@@ -35,4 +35,4 @@ Adding this first-party module changes the complete reader package tree used by 
 
 The auditor reads one member and Arrow batches of 32 rows at a time, with a 128 MiB member bound. These bounds do not establish an aggregate memory, disk or thread limit. Installed execution requires separately pinned runtime admission, offline controls, fresh scratch/output locations and approved external resource supervision.
 
-Complete private audits of selected 1994 and 1995 originals provide lineage for this implementation. They do not qualify a newly installed auditor, other archives, legal interpretation, publisher typography, full history, publication or retirement. Those decisions require their own evidence and authority.
+Complete private audits of selected 1994 and 1995 originals provide lineage for this implementation. The 2000 year extension adds policy and synthetic fixture coverage only; its retained converter versions and actual bodies still require complete original-source qualification under a separately admitted successor runtime. They do not qualify a newly installed auditor, other archives, legal interpretation, publisher typography, full history, publication or retirement. Those decisions require their own evidence and authority.

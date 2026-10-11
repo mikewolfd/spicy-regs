@@ -65,8 +65,14 @@ def title(native_year, enum, publication):
 
 def fixture(tmp_path, year=1995):
     members = [
-        (f"{year}usc40a.htm", title(1994, "40a", "1994 Main Edition")),
-        (f"{year}usc01.htm", title(year, "1", "1995 Supplement I" if year == 1995 else "1994 Main Edition")),
+        (
+            f"{year}usc40a.htm",
+            title(2000 if year == 2000 else 1994, "40a", "2000 Edition" if year == 2000 else "1994 Main Edition"),
+        ),
+        (
+            f"{year}usc01.htm",
+            title(year, "1", {1994: "1994 Main Edition", 1995: "1995 Supplement I", 2000: "2000 Edition"}[year]),
+        ),
         ("usc.css", b"body{}"),
     ]
     payload = io.BytesIO()
@@ -109,7 +115,7 @@ def change_subject(candidate, name, change):
     rebuild_path.write_text(json.dumps(rebuild))
 
 
-@pytest.mark.parametrize("year", [1994, 1995])
+@pytest.mark.parametrize("year", [1994, 1995, 2000])
 def test_complete_fixture_identity_title_routing_and_library_read_only(tmp_path, year):
     candidate, selection, members = fixture(tmp_path, year)
     before = snapshot(tmp_path)
@@ -134,8 +140,17 @@ def test_complete_fixture_identity_title_routing_and_library_read_only(tmp_path,
         )
         assert editions[index - 1]["edition_id"] == expected
     assert editions[0]["title"] == "40a"
-    assert editions[0]["carried_forward"] == str(year != 1994).lower()
+    assert editions[0]["carried_forward"] == str(year == 1995).lower()
     assert editions[2]["member_role"] == "supporting-file" and editions[2]["metadata_json"] is None
+    if year == 2000:
+        assert all(
+            row["native_publication_year"] == "2000"
+            and row["requested_year"] == "2000"
+            and json.loads(row["metadata_json"])["publication_name"] == "2000 Edition"
+            for row in editions[:2]
+        )
+        assert editions[2]["member_name"] == "usc.css" and editions[2]["member_bytes"] == "6"
+        assert editions[2]["member_sha256"] == "sha256:" + hashlib.sha256(b"body{}").hexdigest()
     content = table_rows(candidate, "uscode_edition_sections")
     assert [r["body_text"] for r in content[:4]] == ["ANB", None, "", "�"]
     assert content[0]["native_identifier"] == content[1]["native_identifier"] == "K"
@@ -392,3 +407,27 @@ def test_recompression_between_initial_output_hash_and_snapshot_refuses(tmp_path
     with pytest.raises(AssertionError, match="final output digest"):
         auditor.audit(candidate, selection, annual_year=1995)
     assert calls >= 3
+
+
+@pytest.mark.parametrize("change", ["missing", "digest", "role"])
+def test_annual2000_css_support_member_corruption_refuses(tmp_path, change):
+    candidate, selection, _ = fixture(tmp_path, year=2000)
+
+    def corrupt(records):
+        if change == "missing":
+            records.pop()
+        elif change == "digest":
+            records[-1]["member_sha256"] = "sha256:" + "f" * 64
+        else:
+            records[-1]["member_role"] = "title"
+
+    change_subject(candidate, "uscode_editions", corrupt)
+    with pytest.raises(AssertionError):
+        auditor.audit(candidate, selection, annual_year=2000)
+
+
+@pytest.mark.parametrize("expected", [1994, 1995, 1996, 2001])
+def test_annual2000_expected_year_mismatch_or_unsupported_scope_refuses(tmp_path, expected):
+    candidate, selection, _ = fixture(tmp_path, year=2000)
+    with pytest.raises(AssertionError):
+        auditor.audit(candidate, selection, annual_year=expected)

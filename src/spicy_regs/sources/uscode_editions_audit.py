@@ -1,4 +1,4 @@
-"""Independently qualify one selected annual 1994/1995 U.S. Code archive.
+"""Independently qualify one selected annual 1994/1995/2000 U.S. Code archive.
 
 No acquisition/content reader is called. Expectations come from raw ZIP bytes,
 native comments, an independent field stack, and standard HTML parser events.
@@ -341,7 +341,7 @@ def audit(candidate: Path, selection: Path, *, annual_year: int) -> dict:
     The caller supplies external resource supervision; bounds here limit member
     buffers and Arrow batches, not aggregate process memory.
     """
-    require(type(annual_year) is int and annual_year in (1994, 1995), "initial audit scope is 1994/1995")
+    require(type(annual_year) is int and annual_year in (1994, 1995, 2000), "supported audit scope is 1994/1995/2000")
     candidate, selection = Path(candidate).resolve(), Path(selection).resolve()
     rebuild_bytes = (candidate / "rebuild.json").read_bytes()
     selection_bytes = selection.read_bytes()
