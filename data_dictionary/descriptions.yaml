@@ -5607,7 +5607,7 @@ tables:
   fec_committee_observations:
     label: FEC committee API observations
     subject: campaign_finance
-    grain: One committee result occurrence in a retained API response.
+    grain: One capture-time committee profile occurrence in a retained general API response.
     identity_columns:
     - record_id
     coverage: Sampled. Supported observations from retained committee API result pages. The retained selection is
@@ -5671,10 +5671,11 @@ tables:
       registry_scope_status: Explicit retained-observation scope; this table does not replace the broader current
         candidate/committee registry.
       committee_id_status: State or syntax check of the reported committee ID; a valid shape is not a resolved identity.
-      affiliated_committee_name: Literal affiliated committee name stated by the source; a name is not a verified
-        committee link.
+      affiliated_committee_name: Literal affiliated committee or connected organization name stated by the API;
+        a name is not a verified committee link or a substitute for bulk CONNECTED_ORG_NM.
       organization_type: Literal source organization-type code; interpretation follows the source namespace.
-      cycles_json: Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions.
+      cycles_json: Literal JSON array of reported activity cycles, retaining missing, NULL and empty distinctions.
+        Activity membership does not date the captured profile fields.
       cycles_status: 'Source array state for cycles: source_missing, source_null, source_empty, reported or unsupported_array;
         arrays are independent and preserve order.'
       candidate_ids_json: Literal JSON array of candidate IDs stated by the committee API; relationships require their
@@ -5704,8 +5705,8 @@ tables:
       last_f1_date_raw: Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation.
       last_f1_date_status: 'Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty
         source states and unsupported spellings. A NULL typed value alone does not identify the cause.'
-      source_cycle: Election cycle established by the selected source evidence. Distinct from transaction year, candidate
-        election year and agency fiscal year.
+      source_cycle: NULL for general committee API profiles. Activity query cycles remain in retained capture evidence;
+        they do not establish a historical effective cycle for profile fields.
       designated_agent_city: "Committee-designated agent city, exactly as stated by the source."
       designated_agent_first_name: "Committee-designated agent first name, exactly as stated by the source."
       designated_agent_last_name: "Committee-designated agent last name, exactly as stated by the source."

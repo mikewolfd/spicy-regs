@@ -5,8 +5,15 @@ keeps its own identity and links to exact native evidence. Response controls
 keep typed counts without copying results; captures do not imply a full traversal.
 """
 
+from dataclasses import dataclass
+from datetime import date
+import hashlib
 import json
-from urllib.parse import urlsplit
+import re
+from urllib.parse import parse_qsl, urlsplit
+
+from spicy_docs.sources.fec.document_profile import FEC_DOCUMENT_PROFILE
+from spicy_docs.sources.fec.retained import page_request
 
 import pyarrow as pa
 
@@ -14,7 +21,7 @@ from .build_fec_committees import COLUMNS, _shape
 from .fec_identity_observations import _json, _scalar
 from .fec_identity_shape import array_values, typed_columns, typed_values
 from .fec_context_shape import API_CONTROL_FIELDS, api_control_values
-from .fec_query import CollectionSelection, SOURCE_TEXT, subject_observation_fields, record_evidence
+from .fec_query import CollectionSelection, FIRST_FEC_CYCLE, SOURCE_TEXT, subject_observation_fields, record_evidence
 from .fec_relationships import _id_status
 
 COMMITTEES = "fec_committee_observations"
@@ -51,13 +58,81 @@ SCHEMAS = {
 }
 
 
-def map_committee_api(row, selection: CollectionSelection):
+
+# The maintained committee profile requires committee_id order and bounded pages
+# (spicy_docs.sources.fec.profile/retained). Activity cycle filters are independent
+# of profile vintage; min_last_file_date is also used by build_fec_committees.
+_QUERY_FIELDS = {"sort", "page", "per_page", "cycle", "min_last_file_date"}
+_ENDPOINT = "https://api.open.fec.gov/v1/committees/"
+
+
+@dataclass(frozen=True)
+class CommitteeSelection:
+    selection: CollectionSelection
+    request_url: str
+
+
+def _committee_query(url):
+    pairs, page = page_request(url, endpoint=_ENDPOINT, order_by="committee_id")
+    # Strict parsing rejects bare fields and malformed percent encodings rather
+    # than accepting a different interpretation from the retained selection.
+    query = urlsplit(url).query
+    if re.search(r"%(?![0-9a-fA-F]{2})", query):
+        raise ValueError("Malformed committee query encoding")
+    parse_qsl(query, keep_blank_values=True, strict_parsing=True, errors="strict")
+    if any(name not in _QUERY_FIELDS for name, _ in pairs):
+        raise ValueError("Unsupported committee query field")
+    for name in _QUERY_FIELDS - {"cycle"}:
+        if sum(key == name for key, _ in pairs) > 1:
+            raise ValueError("Duplicate committee query control")
+    for name, value in pairs:
+        if name in {"page", "per_page", "cycle"}:
+            if not value.isascii() or not value.isdecimal() or str(int(value)) != value:
+                raise ValueError("Committee query requires canonical integer controls")
+        if name == "cycle" and (not FIRST_FEC_CYCLE <= int(value) <= 9998 or int(value) % 2):
+            raise ValueError("Invalid committee activity cycle")
+        if name == "min_last_file_date":
+            if date.fromisoformat(value).isoformat() != value:
+                raise ValueError("Invalid committee filing-date filter")
+    # Query ordering is immaterial; retain repetitions and the original URL.
+    return sorted((name, value) for name, value in pairs if name != "page") + [("page", str(page))]
+
+
+def prepare_committee_api(entry, *, source_generation_pin):
+    """Bind a general API capture without assigning historical profile vintage."""
+    if entry.get("profile") != "document" or entry.get("source_cycle") is not None:
+        raise ValueError("General committee profiles require document selection and NULL source_cycle")
+    scope = FEC_DOCUMENT_PROFILE.validate_query_scope(entry["scope"])
+    capture = scope["capture"]
+    if (scope["format"] != "api-json" or scope["api_mode"] != "page"
+            or scope["member"] is not None or capture["representation"] != "opaque"):
+        raise ValueError("Expected the selected native committee API page")
+    request_url = capture["requestUrl"]
+    if _committee_query(request_url) != _committee_query(capture.get("resolvedUrl", request_url)):
+        raise ValueError("Committee response changed the selected query scope")
+    return CommitteeSelection(
+        CollectionSelection(
+            entry["collection_id"], capture["responseSha256"], source_generation_pin,
+            "official-fec", None, "snapshot",
+            "sha256:" + hashlib.sha256(_json(entry).encode()).hexdigest(),
+        ),
+        request_url,
+    )
+
+
+def map_committee_api(row, selection: CollectionSelection | CommitteeSelection):
     """Return one snapshot observation or response control and exact evidence.
 
     No grouping by committee ID, cycle selection, prior-table merge or current
     registry replacement occurs. Native arrays preserve null/missing/empty and
     unsupported shapes independently of the historical committee table defaults.
     """
+    if isinstance(selection, CommitteeSelection):
+        if row["source_url"] != selection.request_url:
+            raise ValueError("Committee row differs from its selected request")
+        selection = selection.selection
+    if selection.source_cycle is not None:
+        raise ValueError("General committee profiles require NULL source_cycle")
     url = urlsplit(row["source_url"])
     if (
         url.scheme != "https"

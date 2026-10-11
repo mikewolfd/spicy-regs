@@ -4220,7 +4220,7 @@
       }
     ],
     "subject": "campaign_finance",
-    "grain": "One committee result occurrence in a retained API response.",
+    "grain": "One capture-time committee profile occurrence in a retained general API response.",
     "identity_columns": [
       "record_id"
     ]

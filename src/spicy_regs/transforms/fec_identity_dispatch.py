@@ -27,11 +27,15 @@ def prepare_identity_job(kind, entry, *, source_generation_pin, header_row=None)
         from .fec_candidate_observations import prepare_candidate_api
 
         prepared = prepare_candidate_api(entry, source_generation_pin=source_generation_pin)
+    elif kind == "committee_api":
+        from .fec_committee_observations import prepare_committee_api
+
+        prepared = prepare_committee_api(entry, source_generation_pin=source_generation_pin)
     elif kind == "committee_history":
         from .fec_committee_history_observations import prepare_history
 
         prepared = prepare_history(entry, source_generation_pin=source_generation_pin, header_row=header_row)
-    elif kind in {"committee_api", "registry", "filings"}:
+    elif kind in {"registry", "filings"}:
         capture = entry["scope"]["capture"]
         prepared = CollectionSelection(
             entry["collection_id"],
