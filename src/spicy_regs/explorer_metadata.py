@@ -228,10 +228,11 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         joins.append(exposed)
     # Availability belongs to this index, while the audit's evidence belongs to
     # its reviewed snapshot. A disappearing parent must not leave 'connected'.
-    from spicy_regs.explorer_navigation import published_navigation
+    from spicy_regs.explorer_navigation import published_navigation, selected_generation_pins
     navigation = published_navigation(join_record.get("navigation", []),
                                       {name: entry["schema"] for name, entry in live.items()},
-                                      record_identities)
+                                      record_identities,
+                                      generation_pins=selected_generation_pins(index))
     if measurements:
         from spicy_regs.navigation_measurements import attached_directions, scalar_navigation
         proofs = {}

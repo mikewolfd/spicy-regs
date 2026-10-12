@@ -12424,12 +12424,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_generation_pin"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "path": [
+                "source_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained source collection selected by this policy decision, under its source-generation pin and source digest; selection is not an individual source-record identity.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -12730,12 +12745,84 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "endpoint_kind"
+              ],
+              "from": "row",
+              "values": [
+                "collection_context"
+              ]
+            },
+            {
+              "path": [
+                "target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "pattern": "fec_[a-z_]+"
+            },
+            {
+              "path": [
+                "target_record_id"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "path": [
+                "witness_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "path": [
+                "witness_generation_pin"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "path": [
+                "context_column"
+              ],
+              "from": "row",
+              "values": [
+                "collection_outcome_json"
+              ]
+            },
+            {
+              "path": [
+                "context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "witness_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The collection containing this context or workbook witness, with its retained context column, JSON pointer and witness digest. Target scope is self and witness scope is the exact external generation pin. This is a collection anchor; release qualification must check the selected generation and the witness pointer/digest.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -12934,12 +13021,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13478,12 +13580,84 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "endpoint_kind"
+              ],
+              "from": "row",
+              "values": [
+                "collection_context"
+              ]
+            },
+            {
+              "path": [
+                "target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "pattern": "fec_[a-z_]+"
+            },
+            {
+              "path": [
+                "target_record_id"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "path": [
+                "witness_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "path": [
+                "witness_generation_pin"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "path": [
+                "context_column"
+              ],
+              "from": "row",
+              "values": [
+                "collection_outcome_json"
+              ]
+            },
+            {
+              "path": [
+                "context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "witness_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The collection containing this context or workbook witness, with its retained context column, JSON pointer and witness digest. Target scope is self and witness scope is the exact external generation pin. This is a collection anchor; release qualification must check the selected generation and the witness pointer/digest.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13614,12 +13788,20 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection context covered by this mapping disposition and its context digest; no individual source-record identity is asserted.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13648,12 +13830,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13682,12 +13879,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13716,12 +13928,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13750,12 +13977,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13784,12 +14026,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13818,12 +14075,27 @@
               "pattern": ".+"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "source_context_pointer"
+              ],
+              "from": "row",
+              "pattern": "/.*"
+            },
+            {
+              "path": [
+                "context_sha256"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "Retained source-record relationship; no current-record or financial-total qualification.",
+      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -15865,66 +16137,6 @@
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "fec_source_row_fec_collection_selection",
-      "source": "fec_collection_selection",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
       "id": "fec_source_row_fec_committee_master_observations",
       "source": "fec_committee_master_observations",
       "fields": [],
@@ -16405,66 +16617,6 @@
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "fec_source_row_fec_filing_definition_evidence",
-      "source": "fec_filing_definition_evidence",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
       "id": "fec_source_row_fec_filing_header_associations",
       "source": "fec_filing_header_associations",
       "fields": [],
@@ -16707,66 +16859,6 @@
     {
       "id": "fec_source_row_fec_filings",
       "source": "fec_filings",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_historical_ie_statistics",
-      "source": "fec_historical_ie_statistics",
       "fields": [],
       "targets": [
         {
@@ -17765,7 +17857,7 @@
               "parts": [
                 {
                   "path": [
-                    "source_sha256"
+                    "witness_sha256"
                   ],
                   "from": "row"
                 }
@@ -17774,12 +17866,61 @@
               "pattern": "sha256:[a-f0-9]{64}"
             }
           ],
-          "guards": []
+          "guards": [
+            {
+              "path": [
+                "endpoint_kind"
+              ],
+              "from": "row",
+              "values": [
+                "source_record"
+              ]
+            },
+            {
+              "path": [
+                "target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "pattern": "fec_[a-z_]+"
+            },
+            {
+              "path": [
+                "target_record_id"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "path": [
+                "witness_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            },
+            {
+              "path": [
+                "witness_generation_pin"
+              ],
+              "from": "row",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ]
         }
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+      "meaning": "An individual source witness identified by collection, source ID and witness content digest. Target scope is self and witness scope is the exact external generation pin; release qualification must bind that pin to the selected source generation before serving this route.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -17965,426 +18106,6 @@
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "fec_source_row_fec_research_context_dispositions",
-      "source": "fec_research_context_dispositions",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_research_document_observations",
-      "source": "fec_research_document_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_research_filing_feed_items",
-      "source": "fec_research_filing_feed_items",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_research_meeting_observations",
-      "source": "fec_research_meeting_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_research_response_outcomes",
-      "source": "fec_research_response_outcomes",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_research_source_pages",
-      "source": "fec_research_source_pages",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "fec_source_row_fec_retained_csv_observations",
-      "source": "fec_retained_csv_observations",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_source_records",
-          "columns": [
-            "collection_id",
-            "source_record_id",
-            "source_sha256"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_record_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            },
-            {
-              "parts": [
-                {
-                  "path": [
-                    "source_sha256"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ],
-          "guards": []
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
       "id": "native_filing_fec_account_transfers",
       "source": "fec_account_transfers",
       "fields": [],
@@ -18416,6 +18137,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18461,6 +18231,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -18504,6 +18323,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18549,6 +18417,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -18592,6 +18509,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18637,6 +18603,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -18680,6 +18695,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18725,6 +18789,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -18768,6 +18881,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18813,6 +18975,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -18856,6 +19067,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18901,6 +19161,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -18944,6 +19253,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -18989,6 +19347,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -19032,6 +19439,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -19077,6 +19533,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -19120,6 +19625,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -19165,6 +19719,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -19208,6 +19811,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -19253,6 +19905,55 @@
               "values": [
                 "resolved_native_filing_key"
               ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
+              ]
             }
           ]
         }
@@ -19296,6 +19997,55 @@
               "from": "row",
               "values": [
                 "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "external"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "filing_association_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            },
+            {
+              "path": [
+                "filing_association_target_generation_scope"
+              ],
+              "from": "row",
+              "values": [
+                "self"
               ]
             }
           ]
@@ -19363,6 +20113,15 @@
               "values": [
                 "lookup_eligible"
               ]
+            },
+            {
+              "path": [
+                "subject_id_status"
+              ],
+              "from": "row",
+              "values": [
+                "source_id_shape"
+              ]
             }
           ]
         },
@@ -19415,6 +20174,15 @@
               "from": "row",
               "values": [
                 "lookup_eligible"
+              ]
+            },
+            {
+              "path": [
+                "subject_id_status"
+              ],
+              "from": "row",
+              "values": [
+                "source_id_shape"
               ]
             }
           ]
@@ -19482,6 +20250,24 @@
               "values": [
                 "lookup_eligible"
               ]
+            },
+            {
+              "path": [
+                "object_id_status"
+              ],
+              "from": "row",
+              "values": [
+                "source_id_shape"
+              ]
+            },
+            {
+              "path": [
+                "value_status"
+              ],
+              "from": "row",
+              "values": [
+                "reported"
+              ]
             }
           ]
         },
@@ -19534,6 +20320,24 @@
               "from": "row",
               "values": [
                 "lookup_eligible"
+              ]
+            },
+            {
+              "path": [
+                "object_id_status"
+              ],
+              "from": "row",
+              "values": [
+                "source_id_shape"
+              ]
+            },
+            {
+              "path": [
+                "value_status"
+              ],
+              "from": "row",
+              "values": [
+                "reported"
               ]
             }
           ]
