@@ -1,4 +1,4 @@
-# Rebuild issue and dated snapshot destinations offline
+# Rebuild retained regulation destinations offline
 
 The maintained producer reads explicit original-byte pins and writes local
 subject tables with the shared ETL receipt writer:
@@ -32,9 +32,11 @@ All selected sources must finish before the requested output directory becomes
 visible. A digest mismatch, unsupported source, wrong native identity or capped
 read refuses the whole selection. Existing directories are never replaced.
 The bundle includes the exact selection, policy descriptors and combined
-generation-bound receipts. Its receipt generation combines the `historical-regulations-public-v2` recipe
-with the SHA-256 of the exact selection manifest. It identifies the selected
-input scope and receipt recipe, not a public publication generation. External validation receipts pin the reader,
+generation-bound receipts. Its receipt generation combines the selected recipe
+with the SHA-256 of the exact selection manifest. Selections containing annual
+CFR use `retained-annual-cfr-v1`; other selections use
+`historical-regulations-public-v2`. It identifies the selected input scope and
+receipt recipe, not a public publication generation. External validation receipts pin the reader,
 adapter and dependency code separately. Original MODS/XML and the manifest
 each have an exact-digest witness; pinned rendition metadata stays traceable
 through the manifest. Empty tables mean no selected source of that kind;
@@ -56,3 +58,41 @@ source fields, and retained rendition metadata admits only publisher URL, digest
 and decoded size. Reader observations preserve native publisher text. Create
 fresh receipts for this recipe; inheriting old path-bearing receipt history
 would retain those earlier private witnesses.
+
+## Retained annual CFR volumes
+
+An `annual-cfr` source supplies an explicit `selection` (`year`, `title`,
+`volume`), `mods` and `xml` originals, and complete inventory expectations
+(`expected_constituents`, `expected_sections`). Each original supplies `path`,
+decoded `sha256`, `bytes`, canonical `source_url`, and a `capture` with its own
+`path`, `sha256`, `bytes` and complete `expected_record`. The capture must bind
+the original's URL, hash, decoded size and successful response. Storage may be
+gzip; capture size is bounded separately in the producer.
+
+`expected_edition` and `expected_native_identity` must match the complete
+maintained reader results. MODS issue/original issue dates and cover-only status
+remain separate from the XML's native revision and requested edition. A body
+may state no volume; its identity records whether the volume came from the
+request URL. No modification date is inferred from an issue date.
+
+The maintained `prepare_retained_cfr_rows` adapter keeps all ordered direct
+MODS constituents, including a declared first title node whose identifier is
+the package itself. It reuses the established CFR shaping and placement rules
+and requires complete, unique section-token coverage. The bundle writes the
+established `cfr_sections` schema; it does not merge a prior table.
+
+Annual rows use the explicit `retained-annual-cfr-v1` receipt recipe. Witnesses
+link both originals, both captures and the selected manifest. Receipt processing
+keeps native edition/identity facts and each row's literal MODS selectors,
+constituent position, placement class and annual occurrence position. The
+maintained scan does not emit XML tree paths, so this recipe does not invent
+`annual_source_path` values. It is distinct from an external qualification
+checker that retains independent tree paths; receipt byte equivalence is not
+implied. Private source paths and unselected manifest fields stay outside
+public receipts.
+
+Focused synthetic tests establish admission and mapping behavior. Qualification
+of a retained volume still needs an exact input/code/runtime selection and
+independent comparison of every destination field and intended receipt context.
+A qualified selected volume does not establish full API history, a real Federal
+Register join, publication authority or baseline replacement.

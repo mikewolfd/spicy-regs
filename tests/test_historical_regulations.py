@@ -131,3 +131,123 @@ def test_nested_retained_rendition_paths_do_not_enter_subject_or_receipts(tmp_pa
         [output / "etl_receipts.parquet"],
         list(POLICIES.values()),
     )
+
+
+def annual_selection(tmp_path):
+    from tests.test_cfr_sections import RETAINED_XML, retained_mods
+
+    sources = {}
+    for name, body, url in (
+        ("mods", retained_mods(), "https://www.govinfo.gov/metadata/pkg/CFR-2025-title1-vol1/mods.xml"),
+        ("xml", RETAINED_XML, "https://www.govinfo.gov/bulkdata/CFR/2025/title-1/CFR-2025-title1-vol1.xml"),
+    ):
+        digest = "sha256:" + hashlib.sha256(body).hexdigest()
+        (tmp_path / f"{name}.xml").write_bytes(body)
+        record = {"url": url, "final_url": url, "status": 200, "sha256": digest, "bytes": len(body)}
+        raw = json.dumps(record).encode()
+        (tmp_path / f"{name}.capture.json").write_bytes(raw)
+        sources[name] = {
+            "path": f"{name}.xml",
+            "sha256": digest,
+            "bytes": len(body),
+            "source_url": url,
+            "capture": {
+                "path": f"{name}.capture.json",
+                "sha256": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                "bytes": len(raw),
+                "expected_record": record,
+            },
+        }
+    spec = {
+        "kind": "annual-cfr",
+        "selection": {"year": 2025, "title": 1, "volume": 1},
+        **sources,
+        "expected_constituents": 2,
+        "expected_sections": 1,
+        "expected_edition": {
+            "year": 2025,
+            "title": 1,
+            "volume": 1,
+            "date_issued": "2025-01-01",
+            "original_date_issued": "2023-01-01",
+            "is_cover_only": True,
+            "edition_id": None,
+            "is_current_edition": None,
+            "is_fallback_title": None,
+            "title_text": None,
+        },
+        "expected_native_identity": {
+            "source": "annual-cfr",
+            "title": 1,
+            "volume": None,
+            "part": None,
+            "section": None,
+            "root_tag": "CFRDOC",
+            "title_text": "General Provisions",
+            "stated_date": "2023-01-01",
+            "revision_text": "Revised as of January 1, 2023",
+            "amendment_dates": [],
+            "identity_basis": ["title:native", "volume:request-url", "edition:request-url"],
+        },
+        "private": {"path": "/Users/private/unselected"},
+    }
+    manifest = tmp_path / "annual-selection.json"
+    manifest.write_text(json.dumps({"format": "spicy-historical-regulations", "version": 1, "sources": [spec]}))
+    return manifest
+
+
+def test_retained_annual_bundle_links_originals_captures_and_all_row_contexts(tmp_path):
+    manifest = annual_selection(tmp_path)
+    bundle = build_historical_regulations(manifest, tmp_path / "annual-bundle")
+    rows = pq.read_table(bundle / "cfr_sections/cfr_sections.parquet").to_pylist()
+    assert [row["granule_id"] for row in rows] == ["CFR-2025-title1-vol1", "CFR-2025-title1-vol1-sec1-1"]
+    assert rows[0]["cfr_ref"] is None and rows[1]["cfr_ref"] == "1-1.1"
+    receipts = pq.read_table(bundle / "cfr_sections/etl_receipts.parquet").to_pylist()
+    spec = json.loads(manifest.read_text())["sources"][0]
+    assert len(receipts) == len(rows)
+    for index, (row, receipt) in enumerate(zip(rows, receipts, strict=True)):
+        assert receipt["policy_version"] == receipt["processor"] == "retained-annual-cfr-v1"
+        assert receipt["outcome"] == "accepted"
+        assert [witness["sha256"] for witness in receipt["witnesses"]] == [
+            spec["mods"]["sha256"],
+            spec["mods"]["capture"]["sha256"],
+            spec["xml"]["sha256"],
+            spec["xml"]["capture"]["sha256"],
+            "sha256:" + hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        ]
+        assert decode_exact_json(receipt["identity_json"]) == [["granule_id", row["granule_id"]]]
+        processing = decode_exact_json(receipt["processing_json"])
+        assert processing["source_context"]["constituent_position"] == index
+        assert processing["source_context"]["granule_id"] == row["granule_id"]
+        assert "annual_source_path" not in processing["source_context"]
+        assert processing["selection_metadata"]["edition"]["date_issued"] == "2025-01-01"
+        assert processing["selection_metadata"]["native_identity"]["stated_date"] == "2023-01-01"
+    assert str(tmp_path) not in json.dumps(receipts) and "/Users/private" not in json.dumps(receipts)
+    validate_receipt_bundle(
+        {name: [bundle / name / (name + ".parquet")] for name in POLICIES},
+        [bundle / "etl_receipts.parquet"],
+        list(POLICIES.values()),
+    )
+    with pytest.raises(FileExistsError):
+        build_historical_regulations(manifest, bundle)
+
+
+@pytest.mark.parametrize("change", ["capture", "native", "duplicate"])
+def test_retained_annual_refusal_keeps_destination_absent(tmp_path, change):
+    manifest = annual_selection(tmp_path)
+    value = json.loads(manifest.read_text())
+    spec = value["sources"][0]
+    if change == "capture":
+        capture = spec["mods"]["capture"]
+        capture["expected_record"]["final_url"] = "https://www.govinfo.gov/wrong"
+        raw = json.dumps(capture["expected_record"]).encode()
+        (tmp_path / capture["path"]).write_bytes(raw)
+        capture.update(bytes=len(raw), sha256="sha256:" + hashlib.sha256(raw).hexdigest())
+    elif change == "native":
+        spec["expected_native_identity"]["stated_date"] = "2025-01-01"
+    else:
+        value["sources"].append(spec)
+    manifest.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        build_historical_regulations(manifest, tmp_path / "refused")
+    assert not (tmp_path / "refused").exists()

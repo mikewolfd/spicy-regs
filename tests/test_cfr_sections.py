@@ -23,9 +23,115 @@ from spicy_regs.transforms.build_cfr_sections import (
     _shape,
     compound_parts,
     place_sections,
+    prepare_retained_cfr_rows,
 )
 
 ANCESTRY = Path(__file__).parent / "fixtures" / "cfr" / "ancestry"
+
+RETAINED_NODE = """<relatedItem type="constituent"><extension>
+<accessId>CFR-2025-title1-vol1</accessId><granuleClass>NODE</granuleClass>
+<granuleLabel>title</granuleLabel><granuleNumber>1 </granuleNumber>
+<sequenceNumber>1</sequenceNumber><heading>Title 1</heading></extension></relatedItem>"""
+RETAINED_SECTION = """<relatedItem type="constituent"><extension>
+<accessId>CFR-2025-title1-vol1-sec1-1</accessId><granuleClass>CONTENT</granuleClass>
+<heading>Purpose</heading></extension></relatedItem>"""
+RETAINED_XML = b"""<CFRDOC><FDSYS><CFRTITLE>1</CFRTITLE><CFRTITLETEXT>General Provisions</CFRTITLETEXT>
+<DATE>2023-01-01</DATE></FDSYS><FMTR><TITLEPG><REVISED>Revised as of January 1, 2023</REVISED></TITLEPG></FMTR>
+<PART><HD>PART 1-General</HD><SECTION><SECTNO>1.1</SECTNO><P>Literal body</P></SECTION></PART></CFRDOC>"""
+
+
+def retained_mods(constituents=RETAINED_NODE + RETAINED_SECTION):
+    return (
+        """<mods xmlns="http://www.loc.gov/mods/v3"><extension>
+<collectionCode>CFR</collectionCode><accessId>CFR-2025-title1-vol1</accessId>
+<titleNumber>1</titleNumber><volumeNumber>1</volumeNumber>
+<originalDateIssued>2023-01-01</originalDateIssued><isCoverOnly>true</isCoverOnly></extension>
+<originInfo><dateIssued>2025-01-01</dateIssued></originInfo>"""
+        + constituents
+        + "</mods>"
+    ).encode()
+
+
+def prepare_retained(mods=None, xml=RETAINED_XML, **kwargs):
+    return prepare_retained_cfr_rows(
+        retained_mods() if mods is None else mods,
+        xml,
+        selection=AnnualCfrSelection(2025, 1, 1),
+        mods_url="https://www.govinfo.gov/metadata/pkg/CFR-2025-title1-vol1/mods.xml",
+        xml_url="https://www.govinfo.gov/bulkdata/CFR/2025/title-1/CFR-2025-title1-vol1.xml",
+        **({"expected_constituents": 2, "expected_sections": 1} | kwargs),
+    )
+
+
+def test_retained_annual_preserves_title_inventory_and_distinct_native_revision():
+    result = prepare_retained()
+    title, section = result["rows"]
+    assert title == {
+        "granule_id": "CFR-2025-title1-vol1",
+        "package_id": "CFR-2025-title1-vol1",
+        "cfr_ref": None,
+        "title": "1",
+        "part": None,
+        "section": None,
+        "heading": "Title 1",
+        "structure_level": "NODE",
+        "edition_year": "2025",
+        "last_modified": None,
+        "url": "https://www.govinfo.gov/app/details/CFR-2025-title1-vol1/CFR-2025-title1-vol1",
+        "part_granule": "false",
+    }
+    assert (section["granule_id"], section["part"], section["section"], section["cfr_ref"]) == (
+        "CFR-2025-title1-vol1-sec1-1",
+        "1",
+        "1",
+        "1-1.1",
+    )
+    assert result["edition"]["date_issued"] == "2025-01-01"
+    assert result["edition"]["original_date_issued"] == "2023-01-01"
+    assert result["native_identity"]["stated_date"] == "2023-01-01"
+    assert result["native_identity"]["volume"] is None
+    assert [context["annual_position"] for context in result["contexts"]] == [None, 1]
+    assert all("annual_source_path" not in context for context in result["contexts"])
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("<granuleClass>NODE</granuleClass>", "<granuleClass>CONTENT</granuleClass>"),
+        ("<granuleLabel>title</granuleLabel>", ""),
+        ("<granuleNumber>1 </granuleNumber>", "<granuleNumber>2</granuleNumber>"),
+        ("<sequenceNumber>1</sequenceNumber>", "<sequenceNumber>2</sequenceNumber>"),
+        ("<accessId>CFR-2025-title1-vol1</accessId>", "<accessId>CFR-2025-title2-vol1</accessId>"),
+        ("<granuleClass>NODE</granuleClass>", "<granuleClass>NODE</granuleClass><granuleClass>NODE</granuleClass>"),
+    ],
+)
+def test_retained_annual_refuses_malformed_title_node(before, after):
+    with pytest.raises(ValueError):
+        prepare_retained(retained_mods(RETAINED_NODE.replace(before, after) + RETAINED_SECTION))
+
+
+@pytest.mark.parametrize(
+    "constituents,kwargs",
+    [
+        (RETAINED_SECTION + RETAINED_NODE, {}),
+        (RETAINED_NODE + RETAINED_NODE, {}),
+        (RETAINED_NODE, {}),
+        (RETAINED_NODE + RETAINED_SECTION, {"expected_sections": 2}),
+        (RETAINED_NODE + RETAINED_SECTION.replace("sec1-1", "sec2-1"), {}),
+    ],
+)
+def test_retained_annual_refuses_incomplete_or_reordered_inventory(constituents, kwargs):
+    with pytest.raises(ValueError):
+        prepare_retained(retained_mods(constituents), **kwargs)
+
+
+def test_retained_annual_checks_native_title_and_scalar_bound():
+    with pytest.raises(ValueError, match="native title"):
+        prepare_retained(xml=RETAINED_XML.replace(b"<CFRTITLE>1", b"<CFRTITLE>2"))
+    oversized = RETAINED_SECTION.replace("sec1-1", "x" * 65537)
+    with pytest.raises(ValueError, match="bounded"):
+        prepare_retained(retained_mods(RETAINED_NODE + oversized))
+
 
 # A CONTENT/section granule with real list-level fields + package stamps, using
 # the real GovInfo ID grammar. Note: no cfrTitle/cfrPart/cfrSection fields exist
@@ -467,7 +573,11 @@ def test_rollup_passes_replace_all_from_the_workflow_input(monkeypatch, tmp_path
     else:
         monkeypatch.setenv("CFR_REPLACE_ALL", raw)
     calls = []
-    monkeypatch.setattr(rollup.CfrSectionsRollup, "build_receipts", lambda self, directory, builder, **kwargs: builder(directory, **kwargs))
+    monkeypatch.setattr(
+        rollup.CfrSectionsRollup,
+        "build_receipts",
+        lambda self, directory, builder, **kwargs: builder(directory, **kwargs),
+    )
     monkeypatch.setattr(rollup, "build_cfr_sections", lambda output_dir, **kwargs: calls.append(kwargs) or output_dir)
     rollup.CfrSectionsRollup(output_dir=tmp_path).build(tmp_path)
     assert calls == [{"replace_all": expected}]
@@ -493,8 +603,10 @@ _TITLE_41 = [
 
 
 def _granules(specs, package_id="CFR-2025-title41-vol1"):
-    return [_shape({"granuleId": gid, "granuleClass": level, "title": heading, "_package_id": package_id})
-            for gid, level, heading in specs]
+    return [
+        _shape({"granuleId": gid, "granuleClass": level, "title": heading, "_package_id": package_id})
+        for gid, level, heading in specs
+    ]
 
 
 def test_title_41_structural_rows_take_the_compound_part_their_part_granule_states():
@@ -510,18 +622,26 @@ def test_title_41_structural_rows_take_the_compound_part_their_part_granule_stat
 
 
 def test_compound_parts_is_idempotent_and_leaves_sections_to_the_volume_scan():
-    section = _shape({"granuleId": "CFR-2025-title41-vol1-sec60-2-1", "granuleClass": "CONTENT",
-                      "_package_id": "CFR-2025-title41-vol1"})
+    section = _shape(
+        {
+            "granuleId": "CFR-2025-title41-vol1-sec60-2-1",
+            "granuleClass": "CONTENT",
+            "_package_id": "CFR-2025-title41-vol1",
+        }
+    )
     once = compound_parts([*_granules(_TITLE_41), section])
     assert compound_parts(once) == once
     assert once[-1] == section
 
 
-@pytest.mark.parametrize(("granule_id", "heading"), [
-    ("CFR-2025-title7-vol1-part8", "4-H CLUB NAME AND EMBLEM"),
-    ("CFR-2025-title31-vol1-part82", "5-CENT AND ONE-CENT COIN REGULATIONS"),
-    ("CFR-2025-title49-vol9-part1240", "1259-REPORTS"),
-])
+@pytest.mark.parametrize(
+    ("granule_id", "heading"),
+    [
+        ("CFR-2025-title7-vol1-part8", "4-H CLUB NAME AND EMBLEM"),
+        ("CFR-2025-title31-vol1-part82", "5-CENT AND ONE-CENT COIN REGULATIONS"),
+        ("CFR-2025-title49-vol9-part1240", "1259-REPORTS"),
+    ],
+)
 def test_only_title_41_reads_a_part_from_its_heading(granule_id, heading):
     rows = _granules([(granule_id, "NODE", heading)], package_id=granule_id.rsplit("-part", 1)[0])
     assert compound_parts(rows) == rows
@@ -529,8 +649,13 @@ def test_only_title_41_reads_a_part_from_its_heading(granule_id, heading):
 
 def test_a_reserved_part_granule_of_a_compound_chapter_names_no_part():
     """GovInfo's "Reserved" part granules state no number; the chapter (41-102) is no part, so the key is NULL."""
-    rows = compound_parts(_granules([
-        ("CFR-2025-title41-vol3-part102-id1058", "NODE", "74-FACILITY MANAGEMENT"),
-        ("CFR-2025-title41-vol3-part102-id122", "CONTENT", "Reserved"),
-    ], package_id="CFR-2025-title41-vol3"))
+    rows = compound_parts(
+        _granules(
+            [
+                ("CFR-2025-title41-vol3-part102-id1058", "NODE", "74-FACILITY MANAGEMENT"),
+                ("CFR-2025-title41-vol3-part102-id122", "CONTENT", "Reserved"),
+            ],
+            package_id="CFR-2025-title41-vol3",
+        )
+    )
     assert [(row["part"], row["cfr_ref"]) for row in rows] == [("102-74", "41-102-74"), (None, None)]

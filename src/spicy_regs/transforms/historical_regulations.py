@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 import pyarrow as pa
 
 from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, combine_receipts, write_dataset
+from spicy_regs.transforms.build_cfr_sections import _SCHEMA as CFR_SCHEMA, prepare_retained_cfr_rows
 
 
 def _schema(strings, integers=()):
@@ -49,18 +50,21 @@ SCHEMAS = {
         ("snapshot_id", "xml_position", "kind", "native_number", "part", "heading", "text", "attributes_json"),
         ("byte_start",),
     ),
+    "cfr_sections": CFR_SCHEMA,
 }
 POLICIES = {
     name: DatasetPolicy(
         name,
         schema,
-        ("snapshot_id", "xml_position")
+        ("granule_id",)
+        if name == "cfr_sections"
+        else ("snapshot_id", "xml_position")
         if name.endswith("sections")
         else ("snapshot_id",)
         if name == "ecfr_snapshots"
         else ("issue_observation_id",),
-        ("selection_metadata",),
-        policy_version="historical-regulations-public-v2",
+        ("selection_metadata", "source_context") if name == "cfr_sections" else ("selection_metadata",),
+        policy_version="retained-annual-cfr-v1" if name == "cfr_sections" else "historical-regulations-public-v2",
     )
     for name, schema in SCHEMAS.items()
 }
@@ -100,6 +104,72 @@ def _read(spec, base, maximum):
     return body
 
 
+def _annual_records(spec, base, generation, ordinal, manifest_digest):
+    from spicy_docs.sources.cfr.models import AnnualCfrSelection
+
+    bodies, witnesses, originals = {}, [], {}
+    for name in ("mods", "xml"):
+        source = spec[name]
+        body = _read(source, base, 64 * 1024 * 1024)
+        capture = source["capture"]
+        record = json.loads(_read(capture, base, 64 * 1024))
+        url = _publisher_url(source["source_url"])
+        if not isinstance(record, dict) or not isinstance(record.get("sha256"), str):
+            raise ValueError("retained annual capture requires a source record and hash")
+        recorded_hash = record.get("sha256", "")
+        if (
+            record != capture["expected_record"]
+            or recorded_hash.removeprefix("sha256:") != source["sha256"].removeprefix("sha256:")
+            or record.get("byte_size", record.get("bytes")) != len(body)
+            or record.get("resolved_url", record.get("final_url")) != url
+            or record.get("requested_url", record.get("url")) != url
+            or record.get("status_code", record.get("status")) != 200
+        ):
+            raise ValueError("retained annual capture does not bind the selected original")
+        bodies[name] = body
+        originals[name] = {
+            "sha256": source["sha256"],
+            "bytes": len(body),
+            "source_url": url,
+            "capture_sha256": capture["sha256"],
+        }
+        witnesses.extend(
+            [
+                {"source_id": f"annual-cfr:{name}", "source_uri": url, "sha256": source["sha256"]},
+                {
+                    "source_id": f"annual-cfr:{name}:capture",
+                    "source_uri": capture["sha256"],
+                    "sha256": capture["sha256"],
+                },
+            ]
+        )
+    request = AnnualCfrSelection(**spec["selection"])
+    prepared = prepare_retained_cfr_rows(
+        bodies["mods"],
+        bodies["xml"],
+        selection=request,
+        mods_url=spec["mods"]["source_url"],
+        xml_url=spec["xml"]["source_url"],
+        expected_constituents=spec["expected_constituents"],
+        expected_sections=spec["expected_sections"],
+    )
+    if _json(prepared["edition"]) != _json(spec["expected_edition"]) or _json(prepared["native_identity"]) != _json(
+        spec["expected_native_identity"]
+    ):
+        raise ValueError("retained annual edition/native identity differs")
+    metadata = {
+        "kind": "annual-cfr",
+        "selection": asdict(request),
+        "originals": originals,
+        "edition": prepared["edition"],
+        "native_identity": prepared["native_identity"],
+    }
+    witnesses.append({"source_id": "selection-manifest", "source_uri": manifest_digest, "sha256": manifest_digest})
+    context = ReceiptContext(generation, f"cfr_sections:{ordinal}", "retained-annual-cfr-v1", witnesses)
+    for row, source_context in zip(prepared["rows"], prepared["contexts"], strict=True):
+        yield {**row, "selection_metadata": metadata, "source_context": source_context}, context
+
+
 def build_historical_regulations(manifest: Path, output: Path) -> Path:
     """Read one complete explicit selection, then atomically expose local outputs.
 
@@ -123,14 +193,30 @@ def build_historical_regulations(manifest: Path, output: Path) -> Path:
     if output.exists():
         raise FileExistsError(output)
     manifest_digest = _digest(raw)
-    generation = _digest(_json(["historical-regulations-public-v2", manifest_digest]).encode())
+    recipe = (
+        "retained-annual-cfr-v1"
+        if any(s.get("kind") == "annual-cfr" for s in sources)
+        else "historical-regulations-public-v2"
+    )
+    generation = _digest(_json([recipe, manifest_digest]).encode())
     seen = set()
 
     def records(dataset):
         for ordinal, spec in enumerate(sources):
             kind = spec["kind"]
-            if kind not in {"fr-issue", "ecfr-snapshot"}:
+            if kind not in {"fr-issue", "ecfr-snapshot", "annual-cfr"}:
                 raise ValueError("unsupported historical regulation source kind")
+            if kind == "annual-cfr":
+                if dataset == "cfr_sections":
+                    for row, context in _annual_records(spec, manifest.parent, generation, ordinal, manifest_digest):
+                        key = (dataset, row["granule_id"])
+                        if key in seen:
+                            raise ValueError("repeated annual CFR constituent")
+                        seen.add(key)
+                        yield row, context
+                continue
+            if dataset == "cfr_sections":
+                continue
             if (dataset.startswith("federal_register")) != (kind == "fr-issue"):
                 continue
             body = _read(spec, manifest.parent, 256 * 1024 * 1024)
@@ -199,7 +285,12 @@ def build_historical_regulations(manifest: Path, output: Path) -> Path:
         stage.mkdir()
         receipts = []
         for dataset, policy in POLICIES.items():
-            _, receipt = write_dataset(records(dataset), stage / dataset, policy)
+            _, receipt = write_dataset(
+                records(dataset),
+                stage / dataset,
+                policy,
+                validation_backend="reference" if dataset == "cfr_sections" else "bulk",
+            )
             receipts.append(receipt)
         combine_receipts(receipts, stage / "etl_receipts.parquet")
         (stage / "selection.json").write_bytes(raw)
