@@ -229,10 +229,14 @@ def test_nonempty_complete_query_links_filing_source_and_retained_history(tmp_pa
     [committee]=pq.ParquetFile(generation/'fec_committee_master_observations.parquet').read().to_pylist()
     assert committee['name']=='TEST COMMITTEE' and committee['cycle']==2024
     assert result['tables']['fec_receipts']['retained_rows']==1
+    assert _sha(headers) == selection.header_associations[0].sha256
+    assert _sha(target) == selection.filings[0].sha256
     with ConversionReadOperation() as operation:
         _,reader,_=operation.admit_generation(generation)
         for key,original in retained.items():
-            reader.compare_original(key.removesuffix('.parquet'),original)
+            compared = reader.compare_original(key.removesuffix('.parquet'),original)
+            assert compared['rows_only_in_restored'] == compared['rows_only_in_retained'] == 0
+    assert all(path.is_relative_to(generation) for path in (generation.parent).rglob('*.parquet'))
 
 
 def test_resource_callback_reaches_fec_inner_table_loops(tmp_path,monkeypatch,bucket):
@@ -362,3 +366,69 @@ def test_conversion_reuses_exact_local_originals_without_fetch(tmp_path,monkeypa
     assert result['prepared']
     for key,path in retained.items():
         assert path.stat().st_ino==(work/'retained'/key).stat().st_ino
+
+
+def test_observations_consolidation_has_only_sealed_parquet_outputs(tmp_path, monkeypatch, bucket):
+    from spicy_regs.fec_native_conversion import build_retained_family
+    from spicy_regs.conversion_reads import ConversionReadOperation
+    snapshot, retained = old_family(tmp_path, monkeypatch, bucket, 'fec-observations', populated=True)
+    originals = {key: path.read_bytes() for key, path in retained.items()}
+    work = tmp_path / 'minimal'
+    with ConversionReadOperation() as operation:
+        generation = build_retained_family('fec-observations', snapshot['families']['fec-observations'],
+            snapshot, retained, work, operation=operation)
+    owned = list((work / 'build').rglob('*.parquet'))
+    assert owned and all(path.is_relative_to(generation) for path in owned)
+    assert len([path for path in owned if path.name == 'etl_receipts.parquet']) == 1
+    assert all(path.read_bytes() == originals[key] for key, path in retained.items())
+
+
+def test_partition_flat_removed_only_after_exact_readback(tmp_path, monkeypatch):
+    import spicy_regs.fec_native_conversion as module
+    original = tmp_path / 'original'
+    part = original / 'source_namespace=n/part-000000.parquet'
+    part.parent.mkdir(parents=True)
+    table = pa.table({'source_namespace': ['n'], 'value': ['exact']})
+    pq.write_table(table, part)
+    flat = tmp_path / 'flat.parquet'
+    pq.write_table(table, flat)
+    module._partition_subject(flat, original, tmp_path / 'partitioned', lambda: None)
+    assert not flat.exists() and part.exists()
+    pq.write_table(table, flat)
+    def refusal(*args):
+        raise ValueError('readback mismatch')
+    monkeypatch.setattr(module, '_equal_streams', refusal)
+    with pytest.raises(ValueError, match='readback mismatch'):
+        module._partition_subject(flat, original, tmp_path / 'failed', lambda: None)
+    assert flat.exists() and not (tmp_path / 'failed/artifact.json').exists()
+
+
+def test_receipt_consolidation_closes_recoverable_partial_on_interruption(tmp_path):
+    from spicy_regs.fec_native_conversion import _consume_receipt
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+    first, second, shared = [tmp_path / name for name in ('first.parquet', 'second.parquet', 'shared.parquet')]
+    table = pa.Table.from_pylist([{}], schema=RECEIPT_SCHEMA)
+    pq.write_table(table, first)
+    pq.write_table(table, second)
+    def stop():
+        raise RuntimeError('resource stop')
+    with pytest.raises(RuntimeError, match='resource stop'):
+        with pq.ParquetWriter(shared, RECEIPT_SCHEMA) as writer:
+            _consume_receipt(first, writer, lambda: None)
+            _consume_receipt(second, writer, stop)
+    assert not first.exists() and second.exists()
+    assert pq.ParquetFile(shared).read().equals(table)
+    assert not (tmp_path / 'artifact.json').exists()
+
+
+def test_receipt_mutation_retains_local_source(tmp_path, monkeypatch):
+    import spicy_regs.fec_native_conversion as module
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+    receipt, shared = tmp_path / 'receipt.parquet', tmp_path / 'shared.parquet'
+    pq.write_table(pa.Table.from_pylist([{}], schema=RECEIPT_SCHEMA), receipt)
+    answers = iter(['original', 'changed'])
+    monkeypatch.setattr(module, '_sha', lambda _: next(answers))
+    with pq.ParquetWriter(shared, RECEIPT_SCHEMA) as writer:
+        with pytest.raises(ValueError, match='changed during consolidation'):
+            module._consume_receipt(receipt, writer, lambda: None)
+    assert receipt.exists() and not (tmp_path / 'artifact.json').exists()

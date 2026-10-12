@@ -3,6 +3,7 @@
 This is representation conversion, not a publisher-source rebuild. Original
 member order and schemas remain the comparison authority.
 """
+from contextlib import ExitStack, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, replace
 import base64
@@ -16,7 +17,7 @@ import pyarrow.parquet as pq
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext
 from spicy_regs.generations import build_generation
 from spicy_regs.sources import publication
-from spicy_regs.transforms.assemble_fec_query import TypedInput, assemble_subject_table, _sha
+from spicy_regs.transforms.assemble_fec_query import TypedInput, assemble_subject_table, _sha, _equal_streams
 from spicy_regs.transforms.build_fec_observations import OUTPUTS
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
 from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
@@ -137,26 +138,55 @@ def _members(path):
 def _partition_subject(flat, original, destination, check_resources):
     """Keep exact member names/lengths; generation admission checks partition cells."""
     destination.mkdir(parents=True)
-    source = pq.ParquetFile(flat)
-    rows = iter(row for batch in source.iter_batches(batch_size=512, use_threads=False) for row in batch.to_pylist())
-    from itertools import islice
-    for member in _members(original):
-        check_resources()
-        target = destination / member.relative_to(original)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        count = pq.ParquetFile(member).metadata.num_rows
-        with pq.ParquetWriter(target, source.schema_arrow, compression='zstd') as writer:
-            remaining = count
-            while remaining:
-                check_resources()
-                batch = list(islice(rows, min(512, remaining)))
-                if not batch:
-                    raise ValueError('Native FEC member lost original rows')
-                writer.write_table(pa.Table.from_pylist(batch, schema=source.schema_arrow))
-                remaining -= len(batch)
-    if next(rows, None) is not None:
-        raise ValueError('Native FEC member has additional rows')
+    with pq.ParquetFile(flat) as source:
+        rows = iter(row for batch in source.iter_batches(batch_size=512, use_threads=False) for row in batch.to_pylist())
+        from itertools import islice
+        for member in _members(original):
+            check_resources()
+            target = destination / member.relative_to(original)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            count = pq.ParquetFile(member).metadata.num_rows
+            with pq.ParquetWriter(target, source.schema_arrow, compression='zstd') as writer:
+                remaining = count
+                while remaining:
+                    check_resources()
+                    batch = list(islice(rows, min(512, remaining)))
+                    if not batch:
+                        raise ValueError('Native FEC member lost original rows')
+                    writer.write_table(pa.Table.from_pylist(batch, schema=source.schema_arrow))
+                    remaining -= len(batch)
+        if next(rows, None) is not None:
+            raise ValueError('Native FEC member has additional rows')
+        def batches(paths):
+            for path in paths:
+                with pq.ParquetFile(path) as reader:
+                    for batch in reader.iter_batches(batch_size=512, use_threads=False):
+                        check_resources()
+                        yield batch
+        _equal_streams(batches([flat]), batches(_members(destination)))
+    if flat.is_symlink() or flat.stat().st_nlink != 1:
+        raise ValueError('Partitioning may consume only its single-link owned flat output')
+    flat.unlink()
     return destination
+
+
+def _consume_receipt(receipt, writer, check_resources):
+    """Consume a completed owned bundle, checking every batch and its byte binding."""
+    if receipt.is_symlink() or receipt.stat().st_nlink != 1:
+        raise ValueError('Receipt consolidation requires a single-link owned output')
+    digest = _sha(receipt)
+    count = 0
+    with pq.ParquetFile(receipt) as source:
+        if not source.schema_arrow.equals(RECEIPT_SCHEMA, check_metadata=False):
+            raise ValueError('Receipt consolidation schema differs')
+        expected = source.metadata.num_rows
+        for batch in source.iter_batches(batch_size=512, use_threads=False):
+            check_resources()
+            writer.write_batch(batch)
+            count += batch.num_rows
+    if count != expected or _sha(receipt) != digest:
+        raise ValueError('Receipt changed during consolidation')
+    receipt.unlink()
 
 
 def validate_identity_schema(table, schema):
@@ -356,6 +386,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
     check_membership(family, old)
     if set(retained) != set(old['tables']):
         raise ValueError('FEC retained table membership differs from captured family')
+    owned_headers = ()
     snapshot = captured if read_snapshot is None else read_snapshot
     if snapshot['families'][family] != old:
         raise ValueError('FEC candidate staging changed its own captured prior')
@@ -365,8 +396,11 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
             raise ValueError('FEC query conversion requires selected native observations')
         if filing_associations is None:
             raise ValueError('FEC query conversion requires admitted filing association inputs')
+        prior_selection = filing_associations
         filing_associations = rebind_filing_inputs(filing_associations, observation_rebinding,
             work / 'build' / 'rebound-filing-inputs', check_resources)
+        if filing_associations is not prior_selection:
+            owned_headers = filing_associations.header_associations
         if filing_associations.source_generation_pin != parent['artifactDigest']:
             raise ValueError('FEC association source differs from selected observations')
     native_filings, native_headers = None, None
@@ -392,93 +426,114 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
     generation_id = uuid4().hex
     build = work / 'build'
     build.mkdir(parents=True, exist_ok=True)
-    policies, subjects, receipt_files, partitioned = [], [], [], {}
-    for key, original in sorted(retained.items()):
-        check_resources()
-        table = key.removesuffix('.parquet')
-        published_members = publication.table_members(captured, key)
-        members = [original / pin.key.removeprefix(table + '/') if original.is_dir() else original
-                   for pin in published_members]
-        if set(members) != set(_members(original)):
-            raise ValueError('FEC retained member set differs from publication')
-        if original.is_dir() and members != sorted(members):
-            raise ValueError('Noncanonical captured FEC member order is unsupported; no reordered build is admitted')
-        schema = pq.read_schema(members[0])
-        if any(not pq.read_schema(p).equals(schema, check_metadata=True) for p in members):
-            raise ValueError('FEC retained split member schemas differ')
-        selected = []
-        witnesses = []
-        if len(members) != len(published_members):
-            raise ValueError('FEC retained member set differs from publication')
-        for path, pin in zip(members, published_members, strict=True):
-            namespace = None
-            if original.is_dir():
-                namespace = path.relative_to(original).parts[0].removeprefix('source_namespace=')
-            if pin.sha256 is None or pin.byte_size is None or pin.rows is None:
-                raise ValueError('FEC conversion requires exact digest, size and row membership')
-            if _sha(path) != pin.sha256 or path.stat().st_size != pin.byte_size or pq.ParquetFile(path).metadata.num_rows != pin.rows:
-                raise ValueError('FEC retained input differs from captured member bytes or rows')
-            selected.append(TypedInput(path, pin.sha256, pin.rows, namespace))
-            witnesses.append(dict(source_id=pin.path, source_uri=None, sha256=pin.sha256,
-                                  locator=None, body_version=old['artifactDigest']))
-        output = build / 'tables' / table
-        if table in FIELD_RULES:
-            from bisect import bisect_right
-            from itertools import accumulate
-            member_ends = list(accumulate(i.rows for i in selected))
-            def context_for(row, ordinal):
-                witness = witnesses[bisect_right(member_ends, ordinal)]
-                return ReceiptContext(generation_id, f'{table}/{ordinal}', 'fec-retained-conversion/1', [witness])
-            applicable = (table != 'fec_filing_header_associations'
-                          and 'filing_key' in FIELD_RULES[table]['keep'] and 'filing_key' in schema.names)
-            def current_header_for(row, ordinal):
-                if native_headers is None:
-                    raise ValueError('Current header interpretation has no complete admitted dependency')
-                return native_headers[ordinal]
-            result = assemble_subject_table(selected, table=table, schema=schema, output=output,
-                generation_id=generation_id, context_for=context_for, check_resources=check_resources,
-                source_partitioned=original.is_dir(), filing_associations=filing_associations if applicable else None,
-                source_digest_for=agency_digest_for if table == 'fec_agency_mapping_dispositions' else None,
-                observation_rebinding=observation_rebinding,
-                current_header_for=current_header_for if table == 'fec_filing_header_associations' else None)
-            if not result['full_rebuild_qualified'] or result['exact_mapper_rows_compared'] != sum(i.rows for i in selected):
-                raise ValueError(f'{table}: retained FEC rows did not all convert exactly')
-            from spicy_regs.transforms.fec_subject_receipts import dataset_policy
-            policy = dataset_policy(table, schema)
-            subject = None if result['subject_path'] is None else Path(result['subject_path'])
-            receipts = Path(result['receipt_path'])
-        else:
-            validate_identity_schema(table, schema)
-            def rows():
-                for item, witness in zip(selected, witnesses, strict=True):
-                    for batch in pq.ParquetFile(item.path).iter_batches(batch_size=512, use_threads=False):
-                        check_resources()
-                        for row in batch.to_pylist():
-                            yield row, witness
-            with IdentityReceiptWriter(output, generation_id=generation_id, tables=[table]) as writer:
-                for ordinal, (row, witness) in enumerate(rows()):
-                    adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
-                    original_row = row
-                    row, overrides = retained_identity_row(table, original_row)
-                    rebound = rebind_row(table, row, observation_rebinding)
-                    overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
-                    row = rebound
-                    if table == 'fec_relationships':
-                        overrides['record_id'] = original_row.get('record_id')
-                    if adopted is not None:
-                        overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
-                    writer.emit(table, row, input_witness=witness,
-                        source_input={'fec_retained_overrides': overrides} if overrides else None, native_filing_subject=adopted)
-            policy = writer.policies[table]
-            subject = None if policy.receipt_only else output / key
-            receipts = output / 'etl_receipts.parquet'
-        policies.append(policy)
-        receipt_files.append(receipts)
-        if subject is not None:
-            if original.is_dir():
-                subject = _partition_subject(subject, original, build / 'partitioned' / table, check_resources)
-                partitioned[key] = old['tables'][key]['partitionColumns']
-            subjects.append(subject)
+    policies, subjects, partitioned, pending_partitions = [], [], {}, []
+    shared = build / 'etl_receipts.parquet'
+    observation_output = build / 'tables' / 'observations'
+    with ExitStack() as stack:
+        observation_writer = (stack.enter_context(IdentityReceiptWriter(observation_output,
+            generation_id=generation_id, tables=[key.removesuffix('.parquet') for key in sorted(retained)]))
+            if family == 'fec-observations' else None)
+        receipt_writer = None
+        if observation_writer is None:
+            stream = stack.enter_context(shared.open('xb'))
+            receipt_writer = stack.enter_context(pq.ParquetWriter(stream, RECEIPT_SCHEMA, compression='zstd'))
+        for key, original in sorted(retained.items()):
+            check_resources()
+            table = key.removesuffix('.parquet')
+            published_members = publication.table_members(captured, key)
+            members = [original / pin.key.removeprefix(table + '/') if original.is_dir() else original
+                       for pin in published_members]
+            if set(members) != set(_members(original)):
+                raise ValueError('FEC retained member set differs from publication')
+            if original.is_dir() and members != sorted(members):
+                raise ValueError('Noncanonical captured FEC member order is unsupported; no reordered build is admitted')
+            schema = pq.read_schema(members[0])
+            if any(not pq.read_schema(p).equals(schema, check_metadata=True) for p in members):
+                raise ValueError('FEC retained split member schemas differ')
+            selected = []
+            witnesses = []
+            if len(members) != len(published_members):
+                raise ValueError('FEC retained member set differs from publication')
+            for path, pin in zip(members, published_members, strict=True):
+                namespace = None
+                if original.is_dir():
+                    namespace = path.relative_to(original).parts[0].removeprefix('source_namespace=')
+                if pin.sha256 is None or pin.byte_size is None or pin.rows is None:
+                    raise ValueError('FEC conversion requires exact digest, size and row membership')
+                if _sha(path) != pin.sha256 or path.stat().st_size != pin.byte_size or pq.ParquetFile(path).metadata.num_rows != pin.rows:
+                    raise ValueError('FEC retained input differs from captured member bytes or rows')
+                selected.append(TypedInput(path, pin.sha256, pin.rows, namespace))
+                witnesses.append(dict(source_id=pin.path, source_uri=None, sha256=pin.sha256,
+                                      locator=None, body_version=old['artifactDigest']))
+            output = observation_output if family == 'fec-observations' else build / 'tables' / table
+            if table in FIELD_RULES:
+                from bisect import bisect_right
+                from itertools import accumulate
+                member_ends = list(accumulate(i.rows for i in selected))
+                def context_for(row, ordinal):
+                    witness = witnesses[bisect_right(member_ends, ordinal)]
+                    return ReceiptContext(generation_id, f'{table}/{ordinal}', 'fec-retained-conversion/1', [witness])
+                applicable = (table != 'fec_filing_header_associations'
+                              and 'filing_key' in FIELD_RULES[table]['keep'] and 'filing_key' in schema.names)
+                def current_header_for(row, ordinal):
+                    if native_headers is None:
+                        raise ValueError('Current header interpretation has no complete admitted dependency')
+                    return native_headers[ordinal]
+                result = assemble_subject_table(selected, table=table, schema=schema, output=output,
+                    generation_id=generation_id, context_for=context_for, check_resources=check_resources,
+                    source_partitioned=original.is_dir(), filing_associations=filing_associations if applicable else None,
+                    source_digest_for=agency_digest_for if table == 'fec_agency_mapping_dispositions' else None,
+                    observation_rebinding=observation_rebinding,
+                    current_header_for=current_header_for if table == 'fec_filing_header_associations' else None)
+                if not result['full_rebuild_qualified'] or result['exact_mapper_rows_compared'] != sum(i.rows for i in selected):
+                    raise ValueError(f'{table}: retained FEC rows did not all convert exactly')
+                from spicy_regs.transforms.fec_subject_receipts import dataset_policy
+                policy = dataset_policy(table, schema)
+                subject = None if result['subject_path'] is None else Path(result['subject_path'])
+                receipts = Path(result['receipt_path'])
+            else:
+                validate_identity_schema(table, schema)
+                def rows():
+                    for item, witness in zip(selected, witnesses, strict=True):
+                        for batch in pq.ParquetFile(item.path).iter_batches(batch_size=512, use_threads=False):
+                            check_resources()
+                            for row in batch.to_pylist():
+                                yield row, witness
+                with (nullcontext(observation_writer) if observation_writer is not None else
+                      IdentityReceiptWriter(output, generation_id=generation_id, tables=[table])) as writer:
+                    for ordinal, (row, witness) in enumerate(rows()):
+                        adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
+                        original_row = row
+                        row, overrides = retained_identity_row(table, original_row)
+                        rebound = rebind_row(table, row, observation_rebinding)
+                        overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
+                        row = rebound
+                        if table == 'fec_relationships':
+                            overrides['record_id'] = original_row.get('record_id')
+                        if adopted is not None:
+                            overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
+                        writer.emit(table, row, input_witness=witness,
+                            source_input={'fec_retained_overrides': overrides} if overrides else None, native_filing_subject=adopted)
+                policy = writer.policies[table]
+                subject = None if policy.receipt_only else output / key
+                receipts = output / 'etl_receipts.parquet'
+            policies.append(policy)
+            if receipt_writer is not None:
+                _consume_receipt(receipts, receipt_writer, check_resources)
+            if subject is not None:
+                if original.is_dir():
+                    destination = build / 'partitioned' / table
+                    if observation_writer is not None:
+                        pending_partitions.append((subject, original, destination))
+                        subject = destination
+                    else:
+                        subject = _partition_subject(subject, original, destination, check_resources)
+                    partitioned[key] = old['tables'][key]['partitionColumns']
+                subjects.append(subject)
+    for flat, original, destination in pending_partitions:
+        _partition_subject(flat, original, destination, check_resources)
+    if family == 'fec-observations':
+        shared = observation_output / 'etl_receipts.parquet'
     if native_filings is not None:
         target = next(p for p in subjects if p.name == 'fec_filings.parquet')
         stored = pq.ParquetFile(target).read(use_threads=False).to_pylist()
@@ -486,12 +541,6 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                 {name: row[name] for name in candidate} != candidate
                 for row, candidate in zip(stored, native_filings, strict=True)):
             raise ValueError('Self-scoped filing target differs from the exact admitted complete remap')
-    shared = build / 'etl_receipts.parquet'
-    with pq.ParquetWriter(shared, RECEIPT_SCHEMA, compression='zstd') as writer:
-        for receipt in receipt_files:
-            for batch in pq.ParquetFile(receipt).iter_batches(batch_size=512, use_threads=False):
-                check_resources()
-                writer.write_batch(batch)
     parents = {} if family == 'fec-observations' else {
         key: publication.table_pin(snapshot, key) for key in family_tables('fec-observations')
         if key in snapshot['families']['fec-observations']['tables']}
@@ -500,5 +549,18 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
         expected_keys=[p.dataset + '.parquet' for p in policies if not p.receipt_only],
         read_snapshot=snapshot, parents=parents, inputs=inputs, partitioned=partitioned,
         receipt_path=shared, receipt_policies=policies, receipt_generation_id=generation_id,
-        read_operation=operation)
+        read_operation=operation, adopt_owned_receipt=True, owned_output_root=build)
+    # These bounded remaps have been consumed and admitted in the final main/
+    # receipts. Resume uses that artifact and original selections, never these files.
+    for item in owned_headers:
+        path = item.path
+        with pq.ParquetFile(path) as source:
+            count = source.metadata.num_rows
+        if (path.parent != build / 'rebound-filing-inputs' or path.is_symlink()
+                or path.stat().st_nlink != 1 or _sha(path) != item.sha256 or count != item.rows):
+            raise ValueError('Owned header remap changed before disposal')
+    for item in owned_headers:
+        item.path.unlink()
+    if owned_headers:
+        (build / 'rebound-filing-inputs').rmdir()
     return generation
