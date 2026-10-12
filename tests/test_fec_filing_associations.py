@@ -348,3 +348,29 @@ def test_only_rebuilt_v2_filing_metadata_can_establish_associations(version):
         assert result["filing_key"] is None
         assert result["association_status"] == "unresolved_target_identity_conflict"
     assert numbers()[0]["policy_version"] == "fec-retained-filing-association/2"
+
+
+@pytest.mark.parametrize('scope,target_pin', [('self', GEN), ('external', None), ('unknown', None)])
+def test_filing_target_scope_refuses_inconsistent_pin(scope, target_pin):
+    from spicy_regs.transforms.fec_filing_associations import association_records
+    row = financial()
+    with pytest.raises(ValueError):
+        list(association_records([row], table='fec_receipts', schema=pa.Table.from_pylist([row]).schema,
+             filings=[filing()], headers=[], source_generation_pin=GEN, target_generation_pin=target_pin,
+             namespace_evidence={NAMESPACE: EVIDENCE}, check_resources=lambda: None,
+             target_generation_scope=scope))
+
+
+def test_self_filing_target_scope_preserves_row_and_all_witnesses_without_self_digest():
+    from spicy_regs.transforms.fec_filing_associations import association_records
+    row = financial(amount='12.34', transaction_id='unchanged', source_ordinal='7')
+    result = list(association_records([row], table='fec_receipts', schema=pa.Table.from_pylist([row]).schema,
+         filings=[filing(), filing('second')], headers=[], source_generation_pin=GEN,
+         target_generation_pin=None, target_generation_scope='self',
+         namespace_evidence={NAMESPACE: EVIDENCE}, check_resources=lambda: None))
+    assert len(result) == 1 and result[0][0] == row
+    decision = result[0][1]
+    assert decision['filing_association_target_generation_scope'] == 'self'
+    assert decision['filing_association_target_generation_pin'] is None
+    assert decision['filing_key'] == filing_key('123')
+    assert decision['filing_association_target_record_ids'] == ['metadata-1', 'second']

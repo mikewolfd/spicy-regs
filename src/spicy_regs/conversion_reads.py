@@ -183,6 +183,31 @@ class _FamilyReader:
                 compare(path, schema, islice(rows, state['rows']))
             if next(rows, None) is not None:
                 raise ValueError("Extra prior receipt inputs without retained source rows")
+        elif dataset.startswith('fec_'):
+            from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
+            from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
+            if dataset not in FIELD_RULES and dataset not in REGISTRY:
+                raise ValueError("No maintained original decoder for admitted FEC dataset")
+            policy = self.policies[dataset]
+            records = (r['processing_fields'] for r in self.processing(dataset, outcomes=frozenset({'observed'}))) if policy.receipt_only else self.read_subjects(dataset)
+            source_columns = pq.read_schema(next(iter(members.values()))).names
+            def originals():
+                for row in records:
+                    if dataset in FIELD_RULES:
+                        moved = row['fec_conversion_inputs']
+                        yield {name: moved[name] if name in moved else row[name]
+                               for name in row['fec_input_columns']}
+                    else:
+                        moved = row['conversion_inputs']
+                        overrides = (row.get('source_input') or {}).get('fec_retained_overrides', {})
+                        yield {name: overrides.get(name, moved.get(name, row.get(name)))
+                               for name in source_columns}
+            rows = iter(originals())
+            for path in members.values():
+                count = pq.ParquetFile(path).metadata.num_rows
+                compare(path, pq.read_schema(path), islice(rows, count))
+            if next(rows, None) is not None:
+                raise ValueError("Extra restored FEC processing rows")
         else:
             if original.is_dir():
                 raise ValueError("This source requires a single retained Parquet member")

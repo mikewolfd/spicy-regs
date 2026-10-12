@@ -1,0 +1,103 @@
+{
+  "fec_api_response_controls": [
+    "amount_kind",
+    "correction_applicability_status",
+    "correction_operation",
+    "currency",
+    "filing_key",
+    "filing_link_status",
+    "native_field_states_json",
+    "native_metadata_json",
+    "original_result_pointer",
+    "value_json",
+    "value_mapping_version"
+  ],
+  "fec_candidate_api_observations": [
+    "amount_kind",
+    "correction_applicability_status",
+    "correction_operation",
+    "currency",
+    "filing_key",
+    "filing_link_status",
+    "native_field_states_json",
+    "native_metadata_json",
+    "value_mapping_version"
+  ],
+  "fec_committee_master_observations": [
+    "amount_kind",
+    "capture_json",
+    "correction_applicability_status",
+    "correction_operation",
+    "currency",
+    "filing_key",
+    "filing_link_status",
+    "native_fields",
+    "value_mapping_version"
+  ],
+  "fec_committee_observations": [
+    "amount_kind",
+    "correction_applicability_status",
+    "correction_operation",
+    "currency",
+    "filing_key",
+    "filing_link_status",
+    "native_field_states_json",
+    "native_metadata_json",
+    "value_mapping_version"
+  ],
+  "fec_filing_links": [
+    "native_field_states_json"
+  ],
+  "fec_filings": [
+    "native_field_states_json"
+  ],
+  "fec_lobbyist_registrations": [
+    "filing_key",
+    "filing_link_status",
+    "native_field_states_json"
+  ],
+  "fec_postgres_committee_history_observations": [
+    "amount_kind",
+    "capture_json",
+    "correction_applicability_status",
+    "correction_operation",
+    "currency",
+    "derivation_json",
+    "filing_key",
+    "filing_link_status",
+    "native_fields",
+    "raw_copy_fields",
+    "value_mapping_version"
+  ],
+  "fec_quality_notices": [
+    "filing_key",
+    "filing_link_status",
+    "native_field_states_json"
+  ],
+  "fec_registration_statements": [
+    "filing_key",
+    "filing_link_status",
+    "native_field_states_json"
+  ],
+  "fec_research_document_observations": [
+    "native_metadata_json"
+  ],
+  "fec_research_filing_feed_items": [
+    "description",
+    "native_fields_json",
+    "source_parts_json"
+  ],
+  "fec_research_meeting_observations": [
+    "native_cells_json"
+  ],
+  "fec_research_response_outcomes": [
+    "native_payload_json"
+  ],
+  "fec_research_source_pages": [
+    "headings_json",
+    "times_json"
+  ],
+  "fec_retained_csv_observations": [
+    "native_fields_json"
+  ]
+}

@@ -1212,7 +1212,7 @@
       {
         "dataset": "fec_account_transfers",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1224,7 +1224,7 @@
       {
         "dataset": "fec_agency_mapping_dispositions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "observation_ordinal"
         ],
@@ -1272,7 +1272,7 @@
       {
         "dataset": "fec_allocated_disbursements",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1284,7 +1284,7 @@
       {
         "dataset": "fec_allocation_bases",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1321,7 +1321,7 @@
       {
         "dataset": "fec_bundled_contributions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1465,7 +1465,7 @@
       {
         "dataset": "fec_communication_costs",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1477,7 +1477,7 @@
       {
         "dataset": "fec_contribution_aggregates",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1489,7 +1489,7 @@
       {
         "dataset": "fec_coordinated_party_expenditures",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1501,7 +1501,7 @@
       {
         "dataset": "fec_debts",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1513,7 +1513,7 @@
       {
         "dataset": "fec_disbursements",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1525,7 +1525,7 @@
       {
         "dataset": "fec_electioneering_communications",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1561,7 +1561,7 @@
       {
         "dataset": "fec_filing_header_associations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "observation_ordinal"
         ],
@@ -1589,7 +1589,7 @@
       {
         "dataset": "fec_filing_report_observations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1601,7 +1601,7 @@
       {
         "dataset": "fec_filing_text_observations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1653,7 +1653,7 @@
       {
         "dataset": "fec_inaugural_donations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1665,7 +1665,7 @@
       {
         "dataset": "fec_independent_expenditures",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1677,7 +1677,7 @@
       {
         "dataset": "fec_intercommittee_transactions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1737,7 +1737,7 @@
       {
         "dataset": "fec_loan_guarantors",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1749,7 +1749,7 @@
       {
         "dataset": "fec_loan_terms",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1761,7 +1761,7 @@
       {
         "dataset": "fec_loans",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1845,7 +1845,7 @@
       {
         "dataset": "fec_receipts",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -1913,7 +1913,7 @@
       {
         "dataset": "fec_reported_financial_summaries",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -2052,11 +2052,12 @@
       {
         "dataset": "fec_source_records",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
+        "policy_version": "fec-identity-context-receipts/3",
         "identity_columns": [
           "collection_id",
           "source_record_id",
-          "source_sha256"
+          "source_sha256",
+          "observation_ordinal"
         ],
         "processing_fields": [
           "metadata_json",
@@ -3681,6 +3682,7 @@
       "measured_on": "2026-09-30",
       "data_quality": "Memo, subtotal and attribution fields retain their source meaning. Their eligibility depends on the source family, retained definitions and analytic purpose; no blanket memo exclusion applies to every query. Joint fundraising transfer and attribution observations can overlap without carrying an exact source link between them. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.",
       "columns": [
+        "observation_ordinal",
         "collection_id",
         "source_family",
         "profile",
@@ -3788,6 +3790,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -3809,7 +3812,8 @@
         "disposition",
         "reason",
         "target_record_ids_json",
-        "observation_ordinal"
+        "observation_ordinal",
+        "source_sha256"
       ]
     },
     {
@@ -4031,6 +4035,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4119,6 +4124,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4289,6 +4295,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4570,6 +4577,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4625,6 +4633,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4739,6 +4748,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4834,6 +4844,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -4949,6 +4960,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5009,6 +5021,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5103,6 +5116,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5202,6 +5216,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5249,6 +5264,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5446,6 +5462,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5547,6 +5564,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5611,6 +5629,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5851,6 +5870,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -5943,6 +5963,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -6044,6 +6065,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -6398,6 +6420,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]
@@ -6615,6 +6638,7 @@
         "filing_association_target_generation_pin",
         "filing_association_record_id",
         "filing_association_referenced_key",
+        "filing_association_target_generation_scope",
         "filing_association_target_count",
         "filing_association_target_record_ids"
       ]

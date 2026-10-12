@@ -37,17 +37,21 @@ class FilingAssociationInputs:
     by the caller's existing release checks, as for the original mapper.
     """
     source_generation_pin: str
-    filing_generation_pin: str
+    filing_generation_pin: str | None
     filings: Sequence[TypedInput]
     namespace_evidence: dict[str, str]
     header_associations: Sequence[TypedInput] = ()
+    filing_generation_scope: str = "external"
 
     def prepare(self, table, schema, check_resources):
         from .fec_filing_associations import association_records
         from .fec_native_subjects import FIELD_RULES
 
         _digest(self.source_generation_pin)
-        _digest(self.filing_generation_pin)
+        if self.filing_generation_scope == "external":
+            _digest(self.filing_generation_pin)
+        elif self.filing_generation_scope != "self" or self.filing_generation_pin is not None:
+            raise ValueError("Self filing target requires a null pin; external requires an exact pin")
         namespace_evidence = dict(self.namespace_evidence)
         for evidence in namespace_evidence.values():
             _digest(evidence)
@@ -93,9 +97,11 @@ class FilingAssociationInputs:
                 source_generation_pin=self.source_generation_pin,
                 target_generation_pin=self.filing_generation_pin,
                 namespace_evidence=namespace_evidence, check_resources=check_resources,
+                target_generation_scope=self.filing_generation_scope,
             ),
             dict(source_generation_pin=self.source_generation_pin, filing_generation_pin=self.filing_generation_pin,
-                 filings=filing_proofs, headers=header_proofs, namespace_evidence=namespace_evidence),
+                 filings=filing_proofs, headers=header_proofs, namespace_evidence=namespace_evidence,
+                 filing_generation_scope=self.filing_generation_scope),
         )
 
 
@@ -300,6 +306,9 @@ def assemble_subject_table(
     generation_id: str, context_for, check_resources: Callable[[], None],
     source_partitioned: bool = False, read_batch_rows: int = 8192,
     filing_associations: FilingAssociationInputs | None = None,
+    source_digest_for=None,
+    observation_rebinding=None,
+    current_header_for=None,
 ) -> dict:
     """Assemble this FEC family's subjects and receipts from qualified mapper files.
 
@@ -343,7 +352,9 @@ def assemble_subject_table(
         associations_for, association_inputs = filing_associations.prepare(table, schema, check_resources)
     paths, policy = write_fec_subjects(records(), output, table=table, input_schema=schema,
                                       generation_id=generation_id, context_for=context_for,
-                                      batch_size=read_batch_rows, associations_for=associations_for)
+                                      batch_size=read_batch_rows, associations_for=associations_for,
+                                      source_digest_for=source_digest_for, observation_rebinding=observation_rebinding,
+                                      current_header_for=current_header_for)
     subject, receipts = paths
     refused = 0
     for batch in pq.ParquetFile(receipts).iter_batches(columns=["outcome"]):

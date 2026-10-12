@@ -184,7 +184,8 @@ def associate_filing_numbers(rows, **kwargs):
 
 
 def association_records(rows, *, table, schema, filings, headers, source_generation_pin,
-                        target_generation_pin, namespace_evidence, check_resources):
+                        target_generation_pin, namespace_evidence, check_resources,
+                        target_generation_scope="external"):
     """Publish one guarded decision per financial/text row in bounded batches.
 
     Reuse the existing number and header rules. Neither rule chooses a latest
@@ -197,7 +198,15 @@ def association_records(rows, *, table, schema, filings, headers, source_generat
 
     if table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]:
         raise ValueError("Filing associations are inapplicable to this subject")
-    _digest(target_generation_pin)
+    # The caller proves complete final-table correspondence before admitting
+    # self scope. A generation cannot include its own content digest in its rows.
+    if target_generation_scope == "self":
+        if target_generation_pin is not None:
+            raise ValueError("Self filing target scope requires a null generation pin")
+    elif target_generation_scope == "external":
+        _digest(target_generation_pin)
+    else:
+        raise ValueError("Unsupported filing target generation scope")
     by_key, _ = _index(filings)
     header_witnesses = defaultdict(list)
     for header in headers:
@@ -281,6 +290,7 @@ def association_records(rows, *, table, schema, filings, headers, source_generat
                     filing_association_status=decision["association_status"],
                     filing_association_policy=POLICY_VERSION,
                     filing_association_source_generation_pin=source_generation_pin,
+                    filing_association_target_generation_scope=target_generation_scope,
                     filing_association_target_generation_pin=target_generation_pin,
                     filing_association_record_id=decision.get("association_record_id", decision.get("record_id")),
                     filing_association_referenced_key=decision.get("referenced_filing_key"),

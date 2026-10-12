@@ -25,6 +25,15 @@ def earlier_policies(policy):
             raise ValueError("Native legal migration changes a historical observation identity")
         return (earlier,)
 
+    if policy.policy_version in {"fec-subject-receipts/3", "fec-identity-context-receipts/3"}:
+        current = json.loads(files("spicy_regs").joinpath("etl_policies/" + policy.dataset + ".json").read_text())
+        history = json.loads(files("spicy_regs").joinpath("fec_conversion_policy_history.json").read_text())
+        if policy.descriptor() != current or policy.dataset not in history:
+            return ()
+        previous = DatasetPolicy.from_descriptor(history[policy.dataset])
+        original = json.loads(files("spicy_regs").joinpath("fec_policy_history.json").read_text())
+        return (previous, DatasetPolicy.from_descriptor(original[policy.dataset]))
+
     if policy.policy_version in {"fec-subject-receipts/2", "fec-identity-context-receipts/2"}:
         fec_history = json.loads(files("spicy_regs").joinpath("fec_policy_history.json").read_text())
         expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
