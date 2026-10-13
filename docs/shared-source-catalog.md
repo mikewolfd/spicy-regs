@@ -31,7 +31,8 @@ reuses the maintained SpicyDocs readers. The path above selects that exact
 observation set; repeat `--discovery` for additional retained snapshots. Omitting
 the flag builds only the corpus and reviewed registry. It does not discover
 publisher catalogs automatically. A refresh requires an explicit acquisition
-command from the [SpicyDocs guide](../../spicy-docs/docs/sources/source-catalog.md).
+command described in the workspace guide at
+`spicy-docs/docs/sources/source-catalog.md`.
 
 Repeat `--discovery FILE` to import retained `spicy-source-discovery` version 1
 observations from SpicyDocs. Dataset and route IDs remain source-owned. Failed,
@@ -92,8 +93,9 @@ The `matrix` command includes each route's `relationships` and
 period, capture and fields. Matching IDs can coexist with differing fields;
 documented publisher reach is separate from observed local holdings. A route
 without comparison evidence still reports its relationship as unresolved.
-The dated [relationship qualification report](../../docs/source-route-qualification-2026-10-10.md)
-links the retained comparisons and destination decisions.
+The dated relationship qualification report at workspace path
+`docs/source-route-qualification-2026-10-10.md` links the retained comparisons
+and destination decisions.
 
 The index retains source-artifact declarations, processing receipt references,
 parent table dependencies, retained baselines, external references and full
