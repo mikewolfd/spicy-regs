@@ -201,7 +201,7 @@ def validate_identity_schema(table, schema):
             raise ValueError(f'{table}: retained identity schema is neither supported current nor captured legacy shape')
 
 
-def retained_identity_row(table, original, *, diagnostics=None):
+def retained_identity_row(table, original, *, diagnostics=None, source_schema=None):
     """Interpret only named legacy shapes; retain exact old values separately."""
     from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
     registry = REGISTRY[table]
@@ -216,6 +216,22 @@ def retained_identity_row(table, original, *, diagnostics=None):
         if value is not None and not isinstance(value, dict):
             raise ValueError(f'{table}: retained {name} must be a named source object')
         return value
+    count_fields = {'fec_research_context_dispositions': ('source_fact_count',),
+                    'fec_collections': ('record_count', 'relationship_count')}.get(table)
+    if count_fields and source_schema is not None:
+        # These historic producers emitted textual counts. Only the exact
+        # admitted captured schema proves that path; current rows remain strict.
+        captured = json.loads(Path(__file__).with_name('fec_retained_legacy_schemas.json').read_text())[table]
+        expected = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(captured)))
+        if source_schema.equals(expected, check_metadata=False):
+            from spicy_regs.transforms.fec_identity_shape import typed_values
+            values, problems = typed_values(original, dict.fromkeys(count_fields, 'integer'))
+            row.update({name: values[name] for name in count_fields})
+            if diagnostics is not None:
+                diagnostics.update(legacy_bridge='retained-counts/1',
+                    field_statuses={name: values[name+'_status'] for name in count_fields},
+                    raw_values={name: values[name+'_raw'] for name in count_fields},
+                    refusals=problems)
     if table in {'fec_committee_master_observations', 'fec_postgres_committee_history_observations'} and 'native_fields' in original:
         from spicy_regs.transforms.fec_committee_history_observations import _history_values
         native = node('native_fields')
@@ -548,7 +564,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                         adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
                         original_row = row
                         retained_diagnostics = {}
-                        row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics)
+                        row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics, source_schema=schema)
                         rebound = rebind_row(table, row, observation_rebinding)
                         overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
                         row = rebound
