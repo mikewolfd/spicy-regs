@@ -118,3 +118,27 @@ must remain outside public packaging. A complete selected docket is distinct
 from publisher-wide history, source acquisition, public serving and release.
 See `metadata/source-catalog-program/20261010/execution-20261012/G/` in the
 canonical corpus for the exact finite selection and executed qualification.
+
+## Finite native FERC originals
+
+A `ferc-originals` unit names the recorded search `scope` (`docket`, `class`,
+`type`), ordered `pages`, complete `files`, and `expected_files`. Each file names
+its publisher `accession`, `file_id` GUID, literal `filename`, `declared_bytes`,
+GET `metadata` capture and POST `original` capture. POST declarations also carry
+`method` and the original UTF-8 `request_body`; those bytes remain in private
+build evidence. The adapter supplies retained responses through the maintained
+FERC reader's acquisition hook. Its normal search traversal checks pagination,
+counts and unique references; its original-file validator checks public
+availability, accession, GUID, size, media type and PDF structure. A transport
+that refuses every request prevents acquisition.
+
+The tables `ferc_search_documents`, `ferc_accession_files` and
+`ferc_original_files` keep source identities separate from SEC and
+Regulations.gov. Search and file-list rows retain the exact `source_page_json`
+and a `record_index`. This preserves decimal numbers, unknown fields, literal
+affiliations and the publisher's `acesssionNumber` spelling without conversion.
+Original rows link each retained body hash and size to its stating search and
+file-list witnesses. A selection must include every search-stated transmittal
+and matching file-list row; missing originals and source failures refuse the
+whole candidate. Failed acquisition records remain in their original evidence;
+this successful-input selection does not manufacture successful rows for them.

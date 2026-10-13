@@ -204,3 +204,168 @@ def test_empty_terminal_listing_requires_no_invented_files(tmp_path):
     path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
     with pytest.raises(ValueError, match="file set"):
         native.build(path, tmp_path / "candidate")
+
+
+def ferc_selection(tmp_path):
+    from spicy_docs.sources.ferc.elibrary import ADVANCED_SEARCH_URL, file_list_url
+    from spicy_docs.sources.ferc.originals import ORIGINAL_DOWNLOAD_URL, original_download_body
+
+    guid = "0731EC70-0165-CA3E-91B7-912DB6700000"
+    accession = "20240807-5052"
+    pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+    body = {
+        "curPage": 1,
+        "resultsPerPage": 2,
+        "idolResultID": "",
+        "docketSearches": [{"docketNumber": "RM24-5", "subDocketNumbers": []}],
+        "classTypes": [{"documentClass": "Comments/Protest", "documentType": "Rulemaking Comment"}],
+    }
+    record = {
+        "reference": "publisher-reference",
+        "acesssionNumber": accession,
+        "description": "Literal description",
+        "score": 85.35,
+        "affiliations": [{"unknown": "retained"}],
+        "transmittals": [{"fileId": guid, "fileName": "original.pdf", "fileSize": len(pdf)}],
+    }
+    metadata = {
+        "ID": guid,
+        "Accession_Number": accession,
+        "Availability_Mode": "P",
+        "File_Size_Num": len(pdf),
+        "Orig_File_Name": "original.pdf",
+        "MimeType": "application/pdf",
+        "File_Type_Code": "PDF",
+        "unused": None,
+    }
+
+    def entry(name, url, data, request=None, media="application/json"):
+        value = capture(tmp_path, name, url, data)
+        value.update(content_type=media, method="POST" if request is not None else "GET", request_body=request)
+        return value
+
+    page = entry(
+        "search.json",
+        ADVANCED_SEARCH_URL,
+        json.dumps(
+            {"success": True, "errorMessage": None, "totalHits": 1, "numHits": 1, "searchHits": [record]}
+        ).encode(),
+        json.dumps(body),
+    )
+    listing = entry(
+        "files.json", file_list_url(accession), json.dumps({"DataList": [metadata], "ErrorList": []}).encode()
+    )
+    original = entry(
+        "original.pdf", ORIGINAL_DOWNLOAD_URL, pdf, original_download_body(guid).decode(), "application/octet-stream"
+    )
+    unit = {
+        "kind": "ferc-originals",
+        "scope": {"docket": "RM24-5", "class": "Comments/Protest", "type": "Rulemaking Comment"},
+        "pages": [page],
+        "files": [
+            {
+                "accession": accession,
+                "file_id": guid,
+                "filename": "original.pdf",
+                "declared_bytes": len(pdf),
+                "metadata": listing,
+                "original": original,
+            }
+        ],
+        "expected_files": 1,
+    }
+    path = tmp_path / "ferc-selection.json"
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    return path, unit
+
+
+def test_ferc_native_validation_raw_decimal_and_post_evidence(tmp_path):
+    from decimal import Decimal
+    from spicy_docs.reading.json_input import load_decimal_json
+
+    path, unit = ferc_selection(tmp_path)
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    assert set(result["outputs"]) == set(native.TABLES["ferc-originals"])
+    assert all(item["rows"] == 1 for item in result["outputs"].values())
+    row = pq.read_table(output / result["outputs"]["ferc_search_documents"]["path"]).to_pylist()[0]
+    raw_page = (tmp_path / "search.json").read_text()
+    assert row["source_page_json"] == raw_page
+    record = load_decimal_json(row["source_page_json"].encode(), source="fixture FERC page")["searchHits"][
+        row["record_index"]
+    ]
+    assert record["score"] == Decimal("85.35") and record["affiliations"] == [{"unknown": "retained"}]
+    assert record["acesssionNumber"] == row["accession"]
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert len(receipts) == 3
+    original = next(row for row in receipts if row["dataset"] == "ferc_original_files")
+    assert [w["locator"] for w in original["witnesses"]] == ["searchHits:0", "DataList:0", "original-file"]
+    capture_value = native.Captures(path).read(unit["files"][0]["original"])
+    assert (
+        capture_value.method == "POST"
+        and capture_value.request_body == unit["files"][0]["original"]["request_body"].encode()
+    )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["scope", "method", "body", "extra-page", "missing-file", "metadata-size", "pdf", "publisher-failure", "total"],
+)
+def test_ferc_selection_refusals_publish_nothing(tmp_path, fault):
+    path, unit = ferc_selection(tmp_path)
+    if fault == "scope":
+        unit["scope"]["docket"] = "RM24-6"
+    elif fault == "method":
+        unit["pages"][0]["method"] = "GET"
+    elif fault == "body":
+        unit["files"][0]["original"]["request_body"] = "{}"
+    elif fault == "extra-page":
+        unit["pages"].append(unit["pages"][0])
+    elif fault == "missing-file":
+        unit["files"] = []
+    else:
+        entry = (
+            unit["pages"][0]
+            if fault in ("publisher-failure", "total")
+            else unit["files"][0]["metadata" if fault == "metadata-size" else "original"]
+        )
+        target = tmp_path / entry["path"]
+        if fault == "pdf":
+            raw = b"x" * entry["bytes"]
+        else:
+            value = json.loads(target.read_bytes())
+            if fault == "metadata-size":
+                value["DataList"][0]["File_Size_Num"] += 1
+            elif fault == "publisher-failure":
+                value["success"] = False
+            else:
+                value["totalHits"] = 2
+            raw = json.dumps(value).encode()
+        target.write_bytes(raw)
+        entry.update(bytes=len(raw), sha256=native._digest(raw))
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    output = tmp_path / "candidate"
+    with pytest.raises((ValueError, KeyError)):
+        native.build(path, output)
+    assert not output.exists()
+
+
+def test_ferc_media_refusal_keeps_original_capture_and_post_body(tmp_path):
+    from spicy_docs.sources.ferc.download import FercElibraryDownloadBudget
+    from spicy_docs.sources.ferc.elibrary import read_file_list
+    import httpx
+
+    path, unit = ferc_selection(tmp_path)
+    loader = native.Captures(path)
+    item = unit["files"][0]
+    file_list = read_file_list(loader.read(item["metadata"]), accession=item["accession"])
+    item["original"]["content_type"] = "text/plain"
+    with native._RetainedFercOriginal(
+        budget=FercElibraryDownloadBudget(native.MAX_CAPTURE, 10, 0), transport=httpx.MockTransport(native._no_network)
+    ) as acquirer:
+        acquirer.retained_init([item["original"]], loader)
+        with pytest.raises(ValueError, match="media/size") as raised:
+            acquirer.acquire(file_list, file_id=item["file_id"])
+    assert raised.value.capture.method == "POST"
+    assert raised.value.capture.request_body == item["original"]["request_body"].encode()
+    assert raised.value.refused_response.response_bytes == (tmp_path / "original.pdf").read_bytes()
