@@ -30,6 +30,16 @@ from spicy_regs.sources.publication import parse_index, table_descriptor, table_
 
 VERSION = 'main-navigation-measurements/1'
 
+# 80f3c8ea -> ad12d4a5: selected-generation binding changed, count SQL did not.
+# The pair includes DuckDB 1.5.5; key semantics also bind PyArrow 23.0.0.
+# Any runtime, key implementation or whole measure() change requires review.
+_REVIEWED_AGGREGATION = (
+    'sha256:a2d79bf283cccf5d8f94860ef4ed95709f1e51384157c40cc9e1529bdcc3f1d9',
+    'sha256:6cf591b765ca5d9d176a193938f9efb1d138233fb139ba2f79305a83e04d196b',
+    'sha256:31c028107a8fd45f3d8e8454289f80d21bf709977c9d6ceb14741a81570c8ef0',
+)
+_AGGREGATION_REUSE = 'selected-generation-binding/1'
+
 
 def digest(value):
     return 'sha256:' + hashlib.sha256(canonical_bytes(value)).hexdigest()
@@ -631,11 +641,94 @@ def qualify_exact_content(index, spec, target_index, historical_proof, extra_tab
                                                        inspect.getsource(qualify_exact_content)])}
 
 
+def _historical_result(proof):
+    """Check old exact-content wrappers without changing their measured result."""
+    for _ in range(8):
+        if not isinstance(proof, dict) or not isinstance(proof.get('binding'), dict):
+            raise ValueError('Historical measurement requires an explicit binding object')
+        if proof.get('authority') != 'exact_content_reuse':
+            if proof.get('authority') is not None:
+                raise ValueError('Unknown historical measurement authority')
+            return proof
+        historical = proof['historicalProof']
+        if not isinstance(historical, dict) or not isinstance(historical.get('binding'), dict):
+            raise ValueError('Historical content qualification requires a measurement object')
+        old, bound = historical['binding'], proof['binding']
+        if any(_content_identity(old[side]) != _content_identity(bound[side]) for side in ('source', 'target')):
+            raise ValueError('Historical wrapper changed selected content')
+        expected = {'format': VERSION, 'status': 'complete', 'authority': 'exact_content_reuse',
+                    'binding': {**old, 'source': bound['source'], 'target': bound['target']},
+                    'route': deepcopy(historical['route']), 'historicalProof': historical,
+                    'historicalDigest': digest(historical),
+                    'qualificationImplementation': digest([VERSION, inspect.getsource(_content_identity),
+                                                           inspect.getsource(qualify_exact_content)])}
+        if proof != expected:
+            raise ValueError('Historical content qualification changed')
+        proof = historical
+    raise ValueError('Historical qualification nesting exceeds the supported limit')
+
+
+def _compatible_directions(index, spec, target_index, historical_proof, extra_tables=None):
+    historical = _historical_result(historical_proof)
+    old = historical['binding']
+    previous, current, keys = _REVIEWED_AGGREGATION
+    aggregate = digest([VERSION, duckdb.__version__, inspect.getsource(MeasurementCache.measure)])
+    if old.get('aggregation') != previous or aggregate != current or implementation_digest() != keys:
+        raise ValueError('Measurement implementation pair is not reviewed')
+    source = selected_binding(index, spec['source'], extra_tables)
+    target = selected_binding(index, spec['targets'][target_index]['table'], extra_tables)
+    if any(_content_identity(old[side]) != _content_identity(binding)
+           for side, binding in (('source', source), ('target', target))):
+        raise ValueError('Selected content changed; measurement is required')
+    selected = navigation.published_navigation([spec],
+        {source['table']: source['schema'], target['table']: target['schema']},
+        generation_pins=navigation.selected_generation_pins(index))[0]
+    recipe = recipe_digest(selected, target_index, historical['sourceIdentity']['columns'])
+    expected = {'source': old['source'], 'target': old['target'], 'recipe': recipe, 'aggregation': previous}
+    if (historical.get('format') != VERSION or historical.get('status') != 'complete'
+            or old != expected or historical['route'] != {'id': spec['id'], 'targetIndex': target_index}
+            or historical['equality'] != 'canonical_navigation_words'
+            or not selected['targets'][target_index]['directions']['forward']['available']):
+        raise ValueError('Historical recipe does not match current selected rules')
+    directions = _reconciled_directions(selected, target_index, historical, source, target)
+    if directions is None:
+        raise ValueError('Historical measurement counts or imported evidence do not qualify')
+    return directions, {'source': source, 'target': target, 'recipe': recipe, 'aggregation': current}
+
+
+def qualify_compatible_aggregation(index, spec, target_index, historical_proof, extra_tables=None):
+    """Qualify only the reviewed binding change; preserve the historical proof.
+
+    This checks selected descriptors and recorded counts without reading bodies.
+    It is not a new measurement and never replaces the original fingerprint.
+    """
+    _, binding = _compatible_directions(index, spec, target_index, historical_proof, extra_tables)
+    return {'format': VERSION, 'status': 'complete', 'authority': 'reviewed_aggregation_reuse',
+            'compatibility': _AGGREGATION_REUSE, 'binding': binding,
+            'route': deepcopy(historical_proof['route']),
+            'historicalProof': deepcopy(historical_proof), 'historicalDigest': digest(historical_proof),
+            'qualificationImplementation': digest([VERSION, _REVIEWED_AGGREGATION,
+                inspect.getsource(count_value), inspect.getsource(recipe_digest), inspect.getsource(implementation_digest),
+                inspect.getsource(_content_identity), inspect.getsource(_historical_result),
+                inspect.getsource(_compatible_directions), inspect.getsource(_reconciled_directions),
+                inspect.getsource(_verified_directions), inspect.getsource(qualify_compatible_aggregation)])}
+
+
 def attached_directions(index, spec, target_index, proof, extra_tables=None):
     """Qualify exact current measurements or explicitly proven carried content."""
     try:
         source = selected_binding(index, spec['source'], extra_tables)
         target = selected_binding(index, spec['targets'][target_index]['table'], extra_tables)
+        if proof.get('authority') == 'reviewed_aggregation_reuse':
+            historical = proof['historicalProof']
+            expected = qualify_compatible_aggregation(index, spec, target_index, historical, extra_tables)
+            if proof != expected:
+                return None
+            directions, _ = _compatible_directions(index, spec, target_index, historical, extra_tables)
+            for direction in directions.values():
+                direction['measurement'].update(proofDigest=digest(proof),
+                    qualification='reviewed_aggregation_reuse', historicalProofDigest=proof['historicalDigest'])
+            return directions
         if proof.get('authority') == 'exact_content_reuse':
             historical = proof['historicalProof']
             expected = qualify_exact_content(index, spec, target_index, historical, extra_tables)
@@ -661,13 +754,6 @@ def _verified_directions(spec, target_index, proof, source, target, *, generatio
     try:
         if proof.get('format') != VERSION or proof.get('status') != 'complete':
             return None
-        # Raw retained result files must meet the same imported-population
-        # admission rules as cache hits before qualifying public measurements.
-        for population in (proof.get('sourceIdentity', {}).get('population') or {}, proof.get('targetPopulation', {})):
-            imported = population.get('populationProof')
-            if imported and (imported.get('authority') != 'imported_existing_full_population' or
-                             imported.get('guardImplementation') != digest([VERSION, inspect.getsource(MeasurementCache.import_population)])):
-                return None
         selected = navigation.published_navigation([spec], {source['table']: source['schema'], target['table']: target['schema']},
                                                    generation_pins=generation_pins)[0]
         columns = proof['sourceIdentity']['columns']
@@ -677,6 +763,29 @@ def _verified_directions(spec, target_index, proof, source, target, *, generatio
                 or proof['equality'] != 'canonical_navigation_words'
                 or not selected['targets'][target_index]['directions']['forward']['available']):
             return None
+        return _reconciled_directions(selected, target_index, proof, source, target)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _reconciled_directions(selected, target_index, proof, source, target):
+    """Shared count/import checks; callers separately qualify all binding rules."""
+    try:
+        identity = proof['sourceIdentity']
+        if not isinstance(identity, dict):
+            return None
+        columns = identity['columns']
+        # Imported evidence has exactly the same admission guard for fresh and
+        # reviewed historical measurements.
+        source_population = identity.get('population')
+        for population in ({} if source_population is None else source_population, proof.get('targetPopulation')):
+            if not isinstance(population, dict):
+                return None
+            imported = population.get('populationProof')
+            if 'populationProof' in population and (not isinstance(imported, dict)
+                             or imported.get('authority') != 'imported_existing_full_population' or
+                             imported.get('guardImplementation') != digest([VERSION, inspect.getsource(MeasurementCache.import_population)])):
+                return None
         counts = [proof[k] for k in ('sourceRows', 'targetRows', 'rawReferences', 'unsupportedReferences',
                   'repeatedReferences', 'eligible', 'matched', 'missing', 'ambiguous', 'unsupportedTargetKeys')]
         if any(not count_value(n) for n in counts):
