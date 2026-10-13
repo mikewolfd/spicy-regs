@@ -1054,8 +1054,10 @@
       "id": "declared:inspectors-general-archive",
       "title": "Read archived inspector-general report metadata",
       "publisher": "Source-specific publisher; see retained workflow evidence",
-      "description": "Declared source reader; enumeration and possession are tracked independently. Coverage remains unknown until scoped evidence is linked.",
-      "source_names": [],
+      "description": "Exact immutable report metadata selection retained at reports commit 779b991b33e317eaa118985834618e67e3cc35c2. Declared report assets remain unacquired; native processing and publication require separate evidence.",
+      "source_names": [
+        "inspectors-general-reports-779b991b-65-v1"
+      ],
       "families": [],
       "tables": []
     }
