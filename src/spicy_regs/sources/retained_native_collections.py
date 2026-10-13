@@ -7,6 +7,9 @@ selection; byte identity alone does not prove an acquisition time or origin.
 from __future__ import annotations
 
 import argparse
+import base64
+import io
+from uuid import UUID
 from collections import defaultdict
 from dataclasses import asdict
 from datetime import datetime
@@ -17,6 +20,8 @@ from tempfile import TemporaryDirectory
 import pyarrow as pa
 import httpx
 from spicy_docs.reading.json_input import load_decimal_json
+from spicy_docs.sources.usitc_edis.records import check_edis_id, parse_documents, parse_attachments
+from spicy_docs.sources.usitc_edis.bulk import inspect_bulk_archive
 from spicy_docs.reading.pdf_bytes import check_pdf_bytes
 from spicy_docs.sources.cftc_comments.acquisition import CftcPortalAcquirer, CftcPortalBudget
 from spicy_docs.sources.cftc_comments.reader import CftcCommentsReader
@@ -124,6 +129,44 @@ for _table, (_strings, _ints) in {
 }.items():
     SCHEMAS[_table] = pa.schema([(key, pa.string()) for key in _strings] + [(key, pa.int64()) for key in _ints])
 
+for _table, (_strings, _ints) in {
+    "edis_documents": (
+        ("observation_id", "native_document_json", "source_xml_base64", "source_uri", "source_sha256", "observed_at"),
+        ("document_id",),
+    ),
+    "edis_attachments": (
+        (
+            "observation_id",
+            "document_observation_id",
+            "native_attachment_json",
+            "source_xml_base64",
+            "source_uri",
+            "source_sha256",
+            "observed_at",
+        ),
+        ("document_id", "attachment_id"),
+    ),
+    "edis_attachment_files": (
+        (
+            "observation_id",
+            "document_observation_id",
+            "source_artifact_id",
+            "source_uri",
+            "source_sha256",
+            "observed_at",
+            "observation_time_state",
+            "member_name",
+            "body_sha256",
+            "pdf_version",
+            "native_index_row_json",
+            "source_archive_index_base64",
+            "member_inventory_json",
+        ),
+        ("document_id", "attachment_id", "member_ordinal", "bytes"),
+    ),
+}.items():
+    SCHEMAS[_table] = pa.schema([(key, pa.string()) for key in _strings] + [(key, pa.int64()) for key in _ints])
+
 POLICIES = {
     table: DatasetPolicy(
         table,
@@ -147,6 +190,7 @@ class Captures:
         self.base = manifest_path.parent
         self.read_bytes = 0
         self.inputs: dict[str, dict] = {}
+        self.input_kinds: dict[str, str] = {}
 
     def read(self, entry: dict) -> CapturedBodyResponse:
         if not isinstance(entry, dict):
@@ -169,18 +213,7 @@ class Captures:
         instant = datetime.fromisoformat(entry["observed_at"].replace("Z", "+00:00"))
         if instant.tzinfo is None:
             raise ValueError("capture observation requires a timezone")
-        path = Path(entry["path"])
-        if not path.is_absolute():
-            path = self.base / path
-        self.read_bytes += size
-        if self.read_bytes > MAX_INPUT_READS:
-            raise ValueError("selected original read budget")
-        body = _read(path, size)
-        if len(body) != size or _digest(body) != entry["sha256"]:
-            raise ValueError("retained capture hash/size differs")
-        source = {**entry, "path": str(path.resolve())}
-        identity = _json(source)
-        self.inputs[identity] = source
+        body = self._body(entry, "capture")
         return CapturedBodyResponse(
             url,
             final,
@@ -192,9 +225,53 @@ class Captures:
             request_body=entry["request_body"].encode() if method == "POST" else None,
         )
 
+    def count_reads(self, size):
+        if type(size) is not int or size < 0:
+            raise ValueError("invalid decoded read size")
+        self.read_bytes += size
+        if self.read_bytes > MAX_INPUT_READS:
+            raise ValueError("selected original read budget")
+
+    def _body(self, entry, kind):
+        if not isinstance(entry, dict):
+            raise ValueError("retained input declaration required")
+        size = entry.get("bytes")
+        if type(size) is not int or not 0 < size <= MAX_CAPTURE:
+            raise ValueError("capture size bound")
+        path = Path(entry["path"])
+        if not path.is_absolute():
+            path = self.base / path
+        self.count_reads(size)
+        body = _read(path, size)
+        if len(body) != size or _digest(body) != entry["sha256"]:
+            raise ValueError("retained capture hash/size differs")
+        source = {**entry, "path": str(path.resolve())}
+        identity = _json(source)
+        if identity in self.input_kinds and self.input_kinds[identity] != kind:
+            raise ValueError("retained input framing changed")
+        self.inputs[identity] = source
+        self.input_kinds[identity] = kind
+        return body
+
+    def read_blob(self, entry):
+        # Retained archives have byte identity without a complete HTTP capture.
+        if not isinstance(entry, dict) or not isinstance(entry.get("source_uri"), str) or not entry["source_uri"]:
+            raise ValueError("retained blob source declaration required")
+        if any(key in entry for key in ("status_code", "requested_url", "resolved_url", "method", "request_body")):
+            raise ValueError("retained blob must not invent HTTP capture framing")
+        if (
+            entry.get("observed_at") is not None
+            or entry.get("observation_time_state") != "not-recorded-in-retained-transfer-evidence"
+        ):
+            raise ValueError("retained blob must preserve unrecorded observation time")
+        return self._body(entry, "blob")
+
     def recheck(self) -> None:
-        for entry in list(self.inputs.values()):
-            self.read(entry)
+        for identity, entry in list(self.inputs.items()):
+            if self.input_kinds[identity] == "blob":
+                self.read_blob(entry)
+            else:
+                self.read(entry)
 
 
 def witness(capture: CapturedBodyResponse, locator: str) -> dict:
@@ -381,7 +458,7 @@ class _RetainedFercOriginal(_RetainedValidatedCapture, FercElibraryOriginalAcqui
     pass
 
 
-def _ferc_source(capture):
+def source_fields(capture):
     return {"source_uri": capture.requested_url, "source_sha256": capture.sha256, "observed_at": capture.observed_at}
 
 
@@ -436,7 +513,7 @@ def ferc_rows(unit: dict, captures: Captures):
                 "description": record.get("description"),
                 "source_page_json": capture.body.decode("utf-8"),
                 "record_index": index,
-                **_ferc_source(capture),
+                **source_fields(capture),
             },
             witnesses,
         )
@@ -477,7 +554,7 @@ def ferc_rows(unit: dict, captures: Captures):
                 "file_guid": guid,
                 "source_page_json": file_list.capture.body.decode("utf-8"),
                 "record_index": index,
-                **_ferc_source(file_list.capture),
+                **source_fields(file_list.capture),
             },
             witnesses,
         )
@@ -491,13 +568,13 @@ def ferc_rows(unit: dict, captures: Captures):
                 "media_type": row["MimeType"],
                 "body_sha256": original.sha256,
                 "bytes": original.capture.byte_size,
-                **_ferc_source(original.capture),
+                **source_fields(original.capture),
             },
             [*witnesses, witness(original.capture, "original-file")],
         )
 
 
-# Pending integration after exact G2 handoff; uses maintained scoped listing walk.
+# The scoped listing walk retains the maintained pagination rules.
 class _RetainedCftcPages(_RetainedValidatedCapture, CftcPortalAcquirer):
     def capture_validated(self, *args, **kwargs):
         page, capture = super().capture_validated(*args, **kwargs)
@@ -634,8 +711,137 @@ def cftc_rows(unit, captures):
         )
 
 
-PROCESSORS = {"sec-comments": sec_rows, "ferc-originals": ferc_rows, "cftc-comments": cftc_rows}
+def blob_witness(entry, locator):
+    return {
+        "source_id": entry["sha256"],
+        "sha256": entry["sha256"],
+        "source_uri": entry["source_uri"],
+        "locator": locator,
+    }
+
+
+def edis_rows(unit, captures):
+    document_id = check_edis_id(unit["document_id"])
+    for entry in [unit["document"], unit["attachments"]]:
+        if entry.get("method", "GET") != "GET":
+            raise ValueError("EDIS metadata requires GET captures")
+    document_capture = captures.read(unit["document"])
+    if document_capture.requested_url != f"https://edis.usitc.gov/data/document/{document_id}":
+        raise ValueError("EDIS selected document locator differs")
+    documents = parse_documents(document_capture.body, max_bytes=MAX_CAPTURE)
+    if len(documents) != 1 or documents[0].id != document_id or documents[0].security_level != "Public":
+        raise ValueError("EDIS selection requires exactly the stated public document")
+    document = documents[0]
+    attachment_capture = captures.read(unit["attachments"])
+    if attachment_capture.requested_url != document.attachment_list_url:
+        raise ValueError("EDIS attachment locator differs from document")
+    attachments = parse_attachments(attachment_capture.body, document_id=document_id, max_bytes=MAX_CAPTURE)
+    ids = [item.id for item in attachments]
+    expected = unit["expected_attachment_ids"]
+    if not isinstance(expected, list) or not expected or any(type(value) is not int for value in expected):
+        raise ValueError("EDIS exact attachment selection required")
+    if len(set(ids)) != len(ids) or len(set(expected)) != len(expected) or set(ids) != set(expected):
+        raise ValueError("EDIS complete attachment metadata differs from selection")
+    archive_entry = unit["archive"]
+    artifact_id = str(UUID(archive_entry["artifact_id"]))
+    if (
+        artifact_id != archive_entry["artifact_id"]
+        or archive_entry["source_uri"]
+        != f"https://edis.usitc.gov/external/attachment/download.zip?artifactId={artifact_id}"
+    ):
+        raise ValueError("EDIS retained archive artifact locator differs")
+    archive_body = captures.read_blob(archive_entry)
+    decoded_limit = min(MAX_CAPTURE, MAX_INPUT_READS - captures.read_bytes)
+    archive = inspect_bulk_archive(
+        io.BytesIO(archive_body),
+        byte_size=len(archive_body),
+        expected_attachments=attachments,
+        max_entries=100,
+        max_decoded_bytes=decoded_limit,
+        max_metadata_bytes=1024**2,
+        max_index_bytes=1024**2,
+    )
+    decoded_bytes = sum(member["byteSize"] for member in archive.inventory["members"])
+    captures.count_reads(decoded_bytes)
+    retained = unit["retained_member_expectations"]
+    actual = [
+        {key: member[key] for key in ("ordinal", "name", "byteSize", "sha256", "crc32")}
+        for member in archive.inventory["members"]
+    ]
+    if actual != retained:
+        raise ValueError("EDIS complete archive membership differs from retained result")
+    doc_observation = _digest(_json(["EDIS", document_id, document_capture.sha256]).encode())
+    document_witnesses = [witness(document_capture, "document:0")]
+    yield (
+        "edis_documents",
+        {
+            "observation_id": doc_observation,
+            "document_id": document_id,
+            "native_document_json": _json(asdict(document)),
+            "source_xml_base64": base64.b64encode(document_capture.body).decode(),
+            **source_fields(document_capture),
+        },
+        document_witnesses,
+    )
+    by_attachment = {item.id: (index, item) for index, item in enumerate(attachments)}
+    for index, item in enumerate(attachments):
+        yield (
+            "edis_attachments",
+            {
+                "observation_id": _digest(_json([doc_observation, item.id, attachment_capture.sha256]).encode()),
+                "document_observation_id": doc_observation,
+                "document_id": document_id,
+                "attachment_id": item.id,
+                "native_attachment_json": _json(asdict(item)),
+                "source_xml_base64": base64.b64encode(attachment_capture.body).decode(),
+                **source_fields(attachment_capture),
+            },
+            [*document_witnesses, witness(attachment_capture, f"attachment:{index}")],
+        )
+    for row in archive.rows:
+        index, item = by_attachment[row.attachment_id]
+        member = archive.inventory["members"][row.member_ordinal]
+        if row.document_id != document_id or member["name"] != row.member_name or not member["crcVerified"]:
+            raise ValueError("EDIS archive member identity/CRC differs")
+        yield (
+            "edis_attachment_files",
+            {
+                "observation_id": _digest(
+                    _json([doc_observation, item.id, archive_entry["sha256"], member["sha256"]]).encode()
+                ),
+                "document_observation_id": doc_observation,
+                "document_id": document_id,
+                "attachment_id": item.id,
+                "source_artifact_id": artifact_id,
+                "source_uri": archive_entry["source_uri"],
+                "source_sha256": archive_entry["sha256"],
+                "observed_at": archive_entry.get("observed_at"),
+                "observation_time_state": archive_entry["observation_time_state"],
+                "member_name": row.member_name,
+                "member_ordinal": row.member_ordinal,
+                "body_sha256": member["sha256"],
+                "bytes": member["byteSize"],
+                "pdf_version": row.pdf_version,
+                "native_index_row_json": _json(asdict(row)),
+                "source_archive_index_base64": base64.b64encode(archive.index_bytes).decode(),
+                "member_inventory_json": _json(member),
+            },
+            [
+                *document_witnesses,
+                witness(attachment_capture, f"attachment:{index}"),
+                blob_witness(archive_entry, f"zip-member:{row.member_ordinal}:{row.member_name}"),
+            ],
+        )
+
+
+PROCESSORS = {
+    "sec-comments": sec_rows,
+    "ferc-originals": ferc_rows,
+    "cftc-comments": cftc_rows,
+    "edis-document-bulk": edis_rows,
+}
 TABLES = {
+    "edis-document-bulk": ("edis_documents", "edis_attachments", "edis_attachment_files"),
     "cftc-comments": ("cftc_rule_observations", "cftc_comments", "cftc_comment_files"),
     "sec-comments": ("sec_rulemakings", "sec_comment_files"),
     "ferc-originals": ("ferc_search_documents", "ferc_accession_files", "ferc_original_files"),

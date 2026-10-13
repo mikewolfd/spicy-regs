@@ -480,3 +480,191 @@ def test_retained_post_request_types_cannot_substitute_zero_for_false(tmp_path):
     with pytest.raises(ValueError, match="POST body differs"):
         native.build(path, tmp_path / "candidate")
     assert not (tmp_path / "candidate").exists()
+
+
+def edis_selection(tmp_path, *, fault=None):
+    import io
+    import zipfile
+    import zlib
+
+    docid = 894762
+    ids = [2620262, 2620275]
+    fields = {
+        "id": str(docid),
+        "documentType": "Order",
+        "documentTitle": "Native title",
+        "securityLevel": "Public",
+        "investigationNumber": "337-1458",
+        "investigationPhase": "Violation",
+        "investigationStatus": "Active",
+        "investigationTitle": "Native investigation",
+        "investigationType": "Sec 337",
+        "documentDate": "2026/09/15 00:00:00",
+        "officialReceivedDate": "2026/09/15 14:36:00",
+        "attachmentListUri": f"https://edis.usitc.gov/data/attachment/{docid}",
+        "unknown": "keep raw XML",
+    }
+    document = (
+        "<results><documents><document>"
+        + "".join(f"<{k}>{v}</{k}>" for k, v in fields.items())
+        + "</document></documents></results>"
+    ).encode()
+    doc = capture(tmp_path, "edis-document.xml", f"https://edis.usitc.gov/data/document/{docid}", document)
+    doc["content_type"] = "application/xml"
+    pdfs = [b"%PDF-1.6\nsynthetic-one\n%%EOF\n", b"%PDF-1.5\nsynthetic-two\n%%EOF\n"]
+    attachment_rows = []
+    for i, identity in enumerate(ids):
+        fields = {
+            "id": str(identity),
+            "documentId": str(docid),
+            "title": f"Attachment {i}",
+            "fileSize": str(len(pdfs[i]) + (1 if fault == "metadata-size" and i == 0 else 0)),
+            "pageCount": "1",
+            "createDate": "2026/09/15 14:35:32",
+            "downloadUri": f"https://edis.usitc.gov/data/download/{docid}/{identity}",
+        }
+        attachment_rows.append("<attachment>" + "".join(f"<{k}>{v}</{k}>" for k, v in fields.items()) + "</attachment>")
+    meta = ("<results><attachments>" + "".join(attachment_rows) + "</attachments></results>").encode()
+    attachments = capture(tmp_path, "edis-attachments.xml", f"https://edis.usitc.gov/data/attachment/{docid}", meta)
+    attachments["content_type"] = "application/xml"
+    columns = [
+        "DOCUMENT ID",
+        "FILE NAME",
+        "SECURITY",
+        "INVESTIGATION",
+        "DOCUMENT DATE",
+        "OFFICIAL RECEIVED DATE",
+        "UNKNOWN FIELD",
+    ]
+    names = [f"{docid}-{i}-{identity}.pdf" for i, identity in enumerate(ids)]
+    values = []
+    for i, identity in enumerate(ids):
+        values.append(
+            [
+                str(docid),
+                f'<a href="{names[i]}">{docid}-{identity}.pdf</a>',
+                "Confidential" if fault == "security" and i == 0 else "Public",
+                "337-1458 - Violation",
+                "09/15/2026 12:00 AM",
+                "09/15/2026 02:36 PM",
+                "Literal extra",
+            ]
+        )
+    index = (
+        "<html><table><tr>"
+        + "".join(f"<th>{name}</th>" for name in columns)
+        + "</tr>"
+        + "".join("<tr>" + "".join(f"<td>{value}</td>" for value in row) + "</tr>" for row in values)
+        + "</table></html>"
+    ).encode()
+    members = [(names[0], pdfs[0]), (names[1], pdfs[1]), ("index.html", index)]
+    if fault == "missing-member":
+        members = members[1:]
+    if fault == "extra-member":
+        members.append(("894762-2-2620276.pdf", pdfs[0]))
+    if fault == "unsafe-member":
+        members.append(("../escape.pdf", pdfs[0]))
+    if fault == "bad-pdf":
+        members[0] = (names[0], b"x" * len(pdfs[0]))
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, body in members:
+            z.writestr(name, body)
+    blob = stream.getvalue()
+    target = tmp_path / "edis.zip"
+    target.write_bytes(blob)
+    artifact = "bd98c9a2-0c13-4d8c-8a48-a72aab5d86d4"
+    archive = {
+        "path": target.name,
+        "bytes": len(blob),
+        "sha256": native._digest(blob),
+        "source_uri": f"https://edis.usitc.gov/external/attachment/download.zip?artifactId={artifact}",
+        "artifact_id": artifact,
+        "observed_at": None,
+        "observation_time_state": "not-recorded-in-retained-transfer-evidence",
+    }
+    expected = [
+        {
+            "ordinal": i,
+            "name": name,
+            "byteSize": len(body),
+            "sha256": native._digest(body),
+            "crc32": f"{zlib.crc32(body) & 0xFFFFFFFF:08x}",
+        }
+        for i, (name, body) in enumerate(members)
+    ]
+    unit = {
+        "kind": "edis-document-bulk",
+        "document_id": docid,
+        "expected_attachment_ids": ids,
+        "document": doc,
+        "attachments": attachments,
+        "archive": archive,
+        "retained_member_expectations": expected,
+    }
+    path = tmp_path / "edis-selection.json"
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    return path, unit
+
+
+def test_edis_retained_metadata_and_complete_zip_keep_distinct_literals(tmp_path):
+    import base64
+
+    path, unit = edis_selection(tmp_path)
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    assert set(result["outputs"]) == set(native.TABLES["edis-document-bulk"])
+    assert {table: value["rows"] for table, value in result["outputs"].items()} == {
+        "edis_documents": 1,
+        "edis_attachments": 2,
+        "edis_attachment_files": 2,
+    }
+    doc = pq.read_table(output / result["outputs"]["edis_documents"]["path"]).to_pylist()[0]
+    assert json.loads(doc["native_document_json"])["investigation_phase"] == "Violation"
+    assert b"<unknown>keep raw XML</unknown>" in base64.b64decode(doc["source_xml_base64"])
+    files = pq.read_table(output / result["outputs"]["edis_attachment_files"]["path"]).to_pylist()
+    for row in files:
+        index = json.loads(row["native_index_row_json"])
+        fields = dict(index["fields"])
+        assert fields["INVESTIGATION"] == "337-1458 - Violation" and fields["DOCUMENT DATE"] == "09/15/2026 12:00 AM"
+        assert fields["OFFICIAL RECEIVED DATE"] == "09/15/2026 02:36 PM" and fields["UNKNOWN FIELD"] == "Literal extra"
+        assert (
+            row["observed_at"] is None and row["observation_time_state"] == "not-recorded-in-retained-transfer-evidence"
+        )
+        assert json.loads(row["member_inventory_json"])["crcVerified"]
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert len(receipts) == 5
+    assert not list(output.rglob("*.pdf")) and not list(output.rglob("*.zip"))
+    decoded = sum(item["byteSize"] for item in unit["retained_member_expectations"])
+    assert (
+        result["source_read_bytes"]
+        == 2 * sum(unit[k]["bytes"] for k in ("document", "attachments", "archive")) + decoded
+    )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "metadata-size",
+        "security",
+        "missing-member",
+        "extra-member",
+        "unsafe-member",
+        "bad-pdf",
+        "invented-time",
+        "wrong-document",
+        "membership-pin",
+    ],
+)
+def test_edis_invalid_retained_unit_refuses_candidate(tmp_path, fault):
+    path, unit = edis_selection(tmp_path, fault=fault)
+    if fault == "invented-time":
+        unit["archive"]["observed_at"] = "2026-09-25T17:21:37Z"
+    elif fault == "wrong-document":
+        unit["document_id"] = 894763
+    elif fault == "membership-pin":
+        unit["retained_member_expectations"][0]["sha256"] = "sha256:" + "0" * 64
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    with pytest.raises(ValueError):
+        native.build(path, tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()

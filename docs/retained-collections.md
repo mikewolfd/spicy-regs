@@ -168,3 +168,29 @@ The shared offline hook compares POST request JSON through the maintained
 lossless evidence codec. It allows whitespace and object-key-order differences
 while preserving numeric and Boolean types; integer zero cannot substitute for
 Boolean false.
+
+
+## Finite EDIS document and retained ZIP
+
+An `edis-document-bulk` unit supplies one public `document_id`, its GET
+`document` and `attachments` XML captures, all `expected_attachment_ids`, and a
+retained `archive` with exact artifact ID, byte identity, source URI and complete
+`retained_member_expectations`. The ZIP lacks a retained acquisition observation
+time. Its blob declaration therefore keeps `observed_at: null` and
+`observation_time_state: not-recorded-in-retained-transfer-evidence`; it does not
+manufacture HTTP capture fields or borrow a poll timestamp.
+
+The maintained EDIS XML parsers retain native document and attachment values.
+The maintained bulk reader validates the entire ZIP against all stated
+attachments, including public index rows, complete membership, sizes, CRCs,
+digests and PDF headers/trailers. It inflates members without extracting files.
+A shared bounded byte reader verifies both captured inputs and retained blobs;
+ZIP decoded member bytes also count against the cumulative read bound.
+
+`edis_documents` and `edis_attachments` preserve complete native JSON and raw
+XML in base64. `edis_attachment_files` preserves each literal index row, raw
+index, member inventory and decoded PDF identity, with ordered document,
+attachment and ZIP-member witnesses. The index's `337-1458 - Violation` and its
+date strings remain literal. Separate investigation number/phase and date
+fields stated in document XML remain independent native observations. These
+rows qualify one selected document, not a complete investigation docket.
