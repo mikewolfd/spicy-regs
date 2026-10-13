@@ -137,3 +137,16 @@ optional nonnegative `rows` describe only that accepted table. Candidate
 evidence adds processed measurements; publication and completeness require
 their own evidence. The importer pins the discovery document but does not
 revalidate its qualification proof.
+
+A discovery document may retain exact prior global baseline metadata rows in
+`baseline_history`. Each entry supplies the retained `value`, `evidence_id`,
+`data_sha256`, `prior_catalog_generation` and a `source_locator` naming the
+prior catalog's `evidence` row. The importer checks the metadata checksum and
+fixed baseline identity/provenance shape; the owner retains the prior index
+and extraction receipt. It does not reread or hash the prior database.
+
+The canonical manifest still controls current file admission. Historical rows
+preserve their exact IDs and values without importing files or adding
+processing/publication measurements. This retains evidence when a manifest
+grows, including IDs formed before the original JSON key order was lost.
+It does not reconstruct an unheld earlier manifest file.

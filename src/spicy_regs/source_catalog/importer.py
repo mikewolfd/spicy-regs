@@ -71,10 +71,14 @@ class Importer:
         self.collection(cid, cid)
         self.db.execute("INSERT OR REPLACE INTO routes VALUES(?,?,?)", (entry["id"], cid, encoded(entry)))
 
-    def evidence(self, cid: str | None, kind: str, entry: dict) -> None:
+    def evidence(self, cid: str | None, kind: str, entry: dict, *, retained_id: str | None = None) -> None:
         if cid:
             self.collection(cid, cid)
-        ident = entry.get("id") or kind + ":" + stable(cid, entry)
+        ident = retained_id or entry.get("id") or kind + ":" + stable(cid, entry)
+        if retained_id:
+            existing = self.db.execute("SELECT collection_id,kind,data FROM evidence WHERE id=?", (ident,)).fetchone()
+            if existing and tuple(existing) != (cid, kind, encoded(entry)):
+                raise ValueError("Historical evidence ID already names different data")
         self.db.execute("INSERT OR IGNORE INTO evidence VALUES(?,?,?,?)", (ident, cid, kind, encoded(entry)))
 
     def file(self, cid: str, name: str, row: dict, *, context: str, reference: str | None = None) -> None:
@@ -531,6 +535,27 @@ class Importer:
     def discovery(self, value: dict) -> None:
         if value.get("format") != "spicy-source-discovery" or value.get("version") != 1:
             raise ValueError("Unsupported discovery format")
+        # Exact prior catalog rows retain IDs even when original JSON key order is lost.
+        # This fixed metadata kind never reimports files or qualifies processing.
+        history = value.get("baseline_history", [])
+        if not isinstance(history, list):
+            raise ValueError("Historical baseline metadata must be an array")
+        for baseline in history:
+            if not isinstance(baseline, dict) or not isinstance(baseline.get("value"), (dict, list)):
+                raise ValueError("Historical baseline metadata requires a retained value")
+            data = {"value": baseline["value"]}
+            if (
+                not re.fullmatch(r"baseline-files:[a-f0-9]{64}", str(baseline.get("evidence_id", "")))
+                or not re.fullmatch(r"sha256:[a-f0-9]{64}", str(baseline.get("prior_catalog_generation", "")))
+                or baseline.get("data_sha256") != "sha256:" + hashlib.sha256(encoded(data).encode()).hexdigest()
+                or not isinstance(baseline.get("source_locator"), dict)
+                or not isinstance(baseline["source_locator"].get("database"), str)
+                or not baseline["source_locator"]["database"].strip()
+                or baseline["source_locator"].get("table") != "evidence"
+                or baseline["source_locator"].get("id") != baseline["evidence_id"]
+            ):
+                raise ValueError("Historical baseline metadata identity/provenance mismatch")
+            self.evidence(None, "baseline-files", data, retained_id=baseline["evidence_id"])
         for item in value.get("collections", []):
             self.collection(item["id"], item.get("title", item["id"]), item)
             self.evidence(item["id"], "publisher_collection_observation", item)

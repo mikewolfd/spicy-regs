@@ -1111,3 +1111,61 @@ def test_additive_candidate_route_binding_and_immutable_evidence_ids(corpus, tmp
     write(tmp_path, "discovery.json", {"format": "spicy-source-discovery", "version": 1, "planned": [route_candidate]})
     with pytest.raises(ValueError, match="requires a collection or route binding"):
         build(corpus, tmp_path / "unknown-route.sqlite", config=config, discovery=[discovery])
+
+
+def test_grown_baseline_manifest_retains_exact_historical_aggregate(corpus, tmp_path):
+    baseline = [{"sha256": "sha256:prior", "relative_path": "prior.parquet", "family": "test"}]
+    write(corpus, "metadata/baseline-files.json", baseline)
+    config = write(tmp_path, "config.json", {})
+    original = tmp_path / "original.sqlite"
+    original_result = build(corpus, original, config=config)
+    with connect(original, readonly=True) as db:
+        prior = tuple(db.execute("SELECT * FROM evidence WHERE kind='baseline-files' AND collection_id IS NULL").fetchone())
+    write(corpus, "metadata/baseline-files.json", baseline + [{"family": "test", "relative_path": "additional.parquet", "sha256": "sha256:new"}])
+    from spicy_regs.source_catalog.storage import stable
+    assert prior[0] != "baseline-files:" + stable(None, json.loads(prior[3]))
+    history = {"evidence_id": prior[0], "value": json.loads(prior[3])["value"],
+               "data_sha256": "sha256:" + hashlib.sha256(prior[3].encode()).hexdigest(),
+               "prior_catalog_generation": original_result["generation"],
+               "source_locator": {"database": str(original), "table": "evidence", "id": prior[0]}}
+    discovery = write(tmp_path, "history.json", {"format": "spicy-source-discovery", "version": 1, "baseline_history": [history, history]})
+    output = tmp_path / "successor.sqlite"
+    build(corpus, output, config=config, discovery=[discovery])
+    with connect(output, readonly=True) as db:
+        aggregates = [tuple(row) for row in db.execute("SELECT * FROM evidence WHERE kind='baseline-files' AND collection_id IS NULL")]
+        assert prior in aggregates
+        assert len(aggregates) == 2
+        assert db.execute("SELECT count(*) FROM files WHERE name='prior.parquet'").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM files WHERE name='additional.parquet'").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("history", [{"value": []}, ["not a baseline manifest"], [None]])
+def test_historical_baseline_metadata_refuses_invalid_shapes(corpus, tmp_path, history):
+    discovery = write(tmp_path, "history.json", {"format": "spicy-source-discovery", "version": 1, "baseline_history": history})
+    with pytest.raises(ValueError, match="Historical baseline metadata"):
+        build(corpus, tmp_path / "refused.sqlite", config=write(tmp_path, "config.json", {}), discovery=[discovery])
+
+
+@pytest.mark.parametrize("change", ["checksum", "locator", "identity", "collision"])
+def test_historical_baseline_metadata_refuses_changed_identity_or_value(corpus, tmp_path, change):
+    baseline = []
+    write(corpus, "metadata/baseline-files.json", baseline)
+    config = write(tmp_path, "config.json", {})
+    original = tmp_path / "original.sqlite"
+    result = build(corpus, original, config=config)
+    with connect(original, readonly=True) as db:
+        prior = tuple(db.execute("SELECT * FROM evidence WHERE kind='baseline-files' AND collection_id IS NULL").fetchone())
+    history = {"value": baseline, "evidence_id": prior[0], "data_sha256": "sha256:" + hashlib.sha256(prior[3].encode()).hexdigest(),
+               "prior_catalog_generation": result["generation"], "source_locator": {"database": str(original), "table": "evidence", "id": prior[0]}}
+    if change == "checksum":
+        history["data_sha256"] = "sha256:" + "0" * 64
+    elif change == "locator":
+        history["source_locator"]["id"] = "another-row"
+    elif change == "identity":
+        history["evidence_id"] = "publication:unrelated"
+    else:
+        history["value"] = ["changed value"]
+        history["data_sha256"] = "sha256:" + hashlib.sha256(json.dumps({"value": history["value"]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    discovery = write(tmp_path, "history.json", {"format": "spicy-source-discovery", "version": 1, "baseline_history": [history]})
+    with pytest.raises(ValueError, match="Historical"):
+        build(corpus, tmp_path / "refused.sqlite", config=config, discovery=[discovery])
