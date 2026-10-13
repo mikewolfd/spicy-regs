@@ -85,9 +85,12 @@ def _buffer_size(value):
 class IdentityReceiptWriter:
     """Bounded family build; failed admission never replaces an existing output."""
 
-    def __init__(self, output_dir, *, generation_id, tables, batch_size=512):
+    def __init__(self, output_dir, *, generation_id, tables, batch_size=512, attempt_offset=0):
         if type(batch_size) is not int or batch_size < 1:
             raise ValueError("batch_size must be a positive integer")
+        if type(attempt_offset) is not int or attempt_offset < 0:
+            raise ValueError("attempt_offset must be a nonnegative integer")
+        self.attempt_offset = attempt_offset
         self.output_dir = Path(output_dir)
         self.generation_id = generation_id
         self.policies = {name: dataset_policy(name) for name in tables}
@@ -163,7 +166,7 @@ class IdentityReceiptWriter:
             diagnostics["mapping"] = diagnostic
         context = ReceiptContext(
             self.generation_id,
-            f"{table}/{self.attempts}",
+            f"{table}/{self.attempt_offset + self.attempts}",
             VERSION,
             witnesses_for(mapped, evidence, input_witness),
             diagnostics,

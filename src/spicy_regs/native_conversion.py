@@ -122,13 +122,9 @@ def source_state(remote: str) -> dict:
     }
 
 
-def _refuse_moved(state: Mapping, *, main: str, spicy_docs: str) -> None:
-    """Field policies and the writer come from main and its pinned wheel; converting from anything else is refused."""
+def _runtime_problems(state: Mapping, spicy_docs: str) -> list[str]:
+    """The same clean checkout and exact installed-wheel checks for every path."""
     problems = []
-    if len(main) < 8 or not state["main"].startswith(main):
-        problems.append(f"main is {state['main'][:12]}, not the {main[:12]} this run was started for")
-    if state["checkout"] != state["main"]:
-        problems.append(f"this checkout is {state['checkout'][:12]}, not main {state['main'][:12]}")
     if state["uncommitted"]:
         problems.append(f"the checkout has uncommitted changes: {', '.join(state['uncommitted'][:5])}")
     if state["untracked"]:
@@ -143,6 +139,17 @@ def _refuse_moved(state: Mapping, *, main: str, spicy_docs: str) -> None:
     elif wheel["installed_differs"]:
         problems.append("the installed SpicyDocs differs from the pinned wheel in "
                         + ", ".join(wheel["installed_differs"][:5]))
+    return problems
+
+
+def _refuse_moved(state: Mapping, *, main: str, spicy_docs: str) -> None:
+    """Field policies and the writer come from main and its pinned wheel; converting from anything else is refused."""
+    problems = []
+    if len(main) < 8 or not state["main"].startswith(main):
+        problems.append(f"main is {state['main'][:12]}, not the {main[:12]} this run was started for")
+    if state["checkout"] != state["main"]:
+        problems.append(f"this checkout is {state['checkout'][:12]}, not main {state['main'][:12]}")
+    problems.extend(_runtime_problems(state, spicy_docs))
     if problems:
         raise ConversionRefused("Main or the pinned wheel moved: " + "; ".join(problems))
 
@@ -195,6 +202,34 @@ def _historical_producer(root: Path, revision: str, publisher: str) -> tuple[str
         digest.update(path.as_posix().encode() + b"\0")
         digest.update(git("show", f"{revision}:{prefix}{path.as_posix()}"))
     return "urn:spicy-regs:implementation:sha256:" + digest.hexdigest(), locked
+
+
+def _checkpoint_ancestor(previous: str, observed: str, *, root: Path | None = None) -> None:
+    """Both full commits must form a forward path in retained hosted history."""
+    if any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value) for value in (previous, observed)):
+        raise ConversionRefused("Checkpoint hosted history requires exact full commits")
+    root = root or Path(__file__).resolve().parents[2]
+    checked = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", previous, observed],
+        capture_output=True, text=True, env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
+    if checked.returncode != 0:
+        raise ConversionRefused("Checkpoint hosted main rewound, diverged or has unavailable ancestry")
+
+
+def _checkpoint_producer(started: Mapping, producer: str, spicy_docs: str) -> dict:
+    """Admit only a frozen clean producer, never substitute a fabricated main state."""
+    if not re.fullmatch(r"[0-9a-f]{40}", producer) or started["checkout"] != producer:
+        raise ConversionRefused("Checkpoint requires its exact frozen producer checkout")
+    problems = _runtime_problems(started, spicy_docs)
+    if problems:
+        raise ConversionRefused("Checkpoint producer or pinned wheel moved: " + "; ".join(problems))
+    if not re.fullmatch(r"[0-9a-f]{40}", started["main"]):
+        raise ConversionRefused("Checkpoint requires an exact observed hosted main")
+    from spicy_regs.generations import implementation_id
+    identity, locked = _historical_producer(Path(__file__).resolve().parents[2], producer, started["main"])
+    if (identity != implementation_id() or locked["version"] != started["pinned_spicy_docs"]
+            or locked["wheels"][0]["hash"] != started["spicy_docs_wheel"]["locked_sha256"]):
+        raise ConversionRefused("Checkpoint producer code or locked runtime differs")
+    return {"commit": producer, "implementationId": identity, "lockedSpicyDocs": locked}
 
 
 def _prepared_implementation(source: Mapping, publisher: Mapping, expected_producer: str | None) -> str:
@@ -431,7 +466,8 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str, wor
 
 def _convert_fec(family, old, captured, retained, base, work, handed_on,
                  retain_evidence, read_operation, original_pins, *, filing_associations=None,
-                 read_snapshot=None, observation_generation=None, check_resources=None, observation_rebinding=None):
+                 read_snapshot=None, observation_generation=None, check_resources=None, observation_rebinding=None,
+                 observation_checkpoint=None, observation_source_pin=None, observation_hosted_main=None):
     from spicy_regs.fec_native_conversion import build_retained_family
     evidence = None
     if retain_evidence:
@@ -445,7 +481,8 @@ def _convert_fec(family, old, captured, retained, base, work, handed_on,
             operation=read_operation, inputs=evidence.inputs() if evidence else (),
             filing_associations=filing_associations, read_snapshot=read_snapshot,
             observation_generation=observation_generation, check_resources=check_resources,
-            observation_rebinding=observation_rebinding)
+            observation_rebinding=observation_rebinding, observation_checkpoint=observation_checkpoint,
+            observation_source_pin=observation_source_pin, observation_hosted_main=observation_hosted_main)
     except BaseException as error:
         if evidence:
             evidence.finish(error)
@@ -835,6 +872,18 @@ def _receipt_producer_implementation(receipt: Mapping, now: Mapping, expected_pr
         return _prepared_implementation(receipt["source"], now, expected_producer)
     if expected_producer is None or producer.get("commit") != expected_producer:
         raise ConversionRefused("Resumed producer requires its exact --expect-producer commit")
+    admission = receipt.get("checkpoint_admission")
+    if admission is not None:
+        source = receipt["source"]
+        if (receipt["family"] != "fec-observations"
+                or source["checkout"] != expected_producer or source["remote"] != now["remote"]
+                or admission != {"observed_remote_main": source["main"], "remote": source["remote"],
+                                 "producer_commit": expected_producer}
+                or _runtime_problems(source, now["spicy_docs"])
+                or source["spicy_docs_wheel"] != now["spicy_docs_wheel"]):
+            raise ConversionRefused("Checkpoint prepared source or observed history differs")
+        _checkpoint_ancestor(expected_producer, source["main"])
+        _checkpoint_ancestor(source["main"], now["checkout"])
     identity, locked = _historical_producer(Path(__file__).resolve().parents[2], expected_producer, now["checkout"])
     if (producer != {"commit": expected_producer, "implementationId": identity, "lockedSpicyDocs": locked}
             or locked["version"] != now["pinned_spicy_docs"]
@@ -1000,7 +1049,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             expect_bucket: str | None = None, read_operation: ConversionReadOperation | None = None,
             filing_associations=None, staged_observations: Path | None = None,
             retained_members: Mapping[str, str] | None = None,
-            check_resources: Callable[[], None] | None = None) -> dict:
+            check_resources: Callable[[], None] | None = None, observation_checkpoint: Path | None = None) -> dict:
     """Convert ``family`` in ``work``; with ``publish``, move its pointer and read the result back anonymously."""
     if read_operation is None:
         try:
@@ -1009,7 +1058,8 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                                expected_spicy_docs=expected_spicy_docs, publish=publish, remote=remote,
                                state=state, expect_bucket=expect_bucket, read_operation=operation,
                                filing_associations=filing_associations, staged_observations=staged_observations,
-                               retained_members=retained_members, check_resources=check_resources)
+                               retained_members=retained_members, check_resources=check_resources,
+                               observation_checkpoint=observation_checkpoint)
         except ValueError as failure:
             receipt_path = work / RECEIPT
             attempted = receipt_path.is_file() and json.loads(receipt_path.read_bytes()).get("publish_attempt")
@@ -1019,12 +1069,20 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         from spicy_regs.runtime_bounds import checkpoint
         check_resources = checkpoint
     check_resources()
+    if observation_checkpoint is not None and (family != 'fec-observations' or publish):
+        raise ConversionRefused('Observation checkpoints belong only to local fec-observations preparation')
+    if observation_checkpoint is not None and retained_members is None:
+        raise ConversionRefused('Observation checkpoints require an explicit retained member map; no downloads')
     if family not in allowed:
         raise ConversionRefused(f"{family} is not in this run's allow-list ({', '.join(sorted(allowed)) or 'empty'})")
     work = work.resolve()
     state = state or source_state
     started = state(remote)
-    _refuse_moved(started, main=expected_main, spicy_docs=expected_spicy_docs)
+    checkpoint_producer = None
+    if observation_checkpoint is not None:
+        checkpoint_producer = _checkpoint_producer(started, expected_main, expected_spicy_docs)
+    else:
+        _refuse_moved(started, main=expected_main, spicy_docs=expected_spicy_docs)
     base = (os.getenv("R2_PUBLIC_URL") or "").rstrip("/")
     if not base:
         raise ConversionRefused("R2_PUBLIC_URL is not set: the published family is read from it")
@@ -1034,6 +1092,10 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         raise ConversionRefused(f"{work} is not empty; every conversion keeps its own receipt and build")
     work.mkdir(parents=True, exist_ok=True)
     receipt: dict = {"family": family, "started_at": _now(), "source": started, "public_url": base, "target": target}
+    if checkpoint_producer is not None:
+        receipt["producer"] = checkpoint_producer
+        receipt["checkpoint_admission"] = {"observed_remote_main": started["main"], "remote": started["remote"],
+                                           "producer_commit": checkpoint_producer["commit"]}
     pointer = f"{base}/{publication.INDEX_V2_KEY}"
     before = r2.public_object_version(pointer)
     with publication.snapshot(base) as captured:
@@ -1109,7 +1171,9 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                 built = _convert_fec(family, old, captured, retained, base, work, handed_on, retains,
                     read_operation, original_pins, filing_associations=filing_associations, read_snapshot=read_snapshot,
                     observation_generation=staged_observations, check_resources=check_resources,
-                    observation_rebinding=observation_rebinding)
+                    observation_rebinding=observation_rebinding, observation_checkpoint=observation_checkpoint,
+                    observation_source_pin={name: value for name, value in started.items() if name != "main"},
+                    observation_hosted_main=started["main"] if observation_checkpoint is not None else None)
             elif regulatory is not None:
                 built = _convert_regulatory_base(regulatory, captured, retained, base, work, handed_on, retains, read_operation, original_pins)
             else:
@@ -1428,10 +1492,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--filing-associations", type=Path, help="Explicit admitted FEC filing/definition selection JSON")
     parser.add_argument("--staged-observations", type=Path, help="Complete prepared observations generation for FEC query")
     parser.add_argument("--retained-member-map", type=Path, help="Exact captured object path to retained local file map; missing members refuse downloads")
+    parser.add_argument("--observation-checkpoint", type=Path,
+                        help="Reuse closed consecutive observation row groups; keep each invocation's --work new")
     parser.add_argument("--bulk-threads", type=int, help="DuckDB threads for this initial conversion")
     parser.add_argument("--bulk-memory-limit", help="DuckDB memory limit for this initial conversion")
     parser.add_argument("--require-bulk", action="store_true", help="Refuse SQL admission failure instead of building a reference index")
-    parser.add_argument("--expect-main", help="The main commit this run was started for")
+    parser.add_argument("--expect-main", help="The main commit this run was started for; with --observation-checkpoint, the exact frozen producer commit")
     parser.add_argument("--expect-spicy-docs", help="The SpicyDocs version main pinned when this run was started")
     parser.add_argument("--remote", default="origin", help="The git remote whose main is checked (default: origin)")
     parser.add_argument("--publish", action="store_true", help="Move the family's pointer; without it nothing is uploaded")
@@ -1446,6 +1512,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="With --rollback: also discard a generation published after the conversion")
     parser.add_argument("--env-file", type=Path, help="Read R2_* settings from this file; nothing is loaded implicitly")
     args = parser.parse_args(argv)
+    if args.observation_checkpoint and (args.family != 'fec-observations' or args.publish or args.rollback
+                                        or args.resume_generation or args.publish_prepared):
+        parser.error('--observation-checkpoint belongs only to local fec-observations preparation')
+    if args.observation_checkpoint and not args.retained_member_map:
+        parser.error('--observation-checkpoint requires --retained-member-map; no downloads')
     if args.rollback and (args.family or args.allow or args.work or args.expect_main or args.expect_spicy_docs or args.publish_prepared
                           or args.resume_generation or args.expect_producer or args.publish or args.remote != "origin"):
         parser.error("--rollback takes only --expect-bucket, --env-file and --discard-newer")
@@ -1521,7 +1592,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     remote=args.remote, expect_bucket=args.expect_bucket,
                     filing_associations=load_filing_associations(args.filing_associations) if args.filing_associations else None,
                     staged_observations=args.staged_observations,
-                    retained_members=json.loads(args.retained_member_map.read_text()) if args.retained_member_map else None)
+                    retained_members=json.loads(args.retained_member_map.read_text()) if args.retained_member_map else None,
+                    observation_checkpoint=args.observation_checkpoint)
     except (ConversionRefused, publication.PublicationError) as refusal:
         print(f"REFUSED: {refusal}", file=sys.stderr)
         result_state = (_prepared_refusal_state(args.publish_prepared) if args.publish_prepared and not entered_prepared
