@@ -22,7 +22,7 @@ import platform
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from spicy_regs.etl_receipts import RECEIPT_SCHEMA, subject_identity, validate_receipt_row
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, exact_json, subject_identity, validate_receipt_row
 from spicy_regs.sources.uscode_editions import POLICIES, SCHEMAS
 
 # Explicit retained annual selection; admitting a year does not qualify its
@@ -428,19 +428,32 @@ def audit(candidate: Path, selection: Path, *, annual_year: int) -> dict:
             etl["outcome"] == "accepted" and etl["attempt_id"] == edition["edition_id"],
             "receipt outcome/member attempt differs",
         )
-        witnesses = etl["witnesses"]
-        require(len(witnesses) == 2, "unexpected source witness count")
         require(
-            witnesses[0]["sha256"] == spec["sha256"]
-            and witnesses[0]["source_id"] == spec["sha256"]
-            and witnesses[0]["source_uri"] == spec["sha256"],
-            "archive witness differs",
+            etl["policy_version"] == POLICIES[table].policy_version
+            and etl["processor"] == "uscode-editions-public-v2"
+            and etl["processing_json"] == exact_json({})
+            and etl["diagnostic_json"] == exact_json({}),
+            "complete declared receipt processing fields differ",
         )
         require(
-            witnesses[1]["sha256"] == edition["member_sha256"]
-            and witnesses[1]["source_id"] == edition["edition_id"]
-            and witnesses[1]["locator"] == edition["member_name"],
-            "member witness differs",
+            etl["witnesses"]
+            == [
+                dict(
+                    source_id=spec["sha256"],
+                    source_uri=spec["sha256"],
+                    sha256=spec["sha256"],
+                    locator=None,
+                    body_version=None,
+                ),
+                dict(
+                    source_id=edition["edition_id"],
+                    source_uri=None,
+                    sha256=edition["member_sha256"],
+                    locator=edition["member_name"],
+                    body_version=None,
+                ),
+            ],
+            "complete declared receipt witnesses differ",
         )
         counts[table] += 1
 

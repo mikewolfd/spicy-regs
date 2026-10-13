@@ -471,3 +471,39 @@ def test_annual2000_expected_year_mismatch_refuses(tmp_path, expected):
     candidate, selection, _ = fixture(tmp_path, year=2000)
     with pytest.raises(AssertionError):
         auditor.audit(candidate, selection, annual_year=expected)
+
+
+@pytest.mark.parametrize(
+    "change", ["processor", "diagnostics", "processing", "archive_locator", "member_uri", "body_version"]
+)
+def test_annual1996_self_consistent_receipt_rewrite_refuses(tmp_path, change):
+    candidate, selection, _ = fixture(tmp_path, year=1996)
+    path = candidate / "etl_receipts.parquet"
+    values = pq.read_table(path).to_pylist()
+    item = values[0]
+    if change == "processor":
+        item["processor"] = "different-reader"
+    elif change == "diagnostics":
+        item["diagnostic_json"] = exact_json({"reason": "changed"})
+    elif change == "processing":
+        item["processing_json"] = json.dumps(json.loads(exact_json({})), indent=2)
+    elif change == "archive_locator":
+        item["witnesses"][0]["locator"] = "extra.htm"
+    elif change == "member_uri":
+        item["witnesses"][1]["source_uri"] = "sha256:" + "f" * 64
+    else:
+        item["witnesses"][1]["body_version"] = "other-version"
+    item["receipt_id"] = (
+        "sha256:"
+        + hashlib.sha256(exact_json({k: v for k, v in item.items() if k != "receipt_id"}).encode()).hexdigest()
+    )
+    # Each rewrite still passes generic receipt protocol admission. Refusal
+    # must come from the newly enforced producer-specific context checks.
+    auditor.validate_receipt_row(item, auditor.POLICIES)
+    pq.write_table(pa.Table.from_pylist(values, schema=auditor.RECEIPT_SCHEMA), path)
+    pq.write_table(
+        pa.Table.from_pylist(values[:3], schema=auditor.RECEIPT_SCHEMA),
+        candidate / "uscode_editions/etl_receipts.parquet",
+    )
+    with pytest.raises(AssertionError, match="complete declared receipt"):
+        auditor.audit(candidate, selection, annual_year=1996)
