@@ -1692,7 +1692,7 @@ def _table_metadata() -> dict[str, dict[str, Any]]:
     return json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text(encoding="utf-8"))
 
 
-def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
+def _lineage_meanings(lineage: Mapping[str, Sequence[str]], *, cursor: duckdb.DuckDBPyConnection | None = None) -> dict[str, str]:
     """Dictionary meanings for the view columns that project a dependency table's column unchanged.
 
     ``lineage`` is the view's ``column_lineage`` (``relationship_views.lineage``),
@@ -1705,11 +1705,13 @@ def _lineage_meanings(lineage: Mapping[str, Sequence[str]]) -> dict[str, str]:
     processing = processing_declarations()
     meanings: dict[str, str] = {}
     for column, (table, source) in lineage.items():
-        original = table.removeprefix("_spicy_fec_processing_")
+        original = table.removeprefix("_spicy_fec_processing_").removeprefix("_spicy_fec_current_")
         if table != original and original not in processing:
             continue
-        declared = {c["column_name"]: c.get("description") for c in dictionary.get(original, {}).get("columns", [])}
-        meaning = declared.get(source) or processing.get(original, {}).get("descriptions", {}).get(source)
+        entry = dictionary.get(original, {})
+        declared = {c["column_name"]: c.get("description") for c in entry.get("columns", [])}
+        legacy = _legacy_column_meanings(cursor, original, entry) if cursor is not None else {}
+        meaning = legacy.get(source) or declared.get(source) or processing.get(original, {}).get("descriptions", {}).get(source)
         if meaning:
             meanings[column] = meaning
     return meanings
@@ -2446,7 +2448,7 @@ def _tools() -> list[Tool]:
 
             # A derived view declares its bound schema; it is described here, not at connection build.
             metadata = relationships[table]["metadata"]
-            inherited = _lineage_meanings(metadata.get("column_lineage", {}))
+            inherited = _lineage_meanings(metadata.get("column_lineage", {}), cursor=cursor)
             entry = {"table": table, **metadata,
                      "columns": view_columns(rows, {**_table_metadata().get(table, {}).get("column_descriptions", {}),
                                                    **metadata.get("column_descriptions", {})}, inherited)}
@@ -2511,7 +2513,7 @@ def _tools() -> list[Tool]:
             "schema_differences": differences,
             "columns": [
                 {"column_name": name, "column_type": dtype,
-                 "description": declared.get(name, {}).get("description") or legacy_meanings.get(name)}
+                 "description": legacy_meanings.get(name) or declared.get(name, {}).get("description")}
                 for name, dtype in actual.items()
             ] if available else entry["columns"],
         }

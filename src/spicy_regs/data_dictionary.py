@@ -1084,6 +1084,14 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
                 }
             entry["columns"] = overrides[name]["columns"]
         entry["identity_columns"] = list(policy.identity_fields)
+    # A selected receiptless FEC generation still exposes the captured source
+    # fields. Keep their qualified meanings independently of current native
+    # fields, whose versioned interpretation can legitimately change.
+    legacy_path = REPO_ROOT / "data_dictionary" / "fec_legacy_column_descriptions.json"
+    legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
+    for name, meanings in legacy["tables"].items():
+        if name in tables:
+            tables[name]["legacy_column_descriptions"] = meanings
     return tables
 
 
