@@ -312,6 +312,15 @@ def split_record(policy: DatasetPolicy, row: Mapping, context: ReceiptContext) -
     return _split(policy, row, context, None if policy.receipt_only else _subject(policy, row))
 
 
+def split_records(policy: DatasetPolicy, records: Sequence[tuple[Mapping, ReceiptContext]]):
+    """Split a caller-bounded batch with the same field, type and receipt checks."""
+    for row, _ in records:
+        policy.check_fields(row)
+    subjects = [None] * len(records) if policy.receipt_only else _subjects(policy, [row for row, _ in records])
+    for (row, context), subject in zip(records, subjects, strict=True):
+        yield _split(policy, row, context, subject)
+
+
 def _split(policy: DatasetPolicy, row: Mapping, context: ReceiptContext, subject: dict | None) -> tuple[dict | None, dict]:
     processing = {key: row[key] for key in policy.receipt_fields if key in row}
     return subject, _receipt(
@@ -345,11 +354,7 @@ def _dataset_batches(records, policy, *, failures=(), batch_size=2000):
     subjects, receipts, pending = [], [], []
 
     def split_pending():
-        for row, _ in pending:
-            policy.check_fields(row)
-        held = [None] * len(pending) if policy.receipt_only else _subjects(policy, [row for row, _ in pending])
-        for (row, context), subject in zip(pending, held):
-            subject, receipt = _split(policy, row, context, subject)
+        for subject, receipt in split_records(policy, pending):
             if subject is not None:
                 subjects.append(subject)
             receipts.append(receipt)

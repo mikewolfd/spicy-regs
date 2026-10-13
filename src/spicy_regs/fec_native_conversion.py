@@ -697,27 +697,32 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                         check_resources=check_resources) if table == 'fec_filing_links' else nullcontext(None)) as native_links, \
                      (nullcontext(observation_writer) if observation_writer is not None else
                       IdentityReceiptWriter(output, generation_id=generation_id, tables=[table])) as writer:
-                    for ordinal, (row, witness) in enumerate(rows()):
-                        adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
-                        adopted_link = next(native_links, None) if native_links is not None else None
-                        if native_links is not None and adopted_link is None:
-                            raise ValueError('Filing reference resolution lost a selected observation')
-                        original_row = row
-                        retained_diagnostics = {}
-                        row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics, source_schema=schema)
-                        rebound = rebind_row(table, row, observation_rebinding)
-                        overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
-                        row = rebound
-                        if table == 'fec_relationships':
-                            overrides['record_id'] = original_row.get('record_id')
-                        if adopted is not None:
-                            overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
-                        source_input = {'fec_retained_overrides': overrides} if overrides else {}
-                        if retained_diagnostics:
-                            source_input['fec_retained_interpretation'] = retained_diagnostics
-                        writer.emit(table, row, input_witness=witness,
-                            source_input=source_input or None, native_filing_subject=adopted,
-                            native_link_subject=adopted_link)
+                    def prepared_rows():
+                        for ordinal, (row, witness) in enumerate(rows()):
+                            adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
+                            adopted_link = next(native_links, None) if native_links is not None else None
+                            if native_links is not None and adopted_link is None:
+                                raise ValueError('Filing reference resolution lost a selected observation')
+                            original_row = row
+                            retained_diagnostics = {}
+                            row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics, source_schema=schema)
+                            rebound = rebind_row(table, row, observation_rebinding)
+                            overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
+                            row = rebound
+                            if table == 'fec_relationships':
+                                overrides['record_id'] = original_row.get('record_id')
+                            if adopted is not None:
+                                overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
+                            source_input = {'fec_retained_overrides': overrides} if overrides else {}
+                            if retained_diagnostics:
+                                source_input['fec_retained_interpretation'] = retained_diagnostics
+                            yield row, dict(input_witness=witness, source_input=source_input or None,
+                                native_filing_subject=adopted, native_link_subject=adopted_link)
+                    if table == 'fec_source_records':
+                        writer.emit_batch(table, prepared_rows(), check_resources=check_resources)
+                    else:
+                        for row, kwargs in prepared_rows():
+                            writer.emit(table, row, **kwargs)
                     if native_links is not None and next(native_links, None) is not None:
                         raise ValueError('Filing reference resolution added selected observations')
                 policy = writer.policies[table]

@@ -21,6 +21,7 @@ from spicy_regs.etl_receipts import (
     ReceiptContext,
     RECEIPT_SCHEMA,
     split_record,
+    split_records,
     failure_receipt,
     validate_receipt_bundle,
     select_receipts,
@@ -121,7 +122,7 @@ class IdentityReceiptWriter:
         self.buffer_bytes = 0
         return self
 
-    def emit(
+    def _prepare_emit(
         self, table, row, *, input_witness, evidence=(), source_input=None, outcome=None, diagnostic=None, lineage=None,
         observation_ordinal=None, native_filing_subject=None, native_link_subject=None,
     ):
@@ -172,11 +173,51 @@ class IdentityReceiptWriter:
         if table == "fec_research_source_pages" and row.get("content_status") != "body_extracted":
             outcome = "refused"
             context = replace(context, diagnostics={**diagnostics, "content_status": row.get("content_status")})
+        return mapped, context, outcome
+
+    def emit(self, table, row, **kwargs):
+        mapped, context, outcome = self._prepare_emit(table, row, **kwargs)
+        policy = self.policies[table]
         if outcome is not None:
             subject = None
             receipt = failure_receipt(policy, context, outcome=outcome, raw_fields=mapped)
         else:
             subject, receipt = split_record(policy, mapped, context)
+        self._append(table, subject, receipt)
+        return subject, receipt
+
+    def emit_batch(self, table, records, *, check_resources=lambda: None):
+        """Normalize small ordered batches; retain complete single wide values."""
+        pending, pending_bytes = [], 0
+
+        def finish():
+            nonlocal pending_bytes
+            if pending:
+                check_resources()
+                for subject, receipt in split_records(self.policies[table], pending):
+                    check_resources()
+                    self._append(table, subject, receipt)
+                pending.clear()
+                pending_bytes = 0
+
+        for row, kwargs in records:
+            check_resources()
+            mapped, context, outcome = self._prepare_emit(table, row, **kwargs)
+            size = _buffer_size(mapped) + _buffer_size(context.witnesses) + _buffer_size(context.diagnostics)
+            if pending and pending_bytes + size > 8 * 1024 * 1024:
+                finish()
+            if outcome is not None:
+                finish()
+                self._append(table, None, failure_receipt(self.policies[table], context,
+                    outcome=outcome, raw_fields=mapped))
+            else:
+                pending.append((mapped, context))
+                pending_bytes += size
+                if len(pending) >= 32 or pending_bytes >= 8 * 1024 * 1024:
+                    finish()
+        finish()
+
+    def _append(self, table, subject, receipt):
         if subject is not None:
             self.buffers[table].append(subject)
             self.counts[table] += 1
@@ -184,7 +225,6 @@ class IdentityReceiptWriter:
         self.buffer_bytes += _buffer_size(subject) + _buffer_size(receipt)
         if len(self.receipts) >= self.batch_size or self.buffer_bytes >= 8 * 1024 * 1024:
             self.flush()
-        return subject, receipt
 
     def flush(self):
         for name, rows in self.buffers.items():
