@@ -365,6 +365,33 @@ def test_historical_refusal_and_stale_attempt_do_not_poison_later_export(con, tm
     assert pl.read_parquet(result)['text_content'].to_list() == ['recovered']
 
 
+
+def test_comments_rebind_compacts_current_input_without_losing_legacy_witness(con):
+    from hashlib import sha256
+    from spicy_regs.etl_receipts import decode_exact_json, exact_json, rebind_receipt, resolve_receipt_witness, _digest
+
+    original = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    [receipt] = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()
+    values = decode_exact_json(receipt['processing_json'])
+    normalized = native.normalize_source_record('comments', original)
+    values['raw_conversion_inputs'] = normalized
+    witness = {'source_id': 'legacy-normalized-input', 'source_uri': None,
+               'sha256': sha256(exact_json(normalized).encode()).hexdigest(),
+               'locator': 'receipt.values.raw_conversion_inputs (canonical exact_json)',
+               'body_version': receipt['generation_id']}
+    receipt['witnesses'].append(witness)
+    receipt['processing_json'] = exact_json(values)
+    receipt['receipt_id'] = _digest({k: v for k, v in receipt.items() if k != 'receipt_id'})
+    carried = rebind_receipt(receipt, generation_id='compact-export')
+    current = decode_exact_json(carried['processing_json'])
+    assert 'raw_conversion_inputs' not in current
+    assert current['raw_source_record'] == original
+    assert carried['witnesses'] == receipt['witnesses']
+    assert resolve_receipt_witness(carried, witness) == exact_json(normalized).encode()
+    assert all(resolve_receipt_witness(carried, item) for item in carried['witnesses'])
+
+
 def test_resealed_catalog_receipt_cannot_restore_inconsistent_source_input(con):
     import json
     from hashlib import sha256
@@ -376,7 +403,7 @@ def test_resealed_catalog_receipt_cannot_restore_inconsistent_source_input(con):
     [receipt] = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted'").to_arrow_table().to_pylist()
     from spicy_regs.etl_receipts import _unpack
     processing = _unpack(json.loads(receipt['processing_json']))
-    processing['raw_conversion_inputs'].pop('text_content')
+    processing['raw_source_record'].pop('text_content')
     receipt['processing_json'] = exact_json(processing)
     receipt['receipt_id'] = 'sha256:' + sha256(exact_json({k: v for k, v in receipt.items() if k != 'receipt_id'}).encode()).hexdigest()
     con.register('altered_receipt', pa.Table.from_pylist([receipt], schema=native.RECEIPT_SCHEMA))
@@ -396,7 +423,7 @@ def test_full_comments_processing_uses_batch_proof_without_unused_identity_scan(
     assert all(actual[name] == value for name, value in expected.items())
 
 
-@pytest.mark.parametrize('later_attachment', ['{bad', '['*20000+']'*20000])
+@pytest.mark.parametrize('later_attachment', ['{bad', '['*20000+']'*20000], ids=['invalid-json', 'excessive-depth'])
 def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch, later_attachment):
     import pyarrow as pa
     from spicy_regs import comments_bulk
@@ -409,7 +436,7 @@ def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch,
     # valid receipt data, but their retained source inputs fail mapper proof.
     for row in rows:
         values = decode_exact_json(row['processing_json'])
-        raw = values['raw_conversion_inputs']
+        raw = values['raw_source_record']
         if raw['comment_id']=='c1':
             raw['text_content'] = 'different'
         if raw['comment_id']=='c2':
@@ -511,4 +538,4 @@ def test_fresh_batch_refusal_commits_no_partial_subjects(con, monkeypatch):
     assert con.execute(f'SELECT count(*) FROM {native.qualified(COMMENT)}').fetchone() == (0,)
     assert con.execute(f"SELECT count(*) FROM {native.receipts_table()} WHERE outcome='accepted'").fetchone() == (0,)
     [refused] = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='refused'").to_arrow_table().to_pylist()
-    assert decode_exact_json(refused['processing_json'])['raw_conversion_inputs']['attachments_json'] == 'not-json'
+    assert decode_exact_json(refused['processing_json'])['raw_source_record']['attachments_json'] == 'not-json'

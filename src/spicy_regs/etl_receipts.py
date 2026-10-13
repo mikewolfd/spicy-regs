@@ -827,9 +827,9 @@ def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
 
     Does not reinterpret an old observation as a new acquisition. Original
     witnesses, processor, attempt and values stay intact; diagnostic lineage
-    records the prior receipt and generation. Comments keeps current-input
-    witnesses and one predecessor reference without copying payload history;
-    an exactly reproducible normalized copy is omitted. Admission checks the row.
+    records the prior receipt and generation. Comments omits an exactly
+    reproducible normalized copy from current processing, while shared flat
+    history keeps every prior payload and witness resolvable. Admission checks the row.
     """
     if not isinstance(generation_id, str) or not generation_id:
         raise ValueError("A carried receipt needs the new generation identity")
@@ -853,25 +853,9 @@ def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
             else:
                 if exact_json(normalized) == exact_json(processing["raw_conversion_inputs"]):
                     processing.pop("raw_conversion_inputs")
-        witnesses = []
-        for witness in receipt["witnesses"]:
-            if (witness.get("source_uri") or "").startswith("receipt-processing:"):
-                continue
-            locator = witness.get("locator") or ""
-            if locator.startswith("receipt.values."):
-                name = locator.removeprefix("receipt.values.").split(" ", 1)[0]
-                if (name not in processing or hashlib.sha256(exact_json(processing[name]).encode()).hexdigest()
-                        != str(witness.get("sha256", "")).removeprefix("sha256:")):
-                    continue
-            witnesses.append(witness)
-        diagnostics = {**comments_receipt_diagnostics(receipt),
-                       "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]}}
-        updated = {**receipt, "generation_id": generation_id, "witnesses": witnesses,
-                   "processing_json": exact_json(processing), "diagnostic_json": exact_json(diagnostics)}
-        # Refuse if compacting removed the only verifiable source witness.
-        ReceiptContext(generation_id, receipt["attempt_id"], receipt["processor"], witnesses, diagnostics)
-        updated["receipt_id"] = _digest({k: v for k, v in updated.items() if k != "receipt_id"})
-        return updated
+        processing_json = exact_json(processing)
+    else:
+        processing_json = receipt["processing_json"]
     diagnostics = _retain_history(
         receipt,
         {
@@ -879,7 +863,8 @@ def rebind_receipt(receipt: Mapping, *, generation_id: str) -> dict:
             "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]},
         },
     )
-    updated = {**receipt, "generation_id": generation_id, "diagnostic_json": exact_json(diagnostics)}
+    updated = {**receipt, "generation_id": generation_id, "processing_json": processing_json,
+               "diagnostic_json": exact_json(diagnostics)}
     updated["receipt_id"] = _digest({k: v for k, v in updated.items() if k != "receipt_id"})
     return updated
 
@@ -1052,14 +1037,6 @@ class ReceiptLineage:
 
 def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict:
     """Retain a removed subject's evidence as an observed historical attempt."""
-    if receipt["dataset"] == "comments":
-        result = rebind_receipt(receipt, generation_id=generation_id)
-        diagnostics = {**comments_receipt_diagnostics(result), "retired_reason": reason,
-                       "carried_from": {"receipt_id": receipt["receipt_id"], "generation_id": receipt["generation_id"]}}
-        result = dict(result, outcome="observed", subject_version=None,
-                      attempt_id=receipt["attempt_id"] + ":retired", diagnostic_json=exact_json(diagnostics))
-        result["receipt_id"] = _digest({k: v for k, v in result.items() if k != "receipt_id"})
-        return result
     context = inherit_receipt(
         ReceiptContext(
             generation_id,
