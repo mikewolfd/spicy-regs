@@ -291,6 +291,183 @@ def test_legacy_source_page_refusal_retains_exact_original_evidence(tmp_path):
     assert reconstructed==old
 
 
+@pytest.mark.parametrize('raw, native, status', [
+    ('0202', 202, 'parsed'), ('2024', 2024, 'parsed'), (2024, 2024, 'parsed'),
+    (None, None, 'source_null'), ('', None, 'source_empty'),
+    ('24', None, 'unsupported_year'), ('20245', None, 'unsupported_year'),
+    (' 2024 ', None, 'unsupported_year'), ('+2024', None, 'unsupported_year'),
+    ('-2024', None, 'unsupported_year'), (str(2**63), None, 'unsupported_year'),
+    (2**63, None, 'unsupported_year'), (True, None, 'unsupported_year'),
+    (1.0, None, 'unsupported_year'), ('2.5', None, 'unsupported_year'),
+])
+def test_retained_registration_legacy_years_preserve_exact_receipt_values(tmp_path, raw, native, status):
+    from spicy_regs.fec_native_conversion import retained_identity_row
+    from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, read_identity_rows
+    from tests.test_fec_identity_receipts import WITNESS
+    original = dict(record_id='legacy-statement', mapping_version='fec-identity-observations/1',
+                    mapping_status='original-mapping', mapping_reason_json='{"original":true}',
+                    election_year=raw, report_year='2025', source_namespace='fec-bulk-form2')
+    before = dict(original)
+    row, overrides = retained_identity_row('fec_registration_statements', original)
+    assert original == before and type(original['election_year']) is type(raw)
+    assert row['election_year'] == native and type(row['election_year']) is type(native)
+    assert row['election_year_status'] == status
+    assert row['report_year'] == 2025 and row['report_year_status'] == 'parsed'
+    # The mapping version remains the actual retained producer's version.
+    assert row['mapping_version'] == original['mapping_version']
+    with IdentityReceiptWriter(tmp_path/'statement', generation_id='legacy', tables=['fec_registration_statements']) as writer:
+        subject, _ = writer.emit('fec_registration_statements', row, input_witness=WITNESS,
+                                source_input={'fec_retained_overrides': overrides})
+    assert subject['election_year_status'] == status
+    [internal] = read_identity_rows(tmp_path/'statement', 'fec_registration_statements', generation_id='legacy')
+    moved = internal['conversion_inputs']; held = internal['source_input']['fec_retained_overrides']
+    restored = {name: held.get(name, moved.get(name, internal.get(name))) for name in original}
+    assert restored == original
+    assert all(type(restored[name]) is type(value) for name, value in original.items())
+
+
+def test_retained_registration_current_refusal_evidence_is_not_reinterpreted(tmp_path):
+    from spicy_regs.fec_native_conversion import retained_identity_row
+    from spicy_regs.transforms import fec_identity_observations as identity
+    from tests.test_fec_identity_observations import SELECTION, registry
+    from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, read_identity_rows
+    from tests.test_fec_identity_receipts import WITNESS
+    for number, value in enumerate(('0202', '2.5', '', None)):
+        row, _ = identity.map_registry(
+            registry(identity.FORM2, ELECTION_YEAR=value, REPORT_YEAR='2025'), SELECTION, identity.FORM2)
+        retained, overrides = retained_identity_row('fec_registration_statements', row)
+        assert retained == row and overrides == {}
+        assert all(type(retained[name]) is type(original) for name, original in row.items())
+        destination = tmp_path/str(number)
+        with IdentityReceiptWriter(destination, generation_id='native', tables=['fec_registration_statements']) as writer:
+            writer.emit('fec_registration_statements', retained, input_witness=WITNESS)
+        [internal] = read_identity_rows(destination, 'fec_registration_statements', generation_id='native')
+        assert internal['election_year_raw'] == row['election_year_raw']
+        assert internal['election_year_status'] == row['election_year_status']
+
+
+@pytest.mark.parametrize('drop_evidence', [False, True])
+def test_retained_registration_current_malformed_type_still_refuses(tmp_path, drop_evidence):
+    from spicy_regs.fec_native_conversion import retained_identity_row
+    from spicy_regs.transforms import fec_identity_observations as identity
+    from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
+    from tests.test_fec_identity_observations import SELECTION, registry
+    from tests.test_fec_identity_receipts import WITNESS
+    current, _ = identity.map_registry(
+        registry(identity.FORM2, ELECTION_YEAR='2024', REPORT_YEAR='2025'), SELECTION, identity.FORM2)
+    malformed = {**current, 'election_year': '2024'}
+    if drop_evidence:
+        for name in ('election_year','report_year'):
+            malformed.pop(name+'_raw');malformed.pop(name+'_status')
+    row, overrides = retained_identity_row('fec_registration_statements', malformed)
+    assert row == malformed and overrides == {}
+    with IdentityReceiptWriter(tmp_path/'bad-current', generation_id='current', tables=['fec_registration_statements']) as writer:
+        with pytest.raises(ValueError, match='election_year: native integer required'):
+            writer.emit('fec_registration_statements', row, input_witness=WITNESS)
+
+
+def test_retained_legacy_context_bridges_reach_production_admission(tmp_path, monkeypatch, bucket):
+    from spicy_regs.transforms.assemble_fec_query import FilingAssociationInputs, TypedInput, _sha
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    original = dict(record_id='legacy-form2', mapping_version='fec-identity-observations/1',
+                    election_year='0202', report_year='2025', source_namespace='fec-bulk-form2')
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    native_document = dict(id=7, title='Synthetic discovery', language='en', page_count=12,
+                           created_at='2024-01-02T03:04:05Z', updated_at='2024-01-03T03:04:05+00:00',
+                           publisher_unmapped={'ordered':[False,1.0,'raw']})
+    document = dict(record_id='legacy-document', mapping_version='fec-research-context/1', document_native_id='7',
+                    title=native_document['title'], source_created_at=native_document['created_at'],
+                    source_updated_at=native_document['updated_at'], native_metadata_json=json.dumps(native_document),
+                    body_status='deferred_pdf', fec_relationship_status='search_result_only_no_verified_matter_join')
+    unavailable_document = dict(record_id='unavailable-document', mapping_version='fec-research-context/1',
+                               source_created_at='2024-01-02T03:04:05Z', source_updated_at='2024-01-02T03:04:05',
+                               native_metadata_json=None, body_status='body_not_qualified')
+    csv = dict(record_id='legacy-csv', mapping_version='fec-research-context/1', amount=Decimal('5.00'),
+               amount_raw='5.00', amount_status='parsed', coverage_status='complete_records_of_truncated_capture',
+               current_total_status='unqualified_partial_capture', source_row_ordinal=1,
+               native_fields_json=json.dumps(dict(amendment_indicator='A', memo_code='X', memo_text=' Literal memo ',
+                   file_number='0171', filing_form='F3', report_year='2026', publisher_unmapped=[False,1.0])))
+    unavailable_csv = {**csv, 'record_id':'unavailable-csv', 'source_row_ordinal':2, 'native_fields_json':None}
+    response = dict(record_id='legacy-response', mapping_version='fec-research-context/1', profile_refusal='provider refused',
+                    payload_shape='other_native_payload', outcome_status='refused_native_observation_not_qualified_empty_success',
+                    native_payload_json=json.dumps([1,False,{'publisher_unmapped':'raw'}]))
+    rows_by_table = {'fec_registration_statements':[original], 'fec_research_document_observations':[document,unavailable_document],
+                     'fec_retained_csv_observations':[csv,unavailable_csv], 'fec_research_response_outcomes':[response]}
+    _, source_paths = old_family(tmp_path/'source', monkeypatch, bucket, 'fec-observations')
+    snapshot, retained = old_family(tmp_path/'query', monkeypatch, bucket, 'fec-query',
+        rows_by_table=rows_by_table, legacy_tables=tuple(rows_by_table))
+    with ConversionReadOperation() as operation:
+        native = build_retained_family('fec-observations', snapshot['families']['fec-observations'], snapshot,
+                                      source_paths, tmp_path/'native-source', operation=operation)
+        staged = staged_snapshot(snapshot, native, operation)
+        target = tmp_path/'empty-native-filings.parquet'
+        pq.write_table(pa.Table.from_batches([], schema=dataset_policy('fec_filings').subject_schema), target)
+        selection = FilingAssociationInputs(staged['families']['fec-observations']['artifactDigest'], None,
+            [TypedInput(target, _sha(target), 0)], {}, filing_generation_scope='self')
+        complete = build_retained_family('fec-query', snapshot['families']['fec-query'], snapshot, retained,
+            tmp_path/'native-query', operation=operation, read_snapshot=staged, filing_associations=selection,
+            observation_generation=native)
+        _, reader, _ = operation.admit_generation(complete)
+        for table in rows_by_table:
+            comparison = reader.compare_original(table, retained[table+'.parquet'])
+            assert comparison['rows_only_in_restored'] == comparison['rows_only_in_retained'] == 0
+            assert comparison['type_changes'] == {}
+        [statement] = reader.read_subjects('fec_registration_statements')
+        assert statement['election_year']==202 and statement['report_year']==2025
+        first, unavailable = reader.read_subjects('fec_research_document_observations')
+        assert first['language']=='en' and first['page_count']==12 and first['page_count_status']=='parsed'
+        assert first['created_at']==datetime(2024,1,2,3,4,5,tzinfo=timezone.utc)
+        assert first['body_status']=='deferred_pdf' and first['fec_relationship_status']==document['fec_relationship_status']
+        assert unavailable['page_count'] is None and unavailable['page_count_status']=='unavailable_retained_metadata'
+        assert unavailable['created_at']==datetime(2024,1,2,3,4,5,tzinfo=timezone.utc) and unavailable['updated_at'] is None
+        first, unavailable = reader.read_subjects('fec_retained_csv_observations')
+        assert first['amendment_indicator']=='A' and first['memo_code']=='X' and first['memo_text']==' Literal memo '
+        assert first['file_number']=='0171' and first['report_year']==2026 and first['report_year_status']=='parsed'
+        assert first['coverage_status']==csv['coverage_status'] and first['current_total_status']==csv['current_total_status']
+        assert unavailable['report_year'] is None and unavailable['report_year_status']=='unavailable_retained_fields'
+        [outcome] = reader.read_subjects('fec_research_response_outcomes')
+        assert outcome['capture_disposition']=='refused' and outcome['outcome_status']==response['outcome_status']
+        held = list(reader.processing('fec_research_document_observations'))
+        diagnostics = held[1]['processing_fields']['source_input']['fec_retained_interpretation']
+        assert diagnostics['field_statuses']['updated_at']=='invalid_or_unzoned_timestamp'
+        assert diagnostics['field_statuses']['language']=='unavailable_retained_metadata'
+
+
+
+@pytest.mark.parametrize('payload', [{'publisher_unmapped':[False,1.0]}, [1,False], 'opaque', 17, None])
+def test_retained_response_arbitrary_payload_is_preserved_without_object_coercion(tmp_path, payload):
+    from spicy_regs.fec_native_conversion import retained_identity_row
+    from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, read_identity_rows
+    from tests.test_fec_identity_receipts import WITNESS
+    original = dict(record_id='response', mapping_version='fec-research-context/1', profile_refusal=None,
+                    payload_shape='other_native_payload', native_payload_json=json.dumps(payload))
+    diagnostics = {}
+    row, overrides = retained_identity_row('fec_research_response_outcomes', original, diagnostics=diagnostics)
+    assert row['capture_disposition']=='captured_payload_not_verified_success'
+    with IdentityReceiptWriter(tmp_path/'response', generation_id='response', tables=['fec_research_response_outcomes']) as writer:
+        writer.emit('fec_research_response_outcomes', row, input_witness=WITNESS,
+                    source_input={'fec_retained_overrides':overrides, 'fec_retained_interpretation':diagnostics})
+    [internal] = read_identity_rows(tmp_path/'response','fec_research_response_outcomes',generation_id='response')
+    assert internal['source_input']['fec_retained_overrides']['native_payload_json']==original['native_payload_json']
+
+
+@pytest.mark.parametrize('table, extra, native', [
+    ('fec_research_document_observations','native_metadata_json', []),
+    ('fec_retained_csv_observations','native_fields_json', []),
+    ('fec_retained_csv_observations','native_fields_json', {'memo_code':False}),
+])
+def test_retained_context_malformed_named_shapes_refuse(table, extra, native):
+    from spicy_regs.fec_native_conversion import retained_identity_row
+    original = dict(record_id='malformed', mapping_version='fec-research-context/1', **{extra:json.dumps(native)})
+    before = dict(original)
+    with pytest.raises(ValueError):
+        retained_identity_row(table, original)
+    assert original == before
+    with pytest.raises(ValueError, match='captured /1 mapping'):
+        retained_identity_row(table, {**original,'mapping_version':'fec-research-context/2'})
+
+
 def test_foreign_generation_pin_is_never_rebound():
     from spicy_regs.fec_native_conversion import ObservationRebinding,rebind_row
     proof=ObservationRebinding('sha256:'+'a'*64,'sha256:'+'b'*64)

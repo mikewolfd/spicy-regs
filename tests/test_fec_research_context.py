@@ -287,6 +287,77 @@ def test_documentcloud_retains_third_party_search_observations_without_legal_joi
     assert docs[0]["fec_relationship_status"] == "search_result_only_no_verified_matter_join"
 
 
+@pytest.mark.parametrize('count, expected, status', [
+    (0, 0, 'parsed'), (12, 12, 'parsed'), (None, None, 'missing'),
+    (True, None, 'invalid_count'), (-1, None, 'invalid_count'),
+    (2**63, None, 'invalid_count'), ('12', None, 'invalid_count'),
+])
+def test_shared_document_interpretation_preserves_count_refusals_and_timezone(count, expected, status):
+    from datetime import datetime, timezone
+    from spicy_regs.transforms.fec_context_shape import document_context_fields
+    native = dict(language='en', page_count=count, created_at='2024-01-02T05:04:05+02:00',
+                  updated_at='2024-01-02T03:04:05', publisher_unmapped=[False,1.0])
+    original = deepcopy(native)
+    values, diagnostics = document_context_fields(native)
+    assert native == original
+    assert values['page_count'] == expected and type(values['page_count']) is type(expected)
+    assert values['page_count_status'] == status and values['language']=='en'
+    assert values['created_at']==datetime(2024,1,2,3,4,5,tzinfo=timezone.utc)
+    assert values['updated_at'] is None and diagnostics['updated_at']=='invalid_or_unzoned_timestamp'
+    assert values['evidence_use']=='discovery_only'
+
+
+@pytest.mark.parametrize('raw, expected, status', [
+    ('2026', 2026, 'parsed'), ('0202', None, 'unsupported_year'),
+    ('+2026', None, 'unsupported_year'), (' 2026 ', None, 'unsupported_year'),
+    (str(2**63), None, 'unsupported_year'), ('', None, 'missing'), (None, None, 'missing'),
+])
+def test_shared_csv_interpretation_preserves_exact_year_spelling(raw, expected, status):
+    from spicy_regs.transforms.fec_context_shape import csv_context_fields
+    native = dict(report_year=raw, amendment_indicator='A', memo_text=' literal ',
+                  file_number='0171', publisher_unmapped={'raw':[False,1.0]})
+    original = deepcopy(native)
+    values, diagnostics = csv_context_fields(native)
+    assert native == original
+    assert values['report_year']==expected and type(values['report_year']) is type(expected)
+    assert values['report_year_status']==status and diagnostics['report_year']==status
+    assert values['memo_text']==' literal ' and values['file_number']=='0171'
+
+
+def test_shared_context_unavailable_objects_and_malformed_selected_fields_are_explicit():
+    from spicy_regs.transforms.fec_context_shape import csv_context_fields, document_context_fields
+    values, diagnostics = document_context_fields(None, source_created_at='2024-01-02T03:04:05Z')
+    assert values['page_count_status']=='unavailable_retained_metadata' and values['language'] is None
+    assert diagnostics['language']=='unavailable_retained_metadata' and diagnostics['created_at']=='parsed'
+    values, diagnostics = csv_context_fields(None)
+    assert values['report_year_status']=='unavailable_retained_fields' and values['report_year'] is None
+    assert diagnostics['memo_code']=='unavailable_retained_fields'
+    for native in ([], 'opaque', 1):
+        with pytest.raises(ValueError, match='named source object'):
+            document_context_fields(native)
+        with pytest.raises(ValueError, match='named source object'):
+            csv_context_fields(native)
+    with pytest.raises(ValueError, match='language'):
+        document_context_fields({'language':True})
+    for native in ({'report_year':2026}, {'memo_code':False}, {'file_number':1.0}):
+        with pytest.raises(ValueError, match='native text'):
+            csv_context_fields(native)
+
+
+@pytest.mark.parametrize('refusal, shape, expected', [
+    ('provider refused', 'results_empty', 'refused'),
+    (None, 'results_empty', 'empty_payload_not_verified_success'),
+    ('', 'docs_present', 'captured_payload_not_verified_success'),
+    (None, 'other_native_payload', 'captured_payload_not_verified_success'),
+    (None, None, 'unavailable_retained_payload_shape'),
+])
+def test_shared_response_disposition_never_qualifies_empty_results(refusal, shape, expected):
+    from spicy_regs.transforms.fec_context_shape import response_capture_disposition
+    assert response_capture_disposition(refusal,shape)==expected
+    with pytest.raises(ValueError, match='native text'):
+        response_capture_disposition(False,shape)
+
+
 def event(kind, name=None, text=None, attrs=None):
     return dict(kind=kind, name=name, text=text, attributes=attrs or [])
 

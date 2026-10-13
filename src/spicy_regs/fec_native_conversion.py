@@ -201,7 +201,7 @@ def validate_identity_schema(table, schema):
             raise ValueError(f'{table}: retained identity schema is neither supported current nor captured legacy shape')
 
 
-def retained_identity_row(table, original):
+def retained_identity_row(table, original, *, diagnostics=None):
     """Interpret only named legacy shapes; retain exact old values separately."""
     from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
     registry = REGISTRY[table]
@@ -226,6 +226,20 @@ def retained_identity_row(table, original):
             native = project_committee_master_row({'fields': native, 'cycle': original.get('source_cycle')})
         values, _ = _history_values(native)
         row.update(values)
+    elif table == 'fec_registration_statements':
+        from spicy_regs.transforms.fec_identity_observations import STATEMENT_TYPED
+        from spicy_regs.transforms.fec_identity_shape import typed_values
+        # Captured /1 statements have year scalars but no raw/status columns.
+        # Current rows already carry their producer's interpretation, including
+        # refused values; do not reinterpret those nulls or replace their evidence.
+        if (original.get('mapping_version') == 'fec-identity-observations/1'
+                and not any(name + suffix in original for name in STATEMENT_TYPED for suffix in ('_raw', '_status'))):
+            values, problems = typed_values(row, STATEMENT_TYPED)
+            row.update(values)
+            if diagnostics is not None:
+                diagnostics.update(legacy_bridge='registration-years/1',
+                                   field_statuses={name:values[name+'_status'] for name in STATEMENT_TYPED},
+                                   refusals=problems)
     elif table == 'fec_api_response_controls' and 'native_metadata_json' in original:
         from spicy_regs.transforms.fec_context_shape import api_control_values
         row.update(api_control_values(node('native_metadata_json')))
@@ -246,6 +260,38 @@ def retained_identity_row(table, original):
             from spicy_regs.transforms.fec_identity_observations import _scalar
             row.update(array_values(native, 'sponsor_candidate_list'))
             row.update({name: _scalar(native.get(name)) for name in ('affiliated_committee_name', 'organization_type', *AGENT_FIELDS)})
+    elif table == 'fec_research_document_observations' and 'native_metadata_json' in original:
+        from spicy_regs.transforms.fec_context_shape import document_context_fields
+        if original.get('mapping_version') != 'fec-research-context/1':
+            raise ValueError('Retained document metadata requires its captured /1 mapping')
+        native = node('native_metadata_json')
+        if native is not None:
+            if not {'id','title'} <= native.keys():
+                raise ValueError('Retained document metadata lacks native identity/title')
+            for field, source in (('document_native_id','id'), ('title','title'),
+                                  ('source_created_at','created_at'), ('source_updated_at','updated_at')):
+                value = str(native[source]) if source == 'id' else native.get(source)
+                if original.get(field) != value:
+                    raise ValueError('Retained document metadata differs from its reported '+field)
+        values, statuses = document_context_fields(native, source_created_at=original.get('source_created_at'),
+                                                    source_updated_at=original.get('source_updated_at'))
+        row.update(values)
+        if diagnostics is not None:diagnostics.update(field_statuses=statuses, legacy_bridge='document-context/1')
+    elif table == 'fec_retained_csv_observations' and 'native_fields_json' in original:
+        from spicy_regs.transforms.fec_context_shape import csv_context_fields
+        if original.get('mapping_version') != 'fec-research-context/1':
+            raise ValueError('Retained CSV fields require their captured /1 mapping')
+        values, statuses = csv_context_fields(node('native_fields_json'))
+        row.update(values)
+        if diagnostics is not None:diagnostics.update(field_statuses=statuses, legacy_bridge='csv-context/1')
+    elif table == 'fec_research_response_outcomes' and 'native_payload_json' in original:
+        from spicy_regs.transforms.fec_context_shape import response_capture_disposition
+        if original.get('mapping_version') != 'fec-research-context/1':
+            raise ValueError('Retained response payload requires its captured /1 mapping')
+        # The payload may be a dict/list/scalar/null; reported shape/refusal is
+        # sufficient and the exact opaque payload remains in original overrides.
+        row['capture_disposition'] = response_capture_disposition(original.get('profile_refusal'), original.get('payload_shape'))
+        if diagnostics is not None:diagnostics.update(legacy_bridge='response-context/1', capture_disposition=row['capture_disposition'])
     elif table == 'fec_research_source_pages' and 'content_status' not in original:
         from spicy_regs.transforms.fec_context_shape import source_page_body
         body, status = source_page_body(original.get('title'), original.get('text'), original.get('source_url'))
@@ -255,7 +301,8 @@ def retained_identity_row(table, original):
         row.update(filing_announcement(original['description'], original.get('published_at_raw')))
     if set(row) - set(registry['input_fields']):
         raise ValueError(f'{table}: maintained legacy interpretation produced undeclared fields')
-    overrides = {name: value for name, value in original.items() if name not in row or row[name] != value}
+    overrides = {name: value for name, value in original.items()
+                 if name not in row or type(row[name]) is not type(value) or row[name] != value}
     return row, overrides
 
 
@@ -500,7 +547,8 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                     for ordinal, (row, witness) in enumerate(rows()):
                         adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
                         original_row = row
-                        row, overrides = retained_identity_row(table, original_row)
+                        retained_diagnostics = {}
+                        row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics)
                         rebound = rebind_row(table, row, observation_rebinding)
                         overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
                         row = rebound
@@ -508,8 +556,10 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                             overrides['record_id'] = original_row.get('record_id')
                         if adopted is not None:
                             overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
+                        source_input = {'fec_retained_overrides': overrides} if overrides else {}
+                        if retained_diagnostics:source_input['fec_retained_interpretation'] = retained_diagnostics
                         writer.emit(table, row, input_witness=witness,
-                            source_input={'fec_retained_overrides': overrides} if overrides else None, native_filing_subject=adopted)
+                            source_input=source_input or None, native_filing_subject=adopted)
                 policy = writer.policies[table]
                 subject = None if policy.receipt_only else output / key
                 receipts = output / 'etl_receipts.parquet'
