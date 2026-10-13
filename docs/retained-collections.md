@@ -223,3 +223,9 @@ renders. Recorded request facts do not establish a resolved URI or redirect
 history. Source-native links remain evidence distinct from a newly captured
 response. Public packaging excludes the
 private manifest/build input paths as with other finite candidates.
+
+## Inspector-general archive metadata
+
+An `inspectors-general-metadata` unit supplies an immutable Git `commit` and a finite `reports` list, with each original metadata capture, archive member path and Git blob SHA-1. The adapter checks the exact commit URL, canonical archive path, retained SHA-256 and size, and Git blob identity. It reuses the maintained inspector-general metadata parser.
+
+`inspectors_general_report_metadata` retains the complete parsed record and exact original JSON bytes in `source_record_base64`, including unknown fields and numeric spelling. Archive path year, the record's `year` and `published_on` remain separate. `declared_assets_json` and `declared_links_json` preserve what the metadata states; they do not establish that asset files were acquired or are present in an archive. Unreleased reports can preserve their landing link with no asset link. Scope stays metadata-only.

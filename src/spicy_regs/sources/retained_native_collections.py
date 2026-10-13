@@ -14,11 +14,13 @@ from collections import defaultdict
 from dataclasses import asdict
 from datetime import datetime
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import hashlib
 from tempfile import TemporaryDirectory
 
 import pyarrow as pa
 import httpx
+from spicy_docs.sources.agency_reports.inspectors_general import parse_inspector_general_report
 from spicy_docs.reading.json_input import load_decimal_json
 from spicy_docs.sources.supreme_court import parse_supreme_court_term_index, read_supreme_court_pdf
 from spicy_docs.sources.usitc_edis.records import check_edis_id, parse_documents, parse_attachments
@@ -231,6 +233,31 @@ for _table, (_strings, _ints) in {
     ),
 }.items():
     SCHEMAS[_table] = pa.schema([(key, pa.string()) for key in _strings] + [(key, pa.int64()) for key in _ints])
+
+SCHEMAS["inspectors_general_report_metadata"] = pa.schema(
+    [
+        (key, pa.string())
+        for key in (
+            "observation_id",
+            "archive_commit",
+            "archive_member_path",
+            "archive_inspector",
+            "archive_path_year",
+            "git_blob_sha1",
+            "report_id",
+            "published_on",
+            "native_record_json",
+            "source_record_base64",
+            "declared_assets_json",
+            "declared_links_json",
+            "selected_scope",
+            "source_uri",
+            "source_sha256",
+            "observed_at",
+        )
+    ]
+    + [("report_year", pa.int64())]
+)
 
 POLICIES = {
     table: DatasetPolicy(
@@ -1102,7 +1129,74 @@ def scotus_rows(unit, captures):
         )
 
 
+def ig_rows(unit, captures):
+    commit = unit["commit"]
+    reports = unit["reports"]
+    if not isinstance(commit, str) or len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
+        raise ValueError("IG metadata requires immutable lowercase commit SHA")
+    if (
+        not isinstance(reports, list)
+        or not 1 <= len(reports) <= 5000
+        or type(unit.get("expected_reports")) is not int
+        or len(reports) != unit["expected_reports"]
+    ):
+        raise ValueError("bounded complete IG metadata selection required")
+    members = set()
+    for item in reports:
+        member = item["member_path"]
+        path = PurePosixPath(member)
+        if (
+            str(path) != member
+            or path.is_absolute()
+            or ".." in path.parts
+            or len(path.parts) != 5
+            or path.parts[0] != "inspectors-general"
+            or path.parts[-1] != "report.json"
+        ):
+            raise ValueError("IG selected archive metadata path differs")
+        if member in members or item["commit"] != commit:
+            raise ValueError("IG duplicate member or commit differs")
+        members.add(member)
+        year = path.parts[2]
+        if len(year) != 4 or not year.isdecimal():
+            raise ValueError("IG archive path year differs")
+        entry = item["capture"]
+        expected_url = f"https://raw.githubusercontent.com/unitedstates/reports/{commit}/{member}"
+        if entry.get("method", "GET") != "GET" or entry["requested_url"] != expected_url:
+            raise ValueError("IG original metadata locator/method differs")
+        capture = captures.read(entry)
+        blob = hashlib.sha1(b"blob " + str(capture.byte_size).encode() + b"\0" + capture.body).hexdigest()
+        if blob != item["git_blob_sha1"]:
+            raise ValueError("IG original Git blob identity differs")
+        native = parse_inspector_general_report(capture.body, url=capture.requested_url, max_bytes=MAX_CAPTURE)
+        if native["source"] != {"url": capture.requested_url, "sha256": capture.sha256, "bytes": capture.byte_size}:
+            raise ValueError("IG maintained metadata source identity differs")
+        record = native["record"]
+        yield (
+            "inspectors_general_report_metadata",
+            {
+                "observation_id": _digest(_json([commit, member, capture.sha256]).encode()),
+                "archive_commit": commit,
+                "archive_member_path": member,
+                "archive_inspector": path.parts[1],
+                "archive_path_year": year,
+                "git_blob_sha1": blob,
+                "report_id": record["report_id"],
+                "report_year": record["year"],
+                "published_on": record["published_on"],
+                "native_record_json": _json(record),
+                "source_record_base64": base64.b64encode(capture.body).decode(),
+                "declared_assets_json": _json(native["assets"]),
+                "declared_links_json": _json(native["links"]),
+                "selected_scope": "metadata-only",
+                **source_fields(capture),
+            },
+            [witness(capture, f"git-member:{commit}:{member}")],
+        )
+
+
 PROCESSORS = {
+    "inspectors-general-metadata": ig_rows,
     "sec-comments": sec_rows,
     "ferc-originals": ferc_rows,
     "cftc-comments": cftc_rows,
@@ -1110,6 +1204,7 @@ PROCESSORS = {
     "supreme-court-observations": scotus_rows,
 }
 TABLES = {
+    "inspectors-general-metadata": ("inspectors_general_report_metadata",),
     "supreme-court-observations": (
         "supreme_court_index_observations",
         "supreme_court_opinion_observations",

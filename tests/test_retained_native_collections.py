@@ -1,5 +1,7 @@
 """Finite inert SEC captures exercise maintained parsing and atomic integration."""
 
+import base64
+import hashlib
 import json
 
 import pyarrow.parquet as pq
@@ -895,3 +897,88 @@ def test_scotus_request_metadata_refuses_conflicting_or_mislabelled_facts(tmp_pa
         record["local_request_instant"]["not_capture_completion"] = False
     with pytest.raises(ValueError):
         native.scotus_request_metadata(item)
+
+
+def ig_selection(tmp_path, *, fault=None):
+    commit = "a" * 40
+    member = "inspectors-general/cia/2007/literal-report/report.json"
+    url = f"https://raw.githubusercontent.com/unitedstates/reports/{commit}/{member}"
+    body = b'{"report_id":"literal-id","inspector":"cia","agency":"CIA","agency_name":"Literal agency","title":"Literal title","published_on":"2007-07-16","type":"report","year":2016,"url":"https://example.test/declared.pdf","file_type":"pdf","summary_url":"https://example.test/summary","unknown":{"decimal":1.234567890123456789}}'
+    entry = capture(tmp_path, "ig-report.json", url, body)
+    entry["content_type"] = "text/plain; charset=utf-8"
+    entry["method"] = "GET"
+    entry["request_body"] = None
+    item = {
+        "member_path": member,
+        "commit": commit,
+        "git_blob_sha1": hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest(),
+        "capture": entry,
+    }
+    unit = {"kind": "inspectors-general-metadata", "commit": commit, "reports": [item], "expected_reports": 1}
+    if fault == "git-blob":
+        item["git_blob_sha1"] = "0" * 40
+    elif fault == "commit-url":
+        entry["requested_url"] = entry["resolved_url"] = url.replace(commit, "b" * 40)
+    elif fault == "duplicate-member":
+        unit["reports"].append(item)
+        unit["expected_reports"] = 2
+    elif fault == "path":
+        item["member_path"] = "inspectors-general/cia/../literal-report/report.json"
+    elif fault == "commit":
+        unit["commit"] = "HEAD"
+    path = tmp_path / "ig-selection.json"
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    return path, body
+
+
+def test_ig_metadata_keeps_independent_years_unknown_values_and_declared_assets(tmp_path):
+    path, body = ig_selection(tmp_path)
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    rows = pq.read_table(output / result["outputs"]["inspectors_general_report_metadata"]["path"]).to_pylist()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["archive_path_year"] == "2007" and row["report_year"] == 2016 and row["published_on"] == "2007-07-16"
+    assert base64.b64decode(row["source_record_base64"]) == body
+    assert json.loads(row["native_record_json"])["unknown"]
+    assert row["selected_scope"] == "metadata-only"
+    assert json.loads(row["declared_assets_json"]) == [
+        {"url": "https://example.test/declared.pdf", "file_type": "pdf", "source_field": "url"}
+    ]
+    assert json.loads(row["declared_links_json"]) == [
+        {"url": "https://example.test/summary", "source_field": "summary_url"}
+    ]
+    assert not any("declared.pdf" in value["path"] for value in result["inputs"])
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert len(receipts) == 1 and len(receipts[0]["witnesses"]) == 1
+
+
+@pytest.mark.parametrize("fault", ["git-blob", "commit-url", "duplicate-member", "path", "commit"])
+def test_ig_invalid_archive_binding_refuses_candidate(tmp_path, fault):
+    path, _ = ig_selection(tmp_path, fault=fault)
+    with pytest.raises(ValueError):
+        native.build(path, tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+
+
+def test_ig_unreleased_metadata_preserves_landing_link_without_claiming_asset(tmp_path):
+    path, _ = ig_selection(tmp_path)
+    selection = json.loads(path.read_text())
+    item = selection["sources"][0]["reports"][0]
+    original = tmp_path / item["capture"]["path"]
+    record = json.loads(original.read_bytes())
+    del record["url"]
+    del record["file_type"]
+    record.update(unreleased=True, landing_url="https://example.test/unreleased")
+    body = json.dumps(record).encode()
+    original.write_bytes(body)
+    item["capture"].update(bytes=len(body), sha256=native._digest(body))
+    item["git_blob_sha1"] = hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest()
+    path.write_text(json.dumps(selection))
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    row = pq.read_table(output / result["outputs"]["inspectors_general_report_metadata"]["path"]).to_pylist()[0]
+    assert json.loads(row["native_record_json"])["unreleased"] is True
+    assert json.loads(row["declared_assets_json"]) == []
+    assert {value["source_field"] for value in json.loads(row["declared_links_json"])} == {"landing_url", "summary_url"}
+    assert len(result["inputs"]) == 1
