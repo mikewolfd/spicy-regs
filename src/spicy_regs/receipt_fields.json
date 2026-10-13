@@ -5677,6 +5677,7 @@
     "source_capture_sha256": "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
    }
   },
+  "uscode_edition_sections": {},
   "uscode_edition_structure": {},
   "uscode_editions": {}
  }

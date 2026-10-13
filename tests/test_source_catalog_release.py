@@ -20,6 +20,7 @@ REGISTERED_RELEASE_DATASETS = (
     "table3_historical_records",
     "uscode_edition_structure",
     "uscode_editions",
+    "uscode_edition_sections",
 )
 
 
@@ -35,7 +36,28 @@ def test_declaration_refresh_preserves_installed_policies_and_shared_log_markers
     for name, policy in installed_policies().items():
         assert {k: v for k, v in declared[name].items() if k != SHARED_LOG} == policy.descriptor()
     assert {name for name, policy in declared.items() if policy.get(SHARED_LOG)} == set(shared_receipt_logs())
-    assert "uscode_edition_sections" not in declared
+    assert "uscode_edition_sections" in declared
+
+
+@pytest.mark.parametrize("datasets", [frozenset(), frozenset({"not_a_dataset"}), frozenset({"uscode_edition_sections", "not_a_dataset"})])
+def test_selected_policy_refresh_refuses_empty_or_unknown_selection(datasets):
+    path = Path(__file__).parents[1] / "scripts/update_etl_policy_declarations.py"
+    spec = importlib.util.spec_from_file_location("selected_policy_declarations", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(ValueError):
+        module.declarations(datasets)
+
+
+def test_selected_section_policy_refresh_matches_maintained_declaration():
+    from spicy_regs.sources.uscode_editions import POLICIES
+    path = Path(__file__).parents[1] / "scripts/update_etl_policy_declarations.py"
+    spec = importlib.util.spec_from_file_location("selected_policy_declarations", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.declarations(frozenset({"uscode_edition_sections"})) == {
+        "uscode_edition_sections": POLICIES["uscode_edition_sections"].descriptor(),
+    }
 
 
 @pytest.mark.parametrize("dataset", REGISTERED_RELEASE_DATASETS)
@@ -101,7 +123,7 @@ def test_registration_does_not_make_unpublished_tables_available(monkeypatch):
 
     registered = installed_policies()
     assert set(REGISTERED_RELEASE_DATASETS) <= set(subject_tables(()))
-    assert "uscode_edition_sections" not in registered
+    assert "uscode_edition_sections" in registered
     monkeypatch.setattr(mcp_server, "DATA_DIR", None)
     monkeypatch.setattr(mcp_server, "_connection_index", lambda _: {"families": {}})
     monkeypatch.setattr(mcp_server, "_connection_rulemaking", lambda _: {"tables": {}})

@@ -27,7 +27,7 @@ from tests.test_generation_publication import build, publish
 MANAGED_ONLY_RELEASE_TABLES = (
     "administration_policy_bill_links", "administration_policy_statements",
     "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
-    "table3_historical_records", "uscode_edition_structure", "uscode_editions",
+    "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
 )
 
 

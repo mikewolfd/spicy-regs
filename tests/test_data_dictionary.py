@@ -24,7 +24,7 @@ def test_source_catalog_policy_descriptions_keep_selected_scope_and_native_field
     names = {
         "administration_policy_statements", "administration_policy_bill_links",
         "federal_register_issues", "ecfr_snapshots", "ecfr_snapshot_sections",
-        "table3_historical_records", "uscode_editions", "uscode_edition_structure",
+        "table3_historical_records", "uscode_editions", "uscode_edition_structure", "uscode_edition_sections",
     }
     descriptions, policies = dd.load_descriptions(), installed_policies()
     for name in names:
@@ -40,7 +40,7 @@ def test_source_catalog_policy_descriptions_keep_selected_scope_and_native_field
         "member_name", "fragment_position", "fragment_record_position", "record_native_id",
     )
     assert container_fields(policies["ecfr_snapshots"]) == {}
-    assert "uscode_edition_sections" not in policies
+    assert "uscode_edition_sections" in policies
 
 
 def test_record_types_covered_by_expected_schemas():

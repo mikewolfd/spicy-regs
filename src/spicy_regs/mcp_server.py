@@ -710,7 +710,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     managed_only = {
         "administration_policy_bill_links", "administration_policy_statements",
         "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
-        "table3_historical_records", "uscode_edition_structure", "uscode_editions",
+        "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
     }
     managed_names = [
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]

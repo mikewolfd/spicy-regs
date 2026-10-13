@@ -3370,6 +3370,15 @@
         ]
       },
       {
+        "dataset": "uscode_edition_sections",
+        "receipt_only": false,
+        "policy_version": "uscode-editions-public-v2",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "uscode_edition_structure",
         "receipt_only": false,
         "policy_version": "uscode-editions-public-v2",
@@ -8222,6 +8231,25 @@
         "act_record_position",
         "fragment_position",
         "fragment_record_position"
+      ]
+    },
+    {
+      "table": "uscode_edition_sections",
+      "label": "Retained U.S. Code section content",
+      "summary": "One section, range, stub or other content observation within a selected edition member. Native identifiers, source context and readable text preserve the retained source meaning.",
+      "coverage": "Sampled. Selected retained annual XHTML and release-point XML members; complete body qualification is recorded separately for each accepted edition. These observations do not establish normalized legal status or replace enacted-law tables.",
+      "kind": "sampled",
+      "measured_on": "2026-10-12",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "edition_id",
+        "source_kind",
+        "source_position",
+        "native_identifier",
+        "source_context",
+        "body_text",
+        "source_observation_json"
       ]
     },
     {

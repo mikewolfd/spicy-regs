@@ -18209,6 +18209,62 @@
       "act_record_position"
     ]
   },
+  "uscode_edition_sections": {
+    "table": "uscode_edition_sections",
+    "label": "Retained U.S. Code section content",
+    "summary": "One section, range, stub or other content observation within a selected edition member. Native identifiers, source context and readable text preserve the retained source meaning.",
+    "coverage": "Sampled. Selected retained annual XHTML and release-point XML members; complete body qualification is recorded separately for each accepted edition. These observations do not establish normalized legal status or replace enacted-law tables.",
+    "kind": "sampled",
+    "measured_on": "2026-10-12",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity of one native content observation within its edition member."
+      },
+      {
+        "column_name": "edition_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity of the retained archive member and edition observation."
+      },
+      {
+        "column_name": "source_kind",
+        "column_type": "VARCHAR",
+        "description": "Original annual XHTML or release-point XML source kind."
+      },
+      {
+        "column_name": "source_position",
+        "column_type": "VARCHAR",
+        "description": "Original byte range or XML path identifying the content observation."
+      },
+      {
+        "column_name": "native_identifier",
+        "column_type": "VARCHAR",
+        "description": "Identifier stated by the native source; absent and unsupported identifiers remain explicit."
+      },
+      {
+        "column_name": "source_context",
+        "column_type": "VARCHAR",
+        "description": "Native heading and placement context retained by the source reader."
+      },
+      {
+        "column_name": "body_text",
+        "column_type": "VARCHAR",
+        "description": "Readable text produced under the recorded source-reader transformation; original markup remains in the retained member."
+      },
+      {
+        "column_name": "source_observation_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native content observation and source context retained as JSON."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One native content observation linked to an edition member.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
   "uscode_edition_structure": {
     "table": "uscode_edition_structure",
     "label": "Retained U.S. Code structural observations",
@@ -21711,6 +21767,15 @@
         "processing_fields": [
           "raw_record"
         ]
+      },
+      {
+        "dataset": "uscode_edition_sections",
+        "receipt_only": false,
+        "policy_version": "uscode-editions-public-v2",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "uscode_edition_structure",

@@ -10050,3 +10050,21 @@ tables:
       carried_forward: Reader-recorded carried-forward state of this archive member.
       member_role: Native member role within its edition, including carried appendices.
       metadata_json: Native edition/member metadata retained as JSON.
+  uscode_edition_sections:
+    label: Retained U.S. Code section content
+    subject: reference
+    summary: One section, range, stub or other content observation within a selected edition member. Native identifiers, source context and readable text preserve the retained source meaning.
+    coverage: Sampled. Selected retained annual XHTML and release-point XML members; complete body qualification is recorded separately for each accepted edition. These observations do not establish normalized legal status or replace enacted-law tables.
+    measured_on: '2026-10-12'
+    grain: One native content observation linked to an edition member.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader identity of one native content observation within its edition member.
+      edition_id: Reader identity of the retained archive member and edition observation.
+      source_kind: Original annual XHTML or release-point XML source kind.
+      source_position: Original byte range or XML path identifying the content observation.
+      native_identifier: Identifier stated by the native source; absent and unsupported identifiers remain explicit.
+      source_context: Native heading and placement context retained by the source reader.
+      body_text: Readable text produced under the recorded source-reader transformation; original markup remains in the retained member.
+      source_observation_json: Complete native content observation and source context retained as JSON.
