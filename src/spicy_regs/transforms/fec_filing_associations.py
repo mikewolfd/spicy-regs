@@ -183,6 +183,25 @@ def associate_filing_numbers(rows, **kwargs):
     return list(iter_filing_number_associations(rows, **kwargs))
 
 
+def validate_header_filing_witnesses(filings, headers):
+    """Validate resolved witnesses without upgrading or changing any decision."""
+    by_key, _ = _index(filings)
+    header_witnesses = defaultdict(list)
+    for header in headers:
+        header_witnesses[tuple(header.get(k) for k in (
+            "record_id", "source_generation_pin", "collection_id", "source_sha256", "source_authority",
+            "header_record_id", "header_locator_json"))].append(header)
+        if header.get("association_status") == "resolved_native_filing_key":
+            candidates = by_key.get(header.get("filing_key"), [])
+            key, status = _resolve(candidates, header.get("source_authority"))
+            if (status != "resolved_native_filing_key" or key != header.get("filing_key")
+                    or sorted(header.get("filing_observation_ids") or []) != sorted(r["record_id"] for r in candidates)
+                    or header.get("filing_observation_count") != len(candidates)):
+                raise ValueError("Header association differs from selected complete filing witnesses")
+
+    return by_key, header_witnesses
+
+
 def association_records(rows, *, table, schema, filings, headers, source_generation_pin,
                         target_generation_pin, namespace_evidence, check_resources,
                         target_generation_scope="external"):
@@ -207,19 +226,7 @@ def association_records(rows, *, table, schema, filings, headers, source_generat
         _digest(target_generation_pin)
     else:
         raise ValueError("Unsupported filing target generation scope")
-    by_key, _ = _index(filings)
-    header_witnesses = defaultdict(list)
-    for header in headers:
-        header_witnesses[tuple(header.get(k) for k in (
-            "record_id", "source_generation_pin", "collection_id", "source_sha256", "source_authority",
-            "header_record_id", "header_locator_json"))].append(header)
-        if header.get("association_status") == "resolved_native_filing_key":
-            candidates = by_key.get(header.get("filing_key"), [])
-            key, status = _resolve(candidates, header.get("source_authority"))
-            if (status != "resolved_native_filing_key" or key != header.get("filing_key")
-                    or sorted(header.get("filing_observation_ids") or []) != sorted(r["record_id"] for r in candidates)
-                    or header.get("filing_observation_count") != len(candidates)):
-                raise ValueError("Header association differs from selected complete filing witnesses")
+    by_key, header_witnesses = validate_header_filing_witnesses(filings, headers)
 
     def batches():
         batch = []

@@ -43,10 +43,9 @@ class FilingAssociationInputs:
     header_associations: Sequence[TypedInput] = ()
     filing_generation_scope: str = "external"
 
-    def prepare(self, table, schema, check_resources):
-        from .fec_filing_associations import association_records
-        from .fec_native_subjects import FIELD_RULES
-
+    def read_dependencies(self, check_resources, *, expected_filing_schema=None,
+                          expected_header_schema=None, on_read=None):
+        """Read the selected small dependency population once, with metered stages."""
         _digest(self.source_generation_pin)
         if self.filing_generation_scope == "external":
             _digest(self.filing_generation_pin)
@@ -55,13 +54,13 @@ class FilingAssociationInputs:
         namespace_evidence = dict(self.namespace_evidence)
         for evidence in namespace_evidence.values():
             _digest(evidence)
-        if (table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]
-                or "filing_key" not in schema.names or not self.filings):
-            raise ValueError("Filing association requires an applicable source schema and selected filing inputs")
-        if schema.field("filing_key").type != pa.string():
-            raise ValueError("Filing association requires the declared string filing key type")
 
-        def read_selected(items):
+        def notify(stage, item, **details):
+            check_resources()
+            if on_read is not None:
+                on_read(stage, item, **details)
+
+        def read_selected(items, expected_schema):
             rows, proofs = [], []
             paths = [item.path.resolve() for item in items]
             if len(paths) != len(set(paths)):
@@ -69,39 +68,61 @@ class FilingAssociationInputs:
             for item in items:
                 check_resources()
                 _digest(item.sha256)
-                if type(item.rows) is not int or item.rows < 0:
-                    raise ValueError("Filing dependency requires explicit integer row membership")
+                if type(item.rows) is not int or not 0 <= item.rows <= 100_000:
+                    raise ValueError("Filing dependency requires bounded integer row membership")
                 before = item.path.stat()
-                if item.path.is_symlink() or not item.path.is_file() or _sha(item.path) != item.sha256:
-                    raise ValueError("Filing dependency differs from its selected bytes")
-                source = pq.ParquetFile(item.path)
-                if source.metadata.num_rows != item.rows or item.rows > 100_000 or item.path.stat().st_size > 64 * 1024**2:
-                    raise ValueError("Filing dependency membership or bounded metadata size refused")
+                if item.path.is_symlink() or not item.path.is_file() or before.st_size > 64 * 1024**2:
+                    raise ValueError("Filing dependency metadata size or file shape refused")
                 if len(rows) + item.rows > 100_000:
                     raise ValueError("Combined filing metadata exceeds the bounded selection")
-                rows.extend(source.read(use_threads=False).to_pylist())
+                notify('hash_pre', item, byte_size=before.st_size)
+                if _sha(item.path) != item.sha256:
+                    raise ValueError("Filing dependency differs from its selected bytes")
+                notify('footer_open', item, byte_size=before.st_size)
+                with pq.ParquetFile(item.path) as source:
+                    if source.metadata.num_rows != item.rows:
+                        raise ValueError("Filing dependency membership refused")
+                    if expected_schema is not None and not source.schema_arrow.equals(expected_schema, check_metadata=False):
+                        raise ValueError("Filing dependency differs from the exact native schema")
+                    decoded = sum(source.metadata.row_group(i).column(j).total_uncompressed_size
+                                  for i in range(source.metadata.num_row_groups)
+                                  for j in range(source.metadata.row_group(i).num_columns))
+                    notify('decode', item, byte_size=decoded, metadata=source.metadata)
+                    rows.extend(source.read(use_threads=False).to_pylist())
                 stamp = dict(inode=before.st_ino, bytes=before.st_size, mtime_ns=before.st_mtime_ns)
                 after = item.path.stat()
+                if stamp != dict(inode=after.st_ino, bytes=after.st_size, mtime_ns=after.st_mtime_ns):
+                    raise ValueError("Filing dependency changed during complete read")
+                notify('hash_post', item, byte_size=after.st_size)
                 if (_sha(item.path) != item.sha256
-                        or stamp != dict(inode=after.st_ino, bytes=after.st_size, mtime_ns=after.st_mtime_ns)
                         or len(rows) != sum(p["rows"] for p in proofs) + item.rows):
                     raise ValueError("Filing dependency changed during complete read")
                 proofs.append(dict(path=str(item.path), sha256=item.sha256, rows=item.rows, stat=stamp))
             return rows, proofs
 
-        filings, filing_proofs = read_selected(self.filings)
-        headers, header_proofs = read_selected(self.header_associations)
+        filings, filing_proofs = read_selected(self.filings, expected_filing_schema)
+        headers, header_proofs = read_selected(self.header_associations, expected_header_schema)
+        return filings, headers, dict(source_generation_pin=self.source_generation_pin,
+            filing_generation_pin=self.filing_generation_pin, filings=filing_proofs,
+            headers=header_proofs, namespace_evidence=namespace_evidence,
+            filing_generation_scope=self.filing_generation_scope)
+
+    def prepare(self, table, schema, check_resources):
+        from .fec_filing_associations import association_records
+        from .fec_native_subjects import FIELD_RULES
+        if (table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]
+                or "filing_key" not in schema.names or not self.filings):
+            raise ValueError("Filing association requires an applicable source schema and selected filing inputs")
+        if schema.field("filing_key").type != pa.string():
+            raise ValueError("Filing association requires the declared string filing key type")
+        filings, headers, proof = self.read_dependencies(check_resources)
         return (
-            lambda rows: association_records(
-                rows, table=table, schema=schema, filings=filings, headers=headers,
-                source_generation_pin=self.source_generation_pin,
+            lambda rows: association_records(rows, table=table, schema=schema,
+                filings=filings, headers=headers, source_generation_pin=self.source_generation_pin,
                 target_generation_pin=self.filing_generation_pin,
-                namespace_evidence=namespace_evidence, check_resources=check_resources,
-                target_generation_scope=self.filing_generation_scope,
-            ),
-            dict(source_generation_pin=self.source_generation_pin, filing_generation_pin=self.filing_generation_pin,
-                 filings=filing_proofs, headers=header_proofs, namespace_evidence=namespace_evidence,
-                 filing_generation_scope=self.filing_generation_scope),
+                namespace_evidence=proof['namespace_evidence'], check_resources=check_resources,
+                target_generation_scope=self.filing_generation_scope),
+            proof,
         )
 
 

@@ -335,6 +335,43 @@ def load_filing_associations(path):
         value.get('target_generation_scope', 'external'))
 
 
+def admit_filing_dependency_selection(selection, *, check_resources=lambda: None, on_read=None):
+    """Admit exact small inputs, never a native parent or final self correspondence."""
+    from collections import Counter
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    from spicy_regs.transforms.fec_filing_associations import (
+        ASSOCIATION_SCHEMA, POLICY_VERSION, TARGET_IDENTITY_VERSION, TARGET_MAPPING_VERSION,
+        _base, validate_header_filing_witnesses)
+    if not selection.filings or not selection.header_associations:
+        raise ValueError('Dependency admission requires both selected populations')
+    filings, headers, proof = selection.read_dependencies(check_resources,
+        expected_filing_schema=dataset_policy('fec_filings').subject_schema,
+        expected_header_schema=ASSOCIATION_SCHEMA, on_read=on_read)
+    for row in filings:
+        check_resources()
+        if row.get('identity_version') != TARGET_IDENTITY_VERSION or row.get('mapping_version') != TARGET_MAPPING_VERSION:
+            raise ValueError('Filing dependency must state maintained target identity and mapping versions')
+    for row in headers:
+        check_resources()
+        if row.get('policy_version') != POLICY_VERSION or row.get('source_generation_pin') != selection.source_generation_pin:
+            raise ValueError('Header dependency policy or source capture differs')
+        raw = {**row, 'record_id': row['target_record_id']}
+        expected = _base(raw, row['target_table'], row['source_generation_pin'],
+                         row['selection_evidence_sha256'], row['association_basis'])
+        if row['record_id'] != expected['record_id']:
+            raise ValueError('Header dependency identity differs from maintained source coordinates')
+        if not isinstance(row.get('association_status'), str) or not row['association_status']:
+            raise ValueError('Header dependency must retain a declared outcome')
+        if row['association_status'] != 'resolved_native_filing_key' and row.get('filing_key') is not None:
+            raise ValueError('Unresolved header cannot claim a resolved filing key')
+    validate_header_filing_witnesses(filings, headers)
+    proof.update(header_statuses=dict(Counter(row['association_status'] for row in headers)),
+        fullParentAdmitted=False, fullTargetCorrespondence=False, generationAdmitted=False,
+        targetBinding='provisional-self' if selection.filing_generation_scope == 'self' else 'declared-external-unadmitted',
+        namespaceDefinitionSemanticsAdmitted=False)
+    return dict(filings=filings, headers=headers, proof=proof)
+
+
 def filing_subjects(selection, retained, check_resources):
     """Admit the complete /2 remap, retaining old interpretation values in receipts."""
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy
