@@ -2375,37 +2375,35 @@ def _tools() -> list[Tool]:
 
     @tool
     def list_sources() -> dict[str, Any]:
-        """List the queryable tables by subject (null: not yet assigned): label, coverage kind and pinned rows; views grouped.
+        """List tables by subject (null: unassigned), label, coverage and pinned rows; views grouped.
 
         FEC subject tables contain the build-shaped facts. Entries marked child_query
-        expose a distinct response or array-element grain and name their source_tables.
+        expose response or array-element rows and name their source_tables.
         Categories distinguish diagnostics, evidence, leads and samples. Generic
         query_data declarations are omitted here; absent category can also mean
-        undeclared. describe_table retains the explicit declaration and limits.
+        undeclared. describe_table retains declarations and limits.
         coverage is the dictionary's kind: true_range, window, sampled,
         derived, not_a_range or empty; a window or a sample does not hold the
-        source's full history. rows is the pinned generation's row count for a
-        managed or snapshot table (describe_table gives the pin): 0 means this
+        source's full history. rows is the pinned count for a managed or
+        snapshot table (describe_table gives the pin): 0 means this
         generation publishes no rows; null means no pointer pins the table. A
-        later data run lands after the pin, so rows is not a freshness claim.
+        later run can follow the pin; rows is not a freshness claim.
         A comments export at a fixed URL is not pinned: rows_basis
         comments_export_receipt marks its export receipt's count, stated while
         the file matched the receipt when this connection was built (a later
         statement can read a newer export); export_receipt_does_not_match_object
-        means the file had moved, and rows is null.
+        means the file moved and rows is null.
         Discovery binds source schemas without restoring receipt-backed rows.
         deferred_views names views whose schema binding or exact receipt admission remains pending
-        until query_sql builds its separate query connection, grouped by reason.
-        Relationship groups list view identities; describe_table gives labels and full meanings.
-        No output schema or
-        execution claim is supplied for a deferred view. Listed source schemas
-        are not a data or freshness audit. Call describe_table before querying a table: it gives
-        columns, coverage caveats, joins, the live data version and the output
-        ledger's audit.
+        until query_sql opens a separate query connection, grouped by reason.
+        Relationship groups list identities; describe_table gives labels and meanings.
+        Deferred views supply no output schema or execution claim. Source schemas
+        are not a data or freshness audit. Call describe_table before querying for
+        columns, caveats, joins, data pins and ledger audit.
         fec_release.status_counts summarizes compatible and disabled views;
         it does not qualify raw financial totals. Available and unavailable
-        names remain listed. Call describe_table for a selected view's full
-        release evidence and reasons, including an unavailable view.
+        names remain listed. describe_table gives each view's release evidence
+        and reasons, including unavailable views.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):

@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="billres.xsl"?>
+<!DOCTYPE bill PUBLIC "-//US Congress//DTDs/bill.dtd//EN" "bill.dtd">
+<bill bill-stage="Introduced-in-House" dms-id="HCONSTRUCTED0002" bill-type="olc" public-private="public" key="H">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dublinCore>
+<dc:title>H.R. 4000 IH: Consolidated Construction Act</dc:title>
+<dc:publisher>U.S. House of Representatives</dc:publisher>
+</dublinCore>
+</metadata>
+<form>
+<congress display="yes">119th CONGRESS</congress>
+<session display="yes">1st Session</session>
+<legis-num display="yes">H. R. 4000</legis-num>
+<sponsor name-id="H0001">Mrs. Example</sponsor>
+<cosponsor name-id="H0002">Mr. Second</cosponsor>
+<legis-type>A BILL</legis-type>
+<official-title display="yes">To consolidate construction authorities, and for other purposes.</official-title>
+</form>
+<legis-body id="HBODY02" style="appropriations">
+<section id="HD0SEC1"><enum>1.</enum><header>Short title</header><text>This Act may be cited as the <quote>Consolidated Construction Act</quote>.</text></section>
+<division id="HDIV01"><enum>A</enum><header>Military Construction</header>
+<title id="HDA0T1"><enum>I</enum><header>Active Components</header>
+<section id="HDA0S1"><enum>101.</enum><header>Authorized construction</header><text>The Secretary concerned may acquire real property and carry out military construction projects for the installations named in the funding table, in a total amount of <external-xref legal-doc="usc" parsable-cite="usc/10/2802">$4,500,000</external-xref>.</text></section>
+<section id="HDA0S2"><enum>102.</enum><header>Family housing</header><subsection id="HDA0S2a"><enum>(a)</enum><text>The Secretary may construct family housing units in a total amount of $2,250,000.</text></subsection><subsection id="HDA0S2b"><enum>(b)</enum><text>Amounts authorized under subsection (a) shall remain available until September 30, 2030.</text></subsection></section>
+</title>
+<title id="HDA0T2"><enum>II</enum><header>Reserve Components</header>
+<subtitle id="HDA0ST1"><enum>A</enum><header>Army National Guard</header>
+<section id="HDA0S3"><enum>201.</enum><header>Authorized construction</header><text>The Secretary of the Army may carry out construction projects for the Army National Guard in a total amount of $980,000.</text></section>
+</subtitle>
+</title>
+</division>
+<division id="HDIV02"><enum>B</enum><header>Veterans Affairs</header>
+<title id="HDB0T1"><enum>I</enum><header>Active Components</header>
+<section id="HDB0S1"><enum>101.</enum><header>Authorized construction</header><text>The Secretary of Veterans Affairs may carry out major medical facility projects in a total amount of $7,100,000.</text></section>
+<section id="HDB0S2"><enum>103.</enum><header>Leases</header><text>The Secretary of Veterans Affairs may enter into leases for medical facilities in a total amount of $650,000 per year.</text></section>
+</title>
+</division>
+</legis-body>
+</bill>

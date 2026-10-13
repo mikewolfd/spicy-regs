@@ -23,6 +23,7 @@ from tests.test_mcp_server import _tool_data
 
 #: One valid call per tool, so a test can add a single bad argument to it.
 VALID = {
+    "connection_status": {},
     "list_sources": {},
     "describe_table": {"table": "laws"},
     "query_sql": {"sql": "SELECT 1"},

@@ -44,7 +44,7 @@ def test_every_registered_description_fits_the_client_cap_without_indentation():
     tools = asyncio.run(server.build_server().list_tools())
     # Named, so a tool that failed to register cannot pass by not being measured.
     assert [tool.name for tool in tools] == ["lookup_agency", "list_sources", "describe_table", "query_sql",
-                                             "resolve_document_citations", "read_receipt_fields"]
+                                             "resolve_document_citations", "read_receipt_fields", "connection_status"]
     for tool in tools:
         description = tool.description or ""
         sent = len(description) + len(json.dumps(tool.input_schema, separators=(",", ":")))

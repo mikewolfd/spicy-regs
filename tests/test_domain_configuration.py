@@ -84,8 +84,9 @@ def test_dictionary_uses_domain_for_live_discovery(monkeypatch):
     class ReachedSelectedSource(Exception):
         pass
 
-    def published_urls(base):
+    def published_urls(base, *, index=None):
         assert base == "https://data.spicygov.ai"
+        assert index is None
         raise ReachedSelectedSource
 
     monkeypatch.setattr(publication, "published_urls", published_urls)

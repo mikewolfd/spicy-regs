@@ -6,11 +6,11 @@ import pytest
 
 from spicy_regs.transforms.native_legal_inputs import qualify_source
 
-OWNER_FIXTURES = Path(__file__).resolve().parents[2] / "spicy-docs/tests/fixtures"
+FIXTURES = Path(__file__).resolve().parent / "fixtures/native_legal_full_inputs"
 
 
 def test_law_qualified_identity_and_unknown_edition():
-    body = (OWNER_FIXTURES / "uslm/plaw-119publ77.xml").read_bytes()
+    body = (FIXTURES / "plaw-119publ77.xml").read_bytes()
     spec = {
         "source_family": "law",
         "source_record_key": "119-public-77",
@@ -35,7 +35,7 @@ def test_law_qualified_identity_and_unknown_edition():
 
 
 def test_bill_printing_identity():
-    body = (OWNER_FIXTURES / "congress_bill_tree/constructed-bill-divisions.xml").read_bytes()
+    body = (FIXTURES / "constructed-bill-divisions.xml").read_bytes()
     spec = {
         "source_family": "bill",
         "source_record_key": "BILLS-119hr4000ih",
