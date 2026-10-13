@@ -278,6 +278,7 @@ def publish_comments_mirror(output_dir: Path, *, resources: ExportResources | No
         _prepare_catalog(rt)
         snapshot = iceberg.catalog_snapshot(rt)
     else:
+        assert prepared_snapshot is not None  # The complete prepared triple was checked above.
         snapshot = prepared_snapshot
         observed_snapshot = _check_prepared_snapshot(prepared_reader, snapshot)
         native_only = _validate_prepared_export(output_dir, prepared_export, snapshot)

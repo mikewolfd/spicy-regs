@@ -18,7 +18,9 @@ def test_law_qualified_identity_and_unknown_edition():
         "source_locator": "https://www.govinfo.gov/bulkdata/PLAW/119/public/PLAW-119publ77.xml",
         "qualification": {"kind": "law-native-xml", "congress": 119, "law_kind": "public", "number": 77},
     }
-    assert qualify_source(spec, body, lambda _: b"", lambda *a, **kw: None)["metadata"]["congress"] == "119"
+    qualified = qualify_source(spec, body, lambda _: b"", lambda *a, **kw: None)
+    assert qualified is not None
+    assert qualified["metadata"]["congress"] == "119"
     for field, wrong in [
         ("source_record_key", "119-private-77"),
         ("source_family", "bill"),
@@ -47,6 +49,8 @@ def test_bill_printing_identity():
             "package_id": "BILLS-119hr4000ih",
         },
     }
-    assert qualify_source(spec, body, lambda _: b"", lambda *a, **kw: None)["metadata"]["version_code"] == "ih"
+    qualified = qualify_source(spec, body, lambda _: b"", lambda *a, **kw: None)
+    assert qualified is not None
+    assert qualified["metadata"]["version_code"] == "ih"
     with pytest.raises(ValueError):
         qualify_source({**spec, "edition": "enr"}, body, lambda _: b"", lambda *a, **kw: None)

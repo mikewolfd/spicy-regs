@@ -166,7 +166,7 @@ def native_observations(body):
             visit(child, ancestors + [element], path + f"/*[{index}]")
         if node.tag in (U + "section", "section", U + "chapter", "chapter"):
 
-            def fields(tag):
+            def named_fields(tag):
                 return [
                     dict(
                         element=dict(tag=c.tag, attributes=dict(c.attrib), source_xpath=path + f"/*[{i}]"), text=text(c)
@@ -180,8 +180,8 @@ def native_observations(body):
                     element=element,
                     ancestors=ancestors,
                     identifier_pieces=[identifier_piece(x) for x in node.attrib.get("identifier", "").split()],
-                    numbers=fields("num"),
-                    headings=fields("heading"),
+                    numbers=named_fields("num"),
+                    headings=named_fields("heading"),
                 )
             )
         if node.tag == U + "section":

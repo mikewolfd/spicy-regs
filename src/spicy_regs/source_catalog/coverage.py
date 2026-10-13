@@ -7,8 +7,14 @@ index records retained evidence, not a fresh integrity or publisher census.
 from __future__ import annotations
 
 import json
+from typing import TypedDict
 
 STAGES = ("expected", "advertised", "acquired", "processed", "published")
+
+
+class _CoverageStage(TypedDict):
+    status: str
+    measurements: list[dict[str, object]]
 
 
 def coverage(db, collection_id: str | None = None) -> dict:
@@ -26,7 +32,7 @@ def coverage(db, collection_id: str | None = None) -> dict:
     results = []
     for row in db.execute("SELECT id FROM collections" + where + " ORDER BY id", params):
         cid = row[0]
-        stages = {stage: {"status": "unknown", "measurements": []} for stage in STAGES}
+        stages: dict[str, _CoverageStage] = {stage: {"status": "unknown", "measurements": []} for stage in STAGES}
         evidence = [
             (r[0], r[1], json.loads(r[2]))
             for r in db.execute("SELECT id,kind,data FROM evidence WHERE collection_id=? ORDER BY id", (cid,))

@@ -23,7 +23,7 @@ def test_global_object_totals_preserve_alias_null_and_value_semantics(tmp_path, 
         [("shared", 11), ("zero", 0), ("large", 2**40), ("orphan", 99), (None, 88)]
         + [(status, 77) for status in ("missing-bytes", "receipt-only", "known-not-acquired", "external-by-choice")],
     )
-    aliases = [
+    aliases: list[tuple[str, str | None, str, int | None]] = [
         ("a", "shared", "missing-bytes", 900),
         ("b", None, "verified", 1000),
         *[("a", status, status, 77) for status in

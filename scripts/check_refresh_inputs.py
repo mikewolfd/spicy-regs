@@ -71,7 +71,7 @@ def main() -> int:
                     or original.get('base_url') != base_url
                     or original.get('objects') != base_pins):
                 raise RuntimeError('Published base versions changed before combined refresh capture')
-        receipt = {'base_url': base_url, 'observed_at': datetime.now(UTC).isoformat(), 'objects': pins}
+        receipt: dict[str, str | bool | dict[str, dict[str, str | int]]] = {'base_url': base_url, 'observed_at': datetime.now(UTC).isoformat(), 'objects': pins}
         if args.reuse_published_base:
             receipt['reuse_published_base'] = True
         if args.base_only:

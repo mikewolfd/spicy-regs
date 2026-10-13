@@ -43,6 +43,7 @@ class TrackedCursor:
     def execute(self, sql, parameters=None):
         assert not self.closed
         if sql.startswith("SET "):
+            assert parameters is not None
             self.settings[sql.split()[1].split("=")[0]] = parameters[0]
             if "http_retry" in sql or "http_retries" in sql:
                 return self  # Core-only fixtures; real httpfs settings are checked separately below.
@@ -158,7 +159,7 @@ def test_failure_waits_for_other_inflight_cursor_before_return(tmp_path):
         con.close()
 
 
-def test_cursor_configuration_failure_closes_every_created_child(tmp_path):
+def test_cursor_configuration_failure_closes_every_created_child(tmp_path, monkeypatch):
     with duckdb.connect(config={"threads": 1}) as raw:
         planned = sources(raw, tmp_path)
         con = TrackedConnection(raw)
@@ -170,13 +171,13 @@ def test_cursor_configuration_failure_closes_every_created_child(tmp_path):
                 child.execute = lambda *args: (_ for _ in ()).throw(ValueError("synthetic settings refusal"))
             return child
 
-        con.cursor = bad_cursor
+        monkeypatch.setattr(con, "cursor", bad_cursor)
         with pytest.raises(ValueError, match="settings refusal"):
             server._admit_remote_source_views(con, planned)
         assert len(con.children) == 2 and all(c.closed for c in con.children)
 
 
-def test_one_close_failure_does_not_leave_other_children_open(tmp_path):
+def test_one_close_failure_does_not_leave_other_children_open(tmp_path, monkeypatch):
     with duckdb.connect(config={"threads": 1}) as raw:
         planned = sources(raw, tmp_path)
         con = TrackedConnection(raw)
@@ -194,7 +195,7 @@ def test_one_close_failure_does_not_leave_other_children_open(tmp_path):
                 child.close = close_then_fail
             return child
 
-        con.cursor = bad_close
+        monkeypatch.setattr(con, "cursor", bad_close)
         with pytest.raises(ValueError, match="close refusal"):
             server._admit_remote_source_views(con, planned)
         assert con.active == 0 and all(c.closed for c in con.children)
@@ -240,7 +241,9 @@ def test_remote_build_collects_paths_then_relationships_then_security(tmp_path, 
 
 def test_real_httpfs_child_retry_and_home_settings_are_explicit(tmp_path):
     with duckdb.connect(config={"threads": 1}) as raw:
-        platform = raw.execute("PRAGMA platform").fetchone()[0]
+        platform_row = raw.execute("PRAGMA platform").fetchone()
+        assert platform_row is not None
+        platform = platform_row[0]
         path = Path.home() / ".duckdb/extensions" / ("v" + duckdb.__version__) / platform / "httpfs.duckdb_extension"
         if not path.is_file():
             pytest.skip("No installed local httpfs; never download an extension in this test")

@@ -790,7 +790,7 @@ def publication_selection(tmp_path, *, cross_family=False, partitioned=False):
     from spicy_regs.source_catalog.storage import digest
 
     family = "comments" if cross_family else "test"
-    descriptor = {"byteSize": 4, "rows": 2, "sha256": "sha256:" + "c" * 64}
+    descriptor: dict[str, object] = {"byteSize": 4, "rows": 2, "sha256": "sha256:" + "c" * 64}
     if partitioned:
         descriptor.pop("sha256")
         descriptor["partitionColumns"] = ["year"]

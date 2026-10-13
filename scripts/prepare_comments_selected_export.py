@@ -342,6 +342,8 @@ def prepare(pair: Path, destination: Path, *, captured_input=None, captured_inpu
                     or _validation_source() != validation_source):
                 raise ValueError("Captured inputs or validation source changed during preparation")
         if remote_writer is None:
+            if subject is None:
+                raise ValueError("Derived Comments population has no accepted subjects")
             publish_directory_no_replace(staged, destination)
             subject, receipt = destination / subject.name, destination / receipt.name
         else:
@@ -516,7 +518,9 @@ def assemble_remote(pair, output, *, client, bucket, staging_prefix, max_bytes,
     holder = {}
     try:
         def member_complete(member):
-            record.setdefault("completedMembers", {})[Path(member.key).name] = asdict(member)
+            completed = record.setdefault("completedMembers", {})
+            assert isinstance(completed, dict)  # This local record creates this map only here.
+            completed[Path(member.key).name] = asdict(member)
             if Path(member.key).name == "comments.parquet":
                 record["completedSubject"] = asdict(member)
             record["status"] = "remote-members-unvalidated-unpublished"
