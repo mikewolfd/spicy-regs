@@ -81,3 +81,40 @@ BILLSTATUS archives belong to the bill source route. Inspector-general metadata
 is independent of GAO/CRS and current Oversight.gov pages. See the G execution
 ledger's `decisions.md` and `bindings-proposed.json` for current dispositions and
 the evidence behind each decision.
+
+## Finite native SEC captures
+
+`spicy_regs.sources.retained_native_collections` builds `sec_rulemakings` and
+`sec_comment_files` from an explicit offline selection. It uses the maintained
+SpicyDocs page parsers and comment-file validator. It preserves form-letter
+sections separately from comment occurrences, repeated listing declarations,
+literal dates and commenter names, and every source capture witness. It does
+not infer Regulations.gov identities or copy PDF bodies into table output.
+
+The manifest has `format: spicy-retained-native-inputs`, `version: 1`, and a
+bounded `sources` list. Each `sec-comments` unit names `docket`, ordered complete
+`listings`, exact distinct `files`, and `expected_files`. Optional `rule` supplies
+publisher-stated discovery. Without it, the selected listing must match the
+maintained legacy URL grammar and the output records that derived route without
+inventing a rule page. Capture declarations carry `path`, `requested_url`,
+`resolved_url`, `status_code`, `content_type`, `observed_at`, decoded `bytes` and
+`sha256`. The caller qualifies these declarations against retained acquisition
+records; this builder checks bytes and source shape, not historical provenance
+independently of those records.
+
+```sh
+python -B -m spicy_regs.sources.retained_native_collections \
+  --manifest /absolute/path/to/selection.json \
+  --output /absolute/path/to/new-candidate
+```
+
+The adapter refuses a nonterminal or reordered listing chain, wrong docket,
+missing/extra/duplicate file selections, failed captures, changed input bytes,
+invalid source formats, and manifest/code drift. Table rows and generation-bound
+receipts use the maintained ETL writer with its reference validator for these
+small finite selections; local publication refuses an existing
+destination. Private `selection.json` and `build.json` contain local locators and
+must remain outside public packaging. A complete selected docket is distinct
+from publisher-wide history, source acquisition, public serving and release.
+See `metadata/source-catalog-program/20261010/execution-20261012/G/` in the
+canonical corpus for the exact finite selection and executed qualification.
