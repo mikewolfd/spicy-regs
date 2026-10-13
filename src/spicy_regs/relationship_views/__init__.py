@@ -20,7 +20,7 @@ from .fec_native_document_query import FEC_NATIVE_DOCUMENT_QUERY_VIEWS
 from .fec_document_query import FEC_DOCUMENT_QUERY_VIEWS
 from .fcc_native import FCC_NATIVE_VIEWS
 from .lobbying_native import LOBBYING_NATIVE_VIEWS
-from .regulations_native import ARRAYS as NATIVE_REGULATORY_ARRAYS, install_native_regulations_views
+from .regulations_native import ARRAYS as NATIVE_REGULATORY_ARRAYS
 from .lifecycle_dates import LIFECYCLE_DATE_VIEWS
 from .identity_candidates import IDENTITY_VIEWS, NATIVE_IDENTITY_VIEWS
 from .sql_views import (annotate_views, compatible_sql_variant, install_sql_variants,
@@ -70,15 +70,18 @@ def describe_relationship_views(
              *native_regulations_views(available))
     # Alternative definitions are documentation, never a schema verdict.
     versions: dict[str, list[str]] = {}
+    dependencies: dict[str, set[str]] = {}
     for spec in arrays:
         documented = install_arrays(connection, (), [spec], publication)
         for name, entry in documented.items():
             versions.setdefault(name, [])
+            dependencies.setdefault(name, set()).add(spec.source_table)
             if spec.rule_version not in versions[name]:
                 versions[name].append(spec.rule_version)
             results.setdefault(name, entry)
     for spec in specs:
         versions.setdefault(spec.name, [])
+        dependencies.setdefault(spec.name, set()).update(spec.required)
         if spec.rule_version not in versions[spec.name]:
             versions[spec.name].append(spec.rule_version)
         if spec.name not in results:
@@ -94,6 +97,7 @@ def describe_relationship_views(
         metadata['definition_basis'] = 'Maintained declarations with this connection\'s selected input pins; no runtime schema verdict.'
         if name in versions:
             metadata['declared_rule_versions'] = versions[name]
+            metadata['declared_dependencies'] = sorted(dependencies[name])
         if name in reachable:
             entry.update(status='deferred', reason='Relationship schema and query admission are deferred until a query connection is requested.')
             metadata['query_admission'] = 'pending_relationship_binding'
@@ -107,6 +111,7 @@ def install_relationship_views(
     connection: Any,
     available_tables: Iterable[str],
     publication: Mapping[str, object] | None = None,
+    *, selected_names: set[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return per-view availability, meaning, source identity and publication pins."""
     available = set(available_tables)
@@ -118,7 +123,10 @@ def install_relationship_views(
     native = {table for table in available if table in declared and not declared[table]["receipt_only"]
               and {column["column_name"] for column in metadata[table]["columns"]} <=
               {row[0] for row in connection.execute(f'DESCRIBE "{table}"').fetchall()}}
-    lobbying_variants = tuple(spec for spec in LOBBYING_NATIVE_VIEWS
+    def requested(spec):
+        return selected_names is None or spec.name in selected_names
+
+    lobbying_variants = tuple(spec for spec in LOBBYING_NATIVE_VIEWS if requested(spec)
                               if compatible_sql_variant(connection, available, [spec], publication)[0] is not None)
     lobbying_replacements = {spec.name for spec in lobbying_variants}
     congress = tuple(spec for spec in CONGRESS_RELATIONSHIPS if spec.source_table not in native)
@@ -131,8 +139,12 @@ def install_relationship_views(
                    and not any(name in lobbying_replacements for name in spec.names)
                    and not (spec.source_table in native and spec.source_table == "fcc_filings"))
     arrays += native_arrays
+    if selected_names is not None:
+        arrays = tuple(spec for spec in arrays if set(spec.names) & selected_names)
     results = install_arrays(connection, available, arrays, publication)
-    results.update(install_comment_references(connection, available, publication))
+    from .comments import NAMES as COMMENT_NAMES
+    if selected_names is None or set(COMMENT_NAMES) & selected_names:
+        results.update(install_comment_references(connection, available, publication))
     sql = tuple(spec for spec in SQL_RELATIONSHIP_VIEWS
                 if spec not in (*DIFF_VIEWS, *LOBBYING_NATIVE_VIEWS)) + lobbying_variants
     native_sql = tuple(spec for spec in (*NATIVE_IDENTITY_VIEWS, *NATIVE_AFFILIATION_VIEWS)
@@ -141,21 +153,21 @@ def install_relationship_views(
     sql = tuple(spec for spec in sql if spec.name not in replaced) + native_sql
     sql += tuple(spec for spec in DIFF_VIEWS if set(spec.required) <= native)
     sql += tuple(spec for spec in LEGACY_DIFF_VIEWS if not set(spec.required) <= native)
-    results.update(install_sql_views(connection, available, sql, publication))
+    results.update(install_sql_views(connection, available, filter(requested, sql), publication))
     legal_names = {"fec_legal_citations", "fec_legal_subjects"}
     results.update(install_sql_views(connection, available,
-                                   [spec for spec in FEC_QUERY_VIEWS if spec.name not in legal_names], publication))
+                                   [spec for spec in FEC_QUERY_VIEWS if spec.name not in legal_names and requested(spec)], publication))
     legal_variants = [(next(s for s in FEC_QUERY_VIEWS if s.name == name),
                        replace(next(s for s in FEC_DOCUMENT_QUERY_VIEWS if s.name == name),
                                role="child_query", category="query_data"))
-                      for name in sorted(legal_names)]
+                      for name in sorted(legal_names) if selected_names is None or name in selected_names]
     results.update(install_sql_variants(connection, available, legal_variants, publication))
     # Legacy array installation already reports incompatible columns. If no
     # lobbying variant binds, keep that explicit disposition rather than hiding it.
     if not lobbying_variants:
         for variants in ([spec] for spec in LOBBYING_NATIVE_VIEWS):
             name = variants[0].name
-            if results[name]["status"] != "available":
+            if requested(variants[0]) and results.get(name, {}).get("status") != "available":
                 results.update(install_sql_variants(connection, available, [variants], publication))
     # Field-read states and lifecycle processing evidence live in shared receipts.
     removed = {base + "_field_states" for base, table, *_ in NATIVE_REGULATORY_ARRAYS if table in native}
@@ -165,7 +177,8 @@ def install_relationship_views(
         removed.add("lifecycle_date_evidence")
     for name in removed:
         results.pop(name, None)
-    results.update(install_native_regulations_views(connection, native, publication))
+    from .regulations_native import native_regulations_views
+    results.update(install_sql_views(connection, available, filter(requested, native_regulations_views(native)), publication))
     annotate_views(results)
     return results
 
