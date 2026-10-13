@@ -6,7 +6,7 @@ from threading import Event, Timer
 import pytest
 
 from spicy_regs import etl_bulk, local_data, mcp_server as server, selected_generations
-from spicy_regs.runtime_bounds import RequestBound, checkpoint
+from spicy_regs.runtime_bounds import RequestBound, checkpoint, current_bound
 from tests.test_local_native_selection import selected_family
 from tests.test_mcp_server import _records, _tool_data
 
@@ -264,9 +264,16 @@ def test_request_timeout_covers_cold_build_and_worker_stops(tmp_path, monkeypatc
     selected_family(tmp_path, monkeypatch)
     monkeypatch.setattr(server, 'DATA_DIR', tmp_path)
     monkeypatch.setattr(server, 'TABLES', ())
-    monkeypatch.setattr(server, 'STATEMENT_TIMEOUT_SECONDS', .10)
+    # Give the worker a bounded startup window under Linux emulation, then
+    # expire the real request bound inside the instrumented admission phase.
+    monkeypatch.setattr(server, 'STATEMENT_TIMEOUT_SECONDS', 30)
+    entered_at = []
     stopped = Event()
     def slow_hash(stream):
+        held = current_bound()
+        assert held is not None
+        entered_at.append(monotonic())
+        held.deadline = entered_at[0] + .10
         try:
             while True:
                 sleep(.005)
@@ -274,11 +281,10 @@ def test_request_timeout_covers_cold_build_and_worker_stops(tmp_path, monkeypatc
         finally:
             stopped.set()
     monkeypatch.setattr(selected_generations, 'stream_sha256', slow_hash)
-    started = monotonic()
     with pytest.raises(Exception, match='including input admission'):
         _tool_data(server.build_server(), 'query_sql', {'sql': 'SELECT bioguide_id FROM members'})
     assert stopped.wait(1)
-    assert monotonic() - started < 1.5
+    assert entered_at and monotonic() - entered_at[0] < 1.5
     assert server._cached_connection is None
 
 
