@@ -1,0 +1,669 @@
+"""Complete retained FEC families through their maintained receipt writers.
+
+This is representation conversion, not a publisher-source rebuild. Original
+member order and schemas remain the comparison authority.
+"""
+from contextlib import ExitStack, nullcontext
+from copy import deepcopy
+from dataclasses import dataclass, replace
+import base64
+import json
+from pathlib import Path
+from uuid import uuid4
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext
+from spicy_regs.generations import build_generation
+from spicy_regs.sources import publication
+from spicy_regs.transforms.assemble_fec_query import TypedInput, assemble_subject_table, _sha, _equal_streams
+from spicy_regs.transforms.build_fec_observations import OUTPUTS
+from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
+from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
+
+FAMILIES = frozenset({'fec-observations', 'fec-query'})
+LEGACY_FIELDS = json.loads(Path(__file__).with_name('fec_retained_legacy_fields.json').read_text())
+
+
+@dataclass(frozen=True)
+class ObservationRebinding:
+    """Fresh complete original comparison authorized this representation-only pin change."""
+    original_pin: str
+    staged_pin: str
+
+
+REBIND_FIELDS = {
+    'fec_collection_selection': 'source_generation_pin',
+    'fec_filing_definition_evidence': 'witness_generation_pin',
+    'fec_filing_header_associations': 'source_generation_pin',
+    'fec_record_evidence': 'witness_generation_pin',
+}
+
+
+def rebind_row(table, row, proof):
+    field = REBIND_FIELDS.get(table)
+    if proof is None or field is None:
+        return row
+    if not isinstance(proof, ObservationRebinding):
+        raise ValueError('Generation rebinding requires the fresh staged observations comparison')
+    if row.get(field) != proof.original_pin:
+        return row
+    return {**row, field: proof.staged_pin}
+
+
+def rebind_filing_inputs(selection, proof, directory, check_resources):
+    """Rebind only byte-admitted header coordinates after complete source equivalence."""
+    if proof is None or selection.source_generation_pin == proof.staged_pin:
+        return selection
+    if selection.source_generation_pin != proof.original_pin:
+        raise ValueError('Filing source selection is foreign to the captured and staged observations')
+    # This prepares all bounded dependencies and verifies their original bytes.
+    from spicy_regs.transforms.fec_query import RECEIPT_SCHEMA
+    selection.prepare('fec_receipts', RECEIPT_SCHEMA, check_resources)
+    directory.mkdir(parents=True, exist_ok=False)
+    headers = []
+    for ordinal, item in enumerate(selection.header_associations):
+        check_resources()
+        source = pq.ParquetFile(item.path)
+        from spicy_regs.transforms.fec_filing_associations import _base, POLICY_VERSION
+        rows = []
+        for row in source.read(use_threads=False).to_pylist():
+            if row.get('policy_version') != POLICY_VERSION:
+                raise ValueError('Header source rebinding requires current maintained decisions')
+            raw = {**row, 'record_id': row['target_record_id']}
+            before = _base(raw, row['target_table'], row['source_generation_pin'],
+                           row['selection_evidence_sha256'], row['association_basis'])
+            if row['record_id'] != before['record_id']:
+                raise ValueError('Current header identity differs from its maintained source-generation rule')
+            rebound = rebind_row('fec_filing_header_associations', row, proof)
+            current = _base(raw, row['target_table'], rebound['source_generation_pin'],
+                            row['selection_evidence_sha256'], row['association_basis'])
+            rows.append({**rebound, 'record_id': current['record_id']})
+        path = directory / f'headers-{ordinal}.parquet'
+        pq.write_table(pa.Table.from_pylist(rows, schema=source.schema_arrow), path, compression='zstd')
+        if _sha(item.path) != item.sha256:
+            raise ValueError('Header dependency changed during qualified rebinding')
+        headers.append(TypedInput(path, _sha(path), item.rows))
+    return replace(selection, source_generation_pin=proof.staged_pin, header_associations=tuple(headers))
+
+
+def family_tables(family):
+    if family == 'fec-observations':
+        return frozenset(OUTPUTS)
+    if family == 'fec-query':
+        root = Path(__file__).resolve().parents[2]
+        return frozenset(name + '.parquet' for name in json.loads(
+            (root / 'data_dictionary/fec_typed_schemas.json').read_text())['tables'])
+    raise ValueError('Unsupported FEC conversion family')
+
+
+def check_membership(family, old):
+    if set(old['tables']) != family_tables(family):
+        raise ValueError('FEC conversion requires the complete registered family membership')
+    for key, table in old['tables'].items():
+        if 'members' in table and [member['key'] for member in table['members']] != sorted(member['key'] for member in table['members']):
+            raise ValueError('Noncanonical captured FEC member order is unsupported; no family build started')
+        if 'members' in table and table.get('partitionColumns') != ['source_namespace']:
+            raise ValueError(f'{key}: unsupported FEC source partition declaration')
+
+
+def staged_snapshot(captured, generation, operation):
+    """Bind a prepared parent without claiming that its pointer has moved."""
+    artifact, _, source = operation.admit_generation(generation)
+    spec = artifact.root['spec']
+    if spec['family'] != 'fec-observations' or spec['publicationStatus'] != 'complete-family':
+        raise ValueError('Staged FEC parent must be complete observations')
+    old = captured['families']['fec-observations']
+    check_membership('fec-observations', old)
+    if spec['readSnapshot'] != captured:
+        raise ValueError('Staged observations differ from the captured prior snapshot')
+    descriptors = {p['dataset'] for p in spec['etlReceipts']['policies']}
+    if descriptors != {key.removesuffix('.parquet') for key in family_tables('fec-observations')}:
+        raise ValueError('Staged observations omit a registered receipt sibling')
+    result = deepcopy(captured)
+    from rulespec_artifacts import iter_member_descriptors
+    result['families']['fec-observations'] = publication.generation_entry(artifact, iter_member_descriptors(artifact, source))
+    return result
+
+
+def _members(path):
+    return sorted(path.rglob('*.parquet')) if path.is_dir() else [path]
+
+
+def _partition_subject(flat, original, destination, check_resources):
+    """Keep exact member names/lengths; generation admission checks partition cells."""
+    destination.mkdir(parents=True)
+    with pq.ParquetFile(flat) as source:
+        rows = iter(row for batch in source.iter_batches(batch_size=512, use_threads=False) for row in batch.to_pylist())
+        from itertools import islice
+        for member in _members(original):
+            check_resources()
+            target = destination / member.relative_to(original)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            count = pq.ParquetFile(member).metadata.num_rows
+            with pq.ParquetWriter(target, source.schema_arrow, compression='zstd') as writer:
+                remaining = count
+                while remaining:
+                    check_resources()
+                    batch = list(islice(rows, min(512, remaining)))
+                    if not batch:
+                        raise ValueError('Native FEC member lost original rows')
+                    writer.write_table(pa.Table.from_pylist(batch, schema=source.schema_arrow))
+                    remaining -= len(batch)
+        if next(rows, None) is not None:
+            raise ValueError('Native FEC member has additional rows')
+        def batches(paths):
+            for path in paths:
+                with pq.ParquetFile(path) as reader:
+                    for batch in reader.iter_batches(batch_size=512, use_threads=False):
+                        check_resources()
+                        yield batch
+        _equal_streams(batches([flat]), batches(_members(destination)))
+    if flat.is_symlink() or flat.stat().st_nlink != 1:
+        raise ValueError('Partitioning may consume only its single-link owned flat output')
+    flat.unlink()
+    return destination
+
+
+def _consume_receipt(receipt, writer, check_resources):
+    """Consume a completed owned bundle, checking every batch and its byte binding."""
+    if receipt.is_symlink() or receipt.stat().st_nlink != 1:
+        raise ValueError('Receipt consolidation requires a single-link owned output')
+    digest = _sha(receipt)
+    count = 0
+    with pq.ParquetFile(receipt) as source:
+        if not source.schema_arrow.equals(RECEIPT_SCHEMA, check_metadata=False):
+            raise ValueError('Receipt consolidation schema differs')
+        expected = source.metadata.num_rows
+        for batch in source.iter_batches(batch_size=512, use_threads=False):
+            check_resources()
+            writer.write_batch(batch)
+            count += batch.num_rows
+    if count != expected or _sha(receipt) != digest:
+        raise ValueError('Receipt changed during consolidation')
+    receipt.unlink()
+
+
+def validate_identity_schema(table, schema):
+    """Only the supported mapper schema or exact retained /1 schema may convert."""
+    source = Path(__file__).resolve().parents[2] / 'data_dictionary/fec_typed_schemas.json'
+    current = json.loads(source.read_text())['tables'].get(table)
+    legacy = json.loads(Path(__file__).with_name('fec_retained_legacy_schemas.json').read_text()).get(table)
+    candidates = [value for value in (None if current is None else current['arrow_schema_ipc_base64'], legacy) if value]
+    if not any(schema.equals(pa.ipc.read_schema(pa.BufferReader(base64.b64decode(value))), check_metadata=False)
+               for value in candidates):
+        # The observations producer has its own complete schemas outside the query declaration.
+        from spicy_regs.transforms.build_fec_observations import RECORD_SCHEMA, COLLECTION_SCHEMA, RELATIONSHIP_SCHEMA
+        expected = {'fec_source_records': RECORD_SCHEMA, 'fec_collections': COLLECTION_SCHEMA,
+                    'fec_relationships': RELATIONSHIP_SCHEMA}.get(table)
+        if expected is None or not schema.equals(expected, check_metadata=False):
+            raise ValueError(f'{table}: retained identity schema is neither supported current nor captured legacy shape')
+
+
+def retained_identity_row(table, original, *, diagnostics=None, source_schema=None):
+    """Interpret only named legacy shapes; retain exact old values separately."""
+    from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
+    registry = REGISTRY[table]
+    legacy = LEGACY_FIELDS
+    extra = set(original) - set(registry['input_fields'])
+    if extra - set(legacy.get(table, ())):
+        raise ValueError(f'{table}: unexplained retained identity fields {sorted(extra)}')
+    row = {name: value for name, value in original.items() if name not in extra}
+    def node(name):
+        raw = original.get(name)
+        value = json.loads(raw) if isinstance(raw, str) else raw
+        if value is not None and not isinstance(value, dict):
+            raise ValueError(f'{table}: retained {name} must be a named source object')
+        return value
+    count_fields = {'fec_research_context_dispositions': ('source_fact_count',),
+                    'fec_collections': ('record_count', 'relationship_count')}.get(table)
+    if count_fields and source_schema is not None:
+        # These historic producers emitted textual counts. Only the exact
+        # admitted captured schema proves that path; current rows remain strict.
+        captured = json.loads(Path(__file__).with_name('fec_retained_legacy_schemas.json').read_text())[table]
+        expected = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(captured)))
+        if source_schema.equals(expected, check_metadata=False):
+            from spicy_regs.transforms.fec_identity_shape import typed_values
+            values, problems = typed_values(original, dict.fromkeys(count_fields, 'integer'))
+            row.update({name: values[name] for name in count_fields})
+            if diagnostics is not None:
+                diagnostics.update(legacy_bridge='retained-counts/1',
+                    field_statuses={name: values[name+'_status'] for name in count_fields},
+                    raw_values={name: values[name+'_raw'] for name in count_fields},
+                    refusals=problems)
+    if table in {'fec_committee_master_observations', 'fec_postgres_committee_history_observations'} and 'native_fields' in original:
+        from spicy_regs.transforms.fec_committee_history_observations import _history_values
+        native = node('native_fields')
+        if native is None:
+            raise ValueError('Legacy committee history has no retained native fields')
+        if table == 'fec_committee_master_observations':
+            from spicy_docs.schemas.fec_committee_history import project_committee_master_row
+            native = project_committee_master_row({'fields': native, 'cycle': original.get('source_cycle')})
+        values, _ = _history_values(native)
+        row.update(values)
+    elif table == 'fec_registration_statements':
+        from spicy_regs.transforms.fec_identity_observations import STATEMENT_TYPED
+        from spicy_regs.transforms.fec_identity_shape import typed_values
+        # Captured /1 statements have year scalars but no raw/status columns.
+        # Current rows already carry their producer's interpretation, including
+        # refused values; do not reinterpret those nulls or replace their evidence.
+        if (original.get('mapping_version') == 'fec-identity-observations/1'
+                and not any(name + suffix in original for name in STATEMENT_TYPED for suffix in ('_raw', '_status'))):
+            values, problems = typed_values(row, STATEMENT_TYPED)
+            row.update(values)
+            if diagnostics is not None:
+                diagnostics.update(legacy_bridge='registration-years/1',
+                                   field_statuses={name:values[name+'_status'] for name in STATEMENT_TYPED},
+                                   refusals=problems)
+    elif table == 'fec_api_response_controls' and 'native_metadata_json' in original:
+        from spicy_regs.transforms.fec_context_shape import api_control_values
+        row.update(api_control_values(node('native_metadata_json')))
+    elif table in {'fec_candidate_api_observations', 'fec_committee_observations'} and 'native_metadata_json' in original:
+        from spicy_regs.transforms.fec_identity_shape import typed_values, array_values
+        if table == 'fec_candidate_api_observations':
+            from spicy_regs.transforms.fec_candidate_observations import TYPED, ARRAYS
+        else:
+            from spicy_regs.transforms.fec_committee_observations import TYPED, ARRAYS, AGENT_FIELDS
+        native = node('native_metadata_json')
+        if native is None:
+            raise ValueError('Legacy API observation has no retained native business object')
+        values, _ = typed_values(native, TYPED)
+        row.update(values)
+        for name in ARRAYS:
+            row.update(array_values(native, name))
+        if table == 'fec_committee_observations':
+            from spicy_regs.transforms.fec_identity_observations import _scalar
+            row.update(array_values(native, 'sponsor_candidate_list'))
+            row.update({name: _scalar(native.get(name)) for name in ('affiliated_committee_name', 'organization_type', *AGENT_FIELDS)})
+    elif table == 'fec_research_document_observations' and 'native_metadata_json' in original:
+        from spicy_regs.transforms.fec_context_shape import document_context_fields
+        if original.get('mapping_version') != 'fec-research-context/1':
+            raise ValueError('Retained document metadata requires its captured /1 mapping')
+        native = node('native_metadata_json')
+        if native is not None:
+            if not {'id','title'} <= native.keys():
+                raise ValueError('Retained document metadata lacks native identity/title')
+            for field, source in (('document_native_id','id'), ('title','title'),
+                                  ('source_created_at','created_at'), ('source_updated_at','updated_at')):
+                value = str(native[source]) if source == 'id' else native.get(source)
+                if original.get(field) != value:
+                    raise ValueError('Retained document metadata differs from its reported '+field)
+        values, statuses = document_context_fields(native, source_created_at=original.get('source_created_at'),
+                                                    source_updated_at=original.get('source_updated_at'))
+        row.update(values)
+        if diagnostics is not None:
+            diagnostics.update(field_statuses=statuses, legacy_bridge='document-context/1')
+    elif table == 'fec_retained_csv_observations' and 'native_fields_json' in original:
+        from spicy_regs.transforms.fec_context_shape import csv_context_fields
+        if original.get('mapping_version') != 'fec-research-context/1':
+            raise ValueError('Retained CSV fields require their captured /1 mapping')
+        values, statuses = csv_context_fields(node('native_fields_json'))
+        row.update(values)
+        if diagnostics is not None:
+            diagnostics.update(field_statuses=statuses, legacy_bridge='csv-context/1')
+    elif table == 'fec_research_response_outcomes' and 'native_payload_json' in original:
+        from spicy_regs.transforms.fec_context_shape import response_capture_disposition
+        if original.get('mapping_version') != 'fec-research-context/1':
+            raise ValueError('Retained response payload requires its captured /1 mapping')
+        # The payload may be a dict/list/scalar/null; reported shape/refusal is
+        # sufficient and the exact opaque payload remains in original overrides.
+        row['capture_disposition'] = response_capture_disposition(original.get('profile_refusal'), original.get('payload_shape'))
+        if diagnostics is not None:
+            diagnostics.update(legacy_bridge='response-context/1', capture_disposition=row['capture_disposition'])
+    elif table == 'fec_research_source_pages' and 'content_status' not in original:
+        from spicy_regs.transforms.fec_context_shape import source_page_body
+        body, status = source_page_body(original.get('title'), original.get('text'), original.get('source_url'))
+        row.update(text=body, content_status=status)
+    elif table == 'fec_research_filing_feed_items' and 'description' in original:
+        from spicy_regs.transforms.fec_context_shape import filing_announcement
+        row.update(filing_announcement(original['description'], original.get('published_at_raw')))
+    if set(row) - set(registry['input_fields']):
+        raise ValueError(f'{table}: maintained legacy interpretation produced undeclared fields')
+    overrides = {name: value for name, value in original.items()
+                 if name not in row or type(row[name]) is not type(value) or row[name] != value}
+    return row, overrides
+
+
+def load_filing_associations(path):
+    """Read the explicit admitted dependency selection supplied by the coordinator."""
+    from spicy_regs.transforms.assemble_fec_query import FilingAssociationInputs
+    value = json.loads(Path(path).read_text())
+    def members(items):
+        if isinstance(items, dict):
+            items = [items]
+        return tuple(TypedInput(Path(item['path']), item['sha256'], item['rows']) for item in items)
+    return FilingAssociationInputs(value['source_generation_pin'], value.get('target_generation_pin'),
+        members(value['filings']), value['namespace_evidence'], members(value.get('header_associations', [])),
+        value.get('target_generation_scope', 'external'))
+
+
+def admit_filing_dependency_selection(selection, *, check_resources=lambda: None, on_read=None):
+    """Admit exact small inputs, never a native parent or final self correspondence."""
+    from collections import Counter
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    from spicy_regs.transforms.fec_filing_associations import (
+        ASSOCIATION_SCHEMA, POLICY_VERSION, TARGET_IDENTITY_VERSION, TARGET_MAPPING_VERSION,
+        _base, validate_header_filing_witnesses)
+    if not selection.filings or not selection.header_associations:
+        raise ValueError('Dependency admission requires both selected populations')
+    filings, headers, proof = selection.read_dependencies(check_resources,
+        expected_filing_schema=dataset_policy('fec_filings').subject_schema,
+        expected_header_schema=ASSOCIATION_SCHEMA, on_read=on_read)
+    for row in filings:
+        check_resources()
+        if row.get('identity_version') != TARGET_IDENTITY_VERSION or row.get('mapping_version') != TARGET_MAPPING_VERSION:
+            raise ValueError('Filing dependency must state maintained target identity and mapping versions')
+    for row in headers:
+        check_resources()
+        if row.get('policy_version') != POLICY_VERSION or row.get('source_generation_pin') != selection.source_generation_pin:
+            raise ValueError('Header dependency policy or source capture differs')
+        raw = {**row, 'record_id': row['target_record_id']}
+        expected = _base(raw, row['target_table'], row['source_generation_pin'],
+                         row['selection_evidence_sha256'], row['association_basis'])
+        if row['record_id'] != expected['record_id']:
+            raise ValueError('Header dependency identity differs from maintained source coordinates')
+        if not isinstance(row.get('association_status'), str) or not row['association_status']:
+            raise ValueError('Header dependency must retain a declared outcome')
+        if row['association_status'] != 'resolved_native_filing_key' and row.get('filing_key') is not None:
+            raise ValueError('Unresolved header cannot claim a resolved filing key')
+    validate_header_filing_witnesses(filings, headers)
+    proof.update(header_statuses=dict(Counter(row['association_status'] for row in headers)),
+        fullParentAdmitted=False, fullTargetCorrespondence=False, generationAdmitted=False,
+        targetBinding='provisional-self' if selection.filing_generation_scope == 'self' else 'declared-external-unadmitted',
+        namespaceDefinitionSemanticsAdmitted=False)
+    return dict(filings=filings, headers=headers, proof=proof)
+
+
+def filing_subjects(selection, retained, check_resources):
+    """Admit the complete /2 remap, retaining old interpretation values in receipts."""
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    # Use the same bounded, fully byte-checked dependency preparation as assembly.
+    from spicy_regs.transforms.fec_query import RECEIPT_SCHEMA
+    selection.prepare('fec_receipts', RECEIPT_SCHEMA, check_resources)
+    expected = dataset_policy('fec_filings').subject_schema
+    candidates = []
+    for item in selection.filings:
+        check_resources()
+        schema = pq.read_schema(item.path)
+        if not schema.equals(expected, check_metadata=False):
+            raise ValueError('Filing remap schema differs from the complete native target policy')
+        candidates.extend(pq.ParquetFile(item.path).read(use_threads=False).to_pylist())
+    originals = []
+    for path in _members(retained['fec_filings.parquet']):
+        originals.extend(pq.ParquetFile(path).read(use_threads=False).to_pylist())
+    if len(originals) != len(candidates):
+        raise ValueError('Filing remap does not preserve complete original population')
+    coordinates = ('record_id', 'collection_id', 'source_record_id', 'source_sha256', 'source_locator_json', 'filing_key')
+    remapped = frozenset(('mapping_version', 'most_recent', 'report_year', 'reported_cycle', 'pages', 'is_amended', 'election_year'))
+    from spicy_regs.transforms.fec_identity_context_fields import normalize_record
+    for original, candidate in zip(originals, candidates, strict=True):
+        if any(original.get(name) != candidate.get(name) for name in coordinates):
+            raise ValueError('Filing remap changes source identity, coordinates, order or business key')
+        if candidate.get('mapping_version') != 'fec-identity-observations/2':
+            raise ValueError('Filing remap must state its actual maintained mapping version')
+        normalized = normalize_record('fec_filings', retained_identity_row('fec_filings', original)[0])
+        from spicy_regs.transforms.fec_identity_observations import FILING_TYPED
+        from spicy_regs.transforms.fec_identity_shape import typed_values
+        serialized = dict(original)
+        for name, kind in FILING_TYPED.items():
+            if kind == 'boolean' and original.get(name) in ('true', 'false'):
+                # /1 wrote native JSON boolean tokens into VARCHAR. Retain that
+                # exact token in the override; /2's maintained mapper is typed.
+                serialized[name] = json.loads(original[name])
+        typed, _ = typed_values(serialized, FILING_TYPED)
+        if any(candidate.get(name) != typed.get(name) for name in remapped - {'mapping_version'}):
+            raise ValueError('Filing remap reinterprets a prior scalar instead of applying maintained native typing')
+        if candidate.get('amendment_chain') != normalized.get('amendment_chain'):
+            raise ValueError('Filing remap changes ordered amendment observations')
+        if any(original[name] != candidate[name] for name in (original.keys() & candidate.keys()) - remapped):
+            raise ValueError('Filing remap changes an unqualified original field')
+    return candidates
+
+
+def header_subjects(selection, retained, proof, check_resources):
+    """Adopt current header decisions only for the complete same ordered population."""
+    originals, candidates = [], []
+    for path in _members(retained['fec_filing_header_associations.parquet']):
+        originals.extend(pq.ParquetFile(path).read(use_threads=False).to_pylist())
+    for item in selection.header_associations:
+        check_resources()
+        if _sha(item.path) != item.sha256:
+            raise ValueError('Current header dependency changed')
+        candidates.extend(pq.ParquetFile(item.path).read(use_threads=False).to_pylist())
+    if len(originals) != len(candidates):
+        raise ValueError('Current header decisions omit or add original observations')
+    allowed = {'record_id', 'policy_version', 'selection_evidence_sha256', 'source_generation_pin'}
+    for old, candidate in zip(originals, candidates, strict=True):
+        if candidate.get('policy_version') != 'fec-retained-filing-association/2':
+            raise ValueError('Current headers must state the maintained association policy')
+        if candidate.get('source_generation_pin') != selection.source_generation_pin:
+            raise ValueError('Current header decision has a foreign source generation')
+        from spicy_regs.transforms.fec_filing_associations import _base
+        raw = {**candidate, 'record_id': candidate['target_record_id']}
+        expected = _base(raw, candidate['target_table'], candidate['source_generation_pin'],
+                         candidate['selection_evidence_sha256'], candidate['association_basis'])
+        if candidate['record_id'] != expected['record_id']:
+            raise ValueError('Current header identity differs from its maintained source-generation rule')
+        if set(old) != set(candidate) or any(old[k] != candidate[k] for k in old.keys() - allowed):
+            raise ValueError('Current header decisions change original coordinates, order or decision outcomes')
+        if old.get('source_generation_pin') != candidate.get('source_generation_pin') and (
+                proof is None or old.get('source_generation_pin') != proof.original_pin
+                or candidate.get('source_generation_pin') != proof.staged_pin):
+            raise ValueError('Header source change lacks the complete staged original comparison')
+    return candidates
+
+
+def agency_source_lookup(generation, operation, coordinates, expected_pin, check_resources):
+    """Qualify each disposition's exact coordinate against the admitted source."""
+    if not coordinates:
+        return lambda row: None
+    if generation is None:
+        raise ValueError('Agency source navigation requires the exact admitted observations generation')
+    artifact, reader, _ = operation.admit_generation(generation)
+    if artifact.pin.artifact_digest != expected_pin:
+        raise ValueError('Agency source lookup generation differs from selected parent')
+    found = {}
+    for row in reader.read_subjects('fec_source_records'):
+        check_resources()
+        key = (row.get('collection_id'), row.get('source_record_id'))
+        if key in coordinates:
+            digest = row.get('source_sha256')
+            if key in found and found[key] != digest:
+                raise ValueError('Agency source coordinate has conflicting digest witnesses')
+            from spicy_regs.transforms.fec_query import _digest
+            found[key] = _digest(digest)
+    if set(found) != coordinates:
+        raise ValueError('Agency source coordinate is absent from selected observations')
+    return lambda row: found[(row.get('collection_id'), row.get('source_record_id'))]
+
+
+def build_retained_family(family, old, captured, retained, work, *, operation,
+                          inputs=(), filing_associations=None, check_resources=lambda: None,
+                          read_snapshot=None, observation_generation=None, observation_rebinding=None):
+    """Actual production call: identity writers and qualified financial assembly."""
+    check_membership(family, old)
+    if set(retained) != set(old['tables']):
+        raise ValueError('FEC retained table membership differs from captured family')
+    owned_headers = ()
+    snapshot = captured if read_snapshot is None else read_snapshot
+    if snapshot['families'][family] != old:
+        raise ValueError('FEC candidate staging changed its own captured prior')
+    if family == 'fec-query':
+        parent = snapshot['families'].get('fec-observations')
+        if parent is None or 'etlReceipts' not in parent:
+            raise ValueError('FEC query conversion requires selected native observations')
+        if filing_associations is None:
+            raise ValueError('FEC query conversion requires admitted filing association inputs')
+        prior_selection = filing_associations
+        filing_associations = rebind_filing_inputs(filing_associations, observation_rebinding,
+            work / 'build' / 'rebound-filing-inputs', check_resources)
+        if filing_associations is not prior_selection:
+            owned_headers = filing_associations.header_associations
+        if filing_associations.source_generation_pin != parent['artifactDigest']:
+            raise ValueError('FEC association source differs from selected observations')
+    native_filings, native_headers = None, None
+    if family == 'fec-query':
+        if filing_associations is None:
+            raise ValueError('FEC query requires its admitted filing selection')
+        if filing_associations.filing_generation_scope != 'self':
+            raise ValueError('Complete FEC query conversion requires a self-scoped complete filing remap')
+        native_filings = filing_subjects(filing_associations, retained, check_resources)
+        native_headers = header_subjects(filing_associations, retained, observation_rebinding, check_resources)
+    agency_digest_for = None
+    agency = retained.get('fec_agency_mapping_dispositions.parquet')
+    if agency is not None:
+        coordinates = set()
+        for path in _members(agency):
+            for batch in pq.ParquetFile(path).iter_batches(columns=['collection_id', 'source_record_id'], batch_size=512):
+                check_resources()
+                coordinates.update((r['collection_id'], r['source_record_id']) for r in batch.to_pylist())
+        if any(not all(isinstance(v, str) and v for v in key) for key in coordinates):
+            raise ValueError('Agency source lookup needs exact collection and source record coordinates')
+        agency_digest_for = agency_source_lookup(observation_generation, operation, coordinates,
+            snapshot['families']['fec-observations']['artifactDigest'], check_resources)
+    generation_id = uuid4().hex
+    build = work / 'build'
+    build.mkdir(parents=True, exist_ok=True)
+    policies, subjects, partitioned, pending_partitions = [], [], {}, []
+    shared = build / 'etl_receipts.parquet'
+    observation_output = build / 'tables' / 'observations'
+    with ExitStack() as stack:
+        observation_writer = (stack.enter_context(IdentityReceiptWriter(observation_output,
+            generation_id=generation_id, tables=[key.removesuffix('.parquet') for key in sorted(retained)]))
+            if family == 'fec-observations' else None)
+        receipt_writer = None
+        if observation_writer is None:
+            stream = stack.enter_context(shared.open('xb'))
+            receipt_writer = stack.enter_context(pq.ParquetWriter(stream, RECEIPT_SCHEMA, compression='zstd'))
+        for key, original in sorted(retained.items()):
+            check_resources()
+            table = key.removesuffix('.parquet')
+            published_members = publication.table_members(captured, key)
+            members = [original / pin.key.removeprefix(table + '/') if original.is_dir() else original
+                       for pin in published_members]
+            if set(members) != set(_members(original)):
+                raise ValueError('FEC retained member set differs from publication')
+            if original.is_dir() and members != sorted(members):
+                raise ValueError('Noncanonical captured FEC member order is unsupported; no reordered build is admitted')
+            schema = pq.read_schema(members[0])
+            if any(not pq.read_schema(p).equals(schema, check_metadata=True) for p in members):
+                raise ValueError('FEC retained split member schemas differ')
+            selected = []
+            witnesses = []
+            if len(members) != len(published_members):
+                raise ValueError('FEC retained member set differs from publication')
+            for path, pin in zip(members, published_members, strict=True):
+                namespace = None
+                if original.is_dir():
+                    namespace = path.relative_to(original).parts[0].removeprefix('source_namespace=')
+                if pin.sha256 is None or pin.byte_size is None or pin.rows is None:
+                    raise ValueError('FEC conversion requires exact digest, size and row membership')
+                if _sha(path) != pin.sha256 or path.stat().st_size != pin.byte_size or pq.ParquetFile(path).metadata.num_rows != pin.rows:
+                    raise ValueError('FEC retained input differs from captured member bytes or rows')
+                selected.append(TypedInput(path, pin.sha256, pin.rows, namespace))
+                witnesses.append(dict(source_id=pin.path, source_uri=None, sha256=pin.sha256,
+                                      locator=None, body_version=old['artifactDigest']))
+            output = observation_output if family == 'fec-observations' else build / 'tables' / table
+            if table in FIELD_RULES:
+                from bisect import bisect_right
+                from itertools import accumulate
+                member_ends = list(accumulate(i.rows for i in selected))
+                def context_for(row, ordinal):
+                    witness = witnesses[bisect_right(member_ends, ordinal)]
+                    return ReceiptContext(generation_id, f'{table}/{ordinal}', 'fec-retained-conversion/1', [witness])
+                applicable = (table != 'fec_filing_header_associations'
+                              and 'filing_key' in FIELD_RULES[table]['keep'] and 'filing_key' in schema.names)
+                def current_header_for(row, ordinal):
+                    if native_headers is None:
+                        raise ValueError('Current header interpretation has no complete admitted dependency')
+                    return native_headers[ordinal]
+                result = assemble_subject_table(selected, table=table, schema=schema, output=output,
+                    generation_id=generation_id, context_for=context_for, check_resources=check_resources,
+                    source_partitioned=original.is_dir(), filing_associations=filing_associations if applicable else None,
+                    source_digest_for=agency_digest_for if table == 'fec_agency_mapping_dispositions' else None,
+                    observation_rebinding=observation_rebinding,
+                    current_header_for=current_header_for if table == 'fec_filing_header_associations' else None)
+                if not result['full_rebuild_qualified'] or result['exact_mapper_rows_compared'] != sum(i.rows for i in selected):
+                    raise ValueError(f'{table}: retained FEC rows did not all convert exactly')
+                from spicy_regs.transforms.fec_subject_receipts import dataset_policy
+                policy = dataset_policy(table, schema)
+                subject = None if result['subject_path'] is None else Path(result['subject_path'])
+                receipts = Path(result['receipt_path'])
+            else:
+                validate_identity_schema(table, schema)
+                def rows():
+                    for item, witness in zip(selected, witnesses, strict=True):
+                        for batch in pq.ParquetFile(item.path).iter_batches(batch_size=512, use_threads=False):
+                            check_resources()
+                            for row in batch.to_pylist():
+                                yield row, witness
+                with (nullcontext(observation_writer) if observation_writer is not None else
+                      IdentityReceiptWriter(output, generation_id=generation_id, tables=[table])) as writer:
+                    for ordinal, (row, witness) in enumerate(rows()):
+                        adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
+                        original_row = row
+                        retained_diagnostics = {}
+                        row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics, source_schema=schema)
+                        rebound = rebind_row(table, row, observation_rebinding)
+                        overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
+                        row = rebound
+                        if table == 'fec_relationships':
+                            overrides['record_id'] = original_row.get('record_id')
+                        if adopted is not None:
+                            overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
+                        source_input = {'fec_retained_overrides': overrides} if overrides else {}
+                        if retained_diagnostics:
+                            source_input['fec_retained_interpretation'] = retained_diagnostics
+                        writer.emit(table, row, input_witness=witness,
+                            source_input=source_input or None, native_filing_subject=adopted)
+                policy = writer.policies[table]
+                subject = None if policy.receipt_only else output / key
+                receipts = output / 'etl_receipts.parquet'
+            policies.append(policy)
+            if receipt_writer is not None:
+                _consume_receipt(receipts, receipt_writer, check_resources)
+            if subject is not None:
+                if original.is_dir():
+                    destination = build / 'partitioned' / table
+                    if observation_writer is not None:
+                        pending_partitions.append((subject, original, destination))
+                        subject = destination
+                    else:
+                        subject = _partition_subject(subject, original, destination, check_resources)
+                    partitioned[key] = old['tables'][key]['partitionColumns']
+                subjects.append(subject)
+    for flat, original, destination in pending_partitions:
+        _partition_subject(flat, original, destination, check_resources)
+    if family == 'fec-observations':
+        shared = observation_output / 'etl_receipts.parquet'
+    if native_filings is not None:
+        target = next(p for p in subjects if p.name == 'fec_filings.parquet')
+        stored = pq.ParquetFile(target).read(use_threads=False).to_pylist()
+        if len(stored) != len(native_filings) or any(
+                {name: row[name] for name in candidate} != candidate
+                for row, candidate in zip(stored, native_filings, strict=True)):
+            raise ValueError('Self-scoped filing target differs from the exact admitted complete remap')
+    parents = {} if family == 'fec-observations' else {
+        key: publication.table_pin(snapshot, key) for key in family_tables('fec-observations')
+        if key in snapshot['families']['fec-observations']['tables']}
+    generation = build / 'generation'
+    build_generation(generation, family=family, files=subjects,
+        expected_keys=[p.dataset + '.parquet' for p in policies if not p.receipt_only],
+        read_snapshot=snapshot, parents=parents, inputs=inputs, partitioned=partitioned,
+        receipt_path=shared, receipt_policies=policies, receipt_generation_id=generation_id,
+        read_operation=operation, adopt_owned_receipt=True, owned_output_root=build)
+    # These bounded remaps have been consumed and admitted in the final main/
+    # receipts. Resume uses that artifact and original selections, never these files.
+    for item in owned_headers:
+        path = item.path
+        with pq.ParquetFile(path) as source:
+            count = source.metadata.num_rows
+        if (path.parent != build / 'rebound-filing-inputs' or path.is_symlink()
+                or path.stat().st_nlink != 1 or _sha(path) != item.sha256 or count != item.rows):
+            raise ValueError('Owned header remap changed before disposal')
+    for item in owned_headers:
+        item.path.unlink()
+    if owned_headers:
+        (build / 'rebound-filing-inputs').rmdir()
+    return generation

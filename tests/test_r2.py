@@ -245,6 +245,7 @@ def test_public_readback_binds_bytes_to_stable_storage_version(tmp_path, monkeyp
 
     @contextmanager
     def stream(method, url, **kwargs):
+        assert kwargs["headers"] == {"User-Agent": "spicy-regs", "Accept-Encoding": "identity"}
         headers = {} if fault == "missing-etag" else {"etag": '"stable"'}
         yield httpx.Response(200, headers=headers, content=b"x" * len(data) if fault == "bytes" else data,
                              request=httpx.Request(method, url))
@@ -264,6 +265,7 @@ def test_public_version_asks_for_the_stored_bytes(monkeypatch):
     import httpx
 
     def head(url, **options):
+        assert options["headers"]["User-Agent"] == "spicy-regs"
         request = httpx.Request("HEAD", url)
         if url.endswith("/absent.json"):
             return httpx.Response(404, request=request)
@@ -274,6 +276,19 @@ def test_public_version_asks_for_the_stored_bytes(monkeypatch):
     monkeypatch.setattr(r2.httpx, "head", head)
     assert r2.public_object_version("https://public.example/publication.v2.json") == {"etag": '"fbc6"', "bytes": 228490}
     assert r2.public_object_version("https://public.example/absent.json") is None
+
+
+@pytest.mark.parametrize("status", [403, 500])
+def test_public_version_preserves_provider_refusals(monkeypatch, status):
+    import httpx
+
+    def head(url, **options):
+        assert options["headers"] == {"User-Agent": "spicy-regs", "Accept-Encoding": "identity"}
+        return httpx.Response(status, request=httpx.Request("HEAD", url))
+
+    monkeypatch.setattr(r2.httpx, "head", head)
+    with pytest.raises(httpx.HTTPStatusError):
+        r2.public_object_version("https://public.example/publication.v2.json")
 
 
 @pytest.mark.parametrize("code", ["NoSuchKey", "AccessDenied", "InternalError"])

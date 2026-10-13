@@ -1395,6 +1395,7 @@ tables:
       raw COPY fields, decoded NULLs and array text remain separate. Missing
       IDs remain missing.
     columns:
+      observation_ordinal: "Zero-based source occurrence position within this generation. Repeated source records retain distinct positions; the ordinal is not a stable identity across generations."
       collection_id: "Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id."
       source_family: "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content."
       profile: "Provider reader profile used to interpret the verified input."
@@ -4499,6 +4500,7 @@ tables:
     measured_on: '2026-10-01'
     summary: "Records whether each saved agency source record produced data, contained only structure, or could not be interpreted."
     columns:
+      source_sha256: "Digest pinning source bytes supporting this record, copied from the exact admitted collection and source-record coordinate."
       collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
         label alone is not a globally unique source identity.
       source_record_id: Native source-observation key within collection_id. Resolve with the source generation, exact

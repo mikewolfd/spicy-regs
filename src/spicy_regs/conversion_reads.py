@@ -13,7 +13,7 @@ from time import perf_counter
 
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import (
-    _bundle_policies, _index_processing, _joined_subjects, _load_receipts, _unpack,
+    _bundle_policies, _index_processing, _joined_subjects, _load_receipts, _pack, _unpack,
 )
 from spicy_regs.runtime_bounds import checkpoint
 
@@ -115,6 +115,62 @@ class _FamilyReader:
             return {outcome: count for outcome, count in self.connection.execute(
                 "SELECT outcome,count(*) FROM receipts GROUP BY outcome").fetchall()}
 
+    def preserved_source_page_refusals(self):
+        """Count only the shipped page policy's body-free refusal observations."""
+        dataset = 'fec_research_source_pages'
+        if dataset not in self.policies:
+            return 0
+        count = 0
+        for receipt in self.processing(dataset, outcomes=frozenset({'refused'})):
+            self._source_page_refusal(receipt)
+            count += 1
+        return count
+
+    def _source_page_refusal(self, receipt):
+        from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+
+        dataset = 'fec_research_source_pages'
+        policy = self.policies.get(dataset)
+        if policy is None or policy.descriptor() != dataset_policy(dataset).descriptor():
+            raise ValueError('Source page refusal requires the exact shipped page policy')
+        row = receipt['processing_fields']
+        if (receipt['outcome'] != 'refused'
+                or row.get('content_status') not in {'failed_page', 'unsupported_body_boundaries'}
+                or row.get('text') is not None
+                or receipt['diagnostics'].get('content_status') != row['content_status']):
+            raise ValueError('Source page refusal must preserve a permitted body-free failure')
+        return row
+
+    def _source_page_rows(self):
+        """Merge matched subjects and preserved failures in the admitted receipt order.
+
+        Disk-backed replay avoids retaining the page population in memory or
+        overlapping streams on the admitted database connection.
+        """
+        dataset = 'fec_research_source_pages'
+        with TemporaryDirectory(prefix='conversion-source-pages-') as temporary, closing(
+                sqlite3.connect(str(Path(temporary) / 'subjects.db'))) as subjects:
+            # Match the finite disk ceiling of reference receipt admission.
+            page_size = subjects.execute('PRAGMA page_size').fetchone()[0]
+            subjects.execute(f'PRAGMA max_page_count={32 * 1024**3 // page_size}')
+            subjects.execute('CREATE TABLE replay (n INTEGER PRIMARY KEY, row TEXT)')
+            for number, row in enumerate(self.read_subjects(dataset)):
+                if row.get('content_status') != 'body_extracted':
+                    raise ValueError('Accepted source page lacks extracted body status')
+                subjects.execute('INSERT INTO replay VALUES (?,?)', [number, json.dumps(_pack(row))])
+            number = 0
+            for receipt in self.processing(dataset):
+                if receipt['outcome'] == 'accepted':
+                    held = subjects.execute('SELECT row FROM replay WHERE n=?', [number]).fetchone()
+                    if held is None:
+                        raise ValueError('Missing accepted source page replay')
+                    number += 1
+                    yield _unpack(json.loads(held[0]))
+                else:
+                    yield self._source_page_refusal(receipt)
+            if subjects.execute('SELECT 1 FROM replay WHERE n>=?', [number]).fetchone():
+                raise ValueError('Extra accepted source page replay')
+
     def compare_original(self, dataset, original, *, source_schema=None):
         """Prove exact source members, Arrow schema/metadata, values, order and repetitions."""
         import pyarrow as pa
@@ -183,6 +239,33 @@ class _FamilyReader:
                 compare(path, schema, islice(rows, state['rows']))
             if next(rows, None) is not None:
                 raise ValueError("Extra prior receipt inputs without retained source rows")
+        elif dataset.startswith('fec_'):
+            from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
+            from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
+            if dataset not in FIELD_RULES and dataset not in REGISTRY:
+                raise ValueError("No maintained original decoder for admitted FEC dataset")
+            policy = self.policies[dataset]
+            records = (self._source_page_rows() if dataset == 'fec_research_source_pages' else
+                       (r['processing_fields'] for r in self.processing(dataset, outcomes=frozenset({'observed'})))
+                       if policy.receipt_only else self.read_subjects(dataset))
+            source_columns = pq.read_schema(next(iter(members.values()))).names
+            def originals():
+                for row in records:
+                    if dataset in FIELD_RULES:
+                        moved = row['fec_conversion_inputs']
+                        yield {name: moved[name] if name in moved else row[name]
+                               for name in row['fec_input_columns']}
+                    else:
+                        moved = row['conversion_inputs']
+                        overrides = (row.get('source_input') or {}).get('fec_retained_overrides', {})
+                        yield {name: overrides.get(name, moved.get(name, row.get(name)))
+                               for name in source_columns}
+            rows = iter(originals())
+            for path in members.values():
+                count = pq.ParquetFile(path).metadata.num_rows
+                compare(path, pq.read_schema(path), islice(rows, count))
+            if next(rows, None) is not None:
+                raise ValueError("Extra restored FEC processing rows")
         else:
             if original.is_dir():
                 raise ValueError("This source requires a single retained Parquet member")

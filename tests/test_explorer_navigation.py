@@ -213,7 +213,8 @@ def test_detail_attempts_use_main_keys_and_house_native_identity():
 def test_financial_filing_routes_require_the_main_association_decision():
     target = recipe('native_filing_fec_receipts')['targets'][0]
     row = {'filing_key':'urn:fec:filing:official-fec:openfec-file-number:123',
-           'filing_association_status':'resolved_native_filing_key'}
+           'filing_association_status':'resolved_native_filing_key',
+           'filing_association_target_generation_scope':'external'}
     assert target_keys(target, {}, row) == [row['filing_key']]
     for status in (None, 'not_evaluated', 'unresolved', 'missing_target'):
         assert target_keys(target, {}, dict(row, filing_association_status=status)) is None
@@ -223,7 +224,8 @@ def test_polymorphic_fec_endpoints_preserve_type_native_id_and_cycle():
     target = next(t for t in recipe('fec_relationship_object')['targets']
                   if t['table']=='fec_candidate_history')
     row = {'object_id':'H8CA12345','object_type':'candidate','cycle':2024,
-           'object_endpoint_status':'lookup_eligible'}
+           'object_endpoint_status':'lookup_eligible', 'object_id_status':'source_id_shape',
+           'value_status':'reported'}
     assert target_keys(target, {}, row) == ['H8CA12345','2024']
     for changed in ({'cycle':None}, {'object_endpoint_status':'name_only'},
                     {'object_type':'committee'}, {'object_endpoint_status':'no_edge_reported_none'}):

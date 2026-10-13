@@ -91,6 +91,10 @@ class ReceiptAdapter:
 
     def selected_rows(self, table):
         """Read one dataset's exact native subjects and verified processing values."""
+        yield from (row for row, _ in self._selected_rows_with_policy(table))
+
+    def _selected_rows_with_policy(self, table):
+        """Keep the admitted historical/current policy beside each verified row."""
         from .etl_receipts import DatasetPolicy, read_with_receipts, read_attempts, select_receipts, selected_subject_policy, receipt_policies
         from .subject_catalog import descriptors
         from .sources.publication import receipt_members, receipt_key_members, table_members, table_owner
@@ -143,13 +147,13 @@ class ReceiptAdapter:
             else:
                 policy = selected_subject_policy(policy, subjects)
             if policy.receipt_only:
-                yield from (row["processing_fields"] for row in read_attempts(
+                yield from ((row["processing_fields"], policy) for row in read_attempts(
                     [receipt], policy, generation_id=generation, outcomes=frozenset({"observed"})))
             else:
-                yield from read_with_receipts(subjects, [receipt], policy,
-                                             generation_id=generation)
+                yield from ((row, policy) for row in read_with_receipts(subjects, [receipt], policy,
+                                                                      generation_id=generation))
 
-    def restore_originals(self, table, schema, original, *, prefix):
+    def restore_originals(self, table, schema, original, *, prefix, interpretation=None):
         """Materialize bounded verified inputs privately, shared by connection cursors."""
         import pyarrow as pa
 
@@ -162,9 +166,12 @@ class ReceiptAdapter:
         con.execute(f'CREATE TABLE "{target}" AS SELECT * FROM "{temporary}"')
         try:
             batch = []
-            for selected in self.selected_rows(table):
+            for selected, admitted_policy in self._selected_rows_with_policy(table):
                 checkpoint()
-                batch.append(original(selected))
+                row = original(selected)
+                if interpretation is not None:
+                    row = interpretation(row, selected, admitted_policy)
+                batch.append(row)
                 if len(batch) == 2000:
                     con.register(temporary, pa.Table.from_pylist(batch, schema=schema))
                     con.execute(f'INSERT INTO "{target}" SELECT * FROM "{temporary}"')
@@ -180,7 +187,13 @@ class ReceiptAdapter:
         self.restored[target] = target
         return target
 
-    def restore(self, table):
+    def restore(self, table, *, source_schema=None, current=False):
+        """Keep source reconstruction separate from selected query interpretation.
+
+        Original reads can supply the exact retained source schema. Current
+        query reads use the maintained processing schema and admitted native
+        business values; neither path rewrites selected public relations.
+        """
         import pyarrow as pa
         from .etl_receipts import DatasetPolicy
         from .subject_catalog import descriptors
@@ -189,7 +202,10 @@ class ReceiptAdapter:
         self.require_selected((table,))
         policy = DatasetPolicy.from_descriptor(descriptors()[table])
         declaration = processing_declarations()[table]
-        schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declaration["arrow_schema"])))
+        schema = (source_schema if source_schema is not None else
+                  pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declaration["arrow_schema"]))))
+        if current and source_schema is not None:
+            raise ValueError("Current FEC interpretation requires its maintained processing schema")
         identity_scalars = ({} if policy.policy_version.startswith("fec-subject-receipts/") else
                             json.loads(files("spicy_regs").joinpath("fec_identity_context_fields.json").read_text())
                             [table]["native_scalars"])
@@ -206,13 +222,43 @@ class ReceiptAdapter:
             conversion = row.get("conversion_inputs")
             if not isinstance(conversion, Mapping):
                 raise ValueError(f"{table}: declared conversion_inputs must be a mapping")
+            source_input = row.get("source_input")
+            if source_input is not None and not isinstance(source_input, Mapping):
+                raise ValueError(f"{table}: retained source_input must be a mapping")
+            overrides = (source_input or {}).get("fec_retained_overrides", {})
+            if not isinstance(overrides, Mapping) or any(not isinstance(name, str) for name in overrides):
+                raise ValueError(f"{table}: retained original overrides must be a named mapping")
+            conversion = {**conversion, **overrides}
             for name in schema.names:
                 if name not in conversion and (name not in policy.input_fields or
                         (name in identity_scalars and row.get(name) is not None)):
                     raise ValueError(f"{table}: missing retained conversion input for {name}")
             return {name: conversion[name] if name in conversion else row.get(name) for name in schema.names}
 
-        return self.restore_originals(table, schema, original, prefix="_spicy_fec_processing_")
+        def interpretation(original_values, selected, admitted_policy):
+            # The selected policy is exact and its subject/receipt row match
+            # has already passed admission. Only same-typed native business
+            # fields can replace old source tokens in a current SQL relation.
+            # Removed fields and different representations keep their explicit
+            # retained processing values; they are never guessed or relabeled.
+            result = dict(original_values)
+            # Named processing fields are the producer's retained current
+            # interpretation. Original-only override maps are deliberately
+            # excluded: they belong solely to source reconstruction.
+            for name in admitted_policy.receipt_fields:
+                if name in schema.names and name in selected:
+                    result[name] = selected[name]
+            for field in admitted_policy.subject_schema:
+                if field.name in schema.names and field.type == schema.field(field.name).type:
+                    result[field.name] = selected[field.name]
+            return result
+
+        prefix = "_spicy_fec_current_" if current else "_spicy_fec_processing_"
+        if source_schema is not None:
+            import hashlib
+            prefix += hashlib.sha256(schema.serialize().to_pybytes()).hexdigest() + "_"
+        return self.restore_originals(table, schema, original, prefix=prefix,
+                                      interpretation=interpretation if current else None)
 
     def prepare_qualified(self, spec, sql):
         """Serve exact receipt-bound legacy inputs, or restore every native input.
@@ -232,7 +278,7 @@ class ReceiptAdapter:
 
     def prepare(self, spec, sql):
         self.require_selected(spec.required)
-        replacements = {table: self.restore(table) for table in spec.required}
+        replacements = {table: self.restore(table, current=True) for table in spec.required}
         tree = json.loads(self.connection.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()[0])
         def visit(node, ctes=frozenset()):
             if isinstance(node, list):

@@ -28,6 +28,8 @@ from loguru import logger
 from spicy_regs.sources.cloudflare import purge_urls
 from spicy_regs.sources.publication import _get_bounded, _head
 
+_PUBLIC_HEADERS = {"User-Agent": "spicy-regs", "Accept-Encoding": "identity"}
+
 
 # --- download (public URL) -------------------------------------------------
 
@@ -392,7 +394,7 @@ def public_object_version(url: str) -> dict | None:
     The request asks for the stored bytes: the public host otherwise answers a JSON object gzip-encoded, with a
     weak ETag and no length (``publication.v2.json`` on the custom domain, 2026-10-05).
     """
-    response = httpx.head(url, follow_redirects=True, timeout=60, headers={"Accept-Encoding": "identity"})
+    response = httpx.head(url, follow_redirects=True, timeout=60, headers=_PUBLIC_HEADERS)
     if response.status_code == 404:
         return None
     response.raise_for_status()
@@ -412,7 +414,7 @@ def verify_public_file(local_path: Path, remote_key: str, base_url: str) -> dict
     received = 0
     url = f"{base_url.rstrip('/')}/{remote_key}"
     with httpx.stream("GET", url, follow_redirects=True, timeout=120,
-                      headers={"Accept-Encoding": "identity"}) as response:
+                      headers=_PUBLIC_HEADERS) as response:
         response.raise_for_status()
         etag = response.headers.get("etag")
         for chunk in response.iter_bytes(chunk_size=1_048_576):

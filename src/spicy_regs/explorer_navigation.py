@@ -145,6 +145,56 @@ def _recorded_source_navigation() -> list[dict]:
     return specs
 
 
+# These retained context mappers have no individual source-record identity.
+_FEC_CONTEXT_SOURCES = frozenset({
+    "fec_collection_selection", "fec_historical_ie_statistics", "fec_research_context_dispositions",
+    "fec_research_document_observations", "fec_research_filing_feed_items", "fec_research_meeting_observations",
+    "fec_research_response_outcomes", "fec_research_source_pages", "fec_retained_csv_observations",
+    "fec_filing_definition_evidence",
+})
+_FEC_DIGEST = r"sha256:[a-f0-9]{64}"
+
+
+def _fec_context_route(source):
+    """Return collection-anchor evidence guards, not fictional record keys."""
+    if source in {"fec_record_evidence", "fec_filing_definition_evidence"}:
+        return (
+            guard("endpoint_kind", row=True, values=("collection_context",)),
+            *_fec_witness_scope(),
+            guard("context_column", row=True, values=("collection_outcome_json",)),
+            guard("context_pointer", row=True, pattern="/.*"),
+            guard("witness_sha256", row=True, pattern=_FEC_DIGEST),
+        ), ("The collection containing this context or workbook witness, with its retained context column, JSON pointer "
+            "and witness digest. Target scope is self and witness scope is the exact external generation pin. This is "
+            "a collection anchor; release qualification must check the selected generation and the witness pointer/digest.")
+    if source == "fec_collection_selection":
+        return (guard("source_generation_pin", row=True, pattern=_FEC_DIGEST),
+                guard("source_sha256", row=True, pattern=_FEC_DIGEST)), (
+            "The retained source collection selected by this policy decision, under its source-generation pin and "
+            "source digest; selection is not an individual source-record identity.")
+    if source == "fec_research_context_dispositions":
+        return (guard("context_sha256", row=True, pattern=_FEC_DIGEST),), (
+            "The retained collection context covered by this mapping disposition and its context digest; "
+            "no individual source-record identity is asserted.")
+    return (guard("source_context_pointer", row=True, pattern="/.*"),
+            guard("context_sha256", row=True, pattern=_FEC_DIGEST)), (
+        "The retained collection containing the historical, research or CSV observation, with its source-context "
+        "pointer and context digest. This collection anchor does not assert an individual source-record identity "
+        "or qualify financial totals.")
+
+
+def _fec_witness_scope():
+    # Literal guards preserve scope labels. Selected-generation equality and
+    # pointer/digest validation remain mandatory release qualification checks.
+    return (
+        guard("target_generation_scope", row=True, values=("self",)),
+        guard("target_table", row=True, pattern="fec_[a-z_]+"),
+        guard("target_record_id", row=True, pattern=_FEC_DIGEST),
+        guard("witness_generation_scope", row=True, values=("external",)),
+        guard("witness_generation_pin", row=True, pattern=_FEC_DIGEST),
+    )
+
+
 def declarations(processing_joins: tuple = ()) -> list[dict]:
     """Explicit source relationships; receipt fields retain inspection context only."""
     specs = [
@@ -293,39 +343,55 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
             continue
         # These are existing canonical declarations, not inferred matching names.
         guards = ()
+        meaning = join.reason or "Retained source-record relationship; no current-record or financial-total qualification."
+        if join.parent == "fec_collections" and join.child in _FEC_CONTEXT_SOURCES | {"fec_record_evidence"}:
+            guards, meaning = _fec_context_route(join.child)
         if join.child == "fec_record_evidence" and "target_record_id" in join.child_columns:
-            guards = (guard("target_table", row=True, values=(join.parent,)),)
+            guards = (guard("target_table", row=True, values=(join.parent,)),
+                      guard("target_generation_scope", row=True, values=("self",)))
         if join.parent == "fec_filings" and "filing_key" in field_rules.get(join.child, {}).get("keep", ()):
             guards += (guard("filing_association_status", row=True, values=("resolved_native_filing_key",)),)
         specs.append(array("receipt_" + join.child + "_" + "_".join(join.child_columns) + "_" + join.parent,
                            join.child, (), (route(join.parent, join.parent_columns,
                                                 tuple(key(part(c, row=True)) for c in join.child_columns), *guards),),
-                           meaning=join.reason or "Retained source-record relationship; no current-record or financial-total qualification.",
+                           meaning=meaning,
                            mode="row"))
     # These canonical collection relationships enumerate the typed observations.
     # A stored native filing_key is already the retained mapper's decision; browser
     # navigation keeps every metadata observation and makes no latest/current selection.
     filing_sources = {j.child for j in processing_joins if j.parent == "fec_collections"}
-    for source in sorted(filing_sources - {"fec_source_records"}):
+    for source in sorted(filing_sources - {"fec_source_records"} - _FEC_CONTEXT_SOURCES):
+        digest_field = "witness_sha256" if source == "fec_record_evidence" else "source_sha256"
+        guards = (guard("endpoint_kind", row=True, values=("source_record",)), *_fec_witness_scope()) if source == "fec_record_evidence" else ()
+        meaning = ("An individual source witness identified by collection, source ID and witness content digest. "
+                   "Target scope is self and witness scope is the exact external generation pin; release qualification "
+                   "must bind that pin to the selected source generation before serving this route.") if source == "fec_record_evidence" else (
+                   "The recorded source row under its exact collection, source ID and source-content hash. "
+                   "This does not qualify a current filing or financial total.")
         specs.append(array("fec_source_row_" + source, source, (),
                            (route("fec_source_records", ("collection_id", "source_record_id", "source_sha256"),
                                   (key(part("collection_id", row=True)), key(part("source_record_id", row=True)),
-                                   key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}"))),),
-                           meaning="The recorded source row under its exact collection, source ID and source-content hash. This does not qualify a current filing or financial total.",
+                                   key(part(digest_field, row=True), pattern=_FEC_DIGEST)), *guards),),
+                           meaning=meaning,
                            mode="row"))
     for source in sorted(filing_sources):
         if "filing_key" not in field_rules.get(source, {}).get("keep", ()):
             continue
+        targets = tuple(route("fec_filings", ("filing_key",),
+                              (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),),
+                              guard("filing_association_status", row=True, values=("resolved_native_filing_key",)),
+                              guard("filing_association_target_generation_scope", row=True, values=(scope,)))
+                        for scope in ("external", "self"))
         specs.append(array("native_filing_" + source, source, (),
-                           (route("fec_filings", ("filing_key",),
-                                  (key(part("filing_key", row=True), pattern=r"urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"),),
-                                  guard("filing_association_status", row=True, values=("resolved_native_filing_key",))),),
+                           targets,
                            meaning="All retained filing metadata with this mapper-qualified native key. This does not select a current amendment or combine financial amounts.", mode="row"))
     for side in ("subject", "object"):
         targets = tuple(route(table, (column, "cycle"),
                               (key(part(side + "_id", row=True), pattern=pattern), key(part("cycle", row=True), pattern=NUM)),
                               guard(side + "_type", row=True, values=(kind,)),
-                              guard(side + "_endpoint_status", row=True, values=("lookup_eligible",)))
+                              guard(side + "_endpoint_status", row=True, values=("lookup_eligible",)),
+                              guard(side + "_id_status", row=True, values=("source_id_shape",)),
+                              *((guard("value_status", row=True, values=("reported",)),) if side == "object" else ()))
                         for kind, table, column, pattern in (
                             ("candidate", "fec_candidate_history", "candidate_id", r"[HPS][A-Za-z0-9]{8}"),
                             ("committee", "fec_committee_history", "committee_id", r"C[0-9]{8}")))
@@ -508,7 +574,72 @@ def directions(available, *, external=False):
     } for direction in ("forward", "reverse")}
 
 
-def published_navigation(specs, schemas, identities=None):
+_FEC_WITNESS_ROUTES = frozenset({
+    "fec_source_row_fec_record_evidence",
+    "receipt_fec_record_evidence_collection_id_fec_collections",
+    "receipt_fec_filing_definition_evidence_collection_id_fec_collections",
+})
+
+
+def selected_generation_pins(index):
+    """One table-to-generation map shared by metadata and measurements."""
+    return {filename.removesuffix(".parquet"): entry.get("artifactDigest")
+            for entry in index.get("families", {}).values()
+            for filename in entry.get("tables", {}) if filename.endswith(".parquet")}
+
+
+def _bind_fec_witness_generation(spec, target, generation_pins):
+    """Bind literal FEC witness guards to this selected metadata snapshot."""
+    filing = spec["id"].startswith("native_filing_fec_")
+    logical_target = spec["id"].startswith("receipt_fec_record_evidence_target_record_id_")
+    if spec["id"] not in _FEC_WITNESS_ROUTES and not filing and not logical_target:
+        return True
+    # An earlier metadata snapshot contributes no generation authority here.
+    target["guards"] = [g for g in target["guards"] if not g.get("selectedGenerationGuard")]
+    target.pop("generationScope", None)
+    source_pin = generation_pins.get(spec["source"])
+    witness_pin = generation_pins.get(target["table"])
+    def valid(pin):
+        return isinstance(pin, str) and re.fullmatch(_FEC_DIGEST, pin) is not None
+    if logical_target:
+        if not valid(source_pin) or not valid(witness_pin) or source_pin != witness_pin:
+            return False
+        target["generationScope"] = {"target": witness_pin, "scope": "self"}
+        return True
+    if filing:
+        evidence_pin = generation_pins.get("fec_source_records")
+        scope = next(g["values"][0] for g in target["guards"]
+                     if g["path"] == ["filing_association_target_generation_scope"])
+        if not all(valid(pin) for pin in (source_pin, witness_pin, evidence_pin)):
+            return False
+        if scope == "self" and source_pin != witness_pin:
+            return False
+        target["guards"].append(
+            {**part("filing_association_source_generation_pin", row=True),
+             "sameAs": {**part("", row=True), "literal": evidence_pin}, "selectedGenerationGuard": True})
+        if scope == "external":
+            target["guards"].append(
+                {**part("filing_association_target_generation_pin", row=True),
+                 "sameAs": {**part("", row=True), "literal": witness_pin}, "selectedGenerationGuard": True})
+        target["generationScope"] = {"sourceEvidence": evidence_pin, "target": witness_pin, "scope": scope}
+        return True
+    target_tables = sorted(name for name, pin in generation_pins.items()
+                           if name.startswith("fec_") and name != spec["source"] and pin == source_pin)
+    if not valid(source_pin) or not valid(witness_pin) or not target_tables:
+        return False
+    # Remove prior snapshot bindings before fresh resolution. An old metadata
+    # recipe can never impose its pin on a new selected publication.
+    target["guards"] += [
+        {**part("witness_generation_pin", row=True), "sameAs": {**part("", row=True), "literal": witness_pin},
+         "selectedGenerationGuard": True},
+        {**guard("target_table", row=True, values=tuple(target_tables)), "selectedGenerationGuard": True},
+    ]
+    target["generationScope"] = {"target": source_pin, "witness": witness_pin,
+                                 "targetTables": target_tables}
+    return True
+
+
+def published_navigation(specs, schemas, identities=None, *, generation_pins=None):
     """Admit only main-field routes and retain dispositions for unpublished sources.
 
     Receipt fields describe separately inspectable evidence. They never recover
@@ -516,12 +647,14 @@ def published_navigation(specs, schemas, identities=None):
     against selected schemas; JSON paths remain guarded per source occurrence.
     """
     identities = identities or {}
+    generation_pins = generation_pins or {}
     result = []
     for original in specs:
         spec = deepcopy(original)
         fields = dict(schemas.get(spec["source"], []))
         spec["field"] = next((name for name in spec["fields"] if name in fields), None)
         for target in spec["targets"]:
+            generation_available = _bind_fec_witness_generation(spec, target, generation_pins)
             if target["table"].startswith("@receipt:"):
                 dataset = target["table"].removeprefix("@receipt:")
                 if set(target["columns"]) <= set(dict(schemas.get(dataset, []))):
@@ -529,7 +662,7 @@ def published_navigation(specs, schemas, identities=None):
             main, nested = _dependencies(target, fields, spec["field"], spec["mode"], candidates=spec["candidates"])
             target["requiredMainFields"], target["requiredElementFields"] = main, nested
             target["sourceAvailable"] = spec["source"] in schemas and all(
-                item["status"] != "missing" for item in [*main, *nested])
+                item["status"] != "missing" for item in [*main, *nested]) and generation_available
             external = target["table"] == "@url"
             target["requiredTargetFields"] = [
                 {"path": column, "status": "published" if external or column in
@@ -545,6 +678,8 @@ def published_navigation(specs, schemas, identities=None):
                 target["sourceUnavailableReason"] = (
                     "Required main source fields are not published: " + ", ".join(missing)
                     if spec["source"] in schemas else "The source table is not published.")
+                if not generation_available:
+                    target["sourceUnavailableReason"] = "Exact selected FEC target and witness generation scope is unavailable."
             if not target["available"]:
                 target["unavailableReason"] = "The target table or its complete key is not published."
         spec["available"] = any(t["sourceAvailable"] for t in spec["targets"])

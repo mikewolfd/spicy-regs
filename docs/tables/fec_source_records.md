@@ -17,6 +17,7 @@ Joinable metadata and retained source evidence across FEC families. collection_i
 
 | Column | Type | Description |
 | --- | --- | --- |
+| `observation_ordinal` | `BIGINT` | Zero-based source occurrence position within this generation. Repeated source records retain distinct positions; the ordinal is not a stable identity across generations. |
 | `collection_id` | `VARCHAR` | Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id. |
 | `source_family` | `VARCHAR` | Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content. |
 | `profile` | `VARCHAR` | Provider reader profile used to interpret the verified input. |

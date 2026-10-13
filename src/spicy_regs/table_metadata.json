@@ -2554,6 +2554,11 @@
     "data_quality": "Memo, subtotal and attribution fields retain their source meaning. Their eligibility depends on the source family, retained definitions and analytic purpose; no blanket memo exclusion applies to every query. Joint fundraising transfer and attribution observations can overlap without carrying an exact source link between them. Monetary values, amendment chains and record inclusion rules differ by family; generic record ingestion does not select a latest amendment or establish a safe sum. Unknown fields stay in native JSON. Original pinned bytes preserve numeric spelling where the provider exposes exact decimal values as strings.",
     "columns": [
       {
+        "column_name": "observation_ordinal",
+        "column_type": "BIGINT",
+        "description": "Zero-based source occurrence position within this generation. Repeated source records retain distinct positions; the ordinal is not a stable identity across generations."
+      },
+      {
         "column_name": "collection_id",
         "column_type": "VARCHAR",
         "description": "Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id."
@@ -2624,7 +2629,8 @@
     "identity_columns": [
       "collection_id",
       "source_record_id",
-      "source_sha256"
+      "source_sha256",
+      "observation_ordinal"
     ]
   },
   "fec_relationships": {
@@ -2992,7 +2998,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -3003,6 +3009,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -3066,6 +3077,11 @@
         "column_name": "observation_ordinal",
         "column_type": "BIGINT",
         "description": "Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest pinning source bytes supporting this record, copied from the exact admitted collection and source-record coordinate."
       }
     ],
     "subject": "campaign_finance",
@@ -3988,7 +4004,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -3999,6 +4015,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -4385,7 +4406,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -4396,6 +4417,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -5102,7 +5128,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -5113,6 +5139,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -6288,7 +6319,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -6299,6 +6330,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -6520,7 +6556,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -6531,6 +6567,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -7047,7 +7088,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -7058,6 +7099,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -7479,7 +7525,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -7490,6 +7536,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -8011,7 +8062,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -8022,6 +8073,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -8268,7 +8324,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -8279,6 +8335,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -8597,7 +8658,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -8608,6 +8669,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -9006,7 +9072,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -9017,6 +9083,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -9198,7 +9269,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -9209,6 +9280,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -10054,7 +10130,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -10065,6 +10141,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -10516,7 +10597,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -10527,6 +10608,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -10793,7 +10879,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -10804,6 +10890,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -11778,7 +11869,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -11789,6 +11880,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -12195,7 +12291,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -12206,6 +12302,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -12657,7 +12758,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -12668,6 +12769,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -14212,7 +14318,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -14223,6 +14329,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -15121,7 +15232,7 @@
       {
         "column_name": "filing_association_target_generation_pin",
         "column_type": "VARCHAR",
-        "description": "Exact selected filing-metadata generation against which this association was checked."
+        "description": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases."
       },
       {
         "column_name": "filing_association_record_id",
@@ -15132,6 +15243,11 @@
         "column_name": "filing_association_referenced_key",
         "column_type": "VARCHAR",
         "description": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified."
+      },
+      {
+        "column_name": "filing_association_target_generation_scope",
+        "column_type": "VARCHAR",
+        "description": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match."
       },
       {
         "column_name": "filing_association_target_count",
@@ -28094,7 +28210,7 @@
       {
         "dataset": "fec_account_transfers",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28106,7 +28222,7 @@
       {
         "dataset": "fec_agency_mapping_dispositions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "observation_ordinal"
         ],
@@ -28154,7 +28270,7 @@
       {
         "dataset": "fec_allocated_disbursements",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28166,7 +28282,7 @@
       {
         "dataset": "fec_allocation_bases",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28203,7 +28319,7 @@
       {
         "dataset": "fec_bundled_contributions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28347,7 +28463,7 @@
       {
         "dataset": "fec_communication_costs",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28359,7 +28475,7 @@
       {
         "dataset": "fec_contribution_aggregates",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28371,7 +28487,7 @@
       {
         "dataset": "fec_coordinated_party_expenditures",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28383,7 +28499,7 @@
       {
         "dataset": "fec_debts",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28395,7 +28511,7 @@
       {
         "dataset": "fec_disbursements",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28407,7 +28523,7 @@
       {
         "dataset": "fec_electioneering_communications",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28443,7 +28559,7 @@
       {
         "dataset": "fec_filing_header_associations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "observation_ordinal"
         ],
@@ -28471,7 +28587,7 @@
       {
         "dataset": "fec_filing_report_observations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28483,7 +28599,7 @@
       {
         "dataset": "fec_filing_text_observations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28535,7 +28651,7 @@
       {
         "dataset": "fec_inaugural_donations",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28547,7 +28663,7 @@
       {
         "dataset": "fec_independent_expenditures",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28559,7 +28675,7 @@
       {
         "dataset": "fec_intercommittee_transactions",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28619,7 +28735,7 @@
       {
         "dataset": "fec_loan_guarantors",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28631,7 +28747,7 @@
       {
         "dataset": "fec_loan_terms",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28643,7 +28759,7 @@
       {
         "dataset": "fec_loans",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28727,7 +28843,7 @@
       {
         "dataset": "fec_receipts",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28795,7 +28911,7 @@
       {
         "dataset": "fec_reported_financial_summaries",
         "receipt_only": false,
-        "policy_version": "fec-subject-receipts/2",
+        "policy_version": "fec-subject-receipts/3",
         "identity_columns": [
           "record_id"
         ],
@@ -28934,11 +29050,12 @@
       {
         "dataset": "fec_source_records",
         "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
+        "policy_version": "fec-identity-context-receipts/3",
         "identity_columns": [
           "collection_id",
           "source_record_id",
-          "source_sha256"
+          "source_sha256",
+          "observation_ordinal"
         ],
         "processing_fields": [
           "metadata_json",

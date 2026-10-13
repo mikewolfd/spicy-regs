@@ -905,9 +905,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1096,9 +1097,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1176,9 +1178,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1286,9 +1289,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1566,9 +1570,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1613,9 +1618,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1719,9 +1725,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1806,9 +1813,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1913,9 +1921,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -1965,9 +1974,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2048,9 +2058,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2087,9 +2098,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2260,9 +2272,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2353,9 +2366,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2409,9 +2423,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2609,9 +2624,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2693,9 +2709,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -2786,9 +2803,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -3100,9 +3118,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -3295,9 +3314,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -4558,7 +4578,8 @@
       "disposition": "Source-stated disposition or mapper classification at this table's grain; interpret with the adjacent reason or finding fields.",
       "reason": "Concrete reason for this observation's mapping or nondata disposition.",
       "target_record_ids_json": "JSON array of typed observation keys emitted from this native source record; empty output is explained by the disposition.",
-      "observation_ordinal": "Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier."
+      "observation_ordinal": "Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier.",
+      "source_sha256": "Digest pinning source bytes supporting this record, copied from the exact admitted collection and source-record coordinate."
     }
   },
   "fec_api_response_controls": {
@@ -4692,9 +4713,10 @@
       "filing_association_status": "The maintained association rule result. Resolved means a qualified filing key; unresolved reasons and not_evaluated never imply an edge or a current filing.",
       "filing_association_policy": "Version of the maintained filing association rule used for this decision.",
       "filing_association_source_generation_pin": "Exact selected source generation used for the filing association decision.",
-      "filing_association_target_generation_pin": "Exact selected filing-metadata generation against which this association was checked.",
+      "filing_association_target_generation_pin": "Exact separately selected filing-metadata generation for an external target. Null for a target in this same dataset generation (self); use the target scope to distinguish these cases.",
       "filing_association_record_id": "Identity of the admitted association witness; null when source context or a singular header witness is unavailable.",
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
+      "filing_association_target_generation_scope": "Whether the filing target belongs to this same dataset generation (self) or a separately pinned generation (external). Self targets have no external generation pin; the scope alone does not establish a resolved match.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
@@ -4764,6 +4786,7 @@
   },
   "fec_source_records": {
     "columns": {
+      "observation_ordinal": "Zero-based source occurrence position within this generation. Repeated source records retain distinct positions; the ordinal is not a stable identity across generations.",
       "collection_id": "Selected collection label: the file or query the record came from. Together with source_record_id identifies this record; joins fec_collections.collection_id and, for the election cycle, fec_collection_cycles.collection_id.",
       "source_family": "Caller-selected official FEC source-family identifier, checked against the inventory. Joins fec_source_catalog.source_family; this classification is not independently inferred from source content.",
       "profile": "Provider reader profile used to interpret the verified input.",

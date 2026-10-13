@@ -273,6 +273,7 @@ def build_generation(
     receipt_generation_id: str | None = None,
     receipt_index: tuple[Path, Mapping] | None = None,
     adopt_owned_receipt: bool = False,
+    owned_output_root: Path | None = None,
     read_operation=None,
     canonical_root: Path | None = None,
 ):
@@ -300,6 +301,12 @@ def build_generation(
     admission fails; callers must preserve the directory for recovery. Retained
     source receipts use the default copy behavior.
 
+    ``owned_output_root`` opts table outputs into the same move behavior. All
+    inputs must be single-link regular files beneath that explicit build root,
+    without symlink ancestors, on the same filesystem as the destination. A
+    failed build retains moved files in this directory and remaining files at
+    their prior owned paths; no retained source may be passed as owned output.
+
     ``receipt_index`` explicitly adopts an already built key sidecar and its
     descriptor. Normal builds create no index. Full generation admission checks
     its exact receipt binding and every position before this artifact can publish.
@@ -321,17 +328,23 @@ def build_generation(
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
         raise ValueError("Output keys must be plain Parquet filenames")
+    if owned_output_root is not None:
+        _validate_owned_outputs(owned_output_root, directory, files,
+            receipt_path if adopt_owned_receipt else None, partitioned)
     directory.mkdir(parents=True, exist_ok=False)
     table_info = _table_footer_info if read_operation is not None else _table_info
     tables, rows = {}, {}
     for key, path in sorted(zip(names, files)):
         if key in partitioned:
             columns = list(partitioned[key])
-            tables[key] = {**_copy_split(path, directory, columns, rows, table_info=table_info), "partitionColumns": columns}
+            tables[key] = {**_copy_split(path, directory, columns, rows, table_info=table_info, adopt=owned_output_root is not None), "partitionColumns": columns}
         else:
             if path.is_symlink() or not path.is_file():
                 raise ValueError(f"Output is not a regular file: {path.name}")
-            shutil.copyfile(path, directory / key)
+            if owned_output_root is not None:
+                path.rename(directory / key)
+            else:
+                shutil.copyfile(path, directory / key)
             tables[key] = table_info(directory / key)
             rows[key] = tables[key]["rows"]
         declared = (schemas or {}).get(Path(key).stem)
@@ -401,7 +414,48 @@ def build_generation(
     return verify_generation(directory)
 
 
-def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str, int], *, table_info=_table_info) -> dict:
+def _validate_owned_outputs(root, destination, files, receipt, partitioned):
+    """Adoption is restricted to unaliased, freshly owned local output files."""
+    root, destination = Path(root).absolute(), Path(destination).absolute()
+    if any('..' in path.parts for path in (root, destination, *map(Path, files), *([] if receipt is None else [Path(receipt)]))):
+        raise ValueError('Owned output adoption refuses parent traversal')
+    def no_symlinks(path):
+        if any(p.is_symlink() for p in (path, *path.parents)):
+            raise ValueError('Owned output adoption refuses symlink paths or ancestors')
+    no_symlinks(root)
+    no_symlinks(destination)
+    if not root.is_dir() or not destination.is_relative_to(root) or destination == root:
+        raise ValueError('Owned output adoption requires a separate destination inside its build root')
+    existing_destination = next(p for p in (destination, *destination.parents) if p.exists())
+    if existing_destination.stat().st_dev != root.stat().st_dev:
+        raise ValueError('Owned output destination must be on the same filesystem')
+    seen = set()
+    for path in [*files, *([] if receipt is None else [receipt])]:
+        path = Path(path).absolute()
+        no_symlinks(path)
+        if not path.is_relative_to(root) or path == root or destination.is_relative_to(path) or path.is_relative_to(destination):
+            raise ValueError('Owned output is outside build root or aliases its destination')
+        members = list(path.rglob('*')) if path.is_dir() else [path]
+        if path.is_dir() and path.name + '.parquet' not in partitioned:
+            raise ValueError('Owned output directory is not a declared split table')
+        for member in members:
+            no_symlinks(member)
+            info = member.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                continue
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_dev != root.stat().st_dev:
+                raise ValueError('Owned output adoption requires single-link regular files on the same filesystem')
+            identity = (info.st_dev, info.st_ino)
+            if identity in seen:
+                raise ValueError('Owned output sources alias one another')
+            seen.add(identity)
+            if path.is_dir():
+                labels = member.relative_to(path).parts[:-1]
+                if not _PART_NAME.fullmatch(member.name) or [label.partition('=')[0] for label in labels] != list(partitioned[path.name + '.parquet']) or not all('=' in label for label in labels):
+                    raise ValueError('Owned split output contains an unexpected member')
+
+
+def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str, int], *, table_info=_table_info, adopt=False) -> dict:
     """Copy one split table's members into ``directory`` under ``<table>/``; return its columns and summed rows.
 
     Each member's row count is recorded in ``rows`` by its object key.
@@ -420,7 +474,10 @@ def _copy_split(path: Path, directory: Path, columns: list[str], rows: dict[str,
             raise ValueError(f"A split member is not <col>=<value>/.../part-NNNNNN.parquet: {path.name}/{relative}")
         key = f"{path.name}/{relative}"
         (directory / key).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(member, directory / key)
+        if adopt:
+            member.rename(directory / key)
+        else:
+            shutil.copyfile(member, directory / key)
         observed = table_info(directory / key)
         if info is not None and observed["columns"] != info["columns"]:
             raise ValueError(f"Members of a split table differ in columns: {key}")

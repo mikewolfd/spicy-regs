@@ -41,7 +41,8 @@ def dataset_policy(table: str, input_schema: pa.Schema) -> DatasetPolicy:
         schema,
         tuple(rule.get("identity_fields", ("record_id",))),
         (_CONVERSIONS, _INPUT_COLUMNS),
-        policy_version=VERSION,
+        policy_version=("fec-subject-receipts/3" if "filing_association_target_generation_scope" in schema.names
+                        or table == "fec_agency_mapping_dispositions" else VERSION),
         receipt_only=rule["receipt_only"],
     )
 
@@ -82,6 +83,9 @@ def write_fec_subjects(
     context_for,
     batch_size: int = 2000,
     associations_for=None,
+    source_digest_for=None,
+    observation_rebinding=None,
+    current_header_for=None,
 ):
     """Write actual mapper outputs and preserve failed conversion attempts.
 
@@ -105,6 +109,30 @@ def write_fec_subjects(
                         raise ValueError("FEC context differs from the selected generation")
                     try:
                         mapped = mapped_record(table, row, policy, ordinal=ordinal, association=association)
+                        if source_digest_for is not None:
+                            if table != "fec_agency_mapping_dispositions":
+                                raise ValueError("Source digest lookup is only for agency mapping dispositions")
+                            digest = source_digest_for(row)
+                            if row.get("source_sha256") is not None and row["source_sha256"] != digest:
+                                raise ValueError("Agency disposition digest conflicts with selected source")
+                            mapped["source_sha256"] = digest
+                        if current_header_for is not None:
+                            if table != 'fec_filing_header_associations':
+                                raise ValueError('Current header adoption requires its owned header dataset')
+                            current = current_header_for(row, ordinal)
+                            current_mapped = mapped_record(table, current, policy, ordinal=ordinal)
+                            for name in policy.subject_schema.names:
+                                value = current_mapped[name]
+                                if mapped[name] != value:
+                                    mapped[_CONVERSIONS][name] = row.get(name)
+                                    mapped[name] = value
+                        if observation_rebinding is not None:
+                            from spicy_regs.fec_native_conversion import rebind_row
+                            rebound = rebind_row(table, row, observation_rebinding)
+                            for name in row:
+                                if row[name] != rebound[name]:
+                                    mapped[_CONVERSIONS][name] = row[name]
+                                    mapped[name] = rebound[name]
                         # Check native values before write_dataset can expose any output.
                         split_record(policy, mapped, context)
                     except (ValueError, TypeError, pa.ArrowException) as error:
