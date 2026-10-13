@@ -196,12 +196,18 @@
       "audits": [
         {
           "disposition": "qualified",
+          "pin": "a3740f92",
+          "pin_kind": "artifact",
+          "date": "2026-10-11"
+        },
+        {
+          "disposition": "qualified",
           "pin": "649cfd28",
           "pin_kind": "artifact",
           "date": "2026-09-26"
         }
       ],
-      "statement": "qualified at `649cfd28…` (2026-09-26): the edition backfill holds 58 editions, 199510–202510, in 233,250 rows over 46,247 RINs, with `(rin, agenda_edition)` unique. Every readable edition is present; 199504 and 201204 were never published, and SpicyDocs refuses 200404 and 200410 over an XML-forbidden control byte. The Fall 2012 file is stamped `201210`, as its records state. No prior row is removed. Three editions, the oldest, the legacy-named Fall 2012 and the newest, match independent parses of reginfo's export exactly: RIN sets, titles and priority categories (4,999, 4,063 and 3,954 RINs). The run retains no source evidence. Receipt: `unified-agenda-649cfd28-2026-09-26/`."
+      "statement": "qualified at `a3740f92…` (2026-10-11): the accepted retained-source release holds 241,726 native subjects and 241,727 receipts, including the two repaired 2004 editions. Complete selected source/content and current native-receipt checks passed; all six selected join checks passed within their documented scopes. Every byte of all four remote generation members matches the admitted local release. Serving readback matches the generation, publication time, row count, schema and receipt interface; it is not a new all-row serving query or every-endpoint/cache audit. Previous generation and rollback originals remain retained. Receipt: `source-catalog-program/20261010/A/agenda-release-v1/native-preparation-v1/full-artifact-admission-preparation-v1/release-package-v1/coordinator-final-publication-acceptance.json`. Earlier history: qualified at `649cfd28…` (2026-09-26): the edition backfill holds 58 editions, 199510–202510, in 233,250 rows over 46,247 RINs, with `(rin, agenda_edition)` unique. Every readable edition is present; 199504 and 201204 were never published, and SpicyDocs refuses 200404 and 200410 over an XML-forbidden control byte. The Fall 2012 file is stamped `201210`, as its records state. No prior row is removed. Three editions, the oldest, the legacy-named Fall 2012 and the newest, match independent parses of reginfo's export exactly: RIN sets, titles and priority categories (4,999, 4,063 and 3,954 RINs). The run retains no source evidence. Receipt: `unified-agenda-649cfd28-2026-09-26/`."
     },
     {
       "task": "T11",
