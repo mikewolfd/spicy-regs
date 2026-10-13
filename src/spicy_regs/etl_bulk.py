@@ -820,6 +820,9 @@ def validate_bundle(
 def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False,
                       threads=4, memory_limit="4GB", bounded_insert=False, retained_scan=None):
     """Keep the maintained admission tables alive for replay only after complete admission."""
+    # Explicit conversion limits bound encoding work as well as DuckDB storage.
+    # Reuse the same byte-sized inserts for writer validation and later replay.
+    bounded_insert = bounded_insert or _limits.get() is not None
     registered = _bundle_policies(subjects, receipt_paths, policies)
     if scoped and len(registered) > 1:
         raise NotBulkEligible("Multiple scoped policies require grouped row selection to preserve first-error order")
@@ -1005,16 +1008,22 @@ def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing
             read = [0, 0]
             count = 0
             with closing(_numbered(parquet, start, number, None, read)) as numbered:
-                # Ordinal replay finishes one source batch before the next. Its
-                # ORDER BY therefore never retains the complete wide subject file.
-                sources = (pa.Table.from_batches([batch]) for batch in numbered) if processing_rows is not None else (numbered,)
+                # Finish each explicit-limit byte slice before encoding the next.
+                # Ordinal processing keeps its existing batch replay outside that context.
+                limited = _limits.get() is not None
+                batch_replay = limited or processing_rows is not None
+                sources = (
+                    (pa.Table.from_batches([piece]) for batch in numbered for piece in _insert_batches(batch))
+                    if limited else (pa.Table.from_batches([batch]) for batch in numbered)
+                    if batch_replay else (numbered,)
+                )
                 for source in sources:
                     con.register("source", source)
                     try:
                         first = start + count
-                        stop = first + source.num_rows if processing_rows is not None else start + parquet.metadata.num_rows
+                        stop = first + source.num_rows if batch_replay else start + parquet.metadata.num_rows
                         added = yield from replay(first, stop)
-                        if processing_rows is not None and added != source.num_rows:
+                        if batch_replay and added != source.num_rows:
                             raise ValueError("Receipt replay did not reconstruct every source batch")
                         count += added
                     finally:
