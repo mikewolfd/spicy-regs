@@ -37,7 +37,7 @@ def dataset_policy(table):
         subject_schema(table),
         tuple(rules["identity_fields"]),
         tuple(rules["receipt_fields"]),
-        policy_version=VERSION,
+        policy_version="fec-identity-context-receipts/3" if table == "fec_source_records" else VERSION,
         receipt_only=rules["receipt_only"],
     )
 
@@ -83,6 +83,7 @@ class IdentityReceiptWriter:
         self.counts = {name: 0 for name in self.policies}
         self.attempts = 0
         self.table_attempts = {name: 0 for name in self.policies}
+        self._last_observation_ordinal = {name: -1 for name in self.policies}
         self._stack = ExitStack()
 
     def __enter__(self):
@@ -108,14 +109,22 @@ class IdentityReceiptWriter:
         return self
 
     def emit(
-        self, table, row, *, input_witness, evidence=(), source_input=None, outcome=None, diagnostic=None, lineage=None
+        self, table, row, *, input_witness, evidence=(), source_input=None, outcome=None, diagnostic=None, lineage=None,
+        observation_ordinal=None, native_filing_subject=None,
     ):
         if table not in self.policies:
             raise ValueError(f"Output outside explicitly selected identity tables: {table}")
         policy = self.policies[table]
-        ordinal = self.table_attempts[table]
+        ordinal = self.table_attempts[table] if observation_ordinal is None else observation_ordinal
+        if type(ordinal) is not int or ordinal <= self._last_observation_ordinal[table]:
+            raise ValueError("FEC observation ordinals must increase across selected members")
+        self._last_observation_ordinal[table] = ordinal
         self.table_attempts[table] += 1
         mapped = normalize_record(table, row, source_input=source_input, observation_ordinal=ordinal)
+        if native_filing_subject is not None:
+            if table != "fec_filings" or set(native_filing_subject) != set(policy.subject_schema.names):
+                raise ValueError("Qualified filing adoption requires its complete declared native subject")
+            mapped.update(native_filing_subject)
         if table == "fec_committees":
             mapped["conversion_inputs"] = dict(row)
         self.attempts += 1

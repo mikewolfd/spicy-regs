@@ -20,8 +20,9 @@ from .fec_query import AMOUNT_TYPE, _digest, exact_amount
 from .fec_context_shape import (
     CSV_FIELDS,
     filing_announcement,
-    iso_timestamp,
-    nonnegative_integer,
+    csv_context_fields,
+    document_context_fields,
+    response_capture_disposition,
     source_page_body,
 )
 
@@ -413,15 +414,7 @@ def _csv(ctx):
                 date_raw=raw_date,
                 reported_date=dt,
                 date_status=ds,
-                **{name: values.get(name) or None for name in CSV_FIELDS},
-                report_year=int(values["report_year"])
-                if re.fullmatch(r"[1-9][0-9]{3}", values.get("report_year") or "")
-                else None,
-                report_year_status="parsed"
-                if re.fullmatch(r"[1-9][0-9]{3}", values.get("report_year") or "")
-                else "missing"
-                if not values.get("report_year")
-                else "unsupported_year",
+                **csv_context_fields(values)[0],
                 native_row_locator_json=_json(native["source"]),
                 source_row_ordinal=i,
                 coverage_status="complete_records_of_truncated_capture",
@@ -463,16 +456,7 @@ def _documents(ctx):
                     original_extension=extension,
                     body_status="deferred_pdf" if extension and extension.lower() == "pdf" else "body_not_qualified",
                     fec_relationship_status="search_result_only_no_verified_matter_join",
-                    language=native.get("language"),
-                    page_count=nonnegative_integer(native.get("page_count")),
-                    page_count_status="parsed"
-                    if nonnegative_integer(native.get("page_count")) is not None
-                    else "missing"
-                    if native.get("page_count") is None
-                    else "invalid_count",
-                    created_at=iso_timestamp(native.get("created_at")),
-                    updated_at=iso_timestamp(native.get("updated_at")),
-                    evidence_use="discovery_only",
+                    **document_context_fields(native)[0],
                 ),
             )
     return ctx.disposition(
@@ -733,11 +717,7 @@ def _response_outcome(ctx):
                 payload_shape=shape,
                 outcome_status="refused_native_observation_not_qualified_empty_success",
                 observed_payload_records=count,
-                capture_disposition="refused"
-                if fact["profile_refusal"]
-                else "empty_payload_not_verified_success"
-                if shape == "results_empty"
-                else "captured_payload_not_verified_success",
+                capture_disposition=response_capture_disposition(fact['profile_refusal'], shape),
             ),
         )
     return ctx.disposition(

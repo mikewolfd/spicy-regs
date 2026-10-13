@@ -167,6 +167,65 @@ CSV_FIELDS = (
     "back_reference_schedule_name",
 )
 
+
+def document_context_fields(native, *, source_created_at=None, source_updated_at=None):
+    """Interpret held document metadata; report unavailable fields separately."""
+    if native is not None and not isinstance(native, dict):
+        raise ValueError('Document metadata must be a named source object or null')
+    available = native is not None
+    metadata = native or {}
+    language = metadata.get('language')
+    if language is not None and not isinstance(language, str):
+        raise ValueError('Document language must be native text or null')
+    count = nonnegative_integer(metadata.get('page_count'))
+    count_status = ('unavailable_retained_metadata' if not available else 'parsed' if count is not None
+                    else 'missing' if metadata.get('page_count') is None else 'invalid_count')
+    created = metadata.get('created_at') if available else source_created_at
+    updated = metadata.get('updated_at') if available else source_updated_at
+    values = dict(language=language, page_count=count, page_count_status=count_status,
+                  created_at=iso_timestamp(created), updated_at=iso_timestamp(updated), evidence_use='discovery_only')
+    statuses = {'language': 'unavailable_retained_metadata' if not available else 'source_null' if language is None else 'reported',
+                'page_count': count_status}
+    for name, raw in (('created_at', created), ('updated_at', updated)):
+        statuses[name] = ('parsed' if values[name] is not None else ('source_null' if name in metadata else 'source_missing') if raw is None and available
+                          else 'unavailable_retained_timestamp' if raw is None else 'source_empty' if raw == ''
+                          else 'invalid_or_unzoned_timestamp')
+    return values, statuses
+
+
+def csv_context_fields(native):
+    """Reuse native CSV control/year spellings without widening partial coverage."""
+    if native is not None and not isinstance(native, dict):
+        raise ValueError('CSV fields must be a named source object or null')
+    fields = native or {}
+    for name in (*CSV_FIELDS, 'report_year'):
+        if fields.get(name) is not None and not isinstance(fields[name], str):
+            raise ValueError(f'CSV {name} must be native text or null')
+    raw_year = fields.get('report_year')
+    parsed = bool(re.fullmatch(r'[1-9][0-9]{3}', raw_year or ''))
+    status = ('unavailable_retained_fields' if native is None else 'parsed' if parsed
+              else 'missing' if not raw_year else 'unsupported_year')
+    values = {name: fields.get(name) or None for name in CSV_FIELDS}
+    values.update(report_year=int(raw_year) if parsed else None, report_year_status=status)
+    statuses = {name: 'unavailable_retained_fields' if native is None else 'missing' if not fields.get(name) else 'reported'
+                for name in CSV_FIELDS}
+    statuses['report_year'] = status
+    return values, statuses
+
+
+def response_capture_disposition(profile_refusal, payload_shape):
+    """Classify reported refusal/shape; empty payloads never prove coverage."""
+    if profile_refusal is not None and not isinstance(profile_refusal, str):
+        raise ValueError('Response profile refusal must be native text or null')
+    if payload_shape is not None and not isinstance(payload_shape, str):
+        raise ValueError('Response payload shape must be native text or null')
+    if profile_refusal:
+        return 'refused'
+    if payload_shape is None:
+        return 'unavailable_retained_payload_shape'
+    return ('empty_payload_not_verified_success' if payload_shape == 'results_empty'
+            else 'captured_payload_not_verified_success')
+
 COL_DESCRIPTIONS = {
     "reported_filer_id": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label.",
     "source_label_status": "Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling.",

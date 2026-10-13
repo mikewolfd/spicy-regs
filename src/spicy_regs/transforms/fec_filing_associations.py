@@ -183,21 +183,8 @@ def associate_filing_numbers(rows, **kwargs):
     return list(iter_filing_number_associations(rows, **kwargs))
 
 
-def association_records(rows, *, table, schema, filings, headers, source_generation_pin,
-                        target_generation_pin, namespace_evidence, check_resources):
-    """Publish one guarded decision per financial/text row in bounded batches.
-
-    Reuse the existing number and header rules. Neither rule chooses a latest
-    filing, applies corrections, or changes an amount. The original mapper row
-    remains separate so the receipt writer can restore it exactly.
-    """
-    import duckdb
-    from .fec_native_subjects import FIELD_RULES
-    from spicy_regs.relationship_views.fec_filing_associations import financial_header_association_sql
-
-    if table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]:
-        raise ValueError("Filing associations are inapplicable to this subject")
-    _digest(target_generation_pin)
+def validate_header_filing_witnesses(filings, headers):
+    """Validate resolved witnesses without upgrading or changing any decision."""
     by_key, _ = _index(filings)
     header_witnesses = defaultdict(list)
     for header in headers:
@@ -211,6 +198,35 @@ def association_records(rows, *, table, schema, filings, headers, source_generat
                     or sorted(header.get("filing_observation_ids") or []) != sorted(r["record_id"] for r in candidates)
                     or header.get("filing_observation_count") != len(candidates)):
                 raise ValueError("Header association differs from selected complete filing witnesses")
+
+    return by_key, header_witnesses
+
+
+def association_records(rows, *, table, schema, filings, headers, source_generation_pin,
+                        target_generation_pin, namespace_evidence, check_resources,
+                        target_generation_scope="external"):
+    """Publish one guarded decision per financial/text row in bounded batches.
+
+    Reuse the existing number and header rules. Neither rule chooses a latest
+    filing, applies corrections, or changes an amount. The original mapper row
+    remains separate so the receipt writer can restore it exactly.
+    """
+    import duckdb
+    from .fec_native_subjects import FIELD_RULES
+    from spicy_regs.relationship_views.fec_filing_associations import financial_header_association_sql
+
+    if table not in FIELD_RULES or "filing_key" not in FIELD_RULES[table]["keep"]:
+        raise ValueError("Filing associations are inapplicable to this subject")
+    # The caller proves complete final-table correspondence before admitting
+    # self scope. A generation cannot include its own content digest in its rows.
+    if target_generation_scope == "self":
+        if target_generation_pin is not None:
+            raise ValueError("Self filing target scope requires a null generation pin")
+    elif target_generation_scope == "external":
+        _digest(target_generation_pin)
+    else:
+        raise ValueError("Unsupported filing target generation scope")
+    by_key, header_witnesses = validate_header_filing_witnesses(filings, headers)
 
     def batches():
         batch = []
@@ -281,6 +297,7 @@ def association_records(rows, *, table, schema, filings, headers, source_generat
                     filing_association_status=decision["association_status"],
                     filing_association_policy=POLICY_VERSION,
                     filing_association_source_generation_pin=source_generation_pin,
+                    filing_association_target_generation_scope=target_generation_scope,
                     filing_association_target_generation_pin=target_generation_pin,
                     filing_association_record_id=decision.get("association_record_id", decision.get("record_id")),
                     filing_association_referenced_key=decision.get("referenced_filing_key"),

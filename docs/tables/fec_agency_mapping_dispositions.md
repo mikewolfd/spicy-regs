@@ -22,3 +22,4 @@ Records whether each saved agency source record produced data, contained only st
 | `reason` | `VARCHAR` | Concrete reason for this observation's mapping or nondata disposition. |
 | `target_record_ids_json` | `VARCHAR` | JSON array of typed observation keys emitted from this native source record; empty output is explained by the disposition. |
 | `observation_ordinal` | `BIGINT` | Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier. |
+| `source_sha256` | `VARCHAR` | Digest pinning source bytes supporting this record, copied from the exact admitted collection and source-record coordinate. |

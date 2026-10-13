@@ -78,7 +78,7 @@ FILING_ASSOCIATION_FIELDS = {
     **dict.fromkeys(
         "filing_association_status filing_association_policy filing_association_source_generation_pin "
         "filing_association_target_generation_pin filing_association_record_id "
-        "filing_association_referenced_key".split(), _TEXT
+        "filing_association_referenced_key filing_association_target_generation_scope".split(), _TEXT
     ),
     "filing_association_target_count": pa.int64(),
     "filing_association_target_record_ids": _TEXTS,
@@ -221,7 +221,9 @@ def _organization(value):
 def native_fields(table):
     """Additional or reshaped business columns, explicitly declared by family."""
     if FIELD_RULES[table].get("observation_control"):
-        return {"observation_ordinal": pa.int64()}
+        return {"observation_ordinal": pa.int64(), **({"source_sha256": _TEXT} if table == "fec_agency_mapping_dispositions" else {})}
+    if table == "fec_agency_mapping_dispositions":
+        return {"source_sha256": _TEXT}
     if table == "fec_legal_matters":
         return _LEGAL_FACTS | _LEGAL_SCALARS
     if table == "fec_reported_financial_summaries":

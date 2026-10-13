@@ -276,7 +276,7 @@ def _answers(view, selected):
     with duckdb.connect(config={"threads": 1, "memory_limit": "256MB"}) as con:
         adapter = ReceiptAdapter(con, {"families": {}}, "unused", local_native=selected)
         prepared = adapter.prepare(view, view.query({}))
-        assert set(prepared.required) == {"_spicy_fec_processing_" + table for table in view.required}
+        assert set(prepared.required) == {"_spicy_fec_current_" + table for table in view.required}
         cursor = con.execute(prepared.query({}))
         names = [item[0] for item in cursor.description]
         return [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]

@@ -58,7 +58,7 @@ def served(bundle):
             prepared = adapter.prepare(spec, spec.query({}))
             con.execute(f"CREATE VIEW {spec.name} AS {prepared.query({})}")
         restored = [row[0] for row in con.execute(
-            'SELECT source_sha256 FROM "_spicy_fec_processing_fec_source_records"').fetchall()]
+            'SELECT source_sha256 FROM "_spicy_fec_current_fec_source_records"').fetchall()]
         evidence = con.execute(
             "SELECT target_count, target_status, companion_candidates_json, recorded_digest_status "
             "FROM fec_relationship_evidence").fetchall()

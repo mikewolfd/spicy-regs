@@ -427,8 +427,11 @@ class MeasurementCache:
         # Ignore previous availability metadata: resolve canonical requirements
         # against the actual selected schemas in this operation.
         spec = navigation.published_navigation([original], {source['table']: source['schema'],
-                                               target['table']: target['schema']})[0]
-        original['field'] = spec['field']
+                                               target['table']: target['schema']},
+                                               generation_pins=navigation.selected_generation_pins(index))[0]
+        # The key scan and recipe digest must use the same bound guards that
+        # selected metadata and admission use, including exact FEC pins.
+        original = deepcopy(spec)
         route = spec['targets'][target_index]
         if not route['sourceAvailable'] or not route['available']:
             raise ValueError('Required main source/target route fields are unavailable')
@@ -647,12 +650,13 @@ def attached_directions(index, spec, target_index, proof, extra_tables=None):
                                                        qualification='exact_content_reuse',
                                                        historicalProofDigest=proof['historicalDigest'])
             return directions
-        return _verified_directions(spec, target_index, proof, source, target)
+        return _verified_directions(spec, target_index, proof, source, target,
+                                    generation_pins=navigation.selected_generation_pins(index))
     except (KeyError, TypeError, ValueError, IndexError):
         return None
 
 
-def _verified_directions(spec, target_index, proof, source, target):
+def _verified_directions(spec, target_index, proof, source, target, *, generation_pins=None):
     """Only a fully reconciled result with exact current bindings can qualify metadata."""
     try:
         if proof.get('format') != VERSION or proof.get('status') != 'complete':
@@ -664,7 +668,8 @@ def _verified_directions(spec, target_index, proof, source, target):
             if imported and (imported.get('authority') != 'imported_existing_full_population' or
                              imported.get('guardImplementation') != digest([VERSION, inspect.getsource(MeasurementCache.import_population)])):
                 return None
-        selected = navigation.published_navigation([spec], {source['table']: source['schema'], target['table']: target['schema']})[0]
+        selected = navigation.published_navigation([spec], {source['table']: source['schema'], target['table']: target['schema']},
+                                                   generation_pins=generation_pins)[0]
         columns = proof['sourceIdentity']['columns']
         expected = {'source': source, 'target': target, 'recipe': recipe_digest(selected, target_index, columns),
                     'aggregation': digest([VERSION, duckdb.__version__, inspect.getsource(MeasurementCache.measure)])}

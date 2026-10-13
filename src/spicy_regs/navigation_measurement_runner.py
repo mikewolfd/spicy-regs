@@ -91,7 +91,9 @@ def run_measurements(index, paths, cache: MeasurementCache, *, routes=(), affect
             binding_errors[table] = str(error)
     for spec in specs:
         identity = _identity(spec['source'], metadata, policies)
-        resolved = published_navigation([spec], {name: b['schema'] for name, b in bindings.items()})[0]
+        from spicy_regs.explorer_navigation import selected_generation_pins
+        resolved = published_navigation([spec], {name: b['schema'] for name, b in bindings.items()},
+                                        generation_pins=selected_generation_pins(index))[0]
         for i, target in enumerate(spec['targets']):
             source_binding, target_binding = bindings.get(spec['source']), bindings.get(target['table'])
             entry = {'route': {'id': spec['id'], 'targetIndex': i},

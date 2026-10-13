@@ -16,8 +16,13 @@ HISTORY=json.loads(Path(__file__).parents[1].joinpath('src/spicy_regs/fec_policy
 @pytest.mark.parametrize('dataset',sorted(HISTORY))
 def test_every_exact_pre_migration_policy_is_supported(dataset):
     from spicy_regs.earlier_receipt_policies import earlier_policies
-    [prior]=earlier_policies(policies()[dataset])
-    assert prior.descriptor()==HISTORY[dataset]
+    priors=earlier_policies(policies()[dataset])
+    assert priors[-1].descriptor()==HISTORY[dataset]
+    conversion_history=json.loads(Path(__file__).parents[1].joinpath('src/spicy_regs/fec_conversion_policy_history.json').read_text())
+    if dataset in conversion_history:
+        assert [prior.descriptor() for prior in priors]==[conversion_history[dataset],HISTORY[dataset]]
+    else:
+        assert len(priors)==1
 
 
 def old_pair(tmp_path, table, row):
