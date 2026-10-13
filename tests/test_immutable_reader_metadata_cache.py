@@ -58,13 +58,13 @@ class Settings:
         self.statements.append(sql)
 
 
-def test_complete_managed_subject_receipt_index_and_snapshot_paths_enable_only_http():
+def test_complete_managed_subject_receipt_index_and_snapshot_paths_enable_both_caches():
     value, rulemaking = index(), snapshot()
     admitted = [*paths(value), server.R2_BASE_URL + "/" + rulemaking["tables"]["snapshot_table.parquet"]["remote_key"]]
     con = Settings()
     result = server._enable_immutable_metadata_cache(con, value, rulemaking, admitted)
     assert result == {**dict.fromkeys(paths(value), "managed_generation"), admitted[-1]: "rulemaking_snapshot"}
-    assert con.statements == ["SET enable_http_metadata_cache=true"]
+    assert con.statements == ["SET enable_http_metadata_cache=true", "SET GLOBAL parquet_metadata_cache=true"]
 
 
 @pytest.mark.parametrize("extra", ["/s.parquet", "/comments.parquet", "/comments_index.parquet",
@@ -199,7 +199,7 @@ def test_real_cache_setting_reaches_request_cursor_and_new_database_starts_fresh
         child = con.cursor()
         try:
             assert child.execute("SELECT current_setting('enable_http_metadata_cache')").fetchone() == (True,)
-            assert child.execute("SELECT current_setting('parquet_metadata_cache')").fetchone() == (False,)
+            assert child.execute("SELECT current_setting('parquet_metadata_cache')").fetchone() == (True,)
             with pytest.raises(duckdb.Error):
                 child.execute("SET enable_external_access=true")
         finally:
@@ -208,3 +208,28 @@ def test_real_cache_setting_reaches_request_cursor_and_new_database_starts_fresh
             fresh.execute(load)
             assert fresh.execute("SELECT current_setting('enable_http_metadata_cache')").fetchone() == (before,)
             assert fresh.execute("SELECT current_setting('parquet_metadata_cache')").fetchone() == (False,)
+
+
+def test_warmed_parsed_metadata_preserves_results_and_cannot_read_unallowed_files(tmp_path):
+    """Local stand-ins exercise native cache/ACL behavior, not production local-mode eligibility."""
+    allowed = tmp_path / "allowed.parquet"
+    unknown = tmp_path / "unknown.parquet"
+    with duckdb.connect(config={"threads": 1}) as con:
+        con.execute("COPY (SELECT 7::INTEGER AS id) TO ? (FORMAT PARQUET)", [str(allowed)])
+        con.execute("COPY (SELECT 99::INTEGER AS id) TO ? (FORMAT PARQUET)", [str(unknown)])
+        con.execute("CREATE VIEW admitted AS SELECT * FROM " + pub.parquet_scan([str(allowed)]))
+        original = con.execute("DESCRIBE admitted").fetchall()
+        con.execute("SET GLOBAL parquet_metadata_cache=true")
+        assert con.execute("SELECT * FROM admitted").fetchall() == [(7,)]
+        server._apply_security_settings(con, [str(allowed)])
+        child = con.cursor()
+        try:
+            assert child.execute("DESCRIBE admitted").fetchall() == original
+            assert child.execute("SELECT * FROM admitted").fetchall() == [(7,)]
+            assert child.execute("SELECT count(*) FROM admitted").fetchall() == [(1,)]
+            for sql in ["SELECT * FROM read_parquet(?)", "SELECT count(*) FROM read_parquet(?)",
+                        "SELECT * FROM parquet_metadata(?)", "SELECT * FROM parquet_file_metadata(?)"]:
+                with pytest.raises(duckdb.Error, match="disabled by configuration"):
+                    child.execute(sql, [str(unknown)]).fetchall()
+        finally:
+            child.close()

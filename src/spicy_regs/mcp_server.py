@@ -720,7 +720,7 @@ def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, st
 
 
 def _enable_immutable_metadata_cache(con, index, rulemaking, allowed_paths):
-    """Reuse HTTP metadata only after fresh admission of exclusively immutable SQL inputs.
+    """Reuse HTTP headers and parsed Parquet metadata after fresh immutable-input admission.
 
     Rulemaking immutability is the maintained source-owner policy, weaker than
     managed generation create-only writes. Neither premise covers legacy mirrors.
@@ -728,6 +728,7 @@ def _enable_immutable_metadata_cache(con, index, rulemaking, allowed_paths):
     inputs = _immutable_metadata_inputs(index, rulemaking, allowed_paths)
     if inputs is not None:
         con.execute("SET enable_http_metadata_cache=true")
+        con.execute("SET GLOBAL parquet_metadata_cache=true")
     return inputs
 
 
