@@ -101,10 +101,6 @@ def family_tables(family):
 def check_membership(family, old):
     if set(old['tables']) != family_tables(family):
         raise ValueError('FEC conversion requires the complete registered family membership')
-    if family == 'fec-query':
-        pages = old['tables'].get('fec_research_source_pages.parquet', {})
-        if pages.get('rows', 0) and 'content_status' not in {column[0] for column in pages.get('columns', ())}:
-            raise ValueError('Legacy nonempty fec_research_source_pages requires unsupported refused-page original reconstruction; no family build started')
     for key, table in old['tables'].items():
         if 'members' in table and [member['key'] for member in table['members']] != sorted(member['key'] for member in table['members']):
             raise ValueError('Noncanonical captured FEC member order is unsupported; no family build started')

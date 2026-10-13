@@ -317,23 +317,16 @@ def test_noncanonical_partition_order_refuses_before_family_writes(tmp_path):
     assert not (tmp_path/'build').exists()
 
 
-def test_legacy_source_page_population_refuses_before_retaining_large_inputs(tmp_path,monkeypatch,bucket):
-    from spicy_regs.fec_native_conversion import build_retained_family
+def test_legacy_source_page_population_has_supported_original_reconstruction(tmp_path,monkeypatch,bucket):
+    from spicy_regs.fec_native_conversion import check_membership, retained_identity_row
     snapshot,retained=old_family(tmp_path,monkeypatch,bucket,'fec-query',
         rows_by_table={'fec_research_source_pages':[{'record_id':'page','title':'Server error','text':'Server error'}]},
         legacy_tables=['fec_research_source_pages'])
-    def retain(*args,**kwargs):
-        pytest.fail('Known unsupported source pages must refuse before any family member retention')
-    monkeypatch.setattr(conversion,'_retain_table',retain)
-    with pytest.raises(conversion.ConversionRefused,match='unsupported refused-page original reconstruction'):
-        conversion.convert('fec-query',allowed=['fec-query'],work=tmp_path/'work',expected_main=MAIN,
-            expected_spicy_docs=WHEEL,state=lambda _:dict(STATE))
-    assert not (tmp_path/'work/build').exists() and not (tmp_path/'work/retained').exists()
-    with ConversionReadOperation() as operation:
-        with pytest.raises(ValueError,match='unsupported refused-page original reconstruction'):
-            build_retained_family('fec-query',snapshot['families']['fec-query'],snapshot,retained,
-                tmp_path/'direct',operation=operation)
-    assert not (tmp_path/'direct').exists()
+    check_membership('fec-query',snapshot['families']['fec-query'])
+    original=pq.ParquetFile(retained['fec_research_source_pages.parquet']).read().to_pylist()[0]
+    row,overrides=retained_identity_row('fec_research_source_pages',original)
+    assert row['content_status']=='failed_page' and row['text'] is None
+    assert overrides['text']==original['text']
 
 
 def test_already_current_header_selection_rejects_wrong_generation_bound_identity(tmp_path):

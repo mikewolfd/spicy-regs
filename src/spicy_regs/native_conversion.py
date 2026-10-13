@@ -1149,7 +1149,14 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
     artifact = admitted.root
     outcomes = reader.outcome_counts()
     tables, problems = {}, []
-    if unconverted := {name: count for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES}:
+    preserved_pages = 0
+    try:
+        preserved_pages = reader.preserved_source_page_refusals()
+    except ValueError as invalid_refusal:
+        problems.append(f"source page refusals do not qualify: {invalid_refusal}")
+    unconverted = {name: count - (preserved_pages if name == 'refused' else 0)
+                   for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES}
+    if unconverted := {name: count for name, count in unconverted.items() if count}:
         problems.append(f"receipts hold {unconverted}; every retained row must convert")
     for key, table in old["tables"].items():
         dataset = key.removesuffix(".parquet")
@@ -1171,7 +1178,10 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         elif key not in built.receipt_only_tables:
             problems.append(f"{key} is neither a subject table nor a declared receipt-only table")
         tables[dataset] = check
-        if check.get("subject_rows", table["rows"]) != table["rows"] or _has_differences(check):
+        preserved = preserved_pages if dataset == 'fec_research_source_pages' else 0
+        if preserved:
+            check['preserved_refused_rows'] = preserved
+        if check.get("subject_rows", table["rows"]) + preserved != table["rows"] or _has_differences(check):
             problems.append(f"{dataset} does not restore to its retained table: {check}")
     expected = (set(old["tables"]) | built.added_tables) - built.receipt_only_tables
     if (subjects := set(artifact["spec"]["tables"])) != expected:
