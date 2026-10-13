@@ -143,6 +143,25 @@ def coverage(db, collection_id: str | None = None) -> dict:
                     version=candidate["sha256"],
                     verification="recorded local qualification; candidate and proof not revalidated by this report",
                 )
+        # Importer-validated observations add dated snapshots, never replace old ones.
+        for ident, kind, item in evidence:
+            if kind != "publication_observation" or item.get("associationStatus") != "exact-family":
+                continue
+            for member in item["tables"]:
+                add(
+                    "published",
+                    count=1,
+                    unit="captured-table-artifact-version",
+                    scope={
+                        "collection_id": cid,
+                        "table": member["table"].removesuffix(".parquet"),
+                        "captured_at": item["captureAt"],
+                    },
+                    period={"kind": "family-publication-instant", "label": item["familyPublishedAt"]},
+                    evidence_ids=[ident],
+                    version=item["artifactDigest"],
+                    verification="retained publication descriptor; member content and native qualification not revalidated",
+                )
         for table in db.execute("SELECT id,data FROM tables WHERE collection_id=? ORDER BY id", (cid,)):
             facts = json.loads(table[1])
             if facts.get("artifact_digest") and capture.get("sha256") and capture.get("at"):

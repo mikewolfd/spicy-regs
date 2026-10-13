@@ -905,7 +905,20 @@ def test_retained_publication_preserves_inventory_and_scoped_coverage(corpus, tm
         selected_coverage = coverage(db, "family:test")
         selected_coverage.pop("catalog_generation")
         old_coverage.pop("catalog_generation")
-        assert selected_coverage == old_coverage
+        if cross_family:
+            assert selected_coverage == old_coverage
+        else:
+            selected_stages = selected_coverage["collections"][0]["stages"]
+            old_stages = old_coverage["collections"][0]["stages"]
+            new_measurements = selected_stages["published"]["measurements"]
+            assert len(new_measurements) == len(old_stages["published"]["measurements"]) + 1
+            assert all(item in new_measurements for item in old_stages["published"]["measurements"])
+            fresh = next(item for item in new_measurements if item["version"] == "sha256:" + "b" * 64)
+            assert fresh["scope"]["captured_at"] == "2026-10-10T19:54:12.354210+00:00"
+            assert fresh["period"] == {"kind": "family-publication-instant", "label": "2026-10-10T01:36:31Z"}
+            for stage in ["expected", "advertised", "acquired", "processed"]:
+                assert selected_stages[stage] == old_stages[stage]
+            assert selected_coverage["collections"][0]["completeness_denominator"] is None
     assert str(selection.resolve()) in result["inputs"]
     manifest = export(output, tmp_path / "public")
     cid = "publication:comments" if cross_family else "family:test"
@@ -919,6 +932,8 @@ def test_retained_publication_preserves_inventory_and_scoped_coverage(corpus, tm
     if cross_family:
         historical = next(item for item in manifest["collections"] if item["id"] == "family:test")
         assert "publicationObservations" not in json.loads((tmp_path / "public" / historical["detailPath"]).read_text())
+    if not cross_family:
+        assert any(item["version"] == "sha256:" + "b" * 64 for item in detail["coverage"]["stages"]["published"]["measurements"])
     validate_public(detail)
 
 
@@ -1032,3 +1047,67 @@ def test_retained_publication_partition_labels_fail_closed_for_private_values(va
     }
     with pytest.raises(ValueError):
         public_publication(item)
+
+
+def test_additive_discovery_candidate_preserves_selected_scope_without_publication(corpus, tmp_path):
+    from spicy_regs.source_catalog.coverage import coverage
+
+    config = write(tmp_path, "config.json", {"collections": [{"id": "family:test", "families": ["test"]}]})
+    candidate = {
+        "id": "accepted-candidate:new-proof",
+        "collection_id": "family:test",
+        "qualification_input": {"sha256": "sha256:" + "a" * 64},
+        "qualification_scope": "selected metadata; historical coverage unknown",
+        "local_candidate_outputs": [{"table": "metadata", "sha256": "sha256:" + "d" * 64, "rows": 401}],
+    }
+    discovery = write(tmp_path, "discovery.json", {"format": "spicy-source-discovery", "version": 1, "planned": [candidate]})
+    output = tmp_path / "candidate.sqlite"
+    result = build(corpus, output, config=config, discovery=[discovery])
+    with connect(output, readonly=True) as db:
+        stages = coverage(db, "family:test")["collections"][0]["stages"]
+        measurement = stages["processed"]["measurements"][0]
+        assert measurement["count"] == 401
+        assert measurement["version"] == candidate["local_candidate_outputs"][0]["sha256"]
+        assert measurement["scope"]["qualification_scope"] == candidate["qualification_scope"]
+        assert stages["published"]["status"] == stages["expected"]["status"] == "unknown"
+    assert str(discovery.resolve()) in result["inputs"]
+    candidate.pop("collection_id")
+    write(tmp_path, "discovery.json", {"format": "spicy-source-discovery", "version": 1, "planned": [candidate]})
+    with pytest.raises(ValueError, match="requires a collection or route binding"):
+        build(corpus, tmp_path / "unbound.sqlite", config=config, discovery=[discovery])
+
+
+def test_additive_candidate_route_binding_and_immutable_evidence_ids(corpus, tmp_path):
+    from spicy_regs.source_catalog.coverage import coverage
+
+    candidate = {
+        "id": "candidate:old", "collection_id": "family:test",
+        "qualification_input": {"sha256": "sha256:" + "a" * 64},
+        "qualification_scope": "selected metadata",
+        "local_candidate_outputs": [{"table": "metadata", "sha256": "sha256:" + "c" * 64, "rows": 3}],
+    }
+    config = write(tmp_path, "config.json", {
+        "collections": [{"id": "family:test", "families": ["test"]}],
+        "routes": [{"id": "selected-route", "collection_id": "family:test"}],
+        "planned": [candidate],
+    })
+    route_candidate = dict(candidate, route_id="selected-route")
+    route_candidate.pop("collection_id")
+    route_candidate["local_candidate_outputs"] = [{"table": "metadata", "sha256": "sha256:" + "d" * 64, "rows": 4}]
+    discovery = write(tmp_path, "discovery.json", {
+        "format": "spicy-source-discovery", "version": 1,
+        "planned": [route_candidate, dict(route_candidate, id="candidate:new")],
+    })
+    output = tmp_path / "route.sqlite"
+    build(corpus, output, config=config, discovery=[discovery])
+    with connect(output, readonly=True) as db:
+        measurements = coverage(db, "family:test")["collections"][0]["stages"]["processed"]["measurements"]
+        by_id = {m["evidence_ids"][0]: m for m in measurements}
+        assert by_id["candidate:old"]["count"] == 3
+        assert by_id["candidate:old"]["version"] == "sha256:" + "c" * 64
+        assert by_id["candidate:new"]["count"] == 4
+        assert by_id["candidate:new"]["route_id"] == "selected-route"
+    route_candidate["route_id"] = "missing-route"
+    write(tmp_path, "discovery.json", {"format": "spicy-source-discovery", "version": 1, "planned": [route_candidate]})
+    with pytest.raises(ValueError, match="requires a collection or route binding"):
+        build(corpus, tmp_path / "unknown-route.sqlite", config=config, discovery=[discovery])

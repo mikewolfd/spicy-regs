@@ -326,7 +326,7 @@ class Importer:
         self.evidence(None, "corpus_catalog", {k: v for k, v in catalog.items() if k not in ["families", "lineage"]})
 
     def publication_observation(self, selection: dict) -> None:
-        """Retain a digest-bound publication capture without replacing inventory or coverage."""
+        """Retain a digest-bound publication capture without replacing historical inventory or measurements."""
         if selection.get("format") != "spicy-retained-publication-selection" or selection.get("version") != 1:
             raise ValueError("Unsupported retained publication selection")
 
@@ -551,7 +551,7 @@ class Importer:
             )
         observations = {item["id"]: item for item in value.get("observations", []) if item.get("id")}
         observation_targets = {}
-        for kind in ["observations", "periods", "errors", "relationships"]:
+        for kind in ["observations", "periods", "errors", "relationships", "planned"]:
             for item in value.get(kind, []):
                 cid = item.get("collection_id")
                 if not cid and item.get("route_id"):
@@ -561,6 +561,8 @@ class Importer:
                     cid = found[0] if found else None
                 parent_observation = observations.get(item.get("observation_id"), {})
                 targets = item.get("collection_ids") or ([cid] if cid else [])
+                if kind == "planned" and not targets:
+                    raise ValueError("Planned discovery evidence requires a collection or route binding")
                 if kind == "errors" and not targets:
                     targets = observation_targets.get(item.get("observation_id"), [])
                 if kind in ["observations", "errors"] and not targets:

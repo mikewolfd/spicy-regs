@@ -112,7 +112,10 @@ tables retain member keys, partition values and digests; they have no invented
 aggregate member digest. The reader validates this optional field and the
 existing detail request loads it. Older details remain readable.
 
-Historical inventory tables and coverage measurements remain intact. An exact
+Historical inventory tables and coverage measurements remain intact. Exact
+family observations add published measurements with their own capture time,
+artifact version and family publication time. These measurements describe
+retained descriptors and do not qualify newly changed receipts. An exact
 family and table association locates the retained observation; it does not
 verify member content, establish current live status, qualify source coverage
 or choose an active release. Unqualified associations receive a separate
@@ -122,3 +125,15 @@ association. Court's accepted processing delta remains independent evidence;
 a retained Court publication does not establish the full historical merge or
 qualify that delta for publication. The coordinator owns any future release
 selection and canonical inventory changes.
+
+## Additive candidate evidence
+
+A selected discovery document may include `planned` entries with a collection
+or route binding. Use a new evidence `id` for each accepted result; existing
+IDs retain their original evidence. `qualification_input`,
+`qualification_scope` and `local_candidate_outputs` preserve the existing
+scoped candidate format. Output digests identify individual table bytes, and
+optional nonnegative `rows` describe only that accepted table. Candidate
+evidence adds processed measurements; publication and completeness require
+their own evidence. The importer pins the discovery document but does not
+revalidate its qualification proof.
