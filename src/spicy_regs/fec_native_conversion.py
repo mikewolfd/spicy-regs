@@ -3,7 +3,7 @@
 This is representation conversion, not a publisher-source rebuild. Original
 member order and schemas remain the comparison authority.
 """
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, replace
 import base64
@@ -467,6 +467,69 @@ def header_subjects(selection, retained, proof, check_resources):
     return candidates
 
 
+@contextmanager
+def filing_reference_subjects(selected, native_filings, *, filing_generation_scope, check_resources):
+    """Resolve ordered links against the complete already-admitted self filing set.
+
+    Keep the maintained resolver and the same bounded SQL settings as the filing
+    association reader. The source-member order is explicit, not an engine order
+    or a deduplicated business key. Only the resolution status changes.
+    """
+    import duckdb
+    from spicy_regs.relationship_views.fec_typed import filing_reference_resolution
+    from spicy_regs.transforms.fec_identity_context_fields import normalize_record
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+
+    if filing_generation_scope != 'self' or native_filings is None:
+        raise ValueError('Filing reference resolution requires complete admitted self-scoped filings')
+    policy = dataset_policy('fec_filing_links')
+    filing_columns = ('record_id', 'filing_key', 'source_authority', 'source_namespace',
+                      'report_number', 'native_filer_id', 'form_type')
+    filing_schema = pa.schema([(name, pa.string()) for name in filing_columns])
+    check_resources()
+    with duckdb.connect(config={'threads': 1, 'memory_limit': '128MiB',
+                                'max_temp_directory_size': '0B'}) as con:
+        con.register('fec_filings', pa.Table.from_pylist(native_filings, schema=filing_schema))
+        branches = []
+        for ordinal, item in enumerate(selected):
+            check_resources()
+            # These inputs have already passed the captured hash/footer/member
+            # checks in build_retained_family. Paths are bound as parameters.
+            name = f'link_member_{ordinal}'
+            con.from_parquet(str(item.path), file_row_number=True, hive_partitioning=False).create_view(name)
+            branches.append(f'SELECT *, {ordinal} AS selected_member_ordinal FROM {name}')
+        if not branches:
+            raise ValueError('Filing reference resolution requires the selected link members')
+        con.execute('CREATE VIEW fec_filing_links AS ' + ' UNION ALL '.join(branches))
+        check_resources()
+        result = con.execute('SELECT * FROM (' + filing_reference_resolution() +
+                             ') ORDER BY selected_member_ordinal, file_row_number').to_arrow_reader(512)
+
+        def subjects():
+            count = 0
+            for batch in result:
+                for part in _bounded_record_batches(batch):
+                    check_resources()
+                    for resolved in part.to_pylist():
+                        status = resolved.pop('target_resolution_status')
+                        for extra in ('resolution_policy_version', 'target_observation_count',
+                                      'selected_member_ordinal', 'file_row_number'):
+                            resolved.pop(extra)
+                        source, _ = retained_identity_row('fec_filing_links', resolved)
+                        native = normalize_record('fec_filing_links', source)
+                        native['target_resolution_status'] = status
+                        count += 1
+                        yield {name: native[name] for name in policy.subject_schema.names}
+            check_resources()
+            if count != sum(item.rows for item in selected):
+                raise ValueError('Filing reference resolution changed selected row membership')
+            for item in selected:
+                check_resources()
+                if _sha(item.path) != item.sha256:
+                    raise ValueError('Selected filing references changed during resolution')
+        yield subjects()
+
+
 def agency_source_lookup(generation, operation, coordinates, expected_pin, check_resources):
     """Qualify each disposition's exact coordinate against the admitted source."""
     if not coordinates:
@@ -629,10 +692,16 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                                 for row in part.to_pylist():
                                     yield row, witness
                     report()
-                with (nullcontext(observation_writer) if observation_writer is not None else
+                with (filing_reference_subjects(selected, native_filings,
+                        filing_generation_scope=filing_associations.filing_generation_scope if filing_associations is not None else None,
+                        check_resources=check_resources) if table == 'fec_filing_links' else nullcontext(None)) as native_links, \
+                     (nullcontext(observation_writer) if observation_writer is not None else
                       IdentityReceiptWriter(output, generation_id=generation_id, tables=[table])) as writer:
                     for ordinal, (row, witness) in enumerate(rows()):
                         adopted = native_filings[ordinal] if table == 'fec_filings' and native_filings is not None else None
+                        adopted_link = next(native_links, None) if native_links is not None else None
+                        if native_links is not None and adopted_link is None:
+                            raise ValueError('Filing reference resolution lost a selected observation')
                         original_row = row
                         retained_diagnostics = {}
                         row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics, source_schema=schema)
@@ -647,7 +716,10 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                         if retained_diagnostics:
                             source_input['fec_retained_interpretation'] = retained_diagnostics
                         writer.emit(table, row, input_witness=witness,
-                            source_input=source_input or None, native_filing_subject=adopted)
+                            source_input=source_input or None, native_filing_subject=adopted,
+                            native_link_subject=adopted_link)
+                    if native_links is not None and next(native_links, None) is not None:
+                        raise ValueError('Filing reference resolution added selected observations')
                 policy = writer.policies[table]
                 subject = None if policy.receipt_only else output / key
                 receipts = output / 'etl_receipts.parquet'

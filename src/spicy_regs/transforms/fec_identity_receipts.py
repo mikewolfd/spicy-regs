@@ -123,7 +123,7 @@ class IdentityReceiptWriter:
 
     def emit(
         self, table, row, *, input_witness, evidence=(), source_input=None, outcome=None, diagnostic=None, lineage=None,
-        observation_ordinal=None, native_filing_subject=None,
+        observation_ordinal=None, native_filing_subject=None, native_link_subject=None,
     ):
         if table not in self.policies:
             raise ValueError(f"Output outside explicitly selected identity tables: {table}")
@@ -138,6 +138,22 @@ class IdentityReceiptWriter:
             if table != "fec_filings" or set(native_filing_subject) != set(policy.subject_schema.names):
                 raise ValueError("Qualified filing adoption requires its complete declared native subject")
             mapped.update(native_filing_subject)
+        if native_link_subject is not None:
+            if table != "fec_filing_links" or set(native_link_subject) != set(policy.subject_schema.names):
+                raise ValueError("Qualified filing reference adoption requires its complete declared native subject")
+            if any(mapped[name] != native_link_subject[name] for name in policy.subject_schema.names
+                   if name != "target_resolution_status"):
+                raise ValueError("Filing reference resolution changed ordered source fields")
+            if mapped["target_resolution_status"] != native_link_subject["target_resolution_status"]:
+                held = dict(mapped.get("source_input") or {})
+                overrides = dict(held.get("fec_retained_overrides", {}))
+                original = row.get("target_resolution_status")
+                if "target_resolution_status" in overrides and overrides["target_resolution_status"] != original:
+                    raise ValueError("Filing reference original status conflicts with retained evidence")
+                overrides["target_resolution_status"] = original
+                held["fec_retained_overrides"] = overrides
+                mapped["source_input"] = held
+            mapped.update(native_link_subject)
         if table == "fec_committees":
             mapped["conversion_inputs"] = dict(row)
         self.attempts += 1
