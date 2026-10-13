@@ -38,13 +38,14 @@ def managed_release_fixture(tmp_path, table):
     from spicy_regs.generations import build_generation
 
     policy = installed_policies()[table]
-    row = {f.name: False if pa.types.is_boolean(f.type)
+    row: dict[str, object] = {f.name: False if pa.types.is_boolean(f.type)
            else 1 if pa.types.is_integer(f.type) else "fixture" for f in policy.subject_schema}
     row.update({field: {} for field in policy.receipt_fields})
     context = ReceiptContext("test-generation", "test-attempt", "test-processor", [{
         "source_id": "test-source", "sha256": "sha256:" + "a" * 64,
     }])
     subject, receipts = write_dataset([(row, context)], tmp_path / "source", policy)
+    assert subject is not None
     directory = tmp_path / "managed"
     build_generation(directory, family="managed-release", files=[subject], expected_keys=[subject.name],
                      receipt_path=receipts, receipt_policies=[policy], receipt_generation_id=context.generation_id)

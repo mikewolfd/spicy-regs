@@ -857,6 +857,7 @@ def test_write_validation_backends_preserve_exact_subjects_and_receipts(tmp_path
     monkeypatch.setattr(etl_bulk, "validate_bundle", unexpected_bulk)
     reference = write_dataset(((r, context) for r in values), tmp_path / "reference", p, validation_backend="reference")
     assert backends == [True, False]
+    assert default[0] is not None and reference[0] is not None
     assert pq.read_table(default[0]).to_pylist() == pq.read_table(reference[0]).to_pylist()
     assert pq.read_table(default[1]).to_pylist() == pq.read_table(reference[1]).to_pylist()
     assert list(read_with_receipts([reference[0]], [reference[1]], p, generation_id=context.generation_id)) == values

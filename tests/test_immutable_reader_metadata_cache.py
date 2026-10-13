@@ -20,7 +20,7 @@ def remote(monkeypatch):
 def index(*, receipts=True):
     value = pub.empty_index()
     digest = "sha256:" + "a" * 64
-    entry = {"prefix": "generations/fixture/" + "a" * 64, "artifactDigest": digest,
+    entry: dict[str, object] = {"prefix": "generations/fixture/" + "a" * 64, "artifactDigest": digest,
              "logicalId": "urn:test:fixture", "tables": {"s.parquet": {
                  "sha256": digest, "byteSize": 1, "rows": 1, "columns": [["id", "INTEGER"]]}}}
     if receipts:
@@ -185,13 +185,17 @@ def test_allowlist_change_after_enable_refuses_before_security(tmp_path, monkeyp
 
 def test_real_cache_setting_reaches_request_cursor_and_new_database_starts_fresh():
     with duckdb.connect(config={"threads": 1}) as con:
-        platform = con.execute("PRAGMA platform").fetchone()[0]
+        platform_row = con.execute("PRAGMA platform").fetchone()
+        assert platform_row is not None
+        platform = platform_row[0]
         path = Path.home() / ".duckdb/extensions" / ("v" + duckdb.__version__) / platform / "httpfs.duckdb_extension"
         if not path.is_file():
             pytest.skip("No installed local httpfs; do not download it")
         load = "LOAD '" + str(path).replace("'", "''") + "'"
         con.execute(load)
-        before = con.execute("SELECT current_setting('enable_http_metadata_cache')").fetchone()[0]
+        setting_row = con.execute("SELECT current_setting('enable_http_metadata_cache')").fetchone()
+        assert setting_row is not None
+        before = setting_row[0]
         value = index()
         assert server._enable_immutable_metadata_cache(con, value, None, paths(value)) is not None
         con.execute("SET enable_external_access=false")

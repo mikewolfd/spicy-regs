@@ -142,8 +142,11 @@ def stage_comments_remote(records, current, *, failures, generation_id, snapshot
                 del parquet, stream
             del paired
             projection.flush()
-        subject = (StoredParquet(**retained_subject, sha256=retained_subject_sha256)
-                   if reuse_subject else subject_upload.stored)
+        if reuse_subject:
+            assert retained_subject is not None  # Validated before staging any output.
+            subject = StoredParquet(**retained_subject, sha256=retained_subject_sha256)
+        else:
+            subject = subject_upload.stored
         assert subject is not None
         if on_subject is not None:
             on_subject(subject)
