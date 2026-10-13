@@ -43,6 +43,28 @@ def test_source_catalog_policy_descriptions_keep_selected_scope_and_native_field
     assert "uscode_edition_sections" in policies
 
 
+def test_retained_native_policies_regenerate_receipt_declarations():
+    from spicy_regs.sources.retained_native_collections import POLICIES
+    from spicy_regs.receipt_field_declarations import container_fields
+    from scripts.update_etl_policy_declarations import family_policies
+
+    selected = family_policies(frozenset(POLICIES))
+    assert set(selected) == set(POLICIES)
+    for name, policy in POLICIES.items():
+        assert selected[name].descriptor() == policy.descriptor()
+        assert not policy.receipt_fields
+        assert container_fields(policy) == {}
+
+
+def test_every_installed_subject_policy_has_receipt_field_registry():
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.receipt_field_declarations import container_fields
+
+    for policy in installed_policies().values():
+        if not policy.receipt_only and policy.identity_fields:
+            assert set(container_fields(policy)) <= set(policy.receipt_fields)
+
+
 def test_record_types_covered_by_expected_schemas():
     """Every core table exposes only its declared native subject fields."""
     expected = dd.expected_schemas()

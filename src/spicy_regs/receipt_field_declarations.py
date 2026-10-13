@@ -70,6 +70,13 @@ def _administration_policy(table: str) -> dict[str, tuple[str, ...]]:
     return {}  # The producer declares no receipt-only mappings.
 
 
+def _retained_native(table: str) -> dict[str, tuple[str, ...]]:
+    from spicy_regs.sources.retained_native_collections import POLICIES
+
+    POLICIES[table]
+    return {}  # Every retained field is already a subject column.
+
+
 def _historical_regulations(table: str) -> dict[str, tuple[str, ...]]:
     from spicy_regs.transforms.historical_regulations import POLICIES
 
@@ -109,6 +116,7 @@ FAMILIES: tuple[tuple[str, str, Callable[[str], dict[str, tuple[str, ...]]]], ..
     ("scorecards-etl-", "scorecards", _scorecards),
     ("courts/", "courts", lambda table: {}),
     ("administration-policy-", "administration policy", _administration_policy),
+    ("retained-native-collections-", "retained native collections", _retained_native),
     ("historical-regulations-", "historical regulations", _historical_regulations),
     ("uscode-editions-", "Code editions", _uscode_editions),
     ("table3-historical", "historical Table III", _table3_history),

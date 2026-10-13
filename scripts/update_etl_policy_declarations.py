@@ -34,6 +34,7 @@ def family_policies(datasets: frozenset[str] | None = None):
     from spicy_regs.transforms.fec_subject_receipts import dataset_policy as fec_policy
     from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
 
+    from spicy_regs.sources.retained_native_collections import POLICIES as retained_native
     from spicy_regs.sources.retained_collections import POLICIES as administration
     from spicy_regs.transforms.historical_regulations import POLICIES as historical
     from spicy_regs.sources.table3_history import POLICY as table3_history
@@ -50,7 +51,7 @@ def family_policies(datasets: frozenset[str] | None = None):
             raise ValueError(f'Family policy conflict: {policy.dataset}')
         result[policy.dataset] = policy
     for policy in (*courts.values(), *scorecards.values(), *government.values(), *shared_logs(),
-                   *administration.values(), *historical.values(), table3_history,
+                   *administration.values(), *retained_native.values(), *historical.values(), table3_history,
                    *editions.values()):
         add(policy)
     for name in INPUT_COLUMNS:
