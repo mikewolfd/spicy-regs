@@ -25,6 +25,7 @@ from spicy_regs.public_url import resolve_r2_base_url  # noqa: E402
 from spicy_regs.sources.publication import INDEX_LIMIT, INDEX_V2_KEY, parse_index, table_members  # noqa: E402
 
 METADATA_LIMIT = 8 * 1024 * 1024
+MEASUREMENTS_KEY = "navigation-measurements.v1.json"
 PUBLISHER_LIMIT = 4 * 1024 * 1024
 
 
@@ -112,6 +113,22 @@ def previous_metadata(raw: bytes | None) -> dict | None:
     return None
 
 
+def measurement_results(raw: bytes | None) -> list[dict]:
+    """An absent companion is optional; invalid measurement input stops refresh."""
+    if raw is None:
+        return []
+    if len(raw) > METADATA_LIMIT:
+        raise ValueError("Navigation measurement receipt exceeds its reader limit")
+    try:
+        receipt = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError("Navigation measurement receipt must be valid JSON") from exc
+    if (not isinstance(receipt, dict) or not isinstance(receipt.get("results"), list)
+            or any(not isinstance(result, dict) for result in receipt["results"])):
+        raise ValueError("Navigation measurement receipt must be an object containing a results list of objects")
+    return receipt["results"]
+
+
 def publish_bundle(client, bucket: str, bundle: dict) -> str:
     """Write one complete JSON object after validation; failures stay visible."""
     encoded = canonical_bytes(bundle)
@@ -134,7 +151,7 @@ def main() -> None:
     parser.add_argument("--publish", action="store_true", help="Write only explorer-metadata.v1.json to R2")
     parser.add_argument("--index", type=Path, help="Local version-2 publication index for an offline/read-only build")
     parser.add_argument("--output", type=Path, default=Path("output") / KEY)
-    parser.add_argument("--measurements", type=Path, help="Attach completed navigation measurements only when their exact current input/rule bindings match")
+    parser.add_argument("--measurements", type=Path, help=f"Override the optional {MEASUREMENTS_KEY} companion with a local measurement receipt")
     parser.add_argument("--base-url", default=resolve_r2_base_url())
     args = parser.parse_args()
     if args.publish and args.index:
@@ -170,17 +187,15 @@ def main() -> None:
         return get_optional_public(url, INDEX_LIMIT) if allow_missing else get_public(url, INDEX_LIMIT)
     extra_tables = other_tables(index, args.base_url, read=read_publication, previous=previous)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    measurements = []
     if args.measurements:
-        raw_measurements = args.measurements.read_bytes()
-        if len(raw_measurements) > METADATA_LIMIT:
-            raise ValueError("Navigation measurement receipt exceeds its reader limit")
-        measurement_receipt = json.loads(raw_measurements)
-        if not isinstance(measurement_receipt, dict):
-            raise ValueError("Navigation measurement receipt must be an object containing a results list")
-        measurements = measurement_receipt.get("results", [])
-        if not isinstance(measurements, list):
-            raise ValueError("Navigation measurement receipt must contain a results list")
+        with args.measurements.open("rb") as receipt_file:
+            raw_measurements = receipt_file.read(METADATA_LIMIT + 1)
+    elif client:
+        assert bucket is not None
+        raw_measurements = read_object(client, bucket, MEASUREMENTS_KEY, METADATA_LIMIT, optional=True)
+    else:
+        raw_measurements = get_optional_public(args.base_url.rstrip("/") + "/" + MEASUREMENTS_KEY, METADATA_LIMIT)
+    measurements = measurement_results(raw_measurements)
     bundle = build_bundle(index, scorecard_publishers=scorecard_sources(index, args.base_url), source_revision=revision,
                           extra_tables=extra_tables, measurements=measurements)
     encoded = canonical_bytes(bundle)

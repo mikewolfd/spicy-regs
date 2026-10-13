@@ -216,14 +216,21 @@ duplicate or unsupported source identities prevent distinct-record claims.
 Complete target-key populations qualify uniqueness; reference-only observations
 do not. Native scalar joins refuse text/numeric coercion.
 
-The publisher accepts an optional `--measurements <receipt.json>`. It attaches
-counts only when the receipt reconciles and matches the current complete source
-and target bindings and unchanged recipe. Separate publications retain their
+Each refresh reads the optional `navigation-measurements.v1.json` companion
+from the configured data host; publishing reads it directly from R2. An owner
+release job uploads that proof object separately. The metadata publisher still
+writes only `explorer-metadata.v1.json`. `--measurements <receipt.json>` overrides
+the companion with a local receipt. A missing companion supplies no measurements;
+malformed or oversized input, authentication errors and transport failures stop
+the refresh before it writes metadata.
+
+The publisher attaches counts only when each proof reconciles and matches the
+current complete source and target bindings and unchanged recipe. Separate publications retain their
 exact file identities, including mutable ETags. Missing, stale, conflicting or
 partial measurements leave each direction unknown. Public lookup capabilities
 remain exact scans; measurement caches are neither browser row locators nor
-receipt indexes. Producing and supplying these measurements is explicit; the
-existing scheduled publisher does not start corpus scans.
+receipt indexes. The scheduled publisher revalidates saved proofs against current
+code and publication details; it does not start corpus scans or rewrite proofs.
 
 ### Affected routes and a complete census
 
@@ -272,7 +279,8 @@ stages.
 CI can run `tests/test_navigation_measurement_runner.py` with fixture members
 and read-only repository permissions. An owner release job can run the command
 against already-staged pinned members, retain the census as an artifact, and
-pass its `results` to `publish_explorer_metadata.py --measurements`. Do not add a
+upload the receipt as `navigation-measurements.v1.json`, or pass it to
+`publish_explorer_metadata.py --measurements` for that run. Do not add a
 scheduled full-corpus download. The existing exact-main schema gates remain
 required before metadata publication; production website and MCP checks remain
 separate release steps.

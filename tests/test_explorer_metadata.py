@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 import importlib.util
+import io
+import json
 from pathlib import Path
 
 import pytest
@@ -43,6 +45,198 @@ def args():
                          "families": {}, "tables": {"child": {"sources": ["original"], "inputs": ["parent"]}}},
             "join_record": {"joins": [join()]}, "audit": {},
             "generated_at": "2026-10-03T00:00:00Z"}
+
+
+@pytest.fixture
+def measurement_refresh(tmp_path, monkeypatch):
+    """Run the publisher with real construction/verifiers and tiny measured main files."""
+    from botocore.exceptions import ClientError
+    from spicy_regs import explorer_metadata
+    from spicy_regs.sources import cloudflare, r2
+    from spicy_regs.navigation_measurements import MeasurementCache
+    from tests.test_navigation_measurements import selection
+
+    script = publisher_script()
+    selected, paths, spec = selection(tmp_path)
+    proof = MeasurementCache(tmp_path / "cache").measure(selected, paths, spec, source_identity=("id",))
+    receipt = {"results": [proof]}
+    original_receipt = script.canonical_bytes(receipt)
+    reads, writes, purges = [], [], []
+
+    class Store:
+        objects = {script.INDEX_V2_KEY: script.canonical_bytes(selected),
+                   script.MEASUREMENTS_KEY: original_receipt}
+        failure = None
+
+        def get_object(self, **kwargs):
+            name = kwargs["Key"]
+            reads.append(name)
+            if name == script.MEASUREMENTS_KEY and self.failure:
+                raise self.failure
+            if name not in self.objects:
+                raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+            return {"Body": io.BytesIO(self.objects[name])}
+
+        def put_object(self, **kwargs):
+            writes.append(kwargs["Key"])
+            self.objects[kwargs["Key"]] = kwargs["Body"]
+
+    store = Store()
+    monkeypatch.setenv("R2_BUCKET_NAME", "test")
+    monkeypatch.setattr(r2, "require_credentials", lambda *_: None)
+    monkeypatch.setattr(r2, "get_r2_client", lambda: store)
+    monkeypatch.setattr(cloudflare, "purge_urls", lambda urls: purges.extend(urls))
+    monkeypatch.setattr(script, "get_public", lambda *_: pytest.fail("Publishing must use authoritative control reads"))
+    monkeypatch.setattr(script, "other_tables", lambda *a, **kw: {})
+    monkeypatch.setattr(script.subprocess, "check_output", lambda *a, **kw: "fixture-revision\n")
+    monkeypatch.setattr(explorer_metadata, "publication_descriptions", lambda _: {
+        "source": {"label": "Source", "columns": [], "identity_columns": ["id"]},
+        "target": {"label": "Target", "columns": []}})
+    maintained_read = explorer_metadata.read_json
+    monkeypatch.setattr(explorer_metadata, "read_json", lambda name:
+                        {"joins": [], "navigation": [spec]} if name == "table_joins.json"
+                        else maintained_read(name))
+    output = tmp_path / "output" / script.KEY
+    argv = ["publish_explorer_metadata.py", "--publish", "--base-url", "https://data.example.org",
+            "--output", str(output)]
+    monkeypatch.setattr("sys.argv", argv)
+    return script, store, selected, spec, output, argv, reads, writes, purges, original_receipt
+
+
+def test_default_companion_survives_the_next_refresh_without_proof_changes(measurement_refresh):
+    script, store, _, _, output, _, reads, writes, purges, original = measurement_refresh
+    script.main()
+    first = json.loads(output.read_bytes())
+    directions = first["navigation"][0]["targets"][0]["directions"]
+    assert directions["forward"]["measurement"]["status"] == "measured"
+    assert directions["reverse"]["measurement"]["status"] == "measured"
+    assert [directions["forward"]["measurement"][name] for name in
+            ("eligible", "matched", "missing", "ambiguous")] == [4, 3, 1, 1]
+    script.main()
+    assert json.loads(output.read_bytes())["navigation"] == first["navigation"]
+    assert reads.count(script.MEASUREMENTS_KEY) == 2
+    assert writes == [script.KEY]
+    assert purges == ["https://data.example.org/" + script.KEY]
+    assert store.objects[script.MEASUREMENTS_KEY] == original
+
+
+@pytest.mark.parametrize("changed", ["input", "recipe", "absent"])
+def test_default_companion_refuses_stale_bindings_or_remains_optional(measurement_refresh, changed):
+    script, store, selected, spec, output, _, _, writes, _, original = measurement_refresh
+    if changed == "input":
+        selected["families"]["fixture"]["tables"]["source.parquet"]["sha256"] = "sha256:" + "c" * 64
+        store.objects[script.INDEX_V2_KEY] = script.canonical_bytes(selected)
+    elif changed == "recipe":
+        spec["ruleVersion"] = "changed-recipe/2"
+    else:
+        del store.objects[script.MEASUREMENTS_KEY]
+    script.main()
+    directions = json.loads(output.read_bytes())["navigation"][0]["targets"][0]["directions"]
+    assert directions["forward"]["measurement"]["status"] == "unknown"
+    assert directions["reverse"]["measurement"]["status"] == "unknown"
+    assert writes == [script.KEY]
+    if changed != "absent":
+        assert store.objects[script.MEASUREMENTS_KEY] == original
+
+
+@pytest.mark.parametrize("bad", [b"broken", b"\xff", b"null", b"[]", b"{}", b'{"results":null}',
+                                  b'{"results":{}}', b'{"results":[null]}'])
+def test_invalid_companion_stops_before_output_or_publication(measurement_refresh, bad):
+    script, store, _, _, output, _, _, writes, purges, _ = measurement_refresh
+    old = b'{"existing":"metadata"}'
+    store.objects[script.KEY] = old
+    store.objects[script.MEASUREMENTS_KEY] = bad
+    with pytest.raises(ValueError, match="Navigation measurement receipt"):
+        script.main()
+    assert not output.exists()
+    assert writes == purges == []
+    assert store.objects[script.KEY] == old
+
+
+def test_oversized_companion_is_bounded_before_output_or_publication(measurement_refresh):
+    script, store, _, _, output, _, _, writes, purges, _ = measurement_refresh
+    store.objects[script.MEASUREMENTS_KEY] = b" " * (script.METADATA_LIMIT + 1)
+    with pytest.raises(ValueError, match="exceeds"):
+        script.main()
+    assert not output.exists()
+    assert writes == purges == []
+
+
+@pytest.mark.parametrize("failure", ["AccessDenied", "transport"])
+def test_companion_storage_failures_never_erase_counts(measurement_refresh, failure):
+    from botocore.exceptions import ClientError
+    script, store, _, _, output, _, _, writes, purges, _ = measurement_refresh
+    store.failure = (ClientError({"Error": {"Code": failure}}, "GetObject")
+                     if failure == "AccessDenied" else RuntimeError("transport unavailable"))
+    with pytest.raises((ClientError, RuntimeError)):
+        script.main()
+    assert not output.exists()
+    assert writes == purges == []
+
+
+def test_explicit_receipt_overrides_unreadable_companion(measurement_refresh):
+    script, store, _, _, output, argv, reads, writes, _, original = measurement_refresh
+    receipt = output.parent.parent / "explicit.json"
+    receipt.write_bytes(original)
+    argv.extend(["--measurements", str(receipt)])
+    store.failure = RuntimeError("companion must not be read")
+    script.main()
+    assert script.MEASUREMENTS_KEY not in reads
+    assert writes == [script.KEY]
+    assert json.loads(output.read_bytes())["navigation"][0]["targets"][0]["directions"]["forward"]["measurement"]["status"] == "measured"
+
+
+def test_explicit_receipt_uses_the_same_bounded_parser(measurement_refresh):
+    script, _, _, _, output, argv, reads, writes, _, _ = measurement_refresh
+    receipt = output.parent.parent / "explicit.json"
+    receipt.write_bytes(b" " * (script.METADATA_LIMIT + 1))
+    argv.extend(["--measurements", str(receipt)])
+    with pytest.raises(ValueError, match="receipt exceeds"):
+        script.main()
+    assert script.MEASUREMENTS_KEY not in reads
+    assert not output.exists()
+    assert writes == []
+
+
+def test_measurement_parser_accepts_the_limit_and_requires_result_objects():
+    script = publisher_script()
+    assert script.measurement_results(None) == []
+    raw = b'{"results":[]}'
+    assert script.measurement_results(raw + b" " * (script.METADATA_LIMIT - len(raw))) == []
+    with pytest.raises(ValueError, match="exceeds"):
+        script.measurement_results(raw + b" " * script.METADATA_LIMIT)
+
+
+def test_public_default_reads_optional_companion_with_metadata_limit(measurement_refresh, monkeypatch):
+    script, _, selected, _, output, argv, _, _, _, original = measurement_refresh
+    argv.remove("--publish")
+    reads = []
+    monkeypatch.setattr(script, "get_public", lambda url, limit: script.canonical_bytes(selected))
+    def optional(url, limit):
+        reads.append((url, limit))
+        return original if url.endswith("/" + script.MEASUREMENTS_KEY) else None
+    monkeypatch.setattr(script, "get_optional_public", optional)
+    script.main()
+    assert reads == [("https://data.example.org/" + script.KEY, script.METADATA_LIMIT),
+                     ("https://data.example.org/" + script.MEASUREMENTS_KEY, script.METADATA_LIMIT)]
+    assert json.loads(output.read_bytes())["navigation"][0]["targets"][0]["directions"]["forward"]["measurement"]["status"] == "measured"
+
+
+@pytest.mark.parametrize("status", [404, 401, 403, 503])
+def test_public_optional_only_omits_an_absent_object(monkeypatch, status):
+    import httpx
+    script = publisher_script()
+    url = "https://data.example.org/" + script.MEASUREMENTS_KEY
+    failure = httpx.HTTPStatusError("read refused", request=httpx.Request("GET", url),
+                                  response=httpx.Response(status))
+    def fail(*_):
+        raise failure
+    monkeypatch.setattr(script, "get_public", fail)
+    if status == 404:
+        assert script.get_optional_public(url, script.METADATA_LIMIT) is None
+    else:
+        with pytest.raises(httpx.HTTPStatusError):
+            script.get_optional_public(url, script.METADATA_LIMIT)
 
 
 def test_new_table_remains_discoverable_but_never_borrowed_description_or_join():
