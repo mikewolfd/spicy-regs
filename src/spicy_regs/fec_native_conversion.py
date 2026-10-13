@@ -185,6 +185,19 @@ def _consume_receipt(receipt, writer, check_resources):
     receipt.unlink()
 
 
+def _bounded_record_batches(batch, *, max_bytes=8 * 1024 * 1024):
+    """Limit each Python materialization; a single wide value stays intact."""
+    start = 0
+    while start < batch.num_rows:
+        count = batch.num_rows - start
+        part = batch.slice(start, count)
+        while count > 1 and part.nbytes > max_bytes:
+            count = max(1, count // 2)
+            part = batch.slice(start, count)
+        yield part
+        start += count
+
+
 def validate_identity_schema(table, schema):
     """Only the supported mapper schema or exact retained /1 schema may convert."""
     source = Path(__file__).resolve().parents[2] / 'data_dictionary/fec_typed_schemas.json'
@@ -593,11 +606,29 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
             else:
                 validate_identity_schema(table, schema)
                 def rows():
+                    peak_arrow, peak_python, input_rows = 0, 0, 0
+                    def report():
+                        (build / 'input-materialization.json').write_text(json.dumps({
+                            'table': table, 'input_rows_observed': input_rows,
+                            'peak_arrow_batch_bytes': peak_arrow, 'peak_python_batch_arrow_bytes': peak_python,
+                            'scope': 'Progress and logical Arrow bytes; not Python heap or qualification',
+                        }) + '\n')
+                    report()
                     for item, witness in zip(selected, witnesses, strict=True):
-                        for batch in pq.ParquetFile(item.path).iter_batches(batch_size=512, use_threads=False):
+                        for batch in pq.ParquetFile(item.path).iter_batches(batch_size=32, use_threads=False):
                             check_resources()
-                            for row in batch.to_pylist():
-                                yield row, witness
+                            input_rows += batch.num_rows
+                            if batch.nbytes > peak_arrow:
+                                peak_arrow = batch.nbytes
+                                report()
+                            for part in _bounded_record_batches(batch):
+                                check_resources()
+                                if part.nbytes > peak_python:
+                                    peak_python = part.nbytes
+                                    report()
+                                for row in part.to_pylist():
+                                    yield row, witness
+                    report()
                 with (nullcontext(observation_writer) if observation_writer is not None else
                       IdentityReceiptWriter(output, generation_id=generation_id, tables=[table])) as writer:
                     for ordinal, (row, witness) in enumerate(rows()):

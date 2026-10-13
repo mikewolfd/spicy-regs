@@ -68,6 +68,19 @@ def witnesses_for(row, evidence, input_witness):
     return witnesses
 
 
+def _buffer_size(value):
+    """Conservative retained value bytes; includes subjects and witness fields."""
+    if isinstance(value, str):
+        return 4 * len(value) + 64
+    if isinstance(value, bytes):
+        return len(value) + 64
+    if isinstance(value, dict):
+        return 64 + sum(_buffer_size(key) + _buffer_size(item) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return 64 + sum(_buffer_size(item) for item in value)
+    return 64
+
+
 class IdentityReceiptWriter:
     """Bounded family build; failed admission never replaces an existing output."""
 
@@ -152,7 +165,7 @@ class IdentityReceiptWriter:
             self.buffers[table].append(subject)
             self.counts[table] += 1
         self.receipts.append(receipt)
-        self.buffer_bytes += len(receipt["processing_json"]) + len(receipt["diagnostic_json"])
+        self.buffer_bytes += _buffer_size(subject) + _buffer_size(receipt)
         if len(self.receipts) >= self.batch_size or self.buffer_bytes >= 8 * 1024 * 1024:
             self.flush()
         return subject, receipt
