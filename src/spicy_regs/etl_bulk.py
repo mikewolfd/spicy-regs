@@ -953,7 +953,7 @@ def _replay_admitted_subjects(con, subject_paths, policy, *, start=0, processing
                     processing_values = processing_rows(processing_values)
                 priors = processing_values if include_prior else [None] * len(processing_values)
                 if include_prior:
-                    processing_values = [receipt["processing_json"] for receipt in priors]
+                    processing_values = [receipt["processing_json"] for receipt in processing_values]
                 for subject, processing, prior, matched, key, expected_version, expected_identity in zip(
                     subjects, processing_values, priors, *(batch.column(i).to_pylist() for i in range(2, 6))
                 ):

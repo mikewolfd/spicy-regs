@@ -119,9 +119,11 @@ def open_pinned_http(url: str, *, etag: str) -> Iterator[io.BufferedIOBase]:
     with requests.Session() as session:
         session.trust_env = False  # No environment credentials or proxy auth in anonymous admission.
         tracked = ClosingSession(session)
+        # smart_open uses only Session.get; the proxy keeps response closure and
+        # ETag admission around that exact transport without changing its owner.
         try:
             with http.open(url, "rb", headers={"If-Match": etag, "Accept-Encoding": "identity"},
-                           session=tracked, buffer_size=READ_BUFFER_BYTES, timeout=120) as stream:
+                           session=cast(requests.Session, tracked), buffer_size=READ_BUFFER_BYTES, timeout=120) as stream:
                 if not stream.seekable():
                     raise ValueError("Public member does not support bounded seekable reads")
                 yield stream
