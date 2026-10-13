@@ -2387,7 +2387,7 @@ def _tools() -> list[Tool]:
         source's full history. rows is the pinned count for a managed or
         snapshot table (describe_table gives the pin): 0 means this
         generation publishes no rows; null means no pointer pins the table. A
-        later run can follow the pin; rows is not a freshness claim.
+        later run can land after the pin; rows is not a freshness claim.
         A comments export at a fixed URL is not pinned: rows_basis
         comments_export_receipt marks its export receipt's count, stated while
         the file matched the receipt when this connection was built (a later
