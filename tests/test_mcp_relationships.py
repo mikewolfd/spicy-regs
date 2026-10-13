@@ -26,13 +26,15 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         available = [name for name in member_views if registry[name]["status"] == "available"]
         assert available
         name = next(n for n in available if n.endswith("_occurrences"))
-        # A family's views share one summary and are listed together, once.
+        # A family's views remain grouped once; labels and full meanings are described on request.
         [group] = [group for group in discovered["relationship_views"] if name in group["views"]]
         assert set(group["views"]) == set(available)
-        assert group["summary"] == registry[group["views"][0]]["metadata"]["label"].removesuffix(" occurrences")
+        assert set(group) == {"views"}
+        assert "labels" in discovered["relationship_view_details"]
         assert name not in [entry["table"] for entry in _listed(discovered)]
         described = _tool_data(server, "describe_table", {"table": name})
         assert described["metadata"]["summary"] == registry[name]["metadata"]["summary"]
+        assert described["metadata"]["label"] == registry[name]["metadata"]["label"]
         assert described["relationship"]["dependencies"] == ["members"]
         assert described["publication"]["status"] == "derived_view"
         assert described["publication"]["input_publications"]["members"]["status"].endswith("unversioned")

@@ -60,6 +60,19 @@ def test_selected_section_policy_refresh_matches_maintained_declaration():
     }
 
 
+def test_cfr_declaration_uses_public_owner_without_changing_local_rebuild_policy():
+    from scripts.update_etl_policy_declarations import declarations
+    from spicy_regs.transforms.historical_regulations import POLICIES, PUBLIC_POLICIES
+    from spicy_regs.transforms.regulations_receipts import policy
+
+    public = policy("cfr_sections").descriptor()
+    retained = POLICIES["cfr_sections"].descriptor()
+    assert declarations(frozenset({"cfr_sections"})) == {"cfr_sections": public}
+    assert "cfr_sections" not in PUBLIC_POLICIES
+    assert retained["policy_version"] == "retained-annual-cfr-v1"
+    assert retained != public
+
+
 @pytest.mark.parametrize("dataset", REGISTERED_RELEASE_DATASETS)
 def test_registered_release_policy_matches_final_producer(dataset):
     from spicy_regs.etl_policy_registry import installed_policies

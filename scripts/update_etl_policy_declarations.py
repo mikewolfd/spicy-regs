@@ -37,7 +37,7 @@ def family_policies(datasets: frozenset[str] | None = None):
 
     from spicy_regs.sources.retained_native_collections import POLICIES as retained_native
     from spicy_regs.sources.retained_collections import POLICIES as administration
-    from spicy_regs.transforms.historical_regulations import POLICIES as historical
+    from spicy_regs.transforms.historical_regulations import PUBLIC_POLICIES as historical
     from spicy_regs.sources.table3_history import POLICY as table3_history
     from spicy_regs.sources.uscode_editions import POLICIES as editions
 

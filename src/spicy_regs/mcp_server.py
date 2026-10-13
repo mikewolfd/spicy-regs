@@ -2307,7 +2307,9 @@ def _tools() -> list[Tool]:
 
         FEC subject tables contain the build-shaped facts. Entries marked child_query
         expose a distinct response or array-element grain and name their source_tables.
-        Categories distinguish query data, diagnostics, evidence, leads and samples.
+        Categories distinguish diagnostics, evidence, leads and samples. Generic
+        query_data declarations are omitted here; absent category can also mean
+        undeclared. describe_table retains the explicit declaration and limits.
         coverage is the dictionary's kind: true_range, window, sampled,
         derived, not_a_range or empty; a window or a sample does not hold the
         source's full history. rows is the pinned generation's row count for a
@@ -2322,7 +2324,7 @@ def _tools() -> list[Tool]:
         Discovery binds source schemas without restoring receipt-backed rows.
         deferred_views names views whose exact receipt admission remains pending
         until query_sql builds its separate query connection, grouped by reason.
-        Relationship summaries are group labels; describe_table gives full meanings.
+        Relationship groups list view identities; describe_table gives labels and full meanings.
         No output schema or
         execution claim is supplied for a deferred view. Listed source schemas
         are not a data or freshness audit. Call describe_table before querying a table: it gives
@@ -2369,7 +2371,7 @@ def _tools() -> list[Tool]:
                 subjects.setdefault(entry.get("subject", "campaign_finance" if view.get("view_role") == "child_query" else None), []).append(
                     {"table": name, "label": entry.get("label", view.get("label")),
                      "coverage": entry.get("kind", "derived"), **rows(name),
-                     **({"category": entry["category"]} if entry.get("category") else {}),
+                     **({"category": entry["category"]} if entry.get("category") and entry["category"] != "query_data" else {}),
                      **({"role": "child_query", "source_tables": relationship["dependencies"]}
                         if relationship else {})})
         if None in subjects:
@@ -2377,9 +2379,9 @@ def _tools() -> list[Tool]:
         return {
             **_source_details(cursor),
             "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
-            "relationship_views": [{"views": names, "summary": relationships[names[0]]["metadata"]["label"].removesuffix(" occurrences")}
-                                   for names in views.values()],
-            "relationship_view_details": "Summaries name view groups. Call describe_table for full meanings, identities, dependencies and purpose limits.",
+            "relationship_views": [{"views": names} for names in views.values()],
+            "relationship_view_details": "Call describe_table for group labels, full meanings, identities, dependencies and purpose limits.",
+            "category_details": "Generic query_data declarations are omitted; absent category can also mean undeclared. describe_table gives declared categories and limits.",
             "unavailable_tables": [name for name in (*TABLES, *relationships)
                                    if name not in available and relationships.get(name, {}).get("status") != "deferred"],
             "deferred_views": [{"views": names, "reason": reason, "query_admission": admission}
