@@ -432,19 +432,19 @@ def test_discovery_continues_after_an_unreadable_table(tmp_path, monkeypatch):
 
 def test_live_check_accepts_supported_but_unpublished_tables(monkeypatch):
     schemas = dd.expected_schemas()
-    monkeypatch.setattr(dd, 'discover_schemas', lambda *_: {'dockets': schemas['dockets']})
+    monkeypatch.setattr(dd, 'discover_schemas', lambda *_, **_kwargs: {'dockets': schemas['dockets']})
     args = dd.build_parser().parse_args(['check', '--source', 'r2'])
     assert args.func(args) == 0
 
 
 def test_unknown_published_table_is_schema_drift(monkeypatch):
-    monkeypatch.setattr(dd, 'discover_schemas', lambda *_: {'unknown_published': [('id', 'VARCHAR')]})
+    monkeypatch.setattr(dd, 'discover_schemas', lambda *_, **_kwargs: {'unknown_published': [('id', 'VARCHAR')]})
     args = dd.build_parser().parse_args(['check', '--source', 'r2'])
     assert args.func(args) == 1
 
 
 def test_incomplete_live_check_is_not_a_pass_after_other_tables_match(monkeypatch):
-    def partial(*_):
+    def partial(*_, **_kwargs):
         raise dd.SchemaDiscoveryError({'dockets': dd.expected_schemas()['dockets']}, ['[documents] unreachable'])
     monkeypatch.setattr(dd, 'discover_schemas', partial)
     args = dd.build_parser().parse_args(['check', '--source', 'r2'])
@@ -728,7 +728,7 @@ def test_each_rulemaking_table_names_its_identity_and_where_it_is_published():
 def test_a_pointer_that_names_no_publication_is_unreadable_not_drift(monkeypatch):
     from spicy_regs.sources.publication import PublicationError
 
-    def refuse(*_):
+    def refuse(*_, **_kwargs):
         raise PublicationError("Invalid rulemaking snapshot")
 
     monkeypatch.setattr(dd, "discover_schemas", refuse)
@@ -741,13 +741,87 @@ def test_live_check_holds_declared_types_to_the_published_file(monkeypatch, caps
     declared = dd.expected_schemas()["rulemaking_lifecycles"]
     drifted = [(column, "VARCHAR" if column == "proposal_date" else kind) for column, kind in declared]
     args = dd.build_parser().parse_args(["check", "--source", "r2"])
-    monkeypatch.setattr(dd, "discover_schemas", lambda *_: {"rulemaking_lifecycles": drifted})
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_, **_kwargs: {"rulemaking_lifecycles": drifted})
     assert args.func(args) == 1
     assert "[rulemaking_lifecycles.proposal_date] in-code type DATE but live parquet VARCHAR" in capsys.readouterr().err
-    monkeypatch.setattr(dd, "discover_schemas", lambda *_: {"rulemaking_lifecycles": declared})
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_, **_kwargs: {"rulemaking_lifecycles": declared})
     assert args.func(args) == 0
 
 
 def test_native_list_names_are_respelled_within_their_own_table():
     assert dd.native_spelling('committees_json', 'house_communications') == 'committees'
     assert dd.native_spelling('committees_json', 'nominations') == 'committees_json'
+
+
+@pytest.mark.parametrize("receipts", [False, True, None])
+def test_selected_dictionary_uses_explicit_receiptless_owner_only(receipts):
+    entry: dict = {"tables": {"bill_subjects.parquet": {}}}
+    if receipts is not False:
+        entry["etlReceipts"] = {"datasets": ["bill_subjects"]} if receipts else None
+    index = {"families": {"bill-subjects": entry}}
+    descriptions, schemas = dd.selected_dictionary_definitions(index, ["bill_subjects"], dd.DEFAULT_DESCRIPTIONS)
+    raw = receipts is False
+    assert schemas["bill_subjects"] == dd.expected_schemas(native=not raw)["bill_subjects"]
+    assert descriptions["bill_subjects"]["columns"] == dd.load_descriptions(native=not raw)["bill_subjects"]["columns"]
+    assert ("subjects_json" in dict(schemas["bill_subjects"])) == raw
+
+
+def test_unknown_selected_owner_keeps_strict_native_declarations():
+    descriptions, schemas = dd.selected_dictionary_definitions({"families": {}}, ["bill_subjects"], dd.DEFAULT_DESCRIPTIONS)
+    assert schemas == dd.expected_schemas()
+    assert descriptions == dd.load_descriptions()
+
+
+def test_live_selected_legacy_check_accepts_declared_shape_but_refuses_real_drift(monkeypatch, capsys):
+    from spicy_regs.sources import publication
+
+    index = {"families": {"bill-subjects": {"tables": {"bill_subjects.parquet": {}}}}}
+    monkeypatch.setattr(publication, "load_index", lambda _: index)
+    monkeypatch.setattr(dd, "published_row_counts", lambda *_, **_kwargs: {})
+    declared = dd.expected_schemas(native=False)["bill_subjects"]
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_, **_kwargs: {"bill_subjects": declared})
+    args = dd.build_parser().parse_args(["check", "--source", "r2"])
+    assert args.func(args) == 0
+    capsys.readouterr()
+    drift = [(name, "BIGINT" if name == "subjects_json" else kind) for name, kind in declared]
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_, **_kwargs: {"bill_subjects": drift})
+    assert args.func(args) == 1
+    assert "[bill_subjects.subjects_json] in-code type VARCHAR but live parquet BIGINT" in capsys.readouterr().err
+
+
+def test_live_dictionary_changed_selection_is_incomplete(monkeypatch, capsys):
+    from spicy_regs.sources import publication
+
+    indexes = iter([{"families": {}}, {"families": {"changed": {"tables": {}}}}])
+    monkeypatch.setattr(publication, "load_index", lambda _: next(indexes))
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_, **_kwargs: {"dockets": dd.expected_schemas()["dockets"]})
+    args = dd.build_parser().parse_args(["check", "--source", "r2"])
+    assert args.func(args) == dd.EXIT_SOURCE_UNREACHABLE
+    assert "Publication selection changed" in capsys.readouterr().err
+
+
+
+def test_published_urls_use_captured_index_without_reloading(monkeypatch):
+    from spicy_regs.sources import publication
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("Captured index must select URLs without loading another index")
+
+    monkeypatch.setattr(publication, "load_index", unexpected)
+    monkeypatch.setattr(publication, "load_rulemaking_snapshot", lambda _: None)
+    assert publication.published_urls("https://example.test", index=publication.empty_index()) == {}
+
+
+def test_live_checker_passes_captured_selection_to_discovery(monkeypatch):
+    from spicy_regs.sources import publication
+
+    selected = publication.empty_index()
+    monkeypatch.setattr(publication, "load_index", lambda _: selected)
+
+    def discover(source, base, *, index):
+        assert source == "r2" and index is selected
+        return {"dockets": dd.expected_schemas()["dockets"]}
+
+    monkeypatch.setattr(dd, "discover_schemas", discover)
+    args = dd.build_parser().parse_args(["check", "--source", "r2"])
+    assert args.func(args) == 0

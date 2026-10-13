@@ -509,7 +509,7 @@ def mutable_versions_match(pins: Mapping[str, Mapping | None]) -> bool:
     return True
 
 
-def published_urls(base_url: str) -> dict[str, list[str]]:
+def published_urls(base_url: str, *, index: Mapping | None = None) -> dict[str, list[str]]:
     """Each table the publisher's two pointers name, by name, to its immutable file URLs.
 
     The publication index's generations come first, then the rulemaking
@@ -517,7 +517,8 @@ def published_urls(base_url: str) -> dict[str, list[str]]:
     the bare ``<name>.parquet`` key, which the caller adds.
     """
     base = base_url.rstrip("/")
-    index, snapshot = load_index(base), load_rulemaking_snapshot(base)
+    index = load_index(base) if index is None else index
+    snapshot = load_rulemaking_snapshot(base)
     urls = {table: [f"{base}/{member.path}" for member in table_members(index, f"{table}.parquet")]
             for table in parquet_tables(index)}
     for key, record in (snapshot or {"tables": {}})["tables"].items():
