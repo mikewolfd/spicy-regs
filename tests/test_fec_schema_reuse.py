@@ -105,9 +105,11 @@ def test_preparation_replacement_rechecks_actual_physical_columns(monkeypatch, a
         if adapted:
             owner = ReceiptAdapter(con, {"families": {"native": {"tables": {}, "etlReceipts": {"datasets": ["source"]}}}},
                                    "unused")
-            owner.prepare = prepare
-            prepare = owner.prepare_qualified
-        result = selected(monkeypatch, [view("v1"), view("v2")], con, prepare=prepare)
+            monkeypatch.setattr(owner, "prepare", prepare)
+            selected_prepare = owner.prepare_qualified
+        else:
+            selected_prepare = prepare
+        result = selected(monkeypatch, [view("v1"), view("v2")], con, prepare=selected_prepare)
         assert result["v1"]["status"] == "available"
         assert result["v2"]["status"] == "unsupported"
         assert result["v2"]["release_compatibility"]["status"] == "disabled"

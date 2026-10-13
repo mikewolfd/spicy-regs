@@ -146,11 +146,12 @@ def prepare_selected(
                 raise ValueError("Accepted native row count differs")
             if not pq.read_schema(generation / (table + ".parquet")).equals(POLICIES[table].subject_schema):
                 raise ValueError("Accepted native schema differs from its receipt policy")
+        receipt_info = generations._table_info(generation / "etl_receipts.parquet")
         receipt_spec = {
             "key": "etl_receipts.parquet",
             "generationId": selected_generation,
             "policies": [policy.descriptor() for policy in policies],
-            **generations._table_info(generation / "etl_receipts.parquet"),
+            **receipt_info,
         }
         require_registered_receipts(tables, receipt_spec)
         evidence = CaptureEvidence(stage, family)
@@ -181,7 +182,7 @@ def prepare_selected(
                 object_key=key,
                 role="table",
                 media_type="application/vnd.apache.parquet",
-                record_count=receipt_spec["rows"] if key == "etl_receipts.parquet" else tables[key]["rows"],
+                record_count=receipt_info["rows"] if key == "etl_receipts.parquet" else tables[key]["rows"],
             )
             for _, key, _, _ in sorted(declarations, key=lambda value: value[1])
         ]

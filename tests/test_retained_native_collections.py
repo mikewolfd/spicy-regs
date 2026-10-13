@@ -293,9 +293,14 @@ def test_ferc_native_validation_raw_decimal_and_post_evidence(tmp_path):
     row = pq.read_table(output / result["outputs"]["ferc_search_documents"]["path"]).to_pylist()[0]
     raw_page = (tmp_path / "search.json").read_text()
     assert row["source_page_json"] == raw_page
-    record = load_decimal_json(row["source_page_json"].encode(), source="fixture FERC page")["searchHits"][
-        row["record_index"]
-    ]
+    parsed_page = load_decimal_json(row["source_page_json"].encode(), source="fixture FERC page")
+    assert isinstance(parsed_page, dict)
+    from typing import cast
+
+    page_object = cast(dict[str, object], parsed_page)
+    records = page_object["searchHits"]
+    assert isinstance(records, list)
+    record = records[row["record_index"]]
     assert record["score"] == Decimal("85.35") and record["affiliations"] == [{"unknown": "retained"}]
     assert record["acesssionNumber"] == row["accession"]
     receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
@@ -368,9 +373,15 @@ def test_ferc_media_refusal_keeps_original_capture_and_post_body(tmp_path):
         acquirer.retained_init([item["original"]], loader)
         with pytest.raises(ValueError, match="media/size") as raised:
             acquirer.acquire(file_list, file_id=item["file_id"])
-    assert raised.value.capture.method == "POST"
-    assert raised.value.capture.request_body == item["original"]["request_body"].encode()
-    assert raised.value.refused_response.response_bytes == (tmp_path / "original.pdf").read_bytes()
+    from spicy_docs.transport.captured import attached_capture
+    from spicy_docs.reading.refusals import RefusedResponse
+
+    capture = attached_capture(raised.value)
+    refusal = getattr(raised.value, "refused_response", None)
+    assert capture is not None and isinstance(refusal, RefusedResponse)
+    assert capture.method == "POST"
+    assert capture.request_body == item["original"]["request_body"].encode()
+    assert refusal.response_bytes == (tmp_path / "original.pdf").read_bytes()
 
 
 def cftc_selection(tmp_path, *, listing_only=False, pages=1):
@@ -676,12 +687,12 @@ def scotus_selection(tmp_path, *, fault=None):
     from spicy_docs.sources.supreme_court import supreme_court_term_index_locator
 
     pdf = b"%PDF-1.4\nsynthetic court PDF\n%%EOF\n"
-    indexes = []
+    indexes: list[dict] = []
     common = "https://www.supremecourt.gov/opinions/preliminaryprint/600US1PP.pdf"
     diff = "https://www.supremecourt.gov/opinions/25pdf/example_diff.pdf"
-    files = []
+    files: list[dict] = []
 
-    def blob(name, url, body, media):
+    def blob(name, url, body, media) -> dict:
         target = tmp_path / name
         target.write_bytes(body)
         return {
@@ -982,3 +993,30 @@ def test_ig_unreleased_metadata_preserves_landing_link_without_claiming_asset(tm
     assert json.loads(row["declared_assets_json"]) == []
     assert {value["source_field"] for value in json.loads(row["declared_links_json"])} == {"landing_url", "summary_url"}
     assert len(result["inputs"]) == 1
+
+
+@pytest.mark.parametrize("missing", ["subject", "receipt"])
+def test_missing_native_output_refuses_without_candidate(tmp_path, monkeypatch, missing):
+    path, _ = selection(tmp_path)
+    write = native.write_dataset
+
+    def missing_output(*args, **kwargs):
+        subject, receipt = write(*args, **kwargs)
+        return (None, receipt) if missing == "subject" else (subject, None)
+
+    monkeypatch.setattr(native, "write_dataset", missing_output)
+    output = tmp_path / "candidate"
+    with pytest.raises(ValueError, match="requires subject and receipt outputs"):
+        native.build(path, output)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("request_body", ["[]", "null", "1"])
+def test_ferc_non_object_request_refuses_without_candidate(tmp_path, request_body):
+    path, unit = ferc_selection(tmp_path)
+    unit["pages"][0]["request_body"] = request_body
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    output = tmp_path / "candidate"
+    with pytest.raises(ValueError, match="search must be a JSON object"):
+        native.build(path, output)
+    assert not output.exists()

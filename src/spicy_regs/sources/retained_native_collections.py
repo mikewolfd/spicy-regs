@@ -17,6 +17,7 @@ import json
 from pathlib import Path, PurePosixPath
 import hashlib
 from tempfile import TemporaryDirectory
+from typing import cast
 
 import pyarrow as pa
 import httpx
@@ -28,7 +29,9 @@ from spicy_docs.sources.usitc_edis.bulk import inspect_bulk_archive
 from spicy_docs.reading.pdf_bytes import check_pdf_bytes
 from spicy_docs.sources.cftc_comments.acquisition import CftcPortalAcquirer, CftcPortalBudget
 from spicy_docs.sources.cftc_comments.reader import CftcCommentsReader
-from spicy_docs.sources.cftc_comments.pages import view_comment_url
+from spicy_docs.sources.cftc_comments.pages import (
+    CftcCommentDetail, CftcCommentListPage, CftcReleasesPage, view_comment_url,
+)
 from spicy_docs.sources.cftc_comments.attachments import CftcPdfError, pdf_locator
 from spicy_docs.reading.media_types import bare_media_type
 from spicy_docs.reading.paged_json import PagedJsonBudget
@@ -366,7 +369,7 @@ class Captures:
                 self.read(entry)
 
 
-def witness(capture: CapturedBodyResponse, locator: str) -> dict:
+def witness(capture: CapturedBodyResponse, locator: str) -> dict[str, str]:
     return {
         "source_id": capture.sha256,
         "sha256": capture.sha256,
@@ -383,7 +386,7 @@ def sec_rows(unit: dict, captures: Captures):
         for entry in [*unit["listings"], *unit["files"], *([unit["rule"]] if unit.get("rule") else [])]
     ):
         raise ValueError("SEC selection requires GET captures")
-    listing_entries = unit["listings"]
+    listing_entries: list[dict] = unit["listings"]
     if not isinstance(listing_entries, list) or not 1 <= len(listing_entries) <= 100:
         raise ValueError("bounded listing selection required")
     first = listing_entries[0]["requested_url"]
@@ -454,7 +457,7 @@ def sec_rows(unit: dict, captures: Captures):
             {"rule": asdict(native_rule) if native_rule else None, "listings": [asdict(page) for page in pages]}
         ),
     }
-    rule_witnesses = [witness(anchor, "rule" if native_rule else "legacy-listing")]
+    rule_witnesses: list[dict[str, str]] = [witness(anchor, "rule" if native_rule else "legacy-listing")]
     # All listing captures participate in the rule observation, including a
     # terminal empty page. File witnesses also retain every repeated occurrence.
     rule_witnesses += [
@@ -563,10 +566,13 @@ def ferc_rows(unit: dict, captures: Captures):
         raise ValueError("bounded FERC files required")
     docket = docket_id(unit["scope"]["docket"])
     body = load_decimal_json(entries[0]["request_body"].encode(), source="retained FERC search")
+    if not isinstance(body, dict):
+        raise ValueError("selected FERC search must be a JSON object")
+    search_body = cast(dict[str, object], body)
     expected_scope = [{"documentClass": unit["scope"]["class"], "documentType": unit["scope"]["type"]}]
     if (
-        body.get("docketSearches") != [{"docketNumber": docket, "subDocketNumbers": []}]
-        or body.get("classTypes") != expected_scope
+        search_body.get("docketSearches") != [{"docketNumber": docket, "subDocketNumbers": []}]
+        or search_body.get("classTypes") != expected_scope
     ):
         raise ValueError("selected FERC search scope differs")
     search_witnesses, stated, documents = {}, {}, []
@@ -574,7 +580,7 @@ def ferc_rows(unit: dict, captures: Captures):
         budget=PagedJsonBudget(len(entries), MAX_CAPTURE, 10, 0), transport=httpx.MockTransport(_no_network)
     ) as reader:
         reader.retained_init(entries, captures)
-        for page in reader.search_pages(body, max_pages=len(entries)):
+        for page in reader.search_pages(search_body, max_pages=len(entries)):
             for index, record in enumerate(page.records):
                 accession = record[ACCESSION_FIELD]
                 reference = search_hit_reference(record)
@@ -668,6 +674,8 @@ def ferc_rows(unit: dict, captures: Captures):
 
 # The scoped listing walk retains the maintained pagination rules.
 class _RetainedCftcPages(_RetainedValidatedCapture, CftcPortalAcquirer):
+    parsed_pages: list[tuple[CftcReleasesPage | CftcCommentListPage | CftcCommentDetail, CapturedBodyResponse]]
+
     def capture_validated(self, *args, **kwargs):
         page, capture = super().capture_validated(*args, **kwargs)
         self.parsed_pages.append((page, capture))
@@ -700,7 +708,11 @@ def cftc_rows(unit, captures):
         )
         native_rows = reader._listing_rows(rule)
         acquirer.require_consumed()
-        pages = list(acquirer.parsed_pages)
+        pages: list[tuple[CftcCommentListPage, CapturedBodyResponse]] = []
+        for page, capture in acquirer.parsed_pages:
+            if not isinstance(page, CftcCommentListPage):
+                raise ValueError("selected CFTC listing must be a comment list page")
+            pages.append((page, capture))
     if type(unit.get("expected_comments")) is not int or len(native_rows) != unit["expected_comments"]:
         raise ValueError("selected CFTC comment count differs")
     rule_id = _digest(_json([rule, scope, [capture.sha256 for page, capture in pages]]).encode())
@@ -716,7 +728,7 @@ def cftc_rows(unit, captures):
         },
         all_witnesses,
     )
-    details_by_id = {}
+    details_by_id: dict[int, tuple[CftcCommentDetail, CapturedBodyResponse]] = {}
     if scope == "details-and-files":
         if len(details) != len(native_rows):
             raise ValueError("selected CFTC detail count differs")
@@ -734,6 +746,8 @@ def cftc_rows(unit, captures):
             for row in native_rows:
                 acquisition = acquirer.view_comment_page(row.comment_id)
                 detail = acquisition.page
+                if not isinstance(detail, CftcCommentDetail):
+                    raise ValueError("selected CFTC detail must be a comment detail page")
                 if (detail.comment_id, detail.rule_id) != (row.comment_id, rule):
                     raise ValueError("CFTC detail/listing identity differs")
                 details_by_id[row.comment_id] = (detail, acquisition.capture)
@@ -744,9 +758,11 @@ def cftc_rows(unit, captures):
             (page, capture) for page, capture in pages if any(x.comment_id == row.comment_id for x in page.rows)
         )
         index = next(index for index, x in enumerate(page.rows) if x.comment_id == row.comment_id)
-        detail, detail_capture = details_by_id.get(row.comment_id, (None, None))
+        detail_pair = details_by_id.get(row.comment_id)
+        detail = detail_pair[0] if detail_pair is not None else None
         witnesses = [witness(capture, f"comment:{index}")]
-        if detail is not None:
+        if detail_pair is not None:
+            detail, detail_capture = detail_pair
             witnesses.append(witness(detail_capture, "detail"))
             for item in detail.files:
                 if item.url in declared_files:
@@ -1253,6 +1269,8 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
         for table in data:
             policy = POLICIES[table]
             subject, receipt = write_dataset(iter(data[table]), stage / table, policy, validation_backend="reference")
+            if subject is None or receipt is None:
+                raise ValueError("native collection requires subject and receipt outputs")
             outputs[table] = {
                 "rows": len(data[table]),
                 "path": str(subject.relative_to(stage)),

@@ -29,10 +29,11 @@ def fixture(tmp_path):
     for table in TABLES["sec-comments"]:
         policy = POLICIES[table]
         row = dict.fromkeys(policy.subject_schema.names)
-        row[policy.identity_fields[0]] = table + "-fixture"
+        identity = table + "-fixture"
+        row[policy.identity_fields[0]] = identity
         context = ReceiptContext(
             generation,
-            row[policy.identity_fields[0]],
+            identity,
             VERSION,
             [
                 {
@@ -44,6 +45,7 @@ def fixture(tmp_path):
             ],
         )
         subject, receipt = write_dataset([(row, context)], candidate / table, policy, validation_backend="reference")
+        assert subject is not None and receipt is not None
         info = {"path": str(subject.relative_to(candidate)), "rows": 1, "sha256": digest(subject)}
         outputs[table] = info
         members.append(
