@@ -220,15 +220,11 @@ tables:
       comment_on_document_id IS NULL OR comment_on_document_id NOT IN (SELECT
       document_id FROM documents WHERE publisher_status = 'removed')`.
     summary: >-
-      One row per public comment — the largest table
-      (tens of millions of rows). On R2 it is also published as Hive-partitioned
-      files under `comments/agency/agency_code=.../part-0.parquet`, one file per
-      agency, rebuilt daily — this is what `spicy-regs-ui` reads for scoped
-      queries. (An older `comments/agency_code=.../docket_id=.../year=.../month=...`
-      tree was abandoned when comments moved onto the Iceberg catalog and
-      carried a reduced set of columns; prefer the per-agency tree.) Joins to
-      `dockets` on `docket_id` when the source supplies that relationship.
-      Comments with a null docket remain in the table and agency totals.
+      One posted public-comment record, linked to its stated docket and parent document when
+      those references are supplied. Null docket references remain in the table and agency
+      totals. Attachments, source text and extraction results are separate observations;
+      missing text or file URLs do not prove the publisher received no attachment.
+      Agency-partitioned publication supports scoped record queries.
     columns:
       comment_on_document_id: "Literal Regulations.gov commentOnDocumentId: the named parent document, independently nullable from docket_id. No identifier-prefix inference. The comment re-read filled it: on receipt sha256:77a08369… (2026-10-03) it is set on 26,388,456 of 26,415,400 rows, on at least 98.97% of each of the 12 largest agencies' rows, and below 95% only at MSHA (1,892 of 1,993) and TRAIN (1 of 114). NULL means the record states none or the row was not read; `comment_reference_values_json` tells the two apart. NULL does not mean the comment names no document."
       comment_on_object_id: "Literal commentOn in the native object-ID namespace; not interchangeable with a public document key."
@@ -247,7 +243,7 @@ tables:
       posted_date: "When the comment was posted, as the publisher stamps it (ISO 8601 string): a date at Eastern midnight written in UTC (`T04:00:00Z` or `T05:00:00Z`) on most records, a bare date label at `T00:00:00Z` on others. Read the date part as the publisher's date; converting a `T00:00:00Z` label to Eastern moves it a day early."
       modify_date: "Timestamp the comment was last modified (ISO 8601 string)."
       receive_date: "The agency's stated receipt date, stamped as `posted_date` is (ISO 8601 string). It can follow `posted_date` (late or mailed submissions), so compare on the date part."
-      attachments_json: "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree."
+      attachments_json: "JSON list of attachment entries in the retained response, including restricted attachments and renditions without a URL. Entries retain `restrictReasonType`/`restrictReason` when stated. NULL means the included set was absent or unavailable in that row; [] means it contained no attachment entries. A format list can be NULL and an individual URL can be NULL. Older rows may retain the earlier filtered representation, so NULL never proves attachment absence."
       text_content: "Plain text of the comment's attachment(s). Filled inline during the ETL from Mirrulations' own extraction (the bucket's `derived-data` prefix): one extraction tool per comment, its attachments in number order, each stripped and separated by a blank line; when that tool's objects are all blank there is no derived text. Attachments Mirrulations has not extracted are backfilled by the on-demand PDF text-extraction step. Null when neither has produced text; see `text_extraction_status`."
       text_extraction_status: "Where `text_content` came from, or why there is none. `derived` means Mirrulations' own extraction supplied it (see `pdf_extraction_results_json`); `ok` means Spicy Regs extracted text from at least one PDF, even if another failed; otherwise PDF outcomes prefer `error`, `encrypted`, then `empty`. Derived-data fills written before `derived` existed read `ok` until repaired. Null before an attempt or derived-text fill."
       pdf_extraction_results_json: "Provenance of `text_content`. For `derived` rows, a JSON object `{comment_id, tool, available_tools, attachments:[{attachment, tool, key, size, etag, sha256}], only_in_other_tools}`: the primary tool (the first of `pypdf`, `pdfminer` with an object for the comment), every tool with an object for it, each attachment's tool, S3 key, listed size and ETag and the SHA-256 of the bytes read (null when the text was kept without re-reading them), and the attachment numbers taken from a tool other than the primary because the primary has no object for them (decision 41); those are in the text. A primary object that exists is kept even when blank. About 125 bytes plus 330 per attachment (31 KB at 92 attachments, the published maximum). Otherwise an ordered JSON array from the latest PDF attempt: `{url, source_sha256, status, page_count, error}` per distinct selected URL; SHA-256 identifies observed bytes, and no-bytes fetch failures have null digest/page count and a generic error. Null when neither is recorded."
@@ -331,15 +327,10 @@ tables:
     label: "Agency monthly volume"
     subject: rulemaking
     coverage: >-
-      Derived from `documents`: document counts by agency, month and document
-      type. A document whose posted date is NULL or the publisher's year zero is
-      left out, and so is a posting Regulations.gov removed
-      (`documents.publisher_status`); the file records how many of each it
-      left out. Other literal dates stay
-      as the publisher wrote them, including documents dated before 1990 or in
-      the future. Source values are unchanged. Receipts:
-      fork-execution-2026-09-21/document-derivatives/MANUAL-AUDIT.md and
-      publication-agency-monthly-volume.json.
+      Derived from `documents`: counts by agency, month and document type. Excludes NULL,
+      uncastable and year-zero dates and publisher-removed postings. Other literal dates
+      remain, including pre-1990 and future dates. Source values are unchanged;
+      omitted-record counts are retained separately.
     measured_on: "2026-09-21"
     summary: >-
       Per-agency monthly document volume, broken out by document type — one row
@@ -365,22 +356,12 @@ tables:
       its printed labels only.
     measured_on: "2026-10-03"
     summary: >-
-      The Federal Register ↔ docket bridge, from the Register's two statements:
-      each `federal_register` row's printed `docket_ids` array exploded to
-      one row per occurrence, and the docket of its regulations.gov link
-      (`regulations_dot_gov_docket_id`) as a row of its own where no printed
-      label carries it; `link_source` says which statement carries the pair.
-      Printed labels are often agency docket numbers: of 2,791 documents that
-      state a regulations.gov docket in windows sampled from 1998 to 2026, 1,513
-      print no label that carries it, and these `WHERE docket_id = ?` reaches
-      only through the link; 998 print it in another form (`Docket No. …`),
-      kept verbatim, with the id in `normalized_docket_candidates_json`
-      (receipt `round6/impl-W/m2/printed_vs_info.out`). Carries the FR display
-      columns. Use this instead of an
-      `ILIKE` scan over `federal_register.docket_ids`: it is sorted by
-      `docket_id`, so `WHERE docket_id = ?` prunes row groups. The rulemaking
-      tables read the printed statement only (`link_source` `printed` or
-      `both`). Built by `build_fr_docket_links`.
+      One Federal Register docket-reference occurrence, preserving printed docket labels and
+      explicit Regulations.gov links separately. `link_source` names the source; repeated
+      printed labels remain distinct. Printed agency labels are not automatically
+      Regulations.gov identities. Qualified normalization candidates stay visible.
+      Rulemaking grouping uses printed or both-source references only. Main Register
+      number/date and docket values support exact navigation.
     columns:
       docket_id: "The docket as the statement gives it: a printed label verbatim from `docket_ids_json` (`Docket No. FAA-2007-29334`, an agency docket number, a `FRL-` number), or the Register's regulations.gov docket id."
       docket_source_ordinal: "Zero-based position of a printed label in the original docket array, before null/blank elements are filtered; NULL on a row the regulations.gov link alone carries. With document_number and publication_date it identifies a printed occurrence."
@@ -450,33 +431,11 @@ tables:
       validation.json).
     measured_on: "2026-10-03"
     summary: >-
-      One row per GovInfo annual CFR granule, including sections, appendices,
-      tables of contents and other structural units; metadata only, no
-      regulatory body text. Neither a granule id nor a printed section number
-      establishes the enclosing part, so each section granule is placed under
-      the PART heading of its package's annual volume XML: Title 43 numbers
-      sections by subpart (§ 1601.0-1 is in Part 1600), Title 41's parts contain
-      a hyphen (`50-201`) and Title 14 Part 241 prints `19-8.1`. `part` is that
-      structure; `cfr_ref` is the printed citation that joins the Federal
-      Register side. Other granules keep the part their identifier spells,
-      except in Title 41, whose identifiers cut a compound part at the hyphen
-      (`…-part60` is Part 60-1): there a structural row takes the compound part
-      its part granule's heading states (`60-2`), as the section rows do, and a
-      Reserved part granule whose heading states no number takes NULL. The
-      Parquet footer key `spicy_regs.cfr_sections.placement` records that every
-      section row was placed by this rule; generations without it keep
-      identifier-derived parts. The key says nothing of Title 41's structural
-      rows, which no volume scan places: they take their compound part from
-      their part granule's heading on every run from 2026-10-03, under the same
-      key. A generation built before keeps the identifier's chapter there
-      (`part` `60`, `cfr_ref` `41-60` on `…-part60-id334`), and `count(*) WHERE
-      title = '41' AND section IS NULL AND part LIKE '%-%'` is 0 on it and
-      above 0 once the compound parts are in. A package is re-placed only when
-      it is new or its GovInfo lastModified changed; an unchanged package, or one whose
-      volume cannot be read, keeps its prior rows. Missing credentials and
-      incomplete source traversals refuse before output replacement. GovInfo's
-      annual index package (`GPO-CFR-INDEX-2025`) is not a title volume and is
-      not in the table.
+      One GovInfo annual CFR granule: a section, appendix or other structural unit. This is
+      metadata, not regulatory body text. Enclosing parts come from annual volume PART
+      headings, preserving compound and unusual numbering; printed section numbers alone do
+      not identify a part. `cfr_ref` supplies the printed citation. Unchanged or unread
+      volumes can retain earlier placement; the annual index package is excluded.
     columns:
       granule_id: "GovInfo granule identifier. Primary key / dedup key, including non-section structural units."
       package_id: "GovInfo package identifier for the enclosing annual CFR title and volume."
@@ -494,47 +453,19 @@ tables:
     label: "Congressional bills"
     subject: congress
     coverage: >-
-      True range on the archive index, mixed on enrichment. The archive index
-      lists bills back to the earliest Congresses (latest actions from
-      1799-12-16); the bill family fills every column from GovInfo BILLSTATUS
-      for the Congresses it has read, which begin at the 108th. On 2026-09-26
-      the 108th-117th rows, then written by a retired list walk, lacked bills
-      against the BILLSTATUS listings (receipt `join-gaps-2026-09-26/d/`);
-      bill-family runs scoped to those Congresses fill them. An absent CBO element does not mean CBO never scored a bill.
-      The bill family re-reads its own prior once where the CBO outcome is
-      missing, or where a reader other than the running one read it, even when
-      the publisher stamp is unchanged; a bill of the 82nd-107th filled from the
-      detail route is re-read the same way, within the run's fetch cap. A bill
-      the running reader found refused in, or dropped from, its folder's
-      unchanged zip is not read again until the zip moves or another reader
-      runs.
+      True range on the archive index, mixed on enrichment. The index reaches the earliest
+      Congresses, with latest actions from 1799-12-16. Scoped bill-family runs enrich the
+      108th Congress onward from GovInfo BILLSTATUS and the 82nd–107th from Congress.gov
+      details. Older list-only rows can remain where enrichment has not run. Missing child
+      records or CBO estimates do not prove source absence.
     measured_on: "2026-09-29"
     summary: >-
-      One row per bill or resolution. `bill-family` writes this table, filling
-      the full contract for the Congresses it is scoped to (the current Congress
-      on its daily schedule) — from a BILLSTATUS document for the
-      108th onward, and from the API bill detail route for the 82nd through the
-      107th, where no BILLSTATUS bulk exists. A consumer tells the two family
-      routes apart by Congress and by the NULLs: a row for a Congress below the
-      108th is the detail route's, its `schema_version` is NULL because the
-      detail record states no BILLSTATUS schema, and its `action_count`,
-      `committee_count`, `version_count`, `subject_count`, `subjects`,
-      `related_bill_count` and `related_bills` are NULL because the detail
-      record states those only as sub-route counts the backfill does not walk —
-      a zero would contradict the count the publisher declared. `cosponsor_count`
-      is the one count the record does state, as its `cosponsors` sub-route's
-      count, and is published from there (NULL when the record states no such
-      sub-route, as the 92nd's do not). `stage` and `signed_date_rule` are NULL on
-      these rows too: the record carries no actions, so no rule read any. The first
-      ten columns keep the
-      exact order and spelling they have always had, because other repositories
-      pin that prefix by digest; every new column is appended after them. Until
-      plan A1 retired it (decision 31), a second rollup, `congress-bills`, walked
-      the Congress.gov list route for that prefix across the whole archive, and
-      a row of a Congress the family has not been scoped to keeps the prefix
-      that walk last stated. Because rows from the two routes state different
-      columns, this is the one table merged column-wise: a family row's NULL
-      cannot erase a list-era value.
+      One bill or resolution. Full BILLSTATUS records, older API details and retained
+      archive-list rows provide different amounts of detail. Pre-108th detail records do not
+      include walked action, committee, text, subject or related-bill lists; their missing
+      values stay NULL. `cosponsor_count` is retained when stated. Without actions, stage
+      and signed-date rules remain unset. Main identifiers support navigation; source method
+      and processing evidence are inspected separately.
     data_quality: >-
       **Historical cosponsor-count defect:** the 2026-09-21 native-XML audit
       found 13,154 wrong zero counts in the then-retained 118th Congress HR/S
@@ -580,24 +511,18 @@ tables:
     grain: "One observed subject assignment per bill_id, with the latest retained answer replacing its predecessor."
     identity_columns: [bill_id]
     coverage: >-
-      Sampled; it grows each run and is not a complete subject census. From
-      the 108th Congress every bill the bill family filled from GovInfo
-      BILLSTATUS is copied from its congress_bills row; other bills from the
-      108th come from their folder's BILLSTATUS bulk zip, 32 folders a run,
-      newest Congress first. Bills from the 93rd to the 107th, and bills whose
-      BILLSTATUS file the reader refuses, come from the Congress.gov API with a
-      key, up to 2,000 a run. No folder read and no API request, page or retry
-      starts 20 minutes or more after the run began. A list-level bill in a
-      folder the family reads waits for the family while its Congress is the
-      current or previous one, and then goes to the API.
+      Sampled. Subject assignments for bills from the 93rd Congress onward. From the 108th,
+      assignments come from held BILLSTATUS rows or bulk archives; earlier bills and refused
+      bulk records use the keyed Congress.gov API, up to 2,000 a run. Bulk reads cover 32
+      folders per run, newest first; no new request starts after 20 minutes. Missing bills
+      may be pending, refused or outside the run's scope.
     measured_on: "2026-09-23"
     summary: >-
-      Subject assignments returned by Congress.gov or GovInfo BILLSTATUS,
-      keyed by bill_id for a left join to congress_bills.bill_id. policy_area
-      is one publisher category; subjects is a list of legislative
-      subject names, not separate bill records. The consumer trims and
-      deduplicates names.
-      carrier and enriched_at record how and when the answer was obtained.
+      One policy-area and subject-list assignment per bill, from Congress.gov or GovInfo
+      BILLSTATUS. Join on `bill_id`. Subject names are filter values, not separate bill
+      records. Native rows use `subjects`; legacy rows use `subjects_json`. Acquisition
+      method and time belong to receipts for native rows; legacy rows retain `carrier` and
+      `enriched_at`.
     data_quality: >-
       A missing row can mean pending, failed or outside the configured scope.
       An empty assignment can mean no assignments or that the source did not
@@ -655,7 +580,7 @@ tables:
   # snapshot under `materialized/rulemaking/latest.json`, not the publication index. Meanings follow
   # docs/ontology.md and each builder's docstring.
   rule_targets:
-    label: "Rule identity edges (docket, CFR, RIN)"
+    label: "Docket, CFR and agenda links"
     subject: rulemaking
     coverage: >-
       Derived, and bounded by its inputs: `dockets`, `documents`,
@@ -663,14 +588,11 @@ tables:
       pins them.
     measured_on: "2026-09-28"
     summary: >-
-      The rule-identity spine: one row per observed edge between a
-      Regulations.gov docket, a CFR part and a RIN, with the `source` class of
-      evidence that states it (docs/ontology.md, "The rule_targets carrier").
-      A missing or ambiguous reference leaves its target NULL rather than
-      inventing one, and a `docket_document_cites_action_notice` row is a
-      citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`,
-      `source`), NULLs included; joins `dockets` on `docket_id` and
-      `unified_agenda` on `rin`. Built by `build_rule_targets`.
+      One observed link between a Regulations.gov docket, a CFR part or a Unified Agenda
+      RIN, with its source evidence class. Missing and ambiguous references remain
+      unresolved. Action-notice citation rows can have both targets NULL. RIN navigation
+      returns agenda editions; it does not merge proceedings. Main identifiers carry the
+      relationship; receipts retain interpretation evidence.
     grain: "One observed docket, CFR and RIN edge per evidence source class."
     identity_columns: [docket_id, cfr_ref, rin, source]
     columns:
@@ -700,19 +622,12 @@ tables:
       when it is a single Register document.
     measured_on: "2026-09-28"
     summary: >-
-      One row per rulemaking proceeding: the dockets that are one action, the
-      Register documents that joined it, their stage events, RINs and CFR
-      targets. A RIN names a Unified Agenda item, never a proceeding: it is
-      carried as evidence and never groups dockets. A posting Regulations.gov
-      flags withdrawn (`documents.withdrawn = 'true'`) is no evidence: agencies
-      withdraw a posting filed to the wrong docket, duplicated, moved or
-      replaced, so it gives no stage event, title, agency or RIN, and makes no
-      docket a rulemaking. A docket-less proceeding
-      is one Register document. Keyed `proceeding_id`, which continues across
-      generations when its dockets or Register documents overlap a prior one.
-      Joined by `agenda_item_proceedings`, `comment_periods` and
-      `rulemaking_lifecycles` on `proceeding_id`. Built by
-      `build_proceedings`.
+      One rulemaking proceeding with its source dockets, Register documents and staged
+      events. RINs provide agenda evidence and never merge dockets. Withdrawn
+      Regulations.gov postings supply no event, title, agency or RIN evidence. A docket-less
+      proceeding is one Register document. `proceeding_id` continues across generations when
+      source records overlap; main IDs link agenda associations, comment periods and
+      lifecycle records.
     grain: "One rulemaking proceeding: the dockets and Register documents that are one action."
     identity_columns: [proceeding_id]
     columns:
@@ -814,19 +729,12 @@ tables:
       counts come from `describe_table`.
     measured_on: "2026-09-28"
     summary: >-
-      One row per rule-derived group of source-reported date windows. A notice
-      is a Register record with the Regulations.gov documents whose `fr_doc_num`
-      resolves to it, or a Regulations.gov document without a resolved Register
-      record. The builder groups candidate extensions when its title matcher
-      flags extension/reopening language and an abstract's page citation or a
-      qualifying shared RIN uniquely identifies an earlier notice with an
-      overlapping or adjoining window; conflicting targets do not link. A gap
-      starts a separate period. These are candidate relationships, not verified
-      legal extensions or supersession. A docket or proceeding anchors a group
-      (`anchor_kind`) but never merges two; Federal Register feed dockets
-      (`AGENCY_FRDOC_0001` and the like) anchor nothing. Keyed `comment_period_id`.
-      Proceedings, dockets and RINs are lists used for navigation. Built by
-      `build_comment_periods`.
+      One rule-derived group of source-reported comment windows. Extension/reopening
+      language links windows only when an explicit page citation or qualified RIN uniquely
+      identifies an overlapping or adjoining earlier notice. Conflicts do not link; a gap
+      starts another period. These are candidate groupings, not verified legal extensions.
+      Docket/proceeding anchors never merge groups, and synthetic Federal Register feed
+      dockets anchor none. Ordered source references support navigation.
     grain: "One rule-derived group of source-reported date windows for a notice and its candidate extensions; not a legally adjudicated comment period."
     data_quality: >-
       For date-range discovery, test all three date columns (`close_date`,
@@ -939,16 +847,12 @@ tables:
       0584-AF22, in dockets FNA-2026-0034, -0166 and -0201; count distinct
       `proceedings.rin` for rulemakings.
     summary: >-
-      One row per docketed proceeding (owner decisions 54-56c): its earliest
-      proposal, the earliest the Register dates, else its upload-dated one
-      (decision 54d), the earliest final strictly after it, or what else its events
-      make (`kind`), with survival columns (`outcome`, `duration_days`,
-      `censor_date`) for time-to-final estimates, Unified Agenda status and
-      routine-family strata. A docket-less proceeding is one Register
-      document that cannot pair and is left out. Keyed `proceeding_id`; joins
-      `proceedings` on it and is joined by `lifecycle_events`. Built by
-      `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN.
-      Replaces the documents-based rollup withdrawn on 2026-09-23.
+      One docketed proceeding's proposal-to-final history and survival outcome. The earliest
+      Register-dated proposal takes precedence over an upload-dated proposal; the final must
+      follow it strictly. Other events determine the outcome or censor date. Docket-less
+      Register records cannot pair and are excluded. Unified Agenda status and routine
+      strata remain separate context. These are docketed proceedings, not a count of
+      distinct RINs or regulations.
     grain: "One lifecycle per docketed proceeding."
     identity_columns: [proceeding_id]
     columns:
@@ -989,21 +893,12 @@ tables:
       day.
     measured_on: "2026-09-28"
     summary: >-
-      One row per staged document of a docketed proceeding: the events each
-      `rulemaking_lifecycles` row is paired from. A Regulations.gov document
-      whose own `fr_doc_num` resolves to one Register document is that
-      document, dated by the Register (decision 60); a document that states no
-      number keeps Regulations.gov's type and its upload day. A stage comes only
-      from a document's own Rule or Proposed Rule type (decision 58), so a
-      Register document typed Notice is never an event: a petition withdrawal or
-      receipt the Register types Notice (EPA's withdrawals 2010-8292, 2010-13540,
-      2011-8549 and 2011-16199; the receipts 2021-08335 and 2023-14192) neither
-      closes nor opens a lifecycle. A posting Regulations.gov flags withdrawn is
-      never an event (see `proceedings`). An Agenda entry
-      completed as withdrawn adds its dated withdrawal. Keyed
-      (`proceeding_id`, `document_id`); `dated_by` says which kind of id
-      `document_id` is. Joins `rulemaking_lifecycles` on `proceeding_id`.
-      Built by `build_lifecycles`; `event_date` is DATE.
+      One dated stage event per document in a docketed proceeding. A uniquely resolved
+      Federal Register number supplies its document type and date; otherwise the
+      Regulations.gov type and upload day apply. Only Rule/Proposed Rule types create those
+      stages: Notice entries and withdrawn postings do not. A dated Unified Agenda
+      withdrawal can add a withdrawal event. Main document identity and date-source fields
+      preserve those distinctions.
     grain: "One stage event per document of one docketed proceeding."
     identity_columns: [proceeding_id, document_id]
     columns:
@@ -1035,21 +930,12 @@ tables:
       On 2026-09-27 every unsuppressed estimate equalled R's multi-state
       `survfit`.
     summary: >-
-      The Aalen-Johansen cumulative incidence of a final rule, withdrawal
-      competing (decision 54a), per agency and for all agencies
-      (`agency_code` NULL), overall, routine, non-routine and per routine
-      family: the first day it reaches each quartile, NULL where it never
-      does, with a 95% interval from the log-log band. A cell under 30 rules
-      keeps its row, `suppressed`, with no estimates; the Parquet metadata
-      states the estimator exactly. Routine families exist for FAA, EPA and
-      USCG only; for every other agency `non_routine` equals `all`. Cells pool
-      every proposal year and no cohort cell is published; for a cohort
-      (proposals since 2015, say), select its `rulemaking_lifecycles` rows by
-      `proposal_date` and estimate it the same way. A rule is a docketed
-      proceeding, so a Register
-      proposal naming several dockets counts once per docket and the band
-      treats them as independent. Keyed (`agency_code`, `stratum`). Built
-      by `build_agency_lifecycle_stats`; counts and days are INTEGER.
+      Estimated days to a final rule by agency and stratum, using Aalen–Johansen cumulative
+      incidence with withdrawal as a competing outcome and 95% intervals. Cells pool all
+      proposal years; fewer than 30 rules suppress estimates. NULL quartiles mean the
+      estimate never reaches that probability. Routine families exist only for FAA, EPA and
+      USCG. Each docketed proceeding counts separately, including proposals naming several
+      dockets. Cohort estimates require filtering and recomputing the underlying lifecycles.
     grain: "One agency (or all agencies) and one stratum of rules."
     identity_columns: [agency_code, stratum]
     columns:
@@ -1543,98 +1429,32 @@ tables:
     label: "Government Accountability Office reports"
     subject: oversight
     coverage: >-
-      True range on GovInfo's archive and a window on recent products, with a
-      gap between. The `govinfo` rows are every report and testimony in
-      GovInfo's closed GAOREPORTS collection, issued from 1989-11-15 to
-      2008-09-18, less its Comptroller General decisions; GovInfo adds nothing
-      later, and one history run adds them. Their abstract, topics, product
-      type and report number come from each package's MODS, read in batches; a
-      `govinfo` row whose `report_number` is NULL has not been read yet, or
-      GovInfo serves no MODS for it. The `gao_rss` rows are what the
-      daily job has read from GAO's recent-items feed since 2026-09-22 (its
-      first read reached back to 2026-09-15); the feed lists only about 25
-      items, so a product published while the job was not reading is lost to
-      it. The `upstream_copy` rows are the reports published from 2026-07-13 to
-      2026-09-14, copied once from upstream spicy-regs' own feed accumulator.
-      The `gao_repair` rows were added one at a time by an explicit repair.
-      The `gao_listing` rows are the products GAO's own Month in Review and
-      Annual Index list for each year or month a finished walk of those pages
-      read, from 2009 on; a year or month the walk has not finished adds
-      nothing. They are the GAO-numbered products and every Federal Agency
-      Major Rule Report, which GAO numbered GAO- to February 2017 and B- from
-      April 2017, keyed on its page. The major-rule reports before 2009 come
-      from two more of GAO's listings, read with that walk. The
-      `gao_major_rule_listing` rows are the reports its Congressional Review
-      Act listing, "Reports on Major Rules", states and the Month in Review
-      does not: GAO-numbered, from November 2000. The `gao_major_rule_index`
-      rows are the OGC-numbered reports of April 1996 to November 2000, listed
-      by GAO's own index of 2000-12-15 as the Internet Archive holds it and
-      read from each report's product page. So every major-rule report from
-      April 1996 on is here once a run has read those walks. Their
-      `published_date` is GAO's issue date, the one date those listings state;
-      a Month in Review row's is the release date, which can fall weeks later.
-      A major-rule report the R package held becomes the listing's row. One
-      GovInfo held first keeps GovInfo's row, its title included (GovInfo's
-      placeholder on most), and takes only the Federal Agency Major Rule
-      Report `product_type` and the `major_rule_` columns. The Congressional
-      Review Act listing
-      also states a few AIMD- and GGD- products of 1995 to 2000 that are no
-      major-rule reports; they are ordinary rows with no `product_type`. The
-      three `major_rule_` columns are read from each major-rule report's
-      letter, on its product page or in its PDF as captured on 2026-10-04; a
-      report listed after that capture is blank in them until a product-page
-      read reads its letter. B-numbered legal decisions and Contract Appeals
-      Board dockets are in `gao_decisions`; entries GAO gives no number are
-      left out. Products issued from late 2008 to mid-2026 are absent unless a
-      repair or a listing added them. The requester, recommendation,
-      matters, page-count and subject-term columns come from the R package
-      for the reports it lists; reports issued after its copy (package commit
-      6f61230, 2026-09-26) are blank in them. A read of the report's GAO
-      product page fills the two counts, the page count and the subject terms
-      where one is blank, newest reports first and a bounded number a run, and
-      its values replace the package's. A report is not read on the day GAO
-      releases it, and in its first week only where its page agrees with GAO's
-      open recommendations (`gao_recommendations`). That read is built and
-      switched off, so it has filled nothing; the page's own topic and
-      agencies are not read into this table. The `gao_r_package` rows are the
-      reports no other route held, copied once from the CetiAlphaFive/gao R
-      package by Jack T. Rametta (GPL-3.0-or-later; commit 6f61230,
-      `inst/extdata/gao_links.rds`). They run from 1922, mostly the 1970s to
-      the 1990s, and carry no product type. Legal decisions there are left
-      out.
+      True range on GovInfo's closed archive (1989-11-15–2008-09-18), combined with bounded
+      GAO listings, recent RSS reads, retained package data and explicit repairs. Completed
+      GAO listing scopes extend from 2009; major-rule listings reach April 1996. Recent RSS
+      reads began 2026-09-22 and first reached 2026-09-15; the upstream copy covers
+      2026-07-13–2026-09-14. The retained R package reaches 1922 but adds only otherwise
+      unheld reports. Intermediate periods remain incomplete where listing walks or repairs
+      have not filled them. Numbered legal decisions belong to `gao_decisions`. Missing
+      enrichment is not proof of an absent report.
     measured_on: "2026-10-05"
     summary: >-
-      One row per U.S. Government Accountability Office (GAO) report or
-      testimony, keyed by GAO's own product id. The federal oversight layer
-      over the rulemakings this dataset tracks — GAO's audits, evaluations, and
-      recommendations on how agencies implement laws and rules. `source` names
-      the route of each row: the public GAO reports RSS feed, read daily by
-      `build_gao_reports` (a ~25-item recent-products window, the only
-      anonymous machine-readable listing of new products, so the table is an
-      **append-only accumulator**); a one-time copy of upstream's rows for the
-      weeks before the fork read the feed; explicit single-report repairs; and
-      GovInfo's GAOREPORTS listing, a closed collection read once, each row then
-      filled from its package's MODS; and GAO's own Month in Review and Annual
-      Index and its two listings of major-rule reports, read from walks made
-      outside the daily job. Deduped on
-      `report_id`; a GovInfo or listing row never replaces a row already held.
-      A later read of a held product merges cell by cell and never empties a
-      cell. The R package copy is the lowest route: it adds only reports no
-      row holds, and a later read by any other route takes its row over, with
-      the package's cells filling only what that route leaves NULL. On a row
-      already held the listing fills only a NULL `report_number`, makes
-      whole a title its own row holds cut, and sets the Federal Agency Major
-      Rule Report `product_type` on a report GAO's major-rule listings state.
-      A major-rule report's letter and a product-page read each set their own
-      columns on whatever row holds the report. The daily feed sets
-      title, date, abstract and url on its own and upstream-copied rows, and
-      only fills NULLs of those on rows another route supplied; its placeholder
-      type and tag lists fill nothing. A row keeps the `source` that first
-      supplied it. The three counts are BIGINT. The `/3` native schema
-      includes the product page in `url` and its collection route in `source`;
-      earlier schemas keep these fields in receipts. A major-rule report's
-      missing-value reasons and locations within its letter remain in its
-      receipt; see etl_receipts.
+      One GAO report or testimony, keyed by product ID. GovInfo, GAO listings/RSS, retained
+      package data and explicit repairs supply records. The table retains earlier
+      observations and fills missing cells; source routes have different periods and
+      metadata. Native `/3` rows expose product URL and source route; earlier schemas retain
+      them in receipts. Major-rule letters provide separate source-stated agency, date and
+      RIN fields, with reading evidence in receipts.
+    data_quality: >-
+      GovInfo metadata is read in batches; a missing report number can mean unread or
+      unavailable MODS. Major-rule letter fields use product-page/PDF captures from
+      2026-10-04; later products remain blank until read. Package-supplied requester,
+      recommendation, matters, page-count and subject fields can be missing on later
+      reports. Product-page enrichment is implemented but disabled; its absence does not
+      remove report records. GAO listing issue dates and Month in Review release dates
+      differ. The retained R package (CetiAlphaFive/gao, GPL-3.0-or-later, commit 6f61230)
+      supplements other sources and excludes legal decisions. Unnumbered products are
+      excluded. A retained source route does not certify complete coverage of its archive.
     columns:
       report_id: "GAO product id as gao.gov's product URL spells it (e.g. `gao-26-107974`, `t-rced-94-121`), lowercased. Primary key / dedup key. A GovInfo package id maps to that spelling (`GAOREPORTS-GAO-HEHS-00-73` is `hehs-00-73`, `GAOREPORTS-RCED-AIMD-94-221FS` is `rcedaimd-94-221fs`); a few keep GovInfo's spelling where the package id cannot recover gao.gov's."
       title: "Product title as the route states it; on a listing row, the teaser's label and heading joined as `label: heading`, which is how the feed titles the same products. The Month in Review cuts a long heading at about 200 characters and ends it `...`; where GAO's major-rule listing states that heading whole, the title is whole. A `gao_major_rule_listing` or `gao_major_rule_index` row's is `Federal Agency Major Rule Report: ` and the heading GAO's listing or the report's product page states, or the heading alone on the AIMD- and GGD- products. A few GovInfo titles are GovInfo's placeholder `GAO Report from` and the number. Where our own routes leave it NULL, it may come from the CetiAlphaFive/gao R package (GPL-3.0-or-later, commit 6f61230), which fills only empty cells. GAO double-escapes some headings, so a few listing titles keep `&mdash;`, `&#151;` or `&amp;` literally, as GAO's page displays them; apply `html.unescape` when matching."
@@ -1683,40 +1503,18 @@ tables:
     label: "Government Accountability Office legal decisions"
     subject: oversight
     coverage: >-
-      True range from 2009 on: every legal decision GAO's own Month in Review
-      and Annual Index list for each year or month a finished walk of those
-      pages read: the
-      B-numbered decisions (bid protests, appropriations law, vacancies letters,
-      other decisions) and the Contract Appeals Board decisions GAO numbers as
-      dockets (`2020-02`) or `P` numbers. Federal Agency Major Rule Reports,
-      B-numbered from April 2017, are in `gao_reports`, not here. Entries GAO
-      gives no number are left out. A year or month the walk has not finished
-      adds nothing, and a month with no listed decision adds nothing either;
-      this table does not record which case a missing month is. A walk reads
-      a year's listing (`month-in-review/2025?page=N`) or a month's
-      (`month-in-review/2026/August`), as its scopes name, and the held rows
-      came from year scopes for 2009-2025 and month scopes for 2026, so one
-      listing page can span several months and `listing_page` names a scope,
-      not a month. A month inside a year scope read, or before the newest
-      month scope read, with no rows is a publisher zero (October 2025, when
-      GAO was closed by the lapse in appropriations, is one); a month after
-      the newest month scope is unread.
+      True range from 2009 on, within completed GAO Month in Review and Annual Index walks.
+      Includes numbered legal decisions and Contract Appeals Board decisions; major-rule
+      reports belong to `gao_reports`. Unnumbered entries are excluded. Year scopes can span
+      several months. Missing rows alone cannot distinguish an unread scope from a completed
+      listing with no decisions.
     measured_on: "2026-10-03"
     summary: >-
-      One row per GAO legal decision page, read from GAO's own listing of what
-      it issued by month and year. A decision is keyed on its number as GAO
-      spells it and its page: one teaser can name several B-numbers
-      (`B-423916.2,B-423916.3`), and one B-number can have two pages released
-      months apart (`b-331093` and `b-331093-0`). The address of the GAO listing
-      page each decision was read from is `listing_page` in the `/3` native
-      schema; earlier schemas keep it in receipts; see etl_receipts. A
-      later walk refreshes the rows it lists; a run without one carries the
-      table forward. A walk run given the local capture of the decision pages
-      also reads each decision's page caption, which completes a number list
-      the listing cut and states the decided day; a later walk without the
-      capture keeps what a page stated. `outcome` is read again from `decision_status` on every
-      row each run, by spicy-docs' closed table of GAO's sentences, so a new
-      table version reaches held rows without a re-read of the walk.
+      One GAO legal decision page, identified by its stated number and URL. A page can list
+      several B-numbers, and one number can have several pages. Completed listing walks
+      refresh named decisions; retained page captions can add the full number list and
+      decision date. `outcome` classifies source decision-status text. Native `/3` rows
+      expose `listing_page`; earlier schemas retain it in receipts.
     data_quality: >-
       `released_date` is when GAO released the decision, not when it decided
       it; `decided_date` is that day, from the Date line of the decision page's
@@ -1759,18 +1557,11 @@ tables:
       (`published_date` is the current version's date, not first issue).
     measured_on: "2026-09-23"
     summary: >-
-      One row per Congressional Research Service (CRS) report, ingested from the
-      Congress.gov v3 REST API (`/crsreport` list endpoint) by
-      `build_crs_reports`. The nonpartisan policy-analysis layer over the same
-      subjects agencies regulate — complementary to `congress_bills` (the
-      legislative record) and `federal_register` (the rule-publication record).
-      Scope is deliberately list-level only (no per-report detail fetches), so
-      every column comes from the list payload. Incremental by `update_date`,
-      deduped on `report_id`; each query is pooled over whole walks, varying
-      the page size, until one walk is clean or the pool holds exactly the
-      declared count, because the list shifts while it is read. Each report's
-      address on the Congress.gov API (the former `url` column) is kept in its
-      receipt; see etl_receipts.
+      One Congressional Research Service report from the Congress.gov API list, keyed by
+      `report_id`. Whole or pooled list walks validate the declared population; updates
+      follow source `update_date`. This is list metadata only: report details and bodies are
+      not fetched. `published_date` dates the current version, not first publication. The
+      source API locator is retained in receipts.
     columns:
       report_id: "CRS report id (e.g. `R48641`, `IN12713`). Primary key / dedup key."
       title: "Report title as returned by the list endpoint."
@@ -1792,26 +1583,12 @@ tables:
       the publisher's nature-of-suit coding is unmeasured.
     measured_on: "2026-09-28"
     summary: >-
-      One row per court docket of a suit challenging federal agency action under
-      the Administrative Procedure Act (nature of suit 899), mostly in district
-      courts, from CourtListener (`courtlistener.com`: its v4 search API and its
-      bulk docket edition) by `build_courtlistener`. It is the litigation
-      counterpart to the rulemakings in `dockets`/`documents`, not all federal
-      litigation: petitions straight to a court of appeals, such as challenges
-      to FCC orders under the Hobbs Act, are largely absent. For court
-      decisions, including appeals and Supreme Court cases, search
-      `court_opinion_clusters` by `case_name`. There is no RIN, Federal Register
-      or agency identifier on a court docket: the defendant agency appears only
-      as text in `case_name` and `parties`, so a name search finds
-      candidates, not confirmed links, and `cause` names the statute invoked.
-      Primary / dedup key is `cl_docket_id`, a CourtListener docket object, not
-      a case: CourtListener keeps more than one docket object for some cases (a
-      criminal case's per-defendant dockets, or duplicate records of one filing,
-      among them an older object reused for a new case), so one case can be
-      several rows. Count cases on (`court_id`, `docket_number`) rather than
-      rows, bearing in mind that a court can reuse a number for a different
-      case, and see `court_docket_groups` for which rows are records of one
-      case.
+      One CourtListener docket object selected as nature-of-suit 899, an Administrative
+      Procedure Act case. Search API and bulk sources cover mainly district courts; direct
+      appellate challenges are largely absent. Agency names in case/party text identify
+      candidates, not confirmed regulatory links. `cl_docket_id` identifies a docket object,
+      not necessarily a unique case; use `court_docket_groups` to inspect related objects
+      and retain reused-number ambiguity.
     columns:
       cl_docket_id: "CourtListener docket id (e.g. `73613631`). Primary key / dedup key of a docket object, not of a case: one case can be several rows (`court_docket_groups`). Distinct from the regulations.gov `docket_id`."
       case_name: "Short case name (e.g. `HENNEPIN COUNTY, MINNESOTA v. U.S. DEPARTMENT OF HEALTH AND HUMAN SERVICES`). Names the defendant agency as text, not as an identifier. For decisions in cases missing here, including appeals of agency orders, search `court_opinion_clusters.case_name`."
@@ -1852,28 +1629,12 @@ tables:
       group until the grouping is recomputed.
     measured_on: "2026-10-03"
     summary: >-
-      Which published `court_dockets` rows are records of one case, with one
-      representative row per group. CourtListener can hold one case as several
-      docket objects and leaves its own parent link blank in its bulk editions,
-      so the grouping is inferred from the records: rows under one court and
-      docket number are one case when their captions read the same (ignoring
-      case and punctuation, with U.S. and Dept. spelled out), or when they were
-      filed the same day and one caption is contained in the other (`v. Trump`
-      within `City of New York v. Trump`). Count each group once.
-      `confidence_tier` says what the rows are: `per_defendant_dockets`, a
-      criminal case's dockets for its several defendants, which PACER opens
-      together with consecutive case ids; or `duplicate_records`, several
-      CourtListener records of one filing (RECAP copies carrying 14–15-digit
-      ids, an id-less record beside a RECAP one, an older docket object reused
-      for the case). The representative row is the member whose PACER case id
-      is the lowest of those in its court's sequence, meaning within 10% of the
-      median id of the same court's dockets numbered within five of it. Where
-      no such neighbour exists, as for appellate numbers, it is the lowest
-      numeric id, which can be an older object reused for the case. It is a
-      row to show for the group; the publisher marks no main case. Join on
-      `cl_docket_id`; the representative's own row has `parent_cl_docket_id`
-      equal to `cl_docket_id`. This is an inferred mapping, not publisher data,
-      and edition-scoped.
+      One docket object's membership in an inferred same-case group. Shared court/number
+      alone is insufficient: matching captions, or a same-day contained caption, qualify the
+      group. `confidence_tier` separates per-defendant dockets from duplicate records. The
+      representative is a selected display row, not a publisher-designated main case.
+      Grouping is limited to the stated CourtListener bulk edition; reused numbers and later
+      objects may remain ungrouped.
     columns:
       cl_docket_id: "CourtListener docket id of a grouped row in `court_dockets`. Primary key."
       parent_cl_docket_id: "The group's representative row: the member with the lowest PACER case id in its court's sequence, else the lowest numeric id (see the summary). Equal to cl_docket_id on the representative's own row. Not a main case the publisher marks; it marks none."
@@ -2122,38 +1883,25 @@ tables:
     label: "Federal award recipients"
     subject: spending
     coverage: >-
-      Not a range. Every recipient with a positive trailing-12-month award
-      amount at the latest weekly walk, the top of the ranking refreshed daily
-      (owner decision 48). Each run refreshes its selected recipients and retains earlier
-      rows outside that selection with their previous amounts, so the amounts can
-      describe different trailing-12-month periods. A row read since per-row
-      capture evidence was added states its `observed_at` and the digest of its
-      source page; a row carried from earlier runs keeps NULL there, because its
-      read time was not retained. An absent recipient may still exist in the
-      publisher's awards data.
+      Not a range. Weekly walks select recipients with positive trailing-12-month awards;
+      daily reads refresh the top of the ranking. Recipients outside a run's selection keep
+      earlier amounts, so reporting periods can differ. Observation time and source digest
+      belong to receipts when retained; older evidence may lack them. Absence does not prove
+      the recipient has no federal awards.
     measured_on: "2026-09-24"
     summary: >-
-      One row per federal-award recipient, ingested from the USASpending.gov
-      `/api/v2/recipient/` endpoint by `build_usaspending_recipients`. A
-      keyless (no API key) org-resolution reference dimension keyed by UEI and
-      name — the organizations that receive federal money — complementary to the
-      SAM entity registry and the `fec_committees` table for resolving and
-      enriching the organizations that comment on rulemakings by their federal
-      funding. Two selections of the endpoint's ranking by trailing-12-month
-      federal award amount (owner decision 48): a daily read of the top 10,000,
-      and a weekly walk of every recipient with a positive amount, to the end of
-      the funded tail (the endpoint lists about 18M recipients, most unfunded in
-      the window). Each run merges with the prior table, preferring the fresh
-      row, so a recipient outside a run's selection keeps its earlier amount and
-      its original observation columns. A recipient absent here had no positive
-      trailing-12-month amount at the last weekly walk, or is newer than it.
+      One USAspending recipient and rollup level, keyed by `recipient_id`. The public
+      recipient API ranks trailing-12-month federal awards: daily reads refresh the top
+      10,000 and weekly walks select the positive-amount tail. Rows outside a selection
+      retain prior amounts. UEI supports related SAM registrations; names are matching
+      candidates. Parent, child and recipient levels must not be added together.
     columns:
-      recipient_id: "USASpending recipient hash + level suffix (e.g. `7fe0d08f-...-R`). Primary key / dedup key — unique per recipient_level."
-      uei: "Unique Entity Identifier (SAM.gov UEI, e.g. `JE73CDQUAPA7`). The org-resolution join key to SAM and other UEI-keyed sources. May be null for older records."
-      duns: "Legacy DUNS number, when present. Superseded by UEI; often null for newer records."
-      name: "Recipient name as recorded by USASpending (e.g. `LOCKHEED MARTIN CORP`). The name-resolution key."
-      recipient_level: "Recipient rollup level: `P` (parent), `C` (child), or `R` (recipient, no parent in that attribution). USAspending keeps one figure per level, so one UEI can hold `R`, `P` and `C` rows at once, each the publisher's own current figure (NMLEHM4JTN15: `P` and `C` $674,040.31, `R` $4.43B, read 2026-10-02), and the levels do not sum: a `C` row's amount is the child's own awards, which can sit under more than one parent UEI, so a child can exceed the `P` row of its own UEI; the `P` and `C` rows of one UEI can also come from different reads, so compare `observed_at` before comparing amounts. The list's amounts can differ from the recipient profile page's (that UEI's `R` profile stated $611.8M on 2026-10-03)."
-      total_award_amount: "Trailing-12-month federal award dollars reported by the recipient list endpoint at the recipient's last read, as a numeric string (e.g. `63465270734.15`). The ranking's sort key. Retained rows outside the latest selection can carry older amounts; `observed_at` says when this amount was read."
+      recipient_id: "Publisher recipient identifier including its rollup-level suffix; the table's declared record key."
+      uei: "SAM.gov Unique Entity Identifier (UEI), when supplied. Links to related SAM registrations; older records can lack it."
+      duns: "Legacy Data Universal Numbering System (DUNS) identifier, when supplied. UEI replaced it; newer records can lack it."
+      name: "Publisher-stated recipient name. Name matching identifies candidates; it does not establish organization identity."
+      recipient_level: "Publisher rollup level: P (parent), C (child) or R (recipient). One UEI can have several levels; their amounts do not sum and can describe different observations. A child's awards can appear under several parents. Compare matching levels and periods using receipt evidence when available; list amounts can differ from a profile page."
+      total_award_amount: "Trailing-12-month federal award dollars reported by the recipient-list endpoint at its last read. Rows outside the latest selection can retain older amounts. Observation time and source digest are in retained receipt evidence when available, not main columns."
       observed_at: "When the ranking response page this row was read from was captured (UTC, ISO 8601). NULL on a row carried from before per-row capture evidence, whose read time was not retained; a carried row never takes a later run's time."
       source_capture_sha256: "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
   fcc_proceedings:
@@ -2167,25 +1915,12 @@ tables:
       queries cannot reach it.
     measured_on: "2026-09-28"
     summary: >-
-      One row per FCC proceeding (the FCC's docket equivalent, e.g. `17-108`),
-      ingested from the FCC ECFS public API (`/proceedings`) by
-      `build_fcc_proceedings`. The FCC does not participate in regulations.gov —
-      its rulemaking dockets and public comments live in ECFS — so this table
-      extends the dataset's docket universe to the FCC. Requires an api.data.gov
-      key (`DATA_GOV_API_KEY`). Walked whole every run, so later closings and
-      status changes are current. Each creation-date window is pooled over
-      whole walks by document, less its filing-activity counters, until one
-      walk is clean or the pool holds exactly the count ECFS aggregates for
-      it. One row per docket `name`: ECFS holds more
-      than one document for a few dockets (seven on 2026-09-23, three of them
-      re-created 2026-09-21), and the row is the original docket, then the one
-      ECFS edited last. A document with no docket name is left out (one, a
-      2017 stub). Proceedings with no created date are unreachable through the
-      API's date-range queries and are not included (legacy shells with no
-      filing activity). There is no program or topic field, so a title search
-      misses proceedings (see `description`), and open proceedings carry
-      placeholder close dates (see `date_closed`). All columns are stored as
-      VARCHAR.
+      One FCC ECFS docket, keyed by its name, with native proceeding ID retained separately.
+      Full validated creation-date walks refresh its status. Where ECFS has several
+      documents for a name, selection prefers the original docket and then the latest edited
+      record. Unnamed or undated records are excluded. ECFS is separate from Regulations.gov
+      and requires an api.data.gov key. Titles are not complete topic descriptions; open
+      dockets may have placeholder close dates.
     columns:
       name: "Proceeding (docket) number, e.g. `17-108` or `23-320`. Primary key / dedup key, and the join key to the `name` of each entry in `fcc_filings.proceedings`."
       id_proceeding: "ECFS numeric identifier, reused across some docket names in retained data (301759 appears with both 17-108 and 87-432). Native filing-to-proceeding joins require name AND id_proceeding; the numeric ID alone is not globally unique. The table's primary key remains name."
@@ -2206,28 +1941,19 @@ tables:
     label: "FCC filings"
     subject: rulemaking
     coverage: >-
-      Window, not the ECFS archive: filings ECFS received on or after
-      2026-08-24, when this table started, extended by a daily run. Earlier
-      filings are held only for proceedings backfilled on purpose, so a
-      proceeding's count here is not its ECFS total. Attachment text is
-      extracted for a few selected PDFs only. Each daily run re-reads the
-      trailing seven days by `date_received` and nothing older, so a filing
-      ECFS disseminates more than a week after receiving it is missed, and
-      `proceedings` is the assignment as last read: ECFS later moves
-      filings out of `INBOX-…` placeholders into dockets, and a held filing
-      keeps the placeholder. The newest day is partial, ending at the last run.
+      Window. FCC ECFS filings received from 2026-08-24 onward, extended daily; earlier
+      filings appear only in explicitly backfilled proceedings. Daily runs reread the
+      trailing seven received-date days, so later dissemination can be missed. The newest
+      day is partial. Proceedings reflect the last read and may retain a placeholder later
+      reassigned by ECFS. PDF text extraction covers selected documents only; a held
+      proceeding's count is not its ECFS total.
     measured_on: "2026-09-28"
     summary: >-
-      One row per FCC ECFS filing — the FCC's comment equivalent: comments,
-      reply comments, ex-parte notices, letters, and other submissions —
-      ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`.
-      Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by
-      `date_received`, deduped on `id_submission`; each window is pooled over
-      whole walks until one is clean or the pool holds exactly the count ECFS
-      aggregates for it. Because ECFS holds tens of
-      millions of filings, a first run with no prior table is bounded to the
-      trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE`
-      and/or scoped to specific proceedings via `FCC_PROCEEDINGS`.
+      One FCC ECFS submission, including comments, replies, ex-parte notices and letters,
+      keyed by `id_submission`. The public API requires an api.data.gov key. Incremental
+      received-date windows are validated by whole or pooled list walks. A first run
+      defaults to the trailing 30 days; earlier history requires an explicit date or
+      proceeding scope.
     columns:
       id_submission: >-
         ECFS submission id (e.g. `26109947027`). Primary key / dedup key. The filing's page on fcc.gov
@@ -2295,37 +2021,21 @@ tables:
     label: "GAO recommendations"
     subject: oversight
     coverage: >-
-      Window. The recommendations open on any day this table has read, from
-      the first daily read on. Each run reads GAO's open-recommendations export whole, which
-      lists every recommendation GAO still counts open, back to products
-      issued in 2001 (`publication_date`). The window starts at the first
-      daily read, `min(first_seen)`; a recommendation closed before it never
-      appears. One closed later stays, with
-      `listed_open` false and the `last_seen` date of the last export that
-      listed it; GAO's closing status is not in the export, so why it left is
-      unknown here. `first_seen` is when this table first saw a recommendation
-      open, not when GAO made it.
+      Window. Daily whole reads of GAO's open-recommendations export, including
+      recommendations on products issued from 2001 onward. Coverage starts at
+      `min(first_seen)`; earlier closures never appear. Entries leaving the export remain
+      with `listed_open=false` and their last-seen date. Removal does not state a closure
+      reason. `first_seen` records when this table observed the recommendation open, not
+      when GAO made it.
     measured_on: "2026-09-28"
     summary: >-
-      One row per recommendation per agency that GAO's recommendations
-      database has listed as open: the publication it comes from, the agency it
-      is made to, its text, GAO's status and priority designation as last
-      listed, GAO's comments on the agency's progress, and the topic it is
-      filed under. Read once a day through Zyte by the `gao-recommendations`
-      rollup and SpicyDocs' export reader, which refuses a changed header, and
-      kept as an **accumulator**: a recommendation that leaves the export is
-      marked, never deleted. GAO numbers each recommendation within its
-      product and states the number at the end of the text, so
-      `recommendation_id` is keyed on that number (with the publication, kind
-      and agency) and, where no number is stated, on the text; the number is
-      its own column. `listed_open` false means only that the latest export
-      does not list it: usually a closure, but an edit to its number, text or
-      agency reads the same. `report_id` joins `gao_reports`. GAO's own
-      per-department priority counts are its `Priority Open Recommendations:
-      <department>` letters in `gao_reports` (title `ILIKE 'Priority Open
-      Recommendations%'`); a count over `priority` here is bounded by this
-      table's window. The director's phone GAO lists is deliberately not
-      published, and the retained source evidence has it emptied.
+      One recommendation per agency, retaining GAO's last-listed text, status, priority and
+      progress comments. Daily validated export reads accumulate records rather than delete
+      them. Identity uses product, kind, agency and stated recommendation number, or text
+      when unnumbered. `report_id` connects its product. `listed_open=false` means absent
+      from the latest export; closure, edits or reassignment may explain it. Priority counts
+      are limited by this observation window. Director phone numbers are removed from
+      retained evidence.
     columns_from: spicy_docs
 
   fec_candidate_history:
@@ -2391,20 +2101,12 @@ tables:
       passes. Fields absent from a source object remain NULL.
     measured_on: "2026-09-30"
     summary: >-
-      One row per Regulations.gov comment, keyed by `comment_id`, with the
-      attributes the thin `comments` table does not carry: the submitter's
-      stated address, city, state, postal code, country and representative
-      (decision 66), the submitting government body and its level, tracking
-      number, object handle, page count, postmark date, withdrawal flag and
-      reason, access restriction, legacy id, the comment's own content-file
-      renditions and the agency's display properties. Typed where the value
-      is (decision 67): `withdrawn` BOOLEAN, `page_count` INTEGER,
-      `postmark_date` TIMESTAMPTZ. A comment's stated email, phone and fax
-      are left out on purpose (owner, 2026-09-28): on comments they are
-      private individuals' contact details, and most stated fax values are
-      phone numbers. The exclusion is by attribute: a contact-shaped value
-      typed into a published field is published as stated. Projected from
-      each record's API attributes by SpicyDocs' contract.
+      Additional source attributes for each Regulations.gov comment, linked by `comment_id`:
+      address, representative, government body, tracking and legacy identifiers,
+      page/postmark details, withdrawal/restriction state and content-file renditions.
+      Direct email, phone and fax attributes are deliberately excluded. Text entered into
+      other published fields remains as stated. Fields absent from the retained source stay
+      NULL; native and legacy representations use their declared types.
     columns_from: spicy_docs
   bill_actions:
     label: "Bill actions"
@@ -2441,15 +2143,10 @@ tables:
       which Congresses are filled.
     measured_on: "2026-09-28"
     summary: >-
-      One row per committee or subcommittee a bill reached, as its BILLSTATUS
-      document names it. `referral_signal` is set only for the six appropriations
-      committees the money-bill classifier keys on; it is NULL elsewhere rather than
-      absent. It names committees, not what they did: the committee activities
-      BILLSTATUS lists under each committee (Referred To, Markup By, Reported By,
-      with their dates) are not published, so find a committee's report in
-      `bill_actions`. `bill_committee_actions` is a different source, the House
-      committees' activity-report prints, filed at the end of each Congress, so
-      it holds no rows for the sitting Congress.
+      One row per committee or subcommittee named in a bill's BILLSTATUS document.
+      Activities and dates are in `bill_committee_activities`; an action missing from that
+      list may still appear in `bill_actions`. `bill_committee_actions` describes a separate
+      source: House committee activity-report prints.
     columns_from: spicy_docs
 
   bill_publisher_summaries:
@@ -2716,33 +2413,13 @@ tables:
     label: "House and Senate roll-call votes"
     subject: congress
     coverage: >-
-      Sampled, and accumulating: both chambers' roll calls from each chamber's
-      own session listing (the Senate LIS menu, and the House Clerk's roll
-      files, read forward from the session's last held roll until the Clerk
-      stops serving the next ones; a session the Clerk serves no roll of yet,
-      as before its first vote, lists none; both keyless), newest first under
-      a per-run cap. The Clerk's EVS index pages answer 404 since 2026-10-02 and are not
-      read. Each chamber is listed on its own: a run whose listing of one
-      chamber refuses reads none of that chamber's roll calls, keeps its
-      published rows as they were, publishes the other chamber and then fails,
-      so one chamber's newest roll calls can lag the other's. The scheduled
-      scope is the sitting Congress; an earlier Congress is backfilled by
-      dispatching its number under the same cap and, once held, is never
-      re-read. A roll call already published with a tally is not fetched again,
-      except the newest few of a sitting Congress, re-read in case the publisher
-      corrected them. The Clerk and LIS files reach the 101st Congress (the
-      Clerk's archive begins in 1990, the 101st's second session); the bill
-      family's references reach the 108th. The House files of 1990-2002, the
-      101st-107th Congresses, are a House-only dispatch (`congresses` 101-107,
-      `chambers` house) run until a run fetches nothing; replayed over the
-      retained Clerk archive through this rollup they refuse none and change no
-      published row (see the output ledger's roll-call row).
-      A set of roll calls reached from bills alone is not an index of a
-      session's roll calls. A House roll call that a bill's own action names
-      can be published a cron before the Clerk's roll files list it, with the same
-      tally and member positions. `vote_date` keeps the Clerk's own spelling
-      (`9-Sep-2025`, and `3-JAN-1991` on eight files of 1991-2001), which does
-      not sort as a date, so no range over it is quoted here.
+      Sampled, and accumulating. Independent Senate LIS session lists and House Clerk roll
+      files supply votes under per-run caps. The scheduled scope is the current Congress;
+      older Congresses require backfill. Clerk history begins in 1990, in the 101st
+      Congress; bill-derived vote references begin in the 108th. A failed chamber listing
+      preserves its prior rows, so chambers can lag separately. Recent votes may be reread
+      for corrections. Bill references alone do not prove a complete session index.
+      `vote_date` retains publisher spelling and is not a sortable date bound.
     measured_on: "2026-09-29"
     summary: >-
       One row per roll call: the publisher's own tally, and the bill it refers to.
@@ -2868,21 +2545,11 @@ tables:
     label: "Legislators"
     subject: congress
     coverage: >-
-      Sampled. The fork selection covers both complete community crosswalk files
-      captured September 22, 2026 UTC: current and historical legislators. Every
-      declared field was checked against the retained originals, and all earlier
-      retained identities and native values survive. The source supplies FEC
-      candidate IDs and LIS IDs for a subset of members; absent IDs remain
-      absent. This qualifies the captured community files, not an
-      independently complete official roster. Receipts:
-      fork-execution-2026-09-21/members-qualification/.
-      The October 3, 2026 rebuild also qualifies votesmart_id,
-      bioguide_previous and other_names against the retained originals.
-      That members generation was published with the scorecard integration;
-      see docs/research/scorecards/work/integration/member_rebuild/qualification.json
-      and docs/research/scorecards/work/integration/deployment/deployment_receipt.json.
-      These crosswalk fields preserve aliases and collisions rather than asserting
-      a resolved identity.
+      Sampled. Retained current and historical community legislator crosswalks captured
+      September 22, 2026 UTC. Native fields and earlier identities are preserved against
+      those originals, including FEC/LIS identifiers and aliases when supplied. Missing
+      cross-identifiers remain missing. This qualifies captured community files, not a
+      complete official roster or resolved alias identities.
     measured_on: "2026-09-22"
     summary: >-
       One row per legislator in one capture of the community crosswalk. Split from
@@ -3536,22 +3203,16 @@ tables:
     label: "Committee meetings"
     subject: congress
     coverage: >-
-      Sampled, and accumulating. Each run walks the current Congress's whole
-      `committee-meeting` list, and the previous Congress's from the day before
-      its newest held `updateDate` (or its oldest unread row), and reads the
-      detail of every meeting the table does not yet hold, newest `updateDate`
-      first, at most 1,000 a run; a meeting whose detail is unread or refused
-      has its list fields only. The previous Congress stays in scope because its
-      meetings change when GovInfo prints their transcripts, and hearing
-      transcripts have named meetings the table lacked (receipt
-      `join-gaps-2026-09-26/f/`).
+      Sampled, and accumulating. Congress.gov meeting lists cover the current Congress and
+      updates to the previous Congress. New meeting details are read newest first, at most
+      1,000 a run. Unread or refused details leave list-only records. The previous Congress
+      remains in scope because published transcripts can update its meetings.
     measured_on: "2026-09-28"
     summary: >-
-      One row per scheduled committee meeting, as the Congress.gov
-      committee-meeting list and detail routes state it, keyed `(congress,
-      chamber, event_id)`. The detail carries the hearing transcript jackets
-      (`hearing_transcripts` joins on `event_id`), the related bills, the
-      witnesses and every document URL.
+      One scheduled committee meeting, keyed by Congress, chamber and event ID. Detail
+      fields preserve independently listed committees, bills, nominations, treaties, hearing
+      jackets, witnesses and document URLs. Hearing references require Congress and chamber
+      context; document URLs do not prove acquisition.
     data_quality: >-
       A row whose `detail_read` is `false` is list-only: its detail has not
       been read yet, and every detail-only column is NULL with it. A read
@@ -3632,56 +3293,44 @@ tables:
     label: "Treaty documents"
     subject: congress
     coverage: >-
-      Sampled. The 119th Congress's treaty documents from the retained list and
-      their details. Not treaty bodies, action histories, older Congresses, suffixed
-      parts or interpreted legal/in-force effects. Receipts:
-      fork-execution-2026-09-21/legislative-publication-summary.json,
-      legislative-seeds/sealed-candidates.json and legislative-mcp-audit/.
+      Sampled. Retained 119th-Congress treaty list records and available details. Excludes
+      treaty bodies, action histories, older Congresses, suffixed-part details and
+      interpreted legal effects. Incoming references retain the treaty's received Congress
+      and partition.
     measured_on: "2026-09-21"
     summary: >-
-      One row per treaty document, as the Congress.gov treaty list and detail
-      routes state it, keyed `(congress_received, number, suffix)`. `package_id`
-      is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an
-      unpartitioned treaty. That package's MODS
-      (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states
-      the committee the treaty was referred to, which this table does not
-      carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by
-      rule, so GovInfo may not have published it yet.
+      One treaty document, identified by received Congress, number and suffix. An
+      unpartitioned document may have a derived GovInfo CDOC package ID; that locator does
+      not prove the package has been published or acquired. Related documents, titles and
+      countries remain source-stated lists.
     data_quality: >-
-      On 2026-09-21 the list's stated total agreed with the capture. A row
-      whose `detail_read` is `false` is list-only. A partitioned treaty (a
-      non-empty `suffix`) is always list-only: the publisher's suffixed detail
-      address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never
-      asked for and its `package_id` is NULL by the contract's own rule.
+      Partitioned treaties remain list-only because the maintained source reader has no
+      suffixed detail route. Their derived package ID is NULL. Whether an unpartitioned
+      detail was read is recorded in its source evidence; a list record alone does not
+      establish available treaty text.
     columns_from: spicy_docs
 
   nominations:
     label: "Nominations"
     subject: congress
     coverage: >-
-      Sampled. Distinct 119th-Congress nomination-list identities from retained
-      list pages. The pages repeat some identical records, so a pagination total
-      does not prove a stable or complete population. Latest-action fields only:
-      not nominee details, action histories, person entities or inferred
-      confirmation outcomes. Receipts:
-      fork-execution-2026-09-21/legislative-publication-summary.json,
-      legislative-seeds/sealed-candidates.json and legislative-mcp-audit/.
+      Sampled. Retained 119th-Congress nomination-list identities, including partitioned
+      nominations. Repeated list entries mean pagination totals alone do not prove
+      completeness. Optional committee and hearing lists are recorded only after their
+      relationship reads complete. Read outcomes distinguish unread, failed and successfully
+      empty responses. Latest actions are retained; full action histories, person identities
+      and inferred confirmation outcomes are outside scope.
     measured_on: "2026-09-21"
     summary: >-
       One row per nomination or part, as the Congress.gov nomination list route
       states it, keyed `(congress, citation)`; the citation carries the part
       number.
     data_quality: >-
-      The shared Congress index reader pools complete walks with varied
-      page sizes, keyed by `(congress, citation)`, keeping each identity's
-      newest `updateDate`. A clean walk or a pool matching the declared total
-      settles the query. A population change restarts pooling; incomplete
-      or inconsistent walks exhaust the source reader's bounded attempts
-      and fail before output is replaced. The list carries the latest
-      action only, not the action history. `is_civilian` is read again
-      from every row's stored `nomination_type_json` each run, so a
-      nomination the list no longer names follows the rule as well
-      (PN1189 and PN1266, both military).
+      List walks retain each complete Congress/citation identity and newest source update,
+      including partitions. Inconsistent or incomplete walks fail before replacing outputs.
+      Committee and hearing lists are independent: NULL is unread or unstated, while an
+      empty list records a complete empty response. Civilian/military classification uses
+      retained source flags; it does not infer confirmation.
     columns_from: spicy_docs
 
   house_activity_reports:
@@ -3868,31 +3517,19 @@ tables:
     label: "Document citation link table"
     subject: congress
     coverage: >-
-      Derived, and selective: not a list of the texts the service holds.
-      Every House activity report (`govinfo_package`) and budget volume
-      (`budget_volume`) the print-citations family holds is read, and
-      `house_activity_reports` and `budget_volumes` state each read
-      (`pages_read`, `citation_rows`; `citation_rows` 0 is a read that found
-      none). The held-field kinds (bill_section, report_section,
-      lobbying_activity, comment_inline, communication_authority,
-      communication_report_nature, communication_record_entry,
-      court_opinion_derived_pdf) are read only for the fields an operator
-      selects, at most 100 a run, so a held text of those kinds has rows here
-      only once it has been selected. A document with no rows may be held and
-      unread: look a committee report up in `committee_reports` and
-      `report_sections`, a bill's text in `bill_sections`. Each row's
-      document_kind is one the resolve_document_citations tool accepts; the
-      tool refuses any other kind, and a kind with no held rows yet resolves
-      to no occurrences. A budget root the reader refuses yields no
-      citations. Every kind is written by the print-citations family.
+      Derived, and selective. Citation occurrences from held House activity reports and
+      budget volumes, plus operator-selected fields from bills, reports, lobbying records,
+      comments, communications and court opinions, at most 100 selected fields per run.
+      `document_citation_read_outcomes` records exact read scopes and successful zero
+      findings. No citation rows can mean unread, refused or no matches; this table is not
+      an inventory of held text. Page-read evidence belongs to receipts, not the main report
+      or budget columns.
     measured_on: "2026-10-03"
     summary: >-
-      One row per occurrence of one cited key in one document's text: the key,
-      the exact characters that named it, and the character span it was read
-      at. Citation kinds run from bill numbers and public laws to RINs,
-      agency dockets and GAO product ids (`SELECT DISTINCT cite_kind` lists
-      them). One shared link table over every
-      document family, written by exactly one rollup.
+      One cited target occurrence in one version of a document's text, retaining the cited
+      key, exact matched text and character span. Repeated mentions stay separate. Citation
+      kinds include bills, laws, RINs, dockets and GAO products. Read outcomes distinguish
+      successful zero findings from missing evidence.
     data_quality: >-
       **The span is in the identity because the span is the yield.** Keying on
       document, kind and target alone would collapse CRPT-118hrpt968's repeated mentions of one bill into
@@ -3939,26 +3576,17 @@ tables:
     label: "Secretary of the Senate expenditure tables"
     subject: spending
     coverage: >-
-      Sampled: a page window inside each file. Secretary-of-the-Senate
-      expenditure reports reprinted as GovInfo CDOC packages from the 2024-01-01
-      issue floor, read under a per-run package cap. **Every count over this
-      table is a floor on the volume**: each report runs to well over a thousand
-      pages and only the first 80 of each file are read, so `pages_capped` is
-      true on every row. In Part I (`-1.pdf`) those pages carry the `A-`
-      summary-of-transactions section and the start of the `B-` detailed
-      statement; in Part II (`-2.pdf`) they carry the `A-` summary again and
-      then its own `B-` pages from the middle of the statement; the `C-`
-      compensation-of-members and `D-` mail-allocation sections lie far past
-      the read window and are not reached (measured 2026-09-20, receipt
-      `rollups-pdf-families-2026-09-20/`).
+      Sampled. GovInfo CDOC expenditure reports from the 2024-01-01 issue floor, limited by
+      a per-run package cap and the first 80 pages of each file. Counts are lower bounds.
+      Part I and Part II repeat summary pages before diverging into detailed statements. The
+      later compensation and mail-allocation sections lie outside this page window.
+      Page-limit evidence is retained separately from the printed main rows.
     measured_on: "2026-09-28"
     summary: >-
-      One row per ruled row of one ruled table on one page of a Report of the
-      Secretary of the Senate, with the cells exactly as the print states them
-      and the roles its own header band names. Keyed on package, file, page,
-      table, row and the page text's digest — the package id alone is not a
-      key, because each package publishes Part I (`-1.pdf`) and Part II
-      (`-2.pdf`), which repeat the `A-` summary pages before diverging.
+      One printed expenditure row, retaining cells and their stated header roles. Identity
+      includes package, file, page, table, row and body version. A package has separate Part
+      I and Part II files that repeat some summary pages; package ID alone is not a record
+      key.
     data_quality: >-
       **Most rows carry one cell, not a row of cells, and `cells_ruled` is how
       you tell.** Of the ruled body rows across the pages spicy-docs measured
@@ -4072,22 +3700,11 @@ tables:
     label: "CBO cost-estimate publication index"
     subject: congress
     coverage: >-
-      Sampled: the estimates CBO lists for the bills the bill family has read,
-      from the 108th Congress on, from two routes merged: each bill's
-      BILLSTATUS record (`source` `billstatus_bulk`) and CBO's own
-      per-Congress feed (`cbo_feed`), read once by every run for each Congress
-      it is scoped to. BILLSTATUS states no estimate for the 112th and 113th,
-      so theirs come from the feed alone; elsewhere the feed adds only what no
-      BILLSTATUS record lists, such as the Recovery Act, H.R. 3200 and the ACA.
-      A Congress no scoped run has read the feed of yet holds its BILLSTATUS
-      estimates only. A feed item that names no bill has no row here
-      (`cbo_feed_items` lists it): CBO's weekly estimates of the bills the
-      House takes up under suspension of the rules, a committee's
-      reconciliation recommendations, and an estimate CBO files under no bill
-      number. A bill passed under suspension can be
-      scored in such a weekly estimate first or only, so its first row here
-      does not date CBO's first estimate of it. An absent estimate does not
-      mean CBO never scored a bill. No CBO.gov body is requested.
+      Sampled. CBO estimates linked to held bills from the 108th Congress onward, combining
+      BILLSTATUS metadata and per-Congress CBO feeds. The 112th and 113th use the feed
+      alone. A Congress's feed contributes only after a scoped run reads it. Items without a
+      bill link stay in `cbo_feed_items`. Missing rows do not prove CBO never scored a bill;
+      a weekly estimate may cover several bills. CBO document bodies are not acquired.
     summary: >-
       One row per bill and CBO publication, using build_bill_family's own
       cbo_cost_estimates output and spicy-docs' feed builder, merged by

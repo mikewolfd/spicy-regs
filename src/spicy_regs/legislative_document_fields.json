@@ -2123,10 +2123,10 @@
         "name": "target_table",
         "source_type": "VARCHAR",
         "meaning": "Which table or publisher addresses the target key, as the rule names it.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+        "decision": "keep",
+        "target": "target_table",
+        "target_type": "string",
+        "reason": "Required main routing discriminator. Preserve the source rule's literal namespace; an unsupported namespace never becomes a guessed target."
       },
       {
         "name": "target_resolved",

@@ -101,6 +101,23 @@ def _regulatory_navigation() -> list[dict]:
         route("regulatory_agenda_items", ("agenda_item_id",), (key(part("document_id", row=True)),),
               guard("dated_by", row=True, values=("unified_agenda",))),
     ), mode="row", meaning="The source that supplied the event date routes document_id, independently of the source that supplied its stage. The event date and evidence_id never manufacture a target key."))
+    for name, source, field, target, target_field in (
+        ("comment_document", "comments", "comment_on_document_id", "documents", "document_id"),
+        ("register_document", "federal_register", "regulations_dot_gov_document_id", "documents", "document_id"),
+        ("register_docket", "federal_register", "regulations_dot_gov_docket_id", "dockets", "docket_id"),
+    ):
+        specs.append(array(name, source, (), (
+            route(target, (target_field,), (key(part(field, row=True)),)),
+        ), mode="row", meaning="The publisher's explicit Regulations.gov reference. Object IDs, printed docket labels and dates do not supply this key."))
+    specs.append(array("register_supporting_documents", "federal_register", ("regulations_dot_gov_supporting_documents",), (
+        route("documents", ("document_id",), (key(part("document_id")),)),
+    ), meaning="Each source-listed supporting document, including repeated occurrences. Listing a document does not establish that its file was retained."))
+    specs.append(array("rule_target_register", "rule_targets", ("fr_document_ids", "fr_document_ids_json"), (
+        _dated_register_target("", row=False),
+    ), meaning="Each retained Register reference uses its own document number and publication date. Other rule dates never supply the target identity."))
+    specs.append(array("gao_major_rule_agenda", "gao_reports", ("major_rule_rins", "major_rule_rins_json"), (
+        route("unified_agenda", ("rin",), (key(part(""), pattern=r"[0-9]{4}-[A-Z0-9]{4}"),)),
+    ), meaning="Each RIN explicitly listed for the major rule returns all held agenda editions. No latest edition or printed-title match is chosen."))
     return specs
 
 
@@ -108,6 +125,29 @@ def _dated_register_target(path: str, *, row: bool, guards: tuple = ()) -> dict:
     return route("federal_register", ("document_number", "publication_date"), (
         key(part(path, row=row, transform="fr-document-number")),
         key(part(path, row=row, transform="fr-publication-date"))), *guards)
+
+
+def _citation_navigation() -> list[dict]:
+    """Literal source-rule namespaces, never a target recovered from receipts."""
+    resolved = {**part("target_resolved", row=True, transform="native-boolean"), "values": ["true"]}
+    targets = []
+    for kind, namespace, table, column, pattern, rules in (
+        ("bill_number", "congress_bills", "congress_bills", "bill_id",
+         r"[1-9][0-9]*-(hr|s|hres|sres|hjres|sjres|hconres|sconres)-[1-9][0-9]*",
+         ("bill_number:inline_congress", "bill_number:congress_subheading")),
+        ("public_law", "laws", "laws", "law_id", r"[1-9][0-9]*-public-[1-9][0-9]*", ("public_law",)),
+        ("gao_product_id", "gao products (product id as GAO prints it)", "gao_reports", "report_number", r"GAO-[A-Z0-9-]+", ("gao_product_id",)),
+        ("crs_report_id", "crs reports (Congress.gov crsreport)", "crs_reports", "report_id", r"(R|RL|RS|IF|IN|LSB|IG|MM)[0-9]{4,6}", ("crs_report_id",)),
+        ("bioguide_id", "members", "members", "bioguide_id", r"[A-Z][0-9]{6}", ("bioguide_id",)),
+        ("docket_number", "dockets", "dockets", "docket_id", r"[A-Z0-9]+-[0-9]{4}-[A-Z0-9-]+", ("docket_number",)),
+        ("committee_name", "committees", "committees", "system_code", r"[hs][hs][a-z0-9]+", ("exact", "roster_prefix")),
+    ):
+        targets.append(route(table, (column,), (key(part("target_key", row=True), pattern=pattern),),
+                             resolved, guard("cite_kind", row=True, values=(kind,)),
+                             guard("target_table", row=True, values=(namespace,)),
+                             guard("target_rule", row=True, values=rules)))
+    return [array("citation_recorded_targets", "document_citations", (), tuple(targets), mode="row",
+                  meaning="The source rule's qualified, typed main reference. Target presence and uniqueness are checked separately; unresolved references, inferred committee names and unsupported namespaces remain inspectable without a link. Code, reporter and volume/page citations require complete typed identities and remain unsupported here.")]
 
 
 def _recorded_source_navigation() -> list[dict]:
@@ -403,7 +443,10 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
                                key(part("source_sha256", row=True), pattern=r"sha256:[a-f0-9]{64}")),
                               guard("companion_status", row=True, values=("locator_coordinates_available",))),),
                        mode="row", meaning="Literal retained source coordinates and digest; target existence does not establish verified source bytes."))
-    specs += _regulatory_navigation() + _recorded_source_navigation()
+    from spicy_regs.explorer_retained_navigation import declarations as retained_navigation
+    from spicy_regs.explorer_domain_navigation import declarations as domain_navigation
+
+    specs += _regulatory_navigation() + _citation_navigation() + _recorded_source_navigation() + retained_navigation() + domain_navigation()
     return validate_navigation(deepcopy(specs))
 
 

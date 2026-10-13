@@ -4,7 +4,7 @@
 
 **Rulemaking lifecycles**
 
-One row per docketed proceeding (owner decisions 54-56c): its earliest proposal, the earliest the Register dates, else its upload-dated one (decision 54d), the earliest final strictly after it, or what else its events make (`kind`), with survival columns (`outcome`, `duration_days`, `censor_date`) for time-to-final estimates, Unified Agenda status and routine-family strata. A docket-less proceeding is one Register document that cannot pair and is left out. Keyed `proceeding_id`; joins `proceedings` on it and is joined by `lifecycle_events`. Built by `build_lifecycles`; dates are DATE, counts INTEGER and flags BOOLEAN. Replaces the documents-based rollup withdrawn on 2026-09-23.
+One docketed proceeding's proposal-to-final history and survival outcome. The earliest Register-dated proposal takes precedence over an upload-dated proposal; the final must follow it strictly. Other events determine the outcome or censor date. Docket-less Register records cannot pair and are excluded. Unified Agenda status and routine strata remain separate context. These are docketed proceedings, not a count of distinct RINs or regulations.
 
 **Coverage.** Derived, and bounded by its inputs: every docketed proceeding, paired from its cleaned `lifecycle_events` and censored at the day its inputs end. *(measured 2026-09-28)*
 

@@ -4,11 +4,11 @@
 
 **Treaty documents**
 
-One row per treaty document, as the Congress.gov treaty list and detail routes state it, keyed `(congress_received, number, suffix)`. `package_id` is the GovInfo CDOC id by the `CDOC-{congress}tdoc{number}` rule on an unpartitioned treaty. That package's MODS (`https://www.govinfo.gov/metadata/pkg/{package_id}/mods.xml`) states the committee the treaty was referred to, which this table does not carry (CDOC-119tdoc1 and -tdoc2: Foreign Relations); the id is derived by rule, so GovInfo may not have published it yet.
+One treaty document, identified by received Congress, number and suffix. An unpartitioned document may have a derived GovInfo CDOC package ID; that locator does not prove the package has been published or acquired. Related documents, titles and countries remain source-stated lists.
 
-**Coverage.** Sampled. The 119th Congress's treaty documents from the retained list and their details. Not treaty bodies, action histories, older Congresses, suffixed parts or interpreted legal/in-force effects. Receipts: fork-execution-2026-09-21/legislative-publication-summary.json, legislative-seeds/sealed-candidates.json and legislative-mcp-audit/. *(measured 2026-09-21)*
+**Coverage.** Sampled. Retained 119th-Congress treaty list records and available details. Excludes treaty bodies, action histories, older Congresses, suffixed-part details and interpreted legal effects. Incoming references retain the treaty's received Congress and partition. *(measured 2026-09-21)*
 
-**Data quality.** On 2026-09-21 the list's stated total agreed with the capture. A row whose `detail_read` is `false` is list-only. A partitioned treaty (a non-empty `suffix`) is always list-only: the publisher's suffixed detail address has no route in spicy-docs' `LIST_ROUTES`, so its detail is never asked for and its `package_id` is NULL by the contract's own rule.
+**Data quality.** Partitioned treaties remain list-only because the maintained source reader has no suffixed detail route. Their derived package ID is NULL. Whether an unpartitioned detail was read is recorded in its source evidence; a list record alone does not establish available treaty text.
 
 - **Parquet file:** `treaties.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -34,7 +34,7 @@ One row per treaty document, as the Congress.gov treaty list and detail routes s
 | `countries` | `VARCHAR[]` | Every country party the detail names, as a Native list of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `index_terms` | `VARCHAR[]` | Every index term the detail names, as a Native list of names. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `related_docs` | `STRUCT(congress VARCHAR, congressReceived VARCHAR, number VARCHAR, suffix VARCHAR, title VARCHAR, url VARCHAR)[]` | Every related document the detail lists, as a Native list of the publisher's objects. NULL where no detail was read or the detail states no such list; `[]` where it states an empty one. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `parts_count` | `BIGINT` | The publisher's parts object, as JSON. This column retains the source property count. |
+| `parts_count` | `BIGINT` | Publisher-stated number of treaty parts, retained as an integer. NULL means no count was stated. |
 | `action_count` | `BIGINT` | How many actions the detail says the treaty has. |
 | `package_id` | `VARCHAR` | The GovInfo CDOC package id derived from the treaty number, on a treaty with no suffix. |
 | `update_date` | `VARCHAR` | The publisher's updateDate; the merge prefers the larger value. |

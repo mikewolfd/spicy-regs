@@ -4,9 +4,9 @@
 
 **Bill policy areas and legislative subjects**
 
-Subject assignments returned by Congress.gov or GovInfo BILLSTATUS, keyed by bill_id for a left join to congress_bills.bill_id. policy_area is one publisher category; subjects is a list of legislative subject names, not separate bill records. The consumer trims and deduplicates names. carrier and enriched_at record how and when the answer was obtained.
+One policy-area and subject-list assignment per bill, from Congress.gov or GovInfo BILLSTATUS. Join on `bill_id`. Subject names are filter values, not separate bill records. Native rows use `subjects`; legacy rows use `subjects_json`. Acquisition method and time belong to receipts for native rows; legacy rows retain `carrier` and `enriched_at`.
 
-**Coverage.** Sampled; it grows each run and is not a complete subject census. From the 108th Congress every bill the bill family filled from GovInfo BILLSTATUS is copied from its congress_bills row; other bills from the 108th come from their folder's BILLSTATUS bulk zip, 32 folders a run, newest Congress first. Bills from the 93rd to the 107th, and bills whose BILLSTATUS file the reader refuses, come from the Congress.gov API with a key, up to 2,000 a run. No folder read and no API request, page or retry starts 20 minutes or more after the run began. A list-level bill in a folder the family reads waits for the family while its Congress is the current or previous one, and then goes to the API. *(measured 2026-09-23)*
+**Coverage.** Sampled. Subject assignments for bills from the 93rd Congress onward. From the 108th, assignments come from held BILLSTATUS rows or bulk archives; earlier bills and refused bulk records use the keyed Congress.gov API, up to 2,000 a run. Bulk reads cover 32 folders per run, newest first; no new request starts after 20 minutes. Missing bills may be pending, refused or outside the run's scope. *(measured 2026-09-23)*
 
 **Data quality.** A missing row can mean pending, failed or outside the configured scope. An empty assignment can mean no assignments or that the source did not hold the requested bill; those outcomes are not separately represented in this table. Rows copied from the bill family are rewritten when the family's BILLSTATUS read changes; other answers are not asked again. The table does not retain the original response or its digest.
 

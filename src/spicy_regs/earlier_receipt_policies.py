@@ -14,6 +14,16 @@ EARLIER_COLUMNS = {
 
 def earlier_policies(policy):
     from spicy_regs.etl_receipts import DatasetPolicy
+    if policy.dataset == "document_citations" and policy.policy_version == "legislative-documents/2":
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/document_citations.json").read_text()))
+        if policy.descriptor() != expected.descriptor():
+            raise ValueError("Current citation policy differs from the exact declared policy")
+        history = json.loads(files("spicy_regs").joinpath("citation_navigation_policy_history.json").read_text())
+        earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
+        if earlier.policy_version != "legislative-documents/1" or earlier.identity_fields != policy.identity_fields:
+            raise ValueError("Citation namespace promotion changes a historical observation identity")
+        return (earlier,)
     if policy.policy_version == "legislative-documents/2" and policy.dataset in {
         "native_legal_references", "native_legal_reference_reads",
     }:

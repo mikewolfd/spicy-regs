@@ -6,7 +6,7 @@
 
 One row per legislator in one capture of the community crosswalk. Split from `member_terms` because one row cannot hold a chamber switch.
 
-**Coverage.** Sampled. The fork selection covers both complete community crosswalk files captured September 22, 2026 UTC: current and historical legislators. Every declared field was checked against the retained originals, and all earlier retained identities and native values survive. The source supplies FEC candidate IDs and LIS IDs for a subset of members; absent IDs remain absent. This qualifies the captured community files, not an independently complete official roster. Receipts: fork-execution-2026-09-21/members-qualification/. The October 3, 2026 rebuild also qualifies votesmart_id, bioguide_previous and other_names against the retained originals. That members generation was published with the scorecard integration; see docs/research/scorecards/work/integration/member_rebuild/qualification.json and docs/research/scorecards/work/integration/deployment/deployment_receipt.json. These crosswalk fields preserve aliases and collisions rather than asserting a resolved identity. *(measured 2026-09-22)*
+**Coverage.** Sampled. Retained current and historical community legislator crosswalks captured September 22, 2026 UTC. Native fields and earlier identities are preserved against those originals, including FEC/LIS identifiers and aliases when supplied. Missing cross-identifiers remain missing. This qualifies captured community files, not a complete official roster or resolved alias identities. *(measured 2026-09-22)*
 
 - **Parquet file:** `members.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

@@ -225,6 +225,62 @@
       "url": "https://www.usaspending.gov/",
       "kind": "government",
       "note": ""
+    },
+    "administration-policy-archive": {
+      "id": "administration-policy-archive",
+      "name": "United States administration-policy archive",
+      "url": "https://github.com/unitedstates/statements-of-administration-policy",
+      "kind": "community",
+      "note": "Commit-pinned community metadata; statements and explicit bill mentions are retained as stated."
+    },
+    "sec-comments": {
+      "id": "sec-comments",
+      "name": "Securities and Exchange Commission rulemaking comments",
+      "url": "https://www.sec.gov/comments",
+      "kind": "government",
+      "note": "Selected retained rule pages, comment listings and offered files; source-wide coverage is not implied."
+    },
+    "cftc-comments": {
+      "id": "cftc-comments",
+      "name": "Commodity Futures Trading Commission comments",
+      "url": "https://comments.cftc.gov/",
+      "kind": "government",
+      "note": "Selected retained rule listings; detail and file reads have their own selected scope."
+    },
+    "ferc": {
+      "id": "ferc",
+      "name": "Federal Energy Regulatory Commission eLibrary",
+      "url": "https://elibrary.ferc.gov/",
+      "kind": "government",
+      "note": "Selected retained search observations, file metadata and original bytes."
+    },
+    "edis": {
+      "id": "edis",
+      "name": "U.S. International Trade Commission EDIS",
+      "url": "https://edis.usitc.gov/",
+      "kind": "government",
+      "note": "Selected public document metadata, attachment metadata and retained archive members."
+    },
+    "supreme-court": {
+      "id": "supreme-court",
+      "name": "Supreme Court of the United States",
+      "url": "https://www.supremecourt.gov/",
+      "kind": "government",
+      "note": "Selected retained term-index renders and PDF observations; revisions and missing links remain explicit."
+    },
+    "reports-archive": {
+      "id": "reports-archive",
+      "name": "United States inspectors-general reports archive",
+      "url": "https://github.com/unitedstates/reports",
+      "kind": "community",
+      "note": "Commit-pinned report metadata and offered assets; retained metadata does not establish PDF acquisition."
+    },
+    "govinfo-register": {
+      "id": "govinfo-register",
+      "name": "GovInfo Federal Register issues",
+      "url": "https://www.govinfo.gov/app/collection/FR",
+      "kind": "government",
+      "note": "Selected historical issue metadata and retained renditions; issue metadata is distinct from document/granule text."
     }
   },
   "families": {
@@ -535,6 +591,61 @@
         "regulations",
         "register",
         "agenda"
+      ]
+    },
+    "administration-policy": {
+      "sources": [
+        "administration-policy-archive"
+      ]
+    },
+    "uscode-editions": {
+      "sources": [
+        "uscode"
+      ]
+    },
+    "sec-comments": {
+      "sources": [
+        "sec-comments"
+      ]
+    },
+    "cftc-comments": {
+      "sources": [
+        "cftc-comments"
+      ]
+    },
+    "ferc-originals": {
+      "sources": [
+        "ferc"
+      ]
+    },
+    "edis-document-bulk": {
+      "sources": [
+        "edis"
+      ]
+    },
+    "supreme-court-observations": {
+      "sources": [
+        "supreme-court"
+      ]
+    },
+    "inspectors-general-metadata": {
+      "sources": [
+        "reports-archive"
+      ]
+    },
+    "federal-register-issues": {
+      "sources": [
+        "govinfo-register"
+      ]
+    },
+    "ecfr-snapshots": {
+      "sources": [
+        "ecfr"
+      ]
+    },
+    "table3-history": {
+      "sources": [
+        "uscode"
       ]
     }
   },
@@ -1000,6 +1111,222 @@
         "rulemaking_lifecycles"
       ],
       "transformation": "Calculates time to a final action by agency and rule family."
+    },
+    "administration_policy_statements": {
+      "sources": [
+        "administration-policy-archive"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original archive metadata; preserves each statement and its explicit bill mentions.",
+      "evidence": "src/spicy_regs/sources/retained_collections.py",
+      "modelGenerated": false
+    },
+    "administration_policy_bill_links": {
+      "sources": [
+        "administration-policy-archive"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original archive metadata; preserves each statement and its explicit bill mentions.",
+      "evidence": "src/spicy_regs/sources/retained_collections.py",
+      "modelGenerated": false
+    },
+    "uscode_editions": {
+      "sources": [
+        "uscode"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original annual or release-point archive members; preserves member, structure and content observations separately.",
+      "evidence": "src/spicy_regs/sources/uscode_editions.py",
+      "modelGenerated": false
+    },
+    "uscode_edition_structure": {
+      "sources": [
+        "uscode"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original annual or release-point archive members; preserves member, structure and content observations separately.",
+      "evidence": "src/spicy_regs/sources/uscode_editions.py",
+      "modelGenerated": false
+    },
+    "uscode_edition_sections": {
+      "sources": [
+        "uscode"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original annual or release-point archive members; preserves member, structure and content observations separately.",
+      "evidence": "src/spicy_regs/sources/uscode_editions.py",
+      "modelGenerated": false
+    },
+    "sec_rulemakings": {
+      "sources": [
+        "sec-comments"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original rule pages, complete selected comment listings and offered file captures.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "sec_comment_files": {
+      "sources": [
+        "sec-comments"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original rule pages, complete selected comment listings and offered file captures.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "cftc_rule_observations": {
+      "sources": [
+        "cftc-comments"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original rule listings and explicitly selected comment details and files.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "cftc_comments": {
+      "sources": [
+        "cftc-comments"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original rule listings and explicitly selected comment details and files.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "cftc_comment_files": {
+      "sources": [
+        "cftc-comments"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original rule listings and explicitly selected comment details and files.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "ferc_search_documents": {
+      "sources": [
+        "ferc"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original eLibrary search pages, file lists and original file captures.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "ferc_accession_files": {
+      "sources": [
+        "ferc"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original eLibrary search pages, file lists and original file captures.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "ferc_original_files": {
+      "sources": [
+        "ferc"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original eLibrary search pages, file lists and original file captures.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "edis_documents": {
+      "sources": [
+        "edis"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original EDIS document and attachment responses and qualified retained archive members.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "edis_attachments": {
+      "sources": [
+        "edis"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original EDIS document and attachment responses and qualified retained archive members.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "edis_attachment_files": {
+      "sources": [
+        "edis"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original EDIS document and attachment responses and qualified retained archive members.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "supreme_court_index_observations": {
+      "sources": [
+        "supreme-court"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original term-index renders and PDF probes, retaining each declaring opinion or revision occurrence.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "supreme_court_opinion_observations": {
+      "sources": [
+        "supreme-court"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original term-index renders and PDF probes, retaining each declaring opinion or revision occurrence.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "supreme_court_pdf_observations": {
+      "sources": [
+        "supreme-court"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original term-index renders and PDF probes, retaining each declaring opinion or revision occurrence.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "inspectors_general_report_metadata": {
+      "sources": [
+        "reports-archive"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected commit-pinned original report metadata; preserves offered links and assets without implying file acquisition.",
+      "evidence": "src/spicy_regs/sources/retained_native_collections.py",
+      "modelGenerated": false
+    },
+    "federal_register_issues": {
+      "sources": [
+        "govinfo-register"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original issue metadata; separates offered renditions from retained rendition bytes.",
+      "evidence": "src/spicy_regs/transforms/historical_regulations.py",
+      "modelGenerated": false
+    },
+    "ecfr_snapshots": {
+      "sources": [
+        "ecfr"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original dated eCFR responses and their native content nodes.",
+      "evidence": "src/spicy_regs/transforms/historical_regulations.py",
+      "modelGenerated": false
+    },
+    "ecfr_snapshot_sections": {
+      "sources": [
+        "ecfr"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original dated eCFR responses and their native content nodes.",
+      "evidence": "src/spicy_regs/transforms/historical_regulations.py",
+      "modelGenerated": false
+    },
+    "table3_historical_records": {
+      "sources": [
+        "uscode"
+      ],
+      "inputs": [],
+      "transformation": "Reads selected original historical Table III members; retains each classification placement and original source position.",
+      "evidence": "src/spicy_regs/sources/table3_history.py",
+      "modelGenerated": false
     }
   }
 }

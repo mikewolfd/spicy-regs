@@ -20956,6 +20956,655 @@
       "ruleVersion": "source-navigation/1"
     },
     {
+      "id": "comment_document",
+      "source": "comments",
+      "fields": [],
+      "targets": [
+        {
+          "table": "documents",
+          "columns": [
+            "document_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "comment_on_document_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The publisher's explicit Regulations.gov reference. Object IDs, printed docket labels and dates do not supply this key.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "register_document",
+      "source": "federal_register",
+      "fields": [],
+      "targets": [
+        {
+          "table": "documents",
+          "columns": [
+            "document_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "regulations_dot_gov_document_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The publisher's explicit Regulations.gov reference. Object IDs, printed docket labels and dates do not supply this key.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "register_docket",
+      "source": "federal_register",
+      "fields": [],
+      "targets": [
+        {
+          "table": "dockets",
+          "columns": [
+            "docket_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "regulations_dot_gov_docket_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The publisher's explicit Regulations.gov reference. Object IDs, printed docket labels and dates do not supply this key.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "register_supporting_documents",
+      "source": "federal_register",
+      "fields": [
+        "regulations_dot_gov_supporting_documents"
+      ],
+      "targets": [
+        {
+          "table": "documents",
+          "columns": [
+            "document_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_id"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "array",
+      "candidates": false,
+      "meaning": "Each source-listed supporting document, including repeated occurrences. Listing a document does not establish that its file was retained.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "rule_target_register",
+      "source": "rule_targets",
+      "fields": [
+        "fr_document_ids",
+        "fr_document_ids_json"
+      ],
+      "targets": [
+        {
+          "table": "federal_register",
+          "columns": [
+            "document_number",
+            "publication_date"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "transform": "fr-document-number"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element",
+                  "transform": "fr-publication-date"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "array",
+      "candidates": false,
+      "meaning": "Each retained Register reference uses its own document number and publication date. Other rule dates never supply the target identity.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "gao_major_rule_agenda",
+      "source": "gao_reports",
+      "fields": [
+        "major_rule_rins",
+        "major_rule_rins_json"
+      ],
+      "targets": [
+        {
+          "table": "unified_agenda",
+          "columns": [
+            "rin"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": "[0-9]{4}-[A-Z0-9]{4}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "array",
+      "candidates": false,
+      "meaning": "Each RIN explicitly listed for the major rule returns all held agenda editions. No latest edition or printed-title match is chosen.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "citation_recorded_targets",
+      "source": "document_citations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "congress_bills",
+          "columns": [
+            "bill_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*-(hr|s|hres|sres|hjres|sjres|hconres|sconres)-[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "bill_number"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "congress_bills"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "bill_number:inline_congress",
+                "bill_number:congress_subheading"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "laws",
+          "columns": [
+            "law_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*-public-[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "public_law"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "laws"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "public_law"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "gao_reports",
+          "columns": [
+            "report_number"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "GAO-[A-Z0-9-]+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "gao_product_id"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "gao products (product id as GAO prints it)"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "gao_product_id"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "crs_reports",
+          "columns": [
+            "report_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "(R|RL|RS|IF|IN|LSB|IG|MM)[0-9]{4,6}"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "crs_report_id"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "crs reports (Congress.gov crsreport)"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "crs_report_id"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "members",
+          "columns": [
+            "bioguide_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[A-Z][0-9]{6}"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "bioguide_id"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "members"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "bioguide_id"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "dockets",
+          "columns": [
+            "docket_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[A-Z0-9]+-[0-9]{4}-[A-Z0-9-]+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "docket_number"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "dockets"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "docket_number"
+              ]
+            }
+          ]
+        },
+        {
+          "table": "committees",
+          "columns": [
+            "system_code"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[hs][hs][a-z0-9]+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "target_resolved"
+              ],
+              "from": "row",
+              "transform": "native-boolean",
+              "values": [
+                "true"
+              ]
+            },
+            {
+              "path": [
+                "cite_kind"
+              ],
+              "from": "row",
+              "values": [
+                "committee_name"
+              ]
+            },
+            {
+              "path": [
+                "target_table"
+              ],
+              "from": "row",
+              "values": [
+                "committees"
+              ]
+            },
+            {
+              "path": [
+                "target_rule"
+              ],
+              "from": "row",
+              "values": [
+                "exact",
+                "roster_prefix"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The source rule's qualified, typed main reference. Target presence and uniqueness are checked separately; unresolved references, inferred committee names and unsupported namespaces remain inspectable without a link. Code, reporter and volume/page citations require complete typed identities and remain unsupported here.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
       "id": "court_captured_opinion",
       "source": "court_opinion_pdf_extractions",
       "fields": [],
@@ -21841,6 +22490,1548 @@
       "mode": "row",
       "candidates": false,
       "meaning": "The publisher URL associated with the recorded capture ID and source path. Capture IDs are opaque; this URL does not imply a public capture or extracted document target.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "administration_policy_statement",
+      "source": "administration_policy_bill_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "administration_policy_statements",
+          "columns": [
+            "statement_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "statement_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained statement that lists this bill, including repeated bill mentions.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "administration_policy_bill",
+      "source": "administration_policy_bill_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "congress_bills",
+          "columns": [
+            "bill_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bill_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*-(?:hr|s|hres|sres|hjres|sjres|hconres|sconres)-[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The bill explicitly listed in the archived metadata; no support or opposition is inferred.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "sec_file_rulemaking",
+      "source": "sec_comment_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "sec_rulemakings",
+          "columns": [
+            "rulemaking_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rulemaking_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained rulemaking observation that offered this comment file.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "cftc_comment_rule",
+      "source": "cftc_comments",
+      "fields": [],
+      "targets": [
+        {
+          "table": "cftc_rule_observations",
+          "columns": [
+            "observation_id",
+            "rule_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rule_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rule_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained rule listing and its native rule ID.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "cftc_file_rule",
+      "source": "cftc_comment_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "cftc_rule_observations",
+          "columns": [
+            "observation_id",
+            "rule_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rule_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rule_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained rule listing and its native rule ID.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "cftc_file_comment",
+      "source": "cftc_comment_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "cftc_comments",
+          "columns": [
+            "rule_observation_id",
+            "rule_id",
+            "comment_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rule_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "rule_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "comment_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The declaring comment within this retained rule listing; other captures stay separate.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "edis_attachment_document",
+      "source": "edis_attachments",
+      "fields": [],
+      "targets": [
+        {
+          "table": "edis_documents",
+          "columns": [
+            "observation_id",
+            "document_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained document observation and its native EDIS document ID.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "edis_file_document",
+      "source": "edis_attachment_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "edis_documents",
+          "columns": [
+            "observation_id",
+            "document_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained document observation and its native EDIS document ID.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "edis_file_attachment",
+      "source": "edis_attachment_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "edis_attachments",
+          "columns": [
+            "document_observation_id",
+            "document_id",
+            "attachment_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "attachment_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "Retained attachment metadata for this document observation and attachment ID. Multiple metadata captures remain separate; no exact metadata version is selected.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "ferc_file_search_observations",
+      "source": "ferc_accession_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "ferc_search_documents",
+          "columns": [
+            "accession"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "accession"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[0-9]{8}-[0-9]{3,5}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "All selected search observations stating this accession; no exact search capture is implied.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "ferc_original_file_observations",
+      "source": "ferc_original_files",
+      "fields": [],
+      "targets": [
+        {
+          "table": "ferc_accession_files",
+          "columns": [
+            "accession",
+            "file_guid"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "accession"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[0-9]{8}-[0-9]{3,5}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "file_guid"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "All retained metadata observations for this accession and file GUID; capture versions stay separate.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "supreme_court_opinion_index",
+      "source": "supreme_court_opinion_observations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "supreme_court_index_observations",
+          "columns": [
+            "observation_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "index_observation_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained term-index render that states this opinion occurrence.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "supreme_court_pdf_declarations",
+      "source": "supreme_court_pdf_observations",
+      "fields": [
+        "declaring_occurrences_json"
+      ],
+      "targets": [
+        {
+          "table": "supreme_court_opinion_observations",
+          "columns": [
+            "index_observation_id",
+            "opinion_index"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "index_observation_id"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "opinion_index"
+                  ],
+                  "from": "element"
+                }
+              ],
+              "separator": "",
+              "pattern": "(?:0|[1-9][0-9]*)"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "role"
+              ],
+              "from": "element",
+              "values": [
+                "opinion",
+                "revision"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "array",
+      "candidates": false,
+      "meaning": "Each opinion or revision occurrence offering this retained PDF. Repeated declarations and different index renders stay separate.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "ecfr_content_snapshot",
+      "source": "ecfr_snapshot_sections",
+      "fields": [],
+      "targets": [
+        {
+          "table": "ecfr_snapshots",
+          "columns": [
+            "snapshot_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "snapshot_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact dated eCFR selection containing this source node.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "uscode_content_edition_member",
+      "source": "uscode_edition_sections",
+      "fields": [],
+      "targets": [
+        {
+          "table": "uscode_editions",
+          "columns": [
+            "edition_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "edition_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained archive member and edition observation, including carried appendices.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "uscode_structure_edition_member",
+      "source": "uscode_edition_structure",
+      "fields": [],
+      "targets": [
+        {
+          "table": "uscode_editions",
+          "columns": [
+            "edition_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "edition_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact retained archive member and edition observation, including carried appendices.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_audit_finding_matter",
+      "source": "fec_audit_findings",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_legal_matters",
+          "columns": [
+            "record_id",
+            "matter_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "matter_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "matter_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact legal-matter observation supplying this audit category. An explicit no-findings row remains inspectable.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_audit_finding_document",
+      "source": "fec_audit_findings",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_legal_documents",
+          "columns": [
+            "record_id",
+            "matter_record_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "supporting_document_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "matter_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The source-linked audit report in the same matter observation. Missing document references create no link; a document record does not prove a captured body.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_recommendation_report",
+      "source": "fec_oversight_recommendations",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_agency_reports",
+          "columns": [
+            "report_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "report_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact report edition supplying this recommendation observation. Repeated status observations do not select a current recommendation.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_document_parent",
+      "source": "fec_legal_documents",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_legal_documents",
+          "columns": [
+            "record_id",
+            "matter_record_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "parent_document_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "matter_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The source-stated document observation within the exact retained matter observation. Optional absent references produce no link; repeated targets stay visible.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_event_document",
+      "source": "fec_legal_events",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_legal_documents",
+          "columns": [
+            "record_id",
+            "matter_record_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "related_document_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "matter_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The source-stated document observation within the exact retained matter observation. Optional absent references produce no link; repeated targets stay visible.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_party_document",
+      "source": "fec_legal_parties",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_legal_documents",
+          "columns": [
+            "record_id",
+            "matter_record_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "matter_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The source-stated document observation within the exact retained matter observation. Optional absent references produce no link; repeated targets stay visible.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_filing_reference_source",
+      "source": "fec_filing_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_filings",
+          "columns": [
+            "record_id",
+            "filing_key",
+            "source_authority",
+            "source_namespace"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_filing_record_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "sha256:[a-f0-9]{64}"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_authority"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_namespace"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "source_authority"
+              ],
+              "from": "row",
+              "values": [
+                "official-fec"
+              ]
+            },
+            {
+              "path": [
+                "source_namespace"
+              ],
+              "from": "row",
+              "values": [
+                "fec-openfec-file-number"
+              ]
+            },
+            {
+              "path": [
+                "filing_link_status"
+              ],
+              "from": "row",
+              "values": [
+                "native_file_number"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact source filing observation with its official native filing key and namespace. Lookup preserves duplicate observations and makes no amendment/current-record selection.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "fec_filing_reference_target",
+      "source": "fec_filing_links",
+      "fields": [],
+      "targets": [
+        {
+          "table": "fec_filings",
+          "columns": [
+            "filing_key",
+            "source_authority",
+            "source_namespace"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "target_filing_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "urn:fec:filing:official-fec:openfec-file-number:-?[1-9][0-9]*"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_authority"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_namespace"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "source_authority"
+              ],
+              "from": "row",
+              "values": [
+                "official-fec"
+              ]
+            },
+            {
+              "path": [
+                "source_namespace"
+              ],
+              "from": "row",
+              "values": [
+                "fec-openfec-file-number"
+              ]
+            },
+            {
+              "path": [
+                "target_resolution_status"
+              ],
+              "from": "row",
+              "values": [
+                "resolved_native_filing_key"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "All filing observations under the conflict-qualified official reference key. The main resolution decision must come from the maintained filing-reference policy; unresolved, missing and conflicting decisions create no link. No first or latest filing is chosen.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "section_diff_from_section",
+      "source": "section_diff_items",
+      "fields": [],
+      "targets": [
+        {
+          "table": "bill_sections",
+          "columns": [
+            "bill_id",
+            "version_code",
+            "printing_id",
+            "element_id",
+            "body_version_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bill_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "from_version_code"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "from_printing_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "from_element_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "from_body_version_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "This comparison endpoint's exact bill printing, element and derived body. Missing or different bodies do not match; every duplicate target remains visible as ambiguity.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "section_diff_to_section",
+      "source": "section_diff_items",
+      "fields": [],
+      "targets": [
+        {
+          "table": "bill_sections",
+          "columns": [
+            "bill_id",
+            "version_code",
+            "printing_id",
+            "element_id",
+            "body_version_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bill_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "to_version_code"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "to_printing_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "to_element_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "to_body_version_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "This comparison endpoint's exact bill printing, element and derived body. Missing or different bodies do not match; every duplicate target remains visible as ambiguity.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "law_section_parent",
+      "source": "law_sections",
+      "fields": [],
+      "targets": [
+        {
+          "table": "law_sections",
+          "columns": [
+            "law_id",
+            "seq"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "law_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "parent_seq"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "0|[1-9][0-9]*"
+            }
+          ],
+          "guards": []
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The publisher's stated parent section position in the same law. Root/absent parents create no link. Quoted sections retain their source hierarchy and do not become enacted text.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "printed_committee_action_document",
+      "source": "bill_committee_actions",
+      "fields": [],
+      "targets": [
+        {
+          "table": "house_activity_reports",
+          "columns": [
+            "package_id",
+            "body_version_id"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "body_version_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "document_kind"
+              ],
+              "from": "row",
+              "values": [
+                "govinfo_package"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The committee activity report and exact derived body where this action wording was read. This source link does not certify the action-to-bill interpretation.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
+      "id": "printed_committee_action_mention",
+      "source": "bill_committee_actions",
+      "fields": [],
+      "targets": [
+        {
+          "table": "document_citations",
+          "columns": [
+            "document_kind",
+            "document_key",
+            "body_version_id",
+            "cite_kind",
+            "target_key",
+            "span_start",
+            "span_end"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_kind"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "document_key"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "body_version_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [],
+                  "from": "row",
+                  "literal": "bill_number"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "bill_id"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": ".+"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "mention_span_start"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "0|[1-9][0-9]*"
+            },
+            {
+              "parts": [
+                {
+                  "path": [
+                    "mention_span_end"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "0|[1-9][0-9]*"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "document_kind"
+              ],
+              "from": "row",
+              "values": [
+                "govinfo_package"
+              ]
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The exact bill-designator citation attached to the printed action, in the same source kind, document and body at its stated span. Multiple citations remain visible; this does not establish that the interpretation is correct.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"

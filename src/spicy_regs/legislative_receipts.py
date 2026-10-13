@@ -56,7 +56,7 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         () if spec["processing_only"] else tuple(spec["identity_fields"]),
         (RAW,),
-        policy_version="legislative-documents/2" if dataset in {"native_legal_references", "native_legal_reference_reads"} else "legislative-documents/1",
+        policy_version="legislative-documents/2" if dataset in {"native_legal_references", "native_legal_reference_reads", "document_citations"} else "legislative-documents/1",
         receipt_only=spec["processing_only"],
     )
 
@@ -76,9 +76,8 @@ def input_policy(dataset: str, subjects: Sequence[Path]) -> DatasetPolicy:
 def _processor(dataset: str) -> str:
     if dataset in {"native_legal_references", "native_legal_reference_reads"}:
         return "legislative-documents/3"
-    # The remaining field policies stay /1: receipt ownership is unchanged.
-    # Version the changed court-key mapping separately in each new attempt.
-    return "legislative-documents/2" if dataset == "document_citations" else "legislative-documents/1"
+    # The citation routing namespace is now retained on main rows.
+    return "legislative-documents/3" if dataset == "document_citations" else "legislative-documents/1"
 
 
 def mapped_record(dataset: str, row: Mapping[str, Any]) -> dict:

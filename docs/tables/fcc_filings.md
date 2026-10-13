@@ -4,9 +4,9 @@
 
 **FCC filings**
 
-One row per FCC ECFS filing — the FCC's comment equivalent: comments, reply comments, ex-parte notices, letters, and other submissions — ingested from the FCC ECFS public API (`/filings`) by `build_fcc_filings`. Requires an api.data.gov key (`DATA_GOV_API_KEY`). Incremental by `date_received`, deduped on `id_submission`; each window is pooled over whole walks until one is clean or the pool holds exactly the count ECFS aggregates for it. Because ECFS holds tens of millions of filings, a first run with no prior table is bounded to the trailing 30 days; deeper history is backfilled in slices via `FCC_SINCE` and/or scoped to specific proceedings via `FCC_PROCEEDINGS`.
+One FCC ECFS submission, including comments, replies, ex-parte notices and letters, keyed by `id_submission`. The public API requires an api.data.gov key. Incremental received-date windows are validated by whole or pooled list walks. A first run defaults to the trailing 30 days; earlier history requires an explicit date or proceeding scope.
 
-**Coverage.** Window, not the ECFS archive: filings ECFS received on or after 2026-08-24, when this table started, extended by a daily run. Earlier filings are held only for proceedings backfilled on purpose, so a proceeding's count here is not its ECFS total. Attachment text is extracted for a few selected PDFs only. Each daily run re-reads the trailing seven days by `date_received` and nothing older, so a filing ECFS disseminates more than a week after receiving it is missed, and `proceedings` is the assignment as last read: ECFS later moves filings out of `INBOX-…` placeholders into dockets, and a held filing keeps the placeholder. The newest day is partial, ending at the last run. *(measured 2026-09-28)*
+**Coverage.** Window. FCC ECFS filings received from 2026-08-24 onward, extended daily; earlier filings appear only in explicitly backfilled proceedings. Daily runs reread the trailing seven received-date days, so later dissemination can be missed. The newest day is partial. Proceedings reflect the last read and may retain a placeholder later reassigned by ECFS. PDF text extraction covers selected documents only; a held proceeding's count is not its ECFS total. *(measured 2026-09-28)*
 
 - **Parquet file:** `fcc_filings.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

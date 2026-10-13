@@ -378,6 +378,15 @@ def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str,
                     return {f.name: historical(value.get(f.name), f.type) for f in dtype}
                 return value
             mapped = {f.name: historical(mapped.get(f.name), f.type) for f in earlier}
+    if mapped is not None and dataset == "document_citations":
+        history = json.loads(files("spicy_regs").joinpath("citation_navigation_policy_history.json").read_text())
+        from spicy_regs.etl_receipts import DatasetPolicy
+
+        earlier = DatasetPolicy.from_descriptor(history[dataset]).subject_schema
+        if set(subject) - {"raw_source_row"} == set(earlier.names):
+            # Verify old values under their exact shape; the next writer can
+            # promote the retained namespace without relabeling old receipts.
+            mapped = {field.name: mapped[field.name] for field in earlier}
     if (mapped is not None and dataset == "document_citations"
             and raw.get("document_kind") == "court_opinion_derived_pdf"
             and subject.get("document_key") == raw.get("document_key")):

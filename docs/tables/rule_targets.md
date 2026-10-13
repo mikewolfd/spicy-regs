@@ -2,9 +2,9 @@
 
 # `rule_targets`
 
-**Rule identity edges (docket, CFR, RIN)**
+**Docket, CFR and agenda links**
 
-The rule-identity spine: one row per observed edge between a Regulations.gov docket, a CFR part and a RIN, with the `source` class of evidence that states it (docs/ontology.md, "The rule_targets carrier"). A missing or ambiguous reference leaves its target NULL rather than inventing one, and a `docket_document_cites_action_notice` row is a citation, with both targets NULL. Keyed (`docket_id`, `cfr_ref`, `rin`, `source`), NULLs included; joins `dockets` on `docket_id` and `unified_agenda` on `rin`. Built by `build_rule_targets`.
+One observed link between a Regulations.gov docket, a CFR part or a Unified Agenda RIN, with its source evidence class. Missing and ambiguous references remain unresolved. Action-notice citation rows can have both targets NULL. RIN navigation returns agenda editions; it does not merge proceedings. Main identifiers carry the relationship; receipts retain interpretation evidence.
 
 **Coverage.** Derived, and bounded by its inputs: `dockets`, `documents`, `federal_register` and `fr_docket_links` as the live snapshot's manifest pins them. *(measured 2026-09-28)*
 

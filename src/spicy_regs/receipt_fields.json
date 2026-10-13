@@ -698,7 +698,7 @@
     "attachments_json": "attachments"
    },
    "meanings": {
-    "attachments_json": "JSON array of the comment's downloadable attachments: `[{title, formats:[{url, format, size}]}]`, from the object's `included` attachments, keeping only formats with a file URL. NULL, never `[]`, when it keeps none, so NULL does not mean no attachments: an attachment regulations.gov lists with no downloadable file (a `restrictReasonType` such as `Copyrighted`) is left out, and a comment whose attachments are all such reads NULL. The source records of EPA-HQ-OW-2022-0114 list 58 such attachments on 16 records, all Copyrighted; -1540, whose only attachment is one, reads NULL. Rows ingested before the extract gained this column (2026-03-15) kept NULL until the comment re-read (cause proven in comments-full-reread-2026-09-28/attachments-root-cause/), which on receipt sha256:77a08369… (2026-10-03) has written 26,414,926 of 26,415,400 rows: a non-NULL `comment_reference_values_json`, which the same extract always writes, marks a row it wrote, though the re-read leaves a column NULL where two copies of the record's version disagree."
+    "attachments_json": "JSON list of attachment entries in the retained response, including restricted attachments and renditions without a URL. Entries retain `restrictReasonType`/`restrictReason` when stated. NULL means the included set was absent or unavailable in that row; [] means it contained no attachment entries. A format list can be NULL and an individual URL can be NULL. Older rows may retain the earlier filtered representation, so NULL never proves attachment absence."
    }
   },
   "comments_index": {
@@ -1263,7 +1263,6 @@
     "evidence_page": "The one-based page the match starts on, counted in the rendition's own page sequence (for a PDF, the page's position in the file, not the folio printed on it: BUDGET-2027-PER's PDF page 83 prints \"Governmental Receipts 75\"), where the rendition states page boundaries; NULL where it states none. A match straddling a page break is attributed to the page it began on.",
     "rule_name": "Which rule in `interpretation/citations.py` fired. Equal to `cite_kind` today, and a separate column because one kind can gain a second rule -- `interpretation/bill_signals.py` already runs two patterns for one bill number -- and the row must then say which one read it.",
     "rule_version": "That rule's version, so a re-extraction under a corrected rule is attributable the way `prompt_version` is; the merge prefers the larger value. Zero-padded decimal, because this column is compared as a string.",
-    "target_table": "The namespace the target key belongs to, as the rule names it (`congress_bills`, `gao products (product id as GAO prints it)`): what the key identifies, not whether a host holds a table of it.",
     "text_sha256": "Digest of the normalized text the offsets index into, and part of the identity. A span means nothing without it -- a re-extraction that moved one character moves every offset after it -- and keying on it is what stops two extractions of the same document from colliding on one identity and silently merging. The table is append-only per digest: a superseded extraction's rows are not retired, and a consumer filters to the digest `house_activity_reports.text_sha256` states for that document."
    }
   },
