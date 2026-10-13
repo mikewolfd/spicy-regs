@@ -750,6 +750,33 @@
         ]
       },
       {
+        "dataset": "cftc_comment_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "cftc_comments",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "cftc_rule_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "comment_attributes",
         "receipt_only": false,
         "policy_version": "regulations-native-v1",
@@ -1188,6 +1215,33 @@
         "processing_fields": [
           "selection_metadata"
         ]
+      },
+      {
+        "dataset": "edis_attachment_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "edis_attachments",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "edis_documents",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "fcc_filings",
@@ -2465,6 +2519,33 @@
         ]
       },
       {
+        "dataset": "ferc_accession_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "ferc_original_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "ferc_search_documents",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "financial_changes",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -2583,6 +2664,15 @@
           "source_schema",
           "entry_kind"
         ]
+      },
+      {
+        "dataset": "inspectors_general_report_metadata",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "law_code_sections",
@@ -3242,6 +3332,24 @@
         ]
       },
       {
+        "dataset": "sec_comment_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "file_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "sec_rulemakings",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "rulemaking_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "section_classifications",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -3302,6 +3410,33 @@
         "processing_fields": [
           "raw_source_row"
         ]
+      },
+      {
+        "dataset": "supreme_court_index_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "supreme_court_opinion_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "supreme_court_pdf_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "table3_historical_records",
@@ -8131,6 +8266,64 @@
       ]
     },
     {
+      "table": "cftc_comment_files",
+      "label": "Selected CFTC comment files",
+      "summary": "One selected comment-file observation, retaining its declared file association and recorded provider evidence.",
+      "coverage": "Sampled. Selected retained listing observations, with detail and file acquisition only where explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage requires separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "rule_observation_id",
+        "filename",
+        "file_url",
+        "body_sha256",
+        "pdf_version",
+        "provider_evidence_json",
+        "observed_at",
+        "comment_id",
+        "rule_id",
+        "file_id",
+        "bytes"
+      ]
+    },
+    {
+      "table": "cftc_comments",
+      "label": "Selected CFTC comment observations",
+      "summary": "One selected comment observation linked to its rule observation, preserving complete native listing and selected detail data.",
+      "coverage": "Sampled. Selected retained listing observations, with detail and file acquisition only where explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage requires separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "rule_observation_id",
+        "native_listing_row_json",
+        "native_detail_json",
+        "detail_state",
+        "observed_at",
+        "comment_id",
+        "rule_id"
+      ]
+    },
+    {
+      "table": "cftc_rule_observations",
+      "label": "Selected CFTC rule observations",
+      "summary": "One selected CFTC listing observation with its complete native listing data and declared detail/file scope.",
+      "coverage": "Sampled. Selected retained listing observations, with detail and file acquisition only where explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage requires separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "scope",
+        "native_listings_json",
+        "observed_at",
+        "rule_id"
+      ]
+    },
+    {
       "table": "ecfr_snapshot_sections",
       "label": "Dated eCFR snapshot content nodes",
       "summary": "One native content node within a retained dated eCFR response, linked to its snapshot. Node text, heading, XML position and attributes remain source observations.",
@@ -8172,6 +8365,72 @@
       ]
     },
     {
+      "table": "edis_attachment_files",
+      "label": "Selected USITC attachment-file inventory",
+      "summary": "One selected bulk-archive member associated with an investigation attachment, retaining the literal archive index and member inventory.",
+      "coverage": "Sampled. Selected retained investigation document, attachment and bulk-member observations. Native XML facts and literal archive-index facts remain separate; byte inventory does not establish PDF text or broader investigation coverage.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": "The rulemaking subject is the existing regulatory browse group. These rows describe USITC investigation filings, with literal investigation metadata retained.",
+      "columns": [
+        "observation_id",
+        "document_observation_id",
+        "source_artifact_id",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "observation_time_state",
+        "member_name",
+        "body_sha256",
+        "pdf_version",
+        "native_index_row_json",
+        "source_archive_index_base64",
+        "member_inventory_json",
+        "document_id",
+        "attachment_id",
+        "member_ordinal",
+        "bytes"
+      ]
+    },
+    {
+      "table": "edis_attachments",
+      "label": "Selected USITC investigation attachments",
+      "summary": "One selected attachment metadata observation linked to its investigation document observation.",
+      "coverage": "Sampled. Selected retained investigation document, attachment and bulk-member observations. Native XML facts and literal archive-index facts remain separate; byte inventory does not establish PDF text or broader investigation coverage.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": "The rulemaking subject is the existing regulatory browse group. These rows describe USITC investigation filings, with literal investigation metadata retained.",
+      "columns": [
+        "observation_id",
+        "document_observation_id",
+        "native_attachment_json",
+        "source_xml_base64",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "document_id",
+        "attachment_id"
+      ]
+    },
+    {
+      "table": "edis_documents",
+      "label": "Selected USITC investigation documents",
+      "summary": "One selected investigation document observation from USITC EDIS, retaining the native metadata and exact source XML.",
+      "coverage": "Sampled. Selected retained investigation document, attachment and bulk-member observations. Native XML facts and literal archive-index facts remain separate; byte inventory does not establish PDF text or broader investigation coverage.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": "The rulemaking subject is the existing regulatory browse group. These rows describe USITC investigation filings, with literal investigation metadata retained.",
+      "columns": [
+        "observation_id",
+        "native_document_json",
+        "source_xml_base64",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "document_id"
+      ]
+    },
+    {
       "table": "federal_register_issues",
       "label": "Historical Federal Register issue observations",
       "summary": "One publisher issue metadata observation with advertised renditions and exact retained rendition references. Issue metadata does not replace document text or complete granule history.",
@@ -8187,6 +8446,219 @@
         "metadata_json",
         "retained_renditions_json",
         "source_bytes"
+      ]
+    },
+    {
+      "table": "ferc_accession_files",
+      "label": "Selected FERC accession files",
+      "summary": "One file-list record occurrence for a selected FERC accession, retaining its original page and record position.",
+      "coverage": "Sampled. Complete selected retained search, accession-file and original-file observations. Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "accession",
+        "file_guid",
+        "source_page_json",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "record_index"
+      ]
+    },
+    {
+      "table": "ferc_original_files",
+      "label": "Selected FERC original-file observations",
+      "summary": "One selected original-file observation with its accession, file GUID, byte identity and media type.",
+      "coverage": "Sampled. Complete selected retained search, accession-file and original-file observations. Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "accession",
+        "file_guid",
+        "filename",
+        "media_type",
+        "body_sha256",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "bytes"
+      ]
+    },
+    {
+      "table": "ferc_search_documents",
+      "label": "Selected FERC search observations",
+      "summary": "One source search-record occurrence, retaining the complete original page and its record position.",
+      "coverage": "Sampled. Complete selected retained search, accession-file and original-file observations. Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "docket",
+        "reference",
+        "accession",
+        "description",
+        "source_page_json",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "record_index"
+      ]
+    },
+    {
+      "table": "inspectors_general_report_metadata",
+      "label": "Selected inspector-general report metadata",
+      "summary": "One original report-metadata observation at an immutable archive commit, retaining both complete parsed metadata and exact source JSON bytes.",
+      "coverage": "Sampled. Selected original report JSON at an immutable archive commit. Path year, record year and publication text remain separate; declared asset links do not establish acquired bodies or broader archive coverage.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "archive_commit",
+        "archive_member_path",
+        "archive_inspector",
+        "archive_path_year",
+        "git_blob_sha1",
+        "report_id",
+        "published_on",
+        "native_record_json",
+        "source_record_base64",
+        "declared_assets_json",
+        "declared_links_json",
+        "selected_scope",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "report_year"
+      ]
+    },
+    {
+      "table": "sec_comment_files",
+      "label": "Selected SEC comment files",
+      "summary": "One selected comment resource with all listing occurrences and source roles retained.",
+      "coverage": "Sampled. Complete selected retained rulemaking and comment-resource observations. Listing roles and discovery basis remain distinct; broader publisher coverage and current publisher state require separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "file_id",
+        "rulemaking_id",
+        "file_url",
+        "format",
+        "pdf_version",
+        "body_sha256",
+        "observed_at",
+        "occurrences_json",
+        "bytes",
+        "linearized_length"
+      ]
+    },
+    {
+      "table": "sec_rulemakings",
+      "label": "Selected SEC rulemaking observations",
+      "summary": "One selected rulemaking observation, retaining the source file number, title and comment-list discovery basis.",
+      "coverage": "Sampled. Complete selected retained rulemaking and comment-resource observations. Listing roles and discovery basis remain distinct; broader publisher coverage and current publisher state require separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "rulemaking_id",
+        "file_number",
+        "title",
+        "rule_url",
+        "discovery_method",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "source_record_json"
+      ]
+    },
+    {
+      "table": "supreme_court_index_observations",
+      "label": "Retained Supreme Court index renders",
+      "summary": "One retained Supreme Court term-index render with complete native index data and separate historical request facts.",
+      "coverage": "Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term coverage require separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "observation_key",
+        "index_url",
+        "stated_term",
+        "native_index_json",
+        "safe_response_headers_json",
+        "response_status_line",
+        "locator_binding",
+        "recorded_request_metadata_json",
+        "pdf_scope",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "observation_time_state",
+        "term_year"
+      ]
+    },
+    {
+      "table": "supreme_court_opinion_observations",
+      "label": "Retained Supreme Court opinion observations",
+      "summary": "One native opinion-row occurrence in a retained term-index render, including missing links, revisions and source page-start text.",
+      "coverage": "Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term coverage require separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "index_observation_id",
+        "release_number",
+        "date_decided",
+        "docket_number",
+        "case_name",
+        "holding",
+        "author_code",
+        "citation",
+        "pdf_url",
+        "pdf_kind",
+        "page_start",
+        "revisions_json",
+        "native_opinion_json",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "observation_time_state",
+        "term_year",
+        "opinion_index"
+      ]
+    },
+    {
+      "table": "supreme_court_pdf_observations",
+      "label": "Selected Supreme Court PDF probes",
+      "summary": "One selected retained PDF resource with every stating opinion or revision occurrence and its byte identity.",
+      "coverage": "Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term coverage require separate evidence.",
+      "kind": "sampled",
+      "measured_on": "2026-10-13",
+      "data_quality": null,
+      "columns": [
+        "observation_id",
+        "document_url",
+        "body_sha256",
+        "pdf_version",
+        "declaring_occurrences_json",
+        "safe_response_headers_json",
+        "response_status_line",
+        "locator_binding",
+        "recorded_request_metadata_json",
+        "source_uri",
+        "source_sha256",
+        "observed_at",
+        "observation_time_state",
+        "bytes",
+        "linearized_length"
       ]
     },
     {

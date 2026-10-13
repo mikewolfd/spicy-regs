@@ -10068,3 +10068,424 @@ tables:
       source_context: Native heading and placement context retained by the source reader.
       body_text: Readable text produced under the recorded source-reader transformation; original markup remains in the retained member.
       source_observation_json: Complete native content observation and source context retained as JSON.
+  sec_rulemakings:
+    label: Selected SEC rulemaking observations
+    subject: rulemaking
+    summary: One selected rulemaking observation, retaining the source file number, title and comment-list
+      discovery basis.
+    coverage: Sampled. Complete selected retained rulemaking and comment-resource observations. Listing
+      roles and discovery basis remain distinct; broader publisher coverage and current publisher state
+      require separate evidence.
+    measured_on: '2026-10-13'
+    grain: One selected rulemaking observation, retaining the source file number, title and comment-list
+      discovery basis.
+    identity_columns:
+    - rulemaking_id
+    columns:
+      rulemaking_id: Reader-generated identity joining the selected rulemaking observation and its comment
+        resources.
+      file_number: Source-stated SEC rulemaking file number.
+      title: Source-stated title.
+      rule_url: Selected rule page URI.
+      discovery_method: 'Recorded basis for the comment listing: publisher-stated or legacy-derived.'
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      source_record_json: Complete native source record represented as JSON.
+  sec_comment_files:
+    label: Selected SEC comment files
+    subject: rulemaking
+    summary: One selected comment resource with all listing occurrences and source roles retained.
+    coverage: Sampled. Complete selected retained rulemaking and comment-resource observations. Listing
+      roles and discovery basis remain distinct; broader publisher coverage and current publisher state
+      require separate evidence.
+    measured_on: '2026-10-13'
+    grain: One selected comment resource with all listing occurrences and source roles retained.
+    identity_columns:
+    - file_id
+    columns:
+      file_id: Source file identifier where stated; SEC uses a reader-generated resource identity.
+      rulemaking_id: Reader-generated identity joining the selected rulemaking observation and its comment
+        resources.
+      file_url: Source-declared selected file URI.
+      format: Maintained reader classification of the selected resource format.
+      pdf_version: Version stated by the retained PDF header; a byte-format observation.
+      body_sha256: SHA-256 of the selected resource or archive-member bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      occurrences_json: All native listing occurrences, preserving order, repeated links and source roles.
+      bytes: Exact selected resource or member byte size.
+      linearized_length: Length stated in the PDF linearization dictionary when present; checked against
+        retained byte size.
+  ferc_search_documents:
+    label: Selected FERC search observations
+    subject: rulemaking
+    summary: One source search-record occurrence, retaining the complete original page and its record
+      position.
+    coverage: Sampled. Complete selected retained search, accession-file and original-file observations.
+      Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate
+      evidence.
+    measured_on: '2026-10-13'
+    grain: One source search-record occurrence, retaining the complete original page and its record position.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      docket: Selected FERC docket value.
+      reference: Maintained source reference for the selected search record.
+      accession: Source-stated FERC accession value; repeated observations remain distinct.
+      description: Source-stated search-record description.
+      source_page_json: Complete original source page JSON; record_index locates this occurrence.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      record_index: Zero-based record position in the original source page.
+  ferc_accession_files:
+    label: Selected FERC accession files
+    subject: rulemaking
+    summary: One file-list record occurrence for a selected FERC accession, retaining its original page
+      and record position.
+    coverage: Sampled. Complete selected retained search, accession-file and original-file observations.
+      Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate
+      evidence.
+    measured_on: '2026-10-13'
+    grain: One file-list record occurrence for a selected FERC accession, retaining its original page
+      and record position.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      accession: Source-stated FERC accession value; repeated observations remain distinct.
+      file_guid: Source-stated FERC file GUID.
+      source_page_json: Complete original source page JSON; record_index locates this occurrence.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      record_index: Zero-based record position in the original source page.
+  ferc_original_files:
+    label: Selected FERC original-file observations
+    subject: rulemaking
+    summary: One selected original-file observation with its accession, file GUID, byte identity and media
+      type.
+    coverage: Sampled. Complete selected retained search, accession-file and original-file observations.
+      Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate
+      evidence.
+    measured_on: '2026-10-13'
+    grain: One selected original-file observation with its accession, file GUID, byte identity and media
+      type.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      accession: Source-stated FERC accession value; repeated observations remain distinct.
+      file_guid: Source-stated FERC file GUID.
+      filename: Source-stated file name.
+      media_type: Recorded media type of the selected original resource.
+      body_sha256: SHA-256 of the selected resource or archive-member bytes.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      bytes: Exact selected resource or member byte size.
+  cftc_rule_observations:
+    label: Selected CFTC rule observations
+    subject: rulemaking
+    summary: One selected CFTC listing observation with its complete native listing data and declared
+      detail/file scope.
+    coverage: Sampled. Selected retained listing observations, with detail and file acquisition only where
+      explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage
+      requires separate evidence.
+    measured_on: '2026-10-13'
+    grain: One selected CFTC listing observation with its complete native listing data and declared detail/file
+      scope.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      scope: Reader-declared selected listing, detail and file scope.
+      native_listings_json: Complete maintained native listing data for the selected observation.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      rule_id: Source-stated CFTC rule identifier.
+  cftc_comments:
+    label: Selected CFTC comment observations
+    subject: rulemaking
+    summary: One selected comment observation linked to its rule observation, preserving complete native
+      listing and selected detail data.
+    coverage: Sampled. Selected retained listing observations, with detail and file acquisition only where
+      explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage
+      requires separate evidence.
+    measured_on: '2026-10-13'
+    grain: One selected comment observation linked to its rule observation, preserving complete native
+      listing and selected detail data.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      rule_observation_id: Reader identity joining this occurrence to its selected rule observation.
+      native_listing_row_json: Complete maintained native comment listing row.
+      native_detail_json: Complete maintained native detail record when selected; null for listing-only
+        scope.
+      detail_state: Whether detail data was selected; listing-only observations preserve not-selected
+        explicitly.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      comment_id: Source-stated CFTC comment identifier.
+      rule_id: Source-stated CFTC rule identifier.
+  cftc_comment_files:
+    label: Selected CFTC comment files
+    subject: rulemaking
+    summary: One selected comment-file observation, retaining its declared file association and recorded
+      provider evidence.
+    coverage: Sampled. Selected retained listing observations, with detail and file acquisition only where
+      explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage
+      requires separate evidence.
+    measured_on: '2026-10-13'
+    grain: One selected comment-file observation, retaining its declared file association and recorded
+      provider evidence.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      rule_observation_id: Reader identity joining this occurrence to its selected rule observation.
+      filename: Source-stated file name.
+      file_url: Source-declared selected file URI.
+      body_sha256: SHA-256 of the selected resource or archive-member bytes.
+      pdf_version: Version stated by the retained PDF header; a byte-format observation.
+      provider_evidence_json: Original recorded provider evidence for the selected file, separate from
+        file bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      comment_id: Source-stated CFTC comment identifier.
+      rule_id: Source-stated CFTC rule identifier.
+      file_id: Source file identifier where stated; SEC uses a reader-generated resource identity.
+      bytes: Exact selected resource or member byte size.
+  edis_documents:
+    label: Selected USITC investigation documents
+    subject: rulemaking
+    summary: One selected investigation document observation from USITC EDIS, retaining the native metadata
+      and exact source XML.
+    coverage: Sampled. Selected retained investigation document, attachment and bulk-member observations.
+      Native XML facts and literal archive-index facts remain separate; byte inventory does not establish
+      PDF text or broader investigation coverage.
+    measured_on: '2026-10-13'
+    grain: One selected investigation document observation from USITC EDIS, retaining the native metadata
+      and exact source XML.
+    identity_columns:
+    - observation_id
+    data_quality: The rulemaking subject is the existing regulatory browse group. These rows describe
+      USITC investigation filings, with literal investigation metadata retained.
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      native_document_json: Complete maintained native investigation document metadata.
+      source_xml_base64: Exact original XML bytes encoded as Base64 text; decode to recover the original
+        XML.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      document_id: Source-stated USITC EDIS document identifier.
+  edis_attachments:
+    label: Selected USITC investigation attachments
+    subject: rulemaking
+    summary: One selected attachment metadata observation linked to its investigation document observation.
+    coverage: Sampled. Selected retained investigation document, attachment and bulk-member observations.
+      Native XML facts and literal archive-index facts remain separate; byte inventory does not establish
+      PDF text or broader investigation coverage.
+    measured_on: '2026-10-13'
+    grain: One selected attachment metadata observation linked to its investigation document observation.
+    identity_columns:
+    - observation_id
+    data_quality: The rulemaking subject is the existing regulatory browse group. These rows describe
+      USITC investigation filings, with literal investigation metadata retained.
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      document_observation_id: Reader identity joining an attachment or member to its selected document
+        observation.
+      native_attachment_json: Complete maintained native attachment metadata.
+      source_xml_base64: Exact original XML bytes encoded as Base64 text; decode to recover the original
+        XML.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      document_id: Source-stated USITC EDIS document identifier.
+      attachment_id: Source-stated USITC EDIS attachment identifier.
+  edis_attachment_files:
+    label: Selected USITC attachment-file inventory
+    subject: rulemaking
+    summary: One selected bulk-archive member associated with an investigation attachment, retaining the
+      literal archive index and member inventory.
+    coverage: Sampled. Selected retained investigation document, attachment and bulk-member observations.
+      Native XML facts and literal archive-index facts remain separate; byte inventory does not establish
+      PDF text or broader investigation coverage.
+    measured_on: '2026-10-13'
+    grain: One selected bulk-archive member associated with an investigation attachment, retaining the
+      literal archive index and member inventory.
+    identity_columns:
+    - observation_id
+    data_quality: The rulemaking subject is the existing regulatory browse group. These rows describe
+      USITC investigation filings, with literal investigation metadata retained.
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      document_observation_id: Reader identity joining an attachment or member to its selected document
+        observation.
+      source_artifact_id: Recorded identifier of the retained bulk source artifact.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      observation_time_state: Explicit state of the acquisition clock; unrecorded values stay unknown.
+      member_name: Literal member path within the selected bulk archive.
+      body_sha256: SHA-256 of the selected resource or archive-member bytes.
+      pdf_version: Version stated by the retained PDF header; a byte-format observation.
+      native_index_row_json: Complete literal bulk-index row for the selected member.
+      source_archive_index_base64: Exact bulk-index bytes encoded as Base64 text.
+      member_inventory_json: Complete selected archive-member inventory, retaining recorded header, size,
+        CRC and digest facts.
+      document_id: Source-stated USITC EDIS document identifier.
+      attachment_id: Source-stated USITC EDIS attachment identifier.
+      member_ordinal: Member position in the selected archive inventory.
+      bytes: Exact selected resource or member byte size.
+  supreme_court_index_observations:
+    label: Retained Supreme Court index renders
+    subject: courts
+    summary: One retained Supreme Court term-index render with complete native index data and separate
+      historical request facts.
+    coverage: Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing
+      links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term
+      coverage require separate evidence.
+    measured_on: '2026-10-13'
+    grain: One retained Supreme Court term-index render with complete native index data and separate historical
+      request facts.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      observation_key: Retained render label distinguishing repeated observations at the same term URI.
+      index_url: Maintained canonical term-index URI stated by the selected term.
+      stated_term: Literal term label retained from the index render.
+      native_index_json: Complete maintained native index, including every selected render row.
+      safe_response_headers_json: Selected recorded Content-Type, Date, Last-Modified, Content-Length
+        and ETag facts; acquisition time remains separate.
+      response_status_line: Recorded response status line where retained; null when unavailable.
+      locator_binding: Recorded basis binding the selected bytes to their declared URI.
+      recorded_request_metadata_json: Historical requested-URI, status, byte/digest and individual request-start
+        facts; completion and final URI remain separate unknowns.
+      pdf_scope: Explicit selected retained-probe scope, without all-term acquisition inference.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      observation_time_state: Explicit state of the acquisition clock; unrecorded values stay unknown.
+      term_year: Term year validated against the retained index.
+  supreme_court_opinion_observations:
+    label: Retained Supreme Court opinion observations
+    subject: courts
+    summary: One native opinion-row occurrence in a retained term-index render, including missing links,
+      revisions and source page-start text.
+    coverage: Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing
+      links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term
+      coverage require separate evidence.
+    measured_on: '2026-10-13'
+    grain: One native opinion-row occurrence in a retained term-index render, including missing links,
+      revisions and source page-start text.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      index_observation_id: Reader identity joining this native opinion row to its exact index render.
+      release_number: Literal release label, including decree labels.
+      date_decided: Source-stated decision date retained as text.
+      docket_number: Literal source docket number.
+      case_name: Source-stated case name.
+      holding: Literal source holding text.
+      author_code: Literal source author code.
+      citation: Source-stated citation text.
+      pdf_url: Literal selected-render PDF link; null if the row has no link.
+      pdf_kind: Maintained classification of the linked PDF form.
+      page_start: Source-stated volume page start retained as text; no end page is inferred.
+      revisions_json: Every native revision URI and literal revision label in source order.
+      native_opinion_json: Complete maintained native opinion row for this render occurrence.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      observation_time_state: Explicit state of the acquisition clock; unrecorded values stay unknown.
+      term_year: Term year validated against the retained index.
+      opinion_index: Native opinion-row position within its exact index render.
+  supreme_court_pdf_observations:
+    label: Selected Supreme Court PDF probes
+    subject: courts
+    summary: One selected retained PDF resource with every stating opinion or revision occurrence and
+      its byte identity.
+    coverage: Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing
+      links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term
+      coverage require separate evidence.
+    measured_on: '2026-10-13'
+    grain: One selected retained PDF resource with every stating opinion or revision occurrence and its
+      byte identity.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      document_url: Selected retained PDF resource URI stated by a selected index.
+      body_sha256: SHA-256 of the selected resource or archive-member bytes.
+      pdf_version: Version stated by the retained PDF header; a byte-format observation.
+      declaring_occurrences_json: Every selected-render opinion or revision occurrence stating this PDF
+        URI, in order.
+      safe_response_headers_json: Selected recorded Content-Type, Date, Last-Modified, Content-Length
+        and ETag facts; acquisition time remains separate.
+      response_status_line: Recorded response status line where retained; null when unavailable.
+      locator_binding: Recorded basis binding the selected bytes to their declared URI.
+      recorded_request_metadata_json: Historical requested-URI, status, byte/digest and individual request-start
+        facts; completion and final URI remain separate unknowns.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      observation_time_state: Explicit state of the acquisition clock; unrecorded values stay unknown.
+      bytes: Exact selected resource or member byte size.
+      linearized_length: Length stated in the PDF linearization dictionary when present; checked against
+        retained byte size.
+  inspectors_general_report_metadata:
+    label: Selected inspector-general report metadata
+    subject: oversight
+    summary: One original report-metadata observation at an immutable archive commit, retaining both complete
+      parsed metadata and exact source JSON bytes.
+    coverage: Sampled. Selected original report JSON at an immutable archive commit. Path year, record
+      year and publication text remain separate; declared asset links do not establish acquired bodies
+      or broader archive coverage.
+    measured_on: '2026-10-13'
+    grain: One original report-metadata observation at an immutable archive commit, retaining both complete
+      parsed metadata and exact source JSON bytes.
+    identity_columns:
+    - observation_id
+    columns:
+      observation_id: Reader-generated identity of this selected source observation.
+      archive_commit: Exact immutable Git commit selecting the original report metadata.
+      archive_member_path: Literal selected report-metadata member path at the archive commit.
+      archive_inspector: Inspector label retained from the archive path, separate from record metadata.
+      archive_path_year: Year text retained from the archive path, separate from report year and publication
+        text.
+      git_blob_sha1: Git blob SHA-1 recomputed from the exact original JSON bytes and checked against
+        the immutable tree binding.
+      report_id: Native report identifier.
+      published_on: Literal publication text in the source record.
+      native_record_json: Complete maintained parsed record, including unknown fields; numeric values
+        use the reader finite-float representation.
+      source_record_base64: Exact original JSON bytes encoded as Base64 text, retaining whitespace and
+        numeric spelling.
+      declared_assets_json: Source-declared asset URIs and types; declarations do not establish acquired
+        asset bodies.
+      declared_links_json: Source-declared inspector, landing and summary links.
+      selected_scope: Explicit metadata-only selection scope.
+      source_uri: Public URI identifying the selected source bytes.
+      source_sha256: SHA-256 of the original selected source bytes.
+      observed_at: Recorded acquisition observation time; null when unrecorded. Separate from publication
+        time.
+      report_year: Year value stated in the source record, separate from archive path year and publication
+        text.

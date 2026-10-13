@@ -17846,6 +17846,179 @@
       "statement_id"
     ]
   },
+  "cftc_comment_files": {
+    "table": "cftc_comment_files",
+    "label": "Selected CFTC comment files",
+    "summary": "One selected comment-file observation, retaining its declared file association and recorded provider evidence.",
+    "coverage": "Sampled. Selected retained listing observations, with detail and file acquisition only where explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage requires separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "rule_observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity joining this occurrence to its selected rule observation."
+      },
+      {
+        "column_name": "filename",
+        "column_type": "VARCHAR",
+        "description": "Source-stated file name."
+      },
+      {
+        "column_name": "file_url",
+        "column_type": "VARCHAR",
+        "description": "Source-declared selected file URI."
+      },
+      {
+        "column_name": "body_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the selected resource or archive-member bytes."
+      },
+      {
+        "column_name": "pdf_version",
+        "column_type": "VARCHAR",
+        "description": "Version stated by the retained PDF header; a byte-format observation."
+      },
+      {
+        "column_name": "provider_evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Original recorded provider evidence for the selected file, separate from file bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "comment_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated CFTC comment identifier."
+      },
+      {
+        "column_name": "rule_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated CFTC rule identifier."
+      },
+      {
+        "column_name": "file_id",
+        "column_type": "BIGINT",
+        "description": "Source file identifier where stated; SEC uses a reader-generated resource identity."
+      },
+      {
+        "column_name": "bytes",
+        "column_type": "BIGINT",
+        "description": "Exact selected resource or member byte size."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected comment-file observation, retaining its declared file association and recorded provider evidence.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "cftc_comments": {
+    "table": "cftc_comments",
+    "label": "Selected CFTC comment observations",
+    "summary": "One selected comment observation linked to its rule observation, preserving complete native listing and selected detail data.",
+    "coverage": "Sampled. Selected retained listing observations, with detail and file acquisition only where explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage requires separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "rule_observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity joining this occurrence to its selected rule observation."
+      },
+      {
+        "column_name": "native_listing_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native comment listing row."
+      },
+      {
+        "column_name": "native_detail_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native detail record when selected; null for listing-only scope."
+      },
+      {
+        "column_name": "detail_state",
+        "column_type": "VARCHAR",
+        "description": "Whether detail data was selected; listing-only observations preserve not-selected explicitly."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "comment_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated CFTC comment identifier."
+      },
+      {
+        "column_name": "rule_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated CFTC rule identifier."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected comment observation linked to its rule observation, preserving complete native listing and selected detail data.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "cftc_rule_observations": {
+    "table": "cftc_rule_observations",
+    "label": "Selected CFTC rule observations",
+    "summary": "One selected CFTC listing observation with its complete native listing data and declared detail/file scope.",
+    "coverage": "Sampled. Selected retained listing observations, with detail and file acquisition only where explicitly selected. Listing-only records preserve their unselected detail state; broader rule coverage requires separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "scope",
+        "column_type": "VARCHAR",
+        "description": "Reader-declared selected listing, detail and file scope."
+      },
+      {
+        "column_name": "native_listings_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native listing data for the selected observation."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "rule_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated CFTC rule identifier."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected CFTC listing observation with its complete native listing data and declared detail/file scope.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
   "ecfr_snapshot_sections": {
     "table": "ecfr_snapshot_sections",
     "label": "Dated eCFR snapshot content nodes",
@@ -17974,6 +18147,219 @@
       "snapshot_id"
     ]
   },
+  "edis_attachment_files": {
+    "table": "edis_attachment_files",
+    "label": "Selected USITC attachment-file inventory",
+    "summary": "One selected bulk-archive member associated with an investigation attachment, retaining the literal archive index and member inventory.",
+    "coverage": "Sampled. Selected retained investigation document, attachment and bulk-member observations. Native XML facts and literal archive-index facts remain separate; byte inventory does not establish PDF text or broader investigation coverage.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": "The rulemaking subject is the existing regulatory browse group. These rows describe USITC investigation filings, with literal investigation metadata retained.",
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "document_observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity joining an attachment or member to its selected document observation."
+      },
+      {
+        "column_name": "source_artifact_id",
+        "column_type": "VARCHAR",
+        "description": "Recorded identifier of the retained bulk source artifact."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "observation_time_state",
+        "column_type": "VARCHAR",
+        "description": "Explicit state of the acquisition clock; unrecorded values stay unknown."
+      },
+      {
+        "column_name": "member_name",
+        "column_type": "VARCHAR",
+        "description": "Literal member path within the selected bulk archive."
+      },
+      {
+        "column_name": "body_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the selected resource or archive-member bytes."
+      },
+      {
+        "column_name": "pdf_version",
+        "column_type": "VARCHAR",
+        "description": "Version stated by the retained PDF header; a byte-format observation."
+      },
+      {
+        "column_name": "native_index_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal bulk-index row for the selected member."
+      },
+      {
+        "column_name": "source_archive_index_base64",
+        "column_type": "VARCHAR",
+        "description": "Exact bulk-index bytes encoded as Base64 text."
+      },
+      {
+        "column_name": "member_inventory_json",
+        "column_type": "VARCHAR",
+        "description": "Complete selected archive-member inventory, retaining recorded header, size, CRC and digest facts."
+      },
+      {
+        "column_name": "document_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated USITC EDIS document identifier."
+      },
+      {
+        "column_name": "attachment_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated USITC EDIS attachment identifier."
+      },
+      {
+        "column_name": "member_ordinal",
+        "column_type": "BIGINT",
+        "description": "Member position in the selected archive inventory."
+      },
+      {
+        "column_name": "bytes",
+        "column_type": "BIGINT",
+        "description": "Exact selected resource or member byte size."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected bulk-archive member associated with an investigation attachment, retaining the literal archive index and member inventory.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "edis_attachments": {
+    "table": "edis_attachments",
+    "label": "Selected USITC investigation attachments",
+    "summary": "One selected attachment metadata observation linked to its investigation document observation.",
+    "coverage": "Sampled. Selected retained investigation document, attachment and bulk-member observations. Native XML facts and literal archive-index facts remain separate; byte inventory does not establish PDF text or broader investigation coverage.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": "The rulemaking subject is the existing regulatory browse group. These rows describe USITC investigation filings, with literal investigation metadata retained.",
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "document_observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity joining an attachment or member to its selected document observation."
+      },
+      {
+        "column_name": "native_attachment_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native attachment metadata."
+      },
+      {
+        "column_name": "source_xml_base64",
+        "column_type": "VARCHAR",
+        "description": "Exact original XML bytes encoded as Base64 text; decode to recover the original XML."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "document_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated USITC EDIS document identifier."
+      },
+      {
+        "column_name": "attachment_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated USITC EDIS attachment identifier."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected attachment metadata observation linked to its investigation document observation.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "edis_documents": {
+    "table": "edis_documents",
+    "label": "Selected USITC investigation documents",
+    "summary": "One selected investigation document observation from USITC EDIS, retaining the native metadata and exact source XML.",
+    "coverage": "Sampled. Selected retained investigation document, attachment and bulk-member observations. Native XML facts and literal archive-index facts remain separate; byte inventory does not establish PDF text or broader investigation coverage.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": "The rulemaking subject is the existing regulatory browse group. These rows describe USITC investigation filings, with literal investigation metadata retained.",
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "native_document_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native investigation document metadata."
+      },
+      {
+        "column_name": "source_xml_base64",
+        "column_type": "VARCHAR",
+        "description": "Exact original XML bytes encoded as Base64 text; decode to recover the original XML."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "document_id",
+        "column_type": "BIGINT",
+        "description": "Source-stated USITC EDIS document identifier."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected investigation document observation from USITC EDIS, retaining the native metadata and exact source XML.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
   "federal_register_issues": {
     "table": "federal_register_issues",
     "label": "Historical Federal Register issue observations",
@@ -18023,6 +18409,720 @@
     "grain": "One publisher issue metadata observation with advertised renditions and exact retained rendition references. Issue metadata does not replace document text or complete granule history.",
     "identity_columns": [
       "issue_observation_id"
+    ]
+  },
+  "ferc_accession_files": {
+    "table": "ferc_accession_files",
+    "label": "Selected FERC accession files",
+    "summary": "One file-list record occurrence for a selected FERC accession, retaining its original page and record position.",
+    "coverage": "Sampled. Complete selected retained search, accession-file and original-file observations. Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "accession",
+        "column_type": "VARCHAR",
+        "description": "Source-stated FERC accession value; repeated observations remain distinct."
+      },
+      {
+        "column_name": "file_guid",
+        "column_type": "VARCHAR",
+        "description": "Source-stated FERC file GUID."
+      },
+      {
+        "column_name": "source_page_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original source page JSON; record_index locates this occurrence."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "record_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based record position in the original source page."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One file-list record occurrence for a selected FERC accession, retaining its original page and record position.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "ferc_original_files": {
+    "table": "ferc_original_files",
+    "label": "Selected FERC original-file observations",
+    "summary": "One selected original-file observation with its accession, file GUID, byte identity and media type.",
+    "coverage": "Sampled. Complete selected retained search, accession-file and original-file observations. Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "accession",
+        "column_type": "VARCHAR",
+        "description": "Source-stated FERC accession value; repeated observations remain distinct."
+      },
+      {
+        "column_name": "file_guid",
+        "column_type": "VARCHAR",
+        "description": "Source-stated FERC file GUID."
+      },
+      {
+        "column_name": "filename",
+        "column_type": "VARCHAR",
+        "description": "Source-stated file name."
+      },
+      {
+        "column_name": "media_type",
+        "column_type": "VARCHAR",
+        "description": "Recorded media type of the selected original resource."
+      },
+      {
+        "column_name": "body_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the selected resource or archive-member bytes."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "bytes",
+        "column_type": "BIGINT",
+        "description": "Exact selected resource or member byte size."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected original-file observation with its accession, file GUID, byte identity and media type.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "ferc_search_documents": {
+    "table": "ferc_search_documents",
+    "label": "Selected FERC search observations",
+    "summary": "One source search-record occurrence, retaining the complete original page and its record position.",
+    "coverage": "Sampled. Complete selected retained search, accession-file and original-file observations. Page occurrences and literal identifiers remain distinct; broader publisher coverage requires separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "docket",
+        "column_type": "VARCHAR",
+        "description": "Selected FERC docket value."
+      },
+      {
+        "column_name": "reference",
+        "column_type": "VARCHAR",
+        "description": "Maintained source reference for the selected search record."
+      },
+      {
+        "column_name": "accession",
+        "column_type": "VARCHAR",
+        "description": "Source-stated FERC accession value; repeated observations remain distinct."
+      },
+      {
+        "column_name": "description",
+        "column_type": "VARCHAR",
+        "description": "Source-stated search-record description."
+      },
+      {
+        "column_name": "source_page_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original source page JSON; record_index locates this occurrence."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "record_index",
+        "column_type": "BIGINT",
+        "description": "Zero-based record position in the original source page."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One source search-record occurrence, retaining the complete original page and its record position.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "inspectors_general_report_metadata": {
+    "table": "inspectors_general_report_metadata",
+    "label": "Selected inspector-general report metadata",
+    "summary": "One original report-metadata observation at an immutable archive commit, retaining both complete parsed metadata and exact source JSON bytes.",
+    "coverage": "Sampled. Selected original report JSON at an immutable archive commit. Path year, record year and publication text remain separate; declared asset links do not establish acquired bodies or broader archive coverage.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "archive_commit",
+        "column_type": "VARCHAR",
+        "description": "Exact immutable Git commit selecting the original report metadata."
+      },
+      {
+        "column_name": "archive_member_path",
+        "column_type": "VARCHAR",
+        "description": "Literal selected report-metadata member path at the archive commit."
+      },
+      {
+        "column_name": "archive_inspector",
+        "column_type": "VARCHAR",
+        "description": "Inspector label retained from the archive path, separate from record metadata."
+      },
+      {
+        "column_name": "archive_path_year",
+        "column_type": "VARCHAR",
+        "description": "Year text retained from the archive path, separate from report year and publication text."
+      },
+      {
+        "column_name": "git_blob_sha1",
+        "column_type": "VARCHAR",
+        "description": "Git blob SHA-1 recomputed from the exact original JSON bytes and checked against the immutable tree binding."
+      },
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Native report identifier."
+      },
+      {
+        "column_name": "published_on",
+        "column_type": "VARCHAR",
+        "description": "Literal publication text in the source record."
+      },
+      {
+        "column_name": "native_record_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained parsed record, including unknown fields; numeric values use the reader finite-float representation."
+      },
+      {
+        "column_name": "source_record_base64",
+        "column_type": "VARCHAR",
+        "description": "Exact original JSON bytes encoded as Base64 text, retaining whitespace and numeric spelling."
+      },
+      {
+        "column_name": "declared_assets_json",
+        "column_type": "VARCHAR",
+        "description": "Source-declared asset URIs and types; declarations do not establish acquired asset bodies."
+      },
+      {
+        "column_name": "declared_links_json",
+        "column_type": "VARCHAR",
+        "description": "Source-declared inspector, landing and summary links."
+      },
+      {
+        "column_name": "selected_scope",
+        "column_type": "VARCHAR",
+        "description": "Explicit metadata-only selection scope."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "report_year",
+        "column_type": "BIGINT",
+        "description": "Year value stated in the source record, separate from archive path year and publication text."
+      }
+    ],
+    "subject": "oversight",
+    "grain": "One original report-metadata observation at an immutable archive commit, retaining both complete parsed metadata and exact source JSON bytes.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "sec_comment_files": {
+    "table": "sec_comment_files",
+    "label": "Selected SEC comment files",
+    "summary": "One selected comment resource with all listing occurrences and source roles retained.",
+    "coverage": "Sampled. Complete selected retained rulemaking and comment-resource observations. Listing roles and discovery basis remain distinct; broader publisher coverage and current publisher state require separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "file_id",
+        "column_type": "VARCHAR",
+        "description": "Source file identifier where stated; SEC uses a reader-generated resource identity."
+      },
+      {
+        "column_name": "rulemaking_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity joining the selected rulemaking observation and its comment resources."
+      },
+      {
+        "column_name": "file_url",
+        "column_type": "VARCHAR",
+        "description": "Source-declared selected file URI."
+      },
+      {
+        "column_name": "format",
+        "column_type": "VARCHAR",
+        "description": "Maintained reader classification of the selected resource format."
+      },
+      {
+        "column_name": "pdf_version",
+        "column_type": "VARCHAR",
+        "description": "Version stated by the retained PDF header; a byte-format observation."
+      },
+      {
+        "column_name": "body_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the selected resource or archive-member bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "occurrences_json",
+        "column_type": "VARCHAR",
+        "description": "All native listing occurrences, preserving order, repeated links and source roles."
+      },
+      {
+        "column_name": "bytes",
+        "column_type": "BIGINT",
+        "description": "Exact selected resource or member byte size."
+      },
+      {
+        "column_name": "linearized_length",
+        "column_type": "BIGINT",
+        "description": "Length stated in the PDF linearization dictionary when present; checked against retained byte size."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected comment resource with all listing occurrences and source roles retained.",
+    "identity_columns": [
+      "file_id"
+    ]
+  },
+  "sec_rulemakings": {
+    "table": "sec_rulemakings",
+    "label": "Selected SEC rulemaking observations",
+    "summary": "One selected rulemaking observation, retaining the source file number, title and comment-list discovery basis.",
+    "coverage": "Sampled. Complete selected retained rulemaking and comment-resource observations. Listing roles and discovery basis remain distinct; broader publisher coverage and current publisher state require separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "rulemaking_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity joining the selected rulemaking observation and its comment resources."
+      },
+      {
+        "column_name": "file_number",
+        "column_type": "VARCHAR",
+        "description": "Source-stated SEC rulemaking file number."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Source-stated title."
+      },
+      {
+        "column_name": "rule_url",
+        "column_type": "VARCHAR",
+        "description": "Selected rule page URI."
+      },
+      {
+        "column_name": "discovery_method",
+        "column_type": "VARCHAR",
+        "description": "Recorded basis for the comment listing: publisher-stated or legacy-derived."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "source_record_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native source record represented as JSON."
+      }
+    ],
+    "subject": "rulemaking",
+    "grain": "One selected rulemaking observation, retaining the source file number, title and comment-list discovery basis.",
+    "identity_columns": [
+      "rulemaking_id"
+    ]
+  },
+  "supreme_court_index_observations": {
+    "table": "supreme_court_index_observations",
+    "label": "Retained Supreme Court index renders",
+    "summary": "One retained Supreme Court term-index render with complete native index data and separate historical request facts.",
+    "coverage": "Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term coverage require separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "observation_key",
+        "column_type": "VARCHAR",
+        "description": "Retained render label distinguishing repeated observations at the same term URI."
+      },
+      {
+        "column_name": "index_url",
+        "column_type": "VARCHAR",
+        "description": "Maintained canonical term-index URI stated by the selected term."
+      },
+      {
+        "column_name": "stated_term",
+        "column_type": "VARCHAR",
+        "description": "Literal term label retained from the index render."
+      },
+      {
+        "column_name": "native_index_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native index, including every selected render row."
+      },
+      {
+        "column_name": "safe_response_headers_json",
+        "column_type": "VARCHAR",
+        "description": "Selected recorded Content-Type, Date, Last-Modified, Content-Length and ETag facts; acquisition time remains separate."
+      },
+      {
+        "column_name": "response_status_line",
+        "column_type": "VARCHAR",
+        "description": "Recorded response status line where retained; null when unavailable."
+      },
+      {
+        "column_name": "locator_binding",
+        "column_type": "VARCHAR",
+        "description": "Recorded basis binding the selected bytes to their declared URI."
+      },
+      {
+        "column_name": "recorded_request_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Historical requested-URI, status, byte/digest and individual request-start facts; completion and final URI remain separate unknowns."
+      },
+      {
+        "column_name": "pdf_scope",
+        "column_type": "VARCHAR",
+        "description": "Explicit selected retained-probe scope, without all-term acquisition inference."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "observation_time_state",
+        "column_type": "VARCHAR",
+        "description": "Explicit state of the acquisition clock; unrecorded values stay unknown."
+      },
+      {
+        "column_name": "term_year",
+        "column_type": "BIGINT",
+        "description": "Term year validated against the retained index."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One retained Supreme Court term-index render with complete native index data and separate historical request facts.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "supreme_court_opinion_observations": {
+    "table": "supreme_court_opinion_observations",
+    "label": "Retained Supreme Court opinion observations",
+    "summary": "One native opinion-row occurrence in a retained term-index render, including missing links, revisions and source page-start text.",
+    "coverage": "Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term coverage require separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "index_observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader identity joining this native opinion row to its exact index render."
+      },
+      {
+        "column_name": "release_number",
+        "column_type": "VARCHAR",
+        "description": "Literal release label, including decree labels."
+      },
+      {
+        "column_name": "date_decided",
+        "column_type": "VARCHAR",
+        "description": "Source-stated decision date retained as text."
+      },
+      {
+        "column_name": "docket_number",
+        "column_type": "VARCHAR",
+        "description": "Literal source docket number."
+      },
+      {
+        "column_name": "case_name",
+        "column_type": "VARCHAR",
+        "description": "Source-stated case name."
+      },
+      {
+        "column_name": "holding",
+        "column_type": "VARCHAR",
+        "description": "Literal source holding text."
+      },
+      {
+        "column_name": "author_code",
+        "column_type": "VARCHAR",
+        "description": "Literal source author code."
+      },
+      {
+        "column_name": "citation",
+        "column_type": "VARCHAR",
+        "description": "Source-stated citation text."
+      },
+      {
+        "column_name": "pdf_url",
+        "column_type": "VARCHAR",
+        "description": "Literal selected-render PDF link; null if the row has no link."
+      },
+      {
+        "column_name": "pdf_kind",
+        "column_type": "VARCHAR",
+        "description": "Maintained classification of the linked PDF form."
+      },
+      {
+        "column_name": "page_start",
+        "column_type": "VARCHAR",
+        "description": "Source-stated volume page start retained as text; no end page is inferred."
+      },
+      {
+        "column_name": "revisions_json",
+        "column_type": "VARCHAR",
+        "description": "Every native revision URI and literal revision label in source order."
+      },
+      {
+        "column_name": "native_opinion_json",
+        "column_type": "VARCHAR",
+        "description": "Complete maintained native opinion row for this render occurrence."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "observation_time_state",
+        "column_type": "VARCHAR",
+        "description": "Explicit state of the acquisition clock; unrecorded values stay unknown."
+      },
+      {
+        "column_name": "term_year",
+        "column_type": "BIGINT",
+        "description": "Term year validated against the retained index."
+      },
+      {
+        "column_name": "opinion_index",
+        "column_type": "BIGINT",
+        "description": "Native opinion-row position within its exact index render."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One native opinion-row occurrence in a retained term-index render, including missing links, revisions and source page-start text.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "supreme_court_pdf_observations": {
+    "table": "supreme_court_pdf_observations",
+    "label": "Selected Supreme Court PDF probes",
+    "summary": "One selected retained PDF resource with every stating opinion or revision occurrence and its byte identity.",
+    "coverage": "Sampled. Selected retained term-index renders and PDF probes. Repeated renders, missing links and revisions remain distinct; capture completion, redirects, PDF semantics and wider term coverage require separate evidence.",
+    "kind": "sampled",
+    "measured_on": "2026-10-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Reader-generated identity of this selected source observation."
+      },
+      {
+        "column_name": "document_url",
+        "column_type": "VARCHAR",
+        "description": "Selected retained PDF resource URI stated by a selected index."
+      },
+      {
+        "column_name": "body_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the selected resource or archive-member bytes."
+      },
+      {
+        "column_name": "pdf_version",
+        "column_type": "VARCHAR",
+        "description": "Version stated by the retained PDF header; a byte-format observation."
+      },
+      {
+        "column_name": "declaring_occurrences_json",
+        "column_type": "VARCHAR",
+        "description": "Every selected-render opinion or revision occurrence stating this PDF URI, in order."
+      },
+      {
+        "column_name": "safe_response_headers_json",
+        "column_type": "VARCHAR",
+        "description": "Selected recorded Content-Type, Date, Last-Modified, Content-Length and ETag facts; acquisition time remains separate."
+      },
+      {
+        "column_name": "response_status_line",
+        "column_type": "VARCHAR",
+        "description": "Recorded response status line where retained; null when unavailable."
+      },
+      {
+        "column_name": "locator_binding",
+        "column_type": "VARCHAR",
+        "description": "Recorded basis binding the selected bytes to their declared URI."
+      },
+      {
+        "column_name": "recorded_request_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Historical requested-URI, status, byte/digest and individual request-start facts; completion and final URI remain separate unknowns."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Public URI identifying the selected source bytes."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original selected source bytes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded acquisition observation time; null when unrecorded. Separate from publication time."
+      },
+      {
+        "column_name": "observation_time_state",
+        "column_type": "VARCHAR",
+        "description": "Explicit state of the acquisition clock; unrecorded values stay unknown."
+      },
+      {
+        "column_name": "bytes",
+        "column_type": "BIGINT",
+        "description": "Exact selected resource or member byte size."
+      },
+      {
+        "column_name": "linearized_length",
+        "column_type": "BIGINT",
+        "description": "Length stated in the PDF linearization dictionary when present; checked against retained byte size."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One selected retained PDF resource with every stating opinion or revision occurrence and its byte identity.",
+    "identity_columns": [
+      "observation_id"
     ]
   },
   "table3_historical_records": {
@@ -19149,6 +20249,33 @@
         ]
       },
       {
+        "dataset": "cftc_comment_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "cftc_comments",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "cftc_rule_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "comment_attributes",
         "receipt_only": false,
         "policy_version": "regulations-native-v1",
@@ -19587,6 +20714,33 @@
         "processing_fields": [
           "selection_metadata"
         ]
+      },
+      {
+        "dataset": "edis_attachment_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "edis_attachments",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "edis_documents",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "fcc_filings",
@@ -20864,6 +22018,33 @@
         ]
       },
       {
+        "dataset": "ferc_accession_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "ferc_original_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "ferc_search_documents",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "financial_changes",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -20982,6 +22163,15 @@
           "source_schema",
           "entry_kind"
         ]
+      },
+      {
+        "dataset": "inspectors_general_report_metadata",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "law_code_sections",
@@ -21641,6 +22831,24 @@
         ]
       },
       {
+        "dataset": "sec_comment_files",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "file_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "sec_rulemakings",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "rulemaking_id"
+        ],
+        "processing_fields": []
+      },
+      {
         "dataset": "section_classifications",
         "receipt_only": false,
         "policy_version": "legislative-documents/1",
@@ -21701,6 +22909,33 @@
         "processing_fields": [
           "raw_source_row"
         ]
+      },
+      {
+        "dataset": "supreme_court_index_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "supreme_court_opinion_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
+      },
+      {
+        "dataset": "supreme_court_pdf_observations",
+        "receipt_only": false,
+        "policy_version": "retained-native-collections-v1",
+        "identity_columns": [
+          "observation_id"
+        ],
+        "processing_fields": []
       },
       {
         "dataset": "table3_historical_records",
