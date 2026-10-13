@@ -292,14 +292,16 @@ def retained_identity_row(table, original, *, diagnostics=None, source_schema=No
         values, statuses = document_context_fields(native, source_created_at=original.get('source_created_at'),
                                                     source_updated_at=original.get('source_updated_at'))
         row.update(values)
-        if diagnostics is not None:diagnostics.update(field_statuses=statuses, legacy_bridge='document-context/1')
+        if diagnostics is not None:
+            diagnostics.update(field_statuses=statuses, legacy_bridge='document-context/1')
     elif table == 'fec_retained_csv_observations' and 'native_fields_json' in original:
         from spicy_regs.transforms.fec_context_shape import csv_context_fields
         if original.get('mapping_version') != 'fec-research-context/1':
             raise ValueError('Retained CSV fields require their captured /1 mapping')
         values, statuses = csv_context_fields(node('native_fields_json'))
         row.update(values)
-        if diagnostics is not None:diagnostics.update(field_statuses=statuses, legacy_bridge='csv-context/1')
+        if diagnostics is not None:
+            diagnostics.update(field_statuses=statuses, legacy_bridge='csv-context/1')
     elif table == 'fec_research_response_outcomes' and 'native_payload_json' in original:
         from spicy_regs.transforms.fec_context_shape import response_capture_disposition
         if original.get('mapping_version') != 'fec-research-context/1':
@@ -307,7 +309,8 @@ def retained_identity_row(table, original, *, diagnostics=None, source_schema=No
         # The payload may be a dict/list/scalar/null; reported shape/refusal is
         # sufficient and the exact opaque payload remains in original overrides.
         row['capture_disposition'] = response_capture_disposition(original.get('profile_refusal'), original.get('payload_shape'))
-        if diagnostics is not None:diagnostics.update(legacy_bridge='response-context/1', capture_disposition=row['capture_disposition'])
+        if diagnostics is not None:
+            diagnostics.update(legacy_bridge='response-context/1', capture_disposition=row['capture_disposition'])
     elif table == 'fec_research_source_pages' and 'content_status' not in original:
         from spicy_regs.transforms.fec_context_shape import source_page_body
         body, status = source_page_body(original.get('title'), original.get('text'), original.get('source_url'))
@@ -610,7 +613,8 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                         if adopted is not None:
                             overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
                         source_input = {'fec_retained_overrides': overrides} if overrides else {}
-                        if retained_diagnostics:source_input['fec_retained_interpretation'] = retained_diagnostics
+                        if retained_diagnostics:
+                            source_input['fec_retained_interpretation'] = retained_diagnostics
                         writer.emit(table, row, input_witness=witness,
                             source_input=source_input or None, native_filing_subject=adopted)
                 policy = writer.policies[table]

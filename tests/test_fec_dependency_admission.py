@@ -1,8 +1,6 @@
 """Small retained dependency admission is distinct from complete generation admission."""
-from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-import json
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -24,11 +22,13 @@ def selected(tmp_path, *, outcomes=None, filings=None, scope='self', target=None
     base=headers(filings=filing_rows)[0]
     for number,status in enumerate(outcomes or ['resolved_native_filing_key']):
         row={**deepcopy(base),'target_record_id':'synthetic-header-'+str(number),'association_status':status}
-        if status!='resolved_native_filing_key':row.update(filing_key=None,filing_observation_count=0,filing_observation_ids=[])
+        if status!='resolved_native_filing_key':
+            row.update(filing_key=None,filing_observation_count=0,filing_observation_ids=[])
         raw={**row,'record_id':row['target_record_id']}
         row['record_id']=_base(raw,row['target_table'],GEN,row['selection_evidence_sha256'],row['association_basis'])['record_id']
         header_rows.append(row)
-    f=tmp_path/'filings.parquet';h=tmp_path/'headers.parquet'
+    f=tmp_path/'filings.parquet'
+    h=tmp_path/'headers.parquet'
     pq.write_table(pa.Table.from_pylist(filing_rows,schema=native_schema),f)
     pq.write_table(pa.Table.from_pylist(header_rows,schema=ASSOCIATION_SCHEMA),h,row_group_size=512)
     selection=FilingAssociationInputs(GEN,target,[TypedInput(f,_sha(f),len(filing_rows))],{NAMESPACE:EVIDENCE},[TypedInput(h,_sha(h),len(header_rows))],filing_generation_scope=scope)
@@ -56,13 +56,19 @@ def test_complete_selected_header_population_preserves_all_recorded_refusals(tmp
 
 
 def test_shared_prepare_reads_each_population_once_and_keeps_number_refusals(tmp_path,monkeypatch):
-    selection,filings,_=selected(tmp_path);calls=[];native=pq.ParquetFile
+    selection,filings,_=selected(tmp_path)
+    calls=[]
+    native=pq.ParquetFile
     class Source:
-        def __init__(self,path):self.inner=native(path);self.path=str(path)
+        def __init__(self,path):
+            self.inner=native(path)
+            self.path=str(path)
         def __enter__(self):return self
         def __exit__(self,*args):self.inner.close()
         def __getattr__(self,name):return getattr(self.inner,name)
-        def read(self,**kwargs):calls.append(self.path);return self.inner.read(**kwargs)
+        def read(self,**kwargs):
+            calls.append(self.path)
+            return self.inner.read(**kwargs)
     monkeypatch.setattr(pq,'ParquetFile',Source)
     apply,proof=selection.prepare('fec_receipts',RECEIPT_SCHEMA,lambda:None)
     assert calls==[str(selection.filings[0].path),str(selection.header_associations[0].path)]
@@ -94,9 +100,11 @@ def test_exact_current_header_identity_and_witness_refusals(tmp_path,change):
              'witness_ids':{'filing_observation_ids':['missing-target']},
              'unresolved_key':{'association_status':'unresolved_source_authority'}}[change]
     row.update(updates)
-    path=selection.header_associations[0].path;pq.write_table(pa.Table.from_pylist(rows,schema=ASSOCIATION_SCHEMA),path)
+    path=selection.header_associations[0].path
+    pq.write_table(pa.Table.from_pylist(rows,schema=ASSOCIATION_SCHEMA),path)
     selection=replace(selection,header_associations=[TypedInput(path,_sha(path),1)])
-    with pytest.raises(ValueError):admit_filing_dependency_selection(selection)
+    with pytest.raises(ValueError):
+        admit_filing_dependency_selection(selection)
 
 
 @pytest.mark.parametrize('kind',['filing','header'])
@@ -115,7 +123,8 @@ def test_complete_native_schema_refused_before_corresponding_decoded_read(tmp_pa
 def test_precharged_complete_decode_refusal_stops_before_read(tmp_path):
     selection,_,_=selected(tmp_path)
     def refuse(stage,item,**values):
-        if stage=='decode':raise RuntimeError('Synthetic decoder budget stop')
+        if stage=='decode':
+            raise RuntimeError('Synthetic decoder budget stop')
     with pytest.raises(RuntimeError,match='Synthetic decoder budget stop'):
         admit_filing_dependency_selection(selection,on_read=refuse)
 

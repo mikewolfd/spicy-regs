@@ -320,7 +320,8 @@ def test_retained_registration_legacy_years_preserve_exact_receipt_values(tmp_pa
                                 source_input={'fec_retained_overrides': overrides})
     assert subject['election_year_status'] == status
     [internal] = read_identity_rows(tmp_path/'statement', 'fec_registration_statements', generation_id='legacy')
-    moved = internal['conversion_inputs']; held = internal['source_input']['fec_retained_overrides']
+    moved = internal['conversion_inputs']
+    held = internal['source_input']['fec_retained_overrides']
     restored = {name: held.get(name, moved.get(name, internal.get(name))) for name in original}
     assert restored == original
     assert all(type(restored[name]) is type(value) for name, value in original.items())
@@ -358,7 +359,8 @@ def test_retained_registration_current_malformed_type_still_refuses(tmp_path, dr
     malformed = {**current, 'election_year': '2024'}
     if drop_evidence:
         for name in ('election_year','report_year'):
-            malformed.pop(name+'_raw');malformed.pop(name+'_status')
+            malformed.pop(name+'_raw')
+            malformed.pop(name+'_status')
     row, overrides = retained_identity_row('fec_registration_statements', malformed)
     assert row == malformed and overrides == {}
     with IdentityReceiptWriter(tmp_path/'bad-current', generation_id='current', tables=['fec_registration_statements']) as writer:
@@ -634,9 +636,12 @@ def test_captured_legacy_counts_restore_raw_types_and_refusals(tmp_path,table,fi
     from spicy_regs.etl_receipts import exact_json
     from tests.test_fec_identity_receipts import WITNESS
     schema=pa.ipc.read_schema(pa.BufferReader(base64.b64decode(CAPTURED_REMAINING_SCHEMAS_011[table])))
-    original=dict.fromkeys(schema.names);original.update(collection_id='synthetic',**{field:raw})
-    if table=='fec_collections':original['relationship_count']='0002'
-    else:original.update(mapping_status='raw-status',mapping_reason='raw-reason',outputs_json='{"raw":[false,1.0]}')
+    original=dict.fromkeys(schema.names)
+    original.update(collection_id='synthetic',**{field:raw})
+    if table=='fec_collections':
+        original['relationship_count']='0002'
+    else:
+        original.update(mapping_status='raw-status',mapping_reason='raw-reason',outputs_json='{"raw":[false,1.0]}')
     diagnostic={}
     row,overrides=retained_identity_row(table,original,diagnostics=diagnostic,source_schema=schema)
     assert type(row[field]) is type(native) and row[field]==native
@@ -645,7 +650,8 @@ def test_captured_legacy_counts_restore_raw_types_and_refusals(tmp_path,table,fi
     with IdentityReceiptWriter(tmp_path/'native',generation_id='count',tables=[table]) as writer:
         writer.emit(table,row,input_witness=WITNESS,source_input={'fec_retained_overrides':overrides,'fec_retained_interpretation':diagnostic})
     [internal]=read_identity_rows(tmp_path/'native',table,generation_id='count')
-    held=internal['source_input']['fec_retained_overrides'];moved=internal['conversion_inputs']
+    held=internal['source_input']['fec_retained_overrides']
+    moved=internal['conversion_inputs']
     restored={name:held.get(name,moved.get(name,internal.get(name))) for name in original}
     assert exact_json(restored)==exact_json(original)
     assert internal[field]==native and type(internal[field]) is type(native)
@@ -660,8 +666,10 @@ def test_current_count_schemas_keep_strict_badtype_refusal(tmp_path,table,field)
     from tests.test_fec_identity_receipts import WITNESS
     schema=COLLECTION_SCHEMA if table=='fec_collections' else DISPOSITION_SCHEMA
     validate_identity_schema(table,schema)
-    original=dict.fromkeys(schema.names);original.update(collection_id='current',**{field:'0171'})
-    diagnostic={};row,overrides=retained_identity_row(table,original,diagnostics=diagnostic,source_schema=schema)
+    original=dict.fromkeys(schema.names)
+    original.update(collection_id='current',**{field:'0171'})
+    diagnostic={}
+    row,overrides=retained_identity_row(table,original,diagnostics=diagnostic,source_schema=schema)
     assert row==original and overrides=={} and diagnostic=={}
     with IdentityReceiptWriter(tmp_path/'strict',generation_id='current',tables=[table]) as writer:
         with pytest.raises(ValueError,match=field+': native integer required'):
@@ -685,7 +693,8 @@ def test_legacy_count_bridges_reach_full_production_admission(tmp_path,monkeypat
         [held]=source_reader.read_subjects('fec_collections')
         assert held['record_count']==171 and held['relationship_count']==2
         staged=staged_snapshot(snapshot,native,operation)
-        target=tmp_path/'empty-filings.parquet';pq.write_table(pa.Table.from_batches([],schema=dataset_policy('fec_filings').subject_schema),target)
+        target=tmp_path/'empty-filings.parquet'
+        pq.write_table(pa.Table.from_batches([],schema=dataset_policy('fec_filings').subject_schema),target)
         selection=FilingAssociationInputs(staged['families']['fec-observations']['artifactDigest'],None,[TypedInput(target,_sha(target),0)],{},filing_generation_scope='self')
         complete=build_retained_family('fec-query',snapshot['families']['fec-query'],snapshot,retained,tmp_path/'native-query',operation=operation,read_snapshot=staged,filing_associations=selection,observation_generation=native)
         _,reader,_=operation.admit_generation(complete)
@@ -701,7 +710,9 @@ def test_captured_legacy_count_missing_field_has_explicit_diagnostics(table,fiel
     # Synthetic missing key is a helper diagnostic, not a decoded Arrow row.
     from spicy_regs.fec_native_conversion import retained_identity_row
     schema=pa.ipc.read_schema(pa.BufferReader(base64.b64decode(CAPTURED_REMAINING_SCHEMAS_011[table])))
-    original=dict.fromkeys(schema.names);original.pop(field);diagnostics={}
+    original=dict.fromkeys(schema.names)
+    original.pop(field)
+    diagnostics={}
     row,_=retained_identity_row(table,original,diagnostics=diagnostics,source_schema=schema)
     assert row[field] is None
     assert diagnostics['field_statuses'][field]=='source_missing'
