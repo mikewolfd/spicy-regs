@@ -414,3 +414,215 @@ def test_historical_rules_and_counts_remain_strict(tmp_path, mutation):
         spec['ruleVersion'] = 'new-rule'
     with pytest.raises(ValueError):
         qualify_exact_content(current, spec, 0, proof)
+
+
+@pytest.fixture
+def reviewed_history(tmp_path, monkeypatch):
+    """Execute the exact old measure body on tiny inputs, not a relabelled result."""
+    import importlib.util
+    import inspect
+    import sys
+    from spicy_regs import navigation_measurements as measurements
+
+    current = inspect.getsource(MeasurementCache.measure)
+    new = """                                               target['table']: target['schema']},
+                                               generation_pins=navigation.selected_generation_pins(index))[0]
+        # The key scan and recipe digest must use the same bound guards that
+        # selected metadata and admission use, including exact FEC pins.
+        original = deepcopy(spec)"""
+    old = """                                               target['table']: target['schema']})[0]
+        original['field'] = spec['field']"""
+    assert new in current
+    previous = current.replace(new, old, 1)
+    assert measurements.digest([measurements.VERSION, measurements.duckdb.__version__, previous]) == \
+        measurements._REVIEWED_AGGREGATION[0]
+    path = tmp_path / 'historical_measure_fixture.py'
+    path.write_text('from spicy_regs.navigation_measurements import *\n\nclass HistoricalCache(MeasurementCache):\n'
+                    + previous)
+    loader = importlib.util.spec_from_file_location('historical_measure_fixture', path)
+    assert loader is not None and loader.loader is not None
+    module = importlib.util.module_from_spec(loader)
+    monkeypatch.setitem(sys.modules, loader.name, module)
+    loader.loader.exec_module(module)
+    index, paths, spec = selection(tmp_path, split=True)
+    proof = module.HistoricalCache(tmp_path / 'old-cache').measure(index, paths, spec, source_identity=('id',))
+    assert proof['binding']['aggregation'] == measurements._REVIEWED_AGGREGATION[0]
+    return index, spec, proof
+
+
+def test_reviewed_aggregation_reuses_old_execution_without_mutating_or_relabelling_it(reviewed_history):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation, digest
+    index, spec, proof = reviewed_history
+    before = deepcopy(proof)
+    assert attached_directions(index, spec, 0, proof) is None
+    with pytest.raises(ValueError):
+        qualify_exact_content(index, spec, 0, proof)  # The ordinary guard stays strict.
+    qualified = qualify_compatible_aggregation(index, spec, 0, proof)
+    assert proof == before == qualified['historicalProof']
+    assert qualified['historicalDigest'] == digest(before)
+    directions = attached_directions(index, spec, 0, qualified)
+    assert directions['forward']['measurement']['matched'] == proof['matched']
+    assert directions['reverse']['measurement']['matchedTargetRows'] == proof['reverse']['matchedTargetRows']
+    assert directions['forward']['measurement']['qualification'] == 'reviewed_aggregation_reuse'
+
+
+@pytest.mark.parametrize('mutation', ['hash', 'size', 'rows', 'type', 'order', 'missing', 'duplicate'])
+def test_reviewed_aggregation_refuses_changed_ordered_content(reviewed_history, mutation):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation
+    index, spec, proof = reviewed_history
+    changed = deepcopy(index)
+    descriptor = changed['families']['fixture']['tables']['source.parquet']
+    if mutation == 'hash':
+        descriptor['members'][0]['sha256'] = 'sha256:' + 'c' * 64
+    elif mutation == 'size':
+        descriptor['members'][0]['byteSize'] += 1
+    elif mutation == 'rows':
+        descriptor['members'][0]['rows'] += 1
+        descriptor['rows'] += 1
+    elif mutation == 'type':
+        descriptor['columns'][0][1] = 'BIGINT'
+    elif mutation == 'order':
+        descriptor['members'].reverse()
+    elif mutation == 'missing':
+        descriptor['members'].pop()
+    else:
+        descriptor['members'][1] = deepcopy(descriptor['members'][0])
+    with pytest.raises((ValueError, KeyError)):
+        qualify_compatible_aggregation(changed, spec, 0, proof)
+
+
+@pytest.mark.parametrize('mutation', ['hash', 'size', 'rows', 'type'])
+def test_reviewed_aggregation_also_refuses_changed_target_content(reviewed_history, mutation):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation
+    index, spec, proof = reviewed_history
+    changed = deepcopy(index)
+    descriptor = changed['families']['fixture']['tables']['target.parquet']
+    if mutation == 'hash':
+        descriptor['sha256'] = 'sha256:' + 'c' * 64
+    elif mutation == 'size':
+        descriptor['byteSize'] += 1
+    elif mutation == 'rows':
+        descriptor['rows'] += 1
+    else:
+        descriptor['columns'][0][1] = 'BIGINT'
+    with pytest.raises(ValueError):
+        qualify_compatible_aggregation(changed, spec, 0, proof)
+
+
+@pytest.mark.parametrize('mutation', ['recipe', 'guard', 'identity', 'counts', 'import', 'route', 'aggregation'])
+def test_reviewed_aggregation_keeps_recipe_count_import_and_route_checks(reviewed_history, mutation):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation
+    index, spec, proof = deepcopy(reviewed_history)
+    if mutation == 'recipe':
+        spec['ruleVersion'] = 'unreviewed'
+    elif mutation == 'guard':
+        spec['targets'][0]['guards'] = [guard('congress', row=True, values=('119',))]
+    elif mutation == 'identity':
+        proof['sourceIdentity']['columns'] = ['congress']
+    elif mutation == 'counts':
+        proof['matched'] += 1
+    elif mutation == 'import':
+        proof['targetPopulation']['populationProof'] = {'authority': 'bad', 'guardImplementation': 'bad'}
+    elif mutation == 'route':
+        proof['route']['targetIndex'] = 1
+    else:
+        proof['binding']['aggregation'] = 'sha256:' + 'c' * 64
+    with pytest.raises(ValueError):
+        qualify_compatible_aggregation(index, spec, 0, proof)
+
+
+@pytest.mark.parametrize('mutation', ['duckdb', 'pyarrow', 'key', 'measure'])
+def test_reviewed_pair_fails_closed_after_runtime_key_or_measure_changes(reviewed_history, monkeypatch, mutation):
+    from spicy_regs import navigation_measurements as measurements
+    index, spec, proof = reviewed_history
+    if mutation == 'duckdb':
+        monkeypatch.setattr(measurements.duckdb, '__version__', 'future-runtime')
+    elif mutation == 'pyarrow':
+        monkeypatch.setattr(measurements.pa, '__version__', 'future-runtime')
+    elif mutation == 'key':
+        monkeypatch.setattr(measurements, 'implementation_digest', lambda: 'sha256:' + 'c' * 64)
+    else:
+        original = measurements.inspect.getsource
+        monkeypatch.setattr(measurements.inspect, 'getsource',
+                            lambda f: original(f) + ('\n# changed' if f is MeasurementCache.measure else ''))
+    with pytest.raises(ValueError, match='implementation pair'):
+        measurements.qualify_compatible_aggregation(index, spec, 0, proof)
+
+
+@pytest.mark.parametrize('mutation', ['binding', 'historical', 'digest', 'implementation', 'compatibility'])
+def test_attacher_recreates_the_complete_reviewed_wrapper(reviewed_history, mutation):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation
+    index, spec, proof = reviewed_history
+    qualified = qualify_compatible_aggregation(index, spec, 0, proof)
+    if mutation == 'binding':
+        qualified['binding']['aggregation'] = proof['binding']['aggregation']
+    elif mutation == 'historical':
+        qualified['historicalProof']['matched'] += 1
+    elif mutation == 'digest':
+        qualified['historicalDigest'] = 'sha256:' + 'c' * 64
+    elif mutation == 'implementation':
+        qualified['qualificationImplementation'] = 'sha256:' + 'c' * 64
+    else:
+        qualified['compatibility'] = 'unreviewed'
+    assert attached_directions(index, spec, 0, qualified) is None
+
+
+def test_existing_reviewed_wrapper_refuses_count_guard_implementation_drift(reviewed_history, monkeypatch):
+    from spicy_regs import navigation_measurements as measurements
+    index, spec, proof = reviewed_history
+    qualified = measurements.qualify_compatible_aggregation(index, spec, 0, proof)
+    original = measurements.count_value
+    monkeypatch.setattr(measurements, 'count_value', lambda value: original(value))
+    assert measurements.attached_directions(index, spec, 0, qualified) is None
+
+
+@pytest.mark.parametrize('malformed', [None, [], 'not-a-measurement'])
+def test_attacher_refuses_malformed_historical_objects_without_crashing(reviewed_history, malformed):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation
+    index, spec, proof = reviewed_history
+    qualified = qualify_compatible_aggregation(index, spec, 0, proof)
+    qualified['historicalProof'] = malformed
+    assert attached_directions(index, spec, 0, qualified) is None
+    qualified['historicalProof'] = {**proof, 'binding': malformed}
+    assert attached_directions(index, spec, 0, qualified) is None
+
+
+@pytest.mark.parametrize('mutation', ['target', 'source', 'import_list', 'import_string', 'import_empty', 'import_null'])
+def test_reviewed_reuse_cleanly_refuses_malformed_population_and_import_objects(reviewed_history, mutation):
+    from spicy_regs.navigation_measurements import qualify_compatible_aggregation
+    index, spec, proof = reviewed_history
+    qualified = qualify_compatible_aggregation(index, spec, 0, proof)
+    historical = qualified['historicalProof']
+    if mutation == 'target':
+        historical['targetPopulation'] = []
+    elif mutation == 'source':
+        historical['sourceIdentity']['population'] = []
+    else:
+        historical['targetPopulation']['populationProof'] = {
+            'import_list': ['bad'], 'import_string': 'bad', 'import_empty': {}, 'import_null': None,
+        }[mutation]
+    assert attached_directions(index, spec, 0, qualified) is None
+    with pytest.raises(ValueError, match='counts or imported evidence'):
+        qualify_compatible_aggregation(index, spec, 0, historical)
+
+
+def test_reviewed_reuse_preserves_valid_earlier_exact_content_wrapper(reviewed_history):
+    import inspect
+    from spicy_regs import navigation_measurements as measurements
+    index, spec, historical = reviewed_history
+    source = measurements.selected_binding(index, spec['source'])
+    target = measurements.selected_binding(index, spec['targets'][0]['table'])
+    carried = {'format': measurements.VERSION, 'status': 'complete', 'authority': 'exact_content_reuse',
+               'binding': {**historical['binding'], 'source': source, 'target': target},
+               'route': deepcopy(historical['route']), 'historicalProof': deepcopy(historical),
+               'historicalDigest': measurements.digest(historical),
+               'qualificationImplementation': measurements.digest([measurements.VERSION,
+                   inspect.getsource(measurements._content_identity),
+                   inspect.getsource(measurements.qualify_exact_content)])}
+    before = deepcopy(carried)
+    qualified = measurements.qualify_compatible_aggregation(index, spec, 0, carried)
+    assert carried == before == qualified['historicalProof']
+    assert measurements.attached_directions(index, spec, 0, qualified) is not None
+    carried['historicalDigest'] = 'sha256:' + 'c' * 64
+    with pytest.raises(ValueError, match='qualification changed'):
+        measurements.qualify_compatible_aggregation(index, spec, 0, carried)
