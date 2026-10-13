@@ -431,7 +431,8 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str, wor
 
 def _convert_fec(family, old, captured, retained, base, work, handed_on,
                  retain_evidence, read_operation, original_pins, *, filing_associations=None,
-                 read_snapshot=None, observation_generation=None, check_resources=None, observation_rebinding=None):
+                 read_snapshot=None, observation_generation=None, check_resources=None, observation_rebinding=None,
+                 observation_checkpoint=None, observation_source_pin=None):
     from spicy_regs.fec_native_conversion import build_retained_family
     evidence = None
     if retain_evidence:
@@ -445,7 +446,8 @@ def _convert_fec(family, old, captured, retained, base, work, handed_on,
             operation=read_operation, inputs=evidence.inputs() if evidence else (),
             filing_associations=filing_associations, read_snapshot=read_snapshot,
             observation_generation=observation_generation, check_resources=check_resources,
-            observation_rebinding=observation_rebinding)
+            observation_rebinding=observation_rebinding, observation_checkpoint=observation_checkpoint,
+            observation_source_pin=observation_source_pin)
     except BaseException as error:
         if evidence:
             evidence.finish(error)
@@ -1000,7 +1002,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             expect_bucket: str | None = None, read_operation: ConversionReadOperation | None = None,
             filing_associations=None, staged_observations: Path | None = None,
             retained_members: Mapping[str, str] | None = None,
-            check_resources: Callable[[], None] | None = None) -> dict:
+            check_resources: Callable[[], None] | None = None, observation_checkpoint: Path | None = None) -> dict:
     """Convert ``family`` in ``work``; with ``publish``, move its pointer and read the result back anonymously."""
     if read_operation is None:
         try:
@@ -1009,7 +1011,8 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                                expected_spicy_docs=expected_spicy_docs, publish=publish, remote=remote,
                                state=state, expect_bucket=expect_bucket, read_operation=operation,
                                filing_associations=filing_associations, staged_observations=staged_observations,
-                               retained_members=retained_members, check_resources=check_resources)
+                               retained_members=retained_members, check_resources=check_resources,
+                               observation_checkpoint=observation_checkpoint)
         except ValueError as failure:
             receipt_path = work / RECEIPT
             attempted = receipt_path.is_file() and json.loads(receipt_path.read_bytes()).get("publish_attempt")
@@ -1019,6 +1022,10 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         from spicy_regs.runtime_bounds import checkpoint
         check_resources = checkpoint
     check_resources()
+    if observation_checkpoint is not None and (family != 'fec-observations' or publish):
+        raise ConversionRefused('Observation checkpoints belong only to local fec-observations preparation')
+    if observation_checkpoint is not None and retained_members is None:
+        raise ConversionRefused('Observation checkpoints require an explicit retained member map; no downloads')
     if family not in allowed:
         raise ConversionRefused(f"{family} is not in this run's allow-list ({', '.join(sorted(allowed)) or 'empty'})")
     work = work.resolve()
@@ -1109,7 +1116,8 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                 built = _convert_fec(family, old, captured, retained, base, work, handed_on, retains,
                     read_operation, original_pins, filing_associations=filing_associations, read_snapshot=read_snapshot,
                     observation_generation=staged_observations, check_resources=check_resources,
-                    observation_rebinding=observation_rebinding)
+                    observation_rebinding=observation_rebinding, observation_checkpoint=observation_checkpoint,
+                    observation_source_pin=started)
             elif regulatory is not None:
                 built = _convert_regulatory_base(regulatory, captured, retained, base, work, handed_on, retains, read_operation, original_pins)
             else:
@@ -1428,6 +1436,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--filing-associations", type=Path, help="Explicit admitted FEC filing/definition selection JSON")
     parser.add_argument("--staged-observations", type=Path, help="Complete prepared observations generation for FEC query")
     parser.add_argument("--retained-member-map", type=Path, help="Exact captured object path to retained local file map; missing members refuse downloads")
+    parser.add_argument("--observation-checkpoint", type=Path,
+                        help="Reuse closed consecutive observation row groups; keep each invocation's --work new")
     parser.add_argument("--bulk-threads", type=int, help="DuckDB threads for this initial conversion")
     parser.add_argument("--bulk-memory-limit", help="DuckDB memory limit for this initial conversion")
     parser.add_argument("--require-bulk", action="store_true", help="Refuse SQL admission failure instead of building a reference index")
@@ -1446,6 +1456,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="With --rollback: also discard a generation published after the conversion")
     parser.add_argument("--env-file", type=Path, help="Read R2_* settings from this file; nothing is loaded implicitly")
     args = parser.parse_args(argv)
+    if args.observation_checkpoint and (args.family != 'fec-observations' or args.publish or args.rollback
+                                        or args.resume_generation or args.publish_prepared):
+        parser.error('--observation-checkpoint belongs only to local fec-observations preparation')
+    if args.observation_checkpoint and not args.retained_member_map:
+        parser.error('--observation-checkpoint requires --retained-member-map; no downloads')
     if args.rollback and (args.family or args.allow or args.work or args.expect_main or args.expect_spicy_docs or args.publish_prepared
                           or args.resume_generation or args.expect_producer or args.publish or args.remote != "origin"):
         parser.error("--rollback takes only --expect-bucket, --env-file and --discard-newer")
@@ -1521,7 +1536,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     remote=args.remote, expect_bucket=args.expect_bucket,
                     filing_associations=load_filing_associations(args.filing_associations) if args.filing_associations else None,
                     staged_observations=args.staged_observations,
-                    retained_members=json.loads(args.retained_member_map.read_text()) if args.retained_member_map else None)
+                    retained_members=json.loads(args.retained_member_map.read_text()) if args.retained_member_map else None,
+                    observation_checkpoint=args.observation_checkpoint)
     except (ConversionRefused, publication.PublicationError) as refusal:
         print(f"REFUSED: {refusal}", file=sys.stderr)
         result_state = (_prepared_refusal_state(args.publish_prepared) if args.publish_prepared and not entered_prepared

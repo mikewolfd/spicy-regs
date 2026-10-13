@@ -554,10 +554,30 @@ def agency_source_lookup(generation, operation, coordinates, expected_pin, check
     return lambda row: found[(row.get('collection_id'), row.get('source_record_id'))]
 
 
+def _identity_conversion_row(table, original_row, schema, observation_rebinding, adopted=None):
+    """One maintained mapping and exact retained-value restoration for either writer."""
+    diagnostics = {}
+    row, overrides = retained_identity_row(table, original_row, diagnostics=diagnostics, source_schema=schema)
+    rebound = rebind_row(table, row, observation_rebinding)
+    overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
+    if table == 'fec_relationships':
+        overrides['record_id'] = original_row.get('record_id')
+    if adopted is not None:
+        overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys()
+                          if original_row[name] != adopted[name]})
+    source_input = {'fec_retained_overrides': overrides} if overrides else {}
+    if diagnostics:
+        source_input['fec_retained_interpretation'] = diagnostics
+    return rebound, source_input or None
+
+
 def build_retained_family(family, old, captured, retained, work, *, operation,
                           inputs=(), filing_associations=None, check_resources=lambda: None,
-                          read_snapshot=None, observation_generation=None, observation_rebinding=None):
+                          read_snapshot=None, observation_generation=None, observation_rebinding=None,
+                          observation_checkpoint=None, observation_source_pin=None):
     """Actual production call: identity writers and qualified financial assembly."""
+    if observation_checkpoint is not None and (family != 'fec-observations' or observation_source_pin is None):
+        raise ValueError('Observation checkpoint requires observations and exact producer source pins')
     check_membership(family, old)
     if set(retained) != set(old['tables']):
         raise ValueError('FEC retained table membership differs from captured family')
@@ -605,9 +625,14 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
     shared = build / 'etl_receipts.parquet'
     observation_output = build / 'tables' / 'observations'
     with ExitStack() as stack:
+        from spicy_regs.fec_observation_segments import observation_segments
+        segments = (stack.enter_context(observation_segments(observation_checkpoint,
+            captured_family=old, source_pin=observation_source_pin)) if observation_checkpoint is not None else None)
+        if segments is not None:
+            generation_id = segments.generation_id
         observation_writer = (stack.enter_context(IdentityReceiptWriter(observation_output,
             generation_id=generation_id, tables=[key.removesuffix('.parquet') for key in sorted(retained)]))
-            if family == 'fec-observations' else None)
+            if family == 'fec-observations' and segments is None else None)
         receipt_writer = None
         if observation_writer is None:
             stream = stack.enter_context(shared.open('xb'))
@@ -640,7 +665,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                 selected.append(TypedInput(path, pin.sha256, pin.rows, namespace))
                 witnesses.append(dict(source_id=pin.path, source_uri=None, sha256=pin.sha256,
                                       locator=None, body_version=old['artifactDigest']))
-            output = observation_output if family == 'fec-observations' else build / 'tables' / table
+            output = observation_output if observation_writer is not None else build / 'tables' / table
             if table in FIELD_RULES:
                 from bisect import bisect_right
                 from itertools import accumulate
@@ -666,6 +691,13 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                 policy = dataset_policy(table, schema)
                 subject = None if result['subject_path'] is None else Path(result['subject_path'])
                 receipts = Path(result['receipt_path'])
+            elif segments is not None:
+                from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+                validate_identity_schema(table, schema)
+                subject, receipts = segments.prepare_table(table, selected, witnesses, schema, output,
+                    prepare_row=lambda original: _identity_conversion_row(table, original, schema, observation_rebinding),
+                    check_resources=check_resources)
+                policy = dataset_policy(table)
             else:
                 validate_identity_schema(table, schema)
                 def rows():
@@ -703,20 +735,8 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                             adopted_link = next(native_links, None) if native_links is not None else None
                             if native_links is not None and adopted_link is None:
                                 raise ValueError('Filing reference resolution lost a selected observation')
-                            original_row = row
-                            retained_diagnostics = {}
-                            row, overrides = retained_identity_row(table, original_row, diagnostics=retained_diagnostics, source_schema=schema)
-                            rebound = rebind_row(table, row, observation_rebinding)
-                            overrides.update({name: row[name] for name in row if row[name] != rebound[name]})
-                            row = rebound
-                            if table == 'fec_relationships':
-                                overrides['record_id'] = original_row.get('record_id')
-                            if adopted is not None:
-                                overrides.update({name: original_row[name] for name in original_row.keys() & adopted.keys() if original_row[name] != adopted[name]})
-                            source_input = {'fec_retained_overrides': overrides} if overrides else {}
-                            if retained_diagnostics:
-                                source_input['fec_retained_interpretation'] = retained_diagnostics
-                            yield row, dict(input_witness=witness, source_input=source_input or None,
+                            row, source_input = _identity_conversion_row(table, row, schema, observation_rebinding, adopted)
+                            yield row, dict(input_witness=witness, source_input=source_input,
                                 native_filing_subject=adopted, native_link_subject=adopted_link)
                     if table == 'fec_source_records':
                         writer.emit_batch(table, prepared_rows(), check_resources=check_resources)
@@ -741,9 +761,11 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                         subject = _partition_subject(subject, original, destination, check_resources)
                     partitioned[key] = old['tables'][key]['partitionColumns']
                 subjects.append(subject)
+        if segments is not None:
+            segments.finish()
     for flat, original, destination in pending_partitions:
         _partition_subject(flat, original, destination, check_resources)
-    if family == 'fec-observations':
+    if family == 'fec-observations' and observation_checkpoint is None:
         shared = observation_output / 'etl_receipts.parquet'
     if native_filings is not None:
         target = next(p for p in subjects if p.name == 'fec_filings.parquet')
