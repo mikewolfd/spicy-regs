@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
+from functools import partial
 import gzip
 import hashlib
 import inspect
@@ -336,9 +337,9 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                         item = json.loads(line)
                         yield item["row"], ReceiptContext(**item["context"])
 
-                write_options = {"batch_size": CONTENT_WRITE_BATCH_SIZE} if table == "uscode_edition_sections" else {}
-                subject, receipts = write_dataset(
-                    rows(), staged / table, policy, validation_backend="reference", **write_options
+                writer = partial(write_dataset, batch_size=CONTENT_WRITE_BATCH_SIZE) if table == "uscode_edition_sections" else write_dataset
+                subject, receipts = writer(
+                    rows(), staged / table, policy, validation_backend="reference"
                 )
                 assert subject is not None
                 outputs[table] = {

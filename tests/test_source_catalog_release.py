@@ -1,6 +1,7 @@
 """Release selections refuse drift, omitted siblings and private receipt paths."""
 
 import importlib.util
+from functools import partial
 import json
 from pathlib import Path
 
@@ -30,6 +31,7 @@ def test_declaration_refresh_preserves_installed_policies_and_shared_log_markers
 
     path = Path(__file__).parents[1] / "scripts/update_etl_policy_declarations.py"
     module_spec = importlib.util.spec_from_file_location("release_policy_declarations", path)
+    assert module_spec is not None and module_spec.loader is not None
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
     declared = module.declarations()
@@ -43,6 +45,7 @@ def test_declaration_refresh_preserves_installed_policies_and_shared_log_markers
 def test_selected_policy_refresh_refuses_empty_or_unknown_selection(datasets):
     path = Path(__file__).parents[1] / "scripts/update_etl_policy_declarations.py"
     spec = importlib.util.spec_from_file_location("selected_policy_declarations", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     with pytest.raises(ValueError):
@@ -53,6 +56,7 @@ def test_selected_section_policy_refresh_matches_maintained_declaration():
     from spicy_regs.sources.uscode_editions import POLICIES
     path = Path(__file__).parents[1] / "scripts/update_etl_policy_declarations.py"
     spec = importlib.util.spec_from_file_location("selected_policy_declarations", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.declarations(frozenset({"uscode_edition_sections"})) == {
@@ -98,7 +102,7 @@ def test_registered_release_artifact_admission_requires_matching_receipts(tmp_pa
 
     policy = installed_policies()[dataset]
     # A small synthetic row tests admission, not source coverage or qualification.
-    row = {field.name: (False if pa.types.is_boolean(field.type)
+    row: dict[str, object] = {field.name: (False if pa.types.is_boolean(field.type)
                         else 1 if pa.types.is_integer(field.type) else "fixture")
            for field in policy.subject_schema}
     row.update({field: {"fixture": "processing"} for field in policy.receipt_fields})
@@ -107,15 +111,15 @@ def test_registered_release_artifact_admission_requires_matching_receipts(tmp_pa
         "source_uri": "https://publisher.example/test", "locator": "record:1",
     }])
     subject, receipts = write_dataset([(row, context)], tmp_path / "source", policy)
-    kwargs = {"family": "test-release", "files": [subject],
-              "expected_keys": [subject.name]}
+    assert subject is not None
+    build = partial(build_generation, family="test-release", files=[subject], expected_keys=[subject.name])
     with pytest.raises(ValueError, match="require ETL receipts"):
-        build_generation(tmp_path / "missing-receipts", **kwargs)
+        build(tmp_path / "missing-receipts")
     with pytest.raises(ValueError, match="differs from installed field policy"):
-        build_generation(tmp_path / "stale-policy", **kwargs, receipt_path=receipts,
+        build(tmp_path / "stale-policy", receipt_path=receipts,
                          receipt_policies=[replace(policy, policy_version="stale")],
                          receipt_generation_id=context.generation_id)
-    artifact = build_generation(tmp_path / "accepted", **kwargs, receipt_path=receipts,
+    artifact = build(tmp_path / "accepted", receipt_path=receipts,
                                 receipt_policies=[policy],
                                 receipt_generation_id=context.generation_id)
     assert verify_generation(tmp_path / "accepted").pin == artifact.pin
@@ -123,7 +127,7 @@ def test_registered_release_artifact_admission_requires_matching_receipts(tmp_pa
     changed[0][policy.identity_fields[0]] = "different-identity"
     pq.write_table(pa.Table.from_pylist(changed, schema=policy.subject_schema), subject)
     with pytest.raises(ValueError, match="Missing, ambiguous or reused subject receipt"):
-        build_generation(tmp_path / "wrong-binding", **kwargs, receipt_path=receipts,
+        build(tmp_path / "wrong-binding", receipt_path=receipts,
                          receipt_policies=[policy], receipt_generation_id=context.generation_id)
 
 
@@ -181,6 +185,7 @@ def test_unpublished_registered_table_never_requests_failing_bare_key(monkeypatc
         built[0].close()
 
 spec = importlib.util.spec_from_file_location("release_preflight", Path(__file__).parents[1] / "scripts/prepare_source_catalog_release.py")
+assert spec is not None and spec.loader is not None
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 

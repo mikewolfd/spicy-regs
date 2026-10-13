@@ -195,7 +195,7 @@ def public_coverage(report: dict) -> dict:
                 if item.get(key) is not None
             ):
                 continue
-            clean = pick(
+            clean: dict[str, object] = pick(
                 item,
                 {
                     "count": "count",
