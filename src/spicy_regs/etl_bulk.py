@@ -18,6 +18,7 @@ import io
 import json
 import sqlite3
 from dataclasses import dataclass
+from contextvars import ContextVar
 from hashlib import sha256
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager
@@ -68,6 +69,36 @@ _INSERT_BYTES = 16 * 1024 * 1024
 
 class NotBulkEligible(Exception):
     """SQL has no proven way to decide this bundle, so ``validate_receipt_bundle`` must."""
+
+
+@dataclass(frozen=True)
+class BulkLimits:
+    """Explicit limits for one conversion; ordinary readers keep their defaults."""
+
+    threads: int
+    memory_limit: str
+    require_bulk: bool = False
+
+
+_limits: ContextVar[BulkLimits | None] = ContextVar("spicy_bulk_limits", default=None)
+
+
+@contextmanager
+def bulk_limits(*, threads: int, memory_limit: str, require_bulk: bool = False):
+    if type(threads) is not int or threads < 1 or not isinstance(memory_limit, str) or not memory_limit.strip():
+        raise ValueError("Bulk limits need positive threads and an explicit memory limit")
+    token = _limits.set(BulkLimits(threads, memory_limit, require_bulk))
+    try:
+        yield
+    finally:
+        _limits.reset(token)
+
+
+def reference_fallback(error: NotBulkEligible) -> None:
+    """Refuse a reference index when the caller has ruled out its capacity."""
+    limits = _limits.get()
+    if limits is not None and limits.require_bulk:
+        raise ValueError(f"Required bulk admission failed; reference fallback disabled: {error}") from error
 
 
 @dataclass(frozen=True)
@@ -184,6 +215,9 @@ def bulk_connection(directory: Path | None = None, *, threads: int = 4, memory_l
     Each operation owns its files. A second statement must never run while a
     result from this connection is still being consumed.
     """
+    limits = _limits.get()
+    if limits is not None:
+        threads, memory_limit = limits.threads, limits.memory_limit
     with TemporaryDirectory(prefix="etl-bulk-", dir=directory) as temp:
         root = Path(temp)
         with closing(duckdb.connect(str(root / "work.duckdb"), config={

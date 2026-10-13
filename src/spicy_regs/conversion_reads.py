@@ -363,7 +363,8 @@ def _open_family_reader(subjects, receipts, policies, *, generation_id, guard):
             connection = stack.enter_context(etl_bulk._validated_bundle(
                 subjects, receipts, policies, generation_id=generation_id, retain_processing=True))
             reference = False
-        except etl_bulk.NotBulkEligible:
+        except etl_bulk.NotBulkEligible as error:
+            etl_bulk.reference_fallback(error)
             temporary = Path(stack.enter_context(TemporaryDirectory(prefix="conversion-reference-")))
             connection = stack.enter_context(closing(sqlite3.connect(str(temporary / "joins.db"))))
             # The reference index has the same finite disk ceiling as bulk spill.

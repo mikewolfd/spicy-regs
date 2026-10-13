@@ -656,12 +656,12 @@ def validate_receipt_bundle(
     Qualified refusals propagate unchanged; fallback never turns them into acceptance.
     """
     if bulk:
-        from spicy_regs.etl_bulk import NotBulkEligible, validate_bundle
+        from spicy_regs.etl_bulk import NotBulkEligible, reference_fallback, validate_bundle
         try:
             validate_bundle(subjects, receipt_paths, policies, generation_id=generation_id)
             return
-        except NotBulkEligible:
-            pass
+        except NotBulkEligible as error:
+            reference_fallback(error)
     _validate_receipt_bundle_rows(subjects, receipt_paths, policies, generation_id=generation_id)
 
 
@@ -759,12 +759,12 @@ def read_with_receipts(
     schemas use that reader before any reconstructed row is returned.
     """
     if bulk:
-        from spicy_regs.etl_bulk import NotBulkEligible, read_with_receipts as read_bulk
+        from spicy_regs.etl_bulk import NotBulkEligible, reference_fallback, read_with_receipts as read_bulk
         try:
             yield from read_bulk(subject_paths, receipt_paths, policy, generation_id=generation_id)
             return
-        except NotBulkEligible:
-            pass
+        except NotBulkEligible as error:
+            reference_fallback(error)
     yield from _read_with_receipts_rows(subject_paths, receipt_paths, policy, generation_id=generation_id)
 
 
@@ -898,12 +898,12 @@ def read_attempts(
     if outcomes is not None and not outcomes <= OUTCOMES:
         raise ValueError("Unknown attempt outcome")
     if bulk:
-        from spicy_regs.etl_bulk import NotBulkEligible, read_attempts as read_bulk
+        from spicy_regs.etl_bulk import NotBulkEligible, reference_fallback, read_attempts as read_bulk
         try:
             yield from read_bulk(receipt_paths, policy, generation_id=generation_id, outcomes=outcomes)
             return
-        except NotBulkEligible:
-            pass
+        except NotBulkEligible as error:
+            reference_fallback(error)
     yield from _read_attempts_rows(receipt_paths, policy, generation_id=generation_id, outcomes=outcomes)
 
 

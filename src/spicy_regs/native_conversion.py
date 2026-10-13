@@ -1428,6 +1428,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--filing-associations", type=Path, help="Explicit admitted FEC filing/definition selection JSON")
     parser.add_argument("--staged-observations", type=Path, help="Complete prepared observations generation for FEC query")
     parser.add_argument("--retained-member-map", type=Path, help="Exact captured object path to retained local file map; missing members refuse downloads")
+    parser.add_argument("--bulk-threads", type=int, help="DuckDB threads for this initial conversion")
+    parser.add_argument("--bulk-memory-limit", help="DuckDB memory limit for this initial conversion")
+    parser.add_argument("--require-bulk", action="store_true", help="Refuse SQL admission failure instead of building a reference index")
     parser.add_argument("--expect-main", help="The main commit this run was started for")
     parser.add_argument("--expect-spicy-docs", help="The SpicyDocs version main pinned when this run was started")
     parser.add_argument("--remote", default="origin", help="The git remote whose main is checked (default: origin)")
@@ -1464,6 +1467,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("FEC selections and retained member map belong only to an initial conversion")
     if (args.filing_associations or args.staged_observations) and args.family != "fec-query":
         parser.error("Filing associations and staged observations belong only to fec-query")
+    if args.bulk_threads is not None and args.bulk_threads < 1:
+        parser.error("--bulk-threads must be positive")
+    if (args.require_bulk or args.bulk_threads is not None or args.bulk_memory_limit is not None) and (
+            args.rollback or args.resume_generation or args.publish_prepared):
+        parser.error("Bulk limits belong only to an initial conversion")
     entered_prepared = False
     try:
         if args.env_file:
@@ -1499,13 +1507,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error("a conversion needs FAMILY, --allow, --work, --expect-main and --expect-spicy-docs")
         else:
             from spicy_regs.fec_native_conversion import load_filing_associations
-            done = convert(
-                args.family, allowed=[name for value in args.allow for name in value.split(",") if name], work=args.work,
-                expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs, publish=args.publish,
-                remote=args.remote, expect_bucket=args.expect_bucket,
-                filing_associations=load_filing_associations(args.filing_associations) if args.filing_associations else None,
-                staged_observations=args.staged_observations,
-                retained_members=json.loads(args.retained_member_map.read_text()) if args.retained_member_map else None)
+            from contextlib import nullcontext
+            from spicy_regs.etl_bulk import bulk_limits
+
+            limits = (bulk_limits(threads=args.bulk_threads or 4, memory_limit=args.bulk_memory_limit if args.bulk_memory_limit is not None else "4GB",
+                                 require_bulk=args.require_bulk)
+                      if args.require_bulk or args.bulk_threads is not None or args.bulk_memory_limit is not None
+                      else nullcontext())
+            with limits:
+                done = convert(
+                    args.family, allowed=[name for value in args.allow for name in value.split(",") if name], work=args.work,
+                    expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs, publish=args.publish,
+                    remote=args.remote, expect_bucket=args.expect_bucket,
+                    filing_associations=load_filing_associations(args.filing_associations) if args.filing_associations else None,
+                    staged_observations=args.staged_observations,
+                    retained_members=json.loads(args.retained_member_map.read_text()) if args.retained_member_map else None)
     except (ConversionRefused, publication.PublicationError) as refusal:
         print(f"REFUSED: {refusal}", file=sys.stderr)
         result_state = (_prepared_refusal_state(args.publish_prepared) if args.publish_prepared and not entered_prepared
