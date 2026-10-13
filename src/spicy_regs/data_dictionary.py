@@ -841,7 +841,7 @@ def fec_typed_schemas() -> dict[str, list[tuple[str, str]]]:
     return result
 
 
-def expected_schemas() -> dict[str, list[tuple[str, str]]]:
+def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]:
     """Return ``{table: [(column, type_label), ...]}`` for all tables (offline)."""
     schemas: dict[str, list[tuple[str, str]]] = {}
     from_contracts = contract_schemas()
@@ -941,8 +941,8 @@ def expected_schemas() -> dict[str, list[tuple[str, str]]]:
     builder_pairs = {
         "org_committee_links": ORG_COMMITTEE_LINK_COLUMNS,
     }
-    installed = subject_policies()
-    for name in TABLES:
+    installed = subject_policies() if native else {}
+    for name in TABLES if native else LEGACY_TABLES:
         if name in installed:
             schemas[name] = described_schema(installed[name].subject_schema)
         elif name in builder_columns:
@@ -980,7 +980,7 @@ class SchemaDiscoveryError(OSError):
         super().__init__("\n".join(failures))
 
 
-def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tuple[str, str]]]:
+def discover_schemas(source: str, base: str | None = None, *, index: dict | None = None) -> dict[str, list[tuple[str, str]]]:
     """Discover schemas from published parquet via DuckDB ``DESCRIBE``.
 
     ``source`` is ``"r2"`` (remote https bucket; needs the httpfs extension) or
@@ -995,7 +995,7 @@ def discover_schemas(source: str, base: str | None = None) -> dict[str, list[tup
         from spicy_regs.sources.publication import published_urls
 
         base_url = resolve_r2_base_url(base)
-        urls = published_urls(base_url)
+        urls = published_urls(base_url, index=index)
         names = tuple(dict.fromkeys(("dockets", "documents", "comments", "comments_index", *urls)))
 
         def url_for(name: str) -> list[str]:
@@ -1044,7 +1044,7 @@ def load_curated_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
         return (yaml.safe_load(fh) or {}).get("tables", {})
 
 
-def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
+def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS, *, native: bool = True) -> dict:
     """The curated descriptions, with every ``columns_from`` marker resolved.
 
     ``columns_from: spicy_docs`` means "the per-column sentences for this table
@@ -1072,7 +1072,7 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
     # and what a table says about its own receipt is written in its own notes.
     subject_prose = REPO_ROOT / "data_dictionary" / "subject_descriptions.json"
     overrides = json.loads(subject_prose.read_text()) if subject_prose.exists() else {}
-    for name, policy in subject_policies().items():
+    for name, policy in (subject_policies().items() if native else ()):
         if policy.receipt_only:
             tables.pop(name, None)
             continue
@@ -1092,12 +1092,38 @@ def load_descriptions(path: Path = DEFAULT_DESCRIPTIONS) -> dict:
     for name, meanings in legacy["tables"].items():
         if name in tables:
             tables[name]["legacy_column_descriptions"] = meanings
+            if not native:
+                tables[name]["columns"] = meanings
     return tables
 
 
 # --------------------------------------------------------------------------- #
 # Reconciliation.
 # --------------------------------------------------------------------------- #
+def selected_dictionary_definitions(index: dict, names: Iterable[str], descriptions_path: Path):
+    """Use earlier declarations only for a selected owner explicitly without receipts.
+
+    Unknown owners and any declared receipt member keep native checks. No live
+    field or type is inferred as a supported declaration.
+    """
+    from spicy_regs.sources.publication import table_owner
+
+    descriptions = load_descriptions(descriptions_path)
+    schemas = expected_schemas()
+    legacy_names = {name for name in names
+                    if (owner := table_owner(index, name + ".parquet")) is not None
+                    and "etlReceipts" not in owner[1]}
+    if legacy_names:
+        legacy_descriptions = load_descriptions(descriptions_path, native=False)
+        legacy_schemas = expected_schemas(native=False)
+        for name in legacy_names:
+            if name in legacy_descriptions:
+                descriptions[name] = legacy_descriptions[name]
+            if name in legacy_schemas:
+                schemas[name] = legacy_schemas[name]
+    return descriptions, schemas
+
+
 def _reconcile_columns(
     table: str,
     left_label: str,
@@ -1406,8 +1432,15 @@ def cmd_check(args: argparse.Namespace) -> int:
     if args.source == "schema":
         errors += check_descriptions(expected_schemas(), descriptions)
     else:
+        index = None
         try:
-            live = discover_schemas(args.source, args.base)
+            if args.source == "r2":
+                from spicy_regs.sources.publication import load_index
+
+                base_url = resolve_r2_base_url(args.base)
+                index = load_index(base_url)
+            live = (discover_schemas(args.source, args.base, index=index) if args.source == "r2"
+                    else discover_schemas(args.source, args.base))
         except SchemaDiscoveryError as exc:
             live = exc.schemas
             unreadable = True
@@ -1423,8 +1456,11 @@ def cmd_check(args: argparse.Namespace) -> int:
         # docs are generated from must match the live schema too.
         # Supported but unpublished tables still receive offline checks. The
         # live check follows actual publication, including unknown active tables.
+        expected = expected_schemas()
+        if index is not None:
+            descriptions, expected = selected_dictionary_definitions(index, live, Path(args.descriptions))
         errors += check_descriptions(live, {name: value for name, value in descriptions.items() if name in live})
-        expected = {name: value for name, value in expected_schemas().items() if name in live}
+        expected = {name: value for name, value in expected.items() if name in live}
         errors += check_schema_drift(expected, live)
         if args.source == "r2":
             # The kind is derived from the pinned index where the index can be read; offline it is the prose prefix.
@@ -1433,7 +1469,10 @@ def cmd_check(args: argparse.Namespace) -> int:
 
             try:
                 base_url = resolve_r2_base_url(args.base)
-                index = load_index(base_url)
+                if index is None:
+                    raise PublicationError("No captured publication selection for live schema verification")
+                if load_index(base_url) != index:
+                    raise PublicationError("Publication selection changed during live schema verification")
                 rows = published_row_counts(base_url, index)
                 errors += kind_index_errors(descriptions, rows)
                 errors += receipt_index_errors(descriptions, rows, published_receipt_datasets(index))
