@@ -12,6 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_docs.sources.uscode.core import UsCodeSourceError
 from spicy_regs.etl_receipts import exact_json
 from spicy_regs.sources import uscode_editions as builder
 from spicy_regs.sources import uscode_editions_audit as auditor
@@ -63,7 +64,7 @@ def title(native_year, enum, publication):
     return ("<!DOCTYPE html><html><head>" + header + "</head><body>").encode() + body + b"</body></html>"
 
 
-def fixture(tmp_path, year=1995):
+def fixture(tmp_path, year=1995, *, all_carried=False, build_candidate=True):
     members = [
         (
             f"{year}usc40a.htm",
@@ -71,7 +72,13 @@ def fixture(tmp_path, year=1995):
         ),
         (
             f"{year}usc01.htm",
-            title(year, "1", {1994: "1994 Main Edition", 1995: "1995 Supplement I", 2000: "2000 Edition"}[year]),
+            title(
+                1994 if all_carried else year,
+                "1",
+                {1994: "1994 Main Edition", 1995: "1995 Supplement I", 2000: "2000 Edition"}.get(
+                    year, f"{year} annual fixture"
+                ),
+            ),
         ),
         ("usc.css", b"body{}"),
     ]
@@ -92,7 +99,8 @@ def fixture(tmp_path, year=1995):
         )
     )
     candidate = tmp_path / "candidate"
-    builder.build(selection, candidate)  # Production is allowed only in fixture setup.
+    if build_candidate:
+        builder.build(selection, candidate)  # Production is allowed only in fixture setup.
     return candidate, selection, members
 
 
@@ -115,7 +123,7 @@ def change_subject(candidate, name, change):
     rebuild_path.write_text(json.dumps(rebuild))
 
 
-@pytest.mark.parametrize("year", [1994, 1995, 2000])
+@pytest.mark.parametrize("year", [1994, 1995, 1996, 2000, 2017, 2024])
 def test_complete_fixture_identity_title_routing_and_library_read_only(tmp_path, year):
     candidate, selection, members = fixture(tmp_path, year)
     before = snapshot(tmp_path)
@@ -140,7 +148,7 @@ def test_complete_fixture_identity_title_routing_and_library_read_only(tmp_path,
         )
         assert editions[index - 1]["edition_id"] == expected
     assert editions[0]["title"] == "40a"
-    assert editions[0]["carried_forward"] == str(year == 1995).lower()
+    assert editions[0]["carried_forward"] == str(year not in (1994, 2000)).lower()
     assert editions[2]["member_role"] == "supporting-file" and editions[2]["metadata_json"] is None
     if year == 2000:
         assert all(
@@ -234,10 +242,42 @@ def test_corrupt_receipts_refuse(tmp_path, change):
 
 
 @pytest.mark.parametrize("year", [1994, 1996])
-def test_wrong_expected_or_outside_grant_year_refuses(tmp_path, year):
+def test_wrong_expected_year_refuses(tmp_path, year):
     candidate, selection, _ = fixture(tmp_path)
     with pytest.raises(AssertionError):
         auditor.audit(candidate, selection, annual_year=year)
+
+
+@pytest.mark.parametrize("year", [1993, 2025, True, "1996", 1996.0])
+def test_outside_retained_selection_or_noninteger_year_refuses_before_reads(tmp_path, year):
+    with pytest.raises(AssertionError, match="supported audit scope"):
+        auditor.audit(tmp_path / "absent-candidate", tmp_path / "absent-selection", annual_year=year)
+
+
+def test_annual1996_native_year_must_exist_before_a_candidate_is_admitted(tmp_path):
+    candidate, selection, _ = fixture(tmp_path, year=1996, all_carried=True, build_candidate=False)
+    # Both native title bodies actually declare 1994. A matching requested-year
+    # manifest cannot override original source metadata or install a candidate.
+    with pytest.raises(UsCodeSourceError, match="states no member of the requested year"):
+        builder.build(selection, candidate)
+    assert not candidate.exists()
+
+
+def test_admitted_year_does_not_allow_multiarchive_audit(tmp_path):
+    sources = []
+    for year in (1995, 1996):
+        root = tmp_path / str(year)
+        root.mkdir()
+        _, selection, _ = fixture(root, year=year)
+        source = json.loads(selection.read_text())["sources"][0]
+        source["path"] = str(root / source["path"])
+        sources.append(source)
+    selection = tmp_path / "combined-selection.json"
+    selection.write_text(json.dumps({"format": "spicy-uscode-edition-inputs", "version": 1, "sources": sources}))
+    candidate = tmp_path / "combined-candidate"
+    builder.build(selection, candidate)
+    with pytest.raises(AssertionError, match="audit scope is one annual archive"):
+        auditor.audit(candidate, selection, annual_year=1996)
 
 
 @pytest.mark.parametrize(
@@ -427,7 +467,7 @@ def test_annual2000_css_support_member_corruption_refuses(tmp_path, change):
 
 
 @pytest.mark.parametrize("expected", [1994, 1995, 1996, 2001])
-def test_annual2000_expected_year_mismatch_or_unsupported_scope_refuses(tmp_path, expected):
+def test_annual2000_expected_year_mismatch_refuses(tmp_path, expected):
     candidate, selection, _ = fixture(tmp_path, year=2000)
     with pytest.raises(AssertionError):
         auditor.audit(candidate, selection, annual_year=expected)

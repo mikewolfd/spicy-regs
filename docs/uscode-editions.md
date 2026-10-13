@@ -67,3 +67,14 @@ checks while avoiding the bulk validator's fixed DuckDB resource settings.
 It does not establish a process-memory bound; Parquet reading and normalization
 still batch rows. Resource qualification requires an independently supervised
 run of the exact selected inputs.
+
+`audit-uscode-editions candidate --selection selection.json --annual-year 1996
+--output fresh-report.json` independently checks one complete retained annual
+archive. The admitted annual selection spans 1994 through 2024, as recorded in
+the corpus's `metadata/historical-rebuilds/20261010/uscode/selection.json`.
+Admission is not qualification: each run checks its exact manifest year,
+original ZIP hash, complete member inventory, native metadata and year,
+headings, structure, body fields, nulls, stubs and every row receipt. Carried
+native years remain separate from the requested year. The auditor refuses
+multi-archive selections, baseline inputs, source or recipe drift, and report
+paths that could overwrite inputs. XML body qualification remains separate.

@@ -1,4 +1,4 @@
-"""Independently qualify one selected annual 1994/1995/2000 U.S. Code archive.
+"""Independently qualify one selected retained annual U.S. Code archive.
 
 No acquisition/content reader is called. Expectations come from raw ZIP bytes,
 native comments, an independent field stack, and standard HTML parser events.
@@ -24,6 +24,11 @@ import pyarrow.parquet as pq
 
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA, subject_identity, validate_receipt_row
 from spicy_regs.sources.uscode_editions import POLICIES, SCHEMAS
+
+# Explicit retained annual selection; admitting a year does not qualify its
+# contents. The one-archive manifest, native year and all-field checks below
+# still establish the scope of each executed audit.
+SUPPORTED_ANNUAL_YEARS = frozenset(range(1994, 2025))
 
 HEADER = (
     "AUTHORITIES-PUBLICATION-NAME",
@@ -341,7 +346,10 @@ def audit(candidate: Path, selection: Path, *, annual_year: int) -> dict:
     The caller supplies external resource supervision; bounds here limit member
     buffers and Arrow batches, not aggregate process memory.
     """
-    require(type(annual_year) is int and annual_year in (1994, 1995, 2000), "supported audit scope is 1994/1995/2000")
+    require(
+        type(annual_year) is int and annual_year in SUPPORTED_ANNUAL_YEARS,
+        "supported audit scope is one retained annual archive from 1994 through 2024",
+    )
     candidate, selection = Path(candidate).resolve(), Path(selection).resolve()
     rebuild_bytes = (candidate / "rebuild.json").read_bytes()
     selection_bytes = selection.read_bytes()
