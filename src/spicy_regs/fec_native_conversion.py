@@ -582,7 +582,7 @@ def _identity_conversion_row(table, original_row, schema, observation_rebinding,
 def build_retained_family(family, old, captured, retained, work, *, operation,
                           inputs=(), filing_associations=None, check_resources=lambda: None,
                           read_snapshot=None, observation_generation=None, observation_rebinding=None,
-                          observation_checkpoint=None, observation_source_pin=None):
+                          observation_checkpoint=None, observation_source_pin=None, observation_hosted_main=None):
     """Actual production call: identity writers and qualified financial assembly."""
     if observation_checkpoint is not None and (family != 'fec-observations' or observation_source_pin is None):
         raise ValueError('Observation checkpoint requires observations and exact producer source pins')
@@ -635,7 +635,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
     with ExitStack() as stack:
         from spicy_regs.fec_observation_segments import observation_segments
         segments = (stack.enter_context(observation_segments(observation_checkpoint,
-            captured_family=old, source_pin=observation_source_pin)) if observation_checkpoint is not None else None)
+            captured_family=old, source_pin=observation_source_pin, hosted_main=observation_hosted_main)) if observation_checkpoint is not None else None)
         if segments is not None:
             generation_id = segments.generation_id
         observation_writer = (stack.enter_context(IdentityReceiptWriter(observation_output,

@@ -11,10 +11,11 @@ from spicy_regs import fec_native_conversion as native
 from spicy_regs import native_conversion as conversion
 from spicy_regs.fec_observation_segments import observation_segments, coalesced_tables
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+from spicy_regs.generations import implementation_id
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
 from spicy_regs.sources import publication
 from tests.test_fec_native_conversion import old_family, fec_bucket
-from tests.test_native_conversion import MAIN, WHEEL, STATE
+from tests.test_native_conversion import MAIN, WHEEL, STATE, BUCKET
 
 PIN = {'fixture_source_commit': 'a' * 40, 'installed_sdk': '0.65.0'}
 
@@ -173,7 +174,10 @@ def test_segment_path_escape_and_symlink_refuse(tmp_path, inputs):
         build(tmp_path, inputs, alias, 'symlink')
 
 
-def test_outer_conversion_resumes_checkpoint_with_new_work_and_complete_admission(tmp_path, inputs):
+def test_outer_conversion_resumes_checkpoint_with_new_work_and_complete_admission(tmp_path, inputs, monkeypatch):
+    monkeypatch.setattr(conversion, '_historical_producer', lambda *_: (implementation_id(),
+        {'version': WHEEL, 'wheels': [{'hash': STATE['spicy_docs_wheel']['locked_sha256']}]}))
+    monkeypatch.setattr(conversion, '_checkpoint_ancestor', lambda *_: None)
     checkpoint = tmp_path / 'checkpoint'
     retained_map = {member.path: str(inputs[1][key]) for key in inputs[1]
                     for member in publication.table_members(inputs[0], key)}
@@ -186,11 +190,33 @@ def test_outer_conversion_resumes_checkpoint_with_new_work_and_complete_admissio
             allowed=['fec-observations'], expected_main=MAIN, expected_spicy_docs=WHEEL,
             state=lambda _: dict(STATE), observation_checkpoint=checkpoint, retained_members=retained_map)
     assert not (tmp_path / 'first/build/generation/artifact.json').exists()
+    header_before = (checkpoint / 'checkpoint.json').read_bytes()
+    advanced = {**STATE, 'main': 'e1' * 20}
     receipt = conversion.convert('fec-observations', work=tmp_path / 'second',
         allowed=['fec-observations'], expected_main=MAIN, expected_spicy_docs=WHEEL,
-        state=lambda _: dict(STATE), observation_checkpoint=checkpoint, retained_members=retained_map)
+        state=lambda _: dict(advanced), observation_checkpoint=checkpoint, retained_members=retained_map)
     assert receipt['prepared'] and receipt['published'] is None
     assert receipt['tables']['fec_source_records']['retained_rows'] == 6
+    assert (checkpoint / 'checkpoint.json').read_bytes() == header_before
+    assert receipt['source']['main'] == advanced['main']
+    assert receipt['producer']['commit'] == MAIN
+    assert receipt['checkpoint_admission']['observed_remote_main'] == advanced['main']
+    observations = [json.loads(p.read_text())['main'] for p in sorted((checkpoint / 'hosted-main-observations').glob('*.json'))]
+    assert observations == [MAIN, advanced['main']]
+    publisher = {**advanced, 'checkout': advanced['main']}
+    sealed_bytes = (tmp_path / 'second' / conversion.RECEIPT).read_bytes()
+    # Publishing still requires a clean checkout at actual current main.
+    with pytest.raises(conversion.ConversionRefused, match='not main'):
+        conversion.publish_prepared(tmp_path / 'second' / conversion.RECEIPT,
+            allowed=['fec-observations'], expected_main=advanced['main'], expected_spicy_docs=WHEEL,
+            expected_producer=MAIN, expect_bucket=BUCKET, state=lambda _: dict(advanced))
+    assert (tmp_path / 'second' / conversion.RECEIPT).read_bytes() == sealed_bytes
+    published = conversion.publish_prepared(tmp_path / 'second' / conversion.RECEIPT,
+        allowed=['fec-observations'], expected_main=advanced['main'], expected_spicy_docs=WHEEL,
+        expected_producer=MAIN, expect_bucket=BUCKET, state=lambda _: dict(publisher))
+    assert published['published']
+    assert published['source'] == advanced
+    assert published['producer']['commit'] == MAIN
 
 
 @pytest.mark.parametrize('family,publish', [('fec-query', False), ('fec-observations', True)])
@@ -257,3 +283,84 @@ def test_coalescing_byte_bound_keeps_complete_wide_values():
 def test_invalid_coalescing_bound_refuses_before_reading():
     with pytest.raises(ValueError, match='positive integer'):
         list(coalesced_tables([], pa.schema([]), check_resources=lambda: None, row_group_rows=0))
+
+
+def test_hosted_history_requires_forward_real_git_commits(tmp_path, inputs, monkeypatch):
+    import subprocess
+
+    root = tmp_path / 'history'
+    root.mkdir()
+    def git(*args):
+        return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True,
+                              text=True).stdout.strip()
+    git('init', '-q')
+    git('config', 'user.email', 'fixture@example.test')
+    git('config', 'user.name', 'Fixture')
+    (root / 'source').write_text('producer')
+    git('add', 'source')
+    git('commit', '-qm', 'producer')
+    producer = git('rev-parse', 'HEAD')
+    (root / 'source').write_text('ordinary advance')
+    git('commit', '-qam', 'advance')
+    advanced = git('rev-parse', 'HEAD')
+    git('checkout', '-qb', 'diverged', producer)
+    (root / 'source').write_text('other history')
+    git('commit', '-qam', 'diverged')
+    diverged = git('rev-parse', 'HEAD')
+    ancestor = conversion._checkpoint_ancestor
+    ancestor(producer, advanced, root=root)
+    for before, after in [(advanced, producer), (advanced, diverged), (producer, 'f' * 40), (producer[:8], advanced)]:
+        with pytest.raises(conversion.ConversionRefused, match='history|ancestry|rewound'):
+            ancestor(before, after, root=root)
+    monkeypatch.setattr(conversion, '_checkpoint_ancestor', lambda a, b: ancestor(a, b, root=root))
+    checkpoint = tmp_path / 'journal'
+    pin = {**PIN, 'checkout': producer}
+    for head in (producer, advanced):
+        with observation_segments(checkpoint, captured_family=inputs[0]['families']['fec-observations'],
+                                  source_pin=pin, hosted_main=head):
+            pass
+    before = {p.relative_to(checkpoint): p.read_bytes() for p in checkpoint.rglob('*.json')}
+    for head in (producer, diverged):
+        with pytest.raises(conversion.ConversionRefused, match='rewound'):
+            with observation_segments(checkpoint, captured_family=inputs[0]['families']['fec-observations'],
+                                      source_pin=pin, hosted_main=head):
+                pytest.fail('Rewound hosted head admitted')
+        assert {p.relative_to(checkpoint): p.read_bytes() for p in checkpoint.rglob('*.json')} == before
+
+
+@pytest.mark.parametrize('damage', ['checkout', 'dirty', 'untracked', 'wheel', 'code', 'lock', 'remote', 'observation'])
+def test_frozen_producer_and_prepared_source_refuse_drift(monkeypatch, damage):
+    import copy
+    source = copy.deepcopy(STATE)
+    source['main'] = 'e1' * 20
+    locked = {'version': WHEEL, 'wheels': [{'hash': STATE['spicy_docs_wheel']['locked_sha256']}]}
+    identity = implementation_id()
+    monkeypatch.setattr(conversion, '_historical_producer', lambda *_: (identity, locked))
+    monkeypatch.setattr(conversion, '_checkpoint_ancestor', lambda *_: None)
+    producer = conversion._checkpoint_producer(source, MAIN, WHEEL)
+    publisher = {**copy.deepcopy(source), 'checkout': source['main']}
+    receipt = {'family': 'fec-observations', 'source': source, 'producer': producer,
+               'checkpoint_admission': {'observed_remote_main': source['main'], 'remote': source['remote'],
+                                        'producer_commit': MAIN}}
+    assert conversion._receipt_producer_implementation(receipt, publisher, MAIN) == identity
+    if damage == 'checkout':
+        source['checkout'] = 'd1' * 20
+    elif damage == 'dirty':
+        source['uncommitted'] = [' M src/spicy_regs/native_conversion.py']
+    elif damage == 'untracked':
+        source['untracked'] = ['src/spicy_regs/new.py']
+    elif damage == 'wheel':
+        source['spicy_docs_wheel']['file_sha256'] = 'different'
+    elif damage == 'code':
+        identity += '-changed'
+    elif damage == 'lock':
+        locked['wheels'][0]['hash'] = 'sha256:' + 'f' * 64
+    elif damage == 'remote':
+        source['remote'] = 'https://example.test/unrelated.git'
+    else:
+        receipt['checkpoint_admission']['observed_remote_main'] = MAIN
+    if damage not in ('remote', 'observation'):
+        with pytest.raises(conversion.ConversionRefused):
+            conversion._checkpoint_producer(source, MAIN, WHEEL)
+    with pytest.raises(conversion.ConversionRefused):
+        conversion._receipt_producer_implementation(receipt, publisher, MAIN)

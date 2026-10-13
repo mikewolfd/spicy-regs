@@ -100,7 +100,7 @@ def _write_new(path, value):
 
 
 @contextmanager
-def observation_segments(path, *, captured_family, source_pin):
+def observation_segments(path, *, captured_family, source_pin, hosted_main=None):
     """Serialize all preparation and readback; a dead owner releases its lock."""
     import fcntl
     path = Path(path).absolute()
@@ -135,6 +135,25 @@ def observation_segments(path, *, captured_family, source_pin):
         for name in ('closed', 'attempts'):
             _directory(path / name)
         _sync_directory(path)
+        if hosted_main is not None:
+            from spicy_regs.native_conversion import _checkpoint_ancestor
+            history = path / 'hosted-main-observations'
+            _directory(history)
+            records = sorted(p for p in history.iterdir() if not p.name.startswith('.pending-'))
+            if [p.name for p in records] != [f'{i:08d}.json' for i in range(len(records))]:
+                raise ValueError('Checkpoint hosted-main observation history has a gap')
+            previous = source_pin['checkout']
+            header_sha = _sha(header)
+            for record in records:
+                _file(record)
+                observed = json.loads(record.read_text())
+                if (not isinstance(observed, dict) or set(observed) != {'checkpoint_sha256', 'main'}
+                        or observed['checkpoint_sha256'] != header_sha):
+                    raise ValueError('Checkpoint hosted-main observation binding changed')
+                _checkpoint_ancestor(previous, observed['main'])
+                previous = observed['main']
+            _checkpoint_ancestor(previous, hosted_main)
+            _write_new(history / f'{len(records):08d}.json', dict(checkpoint_sha256=header_sha, main=hosted_main))
         yield ObservationSegments(path, value['generation_id'], _sha(header))
     finally:
         os.close(fd)
