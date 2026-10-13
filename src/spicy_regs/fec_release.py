@@ -369,6 +369,13 @@ def install_views(connection, specs, configuration, index, available_tables, pub
     from .relationship_views.sql_views import install_sql_views
 
     result = {}
+    schemas = {}
+    # Only this exact adapter's unchanged legacy branch promises no input writes.
+    # Native preparation and arbitrary callbacks keep fresh physical checks.
+    from .fec_receipt_adapter import ReceiptAdapter
+    owner = getattr(prepare, "__self__", None)
+    unchanged_adapter = (type(owner) is ReceiptAdapter and owner.connection is connection
+                         and getattr(prepare, "__func__", None) is ReceiptAdapter.prepare_qualified)
     for spec in specs:
         release = check_view(spec, configuration, index, available_tables)
         if release["status"] == "compatible":
@@ -387,8 +394,18 @@ def install_views(connection, specs, configuration, index, available_tables, pub
             sql = configuration["views"][spec.view.name]["sql"]
             prepared = replace(spec.view, query=lambda _pins, sql=sql: sql)
             if prepare is not None:
-                prepared = prepare(prepared, sql)
-            entry = install_sql_views(connection, set(available_tables) | set(prepared.required), [prepared], publication)[spec.view.name]
+                if not unchanged_adapter:
+                    schemas.clear()
+                original = prepared
+                try:
+                    prepared = prepare(original, sql)
+                except BaseException:
+                    schemas.clear()
+                    raise
+                if prepared is not original:
+                    schemas.clear()
+            entry = install_sql_views(connection, set(available_tables) | set(prepared.required), [prepared], publication,
+                                      _schemas=schemas)[spec.view.name]
             entry["dependencies"] = list(spec.view.required)
             entry["metadata"]["input_publications"] = {table: publication.get(table) for table in spec.view.required}
             if entry["status"] != "available":

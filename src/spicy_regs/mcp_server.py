@@ -21,6 +21,7 @@ import tempfile
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
@@ -30,6 +31,7 @@ from importlib.resources import files
 from pathlib import Path
 from time import monotonic as _monotonic
 from typing import Annotated, Any, NamedTuple
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import anyio
@@ -599,6 +601,136 @@ class _Publication(NamedTuple):
     comments: dict | None = None
 
 
+class _RemoteSourceView(NamedTuple):
+    name: str
+    urls: list[str]
+    columns: list[list[str]] | None
+    required: bool
+    export: bool
+
+
+def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
+    """Bind and freshly check one independent source; only absent legacy files may skip."""
+    from spicy_regs.sources.publication import parquet_scan
+
+    try:
+        with _diagnostic_phase("view_registration", source.name):
+            cursor.execute(f'CREATE VIEW "{source.name}" AS SELECT * FROM {parquet_scan(source.urls)}')
+        if source.columns is not None or source.required:
+            with _diagnostic_phase("view_schema", source.name):
+                actual = cursor.execute(f'DESCRIBE "{source.name}"').fetchall()
+            if source.columns is not None and [[row[0], row[1]] for row in actual] != source.columns:
+                raise RuntimeError(f"Published schema differs from admitted generation: {source.name}")
+    except duckdb.Error as exc:
+        if source.required or not (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404):
+            kind = "Published generation member" if source.required else "Legacy table"
+            raise RuntimeError(f"{kind} unavailable: {source.name}") from exc
+        logger.warning("table %s not available at %s; skipping view: %s", source.name, source.urls, exc)
+        return False
+    return True
+
+
+def _admit_remote_source_views(con, sources: list[_RemoteSourceView]) -> list[bool]:
+    """Use at most four private cursors, settling all work before closing or exposing the database."""
+    if not sources:
+        return []
+    workers = min(4, len(sources))
+    cursors = []
+    stop = threading.Event()
+    admitted = [False] * len(sources)
+
+    def batch(cursor, positions):
+        try:
+            result = []
+            for position in positions:
+                if stop.is_set():
+                    break
+                result.append((position, _admit_remote_source_view(cursor, sources[position])))
+            return result
+        except BaseException:
+            stop.set()
+            raise
+
+    try:
+        # Duplicated cursors share global budgets/security, but LOCAL settings
+        # reset in DuckDB 1.5.5. Apply the same home and retry policy explicitly.
+        for _ in range(workers):
+            cursor = con.cursor()
+            cursors.append(cursor)
+            cursor.execute("SET home_directory=?", [HOME_DIRECTORY])
+            for name, value in INTERACTIVE_HTTP_RETRIES.items():
+                cursor.execute(f"SET {name}=?", [value])
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="source-admission") as pool:
+            futures = [pool.submit(batch, cursor, range(i, len(sources), workers))
+                       for i, cursor in enumerate(cursors)]
+            for future in futures:
+                for position, available in future.result():
+                    admitted[position] = available
+    finally:
+        # Executor shutdown joins running workers even after failure. No child
+        # may still use this database when the caller closes or locks it.
+        close_error = None
+        for cursor in cursors:
+            try:
+                cursor.close()
+            except BaseException as exc:
+                close_error = close_error or exc
+        if close_error is not None:
+            raise close_error
+    return admitted
+
+
+def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, str] | None:
+    """Classify every admitted SQL URL from validated records, or retain cache defaults."""
+    from spicy_regs.sources.publication import (
+        PublicationError, SNAPSHOT_POINTER, load_rulemaking_snapshot, parse_index,
+        receipt_key_members, receipt_members, table_members,
+    )
+
+    base = R2_BASE_URL.rstrip("/")
+    if DATA_DIR is not None or urlsplit(base).scheme not in {"http", "https"} or not allowed_paths:
+        return None
+    try:
+        captured = parse_index(json.dumps(index).encode())
+        owned = {}
+        for entry in captured["families"].values():
+            for key in entry["tables"]:
+                owned.update({f"{base}/{member.path}": "managed_generation"
+                              for member in table_members(captured, key)})
+        owned.update({f"{base}/{member.path}": "managed_generation"
+                      for member in (*receipt_members(captured), *receipt_key_members(captured))})
+        if rulemaking is not None:
+            # Reuse the maintained pointer/manifest validator with the captured
+            # documents only: no additional HTTP read or filename inference.
+            manifest = rulemaking["manifest"]
+            pointer = {"format_version": manifest["format_version"], "dataset": manifest["dataset"],
+                       "snapshot_id": rulemaking["snapshot_id"], "manifest_key": rulemaking["manifest_key"]}
+            documents = {f"{base}/{SNAPSHOT_POINTER}": json.dumps(pointer).encode(),
+                         f"{base}/{rulemaking['manifest_key']}": json.dumps(manifest).encode()}
+            validated = load_rulemaking_snapshot(base, read=lambda url, **_: documents[url])
+            if validated is None or validated != rulemaking:
+                return None
+            owned.update({f"{base}/{record['remote_key']}": "rulemaking_snapshot"
+                          for record in validated["tables"].values()})
+        if any(path not in owned for path in allowed_paths):
+            return None
+        return {path: owned[path] for path in allowed_paths}
+    except (PublicationError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def _enable_immutable_metadata_cache(con, index, rulemaking, allowed_paths):
+    """Reuse HTTP metadata only after fresh admission of exclusively immutable SQL inputs.
+
+    Rulemaking immutability is the maintained source-owner policy, weaker than
+    managed generation create-only writes. Neither premise covers legacy mirrors.
+    """
+    inputs = _immutable_metadata_inputs(index, rulemaking, allowed_paths)
+    if inputs is not None:
+        con.execute("SET enable_http_metadata_cache=true")
+    return inputs
+
+
 @_diagnostic_phase('publication')
 def _read_publication() -> _Publication:
     """The live pointers, read once each; the rulemaking snapshot and comments receipt are ``None`` while unpublished.
@@ -728,6 +860,7 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None else []
     exports: list[str] = []
+    remote_sources: list[_RemoteSourceView] = []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
@@ -742,6 +875,13 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
             urls = [str(path) for path in local.paths(name)]
         else:
             urls = [f"{R2_BASE_URL}/{path}" for path in paths]
+        if local is None:
+            remote_sources.append(_RemoteSourceView(
+                name, urls, published["columns"] if published is not None else None,
+                published is not None or pinned is not None,
+                published is None and pinned is None and name in COMMENTS_EXPORT_TABLES,
+            ))
+            continue
         try:
             if not urls and local is not None and name in local.native:
                 import pyarrow as pa
@@ -771,6 +911,16 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 kind = "Published generation member" if required else "Legacy table"
                 raise RuntimeError(f"{kind} unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
+    try:
+        admitted = _admit_remote_source_views(con, remote_sources)
+    except BaseException:
+        con.close()
+        raise
+    for source, available in zip(remote_sources, admitted):
+        if available:
+            allowed_paths.extend(source.urls)
+            if source.export:
+                exports.append(source.name)
     if comments is not None:
         try:
             matched = _comments_exports(comments, exports)
@@ -838,8 +988,16 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                              {"sha256": _pin(value.receipts), "byteSize": value.receipts.stat().st_size,
                               "rows": pq.ParquetFile(value.receipts).metadata.num_rows})
                 allowed_paths.append(str(value.key_index))
-    _install_relationship_views(con)
-    _apply_security_settings(con, allowed_paths)
+    try:
+        immutable_inputs = _enable_immutable_metadata_cache(con, publication_index, rulemaking, allowed_paths)
+        _install_relationship_views(con)
+        if immutable_inputs is not None and immutable_inputs != _immutable_metadata_inputs(
+                publication_index, rulemaking, allowed_paths):
+            raise RuntimeError("Immutable SQL inputs changed before the security lock")
+        _apply_security_settings(con, allowed_paths)
+    except BaseException:
+        con.close()
+        raise
     return con
 
 
