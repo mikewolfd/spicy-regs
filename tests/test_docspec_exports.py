@@ -70,17 +70,61 @@ def test_exact_pin_survives_ttl_without_rehash_or_catalog_lookup(admitted):
         assert binding["export"] == document["tables"]["comments"]["export"]
         assert binding["evidence"] == {"scope": "release", "version": "initial", "manifest_blake3": "b" * 64, "row_mapping": False}
         assert reply["rows"] == [[1, "public"]]
-        retained = mcp_server._get_connection()
+        # Inspect the query cache without requesting the default full set of
+        # relationships outside the tool's query-specific admission context.
+        retained = mcp_server._cached_connection
+        assert retained is not None
+        assert (len(reads), len(hashes)) == (2, 1)
         configuration.write_text(json.dumps(document, indent=2))
         for _ in range(2):
-            assert mcp_server._get_connection() is retained
             assert call(client, "query_sql", {"sql": "SELECT id FROM comments"})["isError"] is False
+            assert mcp_server._cached_connection is retained
+            assert (len(reads), len(hashes)) == (2, 1)
         assert (len(reads), len(hashes)) == (2, 1)
         refused = call(client, "query_sql", {"sql": f"SELECT content FROM read_text('{manifest}')"})
         assert refused["isError"] is True
         assert "disabled by configuration" in refused["content"][0]["text"]
         assert (len(reads), len(hashes)) == (2, 1)
     assert directory.joinpath("comments.parquet").is_file()
+
+
+def test_discovery_and_query_admit_separate_pins_once_then_reuse_at_ttl(admitted):
+    _, _, _, _, reads, hashes, _ = admitted
+    with TestClient(mcp_server.build_app()) as client:
+        assert call(client, "describe_table", {"table": "comments"})["isError"] is False
+        discovery = mcp_server._cached_discovery_connection
+        assert discovery is not None
+        assert (len(reads), len(hashes)) == (2, 1)
+        assert call(client, "describe_table", {"table": "comments"})["isError"] is False
+        assert mcp_server._cached_discovery_connection is discovery
+        assert (len(reads), len(hashes)) == (2, 1)
+        assert call(client, "query_sql", {"sql": "SELECT id FROM comments"})["isError"] is False
+        query = mcp_server._cached_connection
+        assert query is not None and query is not discovery
+        assert (len(reads), len(hashes)) == (4, 2)
+        for name, arguments in (("query_sql", {"sql": "SELECT id FROM comments"}),
+                                ("describe_table", {"table": "comments"})):
+            assert call(client, name, arguments)["isError"] is False
+            assert (len(reads), len(hashes)) == (4, 2)
+        assert mcp_server._cached_connection is query
+        assert mcp_server._cached_discovery_connection is discovery
+
+
+@pytest.mark.parametrize("ttl", [0, 300])
+def test_cached_export_byte_change_refuses_without_new_metadata_or_hash(admitted, monkeypatch, ttl):
+    directory, _, _, _, reads, hashes, _ = admitted
+    monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", ttl)
+    with TestClient(mcp_server.build_app()) as client:
+        assert call(client, "query_sql", {"sql": "SELECT id FROM comments"})["isError"] is False
+        retained = mcp_server._cached_connection
+        path = directory / "comments.parquet"
+        raw = path.read_bytes()
+        path.write_bytes(b"X" + raw[1:])
+        refused = call(client, "query_sql", {"sql": "SELECT id FROM comments"})
+        assert refused["isError"] is True
+        assert "changed" in refused["content"][0]["text"]
+        assert mcp_server._cached_connection is retained
+        assert (len(reads), len(hashes)) == (2, 1)
 
 
 @pytest.mark.parametrize("failure", ["pin", "release", "bytes", "external"])
