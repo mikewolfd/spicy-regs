@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA
@@ -16,6 +17,34 @@ from spicy_regs.transforms.assemble_fec_query import _sha
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, dataset_policy
 
 FORMAT = 'fec-observation-segments/1'
+
+
+def coalesced_tables(batches, schema, *, check_resources, row_group_rows=8192, max_bytes=8 * 1024 * 1024):
+    """Coalesce small Arrow views without decoding values or holding wide groups."""
+    from spicy_regs.fec_native_conversion import _bounded_record_batches
+    if type(row_group_rows) is not int or row_group_rows < 1 or type(max_bytes) is not int or max_bytes < 1:
+        raise ValueError('Coalescing requires positive integer row and byte bounds')
+    buffers, rows, size = [], 0, 0
+    for batch in batches:
+        check_resources()
+        for part in _bounded_record_batches(batch, max_bytes=max_bytes):
+            offset = 0
+            while offset < part.num_rows:
+                count = min(part.num_rows - offset, row_group_rows - rows)
+                view = part.slice(offset, count)
+                if buffers and size + view.nbytes > max_bytes:
+                    yield pa.Table.from_batches(buffers, schema=schema)
+                    buffers, rows, size = [], 0, 0
+                    continue
+                buffers.append(view)
+                rows += count
+                size += view.nbytes
+                offset += count
+                if rows == row_group_rows or size >= max_bytes:
+                    yield pa.Table.from_batches(buffers, schema=schema)
+                    buffers, rows, size = [], 0, 0
+    if buffers:
+        yield pa.Table.from_batches(buffers, schema=schema)
 
 
 def _same_json(left, right):
@@ -227,18 +256,20 @@ class ObservationSegments:
                 raise ValueError('Observation input changed before table completion')
         output.mkdir(parents=True, exist_ok=False)
         for name, expected_schema in ((table + '.parquet', policy.subject_schema), ('etl_receipts.parquet', RECEIPT_SCHEMA)):
-            with pq.ParquetWriter(output / name, expected_schema, compression='zstd') as writer:
+            def batches():
                 for directory, hashes in directories:
                     check_resources()
                     path = directory / name
                     if _sha(path) != hashes[name]:
                         raise ValueError('Observation segment changed before consolidation')
                     with pq.ParquetFile(path) as source:
-                        for batch in source.iter_batches(batch_size=32, use_threads=False):
-                            check_resources()
-                            writer.write_batch(batch)
+                        yield from source.iter_batches(batch_size=32, use_threads=False)
                     if _sha(path) != hashes[name]:
                         raise ValueError('Observation segment changed during consolidation')
+            with pq.ParquetWriter(output / name, expected_schema, compression='zstd') as writer:
+                for held in coalesced_tables(batches(), expected_schema, check_resources=check_resources):
+                    check_resources()
+                    writer.write_table(held, row_group_size=8192)
         return output / (table + '.parquet'), output / 'etl_receipts.parquet'
 
     def finish(self):

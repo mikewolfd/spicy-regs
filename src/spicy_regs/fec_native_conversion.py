@@ -166,7 +166,7 @@ def _partition_subject(flat, original, destination, check_resources):
     return destination
 
 
-def _consume_receipt(receipt, writer, check_resources):
+def _consume_receipt(receipt, writer, check_resources, *, coalesce=False):
     """Consume a completed owned bundle, checking every batch and its byte binding."""
     if receipt.is_symlink() or receipt.stat().st_nlink != 1:
         raise ValueError('Receipt consolidation requires a single-link owned output')
@@ -176,10 +176,18 @@ def _consume_receipt(receipt, writer, check_resources):
         if not source.schema_arrow.equals(RECEIPT_SCHEMA, check_metadata=False):
             raise ValueError('Receipt consolidation schema differs')
         expected = source.metadata.num_rows
-        for batch in source.iter_batches(batch_size=512, use_threads=False):
-            check_resources()
-            writer.write_batch(batch)
-            count += batch.num_rows
+        batches = source.iter_batches(batch_size=512, use_threads=False)
+        if coalesce:
+            from spicy_regs.fec_observation_segments import coalesced_tables
+            for held in coalesced_tables(batches, RECEIPT_SCHEMA, check_resources=check_resources):
+                check_resources()
+                writer.write_table(held, row_group_size=8192)
+                count += held.num_rows
+        else:
+            for batch in batches:
+                check_resources()
+                writer.write_batch(batch)
+                count += batch.num_rows
     if count != expected or _sha(receipt) != digest:
         raise ValueError('Receipt changed during consolidation')
     receipt.unlink()
@@ -750,7 +758,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                 receipts = output / 'etl_receipts.parquet'
             policies.append(policy)
             if receipt_writer is not None:
-                _consume_receipt(receipts, receipt_writer, check_resources)
+                _consume_receipt(receipts, receipt_writer, check_resources, coalesce=segments is not None)
             if subject is not None:
                 if original.is_dir():
                     destination = build / 'partitioned' / table

@@ -9,7 +9,8 @@ import pytest
 from spicy_regs.conversion_reads import ConversionReadOperation
 from spicy_regs import fec_native_conversion as native
 from spicy_regs import native_conversion as conversion
-from spicy_regs.fec_observation_segments import observation_segments
+from spicy_regs.fec_observation_segments import observation_segments, coalesced_tables
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
 from spicy_regs.sources import publication
 from tests.test_fec_native_conversion import old_family, fec_bucket
@@ -205,3 +206,54 @@ def test_checkpoint_refuses_download_mode_before_any_work(tmp_path):
         conversion.convert('fec-observations', allowed=['fec-observations'], work=tmp_path / 'work',
             expected_main=MAIN, expected_spicy_docs=WHEEL, observation_checkpoint=tmp_path / 'checkpoint')
     assert not (tmp_path / 'work').exists()
+
+
+def test_small_read_batches_coalesce_to_practical_physical_row_groups(tmp_path):
+    schema = pa.schema([('ordinal', pa.int64()), ('value', pa.string())])
+    rows = [{'ordinal': i, 'value': None if i % 3 == 0 else 'é'} for i in range(20_000)]
+    source = tmp_path / 'segment.parquet'
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), source)
+    legacy, coalesced = tmp_path / 'legacy.parquet', tmp_path / 'coalesced.parquet'
+    with pq.ParquetFile(source) as reader, pq.ParquetWriter(legacy, schema) as writer:
+        for batch in reader.iter_batches(batch_size=32, use_threads=False):
+            writer.write_batch(batch)
+    with pq.ParquetFile(source) as reader, pq.ParquetWriter(coalesced, schema) as writer:
+        for held in coalesced_tables(reader.iter_batches(batch_size=32, use_threads=False), schema,
+                                     check_resources=lambda: None):
+            writer.write_table(held, row_group_size=8192)
+    with pq.ParquetFile(legacy) as reader:
+        assert reader.metadata.num_row_groups == 625
+    with pq.ParquetFile(coalesced) as reader:
+        assert reader.metadata.num_row_groups == 3
+        assert reader.read().to_pylist() == rows
+
+
+def test_final_shared_receipts_use_coalescing_and_keep_exact_values(tmp_path):
+    witness = dict(source_id='fixture', sha256='sha256:' + 'a' * 64, source_uri=None, locator=None)
+    with IdentityReceiptWriter(tmp_path / 'segment', generation_id='fixture', tables=['fec_source_records']) as writer:
+        writer.emit_batch('fec_source_records', ((dict(collection_id='fixture', source_record_id=str(i),
+            source_sha256=witness['sha256'], source_record_json='{"value":"é"}'), dict(input_witness=witness))
+            for i in range(2048)))
+    source = tmp_path / 'segment/etl_receipts.parquet'
+    expected = pq.ParquetFile(source).read().to_pylist()
+    output = tmp_path / 'shared.parquet'
+    # The actual owned consolidation consumes this derived receipt member.
+    with pq.ParquetWriter(output, RECEIPT_SCHEMA) as writer:
+        native._consume_receipt(source, writer, lambda: None, coalesce=True)
+    with pq.ParquetFile(output) as reader:
+        assert reader.metadata.num_row_groups == 1
+        assert reader.read().to_pylist() == expected
+
+
+def test_coalescing_byte_bound_keeps_complete_wide_values():
+    schema = pa.schema([('value', pa.string())])
+    rows = [{'value': 'é' * 1000}, {'value': None}, {'value': 'z' * 9000}, {'value': 'last'}]
+    source = pa.RecordBatch.from_pylist(rows, schema=schema)
+    groups = list(coalesced_tables([source], schema, check_resources=lambda: None, max_bytes=4096))
+    assert [row for held in groups for row in held.to_pylist()] == rows
+    assert all(held.nbytes <= 4096 or held.num_rows == 1 for held in groups)
+
+
+def test_invalid_coalescing_bound_refuses_before_reading():
+    with pytest.raises(ValueError, match='positive integer'):
+        list(coalesced_tables([], pa.schema([]), check_resources=lambda: None, row_group_rows=0))
