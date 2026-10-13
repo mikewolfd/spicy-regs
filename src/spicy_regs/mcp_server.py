@@ -788,6 +788,7 @@ def _comments_exports(comments: dict, served: list[str]) -> dict[str, dict]:
 
 
 _discovery_only = ContextVar("spicy_schema_discovery", default=False)
+_requested_relations: ContextVar[set[str] | None] = ContextVar("spicy_requested_relations", default=None)
 
 
 @_diagnostic_phase('connection_build')
@@ -1123,7 +1124,7 @@ def _fec_release_reply(cursor):
 @_diagnostic_phase('relationship_binding')
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
-    from spicy_regs.relationship_views import install_relationship_views
+    from spicy_regs.relationship_views import describe_relationship_views, install_relationship_views
 
     status = _publication_status(con)
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter, receipt_owner
@@ -1152,9 +1153,28 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
                and any(receipt_owner(index, table) or table in native for table in spec.required)]
     for spec in adapted:
         adapter.require_selected(spec.required)
-    relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    requested = _requested_relations.get()
+    selected = None if requested is None else set(requested)
+    if _discovery_only.get() or requested is not None:
+        relationships = describe_relationship_views(con, status["tables"], publication=status["publication"])
+    else:
+        relationships = {}
+    if not _discovery_only.get():
+        if selected is not None:
+            while True:
+                parents = {parent for name in selected if name in relationships
+                           for parent in relationships[name]["metadata"].get(
+                               "declared_dependencies", relationships[name]["dependencies"])}
+                added = parents - selected
+                if not added:
+                    break
+                selected.update(added)
+        relationships.update(install_relationship_views(
+            con, status["tables"] if selected is None else set(status["tables"]) & selected,
+            publication=status["publication"], selected_names=selected,
+        ))
     for spec in adapted:
-        if _discovery_only.get():
+        if _discovery_only.get() or selected is not None and spec.name not in selected:
             relationships[spec.name] = {
                 "status": "deferred", "reason": "Exact receipt row admission is deferred until a query connection is requested.",
                 "dependencies": list(spec.required), "metadata": {
@@ -1178,6 +1198,7 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         relationships.update(install_views(
             con, _selected_fec_views(con), selected, index, set(status["tables"]) | processing, status["publication"],
             read_tables=_tables_named, prepare=adapter.prepare_qualified, defer_admission=_discovery_only.get(),
+            admit_names=requested,
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
@@ -1574,6 +1595,40 @@ def _get_discovery_connection():
         return _cached_discovery_connection
 
 
+def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
+    """Rebuild locked connections with additional trusted views using the same pinned publication."""
+    with current.cursor() as cursor:
+        registry = _connection_relationships(cursor)
+        publication = _pinned_publication(cursor)
+        local = _connection_local_selection(cursor)
+        release = _pinned_record(cursor, '_spicy_fec_release')
+    pending = {name for name, entry in registry.items() if entry['status'] == 'deferred'}
+    requested = _requested_relations.get()
+    if not (pending if requested is None else pending & requested):
+        return current
+    if DATA_DIR is not None and local is None:
+        raise RuntimeError('Local relationship expansion requires a pinned selection; refresh the connection.')
+    installed = {name for name, entry in registry.items() if entry['status'] in ('available', 'unsupported')}
+    if local is not None:
+        from spicy_regs.local_data import assert_local_members_unchanged
+
+        assert_local_members_unchanged(local['signatures'])
+    token = _requested_relations.set(None if requested is None else installed | requested)
+    try:
+        replacement = _build_connection(publication)
+        try:
+            if (_pinned_publication(replacement) != publication
+                    or _connection_local_selection(replacement) != local
+                    or _pinned_record(replacement, '_spicy_fec_release') != release):
+                raise RuntimeError('Selected publication or release changed during relationship expansion; refresh the connection.')
+        except BaseException:
+            replacement.close()
+            raise
+        return replacement
+    finally:
+        _requested_relations.reset(token)
+
+
 @_diagnostic_phase('connection_access')
 def _get_connection() -> duckdb.DuckDBPyConnection:
     """Return the shared connection, building it on first use and refreshing it past the TTL (see above).
@@ -1589,12 +1644,18 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
         if _cached_connection is None:  # cold start: concurrent callers wait for this one build
             _cached_connection, _cached_connection_at = _build_connection(), _monotonic()
             return _cached_connection
-        if _refreshing or _monotonic() - _cached_connection_at < _CONNECTION_TTL_SECONDS:
+        if _refreshing:
+            # An in-flight refresh owns publication of its replacement. A caller
+            # needing more views gets its own pinned replacement, never mutates
+            # the locked connection or overwrites the refresh's cache entry.
+            return _expand_query_connection(_cached_connection)
+        if _monotonic() - _cached_connection_at < _CONNECTION_TTL_SECONDS:
+            _cached_connection = _expand_query_connection(_cached_connection)
             return _cached_connection
         current, _refreshing = _cached_connection, True
     replacement = current
     try:
-        replacement = _refreshed(current)
+        replacement = _expand_query_connection(_refreshed(current))
     except TimeoutError:
         raise
     except Exception:
@@ -2255,10 +2316,21 @@ def _tools() -> list[Tool]:
             bound = RequestBound(STATEMENT_TIMEOUT_SECONDS, f"Request exceeded the {STATEMENT_TIMEOUT} timeout, including input admission")
             def run():
                 token = _discovery_only.set(getattr(fn, "__name__", None) in ("list_sources", "describe_table"))
+                requested_token = None
                 try:
                     with bound.scope():
+                        if getattr(fn, '__name__', None) == 'query_sql':
+                            # Inspect the unbound parse tree before opening source
+                            # views. Never execute caller SQL on this parser.
+                            with duckdb.connect() as parser:
+                                write_statement = _first_write_statement(parser, arguments['sql'])
+                                if write_statement is not None:
+                                    raise ValueError(f"query_sql is read-only; refusing {write_statement} statement")
+                                requested_token = _requested_relations.set(_tables_named(parser, arguments['sql']))
                         return _run_observed_tool(fn, arguments)
                 finally:
+                    if requested_token is not None:
+                        _requested_relations.reset(requested_token)
                     _discovery_only.reset(token)
             try:
                 with anyio.fail_after(STATEMENT_TIMEOUT_SECONDS):
@@ -2322,7 +2394,7 @@ def _tools() -> list[Tool]:
         statement can read a newer export); export_receipt_does_not_match_object
         means the file had moved, and rows is null.
         Discovery binds source schemas without restoring receipt-backed rows.
-        deferred_views names views whose exact receipt admission remains pending
+        deferred_views names views whose schema binding or exact receipt admission remains pending
         until query_sql builds its separate query connection, grouped by reason.
         Relationship groups list view identities; describe_table gives labels and full meanings.
         No output schema or

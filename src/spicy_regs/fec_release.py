@@ -364,7 +364,7 @@ def release_summary(record: Mapping, fields: Sequence[str] | None = None) -> dic
     return deepcopy(summary)
 
 
-def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables, prepare=None, defer_admission=False):
+def install_views(connection, specs, configuration, index, available_tables, publication, *, read_tables, prepare=None, defer_admission=False, admit_names=None):
     """Check first, then reuse the relationship-view owner for compatible trusted SQL."""
     from .relationship_views.sql_views import install_sql_views
 
@@ -390,7 +390,7 @@ def install_views(connection, specs, configuration, index, available_tables, pub
                 release["reasons"].append(dict(path="sql", reason=f"registered_sql_invalid: {exc}", expected=None, actual=None))
             if release["reasons"]:
                 release["status"] = "disabled"
-        if release["status"] == "compatible" and defer_admission:
+        if release["status"] == "compatible" and (defer_admission or admit_names is not None and spec.view.name not in admit_names):
             entry = dict(status="deferred", reason="Release pins match; exact receipt row and output schema admission remains pending.",
                          dependencies=list(spec.view.required), metadata=dict(
                              label=spec.view.name.replace("_", " "), summary=spec.view.meaning, kind="derived",

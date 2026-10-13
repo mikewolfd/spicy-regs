@@ -21,6 +21,148 @@ def reset_connections():
     server._reset_connection_cache()
 
 
+def test_relationship_declarations_do_not_touch_source_schemas():
+    from spicy_regs.relationship_views import describe_relationship_views
+
+    class NoDatabaseWork:
+        def execute(self, *args, **kwargs):
+            raise AssertionError('Discovery must not bind relationship SQL or read source schemas')
+
+    pin = {'status': 'managed_generation', 'artifact_digest': 'sha256:' + 'a' * 64}
+    registry = describe_relationship_views(NoDatabaseWork(), ['members'], {'members': pin})
+    member_views = [item for item in registry.values() if item['dependencies'] == ['members']]
+    assert member_views
+    for entry in member_views:
+        assert entry['status'] == 'deferred'
+        assert entry['metadata']['query_admission'] == 'pending_relationship_binding'
+        assert entry['metadata']['input_publications'] == {'members': pin}
+        assert 'column_lineage' not in entry['metadata']
+        assert entry['metadata']['availability_basis'] == 'Declared dependencies only; runtime schema binding and query admission remain pending.'
+    assert registry['comment_document_references']['status'] == 'unavailable'
+
+
+def test_general_discovery_defers_binding_but_query_preserves_schema_refusal(monkeypatch):
+    import duckdb
+
+    def connection(publication=None):
+        con = duckdb.connect()
+        con.execute('CREATE TABLE members (bioguide_id VARCHAR, fec_ids_json VARCHAR, observed_at VARCHAR, roster VARCHAR)')
+        con.execute("INSERT INTO members VALUES ('X', '[\"S8WA00194\"]', 'today', 'current')")
+        con.execute('CREATE TABLE comments (comment_id VARCHAR, docket_id VARCHAR)')
+        server._install_relationship_views(con)
+        server._apply_security_settings(con)
+        return con
+
+    monkeypatch.setattr(server, '_build_connection', connection)
+    mcp = server.build_server()
+    listed = _tool_data(mcp, 'list_sources', {})
+    # Find the maintained name rather than assuming one from the source field.
+    discovery_connection = server._cached_discovery_connection
+    assert discovery_connection is not None
+    registry = server._connection_relationships(discovery_connection)
+    name = next(name for name, item in registry.items()
+                if item['dependencies'] == ['members'] and name.endswith('_occurrences'))
+    assert name in {name for group in listed['deferred_views'] for name in group['views']}
+    described = _tool_data(mcp, 'describe_table', {'table': name})
+    assert not described['available'] and described['columns'] == []
+    assert described['metadata']['query_admission'] == 'pending_relationship_binding'
+    assert server._cached_connection is None
+    result = _tool_data(mcp, 'query_sql', {'sql': f'SELECT target_key FROM "{name}"'})
+    assert _records(result) == [{'target_key': 'S8WA00194'}]
+    with pytest.raises(Exception, match='comment_document_references'):
+        _tool_data(mcp, 'query_sql', {'sql': 'SELECT * FROM comment_document_references'})
+    query_connection = getattr(server, '_cached_connection')
+    assert query_connection is not None
+    query_registry = server._connection_relationships(query_connection)
+    assert query_registry['comment_document_references']['status'] == 'unsupported'
+    assert server._cached_connection is not server._cached_discovery_connection
+
+
+def test_queries_bind_only_requested_relationships_and_expand_same_pins(monkeypatch):
+    import duckdb
+
+    builds = []
+    selected = {'families': {}, 'test_generation': 'first'}
+
+    def connection(publication=None):
+        index = selected if publication is None else publication.index
+        builds.append((index, server._requested_relations.get()))
+        con = duckdb.connect()
+        con.execute('CREATE TABLE _spicy_publication (snapshot VARCHAR)')
+        import json
+        con.execute('INSERT INTO _spicy_publication VALUES (?)', [json.dumps(index)])
+        con.execute('CREATE TABLE members (bioguide_id VARCHAR, fec_ids_json VARCHAR, observed_at VARCHAR, roster VARCHAR)')
+        con.execute("INSERT INTO members VALUES ('X', '[\"S8WA00194\"]', 'today', 'current')")
+        con.execute('CREATE TABLE comments (comment_id VARCHAR, docket_id VARCHAR, comment_reference_values_json VARCHAR, '
+                    'comment_on_document_id VARCHAR, comment_on_object_id VARCHAR, original_document_id VARCHAR)')
+        server._install_relationship_views(con)
+        server._apply_security_settings(con)
+        return con
+
+    monkeypatch.setattr(server, '_build_connection', connection)
+    mcp = server.build_server()
+    assert _records(_tool_data(mcp, 'query_sql', {'sql': 'SELECT bioguide_id FROM members'})) == [{'bioguide_id': 'X'}]
+    con = getattr(server, '_cached_connection')
+    assert con is not None
+    registry = server._connection_relationships(con)
+    assert all(item['status'] != 'available' for item in registry.values())
+    names = [name for name, item in registry.items()
+             if item['dependencies'] == ['members'] and name.endswith('_pairs')]
+    assert names
+    first = con
+    for name in names:
+        _tool_data(mcp, 'query_sql', {'sql': f'SELECT * FROM "{name}"'})
+    con = getattr(server, '_cached_connection')
+    assert con is not None and con is not first
+    assert builds[1][0] == selected
+    assert all(item['status'] != 'available' for item in server._connection_relationships(con).values()
+               if item['dependencies'] != ['members'])
+    assert _records(_tool_data(mcp, 'query_sql', {'sql': 'SELECT * FROM comment_document_references'})) == []
+    later = getattr(server, '_cached_connection')
+    assert later is not None and later is not con
+    assert server._connection_relationships(later)['comment_document_references']['status'] == 'available'
+    assert builds[-1][0] == selected
+    # A changed selected pointer takes the maintained refresh path, rather
+    # than expanding a stale connection with new-generation source views.
+    selected = {'families': {}, 'test_generation': 'second'}
+    monkeypatch.setattr(server, '_read_publication', lambda: server._Publication(selected, None, None))
+    monkeypatch.setattr(server, '_CONNECTION_TTL_SECONDS', 0)
+    _tool_data(mcp, 'query_sql', {'sql': 'SELECT bioguide_id FROM members'})
+    assert builds[-1][0] == selected
+    with pytest.raises(Exception, match='read-only'):
+        _tool_data(mcp, 'query_sql', {'sql': 'CREATE TABLE bypass AS SELECT 1'})
+
+
+@pytest.mark.parametrize('changed_record', ['_spicy_local_selection', '_spicy_fec_release'])
+def test_relationship_expansion_refuses_changed_local_selection_or_release(monkeypatch, changed_record):
+    import duckdb
+    import json
+
+    def connection(version):
+        con = duckdb.connect()
+        for name, record in {
+            '_spicy_relationships': {'needed': {'status': 'deferred'}},
+            '_spicy_local_selection': {'signatures': {}, 'generation': version if changed_record == '_spicy_local_selection' else 'held'},
+            '_spicy_fec_release': {'receipt': version if changed_record == '_spicy_fec_release' else 'held'},
+        }.items():
+            con.execute(f'CREATE TABLE {name} (snapshot VARCHAR)')
+            con.execute(f'INSERT INTO {name} VALUES (?)', [json.dumps(record)])
+        return con
+
+    with connection('first') as current:
+        replacement = connection('second')
+        monkeypatch.setattr(server, '_build_connection', lambda publication: replacement)
+        token = server._requested_relations.set({'needed'})
+        try:
+            with pytest.raises(RuntimeError, match='publication or release changed'):
+                server._expand_query_connection(current)
+            assert current.execute('SELECT 1').fetchone() == (1,)
+            with pytest.raises(duckdb.ConnectionException, match='closed'):
+                replacement.execute('SELECT 1')
+        finally:
+            server._requested_relations.reset(token)
+
+
 def test_financial_discovery_defers_exact_rows_but_query_still_admits(tmp_path, monkeypatch):
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter
     from tests.test_mcp_fec_release import configure, connection
@@ -51,6 +193,11 @@ def test_financial_discovery_defers_exact_rows_but_query_still_admits(tmp_path, 
     assert _records(result) == [{'id': 1}]
     assert 'fec_receipts' in restored
     assert server._cached_connection is not server._cached_discovery_connection
+    query_connection = getattr(server, '_cached_connection')
+    assert query_connection is not None
+    registry = server._connection_relationships(query_connection)
+    assert registry[specs[0].view.name]['status'] == 'available'
+    assert all(registry[spec.view.name]['status'] == 'deferred' for spec in specs[1:])
 
 
 def test_native_discovery_keeps_pins_without_receipt_row_replay(tmp_path, monkeypatch):
