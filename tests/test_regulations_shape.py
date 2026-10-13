@@ -220,4 +220,5 @@ def test_plain_comment_text_and_source_restrictions_are_mapped_before_receipts()
     shaped = shape_record("comments", raw)
     assert shaped["comment_text"] == "I'm here.\nThanks & good luck."
     assert shaped["attachments"] == [{"title": "Study", "formats": None, "restrict_reason_type": "Copyrighted"}]
-    assert shaped["raw_conversion_inputs"] == raw
+    assert shaped["raw_source_record"] == raw
+    assert "raw_conversion_inputs" not in shaped  # Comments keeps one replayable original input.
