@@ -250,11 +250,19 @@ def test_returned_column_is_a_text_column_of_exactly_the_decided_tables(column):
         policy = installed[name]
         assert policy.subject_schema.field(column).type == pa.string()
         assert column not in policy.receipt_fields
-        # None of these tables had published natively when the column returned, so the version did not move.
+        # Returning these source fields preserved their meaning. The later
+        # filing association schema explicitly distinguishes self/external
+        # targets in /3; unrelated legal/statistical tables remain /2.
         if policy.policy_version == "fec-identity-context-receipts/2":
             declared = identity_policy(name)
         else:
-            assert policy.policy_version == "fec-subject-receipts/2"
+            if name in {"fec_legal_matters", "fec_historical_ie_statistics", "fec_legal_events"}:
+                assert policy.policy_version == "fec-subject-receipts/2"
+                assert "filing_association_target_generation_scope" not in policy.subject_schema.names
+            else:
+                assert policy.policy_version == "fec-subject-receipts/3"
+                for field in ("filing_association_target_generation_scope", "filing_association_target_generation_pin"):
+                    assert policy.subject_schema.field(field).type == pa.string()
             declared = dataset_policy(name, declared_schema(name))
         # Publication admits a generation against the installed declaration, not the registry it was made from.
         assert policy.descriptor() == declared.descriptor()
