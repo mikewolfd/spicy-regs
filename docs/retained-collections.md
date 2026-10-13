@@ -142,3 +142,29 @@ file-list witnesses. A selection must include every search-stated transmittal
 and matching file-list row; missing originals and source failures refuse the
 whole candidate. Failed acquisition records remain in their original evidence;
 this successful-input selection does not manufacture successful rows for them.
+
+
+## Finite native CFTC comments
+
+A `cftc-comments` unit supplies its numeric `rule_id`, complete ordered
+`listings`, explicit `scope`, `details`, `files`, and `expected_comments`.
+`listing-only` retains the native listing fields and marks details
+`not-selected`. `details-and-files` requires every listed comment detail and
+every attachment those details state. Missing, extra, repeated, misidentified
+or incomplete inputs refuse the candidate.
+
+The maintained CFTC scoped listing walk checks pagination, stable stated totals
+and unique comment IDs. Retained GET captures replace acquisition through the
+same bounded validation hook used by FERC. Native listing and detail parsers
+retain literal names, dates, organizations, citation text and letter links.
+The tables `cftc_rule_observations`, `cftc_comments` and `cftc_comment_files`
+retain those complete native values, scope and ordered source witnesses. Letter
+rows also retain historical provider evidence; replay makes no new direct or
+proxy acquisition claim. PDF validation reuses the source reader's maintained
+shared PDF gate. These legacy portal selections do not establish coverage of
+modern Regulations.gov records.
+
+The shared offline hook compares POST request JSON through the maintained
+lossless evidence codec. It allows whitespace and object-key-order differences
+while preserving numeric and Boolean types; integer zero cannot substitute for
+Boolean false.

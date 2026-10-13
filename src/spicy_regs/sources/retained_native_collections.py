@@ -17,6 +17,11 @@ from tempfile import TemporaryDirectory
 import pyarrow as pa
 import httpx
 from spicy_docs.reading.json_input import load_decimal_json
+from spicy_docs.reading.pdf_bytes import check_pdf_bytes
+from spicy_docs.sources.cftc_comments.acquisition import CftcPortalAcquirer, CftcPortalBudget
+from spicy_docs.sources.cftc_comments.reader import CftcCommentsReader
+from spicy_docs.sources.cftc_comments.pages import view_comment_url
+from spicy_docs.sources.cftc_comments.attachments import CftcPdfError, pdf_locator
 from spicy_docs.reading.media_types import bare_media_type
 from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.reading.refusals import attach_refused_response
@@ -38,7 +43,7 @@ from spicy_docs.sources.sec_comments.pages import (
 )
 from spicy_docs.transport.captured import CapturedBodyResponse, attach_capture, refused_capture
 
-from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, combine_receipts, write_dataset
+from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, combine_receipts, exact_json, write_dataset
 from spicy_regs.sources.retained_collections import _code_pins, _digest, _file_digest, _json, _read
 
 VERSION = "retained-native-collections-v1"
@@ -90,6 +95,35 @@ for _table, _fields in {
         [(key, pa.string()) for key in (*_fields, "source_uri", "source_sha256", "observed_at")]
         + [("record_index", pa.int64()) if _table != "ferc_original_files" else ("bytes", pa.int64())]
     )
+for _table, (_strings, _ints) in {
+    "cftc_rule_observations": (("observation_id", "scope", "native_listings_json", "observed_at"), ("rule_id",)),
+    "cftc_comments": (
+        (
+            "observation_id",
+            "rule_observation_id",
+            "native_listing_row_json",
+            "native_detail_json",
+            "detail_state",
+            "observed_at",
+        ),
+        ("comment_id", "rule_id"),
+    ),
+    "cftc_comment_files": (
+        (
+            "observation_id",
+            "rule_observation_id",
+            "filename",
+            "file_url",
+            "body_sha256",
+            "pdf_version",
+            "provider_evidence_json",
+            "observed_at",
+        ),
+        ("comment_id", "rule_id", "file_id", "bytes"),
+    ),
+}.items():
+    SCHEMAS[_table] = pa.schema([(key, pa.string()) for key in _strings] + [(key, pa.int64()) for key in _ints])
+
 POLICIES = {
     table: DatasetPolicy(
         table,
@@ -296,7 +330,7 @@ def _no_network(request):
     raise RuntimeError("retained reader attempted acquisition")
 
 
-class _RetainedFercCapture:
+class _RetainedValidatedCapture:
     """Replace acquisition only; native traversal and validation still execute.
 
     The selection supplies original request framing and captured responses.
@@ -312,22 +346,22 @@ class _RetainedFercCapture:
         try:
             entry = next(self.retained_entries)
         except StopIteration:
-            raise ValueError("missing retained FERC response") from None
+            raise ValueError("missing retained native response") from None
         if entry["requested_url"] != url or entry.get("method", "GET") != method:
-            raise ValueError("retained FERC request locator/method differs")
+            raise ValueError("retained native request locator/method differs")
         original_body = entry.get("request_body")
         if method == "POST":
-            if content is None or load_decimal_json(
-                original_body.encode(), source="retained FERC request"
-            ) != load_decimal_json(content, source="native FERC request"):
-                raise ValueError("retained FERC POST body differs")
+            if content is None or exact_json(
+                load_decimal_json(original_body.encode(), source="retained native request")
+            ) != exact_json(load_decimal_json(content, source="native request")):
+                raise ValueError("retained native POST body differs")
         elif original_body is not None or content is not None:
-            raise ValueError("unexpected retained FERC GET body")
+            raise ValueError("unexpected retained native GET body")
         capture = self.retained_captures.read(entry)
         self.retained_count += 1
         try:
             if capture.byte_size > max_bytes or bare_media_type(capture.content_type) not in media_types:
-                raise ValueError("retained FERC response media/size differs")
+                raise ValueError("retained native response media/size differs")
             return parse(capture, max_bytes), capture
         except Exception as error:
             attach_capture(error, capture)
@@ -336,14 +370,14 @@ class _RetainedFercCapture:
 
     def require_consumed(self):
         if next(self.retained_entries, None) is not None:
-            raise ValueError("unused retained FERC response")
+            raise ValueError("unused retained native response")
 
 
-class _RetainedFercReader(_RetainedFercCapture, FercElibraryReader):
+class _RetainedFercReader(_RetainedValidatedCapture, FercElibraryReader):
     pass
 
 
-class _RetainedFercOriginal(_RetainedFercCapture, FercElibraryOriginalAcquirer):
+class _RetainedFercOriginal(_RetainedValidatedCapture, FercElibraryOriginalAcquirer):
     pass
 
 
@@ -463,8 +497,146 @@ def ferc_rows(unit: dict, captures: Captures):
         )
 
 
-PROCESSORS = {"sec-comments": sec_rows, "ferc-originals": ferc_rows}
+# Pending integration after exact G2 handoff; uses maintained scoped listing walk.
+class _RetainedCftcPages(_RetainedValidatedCapture, CftcPortalAcquirer):
+    def capture_validated(self, *args, **kwargs):
+        page, capture = super().capture_validated(*args, **kwargs)
+        self.parsed_pages.append((page, capture))
+        return page, capture
+
+
+def cftc_rows(unit, captures):
+    listings, details, files = unit["listings"], unit["details"], unit["files"]
+    scope, rule = unit["scope"], unit["rule_id"]
+    if scope not in ("listing-only", "details-and-files"):
+        raise ValueError("unsupported CFTC selected scope")
+    if not isinstance(listings, list) or not 1 <= len(listings) <= 100:
+        raise ValueError("bounded CFTC listings required")
+    if scope == "listing-only" and (details or files):
+        raise ValueError("CFTC listing-only selection must exclude detail and file bodies")
+    for entry in [*listings, *details, *files]:
+        if entry.get("method", "GET") != "GET":
+            raise ValueError("CFTC selection requires GET captures")
+    with _RetainedCftcPages(
+        budget=CftcPortalBudget(len(listings), MAX_CAPTURE, 10, 0), transport=httpx.MockTransport(_no_network)
+    ) as acquirer:
+        acquirer.retained_init(listings, captures)
+        acquirer.parsed_pages = []
+        # The maintained scoped walk carries all pagination/count/uniqueness rules.
+        reader = CftcCommentsReader(
+            acquirer,
+            years=[datetime.fromisoformat(listings[0]["observed_at"].replace("Z", "+00:00")).year],
+            fetch_details=False,
+            max_listing_pages=len(listings),
+        )
+        native_rows = reader._listing_rows(rule)
+        acquirer.require_consumed()
+        pages = list(acquirer.parsed_pages)
+    if type(unit.get("expected_comments")) is not int or len(native_rows) != unit["expected_comments"]:
+        raise ValueError("selected CFTC comment count differs")
+    rule_id = _digest(_json([rule, scope, [capture.sha256 for page, capture in pages]]).encode())
+    all_witnesses = [witness(capture, f"listing:{index}") for index, (page, capture) in enumerate(pages)]
+    yield (
+        "cftc_rule_observations",
+        {
+            "observation_id": rule_id,
+            "rule_id": rule,
+            "scope": scope,
+            "native_listings_json": _json([asdict(page) for page, capture in pages]),
+            "observed_at": pages[0][1].observed_at,
+        },
+        all_witnesses,
+    )
+    details_by_id = {}
+    if scope == "details-and-files":
+        if len(details) != len(native_rows):
+            raise ValueError("selected CFTC detail count differs")
+        with _RetainedCftcPages(
+            budget=CftcPortalBudget(len(details), MAX_CAPTURE, 10, 0), transport=httpx.MockTransport(_no_network)
+        ) as acquirer:
+            # Read in listing order, regardless of manifest details order.
+            entries = {entry["requested_url"]: entry for entry in details}
+            if len(entries) != len(details) or set(entries) != {
+                view_comment_url(row.comment_id) for row in native_rows
+            }:
+                raise ValueError("selected CFTC detail set differs from listing")
+            acquirer.retained_init([entries[view_comment_url(row.comment_id)] for row in native_rows], captures)
+            acquirer.parsed_pages = []
+            for row in native_rows:
+                acquisition = acquirer.view_comment_page(row.comment_id)
+                detail = acquisition.page
+                if (detail.comment_id, detail.rule_id) != (row.comment_id, rule):
+                    raise ValueError("CFTC detail/listing identity differs")
+                details_by_id[row.comment_id] = (detail, acquisition.capture)
+            acquirer.require_consumed()
+    declared_files = {}
+    for row in native_rows:
+        page, capture = next(
+            (page, capture) for page, capture in pages if any(x.comment_id == row.comment_id for x in page.rows)
+        )
+        index = next(index for index, x in enumerate(page.rows) if x.comment_id == row.comment_id)
+        detail, detail_capture = details_by_id.get(row.comment_id, (None, None))
+        witnesses = [witness(capture, f"comment:{index}")]
+        if detail is not None:
+            witnesses.append(witness(detail_capture, "detail"))
+            for item in detail.files:
+                if item.url in declared_files:
+                    raise ValueError("CFTC selected file link repeated")
+                declared_files[item.url] = (item, row.comment_id, witnesses)
+        yield (
+            "cftc_comments",
+            {
+                "observation_id": _digest(_json([rule_id, row.comment_id]).encode()),
+                "rule_observation_id": rule_id,
+                "comment_id": row.comment_id,
+                "rule_id": rule,
+                "native_listing_row_json": _json(asdict(row)),
+                "native_detail_json": _json(asdict(detail)) if detail is not None else None,
+                "detail_state": "complete" if detail is not None else "not-selected",
+                "observed_at": capture.observed_at,
+            },
+            witnesses,
+        )
+    selected = {entry["requested_url"]: entry for entry in files}
+    if len(selected) != len(files) or set(selected) != set(declared_files):
+        raise ValueError("CFTC selected PDF set differs from all detail declarations")
+    for url, entry in selected.items():
+        item, comment, witnesses = declared_files[url]
+        locator = pdf_locator(url)
+        if locator.file_id != item.file_id:
+            raise ValueError("CFTC stated PDF identity differs")
+        capture = captures.read(entry)
+        try:
+            if bare_media_type(capture.content_type) != "application/pdf":
+                raise ValueError("CFTC stated PDF media differs")
+            version = check_pdf_bytes(capture.body, error_type=CftcPdfError, label="retained CFTC letter")
+        except Exception as error:
+            attach_capture(error, capture)
+            attach_refused_response(error, refused_capture(capture, stage="source-validation"))
+            raise
+        yield (
+            "cftc_comment_files",
+            {
+                "observation_id": _digest(_json([rule_id, item.file_id, capture.sha256]).encode()),
+                "rule_observation_id": rule_id,
+                "comment_id": comment,
+                "rule_id": rule,
+                "file_id": item.file_id,
+                "filename": item.file_name,
+                "file_url": url,
+                "body_sha256": capture.sha256,
+                "bytes": capture.byte_size,
+                "pdf_version": version,
+                "provider_evidence_json": _json(entry.get("provider_evidence")),
+                "observed_at": capture.observed_at,
+            },
+            [*witnesses, witness(capture, "letter-file")],
+        )
+
+
+PROCESSORS = {"sec-comments": sec_rows, "ferc-originals": ferc_rows, "cftc-comments": cftc_rows}
 TABLES = {
+    "cftc-comments": ("cftc_rule_observations", "cftc_comments", "cftc_comment_files"),
     "sec-comments": ("sec_rulemakings", "sec_comment_files"),
     "ferc-originals": ("ferc_search_documents", "ferc_accession_files", "ferc_original_files"),
 }

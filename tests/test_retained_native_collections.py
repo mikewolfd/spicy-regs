@@ -369,3 +369,114 @@ def test_ferc_media_refusal_keeps_original_capture_and_post_body(tmp_path):
     assert raised.value.capture.method == "POST"
     assert raised.value.capture.request_body == item["original"]["request_body"].encode()
     assert raised.value.refused_response.response_bytes == (tmp_path / "original.pdf").read_bytes()
+
+
+def cftc_selection(tmp_path, *, listing_only=False, pages=1):
+    from spicy_docs.sources.cftc_comments.pages import CHANGE_PAGE_PARAM, comment_list_url, view_comment_url, pdf_url
+
+    rule, comment, fileid = 7639, 113985, 35788
+    listings = []
+    for number in range(1, pages + 1):
+        row = f'<tr class="rgRow"><td>9/1/2026</td><td>Literal rule</td><td>First</td><td>Last</td><td>Org<br>Other</td><td><a href="ViewComment.aspx?id={comment + number - 1}"></a></td></tr>'
+        footer = ""
+        if pages > 1:
+            next_link = (
+                f'<a title="Next Page" href="CommentList.aspx?id={rule}&amp;{CHANGE_PAGE_PARAM}={number + 1}">next</a>'
+                if number < pages
+                else ""
+            )
+            footer = f'<tfoot><tr class="rgPager"><td><div class="rgNumPart"><a class="rgCurrentPage">{number}</a>{next_link}</div><div class="rgInfoPart"><strong>{pages}</strong> items in <strong>{pages}</strong> pages</div></td></tr></tfoot>'
+        body = f'<html><body><div id="cphContentMain_MainContent_gvCommentList"><table class="rgMasterTable" id="ctl00_ctl00_cphContentMain_MainContent_gvCommentList_ctl00"><thead><tr><th>Date Received</th><th>Release</th><th>First Name</th><th>Last Name</th><th>Organization</th><th>Edit</th></tr></thead>{footer}<tbody>{row}</tbody></table></div></body></html>'.encode()
+        listings.append(
+            capture(
+                tmp_path,
+                f"cftc-list-{number}.html",
+                comment_list_url(rule, page=number) if number > 1 else comment_list_url(rule),
+                body,
+            )
+        )
+    details = []
+    files = []
+    if not listing_only:
+        for number in range(pages):
+            detail = f'<html><body><a id="lnkReturnToReleaseComments" href="CommentList.aspx?id={rule}">View all comments for literal citation</a><div><strong>From:</strong>First Last<strong>Organization(s):</strong>Org<br>Other<strong>Comment No:</strong>{comment + number}<strong>Date:</strong>9/1/2026<strong>Comment Text:</strong>Keep this text</div><a id="hlPdfStaticLink" href="../Handlers/PdfHandler.ashx?id={fileid + number}">Letter{number}.pdf</a></body></html>'.encode()
+            details.append(capture(tmp_path, f"cftc-detail-{number}.html", view_comment_url(comment + number), detail))
+            body = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+            entry = capture(tmp_path, f"cftc-file-{number}.pdf", pdf_url(fileid + number), body)
+            entry.update(
+                content_type="application/pdf",
+                provider_evidence={"transport": "fixture-provider", "request_id": f"fixture-{number}"},
+            )
+            files.append(entry)
+    unit = {
+        "kind": "cftc-comments",
+        "rule_id": rule,
+        "scope": "listing-only" if listing_only else "details-and-files",
+        "listings": listings,
+        "details": details,
+        "files": files,
+        "expected_comments": pages,
+    }
+    path = tmp_path / "cftc-selection.json"
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    return path, unit
+
+
+@pytest.mark.parametrize("listing_only,pages", [(False, 1), (True, 2)])
+def test_cftc_complete_native_scope_and_provenance(tmp_path, listing_only, pages):
+    path, unit = cftc_selection(tmp_path, listing_only=listing_only, pages=pages)
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    assert set(result["outputs"]) == set(native.TABLES["cftc-comments"])
+    comments = pq.read_table(output / result["outputs"]["cftc_comments"]["path"]).to_pylist()
+    assert len(comments) == pages
+    assert all(json.loads(row["native_listing_row_json"])["organizations"] == ["Org", "Other"] for row in comments)
+    assert all(row["detail_state"] == ("not-selected" if listing_only else "complete") for row in comments)
+    assert all((row["native_detail_json"] is None) == listing_only for row in comments)
+    if not listing_only:
+        detail = json.loads(comments[0]["native_detail_json"])
+        assert detail["text"] == "Keep this text" and detail["rule_citation"] == "literal citation"
+        files = pq.read_table(output / result["outputs"]["cftc_comment_files"]["path"]).to_pylist()
+        assert len(files) == 1 and json.loads(files[0]["provider_evidence_json"])["transport"] == "fixture-provider"
+    else:
+        assert result["outputs"]["cftc_comment_files"]["rows"] == 0
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert len(receipts) == 1 + pages + (0 if listing_only else 1)
+
+
+@pytest.mark.parametrize(
+    "fault", ["missing-pdf", "missing-detail", "wrong-detail-rule", "count", "missing-continuation"]
+)
+def test_cftc_incomplete_selection_refuses_without_candidate(tmp_path, fault):
+    path, unit = cftc_selection(
+        tmp_path, listing_only=fault == "missing-continuation", pages=2 if fault == "missing-continuation" else 1
+    )
+    if fault == "missing-pdf":
+        unit["files"] = []
+    elif fault == "missing-detail":
+        unit["details"] = []
+    elif fault == "wrong-detail-rule":
+        entry = unit["details"][0]
+        target = tmp_path / entry["path"]
+        raw = target.read_bytes().replace(b"id=7639", b"id=7640")
+        target.write_bytes(raw)
+        entry.update(bytes=len(raw), sha256=native._digest(raw))
+    elif fault == "count":
+        unit["expected_comments"] += 1
+    else:
+        unit["listings"] = unit["listings"][:1]
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    with pytest.raises(ValueError):
+        native.build(path, tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+
+
+def test_retained_post_request_types_cannot_substitute_zero_for_false(tmp_path):
+    path, unit = ferc_selection(tmp_path)
+    body = json.loads(unit["files"][0]["original"]["request_body"])
+    body["Islegacy"] = 0
+    unit["files"][0]["original"]["request_body"] = json.dumps(body)
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    with pytest.raises(ValueError, match="POST body differs"):
+        native.build(path, tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
