@@ -302,8 +302,13 @@ def test_interruption_after_uploaded_part_aborts_all_remote_parts(monkeypatch):
     schema = pa.schema([("blob", pa.binary())])
 
     def interrupted():
-        yield pa.table({"blob": [os.urandom(6 * 1024 * 1024)]}, schema=schema)
+        # The first 6 MiB stays below the maintained 8 MiB row-group buffer.
+        # A second batch flushes the first through the real multipart boundary.
+        for _ in range(2):
+            yield pa.table({"blob": [os.urandom(6 * 1024 * 1024)]}, schema=schema)
         assert store.part_sizes  # a failure after remote progress, not only an in-memory buffer
+        assert store.uploads["staging/interrupted.parquet"]
+        assert not store.objects and not store.completed
         raise KeyboardInterrupt("stop after first uploaded part")
 
     with pytest.raises(KeyboardInterrupt):
@@ -316,3 +321,4 @@ def test_interruption_after_uploaded_part_aborts_all_remote_parts(monkeypatch):
             max_bytes=20 * 1024 * 1024,
         )
     assert store.objects == {} and store.uploads == {} and store.aborts == ["staging/interrupted.parquet"]
+    assert not store.completed
