@@ -65,6 +65,22 @@ def test_every_installed_subject_policy_has_receipt_field_registry():
             assert set(container_fields(policy)) <= set(policy.receipt_fields)
 
 
+def test_generation_preserves_qualified_legacy_fec_meanings_and_processing_tables():
+    import json
+
+    legacy = json.loads((dd.REPO_ROOT / "data_dictionary" / "fec_legacy_column_descriptions.json").read_text())
+    descriptions = dd.load_descriptions()
+    generated = dd.build_mcp_metadata(descriptions, dd.expected_schemas())
+    for table, meanings in legacy["tables"].items():
+        assert generated[table]["legacy_column_descriptions"] == meanings
+    for table in ("fec_collection_selection", "fec_filing_definition_evidence",
+                  "fec_filing_header_associations", "fec_record_evidence"):
+        assert generated[table]["columns"]
+    current = descriptions["fec_receipts"]["columns"]["filing_association_target_generation_pin"]
+    historical = legacy["tables"]["fec_receipts"]["filing_association_target_generation_pin"]
+    assert "self" in current and current != historical
+
+
 def test_record_types_covered_by_expected_schemas():
     """Every core table exposes only its declared native subject fields."""
     expected = dd.expected_schemas()

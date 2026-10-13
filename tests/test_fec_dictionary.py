@@ -11,10 +11,52 @@ import sys
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from spicy_regs import data_dictionary as dd, mcp_server
 
 RESOURCE = dd.REPO_ROOT / "data_dictionary/fec_typed_schemas.json"
+
+
+@pytest.mark.parametrize("owner", ["legacy", "native", "absent", "local_native", "invalid"])
+def test_describe_table_uses_the_selected_generation_field_meaning(monkeypatch, owner):
+    table, column = "fec_receipts", "filing_association_target_generation_pin"
+    entry = json.loads(dd.DEFAULT_MCP_METADATA_PATH.read_text())[table]
+    historical = entry["legacy_column_descriptions"][column]
+    current = next(c["description"] for c in entry["columns"] if c["column_name"] == column)
+    index = {"families": {}}
+    if owner in {"legacy", "native"}:
+        family = {"tables": {table + ".parquet": {}}}
+        if owner == "native":
+            family["etlReceipts"] = {}
+        index["families"]["fec-query"] = family
+    elif owner == "invalid":
+        index["families"]["fec-query"] = {}
+    local = {"native": {table: {}}} if owner == "local_native" else None
+    monkeypatch.setattr(mcp_server, "_connection_index", lambda _: index)
+    monkeypatch.setattr(mcp_server, "_connection_local_selection", lambda _: local)
+    view = "synthetic_fec_projection"
+    monkeypatch.setattr(mcp_server, "_publication_status", lambda _: {"tables": {table, view}, "publication": {}})
+    monkeypatch.setattr(mcp_server, "_connection_relationships", lambda _: {
+        view: {"metadata": {"column_lineage": {"selected_pin": [table, column]}}}})
+    monkeypatch.setattr(mcp_server, "_qualification", lambda *args, **kwargs: ({}, None))
+    monkeypatch.setattr(mcp_server, "_table_joins", lambda *args, **kwargs: [])
+    monkeypatch.setattr(mcp_server.receipt_lookup, "selected_member", lambda *args, **kwargs: None)
+    with duckdb.connect(config={"threads": 1, "memory_limit": "64MB"}) as con:
+        con.execute(f'CREATE TABLE "{table}" ("{column}" VARCHAR)')
+        con.execute(f'CREATE VIEW "{view}" AS SELECT "{column}" AS selected_pin FROM "{table}"')
+        if owner == "invalid":
+            with pytest.raises(KeyError):
+                mcp_server._legacy_column_meanings(con, table, entry)
+            return
+        monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+        result = tool_data(mcp_server.build_server(), "describe_table", {"table": table})
+        assert result["columns"][0]["description"] == (historical if owner == "legacy" else current)
+        inherited = tool_data(mcp_server.build_server(), "describe_table", {"table": view})
+        assert inherited["columns"][0]["description"] == (historical if owner == "legacy" else current)
+        if owner == "native":
+            assert mcp_server._lineage_meanings(
+                {"selected_pin": ["_spicy_fec_current_" + table, column]}, cursor=con) == {"selected_pin": current}
 
 
 def tool_data(server, name, arguments):
