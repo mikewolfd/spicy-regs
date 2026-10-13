@@ -458,8 +458,10 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                     ],
                 }
             write_json(output / summary["detailPath"], detail, internal=internal)
-        total_objects = db.execute("""SELECT count(*),coalesce(sum(bytes),0) FROM objects WHERE sha256 IN
-                                    (SELECT sha256 FROM files WHERE status NOT IN
+        # Probe files_sha for each object instead of materializing all eligible aliases.
+        total_objects = db.execute("""SELECT count(*),coalesce(sum(objects.bytes),0) FROM objects
+                                    WHERE EXISTS (SELECT 1 FROM files
+                                    WHERE files.sha256=objects.sha256 AND files.status NOT IN
                                     ('missing-bytes','receipt-only','known-not-acquired','external-by-choice'))""").fetchone()
         manifest = {
             "format": "spicy-source-catalog",
