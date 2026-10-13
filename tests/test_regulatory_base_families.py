@@ -173,14 +173,33 @@ def test_refresh_publishes_the_families_before_the_mirror_captures_base_versions
     assert jobs["derived"]["needs"] == "mirror" and jobs["org-links"]["needs"] == "mirror"
 
 
-def test_refresh_fills_docket_gaps_before_the_families_and_publishes_them_even_if_it_fails():
+@pytest.mark.parametrize("cancelled,promote_v1,comments_only,expected", [
+    (False, False, False, True),
+    (True, False, False, False),
+    (False, True, False, False),
+    (False, False, True, False),
+    (False, True, True, False),
+    (True, True, False, False),
+    (True, False, True, False),
+    (True, True, True, False),
+])
+def test_refresh_fills_docket_gaps_before_the_families_and_publishes_them_even_if_it_fails(
+    cancelled, promote_v1, comments_only, expected,
+):
     jobs = yaml.safe_load((REPO_ROOT / ".github/workflows/_regulations-refresh.yml").read_text())["jobs"]
     gaps = jobs["docket-gaps"]
     assert gaps["steps"][-1]["run"] == "uv run --frozen fill-docket-gaps --no-skip-upload"
     assert {"DATA_GOV_API_KEY", "R2_CATALOG_TOKEN"} <= set(gaps["steps"][-1]["env"])
     assert "!inputs.skip_upload" in gaps["if"]
     assert jobs["base-families"]["needs"] == "docket-gaps"
-    assert jobs["base-families"]["if"] == "${{ !cancelled() }}"
+    # A failed gap fill does not block an ordinary refresh. Promotion and
+    # Comments-only runs intentionally skip unrelated base-family publication.
+    condition = jobs["base-families"]["if"].removeprefix("${{").removesuffix("}}")
+    terms = [term.strip() for term in condition.split("&&")]
+    values = {"!cancelled()": not cancelled, "!inputs.promote_v1": not promote_v1,
+              "!inputs.comments_only": not comments_only}
+    assert set(terms) == set(values)
+    assert all(values[term] for term in terms) is expected
 
 
 def test_the_browser_search_blob_is_built_only_where_its_app_reads_this_bucket():
