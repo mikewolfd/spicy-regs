@@ -493,6 +493,36 @@ def test_list_sources_groups_tables_by_subject_with_unassigned_tables_last(monke
     assert set(listed["subjects"][0]["tables"][0]) == {"table", "label", "coverage", "rows"}
 
 
+def test_discovery_keeps_special_categories_and_descriptions_keep_exact_declarations(monkeypatch):
+    metadata = {name: dict(entry) for name, entry in server._table_metadata().items()}
+    categories = dict(laws="query_data", documents="diagnostics", dockets="processing_evidence", comments=None,
+                      fcc_filings="bounded_samples", court_opinions="discovery_leads", bill_versions="source_evidence")
+    for name, category in categories.items():
+        if category is None:
+            metadata[name].pop("category", None)
+        else:
+            metadata[name]["category"] = category
+    monkeypatch.setattr(server, "_table_metadata", lambda: metadata)
+    with duckdb.connect() as con:
+        for name in categories:
+            con.execute(f'CREATE TABLE "{name}" (id VARCHAR)')
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        mcp = server.build_server()
+        listed = _tool_data(mcp, "list_sources", {})
+        rows = {row["table"]: row for group in listed["subjects"] for row in group["tables"]}
+        assert set(rows) == set(categories)
+        assert "query_data" in listed["category_details"] and "undeclared" in listed["category_details"]
+        for name, category in categories.items():
+            described = _tool_data(mcp, "describe_table", {"table": name})
+            assert described["metadata"].get("category") == category
+            if category not in (None, "query_data"):
+                assert rows[name]["category"] == category
+            else:
+                assert "category" not in rows[name]
+            assert rows[name]["label"] == metadata[name]["label"]
+            assert rows[name]["coverage"] == metadata[name]["kind"]
+
+
 def test_the_query_text_says_pragmas_table_forms_count_as_select():
     """L9: a persona read PRAGMA as refused; DuckDB rewrites its table-returning forms to SELECT."""
     [tool] = [t for t in asyncio.run(server.build_server().list_tools()) if t.name == "query_sql"]
