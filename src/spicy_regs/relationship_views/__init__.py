@@ -50,6 +50,59 @@ SQL_RELATIONSHIP_VIEWS = (
 )
 
 
+def describe_relationship_views(
+    connection: Any, available_tables: Iterable[str], publication: Mapping[str, object] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Document maintained definitions against selected inputs without binding SQL.
+
+    Empty input sets reuse the installers' declaration paths: they perform no
+    schema reads or view creation. Variant selection and output schemas remain
+    pending until the separate query connection admits the actual inputs.
+    """
+    from .regulations_native import native_regulations_views
+
+    available = set(available_tables)
+    arrays = (*RELATIONSHIP_VIEWS, *NATIVE_CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS, NATIVE_BILL_SUBJECTS)
+    results = install_arrays(connection, (), RELATIONSHIP_VIEWS, publication)
+    results.update(install_comment_references(connection, (), publication))
+    specs = (*SQL_RELATIONSHIP_VIEWS, *LEGACY_DIFF_VIEWS, *FEC_QUERY_VIEWS,
+             *FEC_DOCUMENT_QUERY_VIEWS, *NATIVE_IDENTITY_VIEWS, *NATIVE_AFFILIATION_VIEWS,
+             *native_regulations_views(available))
+    # Alternative definitions are documentation, never a schema verdict.
+    versions: dict[str, list[str]] = {}
+    for spec in arrays:
+        documented = install_arrays(connection, (), [spec], publication)
+        for name, entry in documented.items():
+            versions.setdefault(name, [])
+            if spec.rule_version not in versions[name]:
+                versions[name].append(spec.rule_version)
+            results.setdefault(name, entry)
+    for spec in specs:
+        versions.setdefault(spec.name, [])
+        if spec.rule_version not in versions[spec.name]:
+            versions[spec.name].append(spec.rule_version)
+        if spec.name not in results:
+            results.update(install_sql_views(connection, (), [spec], publication))
+    reachable = set(available)
+    while True:
+        added = {name for name, entry in results.items() if set(entry['dependencies']) <= reachable} - reachable
+        if not added:
+            break
+        reachable.update(added)
+    for name, entry in results.items():
+        metadata = entry['metadata']
+        metadata['definition_basis'] = 'Maintained declarations with this connection\'s selected input pins; no runtime schema verdict.'
+        if name in versions:
+            metadata['declared_rule_versions'] = versions[name]
+        if name in reachable:
+            entry.update(status='deferred', reason='Relationship schema and query admission are deferred until a query connection is requested.')
+            metadata['query_admission'] = 'pending_relationship_binding'
+    annotate_views(results)
+    for entry in results.values():
+        entry['metadata']['availability_basis'] = 'Declared dependencies only; runtime schema binding and query admission remain pending.'
+    return results
+
+
 def install_relationship_views(
     connection: Any,
     available_tables: Iterable[str],

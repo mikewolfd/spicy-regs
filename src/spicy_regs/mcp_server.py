@@ -1123,7 +1123,7 @@ def _fec_release_reply(cursor):
 @_diagnostic_phase('relationship_binding')
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
-    from spicy_regs.relationship_views import install_relationship_views
+    from spicy_regs.relationship_views import describe_relationship_views, install_relationship_views
 
     status = _publication_status(con)
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter, receipt_owner
@@ -1152,7 +1152,8 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
                and any(receipt_owner(index, table) or table in native for table in spec.required)]
     for spec in adapted:
         adapter.require_selected(spec.required)
-    relationships = install_relationship_views(con, status["tables"], publication=status["publication"])
+    relationship_registry = describe_relationship_views if _discovery_only.get() else install_relationship_views
+    relationships = relationship_registry(con, status["tables"], publication=status["publication"])
     for spec in adapted:
         if _discovery_only.get():
             relationships[spec.name] = {
@@ -2322,7 +2323,7 @@ def _tools() -> list[Tool]:
         statement can read a newer export); export_receipt_does_not_match_object
         means the file had moved, and rows is null.
         Discovery binds source schemas without restoring receipt-backed rows.
-        deferred_views names views whose exact receipt admission remains pending
+        deferred_views names views whose schema binding or exact receipt admission remains pending
         until query_sql builds its separate query connection, grouped by reason.
         Relationship groups list view identities; describe_table gives labels and full meanings.
         No output schema or

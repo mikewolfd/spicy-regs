@@ -21,6 +21,59 @@ def reset_connections():
     server._reset_connection_cache()
 
 
+def test_relationship_declarations_do_not_touch_source_schemas():
+    from spicy_regs.relationship_views import describe_relationship_views
+
+    class NoDatabaseWork:
+        def execute(self, *args, **kwargs):
+            raise AssertionError('Discovery must not bind relationship SQL or read source schemas')
+
+    pin = {'status': 'managed_generation', 'artifact_digest': 'sha256:' + 'a' * 64}
+    registry = describe_relationship_views(NoDatabaseWork(), ['members'], {'members': pin})
+    member_views = [item for item in registry.values() if item['dependencies'] == ['members']]
+    assert member_views
+    for entry in member_views:
+        assert entry['status'] == 'deferred'
+        assert entry['metadata']['query_admission'] == 'pending_relationship_binding'
+        assert entry['metadata']['input_publications'] == {'members': pin}
+        assert 'column_lineage' not in entry['metadata']
+        assert entry['metadata']['availability_basis'] == 'Declared dependencies only; runtime schema binding and query admission remain pending.'
+    assert registry['comment_document_references']['status'] == 'unavailable'
+
+
+def test_general_discovery_defers_binding_but_query_preserves_schema_refusal(monkeypatch):
+    import duckdb
+
+    def connection():
+        con = duckdb.connect()
+        con.execute('CREATE TABLE members (bioguide_id VARCHAR, fec_ids_json VARCHAR, observed_at VARCHAR, roster VARCHAR)')
+        con.execute("INSERT INTO members VALUES ('X', '[\"S8WA00194\"]', 'today', 'current')")
+        con.execute('CREATE TABLE comments (comment_id VARCHAR, docket_id VARCHAR)')
+        server._install_relationship_views(con)
+        server._apply_security_settings(con)
+        return con
+
+    monkeypatch.setattr(server, '_build_connection', connection)
+    mcp = server.build_server()
+    listed = _tool_data(mcp, 'list_sources', {})
+    # Find the maintained name rather than assuming one from the source field.
+    discovery_connection = server._cached_discovery_connection
+    assert discovery_connection is not None
+    registry = server._connection_relationships(discovery_connection)
+    name = next(name for name, item in registry.items()
+                if item['dependencies'] == ['members'] and name.endswith('_occurrences'))
+    assert name in {name for group in listed['deferred_views'] for name in group['views']}
+    described = _tool_data(mcp, 'describe_table', {'table': name})
+    assert not described['available'] and described['columns'] == []
+    assert described['metadata']['query_admission'] == 'pending_relationship_binding'
+    assert server._cached_connection is None
+    result = _tool_data(mcp, 'query_sql', {'sql': f'SELECT target_key FROM "{name}"'})
+    assert _records(result) == [{'target_key': 'S8WA00194'}]
+    query_registry = server._connection_relationships(server._get_connection())
+    assert query_registry['comment_document_references']['status'] == 'unsupported'
+    assert server._cached_connection is not server._cached_discovery_connection
+
+
 def test_financial_discovery_defers_exact_rows_but_query_still_admits(tmp_path, monkeypatch):
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter
     from tests.test_mcp_fec_release import configure, connection
