@@ -194,3 +194,32 @@ attachment and ZIP-member witnesses. The index's `337-1458 - Violation` and its
 date strings remain literal. Separate investigation number/phase and date
 fields stated in document XML remain independent native observations. These
 rows qualify one selected document, not a complete investigation docket.
+
+## Direct Supreme Court render observations
+
+A `supreme-court-observations` unit supplies retained `indexes` with `term_year`,
+`observation_key`, `blob` and `locator_binding`, plus selected PDF `files` and
+explicit expected input totals. Every render remains separate. The maintained
+term parser checks the page's stated term and dates; every native opinion,
+missing link, decree release label, holding, revision link/date label and volume
+`page_start` survives. The adapter infers no volume end page or CourtListener ID.
+
+`supreme_court_index_observations` keeps each complete native index;
+`supreme_court_opinion_observations` keeps each native row tied to that render.
+`supreme_court_pdf_observations` validates selected retained probe bytes with the
+maintained PDF reader and preserves every stating opinion/revision occurrence.
+A selected resource must appear as a literal link in a selected index. The PDF
+scope is the selected probes; it does not claim all index-linked files acquired.
+
+These retained blobs lack local capture-completion clocks. `observed_at` stays null; safe
+recorded HTTP Date, Last-Modified, media, length, ETag and status facts remain
+separate from acquisition time. Session/cookie headers stay outside table data.
+An optional `recorded_request_metadata` stores caller-qualified historical
+requested URI, status, size and digest in `recorded_request_metadata_json` on
+index and PDF observations. The adapter checks these facts against the selected
+blob. An individual request-start instant stays separate from capture completion;
+a session batch clock belongs to the manifest and remains unassigned to individual
+renders. Recorded request facts do not establish a resolved URI or redirect
+history. Source-native links remain evidence distinct from a newly captured
+response. Public packaging excludes the
+private manifest/build input paths as with other finite candidates.

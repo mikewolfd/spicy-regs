@@ -668,3 +668,230 @@ def test_edis_invalid_retained_unit_refuses_candidate(tmp_path, fault):
     with pytest.raises(ValueError):
         native.build(path, tmp_path / "candidate")
     assert not (tmp_path / "candidate").exists()
+
+
+def scotus_selection(tmp_path, *, fault=None):
+    from spicy_docs.sources.supreme_court import supreme_court_term_index_locator
+
+    pdf = b"%PDF-1.4\nsynthetic court PDF\n%%EOF\n"
+    indexes = []
+    common = "https://www.supremecourt.gov/opinions/preliminaryprint/600US1PP.pdf"
+    diff = "https://www.supremecourt.gov/opinions/25pdf/example_diff.pdf"
+    files = []
+
+    def blob(name, url, body, media):
+        target = tmp_path / name
+        target.write_bytes(body)
+        return {
+            "path": target.name,
+            "source_uri": url,
+            "bytes": len(body),
+            "sha256": native._digest(body),
+            "observed_at": None,
+            "observation_time_state": "not-recorded-in-retained-transfer-evidence",
+            "safe_response_headers": {
+                "Content-Type": media,
+                "Date": "Mon, 14 Sep 2026 17:12:52 GMT",
+                "Last-Modified": "Wed, 09 Sep 2026 18:42:09 GMT",
+                "Content-Length": str(len(body)),
+                "ETag": None,
+            },
+            "header_evidence": {"response_status_line": "HTTP/2 200"},
+        }
+
+    for number in [1, 2]:
+        url = f"https://www.supremecourt.gov/opinions/25pdf/example_{number}.pdf"
+        body = f'''<html><span id="ctl00_lblListTitle">Term Year: 2025</span><table>
+<tr><td>D1</td><td>9/04/26</td><td>141, Orig.</td><td><a href="{url}" title="Literal holding">Case A</a><b>Revisions</b>:<a href="{diff}">6/28/26</a></td><td>KT</td><td>609/2</td></tr>
+<tr><td>54</td><td>6/22/26</td><td>25-100</td><td>Case without link</td><td>PC</td><td>608 U.S. 85</td></tr>
+<tr><td>1</td><td>6/20/26</td><td>25-101</td><td><a href="{common}#page=41">Volume case one</a></td><td>KT</td><td>600/1</td></tr>
+<tr><td>2</td><td>6/21/26</td><td>25-102</td><td><a href="{common}#page=73">Volume case two</a></td><td>KT</td><td>600/2</td></tr>
+</table></html>'''.encode()
+        indexes.append(
+            {
+                "term_year": 2025,
+                "observation_key": f"render-{number}",
+                "blob": blob(f"index-{number}.html", supreme_court_term_index_locator(2025), body, "text/html"),
+                "locator_binding": "fixture-retained-port",
+            }
+        )
+        files.append(
+            {
+                "blob": blob(f"pdf-{number}.pdf", url, pdf, "application/pdf"),
+                "locator_binding": "fixture-index-stated-probe",
+            }
+        )
+    files.extend(
+        [
+            {"blob": blob("diff.pdf", diff, pdf, "application/pdf"), "locator_binding": "fixture-index-stated-probe"},
+            {
+                "blob": blob("volume.pdf", common, pdf, "application/pdf"),
+                "locator_binding": "fixture-index-stated-probe",
+            },
+        ]
+    )
+    unit = {
+        "kind": "supreme-court-observations",
+        "indexes": indexes,
+        "files": files,
+        "expected_indexes": 2,
+        "expected_files": 4,
+    }
+    if fault == "wrong-term":
+        indexes[0]["term_year"] = 2024
+    elif fault == "unlisted-probe":
+        files[0]["blob"]["source_uri"] = "https://www.supremecourt.gov/opinions/25pdf/not-stated.pdf"
+    elif fault == "invented-time":
+        indexes[0]["blob"]["observed_at"] = "2026-09-14T17:12:52Z"
+    elif fault == "header-size":
+        files[0]["blob"]["safe_response_headers"]["Content-Length"] = "100000"
+    elif fault == "header-status":
+        files[0]["blob"]["header_evidence"]["response_status_line"] = ""
+    elif fault == "header-media":
+        files[0]["blob"]["safe_response_headers"]["Content-Type"] = "text/html"
+    elif fault == "unsafe-header":
+        indexes[0]["blob"]["safe_response_headers"]["Set-Cookie"] = "inert-cookie"
+    elif fault == "duplicate-observation":
+        indexes[1]["observation_key"] = indexes[0]["observation_key"]
+    elif fault == "bad-pdf":
+        entry = files[0]["blob"]
+        target = tmp_path / entry["path"]
+        raw = b"x" * entry["bytes"]
+        target.write_bytes(raw)
+        entry["sha256"] = native._digest(raw)
+    elif fault == "linearized-length":
+        entry = files[0]["blob"]
+        target = tmp_path / entry["path"]
+        raw = b"%PDF-1.4\n<</Linearized 1/L 999>>\n%%EOF\n"
+        target.write_bytes(raw)
+        entry.update(bytes=len(raw), sha256=native._digest(raw))
+        entry["safe_response_headers"]["Content-Length"] = str(len(raw))
+    path = tmp_path / "scotus-selection.json"
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    return path, unit
+
+
+def test_scotus_renders_revisions_missing_links_and_volume_page_starts_survive(tmp_path):
+    path, unit = scotus_selection(tmp_path)
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    assert {table: value["rows"] for table, value in result["outputs"].items()} == {
+        "supreme_court_index_observations": 2,
+        "supreme_court_opinion_observations": 8,
+        "supreme_court_pdf_observations": 4,
+    }
+    indexes = pq.read_table(output / result["outputs"]["supreme_court_index_observations"]["path"]).to_pylist()
+    opinions = pq.read_table(output / result["outputs"]["supreme_court_opinion_observations"]["path"]).to_pylist()
+    pdfs = pq.read_table(output / result["outputs"]["supreme_court_pdf_observations"]["path"]).to_pylist()
+    assert all(row["pdf_scope"] == "selected-retained-probes-only" for row in indexes)
+    assert len({row["observation_id"] for row in indexes}) == 2
+    assert len({row["safe_response_headers_json"] for row in indexes}) == 1
+    assert all(row["observed_at"] is None for row in indexes + opinions + pdfs)
+    assert len([row for row in opinions if row["pdf_url"] is None]) == 2
+    assert {row["page_start"] for row in opinions if row["pdf_kind"] == "preliminary-print"} == {"41", "73"}
+    assert "page_end" not in opinions[0]
+    d1 = [row for row in opinions if row["release_number"] == "D1"]
+    assert len(d1) == 2 and all(
+        row["docket_number"] == "141, Orig." and row["holding"] == "Literal holding" for row in d1
+    )
+    assert all(json.loads(row["revisions_json"])[0]["label"] == "6/28/26" for row in d1)
+    volume = next(row for row in pdfs if "/preliminaryprint/" in row["document_url"])
+    occurrences = json.loads(volume["declaring_occurrences_json"])
+    assert len(occurrences) == 4
+    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
+    assert len(receipts) == 14
+    receipt = next(
+        row
+        for row in receipts
+        if row["dataset"] == "supreme_court_pdf_observations" and row["attempt_id"] == volume["observation_id"]
+    )
+    assert len(receipt["witnesses"]) == 5 and receipt["witnesses"][-1]["locator"] == "retained-PDF"
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "wrong-term",
+        "unlisted-probe",
+        "invented-time",
+        "header-size",
+        "header-status",
+        "header-media",
+        "unsafe-header",
+        "duplicate-observation",
+        "bad-pdf",
+        "linearized-length",
+    ],
+)
+def test_scotus_invalid_retained_selection_refuses_candidate(tmp_path, fault):
+    path, unit = scotus_selection(tmp_path, fault=fault)
+    with pytest.raises(ValueError):
+        native.build(path, tmp_path / "candidate")
+    assert not (tmp_path / "candidate").exists()
+
+
+def scotus_request_record(item):
+    entry = item["blob"]
+    return {
+        "retained_request_binding": {
+            "requested_uri": entry["source_uri"],
+            "reported_status": 200,
+            "reported_bytes": entry["bytes"],
+            "reported_sha256": entry["sha256"].removeprefix("sha256:"),
+        },
+        "local_request_instant": {
+            "value": "2026-09-14T17:12:51Z",
+            "kind": "retained-request-instant-as-stated-by-source-README",
+            "not_capture_completion": True,
+        },
+        "local_capture_completion_instant": None,
+        "resolved_URI": "not-recorded-by-this-README",
+    }
+
+
+def test_scotus_request_start_survives_without_becoming_capture_completion(tmp_path):
+    path, unit = scotus_selection(tmp_path)
+    for item in unit["indexes"] + unit["files"]:
+        item["recorded_request_metadata"] = scotus_request_record(item)
+    unit["indexes"][1]["recorded_request_metadata"]["local_request_instant"] = None
+    path.write_text(json.dumps({"format": "spicy-retained-native-inputs", "version": 1, "sources": [unit]}))
+    output = tmp_path / "candidate"
+    result = native.build(path, output)
+    for table in ["supreme_court_index_observations", "supreme_court_pdf_observations"]:
+        rows = pq.read_table(output / result["outputs"][table]["path"]).to_pylist()
+        for row in rows:
+            record = json.loads(row["recorded_request_metadata_json"])
+            assert record["retained_request_binding"]["requested_uri"] == row["source_uri"]
+            assert record["local_capture_completion_instant"] is None and row["observed_at"] is None
+        if table == "supreme_court_index_observations":
+            assert (
+                sum(json.loads(row["recorded_request_metadata_json"])["local_request_instant"] is None for row in rows)
+                == 1
+            )
+
+
+@pytest.mark.parametrize(
+    "fault", ["uri", "status", "bytes", "sha", "completion", "resolved", "naive-time", "time-role"]
+)
+def test_scotus_request_metadata_refuses_conflicting_or_mislabelled_facts(tmp_path, fault):
+    _, unit = scotus_selection(tmp_path)
+    item = unit["indexes"][0]
+    record = item["recorded_request_metadata"] = scotus_request_record(item)
+    if fault in {"uri", "status", "bytes", "sha"}:
+        field, value = {
+            "uri": ("requested_uri", "https://example.test/other"),
+            "status": ("reported_status", True),
+            "bytes": ("reported_bytes", True),
+            "sha": ("reported_sha256", "0" * 64),
+        }[fault]
+        record["retained_request_binding"][field] = value
+    elif fault == "completion":
+        record["local_capture_completion_instant"] = "2026-09-14T17:12:51Z"
+    elif fault == "resolved":
+        record["resolved_URI"] = item["blob"]["source_uri"]
+    elif fault == "naive-time":
+        record["local_request_instant"]["value"] = "2026-09-14T17:12:51"
+    else:
+        record["local_request_instant"]["not_capture_completion"] = False
+    with pytest.raises(ValueError):
+        native.scotus_request_metadata(item)

@@ -20,6 +20,7 @@ from tempfile import TemporaryDirectory
 import pyarrow as pa
 import httpx
 from spicy_docs.reading.json_input import load_decimal_json
+from spicy_docs.sources.supreme_court import parse_supreme_court_term_index, read_supreme_court_pdf
 from spicy_docs.sources.usitc_edis.records import check_edis_id, parse_documents, parse_attachments
 from spicy_docs.sources.usitc_edis.bulk import inspect_bulk_archive
 from spicy_docs.reading.pdf_bytes import check_pdf_bytes
@@ -167,6 +168,70 @@ for _table, (_strings, _ints) in {
 }.items():
     SCHEMAS[_table] = pa.schema([(key, pa.string()) for key in _strings] + [(key, pa.int64()) for key in _ints])
 
+for _table, (_strings, _ints) in {
+    "supreme_court_index_observations": (
+        (
+            "observation_id",
+            "observation_key",
+            "index_url",
+            "stated_term",
+            "native_index_json",
+            "safe_response_headers_json",
+            "response_status_line",
+            "locator_binding",
+            "recorded_request_metadata_json",
+            "pdf_scope",
+            "source_uri",
+            "source_sha256",
+            "observed_at",
+            "observation_time_state",
+        ),
+        ("term_year",),
+    ),
+    "supreme_court_opinion_observations": (
+        (
+            "observation_id",
+            "index_observation_id",
+            "release_number",
+            "date_decided",
+            "docket_number",
+            "case_name",
+            "holding",
+            "author_code",
+            "citation",
+            "pdf_url",
+            "pdf_kind",
+            "page_start",
+            "revisions_json",
+            "native_opinion_json",
+            "source_uri",
+            "source_sha256",
+            "observed_at",
+            "observation_time_state",
+        ),
+        ("term_year", "opinion_index"),
+    ),
+    "supreme_court_pdf_observations": (
+        (
+            "observation_id",
+            "document_url",
+            "body_sha256",
+            "pdf_version",
+            "declaring_occurrences_json",
+            "safe_response_headers_json",
+            "response_status_line",
+            "locator_binding",
+            "recorded_request_metadata_json",
+            "source_uri",
+            "source_sha256",
+            "observed_at",
+            "observation_time_state",
+        ),
+        ("bytes", "linearized_length"),
+    ),
+}.items():
+    SCHEMAS[_table] = pa.schema([(key, pa.string()) for key in _strings] + [(key, pa.int64()) for key in _ints])
+
 POLICIES = {
     table: DatasetPolicy(
         table,
@@ -254,7 +319,7 @@ class Captures:
         return body
 
     def read_blob(self, entry):
-        # Retained archives have byte identity without a complete HTTP capture.
+        # Retained inputs can have byte identity without a complete HTTP capture.
         if not isinstance(entry, dict) or not isinstance(entry.get("source_uri"), str) or not entry["source_uri"]:
             raise ValueError("retained blob source declaration required")
         if any(key in entry for key in ("status_code", "requested_url", "resolved_url", "method", "request_body")):
@@ -834,13 +899,222 @@ def edis_rows(unit, captures):
         )
 
 
+def safe_headers(entry, media, size):
+    """Keep selected recorded response facts separate from acquisition time."""
+    values = entry.get("safe_response_headers")
+    evidence = entry.get("header_evidence")
+    if values is None:
+        if evidence is not None:
+            raise ValueError("Supreme Court header evidence differs")
+        return None, None
+    fields = {"Content-Type", "Date", "Last-Modified", "Content-Length", "ETag"}
+    if (
+        not isinstance(values, dict)
+        or set(values) != fields
+        or any(value is not None and not isinstance(value, str) for value in values.values())
+    ):
+        raise ValueError("Supreme Court safe response header fields differ")
+    status = evidence.get("response_status_line") if isinstance(evidence, dict) else None
+    parts = status.split() if isinstance(status, str) else []
+    if len(parts) < 2 or not parts[0].startswith("HTTP/") or parts[1] != "200":
+        raise ValueError("Supreme Court recorded response was not successful")
+    if bare_media_type(values["Content-Type"]) != media:
+        raise ValueError("Supreme Court recorded response media differs")
+    length = values["Content-Length"]
+    if length is not None and (not length.isdecimal() or int(length) != size):
+        raise ValueError("Supreme Court recorded response size differs")
+    return _json(values), evidence["response_status_line"]
+
+
+def scotus_request_metadata(item):
+    """Preserve caller-qualified request facts without assigning a capture clock."""
+    values = item.get("recorded_request_metadata")
+    if values is None:
+        return None
+    entry = item["blob"]
+    if not isinstance(values, dict):
+        raise ValueError("Supreme Court recorded request metadata differs")
+    binding = values.get("retained_request_binding")
+    if (
+        not isinstance(binding, dict)
+        or binding.get("requested_uri") != entry["source_uri"]
+        or type(binding.get("reported_status")) is not int
+        or binding["reported_status"] != 200
+        or type(binding.get("reported_bytes")) is not int
+        or binding["reported_bytes"] != entry["bytes"]
+        or not isinstance(binding.get("reported_sha256"), str)
+        or len(binding["reported_sha256"]) != 64
+        or any(character not in "0123456789abcdef" for character in binding["reported_sha256"])
+        or "sha256:" + binding["reported_sha256"] != entry["sha256"]
+        or values.get("local_capture_completion_instant") is not None
+        or values.get("resolved_URI") != "not-recorded-by-this-README"
+    ):
+        raise ValueError("Supreme Court recorded request binding differs")
+    instant = values.get("local_request_instant")
+    if instant is not None:
+        if (
+            not isinstance(instant, dict)
+            or instant.get("kind") != "retained-request-instant-as-stated-by-source-README"
+            or instant.get("not_capture_completion") is not True
+            or not isinstance(instant.get("value"), str)
+            or datetime.fromisoformat(instant["value"].replace("Z", "+00:00")).tzinfo is None
+        ):
+            raise ValueError("Supreme Court request instant differs")
+    return _json(values)
+
+
+def scotus_rows(unit, captures):
+    entries, files = unit["indexes"], unit["files"]
+    if (
+        not isinstance(entries, list)
+        or not 1 <= len(entries) <= 100
+        or type(unit.get("expected_indexes")) is not int
+        or len(entries) != unit["expected_indexes"]
+    ):
+        raise ValueError("bounded complete Supreme Court index observation selection required")
+    if (
+        not isinstance(files, list)
+        or len(files) > 5000
+        or type(unit.get("expected_files")) is not int
+        or len(files) != unit["expected_files"]
+    ):
+        raise ValueError("bounded Supreme Court selected PDF observation set required")
+    observation_keys = set()
+    declared = defaultdict(list)
+    for item in entries:
+        key = item["observation_key"]
+        if not isinstance(key, str) or not key or key in observation_keys:
+            raise ValueError("Supreme Court observation key repeated or missing")
+        observation_keys.add(key)
+        entry = item["blob"]
+        body = captures.read_blob(entry)
+        index = parse_supreme_court_term_index(body, term_year=item["term_year"], max_bytes=MAX_CAPTURE)
+        if entry["source_uri"] != index.index_url:
+            raise ValueError("Supreme Court selected term locator differs")
+        headers, status = safe_headers(entry, "text/html", len(body))
+        observation = _digest(_json([index.term_year, key, index.index_url, entry["sha256"]]).encode())
+        common = {
+            "source_uri": entry["source_uri"],
+            "source_sha256": entry["sha256"],
+            "observed_at": None,
+            "observation_time_state": entry["observation_time_state"],
+        }
+        yield (
+            "supreme_court_index_observations",
+            {
+                "observation_id": observation,
+                "observation_key": key,
+                "term_year": index.term_year,
+                "index_url": index.index_url,
+                "stated_term": index.stated_term,
+                "native_index_json": _json(asdict(index)),
+                "safe_response_headers_json": headers,
+                "response_status_line": status,
+                "locator_binding": item["locator_binding"],
+                "recorded_request_metadata_json": scotus_request_metadata(item),
+                "pdf_scope": "selected-retained-probes-only",
+                **common,
+            },
+            [blob_witness(entry, "term-index")],
+        )
+        for opinion in index.opinions:
+            yield (
+                "supreme_court_opinion_observations",
+                {
+                    "observation_id": _digest(_json([observation, opinion.index]).encode()),
+                    "index_observation_id": observation,
+                    "term_year": index.term_year,
+                    "opinion_index": opinion.index,
+                    "release_number": opinion.release_number,
+                    "date_decided": opinion.date_decided,
+                    "docket_number": opinion.docket_number,
+                    "case_name": opinion.case_name,
+                    "holding": opinion.holding,
+                    "author_code": opinion.author_code,
+                    "citation": opinion.citation,
+                    "pdf_url": opinion.pdf_url,
+                    "pdf_kind": opinion.pdf_kind,
+                    "page_start": opinion.page_start,
+                    "revisions_json": _json([asdict(value) for value in opinion.revisions]),
+                    "native_opinion_json": _json(asdict(opinion)),
+                    **common,
+                },
+                [blob_witness(entry, f"opinion:{opinion.index}")],
+            )
+            if opinion.pdf_url:
+                declared[opinion.pdf_url].append(
+                    {
+                        "index_observation_id": observation,
+                        "opinion_index": opinion.index,
+                        "role": "opinion",
+                        "revision_index": None,
+                        "revision_label": None,
+                        "witness": blob_witness(entry, f"opinion:{opinion.index}:pdf"),
+                    }
+                )
+            for number, revision in enumerate(opinion.revisions):
+                declared[revision.url].append(
+                    {
+                        "index_observation_id": observation,
+                        "opinion_index": opinion.index,
+                        "role": "revision",
+                        "revision_index": number,
+                        "revision_label": revision.label,
+                        "witness": blob_witness(entry, f"opinion:{opinion.index}:revision:{number}"),
+                    }
+                )
+    seen = set()
+    for item in files:
+        entry = item["blob"]
+        url = entry["source_uri"]
+        key = (url, entry["sha256"])
+        if key in seen or url not in declared:
+            raise ValueError("Supreme Court selected probe repeated or not stated by selected index")
+        seen.add(key)
+        body = captures.read_blob(entry)
+        headers, status = safe_headers(entry, "application/pdf", len(body))
+        document = read_supreme_court_pdf(body, url=url, final_url=url, max_bytes=MAX_CAPTURE)
+        yield (
+            "supreme_court_pdf_observations",
+            {
+                "observation_id": _digest(_json([url, entry["sha256"]]).encode()),
+                "document_url": url,
+                "body_sha256": entry["sha256"],
+                "bytes": document.byte_size,
+                "pdf_version": document.pdf_version,
+                "linearized_length": document.linearized_length,
+                "declaring_occurrences_json": _json(
+                    [
+                        {key: value for key, value in occurrence.items() if key != "witness"}
+                        for occurrence in declared[url]
+                    ]
+                ),
+                "safe_response_headers_json": headers,
+                "response_status_line": status,
+                "locator_binding": item["locator_binding"],
+                "recorded_request_metadata_json": scotus_request_metadata(item),
+                "source_uri": url,
+                "source_sha256": entry["sha256"],
+                "observed_at": None,
+                "observation_time_state": entry["observation_time_state"],
+            },
+            [*[occurrence["witness"] for occurrence in declared[url]], blob_witness(entry, "retained-PDF")],
+        )
+
+
 PROCESSORS = {
     "sec-comments": sec_rows,
     "ferc-originals": ferc_rows,
     "cftc-comments": cftc_rows,
     "edis-document-bulk": edis_rows,
+    "supreme-court-observations": scotus_rows,
 }
 TABLES = {
+    "supreme-court-observations": (
+        "supreme_court_index_observations",
+        "supreme_court_opinion_observations",
+        "supreme_court_pdf_observations",
+    ),
     "edis-document-bulk": ("edis_documents", "edis_attachments", "edis_attachment_files"),
     "cftc-comments": ("cftc_rule_observations", "cftc_comments", "cftc_comment_files"),
     "sec-comments": ("sec_rulemakings", "sec_comment_files"),
