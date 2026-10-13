@@ -36,6 +36,7 @@ import anyio
 import anyio.to_thread
 import duckdb
 import httpx
+from spicy_regs.connection_diagnostics import phase as _diagnostic_phase, snapshot as _diagnostic_snapshot
 import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -572,6 +573,7 @@ def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
     return names
 
 
+@_diagnostic_phase('security_settings')
 def _apply_security_settings(con: duckdb.DuckDBPyConnection, allowed_paths: list[str] | None = None) -> None:
     """Restrict file reads to the selected dataset members, then lock the session settings."""
     con.execute("SET preserve_insertion_order=false")
@@ -597,6 +599,7 @@ class _Publication(NamedTuple):
     comments: dict | None = None
 
 
+@_diagnostic_phase('publication')
 def _read_publication() -> _Publication:
     """The live pointers, read once each; the rulemaking snapshot and comments receipt are ``None`` while unpublished.
 
@@ -611,11 +614,16 @@ def _read_publication() -> _Publication:
     )
 
     try:
-        comments = load_comments_publication(R2_BASE_URL)
+        with _diagnostic_phase("comments_pointer"):
+            comments = load_comments_publication(R2_BASE_URL)
     except PublicationError:
         logger.warning("comments export receipt is invalid; its tables state no rows", exc_info=True)
         comments = None
-    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL), comments)
+    with _diagnostic_phase("publication_index"):
+        index = load_index(R2_BASE_URL)
+    with _diagnostic_phase("rulemaking_pointer"):
+        rulemaking = load_rulemaking_snapshot(R2_BASE_URL)
+    return _Publication(index, rulemaking, comments)
 
 
 def _pinned_publication(con: duckdb.DuckDBPyConnection) -> _Publication:
@@ -638,6 +646,7 @@ def _comments_exports(comments: dict, served: list[str]) -> dict[str, dict]:
     return {name: {**pin, "matches_object": mutable_versions_match({name: pin})} for name, pin in pins.items()}
 
 
+@_diagnostic_phase('connection_build')
 def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
     """Open a DuckDB connection with one view per available table, pinned to one publication snapshot.
 
@@ -672,7 +681,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
     con.execute("SET allow_persistent_secrets=false")
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     if DATA_DIR is None:
-        load_public_http(con, INTERACTIVE_HTTP_RETRIES)
+        with _diagnostic_phase("httpfs_load"):
+            load_public_http(con, INTERACTIVE_HTTP_RETRIES)
 
     allowed_paths: list[str] = []
     # Request cursors share regular in-memory tables, not connection-local
@@ -740,9 +750,11 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                 con.execute(f'CREATE TABLE "{name}" AS SELECT * FROM _empty_native')
                 con.unregister("_empty_native")
             else:
-                con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
+                with _diagnostic_phase("view_registration", name):
+                    con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
             if published is not None:
-                actual = con.execute(f'DESCRIBE "{name}"').fetchall()
+                with _diagnostic_phase("view_schema", name):
+                    actual = con.execute(f'DESCRIBE "{name}"').fetchall()
                 if [[row[0], row[1]] for row in actual] != published["columns"]:
                     con.close()
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
@@ -788,8 +800,10 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
                          for path, names in groups.items()]
                 con.execute('CREATE VIEW etl_receipts AS ' + ' UNION ALL '.join(scans))
             else:
-                con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(urls)}')
-            actual = [[row[0], row[1]] for row in con.execute('DESCRIBE etl_receipts').fetchall()]
+                with _diagnostic_phase('receipt_registration'):
+                    con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(urls)}')
+            with _diagnostic_phase('receipt_schema'):
+                actual = [[row[0], row[1]] for row in con.execute('DESCRIBE etl_receipts').fetchall()]
             # Only the members this view reads: an unselected family's receipts do not gate a local download.
             selected = set(local_receipts) if local_receipts is not None else {member.path for member in receipts}
             if any(entry["etlReceipts"]["columns"] != actual for entry in publication_index["families"].values()
@@ -809,7 +823,8 @@ def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBP
         member_path = f"{entry['prefix']}/{key['key']}"
         location = str(local.receipt_indexes[member_path]) if local is not None else f"{R2_BASE_URL}/{member_path}"
         try:
-            check_reader(con, location, key, specification)
+            with _diagnostic_phase("receipt_key_index"):
+                check_reader(con, location, key, specification)
         except ValueError:
             con.close()
             raise
@@ -913,6 +928,7 @@ def _fec_release_reply(cursor):
     }
 
 
+@_diagnostic_phase('relationship_binding')
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
     from spicy_regs.relationship_views import install_relationship_views
@@ -964,8 +980,6 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
-    from spicy_regs.citation_receipts import install_citation_inputs
-    install_citation_inputs(con, adapter, status["tables"])
     con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
 
@@ -1322,6 +1336,7 @@ _cached_connection_at = 0.0
 _refreshing = False
 
 
+@_diagnostic_phase('connection_access')
 def _get_connection() -> duckdb.DuckDBPyConnection:
     """Return the shared connection, building it on first use and refreshing it past the TTL (see above).
 
@@ -1330,7 +1345,7 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     scoped to one call.
     """
     global _cached_connection, _cached_connection_at, _refreshing
-    with _connection_lock:
+    with _diagnostic_phase("connection_lock"), _connection_lock:
         if _cached_connection is None:  # cold start: concurrent callers wait for this one build
             _cached_connection, _cached_connection_at = _build_connection(), _monotonic()
             return _cached_connection
@@ -1343,7 +1358,7 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     except Exception:
         logger.exception("connection refresh failed; serving the pinned connection until the next TTL")
     finally:
-        with _connection_lock:
+        with _diagnostic_phase("connection_lock"), _connection_lock:
             _cached_connection, _cached_connection_at, _refreshing = replacement, _monotonic(), False
     return replacement
 
@@ -1417,6 +1432,7 @@ def _statement_timeout(cursor: duckdb.DuckDBPyConnection) -> Iterator[None]:
 
 
 @lru_cache(maxsize=1)
+@_diagnostic_phase("dictionary_metadata")
 def _table_metadata() -> dict[str, dict[str, Any]]:
     """Generated dictionary resource; requires neither spicy-docs nor a checkout."""
     return json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text(encoding="utf-8"))
@@ -1955,8 +1971,13 @@ class _StrictTool(Tool):
         return tool.model_copy(update={"parameters": {**schema, "additionalProperties": False}})
 
 
+def _run_observed_tool(fn, arguments):
+    with _diagnostic_phase("tool", fn.__name__):
+        return fn(**arguments)
+
+
 def _tools() -> list[Tool]:
-    """The six tools, each run on a worker thread under one limiter and refusing an argument it does not declare."""
+    """Data tools share a worker limiter; connection_status reads bounded phase metadata directly."""
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
     tools: list[Tool] = []
 
@@ -1976,7 +1997,7 @@ def _tools() -> list[Tool]:
         @functools.wraps(fn)
         async def call(**arguments: Any) -> CallToolResult:
             try:
-                result = await anyio.to_thread.run_sync(functools.partial(fn, **arguments), limiter=limiter)
+                result = await anyio.to_thread.run_sync(functools.partial(_run_observed_tool, fn, arguments), limiter=limiter)
             except Exception as exc:
                 raise ToolError(str(exc)) from exc
             structured, text = _reply_text(result)
@@ -2328,12 +2349,24 @@ def _tools() -> list[Tool]:
             raise ValueError(f"max_occurrences is at most {MAX_OCCURRENCES}; read a long document a page at a time "
                              "with offset (and cite_kind for one kind). coverage.cite_kind_counts states every "
                              "kind's rows.")
-        cursor = _get_connection().cursor()
+        connection = _get_connection()
+        cursor = connection.cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
             if "document_citations" not in status["tables"]:
                 raise ValueError("document_citations is not available in this connection")
-            from spicy_regs.citation_receipts import selected_citation_inputs
+        from spicy_regs.citation_receipts import ensure_citation_inputs, selected_citation_inputs
+        local = _connection_local_selection(cursor)
+        # Restoration previously ran during connection construction, outside
+        # the SQL statement timer. Keep that boundary and check local member
+        # signatures in the statement contexts on both sides of preparation.
+        with _diagnostic_phase("citation_preparation"):
+            ensure_citation_inputs(
+                connection, cursor, _connection_index(cursor), R2_BASE_URL, status["tables"],
+                local_directory=local["directory"] if local else DATA_DIR,
+                local_selection=local, memory_limit=MEMORY_LIMIT, temp_directory=TEMP_DIR,
+            )
+        with _statement_timeout(cursor):
             processing = selected_citation_inputs(cursor)
             citations = processing["tables"]["document_citations"]
             document = [document_kind, document_key]
@@ -2458,6 +2491,16 @@ def _tools() -> list[Tool]:
         receipt_lookup.refuse_oversized(reply, REPLY_CHARS, lambda value: len(_reply_text(value)[1]))
         return reply
 
+    async def connection_status() -> CallToolResult:
+        """Read bounded active/recent phase timings without opening a connection or using a tool slot.
+
+        A phase marks where an operation is waiting; elapsed time does not establish progress or readiness.
+        This observation neither starts a build nor cancels or retries a tool. It reads no source rows.
+        """
+        structured, text = _reply_text(_diagnostic_snapshot())
+        return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
+
+    tools.append(_StrictTool.strict(connection_status, inspect.cleandoc(connection_status.__doc__ or "")))
     return tools
 
 

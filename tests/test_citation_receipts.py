@@ -110,8 +110,12 @@ def test_a_published_flag_its_receipt_contradicts_is_refused_before_the_tool_can
     remember_selection(tmp_path, [SelectedDataset("document_citations", (subject,), receipts, context.generation_id)])
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
     monkeypatch.setattr(mcp_server, "TABLES", ())
-    with pytest.raises(ValueError, match="differs from its selected native subject"):
-        mcp_server._build_connection()
+    with connection(tmp_path, monkeypatch)[0]:
+        server = mcp_server.build_server()
+        _tool_data(server, "list_sources", {})
+        with pytest.raises(ToolError, match="differs from its selected native subject"):
+            _tool_data(server, "resolve_document_citations", {
+                "document_kind": "budget_volume", "document_key": "BUDGET-2027"})
 
 
 def test_held_text_zero_result_comes_from_receipt_only_read(tmp_path, monkeypatch):
