@@ -23,7 +23,7 @@ dependencies = [
 comments-reader = ["pyiceberg[pyarrow]==0.12.0"]
 source-readers = [
     "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
-    "spicy-docs[acquisition,html,pdf,pdf-pypdf,bill-diff,courtlistener-local,yaml]==0.63.0",
+    "spicy-docs[acquisition,html,pdf,pdf-pypdf,bill-diff,courtlistener-local,yaml]==0.65.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.1.2",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -37,7 +37,7 @@ embed = [
 # Checkout pipelines use the pinned source wheels; base CLI/MCP installs do not.
 source-readers = [
     "smart-open[s3]==8.0.1", # Conditional seekable S3 streams for remote generation staging
-    "spicy-docs[acquisition,html,pdf,pdf-pypdf,bill-diff,courtlistener-local,yaml]==0.63.0",
+    "spicy-docs[acquisition,html,pdf,pdf-pypdf,bill-diff,courtlistener-local,yaml]==0.65.0",
     "pypdf==6.14.2", # Qualified PDF text and failure behavior
     "rulespec-artifacts==1.1.2",
     "deltatrack==0.1.0", # spicy-docs' bill-diff extra; git-sourced upstream, so declared here to bind the vendored wheel
@@ -60,6 +60,10 @@ docs = [
 
 [project.scripts]
 spicy-regs-scorecards = "spicy_regs.scorecards.operations.cli:main"
+build-historical-regulations = "spicy_regs.transforms.historical_regulations:main"
+build-table3-history = "spicy_regs.sources.table3_history:main"
+build-uscode-editions = "spicy_regs.sources.uscode_editions:main"
+audit-uscode-editions = "spicy_regs.sources.uscode_editions_audit:main"
 run-rollup-scorecards = "spicy_regs.pipelines.rollups.scorecards:app"
 run-rollup-scorecard-analysis = "spicy_regs.pipelines.rollups.scorecard_analysis:app"
 materialize-rulemaking = "spicy_regs.pipelines.rulemaking_dataset:app"
@@ -135,7 +139,7 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-spicy-docs = { path = "vendor/spicy_docs-0.63.0-py3-none-any.whl" }
+spicy-docs = { path = "vendor/spicy_docs-0.65.0-py3-none-any.whl" }
 rulespec-artifacts = { path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" }
 deltatrack = { path = "vendor/deltatrack-0.1.0-py3-none-any.whl" }
 

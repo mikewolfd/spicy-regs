@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 from pathlib import Path
 
 import duckdb
@@ -9,6 +10,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+# Capture native DuckDB before the connection fixture patches its shared module.
+import spicy_regs.native_types  # noqa: F401
 from spicy_regs import data_dictionary as dd
 from spicy_regs import mcp_server
 from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
@@ -21,6 +24,130 @@ from spicy_regs.transforms.build_regulatory_agenda import ITEM_COLUMNS, RELATION
 from spicy_regs.transforms.build_rule_targets import COLUMNS as RULE_TARGET_COLUMNS
 from tests.generation_fakes import Store
 from tests.test_generation_publication import build, publish
+
+MANAGED_ONLY_RELEASE_TABLES = (
+    "administration_policy_bill_links", "administration_policy_statements",
+    "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
+    "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
+)
+
+
+def managed_release_fixture(tmp_path, table):
+    from spicy_regs.etl_policy_registry import installed_policies
+    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
+    from spicy_regs.generations import build_generation
+
+    policy = installed_policies()[table]
+    row = {f.name: False if pa.types.is_boolean(f.type)
+           else 1 if pa.types.is_integer(f.type) else "fixture" for f in policy.subject_schema}
+    row.update({field: {} for field in policy.receipt_fields})
+    context = ReceiptContext("test-generation", "test-attempt", "test-processor", [{
+        "source_id": "test-source", "sha256": "sha256:" + "a" * 64,
+    }])
+    subject, receipts = write_dataset([(row, context)], tmp_path / "source", policy)
+    directory = tmp_path / "managed"
+    build_generation(directory, family="managed-release", files=[subject], expected_keys=[subject.name],
+                     receipt_path=receipts, receipt_policies=[policy], receipt_generation_id=context.generation_id)
+    index = publish(Store(), directory)
+    entry = index["families"]["managed-release"]
+    locations = {pub.single_member(index, subject.name).path: directory / subject.name,
+                 f"{entry['prefix']}/etl_receipts.parquet": directory / "etl_receipts.parquet"}
+    return directory, index, locations
+
+
+@pytest.mark.parametrize("table", MANAGED_ONLY_RELEASE_TABLES)
+def test_managed_only_name_cannot_serve_successful_bare_bytes(tmp_path, monkeypatch, table):
+    monkeypatch.setattr(mcp_server, "DATA_DIR", None)
+    bare = tmp_path / (table + ".parquet")
+    pq.write_table(pa.table({"unexpected": ["unadmitted"]}), bare)
+    built = connection_fixture(monkeypatch, pub.empty_index(), {bare.name: bare}, tables=(table,))
+    mcp_server._build_connection()
+    con, = built
+    try:
+        assert con.seen == []
+        assert table not in mcp_server._available_tables(con.cursor())
+    finally:
+        con.close()
+
+
+@pytest.mark.parametrize("table", MANAGED_ONLY_RELEASE_TABLES)
+@pytest.mark.parametrize("bad", [None, "missing", "schema", "receipts", "503"])
+def test_managed_only_publication_preserves_selected_schema_and_receipts(tmp_path, monkeypatch, table, bad):
+    monkeypatch.setattr(mcp_server, "DATA_DIR", None)
+    directory, index, locations = managed_release_fixture(tmp_path, table)
+    key = pub.single_member(index, table + ".parquet").path
+    statuses = {}
+    if bad == "missing":
+        del locations[key]
+    elif bad == "schema":
+        index["families"]["managed-release"]["tables"][table + ".parquet"]["columns"] = [["wrong", "VARCHAR"]]
+    elif bad == "receipts":
+        locations = {key: directory / (table + ".parquet")}
+    elif bad == "503":
+        statuses[key] = 503
+    built = connection_fixture(monkeypatch, index, locations, tables=(table,), statuses=statuses)
+    if bad:
+        with pytest.raises(RuntimeError, match="Published"):
+            mcp_server._build_connection()
+        assert built[0].closed
+    else:
+        mcp_server._build_connection()
+        con, = built
+        try:
+            assert table in mcp_server._available_tables(con.cursor())
+            assert con.inner.execute(f'SELECT count(*) FROM "{table}"').fetchone() == (1,)
+            assert con.inner.execute("SELECT count(*) FROM etl_receipts WHERE dataset = ?", [table]).fetchone() == (1,)
+            assert f"{mcp_server.R2_BASE_URL}/{table}.parquet" not in con.seen
+        finally:
+            con.close()
+
+
+@pytest.mark.parametrize("table", MANAGED_ONLY_RELEASE_TABLES)
+def test_managed_only_name_preserves_explicit_local_selection(tmp_path, monkeypatch, table):
+    directory, _, _ = managed_release_fixture(tmp_path, table)
+    monkeypatch.setattr(mcp_server, "DATA_DIR", directory)
+    built = connection_fixture(monkeypatch, pub.empty_index(), {}, tables=(table,))
+    mcp_server._build_connection()
+    con, = built
+    try:
+        assert table in mcp_server._available_tables(con.cursor())
+        assert con.inner.execute(f'SELECT count(*) FROM "{table}"').fetchone() == (1,)
+        assert con.seen == []
+    finally:
+        con.close()
+
+
+@pytest.mark.parametrize("table", MANAGED_ONLY_RELEASE_TABLES)
+def test_managed_only_name_preserves_explicit_pinned_rulemaking_selection(tmp_path, monkeypatch, table):
+    import hashlib
+
+    directory, _, _ = managed_release_fixture(tmp_path, table)
+    monkeypatch.setattr(mcp_server, "DATA_DIR", None)
+    # Model an already captured pin; existing rulemaking tests cover its loader.
+    prefix = f"materialized/rulemaking/snapshots/{SNAPSHOT_A}"
+    key = prefix + "/" + table + ".parquet"
+    path = directory / (table + ".parquet")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    record = {"remote_key": key, "sha256": digest, "bytes": path.stat().st_size,
+              "rows": 1, "visibility": "public"}
+    manifest = {"format_version": 2, "dataset": "rulemaking", "snapshot_id": SNAPSHOT_A,
+                "artifacts": {table + ".parquet": record}, "run_id": "test-run",
+                "asserted_at": "2026-10-10T00:00:00Z"}
+    snapshot = {"snapshot_id": SNAPSHOT_A, "manifest_key": prefix + "/manifest.json",
+                "tables": {table + ".parquet": record}, "manifest": manifest}
+    built = connection_fixture(monkeypatch, pub.empty_index(), {key: directory / (table + ".parquet")}, tables=(table,))
+    monkeypatch.setattr(mcp_server, "_read_publication", lambda: mcp_server._Publication(pub.empty_index(), snapshot))
+    mcp_server._build_connection()
+    con, = built
+    try:
+        assert table in mcp_server._available_tables(con.cursor())
+        assert con.seen == [f"{mcp_server.R2_BASE_URL}/{key}"]
+        assert mcp_server._publication_status(con.cursor())["publication"][table] == {
+            "status": "rulemaking_snapshot", "snapshot_id": SNAPSHOT_A,
+            "sha256": "sha256:" + digest,
+        }
+    finally:
+        con.close()
 
 
 def serve_documents(monkeypatch, documents: dict) -> list[str]:
@@ -59,15 +186,20 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
     built = []
 
     class Connection:
-        def __init__(self):
-            self.inner, self.seen, self.closed = connect(), [], False
-            built.append(self)
+        def __init__(self, inner=None, parent=None):
+            self.inner = connect() if inner is None else inner
+            self.seen = [] if parent is None else parent.seen
+            self.observations_lock = threading.Lock() if parent is None else parent.observations_lock
+            self.closed = False
+            if parent is None:
+                built.append(self)
 
         def execute(self, sql, parameters=None):
             if sql.startswith(("INSTALL ", "LOAD ", "SET ")):
                 return self
             for url in re.findall("'(" + re.escape(mcp_server.R2_BASE_URL) + "/[^']+)'", sql):
-                self.seen.append(url)
+                with self.observations_lock:
+                    self.seen.append(url)
                 key = url.removeprefix(mcp_server.R2_BASE_URL + "/")
                 if key in statuses or key not in locations:
                     raise http_error(statuses.get(key, 404))
@@ -75,7 +207,10 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
             return self.inner.execute(sql, parameters) if parameters is not None else self.inner.execute(sql)
 
         def cursor(self):
-            return self.inner.cursor()
+            return Connection(self.inner.cursor(), self)
+
+        def __getattr__(self, name):
+            return getattr(self.inner, name)
 
         def close(self):
             self.closed = True
@@ -90,7 +225,8 @@ def connection_fixture(monkeypatch, index, locations, *, tables=("a", "b", "lega
     monkeypatch.setattr(mcp_server.duckdb, "connect", Connection)
     monkeypatch.setattr(pub, "load_index", lambda url: index)
     serve_documents(monkeypatch, documents or {})
-    monkeypatch.setattr(mcp_server, "_apply_security_settings", lambda con, allowed_paths=None: None)
+    monkeypatch.setattr(mcp_server, "_apply_security_settings",
+                        lambda con, allowed_paths=None: setattr(con, "allowed_paths", list(allowed_paths or [])))
     monkeypatch.setattr(mcp_server, "TABLES", tables)
     return built
 
@@ -111,7 +247,7 @@ def test_views_and_status_use_one_captured_generation(tmp_path, monkeypatch):
     assert status["publication"]["legacy"] == {"status": "legacy_unversioned"}
     assert status["publication"]["a"]["artifact_digest"] == index["families"]["test"]["artifactDigest"]
     assert con.inner.execute("SELECT * FROM a JOIN b USING (id)").fetchall() == [("one",)]
-    assert con.seen[:2] == [
+    assert con.allowed_paths[:2] == [
         mcp_server.R2_BASE_URL + "/" + pub.single_member(index, key).path for key in ("a.parquet", "b.parquet")
     ]
     con.inner.close()
@@ -268,7 +404,9 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     [first] = built
     assert reads.count(pointer) == 1  # once per connection build, not per call
     prefix = f"{mcp_server.R2_BASE_URL}/materialized/rulemaking/snapshots"
-    assert first.seen == [f"{prefix}/{SNAPSHOT_A}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
+    expected = [f"{prefix}/{SNAPSHOT_A}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
+    assert first.allowed_paths == expected
+    assert sorted(first.seen) == sorted(expected)
 
     monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
     assert mcp_server._get_connection() is first  # past the TTL an unmoved pointer is read, not rebuilt
@@ -283,7 +421,9 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     mcp_server._get_connection()
     [_, second] = built
     assert reads.count(pointer) == 3  # the rebuild pins the pointer its poll read
-    assert second.seen == [f"{prefix}/{SNAPSHOT_B}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
+    expected = [f"{prefix}/{SNAPSHOT_B}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
+    assert second.allowed_paths == expected
+    assert sorted(second.seen) == sorted(expected)
     assert second.inner.execute(query).fetchall() == [("EPA-B",)]
     assert first.inner.execute(query).fetchall() == [("EPA-A",)]  # a connection keeps the snapshot it pinned
     status = mcp_server._publication_status(second.cursor())
@@ -356,7 +496,8 @@ def test_no_published_pointer_leaves_the_rulemaking_tables_unavailable(tmp_path,
     mcp_server._build_connection()
     [con] = built
     assert mcp_server._publication_status(con.cursor())["tables"] == []
-    assert con.seen == [f"{mcp_server.R2_BASE_URL}/{table}.parquet" for table in dd.RULEMAKING_TABLES]  # legacy keys
+    assert con.allowed_paths == []
+    assert sorted(con.seen) == sorted(f"{mcp_server.R2_BASE_URL}/{table}.parquet" for table in dd.RULEMAKING_TABLES)
 
 
 def _moved(documents: dict, key: str, change) -> dict:
@@ -429,11 +570,13 @@ def test_the_index_wins_over_the_snapshot_for_a_table_both_name(tmp_path, monkey
     mcp_server._build_connection()
     [con] = built
     base = mcp_server.R2_BASE_URL
-    assert con.seen == [
+    expected = [
         f"{base}/{pub.single_member(index, 'a.parquet').path}",
         f"{base}/{pub.single_member(index, 'b.parquet').path}",
         f"{base}/{snapshot_key}",
     ]
+    assert con.allowed_paths == expected
+    assert sorted(con.seen) == sorted(expected)
     status = mcp_server._publication_status(con.cursor())
     assert status["tables"] == ["a", "b", "rule_targets"]  # rule_targets is not in TABLES here
     assert status["publication"]["a"]["status"] == "managed_generation"

@@ -147,8 +147,16 @@ Package installs opt in with
 The Unified Agenda reader uses SpicyDocs to fetch XML and read its fields;
 SpicyRegs still chooses table columns and derives timetable dates. An unavailable,
 malformed, or mismatched edition raises before yielding any of that edition's
-rows. The two malformed 2004 exports require a separately approved correction;
-this reader does not repair them.
+rows. The two retained 2004 exports use an exact-hash, exact-position correction
+with original and repaired digests retained. See the
+[Agenda source-only rebuild guide](docs/unified-agenda-retained-rebuild.md).
+
+Pinned originals also support separate local historical destinations:
+[Federal Register issues and dated eCFR snapshots](docs/historical-regulations.md),
+[complete Table III releases](docs/table3-historical-replay.md), and
+[U.S. Code editions and native structure](docs/uscode-editions.md).
+These commands produce receipt-bound local candidates; the published table
+registry changes only when a separate publication selects their outputs.
 
 CourtListener dump listing, source pins and CSV reading come from SpicyDocs.
 The reader preserves quoted empty strings separately from nulls and refuses
@@ -406,6 +414,28 @@ To query locally built or audited outputs through the same MCP tools, set
 loads no remote tables or catalog, and needs no network extensions. Responses
 identify the local source directory. An invalid directory is refused rather
 than silently switching sources. The SQL write guard also applies in local mode.
+
+For an immutable DocSpec export, optionally set
+`SPICY_REGS_DOCSPEC_EXPORTS=/absolute/path/bindings.json` with that explicit
+local directory. The caller-trusted JSON document has `version: 1`, an absolute
+`binary` path to DocSpec, a literal loopback `metadata_url` such as
+`http://127.0.0.1:8080`, and `tables` mapping each application table name to
+`{"file": "comments.parquet", "export": <complete canonical ExportPin>}`.
+Each local file may be bound once. Only these named local files enter the connection; managed download/native
+selection modes cannot share the directory. Admission compares the expected
+pin and exact source release through the configured producer, then uses the
+existing native `hash` command once to check the local file. Unchanged bindings
+keep the admitted connection across refresh checks, with ordinary file-change
+guards around queries. The producer stays running; hashing opens no Engine.
+
+Replies identify `docspec_immutable_export` and retain the exact export and
+release-level evidence reference. That reference is separate from SpicyRegs
+ETL receipts, grants no SQL access to evidence files, and supplies no invented
+row-to-receipt mapping or population-coverage claim. Callers authorize disclosure
+of the pin and its references and retain the referenced evidence independently.
+The first end-to-end qualification covers BIGINT/VARCHAR values; other application
+type representations and remote distribution need their own qualification.
+Default local-directory behavior is unchanged when this setting is absent.
 
 For the FEC source inventory, selected retained collections and relationship
 evidence, see [FEC integration](docs/fec-integration.md). The

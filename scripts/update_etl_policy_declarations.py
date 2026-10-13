@@ -21,7 +21,7 @@ def shared_logs():
     return ACQUISITION_POLICY, FILE_POLICY
 
 
-def family_policies():
+def family_policies(datasets: frozenset[str] | None = None):
     from spicy_regs.congress_receipts import policy as congress_policy
     from spicy_regs.congress_subjects import INPUT_COLUMNS
     from spicy_regs.court_receipts import POLICIES as courts
@@ -35,13 +35,25 @@ def family_policies():
     from spicy_regs.transforms.fec_native_subjects import FIELD_RULES
     from spicy_regs.navigation_read_outcomes import POLICIES as navigation_outcomes
 
+    from spicy_regs.sources.retained_native_collections import POLICIES as retained_native
+    from spicy_regs.sources.retained_collections import POLICIES as administration
+    from spicy_regs.transforms.historical_regulations import POLICIES as historical
+    from spicy_regs.sources.table3_history import POLICY as table3_history
+    from spicy_regs.sources.uscode_editions import POLICIES as editions
+
+    if datasets is not None and not datasets:
+        raise ValueError("Selected dataset declarations must be nonempty")
     result = {}
     def add(policy):
+        if datasets is not None and policy.dataset not in datasets:
+            return
         old = result.get(policy.dataset)
         if old is not None and old.descriptor() != policy.descriptor():
             raise ValueError(f'Family policy conflict: {policy.dataset}')
         result[policy.dataset] = policy
-    for policy in (*courts.values(), *scorecards.values(), *government.values(), *navigation_outcomes.values(), *shared_logs()):
+    for policy in (*courts.values(), *scorecards.values(), *government.values(), *navigation_outcomes.values(), *shared_logs(),
+                   *administration.values(), *retained_native.values(), *historical.values(), table3_history,
+                   *editions.values()):
         add(policy)
     for name in INPUT_COLUMNS:
         add(congress_policy(name))
@@ -55,17 +67,19 @@ def family_policies():
     for name in FIELD_RULES:
         schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declarations[name]['arrow_schema_ipc_base64'])))
         add(fec_policy(name, schema))
+    if datasets is not None and (missing := datasets - result.keys()):
+        raise ValueError(f"Unknown dataset declarations: {sorted(missing)}")
     return result
 
 
-def declarations():
+def declarations(datasets: frozenset[str] | None = None):
     """Each installed declaration as written: the policy's descriptor, and the marker on a shared log."""
     from spicy_regs.subject_catalog import SHARED_LOG, is_shared_log
 
     shared = {policy.dataset for policy in shared_logs()}
     result = {name: {**policy.descriptor(), **({SHARED_LOG: True} if name in shared else {})}
-              for name, policy in family_policies().items()}
-    if {name for name, declared in result.items() if is_shared_log(declared)} != shared:
+              for name, policy in family_policies(datasets).items()}
+    if {name for name, declared in result.items() if is_shared_log(declared)} != shared & result.keys():
         raise ValueError('A shared log has no declared policy')
     return result
 

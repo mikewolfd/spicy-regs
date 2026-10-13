@@ -28,13 +28,13 @@ One committee result occurrence in a retained API response. Makes captured commi
 | `treasurer_name` | `VARCHAR` | Treasurer name stated by the committee or filing source at this observation. |
 | `organization_type_full` | `VARCHAR` | Source-provided expansion of its organization-type code. |
 | `filing_frequency` | `VARCHAR` | Source-stated filing frequency code; not proof that all required reports are retained. |
-| `affiliated_committee_name` | `VARCHAR` | Literal affiliated committee name stated by the source; a name is not a verified committee link. |
+| `affiliated_committee_name` | `VARCHAR` | Literal affiliated committee or connected organization name stated by the API; a name is not a verified committee link or a substitute for bulk CONNECTED_ORG_NM. |
 | `organization_type` | `VARCHAR` | Literal source organization-type code; interpretation follows the source namespace. |
 | `first_file_date` | `DATE` | First filing date as reported in this source observation, not independently reconstructed history. |
 | `last_file_date` | `DATE` | Last filing date as reported in this source observation; later filings may exist. |
 | `first_f1_date` | `DATE` | First Form 1 date reported by the source, without a completeness assertion. |
 | `last_f1_date` | `DATE` | Last Form 1 date reported by the source, without a completeness assertion. |
-| `cycles` | `INTEGER[]` | Literal Native list of cycles stated by the API, retaining missing, NULL and empty distinctions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `cycles` | `INTEGER[]` | Literal Native list of reported activity cycles, retaining missing, NULL and empty distinctions. Activity membership does not date the captured profile fields. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `candidate_ids` | `VARCHAR[]` | Literal Native list of candidate IDs stated by the committee API; relationships require their own evidence and state checks. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `sponsor_candidate_ids` | `VARCHAR[]` | Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `designated_agent_city` | `VARCHAR` | Committee-designated agent city, exactly as stated by the source. |
@@ -76,5 +76,5 @@ One committee result occurrence in a retained API response. Makes captured commi
 | `last_file_date_status` | `VARCHAR` | Interpretation of source last_file_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
 | `first_f1_date_status` | `VARCHAR` | Interpretation of source first_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
 | `last_f1_date_status` | `VARCHAR` | Interpretation of source last_f1_date: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |
-| `source_cycle` | `INTEGER` | Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year. |
+| `source_cycle` | `INTEGER` | NULL for general committee API profiles. Activity query cycles remain in retained capture evidence; they do not establish a historical effective cycle for profile fields. |
 | `sponsor_candidate_list_status` | `VARCHAR` | Source-list interpretation outcome; unsupported_shape means the source value did not match the declared candidate-list structure. |

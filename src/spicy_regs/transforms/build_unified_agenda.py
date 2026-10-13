@@ -35,6 +35,7 @@ normalized per-RIN dict onto the pinned 17 columns.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import date
@@ -51,10 +52,9 @@ from spicy_regs.sources.unified_agenda import DEFAULT_EDITION, UnifiedAgendaRead
 
 OUTPUT = "unified_agenda.parquet"
 
-#: Editions the series skips, all publisher irregularities recorded rather than
-#: repaired: Spring 1995 and Spring 2012 were never published, and SpicyDocs
-#: refuses both 2004 editions, which each carry a control byte XML 1.0 forbids.
-UNREADABLE_EDITIONS = frozenset({"199504", "200404", "200410", "201204"})
+#: Unpublished spring editions. Exact retained 2004 originals are readable
+#: through the shared, hash-qualified repair; changed malformed originals refuse.
+UNREADABLE_EDITIONS = frozenset({"199504", "201204"})
 
 #: Missing editions fetched per run, newest first: about five minutes at the
 #: measured 15 s each, well inside the rollup job's 30-minute timeout. A
@@ -83,7 +83,6 @@ COLUMNS = (
     "url",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
-
 
 
 # reginfo timetable dates are ``MM/DD/YYYY``; anything else (``To Be Determined``)
@@ -184,17 +183,33 @@ def editions_to_fetch(held: set[str], latest: str = DEFAULT_EDITION) -> tuple[st
     return (latest, *missing[:BACKFILL_EDITIONS_PER_RUN])
 
 
-def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None = None,
-                        records: Callable[[str], Iterable[dict]] | None = None,
-                        download_prior: Callable[[str, Path], bool] | None = None) -> Path:
-    """Build ``unified_agenda.parquet`` (incremental merge with the prior table and edition backfill)."""
+def build_unified_agenda(
+    output_dir: Path,
+    *,
+    editions: tuple[str, ...] | None = None,
+    records: Callable[[str], Iterable[dict]] | None = None,
+    download_prior: Callable[[str, Path], bool] | None = None,
+    source_only: bool = False,
+    source_receipts: list[dict] | None = None,
+) -> Path:
+    """Build incremental editions, or replay explicit offline editions without a prior.
+
+    ``source_only`` requires a caller-selected offline reader. Success receipts
+    supplied by that reader retain original pins and any exact historical repair.
+    """
     import duckdb
 
     out_file = output_dir / OUTPUT
     prior_file = output_dir / "_ua_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means no merge base).
-    have_prior = prior_file.exists() or (download_prior or r2.download)(OUTPUT, prior_file)
+    if source_only and (editions is None or records is None):
+        raise ValueError("Source-only Unified Agenda rebuild requires explicit editions and an offline records reader")
+    if source_only and out_file.exists():
+        raise ValueError("Source-only Unified Agenda rebuild refuses an existing output")
+    if source_only and prior_file.exists():
+        raise ValueError("Source-only Unified Agenda rebuild refuses a prior merge file")
+    have_prior = False if source_only else prior_file.exists() or (download_prior or r2.download)(OUTPUT, prior_file)
     if have_prior:
         logger.info("Unified Agenda: merging against prior table {}", prior_file)
     else:
@@ -205,17 +220,34 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
     if editions is None:
         held = set()
         if have_prior:
-            held = {row[0] for row in duckdb.sql(
-                f"SELECT DISTINCT agenda_edition FROM read_parquet('{prior_file}')").fetchall()}
+            held = {
+                row[0]
+                for row in duckdb.sql(f"SELECT DISTINCT agenda_edition FROM read_parquet('{prior_file}')").fetchall()
+            }
         editions = editions_to_fetch(held, newest_edition())
     logger.info("Unified Agenda: fetching editions {}", ", ".join(editions))
     # One reader per edition: each acquisition carries its own request budget.
-    read = records or (lambda edition: UnifiedAgendaReader(editions=(edition,)).iter_records())
-    rows = [_shape(doc) for edition in editions for doc in read(edition)]
+    source_receipts = [] if source_receipts is None else source_receipts
+    read = (
+        records
+        if records is not None
+        else (lambda edition: UnifiedAgendaReader(editions=(edition,), on_source=source_receipts.append).iter_records())
+    )
     new_file = output_dir / "_ua_new.parquet"
-    table = pa.Table.from_pylist(rows, schema=_SCHEMA) if rows else _SCHEMA.empty_table()
-    pq.write_table(table, new_file, compression="zstd")
-    logger.info("Unified Agenda: fetched {:,} entries this run", len(rows))
+    total_new = 0
+    with pq.ParquetWriter(new_file, _SCHEMA, compression="zstd") as writer:
+        rows = []
+        for edition in editions:
+            for doc in read(edition):
+                rows.append(_shape(doc))
+                if len(rows) == 1000:
+                    writer.write_table(pa.Table.from_pylist(rows, schema=_SCHEMA))
+                    total_new += len(rows)
+                    rows.clear()
+        if rows:
+            writer.write_table(pa.Table.from_pylist(rows, schema=_SCHEMA))
+            total_new += len(rows)
+    logger.info("Unified Agenda: fetched {:,} entries this run", total_new)
 
     # 3. Merge prior + new, dedup on (rin, agenda_edition) preferring the new row.
     spill_dir = output_dir / ".duckdb_tmp"
@@ -227,6 +259,16 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
     con.execute(f"SET temp_directory='{spill_dir}'")
 
     cols = ", ".join(COLUMNS)
+    if source_only:
+        invalid_row = con.execute(
+            "SELECT count(*) FROM (SELECT rin, agenda_edition FROM read_parquet(?) "
+            "GROUP BY rin, agenda_edition HAVING count(*) > 1 OR rin IS NULL OR agenda_edition IS NULL)",
+            [str(new_file)],
+        ).fetchone()
+        assert invalid_row is not None
+        if invalid_row[0]:
+            con.close()
+            raise ValueError("Source-only Unified Agenda rebuild requires unique non-null native identities")
     if have_prior:
         union = (
             f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
@@ -253,8 +295,30 @@ def build_unified_agenda(output_dir: Path, *, editions: tuple[str, ...] | None =
     )
     con.close()
 
+    if source_receipts:
+        # Receipt conversion retains this manifest's digest and repair evidence.
+        encoded = (json.dumps(source_receipts, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        (output_dir / "unified_agenda_source_inputs.json").write_bytes(encoded)
+        metadata = {
+            b"unified_agenda_source_inputs_sha256": hashlib.sha256(encoded).hexdigest().encode(),
+            b"unified_agenda_source_only": json.dumps(source_only).encode(),
+            b"unified_agenda_repairs": json.dumps(
+                [item["repair"] for item in source_receipts if item.get("repair")],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode(),
+        }
+        # DuckDB COPY drops key/value metadata. Rewrite in bounded batches,
+        # preserving every value and adding compact provenance.
+        parsed = pq.ParquetFile(out_file)
+        annotated = output_dir / "_ua_annotated.parquet"
+        with pq.ParquetWriter(annotated, parsed.schema_arrow.with_metadata(metadata), compression="zstd") as writer:
+            for batch in parsed.iter_batches(batch_size=1000):
+                writer.write_batch(batch)
+        annotated.replace(out_file)
+
     # Housekeeping: drop scratch files so they aren't mistaken for outputs.
-    for scratch in (prior_file, new_file):
+    for scratch in (new_file,) if source_only else (prior_file, new_file):
         scratch.unlink(missing_ok=True)
 
     total = pq.ParquetFile(out_file).metadata.num_rows

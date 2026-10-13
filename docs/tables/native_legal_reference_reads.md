@@ -16,7 +16,7 @@ Each input's latest completed read, including reads that found no observations. 
 | Column | Type | Description |
 | --- | --- | --- |
 | `scope_id` | `VARCHAR` | The scope this read replaced, spelled as `native_reference_scope_id` spells it; a complete read supersedes the scope's earlier read and every observation row it produced. |
-| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode` or `ecfr`. |
+| `source_family` | `VARCHAR` | The scanner family that read the input: `uscode`, `ecfr`, `bill` or `law`. |
 | `source_record_key` | `VARCHAR` | The caller's record identity for the input, retained literally. |
 | `edition` | `VARCHAR` | The edition or request date the caller's checked capture metadata states, literally; NULL when it states none, never read from a filename. |
 | `input_sha256` | `VARCHAR` | `sha256:` digest of the exact XML bytes this read took. |
@@ -24,8 +24,8 @@ Each input's latest completed read, including reads that found no observations. 
 | `source_bytes` | `BIGINT` | Exact retained XML byte count. |
 | `occurrence_count` | `BIGINT` | Number of observations produced by this completed selected-shape read, including zero. |
 | `read_status` | `VARCHAR` | `complete_selected_shapes`: the scanner finished the whole input for the selected shapes, which does not mean every legal-reference form in it was read. |
-| `selected_shapes` | `VARCHAR[]` | XML shapes this read selected, in recorded order; does not imply all reference forms were read. |
-| `unsupported_shapes` | `VARCHAR[]` | XML forms this read explicitly left out; empty differs from unknown. |
+| `selected_shapes` | `VARCHAR[]` | The source shapes this read selected, as a Native list: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `unsupported_shapes` | `VARCHAR[]` | The shapes this read knowingly left out, as a Native list (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `manifest_sha256` | `VARCHAR` | `sha256:` digest of the selection manifest that named this input and any target pins. |
 | `rule_version` | `VARCHAR` | `native-legal-reference/003` (`NATIVE_LEGAL_REFERENCE_RULE`): the rule this read ran under, the same as its observation rows'; comparable for equality only. |
-| `body_version_id` | `VARCHAR` | Exact retained XML content identity, body:sha256:<digest>; equal across the observation and its completed read scope. |
+| `body_version_id` | `VARCHAR` | Stable identity of the substantive captured document body, independent of extraction processing. |

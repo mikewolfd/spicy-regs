@@ -169,3 +169,13 @@ con.close()
 '''
     result = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_general_committee_profile_descriptions_preserve_source_grain():
+    entry = dd.load_curated_descriptions()["fec_committee_observations"]
+    columns = entry["columns"]
+    assert "capture-time" in entry["grain"]
+    assert "affiliated committee or connected organization" in columns["affiliated_committee_name"]
+    assert "substitute for bulk CONNECTED_ORG_NM" in columns["affiliated_committee_name"]
+    assert "activity cycles" in columns["cycles_json"]
+    assert "NULL for general committee API profiles" in columns["source_cycle"]

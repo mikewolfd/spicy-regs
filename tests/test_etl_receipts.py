@@ -809,3 +809,68 @@ def test_only_declared_earlier_policies_are_admitted(tmp_path, dataset):
     failed = failure_receipt(unknown, context, outcome="rejected", raw_fields={"raw_record": {}})
     with pytest.raises(ValueError, match="matching dataset policy"):
         validate_receipt_row(failed, {current.dataset: current})
+
+
+@pytest.mark.parametrize("backend", [None, True, 1, [], {}, "", "other"])
+def test_invalid_write_validation_backend_refuses_before_writes(tmp_path, policy, backend):
+    consumed = False
+
+    def records():
+        nonlocal consumed
+        consumed = True
+        yield pytest.fail("invalid backend consumed source records")
+
+    parent = tmp_path / "not-created"
+    with pytest.raises(ValueError, match="validation_backend"):
+        write_dataset(records(), parent / "bundle", policy, validation_backend=backend)
+    assert not consumed
+    assert not parent.exists()
+
+
+def test_write_validation_backends_preserve_exact_subjects_and_receipts(tmp_path, context, monkeypatch):
+    from spicy_regs import etl_receipts
+    from spicy_regs import etl_bulk
+
+    p = DatasetPolicy(
+        "section_fixture",
+        pa.schema([("id", pa.string()), ("body", pa.string()), ("note", pa.string())]),
+        ("id",),
+        ("native_processing",),
+    )
+    values = [
+        {"id": "1", "body": "Native quote: \"hello\"\nUnicode é😀", "note": None, "native_processing": {"raw": "01"}},
+        {"id": "2", "body": "", "note": "\x1b", "native_processing": {"raw": "", "items": [None, ""]}},
+    ]
+    real = etl_receipts.validate_receipt_bundle
+    backends = []
+
+    def validation(*args, **kwargs):
+        backends.append(kwargs.get("bulk", True))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(etl_receipts, "validate_receipt_bundle", validation)
+    default = write_dataset(((r, context) for r in values), tmp_path / "default", p)
+
+    def unexpected_bulk(*args, **kwargs):
+        pytest.fail("reference selection entered the bulk validator")
+
+    monkeypatch.setattr(etl_bulk, "validate_bundle", unexpected_bulk)
+    reference = write_dataset(((r, context) for r in values), tmp_path / "reference", p, validation_backend="reference")
+    assert backends == [True, False]
+    assert pq.read_table(default[0]).to_pylist() == pq.read_table(reference[0]).to_pylist()
+    assert pq.read_table(default[1]).to_pylist() == pq.read_table(reference[1]).to_pylist()
+    assert list(read_with_receipts([reference[0]], [reference[1]], p, generation_id=context.generation_id)) == values
+
+
+def test_reference_write_rejects_duplicate_bindings_without_installing(tmp_path, policy, context, row, monkeypatch):
+    from spicy_regs import etl_bulk
+
+    def unexpected_bulk(*args, **kwargs):
+        pytest.fail("reference selection entered the bulk validator")
+
+    monkeypatch.setattr(etl_bulk, "validate_bundle", unexpected_bulk)
+    output = tmp_path / "refused"
+    with pytest.raises(ValueError, match="Duplicate or ambiguous"):
+        write_dataset([(row, context), (row, context)], output, policy, validation_backend="reference")
+    assert not output.exists()
+    assert not list(tmp_path.glob(".etl-*"))

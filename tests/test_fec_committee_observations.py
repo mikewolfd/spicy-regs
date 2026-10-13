@@ -178,3 +178,88 @@ def test_committee_native_dates_affiliations_and_sponsors_are_promoted():
     assert result["affiliated_committee_name"] == "Example" and result["organization_type"] == "L"
     assert json.loads(result["sponsor_candidate_ids_json"]) == ["H2AK01158", "H2AK01158"]
     assert result["sponsor_candidate_ids_status"] == "reported"
+
+
+def selected_entry(query="sort=committee_id&per_page=100&page=1", *, resolved_query=None):
+    from spicy_docs.sources.fec.document_profile import document_scope
+
+    endpoint = "https://api.open.fec.gov/v1/committees/?"
+    capture = dict(requestUrl=endpoint + query, observedAt="2026-10-11T12:00:00Z",
+                   responseSha256=PIN, byteSize=128, representation="opaque")
+    if resolved_query is not None:
+        capture["resolvedUrl"] = endpoint + resolved_query
+    return dict(collection_id="snapshot", profile="document", source_cycle=None,
+                scope=document_scope(capture, format="api-json", api_mode="page"))
+
+
+def test_preparation_preserves_activity_filters_and_literal_profile_values():
+    query = "sort=committee_id&per_page=100&cycle=2024&cycle=2026&min_last_file_date=2024-01-01"
+    entry = selected_entry(query, resolved_query="cycle=2026&per_page=100&sort=committee_id&"
+                           "cycle=2024&min_last_file_date=2024-01-01&page=1")
+    before = json.dumps(entry, sort_keys=True)
+    prepared = committee.prepare_committee_api(entry, source_generation_pin=GEN)
+    row = source(dict(committee_id="C00000001", affiliated_committee_name="  Organization or affiliate  ",
+                      cycles=[2024, 2026, 2024], candidate_ids=["H00000001", "H00000001"]))
+    row["source_url"] = entry["scope"]["capture"]["requestUrl"]
+    tables, _ = committee.map_committee_api(row, prepared)
+    result = tables[committee.COMMITTEES][0]
+    assert prepared.selection.source_cycle is None and result["source_cycle"] is None
+    assert prepared.selection.source_sha256 == PIN
+    assert json.dumps(entry, sort_keys=True) == before
+    assert result["affiliated_committee_name"] == "  Organization or affiliate  "
+    assert json.loads(result["cycles_json"]) == [2024, 2026, 2024]
+    assert json.loads(result["candidate_ids_json"]) == ["H00000001", "H00000001"]
+    assert result["query_completeness"] == "not-asserted"
+
+
+@pytest.mark.parametrize("query", [
+    "sort=committee_id&sort=committee_id&per_page=100", "sort=committee_id&per_page=100&page=1&page=1",
+    "sort=committee_id&per_page=100&per_page=100", "sort=committee_id&per_page=100&cycle=2025",
+    "sort=committee_id&per_page=100&cycle=02024", "sort=committee_id&per_page=100&cycle=",
+    "sort=committee_id&per_page=100&cycle=2024,2026", "sort=committee_id&per_page=100&page=+1",
+    "sort=committee_id&per_page=100&unknown=x", "sort=committee_id&per_page=100&cycle=%ZZ",
+    "sort=committee_id&per_page=100&cycle=%FF", "sort=committee_id&per_page=100&cycle",
+    "sort=committee_id&per_page=100&min_last_file_date=2024-02-30",
+    "sort=committee_id&per_page=100&min_last_file_date=20240101",
+])
+def test_preparation_refuses_ambiguous_or_unsupported_query(query):
+    with pytest.raises(ValueError):
+        committee.prepare_committee_api(selected_entry(query), source_generation_pin=GEN)
+
+
+@pytest.mark.parametrize("case", ["profile", "cycle", "format", "mode", "representation", "history",
+                                  "redirect-filter", "redirect-page", "row-query"])
+def test_preparation_and_mapping_refuse_changed_selected_scope(case):
+    entry = selected_entry()
+    if case == "profile":
+        entry["profile"] = "committee"
+    elif case == "cycle":
+        entry["source_cycle"] = 2024
+    elif case in {"format", "mode", "representation"}:
+        if case == "format":
+            entry["scope"]["format"] = "pdf"
+        elif case == "mode":
+            entry["scope"]["api_mode"] = "keyset"
+        else:
+            entry["scope"]["capture"]["representation"] = "zip"
+    elif case == "history":
+        entry["scope"]["capture"]["requestUrl"] = "https://api.open.fec.gov/v1/committee/C00000001/history/2024/"
+    elif case.startswith("redirect"):
+        entry["scope"]["capture"]["resolvedUrl"] = entry["scope"]["capture"]["requestUrl"] + (
+            "&cycle=2024" if case == "redirect-filter" else "&page=2")
+    if case == "row-query":
+        prepared = committee.prepare_committee_api(entry, source_generation_pin=GEN)
+        row = source({"committee_id": "C00000001"})
+        row["source_url"] += "&cycle=2024"
+        with pytest.raises(ValueError, match="selected request"):
+            committee.map_committee_api(row, prepared)
+    else:
+        with pytest.raises(ValueError):
+            committee.prepare_committee_api(entry, source_generation_pin=GEN)
+
+
+@pytest.mark.parametrize("control", [None, "pagination"])
+def test_direct_mapper_refuses_historical_cycle_for_profiles_and_controls(control):
+    selection = CollectionSelection("snapshot", PIN, GEN, "official-fec", 2024, "snapshot", PIN)
+    with pytest.raises(ValueError, match="NULL source_cycle"):
+        committee.map_committee_api(source({"committee_id": "C00000001"}, control=control), selection)

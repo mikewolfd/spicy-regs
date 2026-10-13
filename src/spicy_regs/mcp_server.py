@@ -21,7 +21,8 @@ import tempfile
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
@@ -31,12 +32,14 @@ from importlib.resources import files
 from pathlib import Path
 from time import monotonic as _monotonic
 from typing import Annotated, Any, NamedTuple
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import anyio
 import anyio.to_thread
 import duckdb
 import httpx
+from spicy_regs.connection_diagnostics import phase as _diagnostic_phase, snapshot as _diagnostic_snapshot
 import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -574,6 +577,7 @@ def _tables_named(cursor: duckdb.DuckDBPyConnection, sql: str) -> set[str]:
     return names
 
 
+@_diagnostic_phase('security_settings')
 def _apply_security_settings(con: duckdb.DuckDBPyConnection, allowed_paths: list[str] | None = None) -> None:
     """Restrict file reads to the selected dataset members, then lock the session settings."""
     con.execute("SET preserve_insertion_order=false")
@@ -599,6 +603,144 @@ class _Publication(NamedTuple):
     comments: dict | None = None
 
 
+class _RemoteSourceView(NamedTuple):
+    name: str
+    urls: list[str]
+    columns: list[list[str]] | None
+    required: bool
+    export: bool
+
+
+def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
+    """Bind and freshly check one independent source; only absent legacy files may skip."""
+    from spicy_regs.sources.publication import parquet_scan
+
+    try:
+        with _diagnostic_phase("view_registration", source.name):
+            cursor.execute(f'CREATE VIEW "{source.name}" AS SELECT * FROM {parquet_scan(source.urls)}')
+        if source.columns is not None or source.required:
+            with _diagnostic_phase("view_schema", source.name):
+                actual = cursor.execute(f'DESCRIBE "{source.name}"').fetchall()
+            if source.columns is not None and [[row[0], row[1]] for row in actual] != source.columns:
+                raise RuntimeError(f"Published schema differs from admitted generation: {source.name}")
+    except duckdb.Error as exc:
+        if source.required or not (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404):
+            kind = "Published generation member" if source.required else "Legacy table"
+            raise RuntimeError(f"{kind} unavailable: {source.name}") from exc
+        logger.warning("table %s not available at %s; skipping view: %s", source.name, source.urls, exc)
+        return False
+    return True
+
+
+def _admit_remote_source_views(con, sources: list[_RemoteSourceView]) -> list[bool]:
+    """Use at most four private cursors, settling all work before closing or exposing the database."""
+    if not sources:
+        return []
+    from spicy_regs.runtime_bounds import current_bound
+
+    bound = current_bound()
+    workers = min(4, len(sources))
+    cursors = []
+    stop = threading.Event()
+    admitted = [False] * len(sources)
+
+    def batch(cursor, positions):
+        try:
+            with bound.scope() if bound is not None else nullcontext():
+                with bounded_connection(cursor):
+                    result = []
+                    for position in positions:
+                        checkpoint()
+                        if stop.is_set():
+                            break
+                        result.append((position, _admit_remote_source_view(cursor, sources[position])))
+                    return result
+        except BaseException:
+            stop.set()
+            raise
+
+    try:
+        # Duplicated cursors share global budgets/security, but LOCAL settings
+        # reset in DuckDB 1.5.5. Apply the same home and retry policy explicitly.
+        for _ in range(workers):
+            cursor = con.cursor()
+            cursors.append(cursor)
+            cursor.execute("SET home_directory=?", [HOME_DIRECTORY])
+            for name, value in INTERACTIVE_HTTP_RETRIES.items():
+                cursor.execute(f"SET {name}=?", [value])
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="source-admission") as pool:
+            futures = [pool.submit(batch, cursor, range(i, len(sources), workers))
+                       for i, cursor in enumerate(cursors)]
+            for future in futures:
+                for position, available in future.result():
+                    admitted[position] = available
+    finally:
+        # Executor shutdown joins running workers even after failure. No child
+        # may still use this database when the caller closes or locks it.
+        close_error = None
+        for cursor in cursors:
+            try:
+                cursor.close()
+            except BaseException as exc:
+                close_error = close_error or exc
+        if close_error is not None:
+            raise close_error
+    return admitted
+
+
+def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, str] | None:
+    """Classify every admitted SQL URL from validated records, or retain cache defaults."""
+    from spicy_regs.sources.publication import (
+        PublicationError, SNAPSHOT_POINTER, load_rulemaking_snapshot, parse_index,
+        receipt_key_members, receipt_members, table_members,
+    )
+
+    base = R2_BASE_URL.rstrip("/")
+    if DATA_DIR is not None or urlsplit(base).scheme not in {"http", "https"} or not allowed_paths:
+        return None
+    try:
+        captured = parse_index(json.dumps(index).encode())
+        owned = {}
+        for entry in captured["families"].values():
+            for key in entry["tables"]:
+                owned.update({f"{base}/{member.path}": "managed_generation"
+                              for member in table_members(captured, key)})
+        owned.update({f"{base}/{member.path}": "managed_generation"
+                      for member in (*receipt_members(captured), *receipt_key_members(captured))})
+        if rulemaking is not None:
+            # Reuse the maintained pointer/manifest validator with the captured
+            # documents only: no additional HTTP read or filename inference.
+            manifest = rulemaking["manifest"]
+            pointer = {"format_version": manifest["format_version"], "dataset": manifest["dataset"],
+                       "snapshot_id": rulemaking["snapshot_id"], "manifest_key": rulemaking["manifest_key"]}
+            documents = {f"{base}/{SNAPSHOT_POINTER}": json.dumps(pointer).encode(),
+                         f"{base}/{rulemaking['manifest_key']}": json.dumps(manifest).encode()}
+            validated = load_rulemaking_snapshot(base, read=lambda url, **_: documents[url])
+            if validated is None or validated != rulemaking:
+                return None
+            owned.update({f"{base}/{record['remote_key']}": "rulemaking_snapshot"
+                          for record in validated["tables"].values()})
+        if any(path not in owned for path in allowed_paths):
+            return None
+        return {path: owned[path] for path in allowed_paths}
+    except (PublicationError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def _enable_immutable_metadata_cache(con, index, rulemaking, allowed_paths):
+    """Reuse HTTP headers and parsed Parquet metadata after fresh immutable-input admission.
+
+    Rulemaking immutability is the maintained source-owner policy, weaker than
+    managed generation create-only writes. Neither premise covers legacy mirrors.
+    """
+    inputs = _immutable_metadata_inputs(index, rulemaking, allowed_paths)
+    if inputs is not None:
+        con.execute("SET enable_http_metadata_cache=true")
+        con.execute("SET GLOBAL parquet_metadata_cache=true")
+    return inputs
+
+
+@_diagnostic_phase('publication')
 def _read_publication() -> _Publication:
     """The live pointers, read once each; the rulemaking snapshot and comments receipt are ``None`` while unpublished.
 
@@ -613,11 +755,16 @@ def _read_publication() -> _Publication:
     )
 
     try:
-        comments = load_comments_publication(R2_BASE_URL)
+        with _diagnostic_phase("comments_pointer"):
+            comments = load_comments_publication(R2_BASE_URL)
     except PublicationError:
         logger.warning("comments export receipt is invalid; its tables state no rows", exc_info=True)
         comments = None
-    return _Publication(load_index(R2_BASE_URL), load_rulemaking_snapshot(R2_BASE_URL), comments)
+    with _diagnostic_phase("publication_index"):
+        index = load_index(R2_BASE_URL)
+    with _diagnostic_phase("rulemaking_pointer"):
+        rulemaking = load_rulemaking_snapshot(R2_BASE_URL)
+    return _Publication(index, rulemaking, comments)
 
 
 def _pinned_publication(con: duckdb.DuckDBPyConnection) -> _Publication:
@@ -643,6 +790,7 @@ def _comments_exports(comments: dict, served: list[str]) -> dict[str, dict]:
 _discovery_only = ContextVar("spicy_schema_discovery", default=False)
 
 
+@_diagnostic_phase('connection_build')
 def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
     """Discard cancelled/failed admissions; never cache a partially built connection."""
     checkpoint()
@@ -672,6 +820,8 @@ def _build_connection_inputs(con, publication):
     """
     from spicy_regs.sources.publication import COMMENTS_EXPORT_TABLES, parquet_scan, table_descriptor, table_members
 
+    if DATA_DIR is None and os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS"):
+        raise RuntimeError("DocSpec exports require an explicit SPICY_REGS_DATA_DIR")
     local = None
     signatures = {}
     comments = None
@@ -687,7 +837,8 @@ def _build_connection_inputs(con, publication):
     con.execute("SET allow_persistent_secrets=false")
     con.execute(f"SET home_directory='{HOME_DIRECTORY.replace(chr(39), chr(39) * 2)}'")
     if DATA_DIR is None:
-        load_public_http(con, INTERACTIVE_HTTP_RETRIES)
+        with _diagnostic_phase("httpfs_load"):
+            load_public_http(con, INTERACTIVE_HTTP_RETRIES)
 
     allowed_paths: list[str] = []
     # Request cursors share regular in-memory tables, not connection-local
@@ -697,7 +848,7 @@ def _build_connection_inputs(con, publication):
     if rulemaking is not None:
         con.execute("CREATE TABLE _spicy_rulemaking (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_rulemaking VALUES (?)", [json.dumps(rulemaking)])
-    if local is not None and (local.is_download or local.native):
+    if local is not None and (local.is_download or local.native or local.docspec):
         con.execute("CREATE TABLE _spicy_local_selection (snapshot VARCHAR)")
         con.execute(
             "INSERT INTO _spicy_local_selection VALUES (?)",
@@ -706,6 +857,8 @@ def _build_connection_inputs(con, publication):
                     {
                         "directory": str(local.directory),
                         "signatures": signatures,
+                        "docspec": local.docspec,
+                        "docspec_configuration": local.docspec_configuration,
                         "selected_tables": list(local.files),
                         "receipt_rows_admitted": not _discovery_only.get(),
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
@@ -719,17 +872,27 @@ def _build_connection_inputs(con, publication):
                 )
             ],
         )
+    # These newly declared subjects enter serving only through a managed
+    # generation or explicit local/rulemaking selection, never a bare legacy key.
+    managed_only = {
+        "administration_policy_bill_links", "administration_policy_statements",
+        "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
+        "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
+    }
     managed_names = [
         key.removesuffix(".parquet") for e in publication_index["families"].values() for key in e["tables"]
     ]
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None else []
     exports: list[str] = []
+    remote_sources: list[_RemoteSourceView] = []
     for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
         checkpoint()
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
         pinned = rulemaking["tables"].get(f"{name}.parquet") if rulemaking is not None and published is None else None
+        if local is None and name in managed_only and published is None and pinned is None:
+            continue
         if pinned is not None:
             paths = [pinned["remote_key"]]
         if local is not None:
@@ -738,6 +901,13 @@ def _build_connection_inputs(con, publication):
             urls = [str(path) for path in local.paths(name)]
         else:
             urls = [f"{R2_BASE_URL}/{path}" for path in paths]
+        if local is None:
+            remote_sources.append(_RemoteSourceView(
+                name, urls, published["columns"] if published is not None else None,
+                published is not None or pinned is not None,
+                published is None and pinned is None and name in COMMENTS_EXPORT_TABLES,
+            ))
+            continue
         try:
             if not urls and local is not None and name in local.native:
                 import pyarrow as pa
@@ -746,9 +916,11 @@ def _build_connection_inputs(con, publication):
                 con.execute(f'CREATE TABLE "{name}" AS SELECT * FROM _empty_native')
                 con.unregister("_empty_native")
             else:
-                con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
+                with _diagnostic_phase("view_registration", name):
+                    con.execute(f'CREATE VIEW "{name}" AS SELECT * FROM {parquet_scan(urls)}')
             if published is not None:
-                actual = con.execute(f'DESCRIBE "{name}"').fetchall()
+                with _diagnostic_phase("view_schema", name):
+                    actual = con.execute(f'DESCRIBE "{name}"').fetchall()
                 if [[row[0], row[1]] for row in actual] != published["columns"]:
                     con.close()
                     raise RuntimeError(f"Published schema differs from admitted generation: {name}")
@@ -756,7 +928,7 @@ def _build_connection_inputs(con, publication):
             if local is None and published is None and pinned is None and name in COMMENTS_EXPORT_TABLES:
                 exports.append(name)
         except duckdb.Error as exc:
-            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native))
+            required = published is not None or pinned is not None or (local is not None and (local.is_download or local.native or local.docspec))
             # A remote legacy table is skipped only when it is absent; a throttled or failing read refuses the
             # build, so a refresh keeps the connection it would replace instead of serving one without the table.
             absent = local is not None or (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404)
@@ -765,6 +937,16 @@ def _build_connection_inputs(con, publication):
                 kind = "Published generation member" if required else "Legacy table"
                 raise RuntimeError(f"{kind} unavailable: {name}") from exc
             logger.warning("table %s not available at %s; skipping view: %s", name, urls, exc)
+    try:
+        admitted = _admit_remote_source_views(con, remote_sources)
+    except BaseException:
+        con.close()
+        raise
+    for source, available in zip(remote_sources, admitted):
+        if available:
+            allowed_paths.extend(source.urls)
+            if source.export:
+                exports.append(source.name)
     if comments is not None:
         try:
             matched = _comments_exports(comments, exports)
@@ -794,8 +976,10 @@ def _build_connection_inputs(con, publication):
                          for path, names in groups.items()]
                 con.execute('CREATE VIEW etl_receipts AS ' + ' UNION ALL '.join(scans))
             else:
-                con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(urls)}')
-            actual = [[row[0], row[1]] for row in con.execute('DESCRIBE etl_receipts').fetchall()]
+                with _diagnostic_phase('receipt_registration'):
+                    con.execute(f'CREATE VIEW etl_receipts AS SELECT * FROM {parquet_scan(urls)}')
+            with _diagnostic_phase('receipt_schema'):
+                actual = [[row[0], row[1]] for row in con.execute('DESCRIBE etl_receipts').fetchall()]
             # Only the members this view reads: an unselected family's receipts do not gate a local download.
             selected = set(local_receipts) if local_receipts is not None else {member.path for member in receipts}
             if any(entry["etlReceipts"]["columns"] != actual for entry in publication_index["families"].values()
@@ -815,7 +999,8 @@ def _build_connection_inputs(con, publication):
         member_path = f"{entry['prefix']}/{key['key']}"
         location = str(local.receipt_indexes[member_path]) if local is not None else f"{R2_BASE_URL}/{member_path}"
         try:
-            check_reader(con, location, key, specification)
+            with _diagnostic_phase("receipt_key_index"):
+                check_reader(con, location, key, specification)
         except ValueError:
             con.close()
             raise
@@ -837,8 +1022,16 @@ def _build_connection_inputs(con, publication):
             # The lookup reads this internal member directly. Admit only the receipt paired with
             # the connection's captured subjects before external access is locked.
             allowed_paths.append(f"{R2_BASE_URL.rstrip('/')}/{snapshot_receipt['remote_key']}")
-    _install_relationship_views(con)
-    _apply_security_settings(con, allowed_paths)
+    try:
+        immutable_inputs = _enable_immutable_metadata_cache(con, publication_index, rulemaking, allowed_paths)
+        _install_relationship_views(con)
+        if immutable_inputs is not None and immutable_inputs != _immutable_metadata_inputs(
+                publication_index, rulemaking, allowed_paths):
+            raise RuntimeError("Immutable SQL inputs changed before the security lock")
+        _apply_security_settings(con, allowed_paths)
+    except BaseException:
+        con.close()
+        raise
     return con
 
 
@@ -927,6 +1120,7 @@ def _fec_release_reply(cursor):
     }
 
 
+@_diagnostic_phase('relationship_binding')
 def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     """Bind trusted definitions and verify selected FEC receipt inputs before locking."""
     from spicy_regs.relationship_views import install_relationship_views
@@ -987,9 +1181,6 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
         ))
         con.execute("CREATE TABLE _spicy_fec_release (snapshot VARCHAR)")
         con.execute("INSERT INTO _spicy_fec_release VALUES (?)", [json.dumps(selected)])
-    from spicy_regs.citation_receipts import install_citation_inputs
-    if not _discovery_only.get():
-        install_citation_inputs(con, adapter, status["tables"])
     con.execute("CREATE TABLE _spicy_relationships (snapshot VARCHAR)")
     con.execute("INSERT INTO _spicy_relationships VALUES (?)", [json.dumps(relationships)])
 
@@ -1022,6 +1213,8 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
                                                 if not local.get("receipt_rows_admitted", True) else
                                                 "Selected bytes and exact receipt joins verified; file changes checked around statements.")}
                         for name, value in local.get("native", {}).items()})
+    if local is not None:
+        managed.update(local.get("docspec", {}))
     receipt_families = _receipt_families(index, local)
     if "etl_receipts" in available and receipt_families:
         managed["etl_receipts"] = {"status": "managed_receipts", "families": receipt_families}
@@ -1296,7 +1489,8 @@ def _reply_pins(cursor: duckdb.DuckDBPyConnection, publication: dict[str, dict],
         elif name in exports:
             pin |= exports[name]
         declared = _table_metadata().get(name) or relationships.get(name, {}).get("metadata", {})
-        pins[name] = {**pin, "coverage": declared.get("kind")}
+        # A DocSpec snapshot does not establish the dictionary's population coverage.
+        pins[name] = {**pin, "coverage": None if pin["status"] == "docspec_immutable_export" else declared.get("kind")}
     return pins
 
 
@@ -1380,6 +1574,7 @@ def _get_discovery_connection():
         return _cached_discovery_connection
 
 
+@_diagnostic_phase('connection_access')
 def _get_connection() -> duckdb.DuckDBPyConnection:
     """Return the shared connection, building it on first use and refreshing it past the TTL (see above).
 
@@ -1390,7 +1585,7 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     if _discovery_only.get():
         return _get_discovery_connection()
     global _cached_connection, _cached_connection_at, _refreshing
-    with _bounded_lock(_connection_lock):
+    with _diagnostic_phase("connection_lock"), _bounded_lock(_connection_lock):
         if _cached_connection is None:  # cold start: concurrent callers wait for this one build
             _cached_connection, _cached_connection_at = _build_connection(), _monotonic()
             return _cached_connection
@@ -1405,7 +1600,7 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     except Exception:
         logger.exception("connection refresh failed; serving the pinned connection until the next TTL")
     finally:
-        with _connection_lock:
+        with _diagnostic_phase("connection_lock"), _connection_lock:
             _cached_connection, _cached_connection_at, _refreshing = replacement, _monotonic(), False
     return replacement
 
@@ -1413,6 +1608,15 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
 def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
     """``current`` while its remote pointers have not moved; otherwise a new connection."""
     if DATA_DIR is not None:
+        selected = _connection_local_selection(current)
+        if selected is not None and selected.get("docspec"):
+            from spicy_regs.docspec_exports import binding_unchanged
+            from spicy_regs.local_data import assert_local_members_unchanged
+
+            configured = os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS")
+            if configured == selected["docspec_configuration"]["path"] and binding_unchanged(selected["docspec_configuration"]):
+                assert_local_members_unchanged(selected["signatures"])
+                return current
         return _build_connection()
     publication = _read_publication()
     if publication != _pinned_publication(current):
@@ -1482,6 +1686,7 @@ def _statement_timeout(cursor: duckdb.DuckDBPyConnection) -> Iterator[None]:
 
 
 @lru_cache(maxsize=1)
+@_diagnostic_phase("dictionary_metadata")
 def _table_metadata() -> dict[str, dict[str, Any]]:
     """Generated dictionary resource; requires neither spicy-docs nor a checkout."""
     return json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text(encoding="utf-8"))
@@ -2020,8 +2225,13 @@ class _StrictTool(Tool):
         return tool.model_copy(update={"parameters": {**schema, "additionalProperties": False}})
 
 
+def _run_observed_tool(fn, arguments):
+    with _diagnostic_phase("tool", fn.__name__):
+        return fn(**arguments)
+
+
 def _tools() -> list[Tool]:
-    """The six tools, each run on a worker thread under one limiter and refusing an argument it does not declare."""
+    """Data tools share a worker limiter; connection_status reads bounded phase metadata directly."""
     limiter = anyio.CapacityLimiter(TOOL_CONCURRENCY)
     tools: list[Tool] = []
 
@@ -2045,7 +2255,7 @@ def _tools() -> list[Tool]:
                 token = _discovery_only.set(getattr(fn, "__name__", None) in ("list_sources", "describe_table"))
                 try:
                     with bound.scope():
-                        return fn(**arguments)
+                        return _run_observed_tool(fn, arguments)
                 finally:
                     _discovery_only.reset(token)
             try:
@@ -2420,12 +2630,24 @@ def _tools() -> list[Tool]:
             raise ValueError(f"max_occurrences is at most {MAX_OCCURRENCES}; read a long document a page at a time "
                              "with offset (and cite_kind for one kind). coverage.cite_kind_counts states every "
                              "kind's rows.")
-        cursor = _get_connection().cursor()
+        connection = _get_connection()
+        cursor = connection.cursor()
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
             if "document_citations" not in status["tables"]:
                 raise ValueError("document_citations is not available in this connection")
-            from spicy_regs.citation_receipts import selected_citation_inputs
+        from spicy_regs.citation_receipts import ensure_citation_inputs, selected_citation_inputs
+        local = _connection_local_selection(cursor)
+        # Restoration previously ran during connection construction, outside
+        # the SQL statement timer. Keep that boundary and check local member
+        # signatures in the statement contexts on both sides of preparation.
+        with _diagnostic_phase("citation_preparation"):
+            ensure_citation_inputs(
+                connection, cursor, _connection_index(cursor), R2_BASE_URL, status["tables"],
+                local_directory=local["directory"] if local else DATA_DIR,
+                local_selection=local, memory_limit=MEMORY_LIMIT, temp_directory=TEMP_DIR,
+            )
+        with _statement_timeout(cursor):
             processing = selected_citation_inputs(cursor)
             citations = processing["tables"]["document_citations"]
             document = [document_kind, document_key]
@@ -2553,6 +2775,16 @@ def _tools() -> list[Tool]:
         receipt_lookup.refuse_oversized(reply, REPLY_CHARS, lambda value: len(_reply_text(value)[1]))
         return reply
 
+    async def connection_status() -> CallToolResult:
+        """Read bounded active/recent phase timings without opening a connection or using a tool slot.
+
+        A phase marks where an operation is waiting; elapsed time does not establish progress or readiness.
+        This observation neither starts a build nor cancels or retries a tool. It reads no source rows.
+        """
+        structured, text = _reply_text(_diagnostic_snapshot())
+        return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=structured)
+
+    tools.append(_StrictTool.strict(connection_status, inspect.cleandoc(connection_status.__doc__ or "")))
     return tools
 
 

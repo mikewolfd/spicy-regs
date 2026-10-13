@@ -384,15 +384,20 @@ def write_dataset(
     failures: Iterable[dict] = (),
     batch_size: int = 2000,
     prior_receipts: Sequence[Path] = (),
+    validation_backend: str = "bulk",
 ) -> tuple[Path | None, Path]:
     """Atomically expose a new local directory with subject data and receipts.
 
     Accepts mappings from Arrow batches or Polars ``iter_rows(named=True)``.
     Existing directories are never replaced. Combine dataset receipts into one
     shared member with ``combine_receipts`` before generation admission.
+    ``validation_backend="reference"`` selects the maintained row validator;
+    the default retains bulk validation and its existing fallback behavior.
     """
     if type(batch_size) is not int or batch_size <= 0:
         raise ValueError("batch_size must be positive")
+    if not isinstance(validation_backend, str) or validation_backend not in {"bulk", "reference"}:
+        raise ValueError("validation_backend must be bulk or reference")
     directory = Path(directory)
     if directory.exists():
         raise FileExistsError(directory)
@@ -419,7 +424,10 @@ def write_dataset(
         if prior_receipts:
             carry_receipt_history(receipt_path, prior_receipts, receipt_path)
         validate_receipt_bundle(
-            {policy.dataset: [] if policy.receipt_only else [subject_path]}, [receipt_path], [policy]
+            {policy.dataset: [] if policy.receipt_only else [subject_path]},
+            [receipt_path],
+            [policy],
+            bulk=validation_backend == "bulk",
         )
         from rulespec_artifacts import publish_directory_no_replace
 

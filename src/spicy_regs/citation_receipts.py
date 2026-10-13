@@ -4,6 +4,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 import json
 import hashlib
+import threading
+import weakref
+from contextlib import contextmanager
+
+from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 
 from spicy_regs.fec_receipt_adapter import receipt_owner
 
@@ -11,10 +16,100 @@ INPUT_RECORD = "_spicy_citation_inputs"
 PROCESSING_PREFIX = "_spicy_citation_processing_"
 SOURCE_DIGEST_PREFIX = "_spicy_citation_digests_"
 PROCESSING_TABLES = ("document_citations", "document_citation_reads", "house_activity_reports", "budget_volumes")
+_initialization_locks = weakref.WeakKeyDictionary()
+_registry_lock = threading.Lock()
+
+
+@contextmanager
+def _bounded_lock(lock):
+    while not lock.acquire(timeout=.05):
+        checkpoint()
+    try:
+        checkpoint()
+        yield
+    finally:
+        lock.release()
+
+
+def _has_inputs(cursor):
+    import duckdb
+
+    try:
+        cursor.execute(f"SELECT snapshot FROM {INPUT_RECORD}").fetchone()
+    except duckdb.CatalogException:
+        return False
+    return True
+
+
+def _copy_inputs(source, destination, record):
+    """Transfer verified private rows; the caller commits the readiness record last."""
+    names = dict.fromkeys((*record["tables"].values(), *record["sources"].values()))
+    temporary = "_spicy_citation_transfer_batch"
+    for name in names:
+        checkpoint()
+        if not name.startswith((PROCESSING_PREFIX, SOURCE_DIGEST_PREFIX)):
+            raise ValueError("Citation input binding names a nonprivate table")
+        quoted = '"' + name.replace('"', '""') + '"'
+        reader = source.execute(f"SELECT * FROM {quoted}").to_arrow_reader(batch_size=2000)
+        import pyarrow as pa
+
+        destination.register(temporary, pa.Table.from_batches([], schema=reader.schema))
+        try:
+            destination.execute(f'CREATE TABLE {quoted} AS SELECT * FROM "{temporary}"')
+            for batch in reader:
+                checkpoint()
+                destination.register(temporary, pa.Table.from_batches([batch]))
+                destination.execute(f'INSERT INTO {quoted} SELECT * FROM "{temporary}"')
+        finally:
+            destination.unregister(temporary)
+            reader.close()
+        source.execute(f"DROP TABLE {quoted}")
+    destination.execute(f"CREATE TABLE {INPUT_RECORD} (snapshot VARCHAR)")
+    destination.execute(f"INSERT INTO {INPUT_RECORD} VALUES (?)", [json.dumps(record)])
+
+
+def ensure_citation_inputs(connection, cursor, index, base_url, available, *,
+                           local_directory=None, local_selection=None, memory_limit=None, temp_directory=None):
+    """Prepare on demand without changing the serving connection's locked file access.
+
+    A private database validates downloaded sidecars and native receipts. Only
+    verified Arrow batches cross into serving, atomically. Locks retain neither
+    connections nor source readers; a failed request may be retried explicitly.
+    """
+    import duckdb
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+
+    with _registry_lock:
+        lock = _initialization_locks.setdefault(connection, threading.Lock())
+    with _bounded_lock(lock), bounded_connection(cursor):
+        if _has_inputs(cursor):
+            return
+        selected = local_selection or {}
+        with duckdb.connect(config={"threads": 2, "allow_persistent_secrets": False}) as private:
+            with bounded_connection(private):
+                if memory_limit is not None:
+                    private.execute("SET memory_limit=?", [memory_limit])
+                if temp_directory is not None:
+                    private.execute("SET temp_directory=?", [temp_directory])
+                adapter = ReceiptAdapter(
+                    private, index, base_url, local_directory=local_directory,
+                    local_receipts=({**selected.get("receipt_members", {}), **selected.get("receipt_indexes", {})}
+                                    if local_selection is not None else None),
+                    local_native=selected.get("native", {}),
+                )
+                install_citation_inputs(private, adapter, available)
+                record = selected_citation_inputs(private)
+                cursor.execute("BEGIN TRANSACTION")
+                try:
+                    _copy_inputs(private, cursor, record)
+                    cursor.execute("COMMIT")
+                except BaseException:
+                    cursor.execute("ROLLBACK")
+                    raise
 
 
 def install_citation_inputs(connection, adapter, available):
-    """Bind verified source rows before the server locks down file access.
+    """Bind verified source rows in the trusted validation database.
 
     The public subject tables keep native columns. Only citation tool code can
     use these regular in-memory tables; request cursors share them and public

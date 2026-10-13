@@ -110,8 +110,12 @@ def test_a_published_flag_its_receipt_contradicts_is_refused_before_the_tool_can
     remember_selection(tmp_path, [SelectedDataset("document_citations", (subject,), receipts, context.generation_id)])
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path)
     monkeypatch.setattr(mcp_server, "TABLES", ())
-    with pytest.raises(ValueError, match="differs from its selected native subject"):
-        mcp_server._build_connection()
+    with connection(tmp_path, monkeypatch)[0]:
+        server = mcp_server.build_server()
+        _tool_data(server, "list_sources", {})
+        with pytest.raises(ToolError, match="differs from its selected native subject"):
+            _tool_data(server, "resolve_document_citations", {
+                "document_kind": "budget_volume", "document_key": "BUDGET-2027"})
 
 
 def test_held_text_zero_result_comes_from_receipt_only_read(tmp_path, monkeypatch):
@@ -148,3 +152,44 @@ def test_receiptless_citation_table_is_not_a_tool_fallback(monkeypatch):
         with pytest.raises(ToolError, match="requires selected native ETL receipts"):
             _tool_data(server, "resolve_document_citations", {
                 "document_kind": "budget_volume", "document_key": "BUDGET-2027"})
+
+
+@pytest.mark.parametrize("blocked", ["lock", "private"])
+def test_lazy_citation_preparation_obeys_request_cancellation(monkeypatch, blocked):
+    import threading
+    from time import monotonic, sleep
+    from spicy_regs import citation_receipts
+    from spicy_regs.runtime_bounds import RequestBound, checkpoint
+
+    with duckdb.connect(config={"threads": 1}) as connection:
+        cursor = connection.cursor()
+        held = threading.Lock()
+        private_connections = []
+        if blocked == "lock":
+            held.acquire()
+            citation_receipts._initialization_locks[connection] = held
+        def blocked_admission(private, adapter, available):
+            private_connections.append(private)
+            assert private in bound._targets and cursor in bound._targets
+            while True:
+                sleep(.005)
+                checkpoint()
+        monkeypatch.setattr(citation_receipts, "install_citation_inputs", blocked_admission)
+        bound = RequestBound(.1, "citation preparation cancelled")
+        started = monotonic()
+        try:
+            with pytest.raises(TimeoutError, match="citation preparation cancelled"):
+                with bound.scope():
+                    citation_receipts.ensure_citation_inputs(connection, cursor, {}, "", {})
+            assert monotonic() - started < 1
+            assert not bound._targets
+            if blocked == "lock":
+                assert held.locked() and not private_connections
+            else:
+                assert len(private_connections) == 1
+                with pytest.raises(duckdb.ConnectionException):
+                    private_connections[0].execute("SELECT 1")
+        finally:
+            if blocked == "lock":
+                held.release()
+            cursor.close()

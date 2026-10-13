@@ -8,7 +8,8 @@ before any of its rows are yielded; earlier completed editions remain yielded.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Sequence
+from dataclasses import asdict
+from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING
 
 import httpx
@@ -41,7 +42,9 @@ def newest_edition(*, transport: httpx.BaseTransport | None = None) -> str:
             response = client.get(EDITION_REPORT_URL)
             response.raise_for_status()
     except httpx.HTTPError as error:
-        logger.warning("Unified Agenda: edition report unreadable ({}); newest edition stays {}", error, DEFAULT_EDITION)
+        logger.warning(
+            "Unified Agenda: edition report unreadable ({}); newest edition stays {}", error, DEFAULT_EDITION
+        )
         return DEFAULT_EDITION
     listed = _LISTED_EDITION.findall(response.text)
     if not listed:
@@ -59,10 +62,12 @@ class UnifiedAgendaReader(Reader):
         editions: tuple[str, ...] | None = None,
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
+        on_source: Callable[[dict], object] | None = None,
     ) -> None:
         self.editions = editions or (DEFAULT_EDITION,)
         self.verbose = verbose
         self.transport = transport
+        self.on_source = on_source
 
     def iter_records(self) -> Iterator[dict]:
         # Base CLI/MCP installations can import source names without the optional
@@ -73,7 +78,6 @@ class UnifiedAgendaReader(Reader):
                 UnifiedAgendaBudget,
                 UnifiedAgendaEdition,
             )
-            from spicy_docs.sources.unified_agenda.records import scan_unified_agenda_records
         except ModuleNotFoundError as error:
             if error.name == "spicy_docs":
                 raise RuntimeError(
@@ -91,14 +95,49 @@ class UnifiedAgendaReader(Reader):
         with UnifiedAgendaAcquirer(budget=budget, transport=self.transport) as source:
             for edition in self.editions:
                 acquired = source.acquire_edition(UnifiedAgendaEdition(edition))
-                # The edition every record states: the off-pattern ``2012`` file is Fall 2012 (201210).
-                publication = acquired.edition.publication_id
-                rows: list[dict] = []
-                scan_unified_agenda_records(
-                    acquired.capture.body, on_record=lambda record: rows.append(_normalize(record, publication))
-                )
+                rows = normalize_retained_edition(acquired.capture.body, edition=edition, on_source=self.on_source)
                 logger.info("Unified Agenda: edition {} yielded {:,} records", edition, len(rows))
                 yield from rows
+
+
+def normalize_retained_edition(
+    body: bytes, *, edition: str, on_source: Callable[[dict], object] | None = None
+) -> list[dict]:
+    """Read an exact retained edition offline using the maintained source checks.
+
+    The table keeps its strip-only normalization. Historical repair is shared
+    with acquisition, qualified by the full original digest, and receipted.
+    No rows or success receipt escape a failed whole-edition scan.
+    """
+    import hashlib
+
+    from spicy_docs.sources.unified_agenda import (
+        UnifiedAgendaEdition,
+        unified_agenda_xml_locator,
+        validate_unified_agenda_xml,
+    )
+    from spicy_docs.sources.unified_agenda.records import scan_unified_agenda_records
+    from spicy_docs.sources.unified_agenda.repair import prepare_unified_agenda_xml
+
+    selected = UnifiedAgendaEdition(edition)
+    metadata = validate_unified_agenda_xml(body, edition=selected, final_url=unified_agenda_xml_locator(selected))
+    readable, repair = prepare_unified_agenda_xml(body, publication_id=metadata.publication_id)
+    rows: list[dict] = []
+    scan_unified_agenda_records(
+        readable, on_record=lambda record: rows.append(_normalize(record, metadata.publication_id))
+    )
+    if on_source is not None:
+        on_source(
+            {
+                "edition": metadata.publication_id,
+                "file_stem": edition,
+                "input_sha256": hashlib.sha256(body).hexdigest(),
+                "input_bytes": len(body),
+                "records": len(rows),
+                "repair": asdict(repair) if repair is not None else None,
+            }
+        )
+    return rows
 
 
 def _find(fields: Sequence[UnifiedAgendaField], *path: str) -> UnifiedAgendaField | None:

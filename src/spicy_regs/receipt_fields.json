@@ -1,6 +1,8 @@
 {
  "basis": "Derived by spicy_regs.receipt_field_declarations from the installed policies, each family's field registry, the builders' read rules and the dictionary; regenerate with spicy-regs-dict generate.",
  "tables": {
+  "administration_policy_bill_links": {},
+  "administration_policy_statements": {},
   "agency_lifecycle_stats": {
    "containers": {
     "raw_conversion_inputs": [
@@ -576,6 +578,9 @@
     "url": "Canonical GovInfo details URL composed from the package and granule identifiers."
    }
   },
+  "cftc_comment_files": {},
+  "cftc_comments": {},
+  "cftc_rule_observations": {},
   "comment_attributes": {
    "containers": {
     "raw_conversion_inputs": [
@@ -1297,6 +1302,11 @@
     "attachments_json": "JSON array of the main document's fileFormats renditions: `[{url, format, size}]`. This compatibility field does not contain separately listed attachment resources. Null when no main renditions were retained."
    }
   },
+  "ecfr_snapshot_sections": {},
+  "ecfr_snapshots": {},
+  "edis_attachment_files": {},
+  "edis_attachments": {},
+  "edis_documents": {},
   "fcc_filings": {
    "containers": {
     "raw_record": [
@@ -1767,7 +1777,7 @@
    },
    "meanings": {
     "candidate_ids_json": "Literal JSON array of candidate IDs stated by the committee API; relationships require their own evidence and state checks.",
-    "cycles_json": "Literal JSON array of cycles stated by the API, retaining missing, NULL and empty distinctions.",
+    "cycles_json": "Literal JSON array of reported activity cycles, retaining missing, NULL and empty distinctions. Activity membership does not date the captured profile fields.",
     "first_f1_date_raw": "Literal source value for first_f1_date before conversion; consult first_f1_date_status for interpretation.",
     "first_file_date_raw": "Literal source value for first_file_date before conversion; consult first_file_date_status for interpretation.",
     "last_f1_date_raw": "Literal source value for last_f1_date before conversion; consult last_f1_date_status for interpretation.",
@@ -2771,6 +2781,7 @@
     }
    ]
   },
+  "federal_register_issues": {},
   "feed_summary": {
    "containers": {
     "raw_conversion_inputs": [
@@ -2786,6 +2797,9 @@
     ]
    }
   },
+  "ferc_accession_files": {},
+  "ferc_original_files": {},
+  "ferc_search_documents": {},
   "financial_changes": {
    "containers": {
     "raw_source_row": [
@@ -3166,6 +3180,7 @@
   },
   "house_communications_detail_reads": {},
   "house_record_enrichment_results": {},
+  "inspectors_general_report_metadata": {},
   "law_code_sections": {
    "containers": {
     "raw_source_row": [
@@ -3527,7 +3542,7 @@
     "unsupported_shapes_json": "unsupported_shapes"
    },
    "meanings": {
-    "selected_shapes_json": "The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code.",
+    "selected_shapes_json": "The source shapes this read selected, as a JSON array: `AUTH` and `SOURCE` for eCFR, `href` and `sourceCredit` for the U.S. Code; `href`, `ref` and `external-xref` for bills; `href` and `ref` for laws.",
     "unsupported_shapes_json": "The shapes this read knowingly left out, as a JSON array (`PARAUTH` and `SECAUTH` for eCFR); not a list of every form the scanner cannot read."
    }
   },
@@ -4176,6 +4191,8 @@
     "periods_json": "Ordered explicit or relative source periods with occurrence_id, period_text, kind and source_path."
    }
   },
+  "sec_comment_files": {},
+  "sec_rulemakings": {},
   "section_classifications": {
    "containers": {
     "raw_source_row": [
@@ -4364,6 +4381,23 @@
    }
   },
   "senate_expenditures_document_file_outcomes": {},
+  "supreme_court_index_observations": {},
+  "supreme_court_opinion_observations": {},
+  "supreme_court_pdf_observations": {},
+  "table3_historical_records": {
+   "containers": {
+    "source_position": [
+     "member_sha256",
+     "release_point",
+     "act_key",
+     "act_record_position",
+     "member_name",
+     "fragment_position",
+     "fragment_record_position",
+     "record_native_id"
+    ]
+   }
+  },
   "table3_records": {
    "containers": {
     "raw_source_row": [
@@ -4506,6 +4540,9 @@
     "observed_at": "When the ranking response page this row was read from was captured (UTC, ISO 8601). NULL on a row carried from before per-row capture evidence, whose read time was not retained; a carried row never takes a later run's time.",
     "source_capture_sha256": "SHA-256 of the retained ranking response page this row was read from, so its values trace to one captured response. NULL exactly when `observed_at` is NULL."
    }
-  }
+  },
+  "uscode_edition_sections": {},
+  "uscode_edition_structure": {},
+  "uscode_editions": {}
  }
 }

@@ -37,10 +37,12 @@ def pin(publication: Mapping[str, object], table: str) -> str:
 
 
 def install_sql_views(connection: Any, available_tables: Iterable[str], specs: Iterable[SQLView],
-                      publication: Mapping[str, object] | None = None) -> dict[str, dict[str, Any]]:
+                      publication: Mapping[str, object] | None = None, *,
+                      _schemas: dict[str, list[str]] | None = None) -> dict[str, dict[str, Any]]:
+    """Check actual columns; a selected install may share its connection-local observations."""
     available, publication = set(available_tables), publication or {}
     result: dict[str, dict[str, Any]] = {}
-    schemas: dict[str, list[str]] = {}
+    schemas: dict[str, list[str]] = {} if _schemas is None else _schemas
     for spec in specs:
         missing_tables = sorted(set(spec.required) - available)
         missing_columns = []
@@ -58,8 +60,12 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
         lineage: dict[str, list[str]] = {}
         if status == 'available':
             select = spec.query(publication)
+            inputs = {t: table_columns(t, schemas[t]) for t in spec.required}
+            # An output may itself be a later dependency, including replacement
+            # under a name described earlier in this install.
+            schemas.pop(spec.name, None)
             connection.execute(f'CREATE OR REPLACE VIEW {quoted(spec.name)} AS {select}')
-            lineage = column_lineage(connection, select, {t: table_columns(t, schemas[t]) for t in spec.required})
+            lineage = column_lineage(connection, select, inputs)
         result[spec.name] = {
             'status': status, 'reason': reason, 'dependencies': list(spec.required),
             'metadata': {

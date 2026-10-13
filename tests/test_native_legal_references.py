@@ -229,3 +229,31 @@ def test_rows_are_spicy_docs_rows_under_its_rule_and_spelling(tmp_path):
     credit = next(r for r in rows if r["observation_kind"] == "source_credit")
     assert credit["target_candidates_json"].isascii() and "\\u2013" in credit["target_candidates_json"]
     assert any("104–199" in c["matched_text"] for c in json.loads(credit["target_candidates_json"]))
+
+
+def test_bill_and_law_scopes_replay_correct_and_fail_closed(tmp_path):
+    bill = b'<bill><external-xref legal-doc="usc" parsable-cite="usc/10/2802"/></bill>'
+    first, _ = run(manifest_for(tmp_path / "bill", bill, family="bill", key="BILLS-119hr1ih"), tmp_path / "first")
+    [row] = pq.read_table(first[0]).to_pylist()
+    assert row["source_family"] == "bill" and row["href"] is None
+    assert json.loads(row["target_candidates_json"])[0]["normalized_key"] == "10-2802"
+    law = b'<pLaw xmlns="http://schemas.gpo.gov/xml/uslm"><ref href="/us/pl/119/1"/></pLaw>'
+    second, _ = run(
+        manifest_for(tmp_path / "law", law, family="law", key="119-public-2"),
+        tmp_path / "second",
+        prior=first[0].parent,
+    )
+    rows = pq.read_table(second[0]).to_pylist()
+    assert {r["source_family"] for r in rows} == {"bill", "law"}
+    empty = manifest_for(tmp_path / "empty-law", b"<pLaw/>", family="law", key="119-public-2")
+    third, _ = run(empty, tmp_path / "third", prior=second[0].parent)
+    assert [r["source_family"] for r in pq.read_table(third[0]).to_pylist()] == ["bill"]
+    assert (
+        next(r for r in pq.read_table(third[1]).to_pylist() if r["source_family"] == "law")["occurrence_count"] == "0"
+    )
+    bad = manifest_for(
+        tmp_path / "bad-law", b'<pLaw><ref href="/us/pl/119/1"/></broken>', family="law", key="119-public-2"
+    )
+    with pytest.raises(ValueError):
+        run(bad, tmp_path / "failed", prior=third[0].parent)
+    assert not (tmp_path / "failed/native_legal_references.parquet").exists()

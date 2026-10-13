@@ -63,6 +63,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import cast
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -113,7 +114,6 @@ COLUMNS = (
     "part_granule",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
-
 
 
 #: Title 41 numbers parts by chapter and part (60-1, 60-2), and GovInfo's part granule ids keep only the chapter
@@ -238,6 +238,116 @@ def place_sections(rows: Iterable[dict], xml: bytes) -> list[dict]:
     return placed
 
 
+def prepare_retained_cfr_rows(
+    mods: bytes,
+    xml: bytes,
+    *,
+    selection,
+    mods_url: str,
+    xml_url: str,
+    expected_constituents: int,
+    expected_sections: int,
+    max_bytes: int = MAX_VOLUME_BYTES,
+) -> dict:
+    """Map one explicitly selected annual MODS inventory using maintained readers.
+
+    Caller owns original/capture digest admission and receipt writing. Native
+    edition and XML identity stay separate; no API modification date is inferred.
+    Complete inventory expectations come from the selected manifest, not this code.
+    """
+    from dataclasses import asdict
+
+    from spicy_docs.sources.cfr.annual import scan_annual_cfr_sections, validate_annual_cfr_xml
+    from spicy_docs.sources.cfr.edition import _EditionFields, _parse_annual_cfr_metadata
+
+    if (
+        type(expected_constituents) is not int
+        or expected_constituents < 1
+        or type(expected_sections) is not int
+        or expected_sections < 0
+    ):
+        raise ValueError("retained CFR requires explicit complete inventory counts")
+    edition, metadata = _parse_annual_cfr_metadata(mods, selection=selection, final_url=mods_url, max_bytes=max_bytes)
+    native = validate_annual_cfr_xml(xml, identity=selection, final_url=xml_url, max_bytes=max_bytes)
+    if len(metadata.constituents) != expected_constituents:
+        raise ValueError("complete retained MODS inventory differs")
+    package = selection.package_id
+    raw, contexts, seen = [], [], set()
+    for position, record in enumerate(metadata.constituents):
+        fields = _EditionFields(record)
+        # The maintained reader raises for a missing required field.
+        gid = cast(str, fields.value("extension", "accessId", required=True)).strip()
+        if gid == package:
+            if not (
+                position == 0
+                and fields.value("extension", "granuleClass", required=True) == "NODE"
+                and fields.value("extension", "granuleLabel", required=True) == "title"
+                and cast(str, fields.value("extension", "granuleNumber", required=True)).strip() == str(selection.title)
+                and fields.value("extension", "sequenceNumber", required=True) == "1"
+            ):
+                raise ValueError("selected package title node identity differs")
+        elif not gid.startswith(package + "-"):
+            raise ValueError("outside selected CFR package")
+        if gid in seen:
+            raise ValueError("duplicate retained CFR constituent")
+        seen.add(gid)
+        raw.append(
+            {
+                "granuleId": gid,
+                "_package_id": package,
+                "title": fields.value("extension", "heading"),
+                "granuleClass": fields.value("extension", "granuleClass"),
+            }
+        )
+        contexts.append(
+            {
+                "constituent_position": position,
+                "granule_id": gid,
+                "native_selectors": ["extension/accessId", "extension/heading", "extension/granuleClass"],
+            }
+        )
+    rows = compound_parts([_shape(row) for row in raw])
+    canonical_sections = [
+        (section.granule, position)
+        for position, section in enumerate(scan_annual_cfr_sections(xml, max_bytes=max_bytes), 1)
+        if section.canonical
+    ]
+    canonical = dict(canonical_sections)
+    tokens = [_ids(row["granule_id"]).section_token for row in rows]
+    section_tokens = [token for token in tokens if token is not None]
+    if (
+        len(canonical_sections) != len(canonical)
+        or len(canonical) != expected_sections
+        or len(section_tokens) != len(set(section_tokens))
+        or len(section_tokens) != len(canonical)
+        or set(section_tokens) != set(canonical)
+    ):
+        raise ValueError("complete unique XML-to-destination section coverage differs")
+    placed = place_sections(rows, xml)
+    if [row["granule_id"] for row in placed] != [row["granuleId"] for row in raw]:
+        raise ValueError("retained destination inventory/order changed")
+    for row, context in zip(placed, contexts, strict=True):
+        if (
+            set(row) != set(COLUMNS)
+            or row["last_modified"] is not None
+            or any(value is not None and not isinstance(value, str) for value in row.values())
+        ):
+            raise ValueError("retained destination schema/modification semantics differ")
+        ids = _ids(row["granule_id"])
+        token = ids.section_token or ids.host_section
+        context.update(
+            placement_class=(
+                "canonical-section"
+                if ids.section_token in canonical
+                else "host-section-attachment"
+                if ids.host_section in canonical
+                else "structural-unplaced"
+            ),
+            annual_position=canonical.get(token) if token is not None else None,
+        )
+    return {"rows": placed, "contexts": contexts, "edition": asdict(edition), "native_identity": asdict(native)}
+
+
 def _placed_package(acquirer: CfrAcquirer, package_id: str | None, rows: list[dict]) -> list[dict] | None:
     """The package's rows with section granules placed; ``None`` when its volume cannot be read.
 
@@ -301,8 +411,11 @@ def _read_prior(prior_file: Path) -> _Prior:
         table = pa.concat_tables([others, pa.Table.from_pylist(fixed, schema=table.schema)])
         packages = table["package_id"].to_pylist()
         rewrite = True
-        logger.info("CFR: {} prior Title {} row(s) took their compound part", sum(a != b for a, b in zip(fixed, held)),
-                    COMPOUND_PART_TITLE)
+        logger.info(
+            "CFR: {} prior Title {} row(s) took their compound part",
+            sum(a != b for a, b in zip(fixed, held)),
+            COMPOUND_PART_TITLE,
+        )
     flags = pa.array([_part_granule(_ids(granule_id)) for granule_id in table["granule_id"].to_pylist()], pa.string())
     if "part_granule" not in table.column_names:
         table = table.append_column("part_granule", flags)
