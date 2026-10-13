@@ -206,7 +206,7 @@ def csv_context_fields(native):
     status = ('unavailable_retained_fields' if native is None else 'parsed' if parsed
               else 'missing' if not raw_year else 'unsupported_year')
     values = {name: fields.get(name) or None for name in CSV_FIELDS}
-    values.update(report_year=int(raw_year) if parsed else None, report_year_status=status)
+    values.update(report_year=int(raw_year) if parsed and raw_year is not None else None, report_year_status=status)
     statuses = {name: 'unavailable_retained_fields' if native is None else 'missing' if not fields.get(name) else 'reported'
                 for name in CSV_FIELDS}
     statuses['report_year'] = status
