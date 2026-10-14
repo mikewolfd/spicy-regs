@@ -18429,6 +18429,11 @@
         "column_name": "major_rule_fr_citations",
         "column_type": "VARCHAR[]",
         "description": "Native list of the Federal Register citation of each rule a Federal Agency Major Rule Report is on, as its letter states it, each as `{volume}-{page}` (`66-6976` for 66 Fed. Reg. 6976), in the letter's order: one for most reports, several where a report is on several rules or on a rule published as several documents. Each joins `federal_register` on `volume` and `start_page` (`split_part(c, '-', 1) = volume AND split_part(c, '-', 2) = start_page`); a few letters cite the page before the document starts or a page inside it. A correction, a delay or an earlier rule the letter cites beside its rule is left out. Not paired with `major_rule_rins`. NULL on a row that is not a major-rule report or whose letter has not been read, and where the letter states no citation: the rule was not published in the Federal Register, or the letter's opening cites none. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+      },
+      {
+        "column_name": "citation_product_id",
+        "column_type": "VARCHAR",
+        "description": "Uppercase report number, falling back to the product-page ID only when the number is NULL. Blank numbers stay blank. This is a citation lookup key; report_id remains the record identity."
       }
     ],
     "subject": "oversight",
@@ -31407,7 +31412,7 @@
       {
         "dataset": "gao_reports",
         "receipt_only": false,
-        "policy_version": "government-sources/3",
+        "policy_version": "government-sources/4",
         "identity_columns": [
           "report_id"
         ],

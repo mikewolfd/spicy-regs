@@ -2296,7 +2296,7 @@
       {
         "dataset": "gao_reports",
         "receipt_only": false,
-        "policy_version": "government-sources/3",
+        "policy_version": "government-sources/4",
         "identity_columns": [
           "report_id"
         ],
@@ -7146,7 +7146,8 @@
         "subject_terms",
         "major_rule_agency",
         "major_rule_rins",
-        "major_rule_fr_citations"
+        "major_rule_fr_citations",
+        "citation_product_id"
       ]
     },
     {
