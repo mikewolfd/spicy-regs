@@ -858,6 +858,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
     from spicy_regs.transforms.enrich_bill_subjects import COLUMNS as BILL_SUBJECT_COLUMNS
     from spicy_regs.transforms.build_court_opinion_clusters import COLUMNS as COURT_CLUSTER_COLUMNS
+    from spicy_regs.transforms.build_court_opinion_clusters import INPUT_COLUMNS as COURT_CLUSTER_INPUT_COLUMNS
     from spicy_regs.transforms.build_courtlistener import PUBLISHED_COLUMNS as COURT_DOCKET_COLUMNS
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
     from spicy_regs.transforms.build_court_pdf_extractions import COLUMNS as COURT_PDF_COLUMNS
@@ -941,6 +942,14 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     builder_pairs = {
         "org_committee_links": ORG_COMMITTEE_LINK_COLUMNS,
     }
+    if not native:
+        builder_columns.update({
+            'court_opinion_clusters': tuple(column for column in COURT_CLUSTER_INPUT_COLUMNS
+                                           if column != 'raw_source_record'),
+            'court_citations': CITATIONS.input_columns,
+            'court_citation_map': CITATION_MAP.input_columns,
+            'court_parentheticals': PARENTHETICALS.input_columns,
+        })
     installed = subject_policies() if native else {}
     for name in TABLES if native else LEGACY_TABLES:
         if name in installed:

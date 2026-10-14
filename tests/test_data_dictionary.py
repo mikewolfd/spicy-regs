@@ -825,3 +825,40 @@ def test_live_checker_passes_captured_selection_to_discovery(monkeypatch):
     monkeypatch.setattr(dd, "discover_schemas", discover)
     args = dd.build_parser().parse_args(["check", "--source", "r2"])
     assert args.func(args) == 0
+
+
+def test_retained_court_legacy_declarations_preserve_native_and_refuse_drift(monkeypatch, capsys):
+    from copy import deepcopy
+    from pathlib import Path
+    from spicy_regs.sources import publication
+
+    fixture = json.loads((Path(__file__).parent / "fixtures" /
+                          "court_selected_legacy_dictionary.json").read_text())
+    index = fixture["index"]
+    live = {table: [tuple(field) for field in fields] for table, fields in fixture["schemas"].items()}
+    native = {table: dd.expected_schemas()[table] for table in live}
+    monkeypatch.setattr(publication, "load_index", lambda _: index)
+    monkeypatch.setattr(dd, "published_row_counts", lambda *_, **_kwargs: {})
+    monkeypatch.setattr(dd, "discover_schemas", lambda *_, **_kwargs: live)
+    args = dd.build_parser().parse_args(["check", "--source", "r2"])
+    assert args.func(args) == 0
+    capsys.readouterr()
+    selected = dd.selected_dictionary_definitions(index, live, dd.DEFAULT_DESCRIPTIONS)[1]
+    assert {table: selected[table] for table in live} == live
+    assert all("raw_source_record" not in dict(fields) for fields in live.values())
+
+    live["court_citation_map"].append(("unexpected_publisher_field", "VARCHAR"))
+    assert args.func(args) == 1
+    assert "unexpected_publisher_field" in capsys.readouterr().err
+    live["court_citation_map"].pop()
+    live["court_citation_map"][0] = ("citing_opinion_id", "BIGINT")
+    assert args.func(args) == 1
+    assert "in-code type VARCHAR but live parquet BIGINT" in capsys.readouterr().err
+
+    for routed in ({"families": {}}, deepcopy(index)):
+        for owner in routed["families"].values():
+            owner["etlReceipts"] = {"datasets": []}
+        schemas = dd.selected_dictionary_definitions(routed, live, dd.DEFAULT_DESCRIPTIONS)[1]
+        assert {table: schemas[table] for table in live} == native
+        assert dd.check_schema_drift({table: schemas[table] for table in live}, live)
+    assert {table: dd.expected_schemas()[table] for table in live} == native
