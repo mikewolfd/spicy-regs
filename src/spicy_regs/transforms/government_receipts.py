@@ -57,7 +57,7 @@ POLICY_VERSIONS = {
     "fcc_filings": "government-sources/3",
     "gao_decisions": "government-sources/3",
     "gao_recommendations": "government-sources/2",
-    "gao_reports": "government-sources/3",
+    "gao_reports": "government-sources/4",
 }
 POLICIES = {
     dataset: DatasetPolicy(
@@ -87,7 +87,7 @@ def _without(dataset: str, *columns: str) -> DatasetPolicy:
 EARLIER_POLICIES: dict[str, tuple[DatasetPolicy, ...]] = {
     "gao_decisions": (_without("gao_decisions", "b_numbers_truncated"),),
     "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),
-    "gao_reports": (_without("gao_reports", "major_rule_agency", "major_rule_rins", "major_rule_fr_citations"),),
+    "gao_reports": (_without("gao_reports", "major_rule_agency", "major_rule_rins", "major_rule_fr_citations", "citation_product_id"),),
 }
 # Exact earlier GAO policies restore private source rows without relabeling them.
 for _name in ("gao_decisions", "gao_reports"):

@@ -18,6 +18,8 @@ from typing import Any, Mapping
 
 import pyarrow as pa
 
+from spicy_regs.gao_citation_keys import citation_product_id
+
 RECEIPT_FIELDS = {
     "crs_reports": ("url",),
     "fcc_filings": ("filing_url", "native_fields_sha256", "pdf_extraction_results_json"),
@@ -344,6 +346,8 @@ def subject_schema(dataset: str) -> pa.Schema:
         fields.append((target, dtype))
     if dataset == "fcc_filings":
         fields.extend([("generation_id", pa.string()), ("extraction_results", FCC_EXTRACTION_TYPE)])
+    if dataset == "gao_reports":
+        fields.append(("citation_product_id", pa.string()))
     return pa.schema(fields, metadata={b"government_etl_policy": b"1"})
 
 
@@ -553,4 +557,6 @@ def map_subject(dataset: str, row: Mapping[str, Any], *, generation_id: str | No
         subject[name] = value
     if subject.get(IDENTITY_FIELDS[dataset][0]) in (None, ""):
         raise GovernmentShapeError(f"{dataset}: missing stable identity")
+    if dataset == "gao_reports":
+        subject["citation_product_id"] = citation_product_id(subject)
     return subject

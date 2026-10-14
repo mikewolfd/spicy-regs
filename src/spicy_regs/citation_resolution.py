@@ -16,6 +16,7 @@ from typing import Any
 
 from spicy_regs.identifiers import normalize_rin
 from spicy_regs.citation_sources import TEXT_SOURCES
+from spicy_regs.gao_citation_keys import CITATION_PRODUCT_SQL
 
 RESOLUTION_RULE = "selected-target-lookup/1"
 #: Each ``document_citations.document_kind`` a writer emits, to the table holding its documents: the print-citations
@@ -75,7 +76,7 @@ ROUTES = {
                                    ("document_number", "publication_date")),
     "rin": Route("unified_agenda", "rin", ("rin", "agenda_edition"), "many", grain="agenda editions for a RIN"),
     # spicy-docs keys a GAO citation on the printed number, upper-cased; a row stating none falls back to its slug.
-    "gao_product_id": Route("gao_reports", "upper(coalesce(report_number, report_id))", ("report_id",)),
+    "gao_product_id": Route("gao_reports", CITATION_PRODUCT_SQL, ("report_id",)),
     "crs_report_id": Route("crs_reports", "report_id", ("report_id",)),
     "docket_number": Route("dockets", "docket_id", ("docket_id",)),
     "committee_name": Route("committees", "system_code", ("system_code",)),

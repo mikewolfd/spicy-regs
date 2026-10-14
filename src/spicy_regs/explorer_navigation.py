@@ -136,7 +136,7 @@ def _citation_navigation() -> list[dict]:
          r"[1-9][0-9]*-(hr|s|hres|sres|hjres|sjres|hconres|sconres)-[1-9][0-9]*",
          ("bill_number:inline_congress", "bill_number:congress_subheading")),
         ("public_law", "laws", "laws", "law_id", r"[1-9][0-9]*-public-[1-9][0-9]*", ("public_law",)),
-        ("gao_product_id", "gao products (product id as GAO prints it)", "gao_reports", "report_number", r"GAO-[A-Z0-9-]+", ("gao_product_id",)),
+        ("gao_product_id", "gao products (product id as GAO prints it)", "gao_reports", "citation_product_id", r"GAO-[A-Z0-9-]+", ("gao_product_id",)),
         ("crs_report_id", "crs reports (Congress.gov crsreport)", "crs_reports", "report_id", r"(R|RL|RS|IF|IN|LSB|IG|MM)[0-9]{4,6}", ("crs_report_id",)),
         ("bioguide_id", "members", "members", "bioguide_id", r"[A-Z][0-9]{6}", ("bioguide_id",)),
         ("docket_number", "dockets", "dockets", "docket_id", r"[A-Z0-9]+-[0-9]{4}-[A-Z0-9-]+", ("docket_number",)),

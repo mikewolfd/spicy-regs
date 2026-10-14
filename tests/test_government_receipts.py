@@ -397,7 +397,7 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
     added = ("major_rule_agency", "major_rule_rins", "major_rule_fr_citations")
     earlier = next(p for p in EARLIER_POLICIES[dataset] if p.policy_version == "government-sources/1")
     assert earlier.policy_version == "government-sources/1" != POLICIES[dataset].policy_version
-    assert [name for name in SUBJECT_SCHEMAS[dataset].names if name not in earlier.subject_schema.names] == ["url", "source", *added]
+    assert [name for name in SUBJECT_SCHEMAS[dataset].names if name not in earlier.subject_schema.names] == ["url", "source", *added, "citation_product_id"]
     # The row as that generation's receipt holds it: the columns of the time, none of the later ones.
     published = module.COLUMNS[: module.COLUMNS.index("subject_terms_json") + 1]
     raw = {

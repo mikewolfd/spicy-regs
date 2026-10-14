@@ -14,6 +14,28 @@ EARLIER_COLUMNS = {
 
 def earlier_policies(policy):
     from spicy_regs.etl_receipts import DatasetPolicy
+    if policy.dataset == "gao_reports" and policy.policy_version == "government-sources/4":
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/gao_reports.json").read_text()))
+        if policy.descriptor() != expected.descriptor():
+            raise ValueError("Current GAO citation-key policy differs from the exact declared policy")
+        history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
+        prior = DatasetPolicy.from_descriptor(history["gao_reports_v3"])
+        if (prior.dataset != policy.dataset or prior.policy_version != "government-sources/3"
+                or prior.identity_fields != policy.identity_fields
+                or prior.receipt_fields != policy.receipt_fields
+                or prior.nullable_identity_fields != policy.nullable_identity_fields
+                or not prior.subject_schema.equals(policy.subject_schema.remove(
+                    policy.subject_schema.get_field_index("citation_product_id")), check_metadata=True)):
+            raise ValueError("GAO citation-key migration changes prior fields or identity")
+        return (prior, *earlier_policies(prior))
+    if policy.dataset == "gao_reports" and policy.policy_version == "government-sources/3":
+        history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
+        if policy.descriptor() != history["gao_reports_v3"]:
+            raise ValueError("Historical GAO policy differs from the exact declared policy")
+        context = json.loads(files("spicy_regs").joinpath("source_context_policy_history.json").read_text())
+        prior = DatasetPolicy.from_descriptor(context[policy.dataset])
+        return (prior, *earlier_policies(prior))
     if policy.dataset == "document_citations" and policy.policy_version == "legislative-documents/2":
         expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
             "etl_policies/document_citations.json").read_text()))

@@ -65,6 +65,7 @@ def main(tables=None):
         'state_name': 'Publisher state name qualifying this aggregate.',
         'zip_3': 'Three-digit postal prefix qualifying this aggregate.',
         'report_number': 'Source-stated report number, not an independently qualified report match.',
+        'citation_product_id': 'Uppercase report number, falling back to the product-page ID only when the number is NULL. Blank numbers stay blank. This is a citation lookup key; report_id remains the record identity.',
         'native_element_id': 'Publisher element identifier attached to this legal reference.',
         'native_idref': 'Publisher identifier reference attached to this legal reference.',
         'native_class': 'Publisher classification attached to this legal reference.',
