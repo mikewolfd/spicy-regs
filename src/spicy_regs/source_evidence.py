@@ -101,7 +101,7 @@ class CaptureEvidence:
         self.read_snapshot: dict | None = None
         self.retention_failure: str | None = None
         #: Where the prior generation's own evidence journal is, and its events once read.
-        self._prior_evidence: tuple[str, dict] | None = None
+        self._prior_evidence: tuple[str | None, dict] | None = None
         self._prior_events: list[dict] | None = None
         self.event(
             "run",
@@ -525,6 +525,42 @@ class CaptureEvidence:
         if public_url is None:
             raise SourceEvidenceError("Managed prior evidence requires its immutable root")
         raw, root = load_family_root(public_url, prior)
+        self._record_prior(prior_index, raw, root, public_url=public_url)
+
+    def inherit_admitted(self, prior_index: dict, artifact) -> None:
+        """Bind an offline run to its already admitted exact prior, retaining its root.
+
+        The caller owns the prior's live byte-admission guard. This records
+        inherited provenance, not new acquisition or requalified coverage.
+        An inherited journal is not implicitly downloaded by this local path.
+        """
+        prior = prior_index["families"].get(self.family)
+        if (prior is None or artifact.pin.as_dict() != {
+                "logicalId": prior["logicalId"], "artifactDigest": prior["artifactDigest"]}):
+            raise SourceEvidenceError("Admitted prior differs from the captured family")
+        self.inherit_pinned_root(prior_index, canonical_json_bytes(artifact.root))
+
+    def inherit_pinned_root(self, prior_index: dict, raw: bytes) -> None:
+        """Retain a captured prior's exact root locally, without fetching its bodies.
+
+        This is the same metadata-only inheritance as ``inherit``. Root pins
+        qualify lineage; they do not admit prior tables or requalify coverage.
+        """
+        from spicy_regs.generations import KIND as GENERATION_KIND
+        from spicy_regs.sources.publication import family_root
+
+        prior = prior_index["families"].get(self.family)
+        if prior is None:
+            raise SourceEvidenceError("Captured family has no managed prior")
+        root = family_root(raw, prior)
+        if root.get("kind") != GENERATION_KIND or root["spec"].get("family") != self.family:
+            raise SourceEvidenceError("Pinned prior belongs to a different generation family")
+        self._record_prior(prior_index, raw, root, public_url=None)
+
+    def _record_prior(self, prior_index, raw, root, *, public_url):
+        self.read_snapshot = prior_index
+        prior = prior_index["families"][self.family]
+        self.prior_input = ArtifactInput(PRIOR_ROLE, prior["logicalId"], prior["artifactDigest"])
         pin = next((item for item in root["inputs"] if item.get("role") == INPUT_ROLE), None)
         self._prior_evidence = None if pin is None else (public_url, pin)
         receipt = self._blob(raw)
@@ -549,11 +585,14 @@ class CaptureEvidence:
         """
         if self._prior_evidence is None:
             return None
+        public_url, pin = self._prior_evidence
+        if public_url is None:
+            raise SourceEvidenceError("Offline inherited journal is not attached; remote lookup is not authorized")
         if self._prior_events is None:
             from spicy_regs.sources.publication import load_evidence_journal
 
             self._prior_events = [
-                json.loads(line) for line in load_evidence_journal(*self._prior_evidence).splitlines()
+                json.loads(line) for line in load_evidence_journal(public_url, pin).splitlines()
             ]
         found = [
             row
