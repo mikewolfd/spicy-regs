@@ -858,6 +858,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.fec_relationships import COLUMNS as FEC_RELATIONSHIP_COLUMNS
     from spicy_regs.transforms.enrich_bill_subjects import COLUMNS as BILL_SUBJECT_COLUMNS
     from spicy_regs.transforms.build_court_opinion_clusters import COLUMNS as COURT_CLUSTER_COLUMNS
+    from spicy_regs.transforms.build_court_opinion_clusters import INPUT_COLUMNS as COURT_CLUSTER_INPUT_COLUMNS
     from spicy_regs.transforms.build_courtlistener import PUBLISHED_COLUMNS as COURT_DOCKET_COLUMNS
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
     from spicy_regs.transforms.build_court_pdf_extractions import COLUMNS as COURT_PDF_COLUMNS
@@ -941,6 +942,14 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     builder_pairs = {
         "org_committee_links": ORG_COMMITTEE_LINK_COLUMNS,
     }
+    if not native:
+        builder_columns.update({
+            'court_opinion_clusters': tuple(column for column in COURT_CLUSTER_INPUT_COLUMNS
+                                           if column != 'raw_source_record'),
+            'court_citations': CITATIONS.input_columns,
+            'court_citation_map': CITATION_MAP.input_columns,
+            'court_parentheticals': PARENTHETICALS.input_columns,
+        })
     installed = subject_policies() if native else {}
     for name in TABLES if native else LEGACY_TABLES:
         if name in installed:
@@ -1121,6 +1130,23 @@ def selected_dictionary_definitions(index: dict, names: Iterable[str], descripti
                 descriptions[name] = legacy_descriptions[name]
             if name in legacy_schemas:
                 schemas[name] = legacy_schemas[name]
+        # These fixed producer declarations describe the earlier receipt-free
+        # FEC generations. Current native definitions remain the default.
+        if any(name.startswith("fec_") for name in legacy_names):
+            path = REPO_ROOT / "data_dictionary" / "fec_historical_definitions.json"
+            historical = json.loads(path.read_text(encoding="utf-8"))["tables"]
+            for name in legacy_names & historical.keys():
+                entry = historical[name]
+                columns, meanings = entry["columns"], entry["columnDescriptions"]
+                if (not columns or any(not isinstance(pair, list) or len(pair) != 2
+                                       or not all(isinstance(value, str) and value for value in pair)
+                                       for pair in columns)
+                        or len({pair[0] for pair in columns}) != len(columns)
+                        or {pair[0] for pair in columns} != set(meanings)
+                        or any(not isinstance(text, str) or not text.strip() for text in meanings.values())):
+                    raise ValueError(f"Invalid historical FEC dictionary declaration: {name}")
+                schemas[name] = [tuple(pair) for pair in columns]
+                descriptions[name]["columns"] = meanings
     return descriptions, schemas
 
 
