@@ -243,7 +243,7 @@ def _literal(text: str) -> str:
 def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     """SQL text equal to ``exact_json`` of ``expression``'s value: the tagged encoding with keys in sorted order.
 
-    Covers strings, integers, booleans, fixed-point decimal128 scales 0 through 6,
+    Covers strings, integers, booleans, date32 in Python's date range, fixed-point decimal128 scales 0 through 6,
     and structs and lists of them whose DuckDB text equals Python's.
     Any other type refuses, so its table stays with the row writer until a test here proves its spelling.
     """
@@ -253,6 +253,16 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
         body = f"'[\"int\",' || CAST({expression} AS VARCHAR) || ']'"
     elif pa.types.is_boolean(dtype):
         body = f"'[\"bool\",' || CASE WHEN {expression} THEN 'true' ELSE 'false' END || ']'"
+    elif pa.types.is_date32(dtype):
+        # Arrow date32 and DuckDB DATE exceed Python date's range; those values
+        # cannot be represented by the reference encoder and must refuse.
+        # Within that range %Y is four digits, matching date.isoformat().
+        text = f"strftime({expression}, '%Y-%m-%d')"
+        body = (
+            f"CASE WHEN isfinite({expression}) AND {expression} BETWEEN DATE '0001-01-01' AND DATE '9999-12-31' "
+            f"THEN '[\"date\",' || CAST(to_json({text}) AS VARCHAR) || ']' "
+            "ELSE error('date32 outside Python date range') END"
+        )
     elif pa.types.is_decimal128(dtype) and 0 <= dtype.scale <= 6:
         # Arrow's Decimal and DuckDB both retain fixed-point spelling at these
         # scales. Higher scales can use Python's exponent spelling and remain
