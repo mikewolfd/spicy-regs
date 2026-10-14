@@ -862,3 +862,39 @@ def test_retained_court_legacy_declarations_preserve_native_and_refuse_drift(mon
         assert {table: schemas[table] for table in live} == native
         assert dd.check_schema_drift({table: schemas[table] for table in live}, live)
     assert {table: dd.expected_schemas()[table] for table in live} == native
+
+
+def test_retained_fec_historical_definitions_keep_native_and_strict_drift():
+    from copy import deepcopy
+    from pathlib import Path
+
+    fixture = json.loads((Path(__file__).parent / "fixtures" /
+                          "fec_selected_legacy_dictionary.json").read_text())
+    index = fixture["index"]
+    live = {key.removesuffix(".parquet"): [tuple(field) for field in table["columns"]]
+            for family in index["families"].values() for key, table in family["tables"].items()}
+    native_schemas, native_prose = dd.expected_schemas(), dd.load_descriptions()
+    descriptions, schemas = dd.selected_dictionary_definitions(index, live, dd.DEFAULT_DESCRIPTIONS)
+    assert {table: schemas[table] for table in live} == live
+    assert dd.check_descriptions(live, {table: descriptions[table] for table in live}) == []
+    assert dd.check_schema_drift({table: schemas[table] for table in live}, live) == []
+
+    drifted = deepcopy(live)
+    drifted["fec_collections"][0] = ("collection_id", "BIGINT")
+    drifted["fec_collections"].append(("unknown_version_field", "VARCHAR"))
+    drifted["fec_collections"].remove(("record_count", "VARCHAR"))
+    errors = dd.check_schema_drift({table: schemas[table] for table in live}, drifted)
+    assert any("in-code type VARCHAR but live parquet BIGINT" in error for error in errors)
+    assert any("unknown_version_field" in error for error in errors)
+    assert any("record_count" in error for error in errors)
+
+    for receipts in ({}, None):
+        routed = deepcopy(index)
+        for owner in routed["families"].values():
+            owner["etlReceipts"] = receipts
+        prose, selected = dd.selected_dictionary_definitions(routed, live, dd.DEFAULT_DESCRIPTIONS)
+        assert selected == native_schemas
+        assert prose == native_prose
+        assert dd.check_schema_drift({table: selected[table] for table in live}, live)
+    prose, selected = dd.selected_dictionary_definitions({"families": {}}, live, dd.DEFAULT_DESCRIPTIONS)
+    assert selected == native_schemas and prose == native_prose

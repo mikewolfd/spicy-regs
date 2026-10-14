@@ -1130,6 +1130,23 @@ def selected_dictionary_definitions(index: dict, names: Iterable[str], descripti
                 descriptions[name] = legacy_descriptions[name]
             if name in legacy_schemas:
                 schemas[name] = legacy_schemas[name]
+        # These fixed producer declarations describe the earlier receipt-free
+        # FEC generations. Current native definitions remain the default.
+        if any(name.startswith("fec_") for name in legacy_names):
+            path = REPO_ROOT / "data_dictionary" / "fec_historical_definitions.json"
+            historical = json.loads(path.read_text(encoding="utf-8"))["tables"]
+            for name in legacy_names & historical.keys():
+                entry = historical[name]
+                columns, meanings = entry["columns"], entry["columnDescriptions"]
+                if (not columns or any(not isinstance(pair, list) or len(pair) != 2
+                                       or not all(isinstance(value, str) and value for value in pair)
+                                       for pair in columns)
+                        or len({pair[0] for pair in columns}) != len(columns)
+                        or {pair[0] for pair in columns} != set(meanings)
+                        or any(not isinstance(text, str) or not text.strip() for text in meanings.values())):
+                    raise ValueError(f"Invalid historical FEC dictionary declaration: {name}")
+                schemas[name] = [tuple(pair) for pair in columns]
+                descriptions[name]["columns"] = meanings
     return descriptions, schemas
 
 
