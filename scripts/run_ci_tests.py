@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+PARTITION_COUNT = 4
+
 
 class Partition:
     def __init__(self, index: int, manifest_path: Path):
@@ -20,14 +22,16 @@ class Partition:
         selected, deselected = [], []
         for item in original:
             file = item.nodeid.split("::", 1)[0]
-            partition = int.from_bytes(hashlib.sha256(file.encode()).digest(), "big") % 2
+            partition = int.from_bytes(hashlib.sha256(file.encode()).digest(), "big") % PARTITION_COUNT
             (selected if partition == self.index else deselected).append(item)
         manifest = {"partition": self.index,
+                    "partitionCount": PARTITION_COUNT,
                     "collectedNodeIds": [item.nodeid for item in original],
                     "selectedNodeIds": [item.nodeid for item in selected]}
         encoded = (json.dumps(manifest, sort_keys=True) + "\n").encode()
         self.manifest_path.write_bytes(encoded)
         print("CI_PARTITION " + json.dumps({"partition": self.index,
+              "partitionCount": PARTITION_COUNT,
               "collected": len(original), "selected": len(selected),
               "manifest": str(self.manifest_path), "sha256": hashlib.sha256(encoded).hexdigest()},
               sort_keys=True), flush=True)
@@ -39,11 +43,11 @@ class Partition:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("partition", type=int, choices=(0, 1))
+    parser.add_argument("partition", type=int, choices=range(PARTITION_COUNT))
     parser.add_argument("--manifest", type=Path)
     args, pytest_args = parser.parse_known_args()
     manifest = args.manifest or Path(f"ci-partition-{args.partition}.json")
-    return pytest.main(pytest_args, plugins=[Partition(args.partition, manifest)])
+    return pytest.main(["--maxfail=1", *pytest_args], plugins=[Partition(args.partition, manifest)])
 
 
 if __name__ == "__main__":

@@ -33,13 +33,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # The larger complete partition took 1196 seconds in run 37561777995.
-    # Allow bounded setup, reporting and artifact-upload time around that measured work.
+    # Run 38487097199 exceeded this bound with two file partitions.
+    # Split the complete collection across four jobs; retain the bounded job limit.
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        partition: [0, 1]
+        partition: [0, 1, 2, 3]
 
     steps:
       - name: Checkout
@@ -57,7 +57,7 @@ jobs:
         run: uv sync
 
       - name: Run tests
-        run: uv run --extra comments-reader python scripts/run_ci_tests.py ${{ matrix.partition }} --manifest "$RUNNER_TEMP/ci-partition-${{ matrix.partition }}.json" -ra
+        run: uv run --extra comments-reader python -B scripts/run_ci_tests.py ${{ matrix.partition }} --manifest "$RUNNER_TEMP/ci-partition-${{ matrix.partition }}.json" -ra
 
       - name: Retain complete test selection
         if: always()
