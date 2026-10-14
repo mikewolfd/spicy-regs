@@ -29,6 +29,8 @@ from spicy_regs.sources.uscode_editions import POLICIES
 FAMILY = "uscode-editions"
 BATCH_ROWS = 64
 METADATA_LIMIT = 8 * 1024**2
+ROW_GROUP_ROWS = 8192
+ROW_GROUP_BYTES = 64 * 1024**2
 
 
 def _stat(path: Path) -> tuple:
@@ -67,12 +69,14 @@ def _batches(paths, schema):
 
 
 def _union(paths, schema, target, *, identities=None, dataset=None):
+    from spicy_regs.fec_observation_segments import coalesced_tables
+
     # Parquet normalizes list child names. Keep the admitted physical schema,
     # including metadata, while requiring the maintained logical policy type.
     physical = pq.read_schema(paths[0])
     if not physical.equals(schema):
         raise ValueError("Held schema differs from its policy")
-    with pq.ParquetWriter(target, physical) as writer:
+    def checked_batches():
         for batch in _batches(paths, physical):
             if identities is not None:
                 if dataset is None:
@@ -86,7 +90,15 @@ def _union(paths, schema, target, *, identities=None, dataset=None):
                     )
                 except sqlite3.IntegrityError as error:
                     raise ValueError(f"Overlapping or duplicate U.S. Code identity: {dataset}") from error
-            writer.write_batch(batch)
+            yield batch
+
+    # Bound the output group separately from small read batches. A 64 MiB
+    # group also admits the accepted XML record bound; external RSS supervision
+    # still owns native allocations and temporary Arrow backing buffers.
+    with pq.ParquetWriter(target, physical) as writer:
+        for table in coalesced_tables(checked_batches(), physical, check_resources=lambda: None,
+                                      row_group_rows=ROW_GROUP_ROWS, max_bytes=ROW_GROUP_BYTES):
+            writer.write_table(table, row_group_size=ROW_GROUP_ROWS)
 
 
 def _check_ordered_union(paths, target, schema):

@@ -191,3 +191,18 @@ def test_refuses_existing_output_and_input_drift(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='Retained input changed'):
         addition.prepare_addition(**args)
     assert not (args['output'] / 'prepared.json').exists()
+
+
+def test_union_coalesces_read_batches_into_bounded_row_groups(tmp_path):
+    schema = pa.schema([('ordinal', pa.int64()), ('value', pa.string())])
+    first, second, target = [tmp_path / n for n in ['first.parquet', 'second.parquet', 'target.parquet']]
+    total = addition.ROW_GROUP_ROWS + 17
+    rows = [{'ordinal': i, 'value': None if i % 2 else ''} for i in range(total)]
+    pq.write_table(pa.Table.from_pylist(rows[:65], schema=schema), first, row_group_size=32)
+    pq.write_table(pa.Table.from_pylist(rows[65:], schema=schema), second, row_group_size=32)
+    addition._union([first, second], schema, target)
+    addition._check_ordered_union([first, second], target, schema)
+    with pq.ParquetFile(target) as parquet:
+        assert parquet.metadata.num_row_groups == 2
+        assert [parquet.metadata.row_group(i).num_rows for i in range(2)] == [addition.ROW_GROUP_ROWS, 17]
+    assert pq.read_table(target).to_pylist() == rows
