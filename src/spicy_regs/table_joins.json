@@ -21303,7 +21303,7 @@
         {
           "table": "gao_reports",
           "columns": [
-            "report_number"
+            "citation_product_id"
           ],
           "keys": [
             {
