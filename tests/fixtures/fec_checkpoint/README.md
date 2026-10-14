@@ -1,0 +1,1 @@
+The retained Python source is the exact `fec_observation_segments.py` Git blob from producer `871132022fc8e06e9402785139a244b33a2fc9f1`. Compatibility tests compare the resource refactor against this source without requiring hosted Git history in a test checkout. The source is a fixture, not executed code or a corpus checkpoint.
