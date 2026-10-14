@@ -1,5 +1,6 @@
 """Closed local preparation segments; only complete-family admission can publish."""
 from contextlib import contextmanager
+from contextvars import ContextVar
 import base64
 import json
 import os
@@ -17,6 +18,7 @@ from spicy_regs.transforms.assemble_fec_query import _sha
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, dataset_policy
 
 FORMAT = 'fec-observation-segments/1'
+_ORIGIN = ContextVar('fec_checkpoint_origin', default=None)
 
 
 def coalesced_tables(batches, schema, *, check_resources, row_group_rows=8192, max_bytes=8 * 1024 * 1024):
@@ -99,10 +101,139 @@ def _write_new(path, value):
     _sync_directory(path.parent)
 
 
+def _check_resource_refactor(previous, current):
+    """Prove that the resource split preserves the complete original kernel."""
+    import ast
+    old, new = ast.parse(previous), ast.parse(current)
+    additions = {'_check_resource_refactor', 'verify_checkpoint_origin', '_checkpoint_implementation',
+                 '_checkpoint_source_pin', 'checkpoint_executor'}
+    new.body = [node for node in new.body if not isinstance(node, ast.FunctionDef) or node.name not in additions]
+    extra = ast.parse("from contextvars import ContextVar\n_ORIGIN = ContextVar('fec_checkpoint_origin', default=None)").body
+    for expected in extra:
+        matches = [node for node in new.body if ast.dump(node) == ast.dump(expected)]
+        if len(matches) != 1:
+            raise ValueError('Checkpoint executor scope changed')
+        new.body.remove(matches[0])
+    cls = next(node for node in new.body if isinstance(node, ast.ClassDef) and node.name == 'ObservationSegments')
+    prepared = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == 'prepare_segments')
+    assembled = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == 'prepare_table')
+    expected = ast.parse("""directories = self.prepare_segments(table, selected, witnesses, schema,
+        prepare_row=prepare_row, check_resources=check_resources)
+policy = dataset_policy(table)
+""").body
+    if (ast.dump(ast.Module(body=assembled.body[1:3], type_ignores=[])) != ast.dump(ast.Module(body=expected, type_ignores=[]))
+            or ast.dump(prepared.body[-1]) != ast.dump(ast.parse('return directories').body[0])):
+        raise ValueError('Checkpoint executor has no exact preparation split')
+    # Its new API must expose exactly the old arguments except assembly output.
+    definition = ast.parse('def prepare_segments(self, table, selected, witnesses, schema, *, prepare_row, check_resources): pass').body[0]
+    assert isinstance(definition, ast.FunctionDef)
+    args = definition.args
+    if ast.dump(prepared.args) != ast.dump(args):
+        raise ValueError('Checkpoint executor preparation arguments changed')
+    assembled.body = prepared.body[:-1] + assembled.body[3:]
+    cls.body.remove(prepared)
+    context = next(node for node in new.body if isinstance(node, ast.FunctionDef) and node.name == 'observation_segments')
+    if context.args.kwonlyargs[-1].arg != 'origin' or ast.dump(context.args.kw_defaults[-1]) != ast.dump(ast.Constant(None)):
+        raise ValueError('Checkpoint executor origin argument changed')
+    context.args.kwonlyargs.pop()
+    context.args.kw_defaults.pop()
+    extra = ast.parse("""origin = origin or _ORIGIN.get()
+source_pin = _checkpoint_source_pin(path, captured_family, source_pin, origin)
+""").body
+    for expected in extra:
+        containers = [value for node in ast.walk(context) for _, value in ast.iter_fields(node) if isinstance(value, list)]
+        matches = [(container, node) for container in containers for node in container
+                   if isinstance(node, ast.AST) and ast.dump(node) == ast.dump(expected)]
+        if len(matches) != 1:
+            raise ValueError('Checkpoint executor source scope changed')
+        matches[0][0].remove(matches[0][1])
+    replacements = 0
+    for node in ast.walk(context):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == '_checkpoint_implementation':
+            expected = ast.parse('_checkpoint_implementation(path, captured_family, source_pin, origin)', mode='eval').body
+            if ast.dump(node) != ast.dump(expected):
+                raise ValueError('Checkpoint executor origin gate changed')
+            node.func.id = 'implementation_id'
+            node.args = []
+            replacements += 1
+    if replacements != 1 or ast.dump(old) != ast.dump(new):
+        raise ValueError('Checkpoint executor changes the frozen segment kernel')
+
+
+def verify_checkpoint_origin(path, captured_family, source_pin, origin):
+    """Admit one explicit immutable checkpoint against a distinct clean executor."""
+    import subprocess
+    from spicy_regs.native_conversion import source_state, _checkpoint_producer, _historical_producer
+    if (not isinstance(origin, dict) or set(origin) != {'commit', 'header_sha256', 'executor_commit', 'remote'}
+            or any(not isinstance(origin[name], str) or not re.fullmatch('[0-9a-f]{40}', origin[name])
+                   for name in ('commit', 'executor_commit'))
+            or not re.fullmatch('sha256:[0-9a-f]{64}', origin['header_sha256'])):
+        raise ValueError('Checkpoint origin requires exact producer, executor and header pins')
+    header = Path(path) / 'checkpoint.json'
+    _file(header)
+    if _sha(header) != origin['header_sha256']:
+        raise ValueError('Checkpoint original header bytes changed')
+    value = json.loads(header.read_text())
+    identity = value['identity']
+    if (identity['captured_family'] != captured_family
+            or identity['source_pin']['checkout'] != origin['commit']):
+        raise ValueError('Checkpoint original producer or selected inputs changed')
+    now = source_state(origin['remote'])
+    original_source = identity['source_pin']
+    if source_pin not in (original_source, {k: v for k, v in now.items() if k != 'main'}):
+        raise ValueError('Checkpoint source pin names neither admitted role')
+    source_pin = original_source
+    executor = _checkpoint_producer(now, origin['executor_commit'], source_pin['pinned_spicy_docs'])
+    if (source_pin['uncommitted'] or source_pin['untracked'] or source_pin['remote'] != now['remote']
+            or source_pin['spicy_docs'] != now['spicy_docs']
+            or source_pin['spicy_docs_wheel'] != now['spicy_docs_wheel']):
+        raise ValueError('Checkpoint original runtime or repository differs from executor')
+    root = Path(__file__).resolve().parents[2]
+    original_identity, locked = _historical_producer(root, origin['commit'], now['checkout'])
+    if identity['implementation'] != original_identity:
+        raise ValueError('Checkpoint original implementation differs from retained producer')
+    def git(*args):
+        return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True,
+                              env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'}).stdout.decode()
+    changed = git('diff', '--name-only', origin['commit'], now['checkout'], '--', 'src', 'data_dictionary', 'uv.lock').splitlines()
+    resource = 'src/spicy_regs/fec_observation_segments.py'
+    if changed != [resource]:
+        raise ValueError('Checkpoint transformation, writer, schema, policy or runtime changed')
+    _check_resource_refactor(git('show', origin['commit'] + ':' + resource), Path(__file__).read_text())
+    return {'originalProducer': {'commit': origin['commit'], 'implementationId': original_identity,
+                                'lockedSpicyDocs': locked},
+            'executor': executor, 'executorSource': now, 'originalHeaderSHA256': origin['header_sha256'],
+            'originalSourcePin': original_source,
+            'compatibility': 'exact-resource-split-with-frozen-transformations/1'}
+
+
 @contextmanager
-def observation_segments(path, *, captured_family, source_pin, hosted_main=None):
+def checkpoint_executor(origin):
+    """Scope an explicitly pinned original checkpoint to one distinct executor."""
+    token = _ORIGIN.set(origin)
+    try:
+        yield
+    finally:
+        _ORIGIN.reset(token)
+
+
+def _checkpoint_source_pin(path, captured_family, source_pin, origin):
+    if origin is None:
+        return source_pin
+    return verify_checkpoint_origin(path, captured_family, source_pin, origin)['originalSourcePin']
+
+
+def _checkpoint_implementation(path, captured_family, source_pin, origin):
+    if origin is None:
+        return implementation_id()
+    return verify_checkpoint_origin(path, captured_family, source_pin, origin)['originalProducer']['implementationId']
+
+
+@contextmanager
+def observation_segments(path, *, captured_family, source_pin, hosted_main=None, origin=None):
     """Serialize all preparation and readback; a dead owner releases its lock."""
     import fcntl
+    origin = origin or _ORIGIN.get()
     path = Path(path).absolute()
     _directory(path)
     header = path / 'checkpoint.json'
@@ -118,8 +249,9 @@ def observation_segments(path, *, captured_family, source_pin, hosted_main=None)
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ValueError('Observation checkpoint already has an active owner') from error
+        source_pin = _checkpoint_source_pin(path, captured_family, source_pin, origin)
         identity = dict(format=FORMAT, captured_family=captured_family, source_pin=source_pin,
-                        implementation=implementation_id(),
+                        implementation=_checkpoint_implementation(path, captured_family, source_pin, origin),
                         policies=[dataset_policy(name).descriptor() for name in
                                   sorted(key.removesuffix('.parquet') for key in captured_family['tables'])])
         if not header.exists():
@@ -201,10 +333,10 @@ class ObservationSegments:
             raise ValueError('Observation segment writer evidence changed')
         return directory
 
-    def prepare_table(self, table, selected, witnesses, schema, output, *, prepare_row, check_resources):
+    def prepare_segments(self, table, selected, witnesses, schema, *, prepare_row, check_resources):
         """Rehash admitted inputs, reuse closed ranges, and decode only new groups."""
         from spicy_regs.fec_native_conversion import _bounded_record_batches
-        policy = dataset_policy(table)
+        policy = dataset_policy(table)  # noqa: F841 - retain the original lookup in the verified prefix
         ordinal, directories = 0, []
         for member_index, (item, witness) in enumerate(zip(selected, witnesses, strict=True)):
             before = file_signature(item.path)
@@ -273,6 +405,13 @@ class ObservationSegments:
             check_resources()
             if file_signature(item.path) != before or _sha(item.path) != item.sha256:
                 raise ValueError('Observation input changed before table completion')
+        return directories
+
+    def prepare_table(self, table, selected, witnesses, schema, output, *, prepare_row, check_resources):
+        """Prepare verified segments, then consolidate a complete table once."""
+        directories = self.prepare_segments(table, selected, witnesses, schema,
+            prepare_row=prepare_row, check_resources=check_resources)
+        policy = dataset_policy(table)
         output.mkdir(parents=True, exist_ok=False)
         for name, expected_schema in ((table + '.parquet', policy.subject_schema), ('etl_receipts.parquet', RECEIPT_SCHEMA)):
             def batches():
