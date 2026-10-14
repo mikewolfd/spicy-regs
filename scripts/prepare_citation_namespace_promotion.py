@@ -10,10 +10,11 @@ import argparse
 import hashlib
 import json
 import os
+from contextlib import ExitStack
 from pathlib import Path
 
 import pyarrow.parquet as pq
-from rulespec_artifacts import ArtifactInput, iter_member_descriptors, parse_admitted_json
+from rulespec_artifacts import iter_member_descriptors, parse_admitted_json
 
 from spicy_regs.conversion_reads import ConversionReadOperation
 from spicy_regs.generations import build_generation
@@ -21,6 +22,7 @@ from spicy_regs.legislative_receipts import RAW
 from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 from spicy_regs.selected_generations import remember_generation
+from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
 from spicy_regs.sources import publication
 
 FAMILY = "print-citations"
@@ -119,7 +121,7 @@ def prepare(*, captured_index: Path, prior_controls: Path, member_bindings: Path
         raise ValueError("Output must be separate from retained inputs and controls")
     output.mkdir(parents=True, exist_ok=False)
     aliases = _stage_prior(prior_controls, bindings, entry, output / "prior")
-    with ConversionReadOperation() as operation:
+    with ConversionReadOperation() as operation, ExitStack() as evidence_run:
         old, old_reader, old_source = operation.admit_generation(output / "prior", expected_pin={
             "logicalId": entry["logicalId"], "artifactDigest": entry["artifactDigest"]})
         described = publication.generation_entry(old, iter_member_descriptors(old, old_source))
@@ -153,10 +155,12 @@ def prepare(*, captured_index: Path, prior_controls: Path, member_bindings: Path
                          for key in PrintCitationsRollup.source_outputs)
 
         files = writer.build_receipts(work, retained_tables)
-        inherited = [item for item in old.root["inputs"] if item["role"] != "prior-generation"]
-        inputs = [ArtifactInput("prior-generation", old.pin.logical_id, old.pin.artifact_digest),
-                  *(ArtifactInput(item["role"], item["logicalId"], item["artifactDigest"])
-                    for item in inherited)]
+        evidence = CaptureEvidence(output, FAMILY)
+        evidence_run.push(lambda _kind, error, _trace: evidence.finish(error))
+        evidence.inherit_admitted(snapshot, old)
+        evidence.event("native-promotion", source_acquisition=False,
+                       change="Expose the retained literal citation target namespace on main rows.")
+        inputs = evidence.inputs()
         artifact = build_generation(output / "generation", family=FAMILY, files=files,
             expected_keys=PrintCitationsRollup.outputs, schemas=writer.generation_schemas(),
             read_snapshot=snapshot, publication_status="complete-family", inputs=inputs,
@@ -178,6 +182,11 @@ def prepare(*, captured_index: Path, prior_controls: Path, member_bindings: Path
             raise ValueError("Namespace qualification omitted citation rows")
         old_reader.check()
         new_reader.check()
+        assert evidence.artifact is not None
+        admitted_evidence = verify_evidence(evidence.artifact_dir, expected_pin=evidence.artifact.pin)
+        if admitted_evidence.root["inputs"] != [item for item in artifact.root["inputs"]
+                                                if item["role"] == "prior-generation"]:
+            raise ValueError("Source evidence and generation name different inherited inputs")
         report = {"state": "qualified-local-complete-family-not-published", "family": FAMILY,
                   "capturedIndexSha256": index_digest, "bindingMapSha256": bindings_digest,
                   "prior": entry, "candidate": {"logicalId": artifact.pin.logical_id,
@@ -185,6 +194,8 @@ def prepare(*, captured_index: Path, prior_controls: Path, member_bindings: Path
                       "directory": str((output / "generation").resolve())},
                   "originalChecks": original_checks, "preservedMainRows": main_counts,
                   "literalNamespacesChecked": namespace_count, "inputAliases": aliases,
+                  "sourceEvidence": {**admitted_evidence.pin.as_dict(),
+                                     "directory": str(evidence.artifact_dir.resolve())},
                   "sourceAcquisition": False, "remoteGets": 0, "published": False,
                   "priorStagingPayloadCopies": 0,
                   "privateWorkingCopies": "The maintained selector copies native subjects and writes restored inputs; the writer retains intermediate subjects and receipts beside the final generation.",

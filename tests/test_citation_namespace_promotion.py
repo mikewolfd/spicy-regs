@@ -8,11 +8,14 @@ import pytest
 from rulespec_artifacts import ArtifactInput, LocalMemberSource, iter_member_descriptors
 
 from scripts.prepare_citation_namespace_promotion import prepare
+from scripts.prepare_citation_lineage_successor import prepare_successor
 from spicy_regs import etl_policy_registry, legislative_receipts as receipts
 from spicy_regs.etl_receipts import DatasetPolicy
 from spicy_regs.generations import build_generation
 from spicy_regs.pipelines.rollups.print_citations import PrintCitationsRollup
+from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, verify_evidence
 from spicy_regs.sources import publication
+from tests.generation_fakes import Store
 from tests.test_legislative_receipts import retained, row
 
 
@@ -52,9 +55,12 @@ def prior(tmp_path, monkeypatch, request):
                                           file_outcomes_table="print_citations_document_file_outcomes")
     policies = tuple(old_policy if item.dataset == "document_citations" else item
                      for item in PrintCitationsRollup.receipt_policies)
-    evidence = {"logicalId": "urn:spicy:artifact:spicy-regs-source-evidence:" + "e" * 64,
-                "artifactDigest": "sha256:" + "e" * 64,
-                "role": "source-evidence"}
+    old_evidence = CaptureEvidence(tmp_path / "old-evidence", "print-citations")
+    old_evidence.event("retained-fixture", source_acquisition=False)
+    old_evidence.inputs()
+    assert old_evidence.artifact is not None
+    evidence = {**old_evidence.artifact.pin.as_dict(), "role": "source-evidence",
+        "directory": str(old_evidence.artifact_dir)}
     installed = etl_policy_registry.installed_policies()
     with monkeypatch.context() as patch:
         # Simulate the historical writer's exact installed declaration, not a bypass.
@@ -106,7 +112,12 @@ def test_complete_native_prior_promotes_literals_and_preserves_originals(prior, 
     root = json.loads((candidate / "artifact.json").read_text())
     assert root["spec"]["readSnapshot"] == json.loads(args["captured_index"].read_text())
     assert root["inputs"] == [{"logicalId": root["spec"]["readSnapshot"]["families"]["print-citations"]["logicalId"],
-                               "artifactDigest": args["expected_prior"], "role": "prior-generation"}, evidence]
+                               "artifactDigest": args["expected_prior"], "role": "prior-generation"},
+                              {key: result["sourceEvidence"][key] for key in ("logicalId", "artifactDigest")}
+                              | {"role": "source-evidence"}]
+    assert result["sourceEvidence"]["artifactDigest"] != evidence["artifactDigest"]
+    new_evidence = verify_evidence(Path(result["sourceEvidence"]["directory"]))
+    assert new_evidence.root["inputs"] == [root["inputs"][0]]
     assert len(result["originalChecks"]) == 5
     for path in originals:
         # The maintained selector chooses its own private layout; find only the tiny fixture's output.
@@ -181,3 +192,107 @@ def test_ineligible_captured_entry_refuses_before_payload_staging(prior, tmp_pat
     with pytest.raises((ValueError, RuntimeError)):
         prepare(**args, output=tmp_path / "refused")
     assert not (tmp_path / "refused").exists()
+
+
+def _selected_store(args):
+    """Retain the tiny fixture's admitted prior under its immutable selected keys."""
+    index = json.loads(args["captured_index"].read_text())
+    store = Store()
+    index["version"] = 2
+    store.objects[publication.INDEX_V2_KEY] = json.dumps(index).encode()
+    prefix = index["families"]["print-citations"]["prefix"]
+    for path in args["prior_controls"].iterdir():
+        store.objects[prefix + "/" + path.name] = path.read_bytes()
+    return store
+
+
+def test_preparation_passes_actual_publisher_evidence_lineage_gate(prior, tmp_path):
+    args, _, old_evidence = prior
+    old_bytes = {path: path.read_bytes() for path in Path(old_evidence["directory"]).rglob("*") if path.is_file()}
+    result = prepare(**args, output=tmp_path / "promotion")
+    store = _selected_store(args)
+    index = publication.publish_generation(tmp_path / "promotion/generation", client=store, bucket="fixture",
+        prior_index=json.loads(args["captured_index"].read_text()),
+        evidence_directories=(Path(result["sourceEvidence"]["directory"]),), exact_prior=True)
+    assert index["families"]["print-citations"]["artifactDigest"] == result["candidate"]["artifactDigest"]
+    assert publication.INDEX_V2_KEY in store.writes
+    assert all(path.read_bytes() == body for path, body in old_bytes.items())
+
+
+def test_old_evidence_with_new_prior_fails_actual_publisher_before_any_write(prior, tmp_path):
+    args, _, old_evidence = prior
+    result = prepare(**args, output=tmp_path / "promotion")
+    root = json.loads((tmp_path / "promotion/generation/artifact.json").read_text())
+    selected = json.loads(args["captured_index"].read_text())
+    prior_input = next(item for item in root["inputs"] if item["role"] == "prior-generation")
+    build_generation(tmp_path / "bad-lineage", family="print-citations",
+        files=[tmp_path / "promotion/generation" / key for key in PrintCitationsRollup.outputs],
+        expected_keys=PrintCitationsRollup.outputs, read_snapshot=selected,
+        receipt_path=tmp_path / "promotion/generation/etl_receipts.parquet",
+        receipt_policies=PrintCitationsRollup.receipt_policies,
+        receipt_generation_id=root["spec"]["etlReceipts"]["generationId"],
+        inputs=[ArtifactInput("source-evidence", old_evidence["logicalId"], old_evidence["artifactDigest"]),
+                ArtifactInput(prior_input["role"], prior_input["logicalId"], prior_input["artifactDigest"])])
+    store = _selected_store(args)
+    pointer = store.objects[publication.INDEX_V2_KEY]
+    with pytest.raises(publication.PublicationError, match="different inherited inputs"):
+        publication.publish_generation(tmp_path / "bad-lineage", client=store, bucket="fixture",
+            prior_index=selected, evidence_directories=(Path(old_evidence["directory"]),), exact_prior=True)
+    assert not store.writes and store.objects[publication.INDEX_V2_KEY] == pointer
+    assert result["sourceEvidence"]["artifactDigest"] != old_evidence["artifactDigest"]
+
+
+def test_offline_inheritance_refuses_wrong_prior_and_unattached_journal(prior, tmp_path):
+    args, _, _ = prior
+    selected = json.loads(args["captured_index"].read_text())
+    raw = (args["prior_controls"] / "artifact.json").read_bytes()
+    evidence = CaptureEvidence(tmp_path / "local", "print-citations")
+    evidence.inherit_pinned_root(selected, raw)
+    with pytest.raises(SourceEvidenceError, match="not attached"):
+        evidence.inherited_event("retained-fixture")
+    selected["families"]["print-citations"]["artifactDigest"] = "sha256:" + "f" * 64
+    with pytest.raises(publication.PublicationError, match="captured pin"):
+        CaptureEvidence(tmp_path / "wrong", "print-citations").inherit_pinned_root(selected, raw)
+
+
+def test_lineage_successor_reuses_exact_members_and_passes_publisher(prior, tmp_path, monkeypatch):
+    args, _, old_evidence = prior
+    result = prepare(**args, output=tmp_path / "promotion")
+    prepared = tmp_path / "promotion/generation"
+    before = {path: path.read_bytes() for path in prepared.iterdir()}
+
+    def no_reconversion(*args, **kwargs):
+        pytest.fail("Lineage repair must not convert, restore or acquire again")
+
+    monkeypatch.setattr(PrintCitationsRollup, "build_receipts", no_reconversion)
+    monkeypatch.setattr("spicy_regs.pipelines.rollups.print_citations.build_print_citations", no_reconversion)
+    monkeypatch.setattr("scripts.prepare_citation_namespace_promotion.SelectedPriors.get", no_reconversion)
+    repaired = prepare_successor(captured_index=args["captured_index"], prior_controls=args["prior_controls"],
+        prepared=prepared, output=tmp_path / "successor", expected_prior=args["expected_prior"],
+        expected_prepared=result["candidate"]["artifactDigest"], expected_index=args["expected_index"])
+    assert repaired["fullNativeAdmissions"] == 2 and repaired["payloadCopies"] == 0
+    assert repaired["originalComparisonsRepeated"] is False and repaired["conversionRepeated"] is False
+    assert repaired["candidate"]["artifactDigest"] != result["candidate"]["artifactDigest"]
+    for path, body in before.items():
+        assert path.read_bytes() == body
+        if path.suffix == ".parquet":
+            assert path.stat().st_ino == (tmp_path / "successor/generation" / path.name).stat().st_ino
+    lineage = [json.loads(line) for line in (Path(repaired["sourceEvidence"]["directory"]) / "journal.jsonl").read_text().splitlines()]
+    assert next(item for item in lineage if item["event"] == "lineage")["prior_inputs"][0]["artifactDigest"] == old_evidence["artifactDigest"]
+    assert next(item for item in lineage if item["event"] == "native-lineage-successor")["prepared_generation"] == repaired["prepared"]
+    store = _selected_store(args)
+    published = publication.publish_generation(tmp_path / "successor/generation", client=store, bucket="fixture",
+        prior_index=json.loads(args["captured_index"].read_text()),
+        evidence_directories=(Path(repaired["sourceEvidence"]["directory"]),), exact_prior=True)
+    assert published["families"]["print-citations"]["artifactDigest"] == repaired["candidate"]["artifactDigest"]
+
+
+def test_successor_with_wrong_prior_refuses_before_readiness(prior, tmp_path):
+    args, _, _ = prior
+    result = prepare(**args, output=tmp_path / "promotion")
+    with pytest.raises(ValueError, match="expected pin"):
+        prepare_successor(captured_index=args["captured_index"], prior_controls=args["prior_controls"],
+            prepared=tmp_path / "promotion/generation", output=tmp_path / "refused-successor",
+            expected_prior="sha256:" + "f" * 64, expected_prepared=result["candidate"]["artifactDigest"],
+            expected_index=args["expected_index"])
+    assert not (tmp_path / "refused-successor").exists()
