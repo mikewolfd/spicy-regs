@@ -1157,15 +1157,14 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     )
 
 
-def _publish_verified_generation(
-    artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
+def _stage_verified_generation(
+    artifact, source, *, upload_member, client, bucket: str, index: dict,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
-    receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
-    conversion_proof: NativeConversionProof | None = None,
-    before_pointer=None,
+    receipt_only_tables: frozenset[str] = frozenset(),
+    conversion_proof: NativeConversionProof | None = None, members=None,
+    _verified_replacement_tables: frozenset[str] = frozenset(),
 ) -> dict:
-    """Shared publication gates; both callers fully verify their source first."""
-    from botocore.exceptions import BotoCoreError, ClientError
+    """Check and upload one verified generation without making it visible."""
     from rulespec_artifacts import admit_artifact, iter_member_descriptors
     from spicy_regs.sources.r2 import _assert_upload_safe, _get_remote_size
     from spicy_regs.source_evidence import INPUT_ROLE, PRIOR_ROLE, verify_evidence
@@ -1177,12 +1176,9 @@ def _publish_verified_generation(
     family = artifact.root["spec"]["family"]
     if not _NAME.fullmatch(family):
         raise PublicationError("Invalid family name")
-    index, etag, bootstrap = _stored_index(client, bucket)
-    exact_prior = exact_prior or conversion_proof is not None
-    _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
-    _assert_parents_current(index, artifact.root["spec"].get("parents", {}))
     converted = _conversion_tables(conversion_proof, artifact, index["families"].get(family))
-    members = list(iter_member_descriptors(artifact, source))
+    members = list(iter_member_descriptors(artifact, source)) if members is None else list(members)
+    _assert_parents_current(index, artifact.root["spec"].get("parents", {}))
     entry = generation_entry(artifact, members)
     prefix, tables = entry["prefix"], entry["tables"]
     # The guards run per table: a partition of a split table may legitimately shrink, but none may vanish,
@@ -1192,7 +1188,7 @@ def _publish_verified_generation(
         if missing := _partitions(prior) - _partitions(table):
             raise PublicationError(f"{key} lacks partitions its prior generation holds: "
                                    + ", ".join("/".join(f"{c}={v}" for c, v in p) for p in sorted(missing)))
-        if key not in converted:
+        if key not in converted | _verified_replacement_tables:
             old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
             _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)
@@ -1250,6 +1246,28 @@ def _publish_verified_generation(
         logger.info("publication: reused {} unchanged member(s) across generation prefixes", reused)
     # S3 success or caller-supplied metadata is not byte-verification evidence.
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
+    return entry
+
+
+def _publish_verified_generation(
+    artifact, source, *, upload_member, client, bucket: str, prior_index: Mapping,
+    evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
+    receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
+    conversion_proof: NativeConversionProof | None = None,
+    before_pointer=None,
+) -> dict:
+    """Shared publication gates; both callers fully verify their source first."""
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    family = artifact.root["spec"]["family"]
+    index, etag, bootstrap = _stored_index(client, bucket)
+    exact_prior = exact_prior or conversion_proof is not None
+    _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
+    entry = _stage_verified_generation(
+        artifact, source, upload_member=upload_member, client=client, bucket=bucket, index=index,
+        evidence_directories=evidence_directories, added_tables=added_tables,
+        receipt_only_tables=receipt_only_tables, conversion_proof=conversion_proof,
+    )
     # Each lost race means another writer's pointer write succeeded, so
     # contention resolves in at most one round per concurrent writer.
     # Version 2 is the pointer; version 1 is derived from it afterwards (multi-file design §4.1).
@@ -1276,6 +1294,72 @@ def _publish_verified_generation(
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag, _ = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
+    raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
+
+
+def publish_fec_release(
+    directory: Path, *, observations_basis: dict, query_basis: dict,
+    client, bucket: str, prior_index: Mapping, evidence_directories: tuple[Path, ...] = (),
+    receipt_only_tables: frozenset[str] = frozenset(),
+) -> dict:
+    """Select proved observations and the exact compatible historical query together.
+
+    The retained query keeps its production lineage and publication timestamp.
+    Maintained verifiers bind both selections and the serving compatibility
+    evidence. Only observations are staged; no retained query bodies are copied.
+    The composed observations proof replaces the size heuristic for its prior
+    tables, while membership, receipts, evidence and transport checks still run.
+    """
+    from botocore.exceptions import BotoCoreError, ClientError
+    from rulespec_artifacts import LocalMemberSource
+    from spicy_regs.fec_release_verification import verify_publication_basis
+    from spicy_regs.fec_query_compatibility import verify_retained_query_compatibility
+
+    observations = verify_publication_basis(directory, observations_basis)
+    if observations.root["spec"]["family"] != "fec-observations":
+        raise PublicationError("FEC release proof must name fec-observations")
+    old = prior_index["families"].get("fec-observations")
+    query = prior_index["families"].get("fec-query")
+    if old is None or query is None:
+        raise PublicationError("Retained FEC release requires both captured families")
+    if observations.proof["priorPin"] != {key: old[key] for key in ("logicalId", "artifactDigest")}:
+        raise PublicationError("FEC observations proof names another prior generation")
+    compatibility = verify_retained_query_compatibility(observations, query, query_basis)
+    if compatibility.entry != query or compatibility.observations_pin != observations.pin:
+        raise PublicationError("FEC compatibility proof names another selection")
+
+    def check():
+        observations.check()
+        compatibility.check()
+
+    index, etag, bootstrap = _stored_index(client, bucket)
+    for family in ("fec-observations", "fec-query"):
+        _assert_family_unchanged(index, prior_index, family, exact=True)
+    check()
+    entry = _stage_verified_generation(
+        observations, LocalMemberSource(directory), client=client, bucket=bucket, index=index,
+        members=observations.members, evidence_directories=evidence_directories,
+        receipt_only_tables=receipt_only_tables,
+        _verified_replacement_tables=frozenset(old["tables"]),
+        upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
+    )
+    for _ in range(_POINTER_ATTEMPTS):
+        for family in ("fec-observations", "fec-query"):
+            _assert_family_unchanged(index, prior_index, family, exact=True)
+        _assert_parents_current(index, observations.root["spec"].get("parents", {}))
+        current = index["families"].get("fec-observations")
+        moved = current if _generation_entry(current) == entry else {**entry, "publishedAt": _instant()}
+        updated, _ = _merge_family(index, "fec-observations", moved)
+        updated, raw = _merge_family(updated, "fec-query", compatibility.entry)
+        check()
+        if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            try:
+                _write_v1(client, bucket, bootstrap)
+            except (BotoCoreError, ClientError, OSError, PublicationError) as exc:
+                logger.error("publication: {} is behind {}; the next publish rederives it ({}: {})",
+                             INDEX_KEY, INDEX_V2_KEY, type(exc).__name__, exc)
+            return updated
+        index, etag, _ = _stored_index(client, bucket)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 
 

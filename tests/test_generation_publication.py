@@ -791,3 +791,21 @@ def test_the_backfill_command_writes_only_with_apply(tmp_path, monkeypatch, caps
     assert "publishedAt" in pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]["test"]
     assert purged == [f"https://test/{pub.INDEX_V2_KEY}"]
     assert main(["--apply"]) == 0 and json.loads(capsys.readouterr().out)["applied"] is False and len(purged) == 1
+
+
+def test_staging_complete_generations_keeps_both_unselected(tmp_path):
+    from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
+
+    store = Store()
+    for family, key in (("first", "a.parquet"), ("second", "b.parquet")):
+        directory, artifact = build(tmp_path, name=family, family=family, keys=(key,))
+        source = LocalMemberSource(directory)
+        entry = pub._stage_verified_generation(
+            artifact, source, client=store, bucket="test", index=pub.empty_index(),
+            members=tuple(iter_member_descriptors(artifact, source)),
+            upload_member=lambda prefix, member: pub._put_immutable(
+                store, "test", prefix + "/" + member, directory / member),
+        )
+        assert store.objects[entry["prefix"] + "/" + key] == (directory / key).read_bytes()
+        assert pub.INDEX_V2_KEY not in store.objects
+        assert pub.INDEX_KEY not in store.objects
