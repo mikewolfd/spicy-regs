@@ -1,6 +1,7 @@
 """Conditional FEC selection with checked proof objects and retained query bytes."""
 
 from copy import deepcopy
+import hashlib
 from types import SimpleNamespace
 import sys
 
@@ -28,6 +29,11 @@ def release(tmp_path, monkeypatch):
     )
     compatibility = SimpleNamespace(entry=deepcopy(prior["families"]["fec-query"]),
                                     observations_pin=artifact.pin, check=lambda: checks.append("query"))
+    descriptor = tmp_path / "descriptor.json"
+    descriptor.write_bytes(b'{"checked":"test fixture"}')
+    compatibility.descriptor_path = descriptor
+    compatibility.descriptor_sha256 = "sha256:" + hashlib.sha256(descriptor.read_bytes()).hexdigest()
+    monkeypatch.setattr(pub, "_bounded_get", lambda url, **kwargs: store.objects[url.removeprefix("https://test/")])
     obs_basis, query_basis = {"path": "obs-proof", "sha256": "obs"}, {"path": "query-proof", "sha256": "query"}
 
     def verify_obs(directory, basis):
@@ -49,7 +55,7 @@ def release(tmp_path, monkeypatch):
 
     def run():
         return pub.publish_fec_release(new, observations_basis=obs_basis, query_basis=query_basis,
-                                       client=store, bucket="test", prior_index=prior)
+                                       client=store, bucket="test", prior_index=prior, public_base_url="https://test")
 
     return SimpleNamespace(store=store, prior=prior, observations=observations,
                            compatibility=compatibility, module=module, checks=checks, run=run)
@@ -166,3 +172,41 @@ def test_rejected_compatibility_basis_never_uploads(release):
     with pytest.raises(ValueError, match="incomplete"):
         release.run()
     assert not release.store.writes
+
+
+@pytest.mark.parametrize("failure", ["missing", "wrong_digest", "existing_corrupt", "public_missing", "public_corrupt", "oversize"])
+def test_descriptor_failure_keeps_old_selection(release, monkeypatch, failure):
+    r = release
+    before = r.store.objects[pub.INDEX_V2_KEY]
+    key = pub.fec_compatibility_key(r.observations.pin.artifact_digest,
+                                    r.prior["families"]["fec-query"]["artifactDigest"])
+    if failure == "missing":
+        r.compatibility.descriptor_path.unlink()
+    elif failure == "wrong_digest":
+        r.compatibility.descriptor_sha256 = "sha256:" + "0" * 64
+    elif failure == "existing_corrupt":
+        r.store.objects[key] = b"corrupt"
+    elif failure.startswith("public_"):
+        monkeypatch.setattr(pub, "_bounded_get", lambda *a, **k: None if failure == "public_missing" else b"corrupt")
+    else:
+        with r.compatibility.descriptor_path.open("wb") as stream:
+            stream.truncate(pub.FEC_DESCRIPTOR_LIMIT + 1)
+    with pytest.raises((pub.PublicationError, FileNotFoundError)):
+        r.run()
+    assert r.store.objects[pub.INDEX_V2_KEY] == before
+    assert not any(k.startswith("generations/") for k in r.store.writes)
+
+
+def test_public_descriptor_exists_before_selection_write(release):
+    r = release
+    key = pub.fec_compatibility_key(r.observations.pin.artifact_digest,
+                                    r.prior["families"]["fec-query"]["artifactDigest"])
+
+    def before(key_being_written):
+        if key_being_written == pub.INDEX_V2_KEY:
+            assert r.store.objects[key] == r.compatibility.descriptor_path.read_bytes()
+            assert r.store.reads[key] == 1
+
+    r.store.before_put = before
+    r.run()
+    assert r.store.writes.index(key) < r.store.writes.index(pub.INDEX_V2_KEY)

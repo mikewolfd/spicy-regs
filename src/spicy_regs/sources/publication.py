@@ -69,6 +69,7 @@ EVIDENCE_WORKERS = 8
 #: captures: a 261 KB manifest and a 588 KB journal, 2026-09-26). Rulespec
 #: bounds a manifest at the same 64 MiB.
 EVIDENCE_CONTROL_LIMIT = 64 * 1024 * 1024
+FEC_DESCRIPTOR_LIMIT = 8 * 1024 * 1024
 _IMMUTABLE_HEADERS = {"ContentType": "application/octet-stream", "CacheControl": "public, max-age=31536000, immutable"}
 _BLOB_KEY = re.compile(r"blobs/sha256/([0-9a-f]{64})\Z")
 _POINTER_ATTEMPTS = 8
@@ -1297,10 +1298,42 @@ def _publish_verified_generation(
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 
 
+def fec_compatibility_key(observations_digest: str, query_digest: str) -> str:
+    """Immutable public descriptor location for one exact FEC selection."""
+    if not all(isinstance(value, str) and _DIGEST.fullmatch(value)
+               for value in (observations_digest, query_digest)):
+        raise PublicationError("FEC descriptor requires exact artifact digests")
+    return (f"fec-compatibility/v1/{observations_digest.removeprefix('sha256:')}/"
+            f"{query_digest.removeprefix('sha256:')}.json")
+
+
+def _publish_fec_descriptor(compatibility, *, observations_digest, query_digest,
+                            client, bucket: str, public_base_url: str) -> None:
+    """Deliver the checked descriptor and verify both storage and public bytes."""
+    path, digest = Path(compatibility.descriptor_path), compatibility.descriptor_sha256
+    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+        raise PublicationError("FEC descriptor requires its checked SHA-256")
+    if path.stat().st_size > FEC_DESCRIPTOR_LIMIT:
+        raise PublicationError("FEC descriptor exceeds its byte limit")
+    key = fec_compatibility_key(observations_digest, query_digest)
+    _put_immutable(client, bucket, key, path, sha256=digest)
+    response = client.get_object(Bucket=bucket, Key=key)
+    try:
+        raw = response["Body"].read(FEC_DESCRIPTOR_LIMIT + 1)
+    finally:
+        response["Body"].close()
+    if len(raw) > FEC_DESCRIPTOR_LIMIT or "sha256:" + hashlib.sha256(raw).hexdigest() != digest:
+        raise PublicationError("Stored FEC descriptor differs from its checked bytes")
+    public = _bounded_get(public_base_url.rstrip("/") + "/" + key,
+                          limit=FEC_DESCRIPTOR_LIMIT, allow_missing=False)
+    if public != raw:
+        raise PublicationError("Public FEC descriptor differs from its checked bytes")
+
+
 def publish_fec_release(
     directory: Path, *, observations_basis: dict, query_basis: dict,
-    client, bucket: str, prior_index: Mapping, evidence_directories: tuple[Path, ...] = (),
-    receipt_only_tables: frozenset[str] = frozenset(),
+    client, bucket: str, prior_index: Mapping, public_base_url: str,
+    evidence_directories: tuple[Path, ...] = (), receipt_only_tables: frozenset[str] = frozenset(),
 ) -> dict:
     """Select proved observations and the exact compatible historical query together.
 
@@ -1336,6 +1369,10 @@ def publish_fec_release(
     for family in ("fec-observations", "fec-query"):
         _assert_family_unchanged(index, prior_index, family, exact=True)
     check()
+    _publish_fec_descriptor(
+        compatibility, observations_digest=observations.pin.artifact_digest,
+        query_digest=query["artifactDigest"], client=client, bucket=bucket, public_base_url=public_base_url,
+    )
     entry = _stage_verified_generation(
         observations, LocalMemberSource(directory), client=client, bucket=bucket, index=index,
         members=observations.members, evidence_directories=evidence_directories,
