@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 
-from .fec_release_verification import digest, load_bound, signature, unchanged, _save
+from .fec_release_verification import VerifiedFecRelease, digest, load_bound, signature, unchanged, _save
 
 FORMAT = "fec-retained-query-compatibility/1"
 SERVING_FORMAT = "fec-retained-query-serving/1"
@@ -259,7 +259,7 @@ class VerifiedRetainedFecQuery:
     entry: dict
     observations_pin: object
     serving: dict
-    _observations: object
+    _observations: VerifiedFecRelease
     _bindings: tuple
     _implementation: dict
     _entry_digest: str
