@@ -1,6 +1,7 @@
 """The replacement retains exact checks while reusing complete earlier evidence."""
 import json
 from pathlib import Path
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -32,9 +33,9 @@ def assembly(tmp_path):
         'fec_source_records': [dict(collection_id='c0', source_record_id='repeated', source_family='fixture',
                                     source_sha256='sha256:'+'a'*64, source_record_json=None if i%2 else '{"v":"é"}') for i in range(4)],
     }
-    candidate = dict(guards={}, candidates={}, rows={t: 4 for t in verify.TABLES},
+    candidate: dict[str, Any] = dict(guards={}, candidates={}, rows={t: 4 for t in verify.TABLES},
                      headerSHA256='sha256:'+'b'*64, totalReceiptRows=12, receiptInputs=[])
-    context = dict(checkpoint=checkpoint, generation=generation, candidate=candidate,
+    context: dict[str, Any] = dict(checkpoint=checkpoint, generation=generation, candidate=candidate,
                    header={'generation_id': 'fixture-generation'}, old={'tables': {}}, retained={})
     position, global_offset = 0, 0
     all_receipts = []

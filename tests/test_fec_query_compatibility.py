@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -21,7 +22,7 @@ def prepared(tmp_path):
     scope = json.loads(Path(bridge.__file__).with_name("fec_query_scope.json").read_text())
     old_digest = scope["source_generation_pin"]
     old_pin = dict(logicalId="urn:spicy:artifact:spicy-regs-rollup-generation:" + "a" * 64, artifactDigest=old_digest)
-    old = dict(
+    old: dict[str, Any] = dict(
         old_pin,
         prefix="generations/fec-observations/" + old_digest[7:],
         tables={
@@ -31,7 +32,7 @@ def prepared(tmp_path):
             for t, fields in {**bridge.PRESERVED, "fec_relationships": ["record_id"]}.items()
         },
     )
-    snapshot = dict(format="spicy-regs-publication", version=2, families={"fec-observations": old})
+    snapshot: dict[str, Any] = dict(format="spicy-regs-publication", version=2, families={"fec-observations": old})
     proof = tmp_path / "observations.json"
     proof.write_text('{"fixture":"already-verified-observations"}')
     observations = SimpleNamespace(
