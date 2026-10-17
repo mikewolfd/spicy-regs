@@ -6,16 +6,21 @@ raw capture evidence, refusal/cleanup paths, and the existing table merge.
 
 from __future__ import annotations
 
-import json
+import hashlib
 import importlib
+import json
 import time
+from datetime import date
 from itertools import pairwise
 from types import SimpleNamespace
 
 import httpx
-
 import pyarrow.parquet as pq
 import pytest
+from spicy_docs.sources.fec import client as client_module
+from spicy_docs.sources.fec.client import FecClient, exclusive_run
+from spicy_docs.transport.download import HttpRefusal
+from spicy_docs.transport.resume import ResumeError
 
 from spicy_regs.transforms.build_fec_committees import (
     API_KEY_ENV_VARS,
@@ -146,7 +151,7 @@ def test_default_builder_uses_the_shared_row_writer(tmp_path, monkeypatch):
         return real_write(records, destination, batch_size=1)
 
     monkeypatch.setattr(module, "write_fec_committee_rows", write)
-    result = module.build_fec_committees(tmp_path)
+    result = module.build_fec_committees(tmp_path, capture_dir=tmp_path / "raw")
     assert calls == ["_fec_new.parquet"]
     assert pq.read_table(result).to_pylist() == [_shape(_RAW_COMMITTEE)]
 
@@ -259,6 +264,8 @@ def _records(tmp_path, payloads, **kwargs):
         value = payloads[number - 1]
         if isinstance(value, int):
             return httpx.Response(value)
+        if isinstance(value, bytes):
+            return httpx.Response(200, content=value)
         return httpx.Response(200, json=value)
 
     transport = ObservedTransport(respond)
@@ -370,7 +377,7 @@ def test_provider_exact_count_terminates_without_unnecessary_empty_request(tmp_p
                 _page([{"committee_id": "C1"}], 1, pages=2, count=2, exact=True),
                 _page([{"committee_id": "C2"}], 2, pages=2, count=3, exact=True),
             ],
-            "changed",
+            "declared count changed",
         ),
         ([_page([], 1, pages=2, count=2, exact=True)], "empty page"),
         ([{"results": []}], "pagination"),
@@ -414,7 +421,7 @@ def test_default_merge_fresh_whole_row_wins_and_prior_only_survives(tmp_path, mo
     )
     fresh = {**_RAW_COMMITTEE, "name": "FRESH", "state": None}
     monkeypatch.setattr(module, "iter_fec_committee_records", lambda **kwargs: (row for row in [fresh]))
-    result = module.build_fec_committees(tmp_path)
+    result = module.build_fec_committees(tmp_path, capture_dir=tmp_path / "raw")
     rows = pq.read_table(result).to_pylist()
     assert rows == [_shape(fresh), _shape({**_RAW_COMMITTEE, "committee_id": "C99999999", "name": "PRIOR ONLY"})]
     assert not (tmp_path / "_fec_prior.parquet").exists()
@@ -436,7 +443,7 @@ def test_builder_closes_walker_when_shaping_fails_and_preserves_output(tmp_path,
     monkeypatch.setattr(module.r2, "download", lambda *args: False)
     monkeypatch.setattr(module, "iter_fec_committee_records", invalid_rows)
     with pytest.raises((TypeError, ValueError)):
-        module.build_fec_committees(tmp_path)
+        module.build_fec_committees(tmp_path, capture_dir=tmp_path / "raw")
     assert closed == [True]
     assert target.read_bytes() == previous
 
@@ -539,5 +546,172 @@ def test_builder_reads_a_week_before_the_newest_held_filing_unless_walking_whole
         return (row for row in [_RAW_COMMITTEE])
 
     monkeypatch.setattr(module, "iter_fec_committee_records", walker)
-    module.build_fec_committees(tmp_path, full_walk=full_walk)
+    module.build_fec_committees(tmp_path, capture_dir=tmp_path / "raw", full_walk=full_walk)
     assert [None if value is None else value.isoformat() for value in seen] == [window]
+
+
+# -- Resumable walks and durable evidence ------------------------------------
+
+
+def _exact(n, *, pages=3, count=3):
+    """An exact-count page of one committee, ``C<n>``."""
+    return _page([{"committee_id": f"C{n}"}], n, pages=pages, count=count, exact=True)
+
+
+def _interrupt(tmp_path, payloads):
+    """Walk until a payload refuses, leaving that attempt on disk; return it and the requests made."""
+    records, requests, _ = _records(tmp_path, payloads)
+    with pytest.raises((ValueError, HttpRefusal)):
+        list(records)
+    return _run_path(tmp_path), requests
+
+
+def _pages_requested(requests):
+    return [int(request.url.params["page"]) for request in requests]
+
+
+def test_interrupted_walk_resumes_without_prefix_requests(tmp_path):
+    run, first = _interrupt(tmp_path, [_exact(1), _exact(2), 404])
+    assert _pages_requested(first) == [1, 2, 3]
+    failed = _run_state(tmp_path)
+    assert failed["status"] == "incomplete" and "404" in failed["failure"]["reason"] and failed["requests"] == 3
+    records, requests, _ = _records(tmp_path, [None, None, _exact(3)], resume=run)
+    assert [record["committee_id"] for record in records] == ["C1", "C2", "C3"]
+    assert _pages_requested(requests) == [3]
+    state = _run_state(tmp_path)
+    assert (state["status"], state["resumed"], state["replayed_pages"], state["requests"]) == ("complete", True, 2, 1)
+    assert (state["pages"], state["records"], state["failure"]) == (3, 3, None)
+    (previous,) = state["previous_runs"]
+    assert previous["status"] == "incomplete" and "404" in previous["failure"]["reason"]
+    assert len((run / "pages.jsonl").read_text().splitlines()) == 3
+    assert json.loads((run / "checkpoint.json").read_text())["complete"] is True
+    _assert_credential_free(tmp_path)
+
+
+@pytest.mark.parametrize("change", ["query", "reader", "population"])
+def test_resume_refuses_changed_query_reader_or_population(tmp_path, monkeypatch, change):
+    run, _ = _interrupt(tmp_path, [_exact(1), _exact(2), 404])
+    options = {"min_last_file_date": date(2026, 9, 18)} if change == "query" else {}
+    if change == "reader":
+        monkeypatch.setattr(client_module, "_reader_sha256", lambda: "sha256:" + "1" * 64)
+    third = _exact(3, count=4) if change == "population" else _exact(3)
+    records, requests, _ = _records(tmp_path, [None, None, third], resume=run, **options)
+    with pytest.raises(ResumeError, match="declared count changed" if change == "population" else "selection changed"):
+        list(records)
+    assert _pages_requested(requests) == ([3] if change == "population" else [])
+    state = _run_state(tmp_path)
+    assert state["status"] == "incomplete" and state["failure"] and len(state["previous_runs"]) == 1
+
+
+def test_resume_needs_a_retained_attempt_and_creates_nothing_otherwise(tmp_path):
+    records, requests, _ = _records(tmp_path, [_exact(1)], resume=tmp_path / "typo")
+    with pytest.raises(ValueError, match="not a retained committee attempt"):
+        list(records)
+    assert requests == [] and list(tmp_path.iterdir()) == []
+
+
+def test_second_owner_is_refused_without_touching_the_attempt(tmp_path):
+    run, _ = _interrupt(tmp_path, [_exact(1), _exact(2), 404])
+    before = (run / "run.json").read_bytes()
+    with exclusive_run(run):
+        records, requests, _ = _records(tmp_path, [None, None, _exact(3)], resume=run)
+        with pytest.raises(ResumeError, match="owned"):
+            list(records)
+    assert requests == [] and (run / "run.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_terminal_refusal_is_recorded_and_resumable(tmp_path, status):
+    run, first = _interrupt(tmp_path, [_exact(1, pages=2, count=2), status])
+    failure = _run_state(tmp_path)["failure"]
+    assert f"HTTP {status}" in failure["reason"]
+    # The refused request is recorded; a refusal carries no body to keep.
+    assert failure["refusal"]["request_key"] == str(first[-1].url) and "sha256" not in failure["refusal"]
+    checkpoint = json.loads((run / "checkpoint.json").read_text())
+    assert checkpoint["failures"][-1]["pending_url"] == str(first[-1].url) and not checkpoint["complete"]
+    _assert_credential_free(tmp_path)
+    records, requests, _ = _records(tmp_path, [None, _exact(2, pages=2, count=2)], resume=run)
+    assert [record["committee_id"] for record in records] == ["C1", "C2"]
+    assert _pages_requested(requests) == [2]
+
+
+def test_completed_attempt_replays_offline(tmp_path):
+    records, _, _ = _records(tmp_path, [_exact(1), _exact(2), _exact(3)])
+    assert len(list(records)) == 3
+    run = _run_path(tmp_path)
+    records, requests, _ = _records(tmp_path, [500, 500, 500], resume=run)
+    assert [record["committee_id"] for record in records] == ["C1", "C2", "C3"]
+    state = _run_state(tmp_path)
+    assert requests == [] and (state["status"], state["replayed_pages"], state["requests"]) == ("complete", 3, 0)
+
+
+def test_parse_refusal_bytes_are_retained(tmp_path):
+    bad = b"{not-json"
+    records, _, _ = _records(tmp_path, [_exact(1), bad])
+    with pytest.raises(ValueError):
+        list(records)
+    refusal = _run_state(tmp_path)["failure"]["refusal"]
+    digest = hashlib.sha256(bad).hexdigest()
+    assert refusal["sha256"] == "sha256:" + digest and refusal["stage"] == "source-validation"
+    assert (_run_path(tmp_path) / "blobs" / "sha256" / digest).read_bytes() == bad
+
+
+def test_a_response_echoing_the_key_is_never_retained(tmp_path):
+    echo = b'{"results": [], "note": "' + _KEY.encode() + b'"}'
+    records, _, _ = _records(tmp_path, [_exact(1), echo])
+    with pytest.raises(RuntimeError, match="echoed"):
+        list(records)
+    # The transport refuses the echo before any body is kept, so only the refused request is recorded.
+    assert "sha256" not in _run_state(tmp_path)["failure"]["refusal"]
+    assert len(list((_run_path(tmp_path) / "blobs" / "sha256").glob("*"))) == 1  # page 1 only
+    _assert_credential_free(tmp_path)
+
+
+def _inject_transport(monkeypatch, payloads):
+    """Run the builder's own ``FecClient`` over a mock OpenFEC serving ``payloads`` by page number."""
+
+    def respond(request):
+        value = payloads[int(request.url.params["page"]) - 1]
+        if isinstance(value, bytes):
+            return httpx.Response(200, content=value)
+        return httpx.Response(200, json=value)
+
+    class Injected(FecClient):
+        def __init__(self, *, store, **options):
+            options.update(transport=httpx.MockTransport(respond), min_interval=0)
+            super().__init__(store=store, **options)
+
+    monkeypatch.setattr(client_module, "FecClient", Injected)
+
+
+@pytest.mark.parametrize("outcome", ["success", "parse-failure", "mapping-failure"])
+def test_rollup_wrapper_keeps_committee_raw_outside_staging(tmp_path, monkeypatch, outcome):
+    from spicy_regs.transforms.build_fec_identity_rollup import build_fec_identity_rollup
+
+    module = importlib.import_module("spicy_regs.transforms.build_fec_committees")
+    monkeypatch.setenv("DATA_GOV_API_KEY", _KEY)
+    second = b"{not-json" if outcome == "parse-failure" else _exact(2, pages=2, count=2)
+    _inject_transport(monkeypatch, [_exact(1, pages=2, count=2), second])
+    if outcome == "mapping-failure":
+
+        def refuse(doc):
+            raise ValueError("mapping refused")
+
+        monkeypatch.setattr(module, "_shape", refuse)
+    out = tmp_path / "out"
+    if outcome == "success":
+        build_fec_identity_rollup("fec_committees", out, generation_id="g", full_walk=True)
+    else:
+        with pytest.raises(ValueError):
+            build_fec_identity_rollup("fec_committees", out, generation_id="g", full_walk=True)
+    (run,) = tmp_path.glob("out.inputs/raw/committees-*")
+    assert {path.name for path in run.iterdir()} >= {"run.json", "checkpoint.json", "selection.json", "pages.jsonl", "blobs"}
+    # A mapping refusal stops at the first page; a parse refusal also keeps the refused page's bytes.
+    assert len(list((run / "blobs" / "sha256").iterdir())) == {"success": 2, "parse-failure": 2, "mapping-failure": 1}[outcome]
+    assert not list(tmp_path.glob(".fec-identity-producer-*"))
+    status = json.loads((run / "run.json").read_text())["status"]
+    assert status == ("complete" if outcome == "success" else "incomplete")
+    assert out.exists() == (outcome == "success")
+    for path in tmp_path.rglob("*"):
+        if path.is_file():
+            assert _KEY.encode() not in path.read_bytes()

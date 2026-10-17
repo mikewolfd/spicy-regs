@@ -100,7 +100,7 @@ the maintainers publish.
   this.
 - The default suite is hermetic. An autouse `isolate_env` fixture in
   `tests/conftest.py` also strips `R2_*`, `SPICY_REGS_*`, `CLOUDFLARE_*`,
-  `AWS_*`, `AGENCIES`, and the API keys as defence in depth. If a test genuinely
+  `AWS_*`, `FEC_*`, `AGENCIES`, and the API keys as defence in depth. If a test genuinely
   needs real credentials or the network, mark it `@pytest.mark.integration` — the
   fixture exempts those, and they're deselected by default.
 

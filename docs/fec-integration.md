@@ -129,9 +129,13 @@ For each added collection:
 6. Record local validation and public availability separately.
 
 Failed collection builds leave earlier generations available. New attempts use
-their own output generation. Committee acquisition retains each attempt's raw
-responses and status; set `FEC_CAPTURE_DIR` to durable storage for scheduled
-jobs. An interrupted or bounded traversal remains incomplete.
+their own output generation. The committee walk and the candidate and committee
+history builds retain each attempt's raw responses and status under
+`FEC_CAPTURE_DIR` when set, otherwise `<output>.inputs/raw`; set it to durable
+storage for scheduled jobs. A history attempt keeps a `selection.json` that
+rebuilds the table offline; a committee attempt keeps a checkpoint that
+`--resume` continues without re-requesting committed pages. An interrupted or
+bounded traversal remains incomplete.
 The existing committee workflow retains that evidence as a GitHub Actions
 artifact for 30 days on successful and failed runs; longer retention needs
 durable storage outside the disposable runner.

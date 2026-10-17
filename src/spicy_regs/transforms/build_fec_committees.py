@@ -9,8 +9,9 @@ a prior table the daily run reads only committees whose ``last_file_date`` is
 within ``DELTA_DAYS`` of the newest one held (owner decision 53: a few pages, not
 the 897-page registry); ``full_walk`` reads the whole registry, which the weekly
 run does for committees that change without a filing. Prior-only rows remain observed coverage; the result is not a frozen
-publisher snapshot. Raw capture evidence is retained separately, and failures
-leave any previous output intact.
+publisher snapshot. Raw capture evidence is retained separately, in a caller-chosen
+durable ``capture_dir`` (the receipt wrapper allocates it), and failures leave any
+previous output intact.
 
 Call ``write_fec_committee_rows`` for an explicit retained-record slice. Its caller
 owns input verification, provenance and coverage. That path makes no HTTP request
@@ -20,7 +21,6 @@ or publication and does not merge an independently moving prior table.
 from __future__ import annotations
 
 import json
-import os
 import time
 from collections.abc import Generator, Iterable
 from datetime import date, timedelta
@@ -35,6 +35,7 @@ from loguru import logger
 
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
+from spicy_regs.transforms.fec_master_history import write_json
 from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -128,10 +129,11 @@ def write_fec_committee_rows(records: Iterable[dict], destination: Path, *, batc
 
 def iter_fec_committee_records(
     *,
+    capture_dir: Path,
+    resume: Path | None = None,
     per_page: int = PER_PAGE,
     max_pages: int | None = None,
     api_key: str | None = None,
-    capture_dir: Path | None = None,
     transport: httpx.BaseTransport | None = None,
     min_interval: float = _MIN_INTERVAL,
     min_last_file_date: date | None = None,
@@ -143,11 +145,17 @@ def iter_fec_committee_records(
     that identifiers advance without duplication, and retains a per-run page index.
     Only normal iterator exhaustion completes an acquisition. Missing credentials,
     page bounds, changed exact counts, failed requests and a walk still unfinished
-    at the run deadline refuse the run; each attempt restarts from page one.
+    at the run deadline refuse the run.
 
-    Set ``FEC_CAPTURE_DIR`` or pass ``capture_dir`` to keep raw evidence outside the
-    build directory. Each attempt gets its own directory; incomplete attempts remain
-    marked incomplete. Source traversal is not a frozen publisher snapshot.
+    Each new attempt gets its own directory under ``capture_dir`` (unused when
+    resuming), held by an exclusive lock for the whole walk. It keeps the SpicyDocs
+    traversal checkpoint, the blobs, the page index and ``run.json``. A refused
+    attempt stays marked incomplete and records a scrubbed ``failure``: the reason
+    and, when the refused bytes are safe to keep, their digest. Pass that attempt's
+    directory as ``resume`` to continue it: committed pages replay from its blobs
+    with no request, then the walk goes on live. A changed query, reader code,
+    declared exact count or retained byte, or a second owner, refuses. Source
+    traversal is not a frozen publisher snapshot.
     """
     if type(per_page) is not int or per_page <= 0:
         raise ValueError("per_page must be a positive integer")
@@ -159,7 +167,10 @@ def iter_fec_committee_records(
     if not api_key:
         raise ValueError("FEC committees require an API key; no complete acquisition was attempted")
     try:
-        from spicy_docs.sources.fec.client import FecClient
+        from spicy_docs.reading.refusals import retain_refused_response
+        from spicy_docs.sources.fec.catalog import MAX_METADATA_BYTES
+        from spicy_docs.sources.fec.client import FecClient, exclusive_run
+        from spicy_docs.transport.credentials import failure_reason
     except ModuleNotFoundError as error:
         if error.name == "spicy_docs":
             raise RuntimeError(
@@ -172,10 +183,16 @@ def iter_fec_committee_records(
         params["min_last_file_date"] = min_last_file_date.isoformat()
 
     def records() -> Generator[dict, None, None]:
-        capture_path = Path(capture_dir or os.environ.get("FEC_CAPTURE_DIR", ".fec-captures"))
-        capture_path.mkdir(parents=True, exist_ok=True)
-        run_path = Path(mkdtemp(prefix="committees-", dir=capture_path))
-        state = {
+        if resume is not None:
+            run_path = Path(resume)
+            # Checked before the lock exists, so a mistyped path creates nothing.
+            if not (run_path / "checkpoint.json").is_file():
+                raise ValueError(f"{resume} is not a retained committee attempt (no checkpoint.json)")
+        else:
+            Path(capture_dir).mkdir(parents=True, exist_ok=True)
+            run_path = Path(mkdtemp(prefix="committees-", dir=capture_dir))
+        run_file = run_path / "run.json"
+        state: dict = {
             "status": "incomplete",
             "source": API_BASE + "/committees/",
             "params": params,
@@ -185,76 +202,97 @@ def iter_fec_committee_records(
             "pages": 0,
             "records": 0,
             "declared_exact_count": None,
+            "resumed": resume is not None,
+            "replayed_pages": 0,
+            "requests": 0,
+            "failure": None,
         }
-        (run_path / "run.json").write_text(json.dumps(state, indent=2) + "\n")
         previous_id = None
-        deadline = time.monotonic() + _DEADLINE_SECONDS
-        try:
-            with (
-                FecClient(
-                    store=run_path / "blobs",
-                    api_key=api_key,
-                    # Includes room for the provider's three attempts and redirects;
-                    # exhausting either request or page budget refuses acquisition.
-                    max_requests=bound * 12,
-                    min_interval=min_interval,
-                    transport=transport,
-                ) as client,
-                (run_path / "pages.jsonl").open("w") as index,
-            ):
-                for page in client.api("/v1/committees/", params=params, max_pages=bound):
-                    state["pages"] += 1
-                    index.write(
-                        json.dumps(
-                            {
-                                key: page[key]
-                                for key in (
-                                    "request_url",
-                                    "resolved_url",
-                                    "observed_at",
-                                    "media_type",
-                                    "via",
-                                    "evidence",
-                                    "next_url",
+        with exclusive_run(run_path):
+            if resume is not None and run_file.exists():
+                previous = json.loads(run_file.read_text())
+                state["previous_runs"] = [*previous.pop("previous_runs", []), previous]
+            write_json(run_file, state)
+            deadline = time.monotonic() + _DEADLINE_SECONDS
+            try:
+                with (
+                    FecClient(
+                        store=run_path / "blobs",
+                        api_key=api_key,
+                        # Includes room for the provider's three attempts and redirects;
+                        # exhausting either request or page budget refuses acquisition.
+                        max_requests=bound * 12,
+                        min_interval=min_interval,
+                        transport=transport,
+                    ) as client,
+                    (run_path / "pages.jsonl").open("a") as index,
+                ):
+                    try:
+                        for page in client.api("/v1/committees/", params=params, max_pages=bound, resume_dir=run_path):
+                            state["pages"] += 1
+                            if page["via"] == "retained-checkpoint":
+                                state["replayed_pages"] += 1
+                            else:
+                                index.write(
+                                    json.dumps(
+                                        {
+                                            key: page[key]
+                                            for key in (
+                                                "request_url",
+                                                "resolved_url",
+                                                "observed_at",
+                                                "media_type",
+                                                "via",
+                                                "evidence",
+                                                "next_url",
+                                            )
+                                        }
+                                        | {"records": len(page["records"])}
+                                    )
+                                    + "\n"
                                 )
-                            }
-                            | {"records": len(page["records"])}
-                        )
-                        + "\n"
-                    )
-                    index.flush()
-                    pagination = page["pagination"]
-                    if pagination.get("is_count_exact") is True:
-                        count = pagination.get("count")
-                        if type(count) is not int or count < 0:
-                            raise ValueError("FEC exact committee count must be a nonnegative integer")
-                        if state["declared_exact_count"] not in (None, count):
-                            raise ValueError("FEC exact committee count changed during traversal")
-                        state["declared_exact_count"] = count
-                    for observation in page["records"]:
-                        record = observation["metadata"]
-                        if not isinstance(record, dict):
-                            raise ValueError("FEC committee record must be an object")
-                        committee_id = record.get("committee_id")
-                        if not isinstance(committee_id, str) or not committee_id:
-                            raise ValueError("FEC committee record omitted its identifier")
-                        if previous_id is not None and committee_id <= previous_id:
-                            raise ValueError("FEC committee identifiers repeated or ceased increasing")
-                        previous_id = committee_id
-                        state["records"] += 1
-                        if state["records"] % _PROGRESS_EVERY == 0:
-                            logger.info("FEC committees: {:,} observed so far", state["records"])
-                        yield record
-                    if page["next_url"] is not None and time.monotonic() > deadline:
-                        raise TimeoutError(
-                            f"FEC committees traversal passed its {_DEADLINE_SECONDS // 60}-minute deadline "
-                            f"after {state['pages']:,} pages; the attempt is incomplete"
-                        )
-                if state["declared_exact_count"] not in (None, state["records"]):
-                    raise ValueError("FEC observed committees disagree with the declared exact count")
-                state["status"] = "complete"
-        finally:
-            (run_path / "run.json").write_text(json.dumps(state, indent=2) + "\n")
+                                index.flush()
+                            pagination = page["pagination"]
+                            if pagination.get("is_count_exact") is True:
+                                count = pagination.get("count")
+                                if type(count) is not int or count < 0:
+                                    raise ValueError("FEC exact committee count must be a nonnegative integer")
+                                # The checkpoint refuses any change of this count across replayed and live pages.
+                                state["declared_exact_count"] = count
+                            for observation in page["records"]:
+                                record = observation["metadata"]
+                                if not isinstance(record, dict):
+                                    raise ValueError("FEC committee record must be an object")
+                                committee_id = record.get("committee_id")
+                                if not isinstance(committee_id, str) or not committee_id:
+                                    raise ValueError("FEC committee record omitted its identifier")
+                                if previous_id is not None and committee_id <= previous_id:
+                                    raise ValueError("FEC committee identifiers repeated or ceased increasing")
+                                previous_id = committee_id
+                                state["records"] += 1
+                                if state["records"] % _PROGRESS_EVERY == 0:
+                                    logger.info("FEC committees: {:,} observed so far", state["records"])
+                                yield record
+                            if page["next_url"] is not None and time.monotonic() > deadline:
+                                raise TimeoutError(
+                                    f"FEC committees traversal passed its {_DEADLINE_SECONDS // 60}-minute deadline "
+                                    f"after {state['pages']:,} pages; the attempt is incomplete"
+                                )
+                        if state["declared_exact_count"] not in (None, state["records"]):
+                            raise ValueError("FEC observed committees disagree with the declared exact count")
+                        state["status"] = "complete"
+                    finally:
+                        state["requests"] = client.http.request_count
+            except Exception as error:
+                state["failure"] = {
+                    "reason": failure_reason(error, api_key),
+                    "refusal": retain_refused_response(
+                        error, store=run_path / "blobs", max_bytes=MAX_METADATA_BYTES, credential=api_key
+                    ),
+                }
+                raise
+            finally:
+                write_json(run_file, state)
         logger.info("FEC committees: {:,} observed; evidence at {}", state["records"], run_path)
 
     return records()
@@ -272,12 +310,14 @@ def _prior_max_last_file_date(prior_file: Path) -> date | None:
         return None
 
 
-def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None, full_walk: bool = False) -> Path:
-    """Merge a completed walk; retain evidence under ``FEC_CAPTURE_DIR`` or locally.
+def build_fec_committees(
+    output_dir: Path, *, capture_dir: Path, full_walk: bool = False, resume: Path | None = None
+) -> Path:
+    """Merge a completed walk; retain its raw evidence under ``capture_dir``.
 
-    An explicit ``capture_dir`` wins over the environment setting. Otherwise the
-    default is ``output_dir/.fec-captures``; callers should select durable storage
-    when their build directory is temporary.
+    ``capture_dir`` is durable storage the caller chose (the receipt wrapper
+    allocates it outside this build directory). ``resume`` continues a refused
+    attempt directory found there; see ``iter_fec_committee_records``.
     """
     import duckdb
 
@@ -294,10 +334,7 @@ def build_fec_committees(output_dir: Path, *, capture_dir: Path | None = None, f
     newest = None if full_walk or not have_prior else _prior_max_last_file_date(prior_file)
     since = None if newest is None else newest - timedelta(days=DELTA_DAYS)
     logger.info("FEC committees: {}", "whole registry" if since is None else f"committees filed since {since}")
-    records = iter_fec_committee_records(
-        capture_dir=capture_dir or Path(os.environ.get("FEC_CAPTURE_DIR", output_dir / ".fec-captures")),
-        min_last_file_date=since,
-    )
+    records = iter_fec_committee_records(capture_dir=capture_dir, resume=resume, min_last_file_date=since)
     # Closing also handles a row-shaping/Arrow failure while acquisition is
     # suspended at a yield, leaving its run marked incomplete and HTTP closed.
     with closing(records) as source:

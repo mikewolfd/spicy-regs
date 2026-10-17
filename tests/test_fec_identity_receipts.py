@@ -3,6 +3,7 @@ import json
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_regs.transforms.build_fec_identity_rollup import BUILDERS
 from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
 from spicy_regs.transforms.fec_identity_receipts import (
     IdentityReceiptWriter,
@@ -326,7 +327,7 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
     calls = []
 
     def producer(stage, **kwargs):
-        calls.append(stage)
+        calls.append(kwargs)
         held = pq.read_table(stage / "_fec_prior.parquet").to_pylist()[0]
         assert held["cycles_json"] == "[2024, 2024]"
         assert held["candidate_ids_json"] == "null"
@@ -344,9 +345,12 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
             table, tmp_path / "wrong", generation_id="g", prior_bundle=prior, prior_generation_id=""
         )
     assert not calls
+    # A refused call leaves no custody directory, so the corrected retry to the same output is not blocked.
+    assert not (tmp_path / "absent.inputs").exists() and not (tmp_path / "wrong.inputs").exists()
     output = build_fec_identity_rollup(
         table, tmp_path / "next", generation_id="next-g", prior_bundle=prior, prior_generation_id="prior-g"
     )
+    assert calls == [{"capture_dir": (tmp_path / "next.inputs" / "raw").resolve()}]
     subject = pq.read_table(output / "fec_committees.parquet").to_pylist()[0]
     assert subject["cycles"] == [2024, 2024]
     assert subject["candidate_ids"] is None
@@ -357,6 +361,126 @@ def test_committee_increment_requires_exact_prior_receipts_before_producer(tmp_p
     assert after["witnesses"][: len(before["witnesses"])] == before["witnesses"]
     reference = next(w for w in after["witnesses"] if w["body_version"] == before["receipt_id"])
     assert resolve_receipt_witness(after, reference)
+
+
+def _stub_producer(monkeypatch, table, *, fail=False):
+    """Replace one table's producer with a stub that files a raw original in ``capture_dir``, then builds or fails."""
+    import importlib
+
+    import pyarrow as pa
+
+    module, function = BUILDERS[table]
+    calls = []
+
+    def producer(stage, **kwargs):
+        calls.append(kwargs)
+        if "capture_dir" in kwargs:
+            (kwargs["capture_dir"]).mkdir(parents=True, exist_ok=True)
+            (kwargs["capture_dir"] / "original.bin").write_bytes(b"raw acquisition evidence")
+        if fail:
+            raise RuntimeError("producer failed")
+        built = stage / (table + ".parquet")
+        pq.write_table(pa.table({c: pa.array([], pa.string()) for c in REGISTRY[table]["input_fields"]}), built)
+        return built
+
+    monkeypatch.setattr(importlib.import_module("spicy_regs.transforms." + module), function, producer)
+    return calls
+
+
+ACQUIRING_TABLES = ["fec_committees", "fec_candidate_history", "fec_committee_history"]
+
+
+def _rollup(table, output, **options):
+    from spicy_regs.transforms.build_fec_identity_rollup import build_fec_identity_rollup
+
+    if table == "fec_committees":
+        options.setdefault("full_walk", True)
+    return build_fec_identity_rollup(table, output, generation_id="g", **options)
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["success", "failure"])
+@pytest.mark.parametrize("table", ACQUIRING_TABLES)
+def test_acquiring_producers_get_durable_storage(tmp_path, monkeypatch, table, fail):
+    calls = _stub_producer(monkeypatch, table, fail=fail)
+
+    def run(output, **options):
+        if fail:
+            with pytest.raises(RuntimeError, match="producer failed"):
+                _rollup(table, output, **options)
+        else:
+            _rollup(table, output, **options)
+        return calls[-1]["capture_dir"]
+
+    def recorded(name):
+        return json.loads((tmp_path / f"{name}.inputs" / "acquisition.json").read_text())
+
+    default = run(tmp_path / "default")
+    assert default == (tmp_path / "default.inputs" / "raw").resolve()
+    assert recorded("default") == {"route": "refresh", "capture_dir": str(default)}
+    monkeypatch.setenv("FEC_CAPTURE_DIR", str(tmp_path / "from-env"))
+    assert run(tmp_path / "env") == (tmp_path / "from-env").resolve()
+    assert recorded("env") == {"route": "refresh", "capture_dir": str((tmp_path / "from-env").resolve())}
+    assert run(tmp_path / "explicit", capture_dir=tmp_path / "chosen") == (tmp_path / "chosen").resolve()
+    assert recorded("explicit") == {"route": "refresh", "capture_dir": str((tmp_path / "chosen").resolve())}
+    monkeypatch.setenv("FEC_CAPTURE_DIR", "")
+    assert run(tmp_path / "blank-env") == (tmp_path / "blank-env.inputs" / "raw").resolve()
+    # The raw file outlives the build and its staging directory, on success and on failure alike.
+    for directory in (default, tmp_path / "from-env", tmp_path / "chosen"):
+        assert (directory / "original.bin").read_bytes() == b"raw acquisition evidence"
+    assert not list(tmp_path.glob(".fec-identity-producer-*"))
+    before = len(calls)
+    with pytest.raises(ValueError, match="inside the receipt bundle"):
+        _rollup(table, tmp_path / "inside", capture_dir=tmp_path / "inside" / "raw")
+    assert len(calls) == before and not (tmp_path / "inside.inputs").exists()
+
+
+def test_selection_and_resume_routes_are_table_specific_and_name_their_originals(tmp_path, monkeypatch):
+    import hashlib
+
+    selection = tmp_path / "attempt" / "selection.json"
+    selection.parent.mkdir()
+    selection.write_bytes(b'{"retained": "selection"}')
+    resume = tmp_path / "committees-attempt"
+    resume.mkdir()
+    (resume / "checkpoint.json").write_text("{}")
+    history = _stub_producer(monkeypatch, "fec_candidate_history")
+    _rollup("fec_candidate_history", tmp_path / "rebuilt", selection=selection)
+    # A rebuild acquires nothing, so no raw storage is allocated; the bundle names the selection it consumed.
+    assert history == [{"selection": selection.resolve()}]
+    digest = "sha256:" + hashlib.sha256(selection.read_bytes()).hexdigest()
+    assert json.loads((tmp_path / "rebuilt.inputs" / "acquisition.json").read_text()) == {
+        "route": "selection",
+        "selection": {"path": str(selection.resolve()), "sha256": digest},
+    }
+    assert not (tmp_path / "rebuilt.inputs" / "raw").exists()
+    committees = _stub_producer(monkeypatch, "fec_committees")
+    _rollup("fec_committees", tmp_path / "resumed", resume=resume)
+    capture = (tmp_path / "resumed.inputs" / "raw").resolve()
+    assert committees == [{"full_walk": True, "resume": resume.resolve(), "capture_dir": capture}]
+    assert json.loads((tmp_path / "resumed.inputs" / "acquisition.json").read_text()) == {
+        "route": "resume",
+        "capture_dir": str(capture),
+        "resume": str(resume.resolve()),
+    }
+    # None means "not given", exactly as the command line passes it.
+    _rollup("fec_committees", tmp_path / "unset", selection=None)
+    _rollup("fec_candidate_history", tmp_path / "unset-resume", resume=None)
+    calls = len(history) + len(committees)
+    for table, name, options, match in (
+        ("fec_committees", "selection-on-committees", {"selection": selection}, "only the candidate and committee"),
+        ("fec_source_catalog", "selection-on-catalog", {"selection": selection}, "only the candidate and committee"),
+        ("fec_candidate_history", "resume-on-candidates", {"resume": resume}, "only a committee walk"),
+        ("fec_committee_history", "resume-on-committee-history", {"resume": resume}, "only a committee walk"),
+        ("fec_candidate_history", "selection-and-capture", {"selection": selection, "capture_dir": tmp_path}, "acquires nothing"),
+        ("fec_committee_history", "selection-and-evidence", {"selection": selection, "evidence": object()}, "acquires nothing"),
+        ("fec_candidate_history", "missing-selection", {"selection": tmp_path / "nowhere.json"}, "missing or unreadable"),
+        ("fec_committees", "missing-resume", {"resume": tmp_path / "typo"}, "not a retained committee attempt"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            _rollup(table, tmp_path / name, **options)
+        # A refused call leaves no custody directory, so the corrected retry to the same output works.
+        assert not (tmp_path / f"{name}.inputs").exists()
+    assert len(history) + len(committees) == calls
 
 
 def test_committee_history_parent_restores_the_rows_its_builder_wrote(tmp_path, monkeypatch):

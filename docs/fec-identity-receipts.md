@@ -41,8 +41,24 @@ receipt writer. Committee increments require `--prior-bundle` and
 `--prior-generation-id`; an initial build requires `--full-walk`. The internal
 reader validates the prior subject content and receipt generation before making
 processing fields available. An absent or ambiguous receipt never becomes a
-legacy-table fallback. Local source acquisition remains the existing producer's
-responsibility; the retained-manifest path performs no network reads.
+legacy-table fallback. The committee walk and the two bulk master histories acquire
+from the publisher; the retained-manifest path performs no network reads.
+
+Those three producers keep their raw originals in one durable directory, which
+survives a successful build, a parser failure and a mapping failure: the
+`FEC_CAPTURE_DIR` environment variable when set, otherwise `<output-dir>.inputs/raw`
+(never inside the bundle). A history refresh writes a new
+`fec-<candidate|committee>-master-*/` attempt there, with its blobs and a
+`selection.json` that records each download as it lands. `--selection PATH`
+rebuilds a history table from such a complete `selection.json` with no HTTP: it
+must name every cycle from 1980 through its closing cycle exactly once, and each
+original is re-checked by digest, size, header and row. A refresh always
+downloads; it never assumes an old URL is unchanged. `--resume DIR` continues a
+refused committee attempt directory (`committees-*/`): committed pages replay from
+its blobs without requests, and a changed query, reader, count or retained byte
+refuses. Each of these bundles records the originals it used in
+`<output-dir>.inputs/acquisition.json`: the route (`refresh`, `selection` or
+`resume`), the raw directory, and for a rebuild the selection's path and SHA-256.
 
 `seal_identity_context` binds the local subjects and receipt member into the
 existing immutable generation format with `local-partial` status. It neither

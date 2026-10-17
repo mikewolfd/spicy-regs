@@ -23,9 +23,19 @@ def rollup(
     prior_bundle: Path | None = None,
     prior_generation_id: str | None = None,
     full_walk: bool = False,
+    selection: Path | None = None,
+    resume: Path | None = None,
 ):
-    """Run a named maintained producer into a local subject/receipt bundle."""
-    options = {"full_walk": full_walk} if table == "fec_committees" else {}
+    """Run a named maintained producer into a local subject/receipt bundle.
+
+    ``selection`` is a retained candidate/committee master ``selection.json``: the history table is rebuilt from it
+    with no download. ``resume`` is an existing committee attempt directory to continue.
+    """
+    options: dict[str, object] = {"full_walk": full_walk} if table == "fec_committees" else {}
+    if selection is not None:
+        options["selection"] = selection
+    if resume is not None:
+        options["resume"] = resume
     build_fec_identity_rollup(
         table,
         output_dir,
