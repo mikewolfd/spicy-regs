@@ -22,6 +22,7 @@ from spicy_docs.sources.fec.client import FecClient, exclusive_run
 from spicy_docs.transport.download import HttpRefusal
 from spicy_docs.transport.resume import ResumeError
 
+from spicy_docs.transport.resume import TraversalCheckpoint
 from spicy_regs.transforms.build_fec_committees import (
     API_KEY_ENV_VARS,
     COLUMNS,
@@ -312,6 +313,13 @@ def _run_path(tmp_path):
     return path
 
 
+def _checkpoint_state(run):
+    """Fold the attempt's append-only checkpoint journal, as the next resume would (a header plus event lines)."""
+    path = run / "checkpoint.json"
+    header = json.loads(path.read_text().splitlines()[0])
+    return TraversalCheckpoint(path, selection_sha256=header["selection_sha256"], first_url=header["first_url"]).state
+
+
 def _run_state(tmp_path):
     """The walker's captured ``run.json`` state for the last attempt."""
     return json.loads((_run_path(tmp_path) / "run.json").read_text())
@@ -584,7 +592,7 @@ def test_interrupted_walk_resumes_without_prefix_requests(tmp_path):
     (previous,) = state["previous_runs"]
     assert previous["status"] == "incomplete" and "404" in previous["failure"]["reason"]
     assert len((run / "pages.jsonl").read_text().splitlines()) == 3
-    assert json.loads((run / "checkpoint.json").read_text())["complete"] is True
+    assert _checkpoint_state(run)["complete"] is True
     _assert_credential_free(tmp_path)
 
 
@@ -627,7 +635,7 @@ def test_terminal_refusal_is_recorded_and_resumable(tmp_path, status):
     assert f"HTTP {status}" in failure["reason"]
     # The refused request is recorded; a refusal carries no body to keep.
     assert failure["refusal"]["request_key"] == str(first[-1].url) and "sha256" not in failure["refusal"]
-    checkpoint = json.loads((run / "checkpoint.json").read_text())
+    checkpoint = _checkpoint_state(run)
     assert checkpoint["failures"][-1]["pending_url"] == str(first[-1].url) and not checkpoint["complete"]
     _assert_credential_free(tmp_path)
     records, requests, _ = _records(tmp_path, [None, _exact(2, pages=2, count=2)], resume=run)

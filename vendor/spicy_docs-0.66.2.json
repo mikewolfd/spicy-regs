@@ -1,0 +1,11 @@
+{
+  "filename": "spicy_docs-0.66.2-py3-none-any.whl",
+  "version": "0.66.2",
+  "sha256": "74094743267172439795e0ac53c5ee5a7798dabaeac794aac6f4699127884416",
+  "byte_size": 2626834,
+  "source_commit": "bc371f522335dc48b39c9c6c9a9880c8e5e929b2",
+  "source_state": "Commit bc371f52 on the fork's main branch of spicy-docs",
+  "build": "release wheel of the source commit, built offline",
+  "scope": "Append-only FEC traversal checkpoint (TraversalCheckpoint journal: a header plus event lines) on top of 0.66.0's bounded response reads, retained-capture reuse and resumable OpenFEC traversal; no catalogue selection, acquisition or publication change",
+  "other_consumers": "DocSpec, Engine and Search do not consume these APIs and are unchanged"
+}

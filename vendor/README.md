@@ -5,6 +5,11 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.66.2`: built from spicy-docs fork main at `bc371f52`; SHA-256
+  `74094743267172439795e0ac53c5ee5a7798dabaeac794aac6f4699127884416`. It makes the
+  OpenFEC traversal checkpoint append-only. Earlier wheels remain retained; see
+  `spicy_docs-0.66.2.json`.
+
 - `spicy_docs-0.66.0`: built from spicy-docs `simplify-20261016` at `3fc47e35`
   (base `743288d0`, 0.65.0); SHA-256
   `0ba69d888f5a8d8e918360407d4801d308317c465664d0f1d43a165839e428dc`. It adds
