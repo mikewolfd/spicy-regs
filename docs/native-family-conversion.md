@@ -183,8 +183,9 @@ has been checked for outside readers.
 `bill-subjects` converts through the hosted workflow. `congress_bills` is
 native (the `bill-family` generation carries receipts), so its scheduled
 rollup can read it, and its scheduled rollup refuses until this runs once.
-Its published evidence predates `evidence_version` 2, so run it only on a main
-whose conversion hands on nothing from such a journal.
+Its published evidence carries no `evidence_version`; converting it needs
+f4dc7227 (pre-v2 evidence is left behind, nothing handed on, version 2 written)
+on main.
 
 1. Digest of the family entry, with `R2_PUBLIC_URL` set:
    `uv run --frozen python -c "import os; from scripts.native_conversion_invocation import entry_digest;
@@ -203,12 +204,14 @@ whose conversion hands on nothing from such a journal.
    listing `bill_subjects`, and its evidence input reads (`publication.load_evidence_journal`
    refuses anything but current completed evidence).
 5. Dispatch `rollup-bill-subjects.yml` with `skip_upload=true`; it must pass
-   the selection that refused every night since 2026-10-05, then let the 21:15Z
+   the selection that refused every night since 2026-10-04 (on `congress_bills` until 10-06, then `bill_subjects`), then let the 21:15Z
    schedule publish.
 
 `lobbying-filings` is not converted by this command: its scheduled rollup converts
 it in its first native run, and refuses nothing on an old shape (it reads the old
-table as literal input). Audit of its readers on 2026-10-17, main at `c0e01f9e` in
+table as literal input). That conversion is per-row over every held row and does
+not finish inside the job's 30-minute limit (about 82 minutes measured), so the
+shape change will not arrive nightly until the bulk receipt writer lands. Audit of its readers on 2026-10-17, main at `c0e01f9e` in
 spicy-regs and each sibling repository's `main`. The first native publication
 removes `url`, `lobbying_activities_json` and `government_entities_json` from
 `lobbying_filings` and `government_entities_json` from `lobbying_activities`
@@ -221,8 +224,8 @@ removes `url`, `lobbying_activities_json` and `government_entities_json` from
 | Reader | Reads | Disposition |
 |---|---|---|
 | `relationship_views/lobbying_native.py`, `artifacts_topics.py` | `government_entities` (native) or `government_entities_json` (old) | Fine: the installer binds whichever shape the table has (`test_relationship_view_variants.py`). The `3a1d3140` hosted build has only the old view, so its `lobbying_contacted_entities*` views go unavailable until the server switch; the tables stay queryable. |
-| `citation_sources.py`, `held_citations.py`, `mcp_server.py` citation tool | `lobbying_activities.description`, keyed `(filing_uuid, activity_index)` | Fine: each key is cast to the column's type and compared again as text (`held_citations.py:102`). |
-| `scripts/check_rollup_freshness.py` | `max(TRY_CAST(dt_posted AS TIMESTAMP))` | Fine on a TIMESTAMPTZ. |
+| `citation_sources.py`, `held_citations.py`, `mcp_server.py` citation tool | `lobbying_activities.description`, keyed `(filing_uuid, activity_index)` | Fine: each key is cast to the column's type and compared again as text (`src/spicy_regs/transforms/held_citations.py:103-104`). |
+| `scripts/check_rollup_freshness.py` | `max(TRY_CAST(dt_posted AS TIMESTAMP))` | Fine on a TIMESTAMPTZ on UTC runners (the cast renders in the session zone). |
 | `table_joins.py`, `join_audit.json`, `join_measurements.json` | `filing_uuid`; `(filing_uuid, activity_index)` | Fine: both sides retype together. |
 | MCP `describe_table`/`list_sources`, `data_dictionary`, `docs/tables`, `table_metadata.json` | the dictionary already declares the native columns | Fine, and better: `schema_matches_declared` becomes true; `test_legacy_lobbying_descriptions.py` keeps the old meanings readable. |
 | `publish-explorer-metadata.yml`, the SpicyGov explorer | `explorer-metadata.v1.json`, fetched at run time and republished after this rollup | Fine. `spicygov/lib/data/table_joins.json` is read only by one test, as a fixture. |

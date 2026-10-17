@@ -129,31 +129,29 @@ BILL_SUBJECTS = [
 
 
 def test_bill_subjects_converts_so_its_scheduled_rollup_can_read_its_prior(tmp_path, monkeypatch, bucket):
-    """Every nightly since 2026-10-12 refused the published bill-subjects family for lacking receipts.
+    """The nightly has failed since 2026-10-04: congress_bills until 10-06, then bill_subjects, which has no receipts.
 
-    The one conversion that releases it publishes native subjects, evidence the current rules admit, and a prior
-    the rollup reads back as the rows it last wrote.
+    The live family carries evidence with no evidence_version key. Its one conversion must still proceed, hand nothing
+    on, publish current-version evidence, and leave a prior the scheduled rollup reads back as the rows it last wrote.
     """
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
-    from spicy_regs.source_evidence import EVIDENCE_VERSION, INPUT_ROLE
+    from spicy_regs.source_evidence import EVIDENCE_VERSION
 
-    old = publish_old(bucket, monkeypatch, tmp_path, "bill-subjects", {"bill_subjects": BILL_SUBJECTS})
+    publish_old_with_evidence(tmp_path, monkeypatch, bucket, "bill-subjects", "bill_subjects", BILL_SUBJECTS,
+                              unversioned=True)
+    old = stored(bucket, "bill-subjects")
+    assert "evidence_version" not in evidence_root(bucket, published_evidence_pin(bucket, "bill-subjects"))["spec"]
     refused_read(tmp_path, "bill_subjects")
 
     receipt = convert("bill-subjects", tmp_path / "work", publish=True)
 
-    entry = publication.current_index(BASE)["families"]["bill-subjects"]
+    entry = stored(bucket, "bill-subjects")
     assert entry == receipt["published"]["entry"] and "etlReceipts" not in old
     assert "bill_subjects" in entry["etlReceipts"]["datasets"] and entry["tables"]["bill_subjects.parquet"]["rows"] == 2
-    assert receipt["read_back"]["anonymous_read_rows"]["bill_subjects"] == 2
-    # The new generation's source evidence is the current version and a completed build: the only kind a later
-    # run or conversion may read, which is what the pre-v2 evidence of the old generation could not be.
-    root = json.loads(bucket.objects[entry["prefix"] + "/artifact.json"])
-    (pin,) = [item for item in root["inputs"] if item["role"] == INPUT_ROLE]
-    evidence = json.loads(bucket.objects[f"{publication.EVIDENCE_PREFIX}/{pin['artifactDigest'].removeprefix('sha256:')}/artifact.json"])
-    assert evidence["spec"]["evidence_version"] == EVIDENCE_VERSION
-    assert publication.load_evidence_journal(BASE, pin)
-    # The read the scheduled run makes first now restores the rows the old table held.
+    assert receipt["read_back"]["anonymous_read_rows"]["bill_subjects"] == 2 and receipt["lineage"]["handed_on_events"] == 0
+    new_pin = published_evidence_pin(bucket, "bill-subjects")
+    assert evidence_root(bucket, new_pin)["spec"]["evidence_version"] == EVIDENCE_VERSION
+    assert publication.load_evidence_journal(BASE, new_pin)
     restored = pq.read_table(SelectedPriors(tmp_path / "after", public_url=BASE).get("bill_subjects")).to_pylist()
     assert sorted(restored, key=lambda row: row["bill_id"]) == BILL_SUBJECTS
 
@@ -755,6 +753,7 @@ def publish_old_with_evidence(
     rows=CFR,
     *,
     evidence_version=None,
+    unversioned=False,
     outcome="build-complete",
     **journaled,
 ):
@@ -783,6 +782,16 @@ def publish_old_with_evidence(
             patch.setattr(source_evidence, "build_artifact_root", unversioned)
         elif evidence_version is not None:
             patch.setattr(source_evidence, "EVIDENCE_VERSION", evidence_version)
+        if unversioned:
+            # Publication verifies what it publishes at the version it believes current; let the old shape through.
+            patch.setattr(source_evidence, "_require_current_version", lambda spec: None)
+            # The live bill-subjects, lobbying-filings and FEC evidence carries no evidence_version key at all.
+            build = source_evidence.build_artifact_root
+
+            def without_version(*, spec, **rest):
+                return build(spec={k: v for k, v in spec.items() if k != "evidence_version"}, **rest)
+
+            patch.setattr(source_evidence, "build_artifact_root", without_version)
         if outcome != "build-complete":
             patch.setattr(source_evidence, "require_current_evidence_root", lambda root: None)
         patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
