@@ -41,17 +41,20 @@ preserves the lineage of unchanged bodies and merged rows without changing
 their observation times.
 
 The retained prior root must match the publication index's immutable pin.
-Its existing input references remain visible in the journal. A prior root
-with `inputs=[]` is explicitly recorded as an inherited raw-source evidence
-gap. This feature does not retroactively qualify it. Without a managed prior,
-any legacy or local merged inputs likewise remain unqualified.
+Its input references remain visible in the journal. It names at most one
+`source-evidence` input; more than one refuses inheritance. A prior that
+names none, because its writer retains no source evidence, backs no held
+detail, and its source coverage stays unqualified. A first run has no managed
+prior. Source-evidence runtime admission supports only the current integer
+`evidence_version`, kind `spicy-regs-source-evidence` and outcome
+`build-complete`, and validates its receipt bindings. Other artifacts stay as
+historical evidence but are not runtime inputs.
 
-The Congress.gov index tables close that gap by reading again. A held detail
-that no retained response backs is read once more, after the run's own new,
-changed and unread records and under the same per-run detail cap. At first
-that is every held detail: a legacy prior backs none, and neither does an
-evidenced prior whose journal states no remainder. Each run journals what is
-left as `unevidenced` in its `congress-index-selection` event. The next run
+The Congress.gov index tables re-read every held detail that no retained
+response backs, after the run's own new, changed and unread records and under
+the same per-run detail cap. An evidenced prior whose journal states no
+remainder backs none of those held details. Each run journals what is left as
+`unevidenced` in its `congress-index-selection` event. The next run
 inherits that remainder from the prior's evidence journal, which it reads
 through the prior root, the member manifest and the journal digest, without
 reading any blob. The remainder only shrinks, so each detail is re-read once.
@@ -70,8 +73,7 @@ old list marker, the RIN columns and `nominations.is_civilian`.
 
 Before publishing a table pointer, the publisher requires the exact admitted
 audit input and re-admits it from storage. Missing, altered or failed evidence
-blocks publication. Existing generations with empty inputs remain readable and
-retain their original evidentiary limits.
+blocks publication.
 
 The artifact root, member manifest and journal are stored under
 `source-evidence/<artifact-digest>/`. Each blob member `blobs/sha256/<hex>` is
@@ -109,3 +111,32 @@ literal input bytes against retained blobs and native output fields, failed
 postconditions, late parsing and listing failures, credential exclusion,
 unchanged resumes, caps, prior-root pins and publication refusal. They do not
 establish live population completeness or deploy this feature.
+
+## Transport captures and local inputs
+
+Full-retention transport captures stream directly into Rulespec's private
+pending blob. The credential scan and byte bound run before each chunk is
+staged; only a complete response reaches the public blob namespace. After
+retention and journal completion,
+`response.extensions["spicy_docs.completed_capture"]` contains a
+`spicy_docs.transport.captured.CompletedCapture`. The ordinary HTTPX stream
+replays this same retained raw blob, renewing its size and SHA-256 in bounded
+reads through a pinned member reader. No separate evidence spool is written.
+Restricted policies keep private temporary replay and expose no
+retained-body reference.
+
+A completed reference identifies raw bytes and the capture's policy and
+parser identities. It does not establish successful decompression, parsing,
+source identity, or publication. Encoded evidence remains available when later
+decoding fails. Each complete replay checks bytes again; partial iteration
+makes no integrity claim. Owner download stores remain independent, so a
+separate owner copy remains necessary unless the caller explicitly selects
+shared storage and supplies a verified expected digest and size to the blob
+writer. Selecting a shared path alone does not avoid unknown-digest staging.
+
+`retain_file`, `retain_bytes`, and explicit capture operations return the
+complete current receipt. Local-file receipt identity, size, completion,
+policy, and file name come from the owner operation; caller metadata cannot
+replace an owner-set receipt field, and such a field is dropped. Full-policy
+refusal records validate any claimed body identity. An unavailable response
+remains a current observation with metadata and no invented body claim.

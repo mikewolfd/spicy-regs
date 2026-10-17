@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,8 @@ def test_retained_file_uses_bounded_reads_and_preserves_bytes_and_receipt(tmp_pa
     monkeypatch.setattr(Path, "open", opening)
     result = evidence.retain_file(path, stage="local", source_scope="retained")
     expected = {"sha256": "sha256:" + hashlib.sha256(raw).hexdigest(), "byte_size": size}
-    assert result == expected
+    assert {key: result[key] for key in expected} == expected
+    assert result["response_complete"] is True and result["source_scope"] == "retained"
     assert len(reads) >= 2 * (size // _CHUNK + 1)
     event = events(evidence)[-1]
     assert {key: event[key] for key in ("event", "stage", "name", "source_scope", "sha256", "byte_size")} == {
@@ -226,3 +228,309 @@ def test_retained_bytes_receipt_identity_cannot_be_overridden_by_caller_fields(t
     assert receipt["evidence_policy"] == "full" and len(receipt["capture_id"]) == 32
     artifact = evidence.seal(outcome="build-complete")
     verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
+
+
+@pytest.mark.parametrize("encoding", ["identity", "gzip"])
+def test_full_transport_replays_completed_retained_bytes_without_private_spool(tmp_path, monkeypatch, encoding):
+    import gzip
+    import httpx
+    import spicy_regs.source_evidence as module
+    from spicy_docs.transport.captured import CompletedCapture
+
+    body = b"literal response bytes" * 1000
+    raw = gzip.compress(body) if encoding == "gzip" else body
+    evidence = CaptureEvidence(tmp_path, "test")
+    context = evidence.for_source("fixture", "full", parser_version="fixture-v1", policy_decision_id="rights-v1")
+
+    def no_spool(*args, **kwargs):
+        raise AssertionError("Full retention must use the maintained private blob writer")
+
+    monkeypatch.setattr(module.tempfile, "NamedTemporaryFile", no_spool)
+    transport = context.transport(
+        httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                headers={"content-encoding": encoding},
+                stream=httpx.ByteStream(raw),
+            )
+        ),
+        stage="native",
+        max_bytes=len(raw),
+    )
+    with httpx.Client(transport=transport) as client:
+        with client.stream("GET", "https://source.test/body") as response:
+            assert "spicy_docs.completed_capture" not in response.extensions
+            assert response.read() == body
+            ref = response.extensions["spicy_docs.completed_capture"]
+    assert isinstance(ref, CompletedCapture)
+    assert ref.sha256 == "sha256:" + hashlib.sha256(raw).hexdigest()
+    assert ref.byte_size == len(raw) and b"".join(ref.iter_bytes()) == raw
+    assert (ref.publisher_id, ref.evidence_policy, ref.parser_version, ref.policy_decision_id) == (
+        "fixture",
+        "full",
+        "fixture-v1",
+        "rights-v1",
+    )
+    assert ref.capture_id == events(evidence)[-1]["capture_id"]
+    evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir)
+
+
+@pytest.mark.parametrize("policy", ["hash_only", "metadata_only"])
+def test_restricted_transport_exposes_no_retained_reference(tmp_path, policy):
+    import httpx
+
+    evidence = CaptureEvidence(tmp_path, "test")
+    context = evidence.for_source("fixture", policy, parser_version="fixture-v1", policy_decision_id="rights-v1")
+    with httpx.Client(
+        transport=context.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    stream=httpx.ByteStream(b"private body"),
+                )
+            ),
+            stage="native",
+            max_bytes=100,
+        )
+    ) as client:
+        response = client.get("https://source.test/")
+    assert response.content == b"private body"
+    assert "spicy_docs.completed_capture" not in response.extensions
+    assert not list((evidence.store.root / "sha256").iterdir())
+    evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir)
+
+
+@pytest.mark.parametrize("mutation", ["same-size", "growth", "replace", "missing"])
+def test_completed_reference_renews_integrity_and_blocks_complete_seal(tmp_path, mutation):
+    import httpx
+
+    raw = b"original response"
+    evidence = CaptureEvidence(tmp_path, "test")
+    with httpx.Client(
+        transport=evidence.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    stream=httpx.ByteStream(raw),
+                )
+            ),
+            stage="native",
+            max_bytes=100,
+        )
+    ) as client:
+        response = client.get("https://source.test/")
+    ref = response.extensions["spicy_docs.completed_capture"]
+    path = evidence.store.root / "sha256" / ref.sha256[7:]
+    if mutation == "same-size":
+        path.write_bytes(b"x" * len(raw))
+    elif mutation == "growth":
+        path.write_bytes(raw + b"x" * 1_000_000)
+    elif mutation == "replace":
+        replacement = tmp_path / "replacement"
+        replacement.write_bytes(b"x" * len(raw))
+        replacement.replace(path)
+    else:
+        path.unlink()
+    with pytest.raises(SourceEvidenceError, match="integrity"):
+        b"".join(ref.iter_bytes())
+    with pytest.raises(SourceEvidenceError, match="retention failed"):
+        evidence.seal(outcome="build-complete")
+
+
+def test_interrupted_capture_has_no_reference_receipt_blob_or_pending_file(tmp_path):
+    import httpx
+
+    class Interrupted(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b"partial response"
+            raise httpx.ReadError("constructed interruption")
+
+    evidence = CaptureEvidence(tmp_path, "test")
+    with httpx.Client(
+        transport=evidence.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    stream=Interrupted(),
+                )
+            ),
+            stage="native",
+            max_bytes=100,
+        )
+    ) as client:
+        with client.stream("GET", "https://source.test/") as response:
+            with pytest.raises(httpx.ReadError):
+                response.read()
+            assert "spicy_docs.completed_capture" not in response.extensions
+    assert not any(row["event"] == "capture" for row in events(evidence))
+    assert events(evidence)[-1]["response_complete"] is False
+    assert not list((evidence.store.root / "sha256").iterdir())
+    assert not list((evidence.store.root / ".pending").iterdir())
+
+
+@pytest.mark.parametrize("policy", ["hash_only", "metadata_only"])
+def test_source_stream_error_under_restricted_policy_is_not_a_retention_failure(tmp_path, policy):
+    import httpx
+
+    class Broken(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b"partial response"
+            raise ValueError("constructed source error")
+
+    evidence = CaptureEvidence(tmp_path, "test")
+    source = evidence.for_source("fixture", policy, parser_version="fixture-v1", policy_decision_id="rights-v1")
+    transport = source.transport(
+        httpx.MockTransport(lambda _: httpx.Response(200, stream=Broken())), stage="native", max_bytes=100
+    )
+    with httpx.Client(transport=transport) as client:
+        with client.stream("GET", "https://source.test/") as response:
+            with pytest.raises(ValueError, match="constructed source error"):
+                response.read()
+    assert events(evidence)[-1]["event"] == "capture-incomplete"
+    assert evidence.retention_failure is None
+    verify_evidence(evidence.artifact_dir, expected_pin=evidence.seal(outcome="build-complete").pin)
+
+
+def test_direct_writer_failure_is_sticky_and_never_exposes_capture(tmp_path, monkeypatch):
+    import httpx
+
+    evidence = CaptureEvidence(tmp_path, "test")
+
+    def fail(*args, **kwargs):
+        raise OSError("constructed disk failure")
+
+    monkeypatch.setattr(evidence.store, "put_stream", fail)
+    with httpx.Client(
+        transport=evidence.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    stream=httpx.ByteStream(b"exact response"),
+                )
+            ),
+            stage="native",
+            max_bytes=100,
+        )
+    ) as client:
+        with client.stream("GET", "https://source.test/") as response:
+            with pytest.raises(SourceEvidenceError, match="Cannot retain"):
+                response.read()
+            assert "spicy_docs.completed_capture" not in response.extensions
+    assert not any(row["event"] == "capture" for row in events(evidence))
+    with pytest.raises(SourceEvidenceError, match="retention failed"):
+        evidence.seal(outcome="build-complete")
+
+
+def test_malformed_gzip_has_raw_reference_without_successful_decoding(tmp_path):
+    import httpx
+
+    raw = b"not actually gzip"
+    evidence = CaptureEvidence(tmp_path, "test")
+    with httpx.Client(
+        transport=evidence.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    headers={"content-encoding": "gzip"},
+                    stream=httpx.ByteStream(raw),
+                )
+            ),
+            stage="native",
+            max_bytes=100,
+        )
+    ) as client:
+        with client.stream("GET", "https://source.test/") as response:
+            with pytest.raises(httpx.DecodingError):
+                response.read()
+            ref = response.extensions["spicy_docs.completed_capture"]
+    assert b"".join(ref.iter_bytes()) == raw
+    assert events(evidence)[-1]["response_complete"] is True
+
+
+def test_completed_capture_works_with_the_real_download_owner(tmp_path, monkeypatch):
+    import httpx
+    from spicy_docs.transport.download import BoundedAcquirer
+    import spicy_regs.source_evidence as module
+
+    raw = b"PK\x03\x04literal source bytes" * 100
+    evidence = CaptureEvidence(tmp_path, "test")
+    monkeypatch.setattr(module.tempfile, "NamedTemporaryFile", lambda *a, **k: pytest.fail("duplicate spool"))
+    with BoundedAcquirer(
+        validate_url=lambda url: url,
+        min_interval=0,
+        transport=evidence.transport(
+            httpx.MockTransport(
+                lambda _: httpx.Response(
+                    200,
+                    stream=httpx.ByteStream(raw),
+                )
+            ),
+            stage="native",
+            max_bytes=len(raw),
+        ),
+    ) as owner:
+        result = owner.download("https://source.test/asset.zip", store=tmp_path / "owner", max_bytes=len(raw))
+    assert result["sha256"] == events(evidence)[-1]["sha256"]
+    assert (tmp_path / "owner" / result["blob_path"]).read_bytes() == raw
+    assert (evidence.store.root / "sha256" / result["sha256"][7:]).read_bytes() == raw
+
+
+SPOOFED = dict(
+    parser_version="spoofed",
+    policy_decision_id="spoofed",
+    publisher_id="spoofed",
+    recorded_at="1999-01-01T00:00:00+00:00",
+    event="capture",
+    request_body={"sha256": "sha256:" + "0" * 64, "byte_size": 1, "body_retained": True, "blob_member": "unrelated"},
+)
+
+
+@pytest.mark.parametrize("bound_context", [False, True])
+def test_retained_file_has_one_receipt_shape_and_caller_cannot_override_identity(tmp_path, bound_context):
+    body = b"current retained input"
+    path = tmp_path / "current.bin"
+    path.write_bytes(body)
+    evidence = CaptureEvidence(tmp_path, "test")
+    source = (
+        evidence.for_source("fixture", "full", parser_version="fixture-v1", policy_decision_id="rights-v1")
+        if bound_context
+        else evidence
+    )
+    identity = (
+        ("fixture", "fixture-v1", "rights-v1")
+        if bound_context
+        else (None, version("spicy-docs"), "existing-full-default")
+    )
+    receipt = source.retain_file(
+        path,
+        stage="local",
+        name="spoofed.bin",
+        sha256="sha256:" + "0" * 64,
+        byte_size=999,
+        body_retained=False,
+        response_complete=False,
+        evidence_policy="metadata_only",
+        capture_id="0" * 64,
+        blob_member="unrelated",
+        detail="current source context",
+        **SPOOFED,
+    )
+    assert receipt["sha256"] == "sha256:" + hashlib.sha256(body).hexdigest()
+    assert receipt["byte_size"] == len(body)
+    assert receipt["name"] == path.name and receipt["detail"] == "current source context"
+    assert receipt["body_retained"] is True and receipt["response_complete"] is True
+    assert receipt["evidence_policy"] == "full" and len(receipt["capture_id"]) == 32
+    assert receipt["blob_member"] == "blobs/sha256/" + receipt["sha256"][7:]
+    received = source.retain_bytes(b"other retained input", stage="local", detail="bytes context", **SPOOFED)
+    assert received["detail"] == "bytes context" and received["response_complete"] is True
+    recorded = events(evidence)[-2:]
+    assert all(recorded[0][key] == value for key, value in receipt.items())
+    assert all(recorded[1][key] == value for key, value in received.items())
+    for row in recorded:
+        assert row["event"] == "retained-file" and not row["recorded_at"].startswith("1999")
+        assert "request_body" not in row
+        assert (row["publisher_id"], row["parser_version"], row["policy_decision_id"]) == identity
+    evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir)

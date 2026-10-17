@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 from uuid import uuid4
 
 from rulespec_artifacts import (
@@ -31,7 +31,7 @@ from rulespec_artifacts import (
 )
 from spicy_docs.reading.refusals import RefusedResponse, retain_refused_response
 from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
-from spicy_docs.transport.captured import CapturedBodyResponse, attached_capture
+from spicy_docs.transport.captured import CapturedBodyResponse, CompletedCapture, attached_capture
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 KIND = "spicy-regs-source-evidence"
@@ -41,10 +41,42 @@ JOURNAL = "journal.jsonl"
 _CHUNK = 1024 * 1024
 POLICIES = frozenset({"full", "hash_only", "metadata_only"})
 EVIDENCE_VERSION = 2
+#: Journaled policy decision of evidence not bound to a publisher; a root ``CompletedCapture`` carries the same one.
+_DEFAULT_POLICY_DECISION = "existing-full-default"
+#: Receipt fields only the retaining operation sets; caller metadata never replaces them.
+_OWNER_FIELDS = frozenset(
+    {
+        "event",
+        "recorded_at",
+        "publisher_id",
+        "evidence_policy",
+        "parser_version",
+        "policy_decision_id",
+        "capture_id",
+        "response_complete",
+        "stage",
+        "name",
+        "sha256",
+        "byte_size",
+        "body_retained",
+        "blob_member",
+        "request_body",
+    }
+)
 
 
 class SourceEvidenceError(RuntimeError):
     """Source retention failed; never turn this into a skippable source refusal."""
+
+
+@dataclass(frozen=True)
+class _RetainedBlobSource:
+    """Open pinned raw members without the blob reader's preliminary hash pass."""
+
+    members: LocalMemberSource
+
+    def open(self, blob_ref: str):
+        return self.members.open("sha256/" + blob_ref.removeprefix("sha256:"))
 
 
 class _StreamCheck:
@@ -170,7 +202,7 @@ class CaptureEvidence:
         if event in {"capture", "retained-file", "refusal", "capture-incomplete"}:
             fields.setdefault("evidence_policy", self.policy)
             fields.setdefault("parser_version", version("spicy-docs"))
-            fields.setdefault("policy_decision_id", "existing-full-default")
+            fields.setdefault("policy_decision_id", _DEFAULT_POLICY_DECISION)
             fields.setdefault("publisher_id", None)
         try:
             raw = canonical_json_bytes(
@@ -210,25 +242,18 @@ class CaptureEvidence:
             # Never store a credential-refused original, including one returned
             # by an injected adapter that bypassed the owner's transport.
             raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
-        response = self._body(capture.body)
-        request = self._body(capture.request_body) if capture.request_body is not None else None
-        receipt = dict(
-            capture_id=uuid4().hex,
-            evidence_policy=self.policy,
-            response_complete=True,
+        return self._record_capture(
+            self._body(capture.body),
             stage=stage,
             requested_url=capture.requested_url,
             resolved_url=capture.resolved_url,
+            observed_at=capture.observed_at,
             status_code=capture.status_code,
             content_type=capture.content_type,
             content_encoding=capture.content_encoding,
             method=capture.method,
-            observed_at=capture.observed_at,
-            **response,
-            request_body=request,
+            request_body=capture.request_body,
         )
-        self.event("capture", **receipt)
-        return receipt
 
     def _retain_file(
         self,
@@ -256,11 +281,8 @@ class CaptureEvidence:
         if status_code in (401, 403) or (self.credential and request_body and self.credential.encode() in request_body):
             raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
         response = self._file_blob(stream, sha256=sha256, byte_size=byte_size)
-        request = self._body(request_body) if request_body is not None else None
-        receipt = dict(
-            capture_id=uuid4().hex,
-            evidence_policy=self.policy,
-            response_complete=True,
+        return self._record_capture(
+            response,
             stage=stage,
             requested_url=requested_url,
             resolved_url=resolved_url,
@@ -269,6 +291,17 @@ class CaptureEvidence:
             content_type=content_type,
             content_encoding=content_encoding,
             method=method,
+            request_body=request_body,
+        )
+
+    def _record_capture(self, response: dict, *, request_body: bytes | None, **metadata) -> dict:
+        """Journal already retained response bytes before exposing a completed reference."""
+        request = self._body(request_body) if request_body is not None else None
+        receipt = dict(
+            **metadata,
+            capture_id=uuid4().hex,
+            evidence_policy=self.policy,
+            response_complete=True,
             request_body=request,
             **response,
         )
@@ -311,15 +344,14 @@ class CaptureEvidence:
             raise SourceEvidenceError("Retained input must be immutable bytes")
         if self.credential and self.credential.encode() in body:
             raise CredentialRefusedError("Source input refused; credential-bearing bytes were not retained")
-        blob = self._body(body)
-        receipt = dict(fields) if self.policy == "full" else {}
-        receipt.update(
-            capture_id=uuid4().hex,
-            evidence_policy=self.policy,
-            response_complete=True,
-            stage=stage,
-            **blob,
-        )
+        return self._retained(self._body(body), stage=stage, fields=fields)
+
+    def _retained(self, blob: dict, *, stage: str, fields: dict, name: str | None = None) -> dict:
+        """Journal one local retained input; caller metadata cannot replace an owner-set field."""
+        receipt = {k: v for k, v in fields.items() if k not in _OWNER_FIELDS} if self.policy == "full" else {}
+        if self.policy == "full" and name is not None:
+            receipt["name"] = name
+        receipt.update(capture_id=uuid4().hex, evidence_policy=self.policy, response_complete=True, stage=stage, **blob)
         self.event("retained-file", **receipt)
         return receipt
 
@@ -357,13 +389,7 @@ class CaptureEvidence:
             raise self._failure("Cannot retain source file bytes") from error
         # Arbitrary caller fields and paths may contain excerpts; non-retaining
         # contexts publish only the bounded receipt, never local extraction names.
-        receipt = dict(capture_id=uuid4().hex, evidence_policy=self.policy, response_complete=True, stage=stage, **blob)
-        if self.policy == "full":
-            receipt.update(name=path.name, **fields)
-        self.event("retained-file", **receipt)
-        if not isinstance(self, SourceEvidenceContext):
-            return {"sha256": blob["sha256"], "byte_size": blob["byte_size"]}
-        return receipt
+        return self._retained(blob, stage=stage, fields=fields, name=path.name)
 
     def transport(self, transport=None, *, stage: str, max_bytes: int):
         """Observe streamed HTTP responses before owner parsing, including retries.
@@ -371,9 +397,10 @@ class CaptureEvidence:
         The source still owns requests, pacing and validation. This wrapper only
         retains exact transport bytes and refuses retention failures. Redirects
         are individual observations, so signed credentials are scrubbed by the
-        same journal policy as ordinary captures. Each byte is hashed and
-        scanned as it is written, then read once by the store and once more
-        by the owner; no response is held in memory.
+        same journal policy as ordinary captures. Full-retention bytes go
+        directly through the maintained private blob writer, then the owner
+        replays those retained bytes with renewed integrity. Restricted
+        policies use a private temporary replay file and retain no body blob.
         """
         import httpx
 
@@ -385,51 +412,113 @@ class CaptureEvidence:
             def __init__(self, stream, request, request_body, response, observed_at):
                 self.stream, self.request, self.response = stream, request, response
                 self.request_body, self.observed_at = request_body, observed_at
+                # RetainedTransport rebinds this to the final response's own mapping (HTTPX copies the argument).
+                self.extensions: dict[str, Any] = {}
 
             def __iter__(self):
                 check = _StreamCheck(evidence, max_bytes)
-                # Temporary files are private and deleted on success, overflow,
-                # interruption or credential refusal. Only verified files seal.
-                with tempfile.NamedTemporaryFile(prefix="spicy-source-private-") as stream:
-                    retained = False
-                    try:
-                        for chunk in self.stream:
-                            check.update(chunk)
-                            stream.write(chunk)
-                        stream.flush()
-                        evidence._retain_file(
-                            stream,
-                            sha256=check.sha256,
-                            byte_size=check.size,
-                            stage=stage,
-                            requested_url=str(self.request.url),
-                            resolved_url=str(self.request.url),
-                            observed_at=self.observed_at,
-                            status_code=self.response.status_code,
-                            content_type=self.response.headers.get("content-type"),
-                            content_encoding=self.response.headers.get("content-encoding", "identity"),
-                            method=self.request.method,
-                            request_body=self.request_body,
+                retained = False
+                metadata: dict[str, Any] = dict(
+                    stage=stage,
+                    requested_url=str(self.request.url),
+                    resolved_url=str(self.request.url),
+                    observed_at=self.observed_at,
+                    status_code=self.response.status_code,
+                    content_type=self.response.headers.get("content-type"),
+                    content_encoding=self.response.headers.get("content-encoding", "identity"),
+                    method=self.request.method,
+                    request_body=self.request_body,
+                )
+                try:
+                    if evidence.artifact is not None:
+                        raise SourceEvidenceError("Cannot append to sealed source evidence")
+                    if self.response.status_code in (401, 403) or (
+                        evidence.credential and self.request_body and evidence.credential.encode() in self.request_body
+                    ):
+                        raise CredentialRefusedError(
+                            "Source response refused; credential-bearing bytes were not retained"
+                        )
+                    if evidence.policy == "full":
+                        source_error = None
+
+                        def checked_chunks():
+                            nonlocal source_error
+                            try:
+                                for chunk in self.stream:
+                                    check.update(chunk)
+                                    yield chunk
+                            except BaseException as error:
+                                source_error = error
+                                raise
+
+                        try:
+                            # Rulespec's private .pending file replaces the old
+                            # evidence spool; no public blob appears before EOF
+                            # and the complete credential scan.
+                            result = evidence.store.put_stream(checked_chunks(), max_bytes=max_bytes)
+                        except BaseException as error:
+                            if error is source_error or not isinstance(error, Exception):
+                                raise
+                            raise evidence._failure("Cannot retain source response bytes") from error
+                        receipt = evidence._record_capture(
+                            {
+                                "sha256": result.blob_ref,
+                                "byte_size": result.byte_size,
+                                "body_retained": True,
+                                "blob_member": "blobs/sha256/" + result.blob_ref.removeprefix("sha256:"),
+                            },
+                            **metadata,
+                        )
+                        completed = CompletedCapture(
+                            source=_RetainedBlobSource(LocalMemberSource(evidence.store.root)),
+                            sha256=result.blob_ref,
+                            byte_size=result.byte_size,
+                            capture_id=receipt["capture_id"],
+                            publisher_id=getattr(evidence, "publisher_id", None),
+                            evidence_policy=evidence.policy,
+                            parser_version=getattr(evidence, "parser_version", version("spicy-docs")),
+                            policy_decision_id=getattr(evidence, "policy_decision_id", _DEFAULT_POLICY_DECISION),
+                            content_encoding=metadata["content_encoding"],
+                            _failure=evidence._failure,
                         )
                         retained = True
-                        # Retain before HTTP decoding too: malformed gzip must
-                        # not discard the native response that explains refusal.
-                        stream.seek(0)
-                        while chunk := stream.read(_CHUNK):
-                            yield chunk
-                    except BaseException as error:
-                        if not retained:
-                            evidence.event(
-                                "capture-incomplete",
-                                stage=stage,
-                                error_type=type(error).__name__,
-                                evidence_policy=evidence.policy,
-                                response_complete=False,
-                                body_retained=False,
-                                requested_url=str(self.request.url),
-                                bytes_received=check.size,
-                            )
-                        raise
+                        self.extensions["spicy_docs.completed_capture"] = completed
+                        # Keep raw encoded evidence even if HTTPX's subsequent
+                        # decoding refuses it. Every consumer exhausts a fresh,
+                        # bounded integrity pass over the retained blob.
+                        yield from completed.iter_bytes()
+                    else:
+                        with tempfile.NamedTemporaryFile(prefix="spicy-source-private-") as stream:
+
+                            def staged(action, *args):
+                                # Only the private spool is a retention failure; a source error propagates unchanged.
+                                try:
+                                    return action(*args)
+                                except (OSError, ValueError) as error:
+                                    raise evidence._failure("Cannot stage private source response bytes") from error
+
+                            for chunk in self.stream:
+                                check.update(chunk)
+                                staged(stream.write, chunk)
+                            staged(stream.flush)
+                            evidence._retain_file(stream, sha256=check.sha256, byte_size=check.size, **metadata)
+                            retained = True
+                            stream.seek(0)
+                            while chunk := stream.read(_CHUNK):
+                                yield chunk
+                except BaseException as error:
+                    if not retained:
+                        evidence.event(
+                            "capture-incomplete",
+                            stage=stage,
+                            error_type=type(error).__name__,
+                            evidence_policy=evidence.policy,
+                            response_complete=False,
+                            body_retained=False,
+                            requested_url=str(self.request.url),
+                            bytes_received=check.size,
+                        )
+                    raise
 
             def close(self):
                 self.stream.close()
@@ -445,12 +534,19 @@ class CaptureEvidence:
                 request_body = request.read() or None
                 observed_at = datetime.now(UTC).isoformat()
                 response = self.inner.handle_request(request)
-                return httpx.Response(
+                stream = RetainedStream(response.stream, request, request_body, response, observed_at)
+                # A reference appears in this shared extensions mapping only
+                # after complete capture, retention and journal completion.
+                extensions = dict(response.extensions)
+                extensions.pop("spicy_docs.completed_capture", None)
+                observed = httpx.Response(
                     response.status_code,
                     headers=response.headers,
-                    stream=RetainedStream(response.stream, request, request_body, response, observed_at),
-                    extensions=response.extensions,
+                    stream=stream,
+                    extensions=extensions,
                 )
+                stream.extensions = observed.extensions
+                return observed
 
             def close(self):
                 self.inner.close()
@@ -518,7 +614,7 @@ class CaptureEvidence:
             self.event(
                 "lineage",
                 prior_generation=None,
-                evidence_status="No managed prior; any legacy or local merged inputs have no capture qualification.",
+                evidence_status="No managed prior; this run starts new source evidence.",
             )
             return
         self.prior_input = ArtifactInput(PRIOR_ROLE, prior["logicalId"], prior["artifactDigest"])
@@ -561,8 +657,10 @@ class CaptureEvidence:
         self.read_snapshot = prior_index
         prior = prior_index["families"][self.family]
         self.prior_input = ArtifactInput(PRIOR_ROLE, prior["logicalId"], prior["artifactDigest"])
-        pin = next((item for item in root["inputs"] if item.get("role") == INPUT_ROLE), None)
-        self._prior_evidence = None if pin is None else (public_url, pin)
+        pins = [item for item in root["inputs"] if item.get("role") == INPUT_ROLE]
+        if len(pins) > 1:
+            raise self._failure("Managed prior names more than one source-evidence input")
+        self._prior_evidence = (public_url, pins[0]) if pins else None
         receipt = self._blob(raw)
         self.event(
             "lineage",
@@ -571,17 +669,17 @@ class CaptureEvidence:
             prior_inputs=root["inputs"],
             evidence_status=(
                 "Inherited pins; prior source coverage is not requalified by this run."
-                if root["inputs"]
-                else "Legacy prior has inputs=[]; inherited raw-source evidence gap."
+                if pins
+                else "Prior generation names no source evidence; this run does not qualify its source coverage."
             ),
         )
 
     def inherited_event(self, event: str, **match) -> dict | None:
         """The prior generation's last journaled ``event`` whose fields equal ``match``, or ``None``.
 
-        ``None`` also when the prior retained no evidence: no managed prior, or a
-        legacy one with ``inputs=[]``. The journal is read once, on first use,
-        and pinned through the prior root, so a rollup that never asks pays nothing.
+        Returns ``None`` without a managed prior or when the prior names no
+        source evidence; a prior naming more than one is refused when it is recorded.
+        The journal is read once, on first use, and pinned through the prior root.
         """
         if self._prior_evidence is None:
             return None
@@ -751,7 +849,9 @@ class SourceEvidenceContext:
 
     _blob = CaptureEvidence._blob
     _body = CaptureEvidence._body
+    _record_capture = CaptureEvidence._record_capture
     _file_blob = CaptureEvidence._file_blob
+    _retained = CaptureEvidence._retained
     _retain_file = CaptureEvidence._retain_file
     capture = CaptureEvidence.capture
     retain_file = CaptureEvidence.retain_file
@@ -760,13 +860,23 @@ class SourceEvidenceContext:
     refusal = CaptureEvidence.refusal
 
 
+def require_current_evidence_root(root) -> None:
+    """Refuse evidence this runtime cannot consume: another kind, an unfinished build, or another receipt version."""
+    spec = root.get("spec")
+    if root.get("kind") != KIND or not isinstance(spec, dict) or spec.get("outcome") != "build-complete":
+        raise SourceEvidenceError("Only completed-build evidence can support a generation")
+    _require_current_version(spec)
+
+
+def _require_current_version(spec) -> None:
+    version_ = spec.get("evidence_version")
+    if type(version_) is not int or version_ != EVIDENCE_VERSION:
+        raise SourceEvidenceError(f"Unsupported source evidence version; expected {EVIDENCE_VERSION}")
+
+
 def _verify_receipts(source: MemberSource, artifact) -> None:
     """Validate versioned receipt policy and every declared body/member binding."""
-    evidence_version = artifact.root["spec"].get("evidence_version")
-    if evidence_version is None:
-        return  # Existing full-retention artifacts retain their original identity.
-    if type(evidence_version) is not int or evidence_version != EVIDENCE_VERSION:
-        raise SourceEvidenceError("Unknown source evidence version")
+    _require_current_version(artifact.root["spec"])
 
     def require(condition, message):
         if not condition:
@@ -884,7 +994,8 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                 )
             elif event.get("response") is not None:
                 require(isinstance(event["response"], dict), "Invalid refusal response receipt")
-                if policy != "full" or "body_retained" in event["response"]:
+                body_fields = {"sha256", "byte_size", "body_retained", "blob_member"}
+                if policy != "full" or body_fields.intersection(event["response"]):
                     body(event["response"], policy)
             if policy != "full":
                 allowed = {
@@ -937,7 +1048,6 @@ def verify_evidence(evidence: Path | MemberSource, *, expected_pin=None):
     """Admit the separate artifact from a directory or any member source; it must never masquerade as a table family."""
     source = LocalMemberSource(evidence) if isinstance(evidence, Path) else evidence
     artifact = admit_artifact(source, expected_pin=expected_pin)
-    if artifact.root["kind"] != KIND or artifact.root["spec"]["outcome"] != "build-complete":
-        raise SourceEvidenceError("Only completed-build evidence can support a generation")
+    require_current_evidence_root(artifact.root)
     _verify_receipts(source, artifact)
     return artifact

@@ -12,7 +12,13 @@ from spicy_docs.transport.captured import attach_capture
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.generation_audit import _Run, _body_shapes
-from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, _verify_receipts, verify_evidence
+from spicy_regs.source_evidence import (
+    CaptureEvidence,
+    SourceEvidenceError,
+    _verify_receipts,
+    require_current_evidence_root,
+    verify_evidence,
+)
 from tests.test_source_evidence import capture, journal
 
 PAYLOAD = b"PRIVATE-SCORECARD-SOURCE-SENTINEL"
@@ -175,18 +181,37 @@ def test_nonretaining_refusal_cannot_hide_payload_in_untyped_response(tmp_path, 
         evidence.seal(outcome="build-complete")
 
 
-def test_unknown_version_refuses_legacy_missing_version_keeps_original_semantics(tmp_path):
+@pytest.mark.parametrize("unsupported", [None, 1, 999, True, "2"])
+def test_only_current_typed_evidence_version_is_supported(tmp_path, unsupported):
     from rulespec_artifacts import LocalMemberSource
 
     evidence = CaptureEvidence(tmp_path, "scorecards")
     context(evidence, "metadata_only").capture(capture(PAYLOAD), stage="http")
     artifact = evidence.seal(outcome="build-complete")
     root = dict(artifact.root)
-    root["spec"] = {**root["spec"], "evidence_version": 999}
-    with pytest.raises(SourceEvidenceError, match="version"):
+    root["spec"] = {**root["spec"], "evidence_version": unsupported}
+    if unsupported is None:
+        del root["spec"]["evidence_version"]
+    with pytest.raises(SourceEvidenceError, match="Unsupported source evidence version"):
         _verify_receipts(LocalMemberSource(evidence.artifact_dir), replace(artifact, root=root))
-    del root["spec"]["evidence_version"]
-    _verify_receipts(LocalMemberSource(evidence.artifact_dir), replace(artifact, root=root))
+
+
+def test_require_current_evidence_root_refuses_other_kind_outcome_or_version(tmp_path):
+    evidence = CaptureEvidence(tmp_path, "scorecards")
+    context(evidence, "metadata_only").capture(capture(PAYLOAD), stage="http")
+    root = evidence.seal(outcome="build-complete").root
+    assert require_current_evidence_root(root) is None
+    spec_without_outcome = {k: v for k, v in root["spec"].items() if k != "outcome"}
+    for refused in (
+        {**root, "kind": "spicy-regs-table-family"},
+        {**root, "spec": {**root["spec"], "outcome": "failed"}},
+        {**root, "spec": spec_without_outcome},
+        {key: value for key, value in root.items() if key != "spec"},
+    ):
+        with pytest.raises(SourceEvidenceError, match="completed-build"):
+            require_current_evidence_root(refused)
+    with pytest.raises(SourceEvidenceError, match="Unsupported source evidence version"):
+        require_current_evidence_root({**root, "spec": {**root["spec"], "evidence_version": 1}})
 
 
 def test_audit_states_body_checks_unavailable_by_policy(tmp_path):
@@ -225,3 +250,45 @@ def test_incomplete_streams_have_no_complete_body_hash_or_payload(tmp_path, poli
     assert len(records) == 1 and records[0]["response_complete"] is False
     assert "sha256" not in records[0] and "blob_member" not in records[0]
     assert_private(evidence.directory, PAYLOAD, hashlib.sha256(PAYLOAD).hexdigest().encode())
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        {"sha256": "sha256:" + "0" * 64},
+        {"byte_size": 0},
+        {"body_retained": True},
+        {"blob_member": "blobs/sha256/" + "0" * 64},
+    ],
+)
+def test_full_refusal_cannot_skip_body_validation_with_partial_identity(tmp_path, claim):
+    evidence = CaptureEvidence(tmp_path, "scorecards")
+    evidence.refusal(ValueError("Current source refusal"), stage="parse")
+    rows = journal(evidence)
+    rows[-1]["response"] = claim
+    (evidence.artifact_dir / "journal.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+    with pytest.raises(SourceEvidenceError):
+        evidence.seal(outcome="build-complete")
+
+
+def test_current_unavailable_full_refusal_preserves_metadata_without_body_claim(tmp_path):
+    evidence = CaptureEvidence(tmp_path, "scorecards")
+    error = ValueError("Current source response unavailable")
+    attach_refused_response(
+        error,
+        RefusedResponse(
+            "https://source.test/response",
+            "transport",
+            None,
+            "application/octet-stream",
+            unavailable_reason="response-byte-limit",
+            observed_byte_size=9,
+            stated_byte_size=100,
+        ),
+    )
+    evidence.refusal(error, stage="parse")
+    response = journal(evidence)[-1]["response"]
+    assert response["observed_byte_size"] == 9 and response["stated_byte_size"] == 100
+    assert not {"sha256", "byte_size", "body_retained", "blob_member"}.intersection(response)
+    evidence.seal(outcome="build-complete")
+    verify_evidence(evidence.artifact_dir)

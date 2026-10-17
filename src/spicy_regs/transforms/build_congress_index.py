@@ -369,8 +369,8 @@ def _unevidenced(held: Mapping[tuple, _Held], spec: IndexSpec, evidence: Capture
     """Held rows whose detail no retained response backs as the running detail shape reads it, to be read once more.
 
     A prior whose evidence journal states the table's remainder hands it on;
-    any other prior backs none of its held details: a legacy one
-    (``inputs=[]``), or one retained before the remainder was journaled. So
+    any other prior backs none of its held details: one that names no source
+    evidence, or one retained before the remainder was journaled. So
     the set starts as every held detail and only shrinks as runs read it. A
     prior journaled under a detail shape other than ``spec.shape_version``
     (or none) no longer backs the rows that shape reads differently

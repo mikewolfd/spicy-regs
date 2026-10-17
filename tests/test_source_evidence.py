@@ -475,20 +475,75 @@ def test_missing_corrupt_or_failed_evidence_never_advances_pointer(tmp_path, fai
     assert not any(key.startswith("generations/") for key in store.writes)
 
 
-def test_prior_legacy_gap_and_new_source_pin_survive_publication(tmp_path, monkeypatch):
+@pytest.mark.parametrize("input_count", [0, 2])
+def test_managed_prior_names_at_most_one_source_evidence_input(tmp_path, monkeypatch, input_count):
     old, old_artifact = build(tmp_path, keys=("a.parquet",))
+    root = {**old_artifact.root, "inputs": [
+        {"role": "source-evidence", "logicalId": "urn:fixture:old", "artifactDigest": "sha256:" + "0" * 64}
+        for _ in range(input_count)
+    ]}
+    monkeypatch.setattr(pub, "load_family_root", lambda *_: ((old / "artifact.json").read_bytes(), root))
+    prior = {"families": {"test": old_artifact.pin.as_dict()}}
+    evidence = CaptureEvidence(tmp_path, "test")
+    if input_count:
+        with pytest.raises(SourceEvidenceError, match="more than one"):
+            evidence.inherit(prior, public_url="https://test.invalid")
+        assert not any(row["event"] == "lineage" for row in journal(evidence))
+        with pytest.raises(SourceEvidenceError, match="retention failed"):
+            evidence.seal(outcome="build-complete")
+        return
+
+    def unread(*_):
+        raise AssertionError("a prior that names no source evidence has no journal to read")
+
+    monkeypatch.setattr(pub, "load_evidence_journal", unread)
+    evidence.inherit(prior, public_url="https://test.invalid")
+    lineage = next(row for row in journal(evidence) if row["event"] == "lineage")
+    assert lineage["evidence_status"].startswith("Prior generation names no source evidence")
+    assert evidence.inherited_event("lineage") is None
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin).pin == artifact.pin
+
+
+@pytest.mark.parametrize("entry_point", ["pinned_root", "admitted"])
+def test_offline_prior_inheritance_names_at_most_one_source_evidence_input(tmp_path, monkeypatch, entry_point):
+    """The at-most-one rule covers the offline entry points, and the refusal is sticky."""
+    old, old_artifact = build(tmp_path, keys=("a.parquet",))
+    pins = [
+        {"role": "source-evidence", "logicalId": f"urn:fixture:old{n}", "artifactDigest": "sha256:" + str(n) * 64}
+        for n in (0, 1)
+    ]
+    root = {**old_artifact.root, "inputs": pins}
+    monkeypatch.setattr(pub, "family_root", lambda *_: root)
+    prior = {"families": {"test": old_artifact.pin.as_dict()}}
+    evidence = CaptureEvidence(tmp_path, "test")
+    with pytest.raises(SourceEvidenceError, match="more than one"):
+        if entry_point == "pinned_root":
+            evidence.inherit_pinned_root(prior, (old / "artifact.json").read_bytes())
+        else:
+            evidence.inherit_admitted(prior, SimpleNamespace(pin=old_artifact.pin, root=root))
+    assert not any(row["event"] == "lineage" for row in journal(evidence))
+    with pytest.raises(SourceEvidenceError, match="retention failed"):
+        evidence.seal(outcome="build-complete")
+
+
+def test_evidence_backed_prior_and_new_source_pin_survive_publication(tmp_path, monkeypatch):
+    old_output = tmp_path / "old"
+    old_output.mkdir()
+    old_evidence = CaptureEvidence(old_output, "test")
+    old_evidence.capture(capture(b"previous current source"), stage="used")
+    old, old_artifact = candidate(old_output, old_evidence)
     store = Store()
-    prior = pub.publish_generation(old, client=store, bucket="test", prior_index=pub.empty_index())
-    assert verify_generation(old).root["inputs"] == []  # old roots stay readable
+    prior = pub.publish_generation(old, client=store, bucket="test", prior_index=pub.empty_index(),
+                                   evidence_directories=(old_evidence.artifact_dir,))
     monkeypatch.setattr(
         pub, "load_family_root", lambda url, entry: ((old / "artifact.json").read_bytes(), old_artifact.root)
     )
     evidence = CaptureEvidence(tmp_path, "test")
     evidence.inherit(prior, public_url="https://test.invalid")
-    assert evidence.inherited_event("lineage") is None, "a legacy prior has no journal to inherit from"
     evidence.capture(capture(), stage="used")
     directory, artifact = candidate(tmp_path, evidence, prior)
-    assert "Legacy prior" in next(row for row in journal(evidence) if row["event"] == "lineage")["evidence_status"]
+    assert next(row for row in journal(evidence) if row["event"] == "lineage")["prior_inputs"] == old_artifact.root["inputs"]
     index = pub.publish_generation(
         directory, client=store, bucket="test", prior_index=prior, evidence_directories=(evidence.artifact_dir,)
     )

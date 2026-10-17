@@ -170,6 +170,10 @@ def test_evidence_retains_a_local_input_file(tmp_path):
     source.write_bytes(b"exact bytes")
     evidence = CaptureEvidence(tmp_path, "gao-reports")
     blob = evidence.retain_file(source, stage="gao-r-package", license="GPL-3.0-or-later")
-    assert blob == {"sha256": "sha256:" + __import__("hashlib").sha256(b"exact bytes").hexdigest(), "byte_size": 11}
+    assert {k: blob[k] for k in ("sha256", "byte_size")} == {
+        "sha256": "sha256:" + __import__("hashlib").sha256(b"exact bytes").hexdigest(),
+        "byte_size": 11,
+    }
+    assert blob["response_complete"] is True and blob["license"] == "GPL-3.0-or-later"
     journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
     assert journal[-1]["event"] == "retained-file" and journal[-1]["license"] == "GPL-3.0-or-later"
