@@ -472,17 +472,15 @@ def validate_publisher_generation(generation_id: str | None) -> None:
 
 
 def receipt_policies(policy: DatasetPolicy) -> tuple[DatasetPolicy, ...]:
-    """The explicit current policy and its declared earlier policies, with no source-reader imports."""
+    """The current policy and its frozen declared earlier policies.
+
+    Carried receipts keep their original ``policy_version`` (``rebind_receipt``, ``carry_receipt_history``).
+    New generations write the current subject schema; readers of already selected inputs choose an earlier
+    declared subject schema only through ``selected_subject_policy``.
+    """
     from spicy_regs.earlier_receipt_policies import earlier_policies
 
     return (policy, *earlier_policies(policy))
-
-
-def receipt_policy(policies: Mapping[str, DatasetPolicy], dataset: str, policy_version: str) -> DatasetPolicy | None:
-    policy = policies.get(dataset)
-    if policy is None:
-        return None
-    return next((p for p in receipt_policies(policy) if p.policy_version == policy_version), None)
 
 
 def validate_receipt_row(receipt: Mapping, policies: Mapping[str, DatasetPolicy], *, accepted_policies=None) -> None:
@@ -667,6 +665,9 @@ def validate_receipt_bundle(
             return
         except NotBulkEligible as error:
             reference_fallback(error)
+            from loguru import logger
+
+            logger.info("receipt validation route=row reason=unsupported-semantics detail={}", error)
     _validate_receipt_bundle_rows(subjects, receipt_paths, policies, generation_id=generation_id)
 
 

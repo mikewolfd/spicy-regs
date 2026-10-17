@@ -67,6 +67,18 @@ _BATCH = 2_000
 _INSERT_BYTES = 16 * 1024 * 1024
 
 
+class BulkValidationError(RuntimeError):
+    """Bulk execution failed; retrying the complete bundle by row is unsafe."""
+
+
+class BulkInputError(BulkValidationError, ValueError):
+    """The input data itself failed bulk execution, for example a date32 outside Python's date range.
+
+    It is a ``ValueError`` as the row validator's own refusals are, so writers and the conversion command keep
+    reporting invalid input as a refusal. Every other bulk failure (memory, storage, I/O) is not one.
+    """
+
+
 class NotBulkEligible(Exception):
     """SQL has no proven way to decide this bundle, so ``validate_receipt_bundle`` must."""
 
@@ -92,6 +104,12 @@ def bulk_limits(*, threads: int, memory_limit: str, require_bulk: bool = False):
         yield
     finally:
         _limits.reset(token)
+
+
+def _bulk_failure(action: str, error: Exception) -> BulkValidationError:
+    """``error`` as a failure that never retries by row: invalid input data, or an operational one."""
+    invalid = isinstance(error, (ValueError, duckdb.DataError, duckdb.IntegrityError, duckdb.InvalidInputException))
+    return (BulkInputError if invalid else BulkValidationError)(f"{action}; no row fallback: {error}")
 
 
 def reference_fallback(error: NotBulkEligible) -> None:
@@ -533,7 +551,7 @@ def _scan(
                     con.unregister("source")
                     inserted += added
             if read != [parquet.metadata.num_rows, inserted]:
-                raise NotBulkEligible("DuckDB did not take every row the reader decoded")
+                raise BulkValidationError("DuckDB did not take every row the reader decoded; no row fallback")
             spans.append((start, start + parquet.metadata.num_rows, path))
             start += parquet.metadata.num_rows
     return spans
@@ -541,7 +559,7 @@ def _scan(
 
 def _readable(
     paths: Sequence[ParquetInput], schema: pa.Schema, differs: str
-) -> tuple[Sequence[ParquetInput], Exception | None]:
+) -> tuple[Sequence[ParquetInput], Exception | None, bool]:
     """The inputs before the first the row validator stops at for its schema, and what it raises there."""
     for index, path in enumerate(paths):
         try:
@@ -549,9 +567,9 @@ def _readable(
                 if parquet.schema_arrow.equals(schema):
                     continue
         except Exception as error:
-            return paths[:index], error
-        return paths[:index], ValueError(differs)
-    return paths, None
+            return paths[:index], error, False
+        return paths[:index], ValueError(differs), True
+    return paths, None, False
 
 
 def _held(spans: Iterable[Span], numbers: Iterable[int]) -> Iterator[tuple[list[int], pa.Table]]:
@@ -609,9 +627,11 @@ def _check_receipts(
 ) -> None:
     """``_load_receipts`` over whole columns: raise what it would at the first row, or schema, it refuses."""
     validate_publisher_generation(generation_id)
-    paths, stopped = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
+    paths, stopped, schema_mismatch = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
     if scoped and stopped is not None:
-        raise NotBulkEligible("select_receipts decides a receipt file that is not the shared schema")
+        if schema_mismatch:
+            raise NotBulkEligible("select_receipts decides a receipt file that is not the shared schema")
+        raise _bulk_failure("Bulk receipt input could not be read", stopped) from stopped
     con.execute(
         "CREATE TABLE receipts (n BIGINT, dataset VARCHAR, generation_id VARCHAR, receipt_id VARCHAR, outcome VARCHAR,"
         " record_id VARCHAR, subject_version VARCHAR, identity_json VARCHAR, unproven BOOLEAN"
@@ -664,7 +684,7 @@ def _check_subjects(
         number = "n"
         while number in {name.casefold() for name in policy.subject_schema.names}:
             number += "_"
-        paths, stopped = _readable(paths, policy.subject_schema, f"Subject schema differs from policy: {dataset}")
+        paths, stopped, _ = _readable(paths, policy.subject_schema, f"Subject schema differs from policy: {dataset}")
         spans = _scan(con, paths, start, _subject_insert_sql(policy, number), number=number,
                       bounded_insert=bounded_insert)
         start = spans[-1][1] if spans else start
@@ -748,10 +768,10 @@ def _check_retained_scan(con, scan, subjects, receipt_paths, policy, generation_
         raise ValueError("Retained scan differs from the selected reader inputs or SQL")
     check_custody()
     validate_publisher_generation(generation_id)
-    paths, stopped = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
+    paths, stopped, _ = _readable(receipt_paths, RECEIPT_SCHEMA, "Receipt schema differs from the shared schema")
     if stopped is not None:
         raise stopped
-    subject_paths, stopped = _readable(subjects[policy.dataset], policy.subject_schema,
+    subject_paths, stopped, _ = _readable(subjects[policy.dataset], policy.subject_schema,
                                       f"Subject schema differs from policy: {policy.dataset}")
     if stopped is not None:
         raise stopped
@@ -816,11 +836,12 @@ def validate_bundle(
     the row code's own. The joins the row validator makes through a SQLite index are set operations over a DuckDB
     file in a temporary directory, which spills there under memory pressure.
 
-    Raises :class:`NotBulkEligible` when SQL cannot decide: a subject type with no proven spelling, or anything DuckDB
-    or the decoder cannot read. The caller then runs the row validator, which decides.
+    Raises :class:`NotBulkEligible` only for unsupported semantics. DuckDB execution failures raise
+    :class:`BulkValidationError` with their original cause and never request a full row retry.
 
-    ``scoped`` ignores receipts of datasets with no policy here, as if ``select_receipts`` had first copied each
-    policy's dataset out of a shared file; the receipts then keep their order in that file.
+    ``scoped`` ignores receipts of datasets with no policy here. Selected receipts keep source-file order.
+    With multiple policies this can report a different first fault than dataset-grouped row selection; acceptance
+    and refusal are unchanged. Single-policy diagnostics retain row-reader ordering.
     """
     with _validated_bundle(subjects, receipt_paths, policies, generation_id=generation_id, scoped=scoped):
         pass
@@ -834,8 +855,6 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
     # Reuse the same byte-sized inserts for writer validation and later replay.
     bounded_insert = bounded_insert or _limits.get() is not None
     registered = _bundle_policies(subjects, receipt_paths, policies)
-    if scoped and len(registered) > 1:
-        raise NotBulkEligible("Multiple scoped policies require grouped row selection to preserve first-error order")
     try:
         for policy in registered.values():
             if not policy.receipt_only and subjects[policy.dataset]:
@@ -859,7 +878,7 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
                                                         receipt_paths, held_policy, generation_id)
                 _check_retained_scan(con, retained_scan, subjects, receipt_paths, held_policy, generation_id)
         except duckdb.Error as error:
-            raise NotBulkEligible(f"DuckDB could not decide the bundle: {error}") from error
+            raise _bulk_failure("Bulk receipt validation failed", error) from error
         try:
             yield con
         finally:
@@ -1049,7 +1068,7 @@ def read_attempts(receipt_paths, policy, *, generation_id, outcomes):
         try:
             _check_receipts(con, temp, receipt_paths, {policy.dataset: policy}, generation_id, False)
         except duckdb.Error as error:
-            raise NotBulkEligible(f"DuckDB could not decide the receipts: {error}") from error
+            raise _bulk_failure("Bulk receipt read failed", error) from error
         for path in receipt_paths:
             for receipt in _rows(path):
                 if outcomes is None or receipt["outcome"] in outcomes:

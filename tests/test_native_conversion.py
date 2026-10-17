@@ -2,6 +2,7 @@
 
 import json
 
+import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -483,6 +484,39 @@ def test_a_refused_pointer_write_reports_the_state_it_left(tmp_path, monkeypatch
     assert conversion.main(["cfr-sections", *COMMON, "--work", str(tmp_path / "again"), "--publish", "--expect-bucket", BUCKET]) == 1
     report = capsys.readouterr().err
     assert "REFUSED: cfr-sections: PublicationError: Refusing to shrink" in report and f"STATE: {conversion.NOTHING_PUBLISHED}" in report
+
+
+@pytest.mark.parametrize("call", [1, 3], ids=["writer-validation", "generation-admission"])
+@pytest.mark.parametrize(
+    "failure, code, report",
+    [
+        (duckdb.InvalidInputException("date32 outside Python date range"), 1, "REFUSED: cfr-sections: "),
+        (duckdb.OutOfMemoryException("injected"), 2, "FAILED: BulkValidationError: "),
+    ],
+    ids=["invalid-input", "operational"],
+)
+def test_a_duckdb_failure_in_bulk_admission_reports_invalid_input_as_a_refusal(
+    tmp_path, monkeypatch, bucket, capsys, call, failure, code, report
+):
+    """Invalid input data stays a refusal (exit 1) and an operational failure does not (exit 2); nothing is published."""
+    from spicy_regs import etl_bulk
+
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    written, check, seen = list(bucket.writes), etl_bulk._check_receipts, []
+
+    def check_receipts(*args, **kwargs):
+        seen.append(call)
+        if len(seen) == call:
+            raise failure
+        return check(*args, **kwargs)
+
+    monkeypatch.setattr(etl_bulk, "_check_receipts", check_receipts)
+    arguments = ["cfr-sections", *COMMON, "--work", str(tmp_path / "work"), "--publish", "--expect-bucket", BUCKET]
+    assert conversion.main(arguments) == code
+    error = capsys.readouterr().err
+    assert report in error and "no row fallback: " in error and f"STATE: {conversion.NOTHING_PUBLISHED}" in error
+    assert len(seen) == call and bucket.writes == written
 
 
 def test_the_write_target_is_named_checked_first_and_recorded(tmp_path, monkeypatch, bucket, capsys):

@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import duckdb
 import pytest
 from rulespec_artifacts import canonical_json_bytes
 
@@ -99,6 +100,52 @@ def test_prepared_allow_runtime_and_target_remain_explicit(tmp_path, monkeypatch
         options: dict = dict(allowed=["cfr-sections"], expect_bucket=BUCKET, state=lambda _: dict(STATE)) | changes
         with pytest.raises(conversion.ConversionRefused):
             conversion.publish_prepared(path, expected_main=MAIN, expected_spicy_docs=WHEEL, **options)
+    assert bucket.writes == before
+
+
+BULK_FAILURES = [
+    pytest.param(duckdb.InvalidInputException("date32 outside Python date range"), True, id="invalid-input"),
+    pytest.param(duckdb.OutOfMemoryException("injected"), False, id="operational"),
+]
+
+
+@pytest.mark.parametrize("step", ["publish", "resume"])
+@pytest.mark.parametrize("failure, refused", BULK_FAILURES)
+def test_prepared_steps_report_a_bulk_failure_by_its_kind(tmp_path, monkeypatch, bucket, step, failure, refused):
+    """Invalid input data refuses the step; an operational failure does not. Nothing is uploaded either way."""
+    from spicy_regs import etl_bulk
+
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    generation = Path(convert("cfr-sections", work)["generation"]["directory"])
+    if step == "resume":
+        (work / conversion.RECEIPT).unlink()
+
+    def fail(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(etl_bulk, "_check_receipts", fail)
+    run = {
+        "publish": lambda: publish_prepared(work / conversion.RECEIPT),
+        "resume": lambda: conversion.resume_prepared(
+            generation,
+            work=work,
+            allowed=["cfr-sections"],
+            expected_main=MAIN,
+            expected_spicy_docs=WHEEL,
+            expected_producer=MAIN,
+            state=lambda _: dict(STATE),
+        ),
+    }[step]
+    before = list(bucket.writes)
+    if refused:
+        with pytest.raises(
+            conversion.ConversionRefused, match=r"cannot be verified: BulkInputError: .*no row fallback"
+        ):
+            run()
+    else:
+        with pytest.raises(etl_bulk.BulkValidationError, match="no row fallback"):
+            run()
     assert bucket.writes == before
 
 

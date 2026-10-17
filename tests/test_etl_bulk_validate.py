@@ -343,7 +343,7 @@ def test_scoped_read_agrees_with_a_selected_copy(tmp_path, name) -> None:
         assert (row is not None) == (target == "things"), (target, row)
 
 
-def test_what_sql_cannot_decide_is_not_bulk_eligible(tmp_path) -> None:
+def test_invalid_utf8_data_fails_bulk_without_row_retry(tmp_path) -> None:
     measured = DatasetPolicy("measured", pa.schema([("id", pa.string()), ("ratio", pa.float64())]), ("id",), ())
     context = ReceiptContext("g1", "a", "test/1", [WITNESS])
     subject, receipts = write_dataset([({"id": "a", "ratio": 0.5}, context)], tmp_path / "measured", measured)
@@ -367,7 +367,7 @@ def test_what_sql_cannot_decide_is_not_bulk_eligible(tmp_path) -> None:
     broken = pa.Array.from_buffers(pa.string(), len(notes), [notes.buffers()[0], notes.buffers()[1], pa.py_buffer(bytes(data))])
     pq.write_table(table.set_column(table.schema.get_field_index("processor"), "processor", broken), paths[0])
     assert outcome(validate_receipt_bundle, subjects, paths, policies)[0] == "UnicodeDecodeError"
-    with pytest.raises(etl_bulk.NotBulkEligible):
+    with pytest.raises(etl_bulk.BulkValidationError):
         etl_bulk.validate_bundle(subjects, paths, policies)
 
 
@@ -380,7 +380,7 @@ def test_a_row_lost_on_the_way_to_sql_is_not_accepted(tmp_path, monkeypatch) -> 
         return pa.RecordBatchReader.from_batches(reader.schema, list(reader)[:-1])
 
     monkeypatch.setattr(etl_bulk, "_numbered", lossy)
-    with pytest.raises(etl_bulk.NotBulkEligible, match="every row"):
+    with pytest.raises(etl_bulk.BulkValidationError, match="every row"):
         etl_bulk.validate_bundle(*args, generation_id="g1")
 
 
@@ -431,7 +431,7 @@ def test_sql_proves_a_text_decodes_only_when_the_row_decoder_accepts_it() -> Non
     assert decoded > 1000 and mapped > 300
 
 
-def test_missing_file_and_corrupt_pages_fall_back_to_exact_row_error(tmp_path):
+def test_missing_file_preserves_error_and_corrupt_pages_fail_without_retry(tmp_path):
     bundle = build(tmp_path)
     subjects, receipts, policies = bundle.write(tmp_path / "inputs")
     missing = tmp_path / "missing.parquet"
@@ -442,13 +442,10 @@ def test_missing_file_and_corrupt_pages_fall_back_to_exact_row_error(tmp_path):
     content = bytearray(receipts[0].read_bytes())
     content[4:12] = b"\xff" * 8
     damaged.write_bytes(content)
-    def admitted(*args, **kwargs):
-        try:
-            return etl_bulk.validate_bundle(*args, **kwargs)
-        except etl_bulk.NotBulkEligible:
-            return validate_receipt_bundle(*args, **kwargs)
-    assert outcome(admitted, subjects, [damaged], policies, generation_id="g1") == outcome(
-        validate_receipt_bundle, subjects, [damaged], policies, generation_id="g1")
+    with pytest.raises(etl_bulk.BulkValidationError, match="no row fallback") as failed:
+        _validate_receipt_bundle(subjects, [damaged], policies, generation_id="g1")
+    assert isinstance(failed.value.__cause__, duckdb.Error)
+    assert outcome(validate_receipt_bundle, subjects, [damaged], policies, generation_id="g1")[0] == "OSError"
 
 
 def test_scoped_multiple_policies_and_receipt_only(tmp_path):
@@ -458,8 +455,7 @@ def test_scoped_multiple_policies_and_receipt_only(tmp_path):
     copied = [select_receipts(receipts[0], tmp_path / (p.dataset + "-selected.parquet"), dataset=p.dataset)
               for p in selected]
     wanted = {p.dataset: subjects[p.dataset] for p in selected}
-    with pytest.raises(etl_bulk.NotBulkEligible, match="first-error"):
-        etl_bulk.validate_bundle(wanted, receipts, selected, generation_id="g1", scoped=True)
+    assert outcome(etl_bulk.validate_bundle, wanted, receipts, selected, generation_id="g1", scoped=True) is None
     assert outcome(validate_receipt_bundle, wanted, copied, selected, generation_id="g1") is None
 
 
@@ -503,3 +499,89 @@ def test_nested_nonnullable_subject_requires_reference(tmp_path):
     validate_receipt_bundle({selected.dataset: [subject]}, [receipts], [selected])
     with pytest.raises(etl_bulk.NotBulkEligible, match="nonnullable"):
         etl_bulk.validate_bundle({selected.dataset: [subject]}, [receipts], [selected])
+
+
+@pytest.mark.parametrize("phase", ["_check_receipts", "_check_subjects"])
+@pytest.mark.parametrize("failure_type", [duckdb.OutOfMemoryException, duckdb.IOException, duckdb.InvalidInputException])
+def test_execution_failure_after_partial_work_never_retries_by_row(tmp_path, monkeypatch, phase, failure_type):
+    from spicy_regs import etl_receipts
+
+    args = build(tmp_path).write(tmp_path / "inputs")
+    original = getattr(etl_bulk, phase)
+    failure = failure_type("injected after completed scan")
+    completed = []
+
+    def fail_after(*args, **kwargs):
+        original(*args, **kwargs)
+        completed.append(phase)
+        raise failure
+
+    def no_row_retry(*args, **kwargs):
+        pytest.fail("operational failure triggered whole-bundle row fallback")
+
+    monkeypatch.setattr(etl_bulk, phase, fail_after)
+    monkeypatch.setattr(etl_receipts, "_validate_receipt_bundle_rows", no_row_retry)
+    with pytest.raises(etl_bulk.BulkValidationError, match="no row fallback") as caught:
+        etl_receipts.validate_receipt_bundle(*args)
+    assert completed == [phase]
+    assert caught.value.__cause__ is failure
+
+
+def test_unsupported_encoding_still_routes_to_row_validator(tmp_path, monkeypatch):
+    from spicy_regs import etl_receipts
+
+    selected = DatasetPolicy("ratios", pa.schema([("id", pa.string()), ("v", pa.float64())]), ("id",), ())
+    subject, receipt = write_dataset([({"id": "one", "v": 0.5}, ReceiptContext("g", "a", "test", [WITNESS]))],
+                                     tmp_path / "ratios", selected)
+    assert subject is not None
+    original, calls = etl_receipts._validate_receipt_bundle_rows, []
+
+    def rows(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(etl_receipts, "_validate_receipt_bundle_rows", rows)
+    etl_receipts.validate_receipt_bundle({"ratios": [subject]}, [receipt], [selected])
+    assert calls == [1]
+
+
+@pytest.mark.parametrize("damage", [None, "receipt_repeated", "subject_dropped", "processing_key_unclassified", "outcome_unknown"])
+def test_scoped_multi_policy_acceptance_matches_grouped_reference(tmp_path, damage):
+    bundle = build(tmp_path)
+    if damage:
+        REFUSALS[damage][1](bundle, "things")
+    subjects, receipts, policies = bundle.write(tmp_path / "inputs")
+    copied = [select_receipts(receipts[0], tmp_path / (p.dataset + "-selected.parquet"), dataset=p.dataset)
+              for p in policies]
+    reference = outcome(validate_receipt_bundle, subjects, copied, policies)
+    bulk = outcome(etl_bulk.validate_bundle, subjects, receipts, policies, scoped=True)
+    assert (reference is None) == (bulk is None)
+
+
+def test_scoped_multi_policy_reports_source_order_fault(tmp_path):
+    bundle = build(tmp_path)
+    seal(bundle.receipt("things", "observed"), processor="")
+    seal(bundle.receipt("others", "observed"), outcome="unknown")
+    bundle.receipts[0].sort(key=lambda row: row["dataset"] != "others")
+    subjects, receipts, policies = bundle.write(tmp_path / "inputs")
+    copied = [select_receipts(receipts[0], tmp_path / (p.dataset + "-selected.parquet"), dataset=p.dataset)
+              for p in policies]
+    assert "generation, attempt and processor" in outcome(validate_receipt_bundle, subjects, copied, policies)[1]
+    assert "Invalid receipt outcome" in outcome(etl_bulk.validate_bundle, subjects, receipts, policies, scoped=True)[1]
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError("missing receipt member"), pa.ArrowInvalid("unreadable receipt footer")])
+def test_scoped_operational_input_failure_preserves_cause(tmp_path, monkeypatch, failure):
+    from spicy_regs import etl_receipts
+
+    args = build(tmp_path).write(tmp_path / "inputs")
+    def unreadable(*args, **kwargs):
+        raise failure
+    monkeypatch.setattr(etl_bulk, "_parquet", unreadable)
+    with pytest.raises(etl_bulk.BulkValidationError, match="no row fallback") as caught:
+        etl_bulk.validate_bundle(*args, scoped=True)
+    assert caught.value.__cause__ is failure
+    monkeypatch.setattr(etl_bulk, "validate_bundle", lambda *args, **kwargs: (_ for _ in ()).throw(caught.value))
+    monkeypatch.setattr(etl_receipts, "_validate_receipt_bundle_rows", lambda *args, **kwargs: pytest.fail("row fallback"))
+    with pytest.raises(etl_bulk.BulkValidationError):
+        etl_receipts.validate_receipt_bundle(*args)

@@ -82,8 +82,12 @@ def test_required_bulk_invalid_date_bundle_refuses_without_row_fallback(tmp_path
         pytest.fail("Required bulk admission must not call the reference validator")
 
     monkeypatch.setattr(etl_receipts, "_validate_receipt_bundle_rows", forbidden_reference)
+    # A DuckDB data failure never retries the bundle by row, with or without required-bulk limits. It stays a
+    # ValueError (BulkInputError), so writers and the conversion command still refuse it as invalid input.
+    with pytest.raises(etl_bulk.BulkInputError, match="no row fallback:.*date32 outside Python date range"):
+        etl_receipts.validate_receipt_bundle(*args, generation_id="g")
     with etl_bulk.bulk_limits(threads=1, memory_limit="256MiB", require_bulk=True):
-        with pytest.raises(ValueError, match="reference fallback disabled:.*date32 outside Python date range"):
+        with pytest.raises(etl_bulk.BulkInputError, match="no row fallback:.*date32 outside Python date range"):
             etl_receipts.validate_receipt_bundle(*args, generation_id="g")
 
 

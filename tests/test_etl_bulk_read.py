@@ -4,6 +4,7 @@ import random
 from contextlib import contextmanager
 from decimal import Decimal
 
+import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -163,3 +164,44 @@ def test_observation_only_generation_with_unproven_subject_schema(tmp_path):
     observation = observation_receipt(policy, context, processing_fields={"raw": {"empty": True}})
     _, receipts = write_dataset([], tmp_path / "written", policy, failures=[observation])
     assert result([], [receipts], policy, bulk=True) == result([], [receipts], policy, bulk=False) == ([], None)
+
+
+INVALID_INPUT = (duckdb.InvalidInputException, duckdb.ConversionException, duckdb.OutOfRangeException)
+DUCKDB_FAILURES = [
+    duckdb.InvalidInputException("date32 outside Python date range"),
+    duckdb.ConversionException("Could not convert"),
+    duckdb.OutOfRangeException("out of range"),
+    duckdb.OutOfMemoryException("injected"),
+    duckdb.IOException("injected"),
+    duckdb.BinderException("injected"),
+]
+
+
+@pytest.mark.parametrize("path", ["validate", "read", "attempts"])
+@pytest.mark.parametrize("failure", DUCKDB_FAILURES, ids=lambda failure: type(failure).__name__)
+def test_a_duckdb_failure_never_retries_by_row_and_only_invalid_input_is_a_value_error(
+    tmp_path, monkeypatch, path, failure
+):
+    """Every bulk path keeps the cause. Invalid input data stays a refusal (``ValueError``); the rest does not."""
+    from spicy_regs import etl_receipts
+
+    subjects, receipts, policies = scoped_bundle(tmp_path).write(tmp_path / "written")
+
+    def fail(*args, **kwargs):
+        raise failure
+
+    def no_row_retry(*args, **kwargs):
+        pytest.fail("a DuckDB failure retried the whole bundle by row")
+
+    monkeypatch.setattr(etl_bulk, "_check_receipts", fail)
+    for name in ("_validate_receipt_bundle_rows", "_read_with_receipts_rows", "_read_attempts_rows"):
+        monkeypatch.setattr(etl_receipts, name, no_row_retry)
+    run = {
+        "validate": lambda: etl_receipts.validate_receipt_bundle(subjects, receipts, policies, generation_id="g1"),
+        "read": lambda: list(read_with_receipts(subjects["things"], receipts, policies[0], generation_id="g1")),
+        "attempts": lambda: list(read_attempts(receipts, policies[0], generation_id="g1")),
+    }[path]
+    with pytest.raises(etl_bulk.BulkValidationError, match="no row fallback") as caught:
+        run()
+    assert caught.value.__cause__ is failure
+    assert isinstance(caught.value, ValueError) is isinstance(failure, INVALID_INPUT)
