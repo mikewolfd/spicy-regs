@@ -36,8 +36,15 @@ def family(tmp_path):
     subject, receipts = write_dataset([({"id": "one", "raw": "retained"}, context)], tmp_path / "writer", selected)
     assert subject is not None
     target = tmp_path / "generation"
-    generations.build_generation(target, family="test", files=[subject], expected_keys=["things.parquet"],
-                                 receipt_path=receipts, receipt_policies=[selected], receipt_generation_id="g")
+    generations.build_generation(
+        target,
+        family="test",
+        files=[subject],
+        expected_keys=["things.parquet"],
+        receipt_path=receipts,
+        receipt_policies=[selected],
+        receipt_generation_id="g",
+    )
     return target
 
 

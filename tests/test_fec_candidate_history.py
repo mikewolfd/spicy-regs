@@ -95,7 +95,9 @@ def test_later_cycle_refusal_preserves_prior_and_never_publishes(tmp_path, monke
     (attempt,) = tmp_path.glob(".builds/*/native.inputs/raw/fec-candidate-master-*")
     for body in files.values():
         assert (attempt / "blobs" / "sha256" / hashlib.sha256(body).hexdigest()).read_bytes() == body
-    assert not list(tmp_path.glob(".builds/*/.fec-identity-producer-*")) and not list(tmp_path.glob(".fec-identity-producer-*"))
+    assert not list(tmp_path.glob(".builds/*/.fec-identity-producer-*")) and not list(
+        tmp_path.glob(".fec-identity-producer-*")
+    )
 
 
 def test_complete_generation_binds_exact_responses_and_refresh_retires_rows(tmp_path, monkeypatch):
