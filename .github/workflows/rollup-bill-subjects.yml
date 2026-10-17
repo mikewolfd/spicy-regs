@@ -24,3 +24,7 @@ jobs:
       command: run-rollup-bill-subjects
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       bill_subjects_max: ${{ inputs.max_bills || '' }}
+      # The enrichment starts no read after 20 minutes (DEADLINE_SECONDS) and the old job took 22 to 27 of its
+      # 30. The native job also restores congress_bills from receipts (5.5 minutes on 2026-10-16, run
+      # 38968700113), restores its own prior, and writes, validates and publishes its receipts.
+      timeout_minutes: 60

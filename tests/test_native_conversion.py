@@ -119,6 +119,45 @@ def test_a_rollup_family_converts_publishes_and_reads_back(tmp_path, monkeypatch
     assert pq.read_schema(receipt["generation"]["directory"] + "/cfr_sections.parquet").field("part_granule").type == pa.bool_()
 
 
+BILL_SUBJECTS = [
+    {"bill_id": "107-hconres-1", "policy_area": "Congress", "carrier": "congress-api",
+     "subjects_json": '["Congressional sessions", "House of Representatives", "Senate"]', "subject_count": "3",
+     "enriched_at": "2026-09-24T21:22:53+00:00"},
+    {"bill_id": "119-hr-1", "policy_area": None, "subjects_json": "[]", "subject_count": "0", "carrier": "billstatus",
+     "enriched_at": "2026-09-25T21:22:53+00:00"},
+]
+
+
+def test_bill_subjects_converts_so_its_scheduled_rollup_can_read_its_prior(tmp_path, monkeypatch, bucket):
+    """Every nightly since 2026-10-12 refused the published bill-subjects family for lacking receipts.
+
+    The one conversion that releases it publishes native subjects, evidence the current rules admit, and a prior
+    the rollup reads back as the rows it last wrote.
+    """
+    from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+    from spicy_regs.source_evidence import EVIDENCE_VERSION, INPUT_ROLE
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "bill-subjects", {"bill_subjects": BILL_SUBJECTS})
+    refused_read(tmp_path, "bill_subjects")
+
+    receipt = convert("bill-subjects", tmp_path / "work", publish=True)
+
+    entry = publication.current_index(BASE)["families"]["bill-subjects"]
+    assert entry == receipt["published"]["entry"] and "etlReceipts" not in old
+    assert "bill_subjects" in entry["etlReceipts"]["datasets"] and entry["tables"]["bill_subjects.parquet"]["rows"] == 2
+    assert receipt["read_back"]["anonymous_read_rows"]["bill_subjects"] == 2
+    # The new generation's source evidence is the current version and a completed build: the only kind a later
+    # run or conversion may read, which is what the pre-v2 evidence of the old generation could not be.
+    root = json.loads(bucket.objects[entry["prefix"] + "/artifact.json"])
+    (pin,) = [item for item in root["inputs"] if item["role"] == INPUT_ROLE]
+    evidence = json.loads(bucket.objects[f"{publication.EVIDENCE_PREFIX}/{pin['artifactDigest'].removeprefix('sha256:')}/artifact.json"])
+    assert evidence["spec"]["evidence_version"] == EVIDENCE_VERSION
+    assert publication.load_evidence_journal(BASE, pin)
+    # The read the scheduled run makes first now restores the rows the old table held.
+    restored = pq.read_table(SelectedPriors(tmp_path / "after", public_url=BASE).get("bill_subjects")).to_pylist()
+    assert sorted(restored, key=lambda row: row["bill_id"]) == BILL_SUBJECTS
+
+
 def test_without_publish_nothing_leaves_the_work_directory(tmp_path, monkeypatch, bucket):
     publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     written = list(bucket.writes)

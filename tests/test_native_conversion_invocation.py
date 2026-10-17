@@ -9,7 +9,7 @@ import sys
 import pytest
 import yaml
 
-from scripts.native_conversion_invocation import check_prepared_prior, entry_digest, record_invocation
+from scripts.native_conversion_invocation import FAMILIES, check_prepared_prior, entry_digest, record_invocation
 
 
 def prior():
@@ -87,6 +87,14 @@ def test_timestamp_only_change_after_preflight_refuses_the_later_capture(tmp_pat
         check_prepared_prior(family="dockets", expected_entry=invocation["expectedEntrySha256"],
                              receipt_path=receipt)
     assert receipt.read_bytes() == before
+
+
+def test_the_workflow_offers_exactly_the_families_the_invocation_accepts():
+    """A family the script accepts but the dispatch menu lacks (bill-subjects, 2026-10-17) cannot be converted."""
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/convert-native-family.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert set(triggers["workflow_dispatch"]["inputs"]["family"]["options"]) == FAMILIES
 
 
 @pytest.mark.parametrize("mode", ["prepare", "download"])

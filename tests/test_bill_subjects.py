@@ -720,3 +720,16 @@ def test_a_redirect_is_not_followed_so_the_key_header_stays_on_the_api_host(api_
     fetcher, calls = api_transport({"status_code": 302, "headers": {"location": "https://elsewhere.example/collect"}})
     assert fetcher.subjects_for("100", "hr", "1") is None
     assert {request.url.host for request in calls} == {"api.congress.gov"}
+
+
+def test_the_job_outlasts_the_enrichment_deadline_by_the_native_restore_and_write():
+    """The job took 22 to 27 of its 30 minutes before receipts; restoring congress_bills alone is 5.5 more."""
+    from pathlib import Path
+
+    import yaml
+
+    from spicy_regs.transforms.enrich_bill_subjects import DEADLINE_SECONDS
+
+    workflow = Path(__file__).resolve().parents[1] / ".github/workflows/rollup-bill-subjects.yml"
+    job_seconds = yaml.safe_load(workflow.read_text())["jobs"]["run"]["with"]["timeout_minutes"] * 60
+    assert job_seconds >= DEADLINE_SECONDS + 30 * 60

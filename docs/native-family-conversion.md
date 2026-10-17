@@ -177,9 +177,12 @@ has been checked for outside readers.
   `court-citations` (102.0M rows), `court-opinions` (10.8M),
   `court-opinion-clusters` (10.1M), `roll-call-votes` (10.6M),
   `member-vote-terms` (10.6M), `federal-register` (1.0M).
-- Are not on an approved list: `bill-subjects` (also
-  needs `congress_bills` native first), `committee-rosters`,
-  `press-releases`, `laws`, `print-citations`.
+- Are not on an approved list: `committee-rosters`, `press-releases`, `laws`,
+  `print-citations`.
+
+`bill-subjects` converts through the hosted workflow. `congress_bills` is
+native (the `bill-family` generation carries receipts), so its scheduled
+rollup can read it, and its scheduled rollup refuses until this runs once.
 
 A Congress.gov or GovInfo receipt also records the local path of the file it
 was converted from. Run those conversions from a neutral `--work` path.
@@ -350,7 +353,7 @@ set in the shell that the file contradicts is refused, by name.
 
 `convert-native-family.yml` runs the same maintained converter on a hosted
 runner, one named family per manual dispatch. It supports the bulk regulatory,
-court and votes families and `bill-family`. Their owners still coordinate
+court and votes families, `bill-family` and `bill-subjects`. Their owners still coordinate
 reader compatibility and concurrent ordinary writers.
 
 Bind `expected_entry_sha256` to the complete observed family entry with

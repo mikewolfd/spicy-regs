@@ -11,7 +11,7 @@ import re
 
 
 FAMILIES = frozenset({
-    "dockets", "documents", "court-opinions", "roll-call-votes", "member-vote-terms", "bill-family",
+    "dockets", "documents", "court-opinions", "roll-call-votes", "member-vote-terms", "bill-family", "bill-subjects",
 })
 
 
