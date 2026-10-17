@@ -9,7 +9,11 @@ Two routes, and only these:
 * **Refresh** (``capture_dir``) downloads the header and every cycle through SpicyDocs' FEC client into a new
   ``<capture_dir>/fec-<label>-master-XXXX/`` attempt: ``blobs/`` holds each original and ``selection.json`` records
   every capture as it lands, ``complete: true`` after the last, or a scrubbed ``failure``. Old URLs are never assumed
-  immutable, so a refresh always downloads; a failed or refused attempt stays on disk.
+  immutable, so a refresh always downloads; a failed or refused attempt stays on disk. Raw custody and the run's
+  source evidence keep independent copies of each original on purpose: custody outlives failed builds and feeds
+  selection rebuilds, while evidence is sealed with the generation. They are never hard-linked (spicy-regs-run's
+  closed census refuses aliases). The duplicate write waits on SpicyDocs ``download()`` adopting a
+  ``CompletedCapture``.
 * **Rebuild** (``selection``) reads a retained, complete ``selection.json`` and its blobs with no client and no HTTP.
   It is how a mapping change, or a parser failure after a good download, is re-run without touching the publisher.
 

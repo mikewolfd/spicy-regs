@@ -121,9 +121,21 @@ def test_complete_generation_binds_exact_responses_and_refresh_retires_rows(tmp_
     evidence = second.source_evidence
     assert evidence is not None
     verified = verify_evidence(evidence.artifact_dir)
+    # Raw custody and evidence stay independent copies of each original: equal bytes, never aliased.
+    attempts = list(tmp_path.glob(".builds/*/native.inputs/raw/fec-candidate-master-*"))
     for body in files.values():
         digest = hashlib.sha256(body).hexdigest()
-        assert (evidence.artifact_dir / "blobs" / "sha256" / digest).read_bytes() == body
+        retained = evidence.artifact_dir / "blobs" / "sha256" / digest
+        copies = [
+            attempt / "blobs" / "sha256" / digest
+            for attempt in attempts
+            if (attempt / "blobs" / "sha256" / digest).exists()
+        ]
+        assert copies and retained.stat().st_nlink == 1
+        assert all(
+            c.read_bytes() == body and c.stat().st_nlink == 1 and c.stat().st_ino != retained.stat().st_ino
+            for c in copies
+        )
     generations = [json.loads(p.read_text()) for p in (tmp_path / "generations").glob("*/artifact.json")]
     assert any(verified.pin.artifact_digest in json.dumps(generation) for generation in generations)
     # The rows are written under the policy main declares for this table, not a version literal of this lane.

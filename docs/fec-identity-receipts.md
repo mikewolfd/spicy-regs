@@ -60,6 +60,11 @@ refuses. Each of these bundles records the originals it used in
 `<output-dir>.inputs/acquisition.json`: the route (`refresh`, `selection` or
 `resume`), the raw directory, and for a rebuild the selection's path and SHA-256.
 
+Raw custody and the run's source evidence keep independent copies of each
+original on purpose; they are never hard-linked, because the closed census of
+`spicy-regs-run` refuses aliases. The duplicate write waits on SpicyDocs
+`download()` adopting a `CompletedCapture`.
+
 `seal_identity_context` binds the local subjects and receipt member into the
 existing immutable generation format with `local-partial` status. It neither
 publishes nor changes the selected remote generation. Failed or unsupported
