@@ -153,7 +153,7 @@ installed, the existing scheduled `lobbying_filings` job published a generation
 with zero rows (422 bytes, 14 columns) after the source rejected an unfiltered
 request with HTTP 400. Its public bytes and decoded row count match the
 publication record, but the source failure did not establish absence. The
-invalid family was conditionally withdrawn from `publication.json`; its
+invalid family was conditionally withdrawn from `publication.json` (the v1 pointer, no longer written); its
 immutable files and receipts remain available for diagnosis.
 The reader repair in `7551f63` refuses failed, malformed and incomplete pages
 before output or publication. Independent replay verifies both former

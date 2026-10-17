@@ -5,6 +5,19 @@ publish it through `publication.v2.json`, the one pointer. Readers that understa
 its immutable table paths once per operation. Existing bare Parquet URLs remain
 legacy, unversioned data; this change does not rewrite or certify them.
 
+## The retired `publication.json`
+
+Nothing writes or reads `publication.json` any more; `publication.v2.json` is
+the only pointer. The object already in the bucket is left in place on
+purpose, so it stays valid but frozen at the last state it was derived to, and
+a reader that still fetches it (a user script, a pre-2026-09-27 checkout, the
+historical probes in sibling repos) gets an outdated index with no error. A
+tombstone that v1 parsers refuse would make such readers fail loudly; it is an
+owner decision, not done here. Likewise `_fold_v1` is gone: a workflow run from
+a branch that predates v2 publishes to a pointer nobody reads instead of being
+folded into v2. Before merging, confirm no workflow log since v2 went live
+carries the warning "a writer predating publication.v2.json published them".
+
 ## What is checked
 
 A rollup must return every declared output, including a real zero-row Parquet
