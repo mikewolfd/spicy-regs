@@ -119,7 +119,7 @@ def test_full_remote_generation_and_publication_have_no_local_table_copy(tmp_pat
     assert store.objects[key] == store.objects[member.key]
     assert pq.read_table(BytesIO(store.objects[key])).equals(table, check_metadata=True)
     assert len(store.copied) > 1
-    assert store.writes[-1] == pub.INDEX_KEY
+    assert store.writes[-1] == pub.INDEX_V2_KEY
     assert store.ranges and all(pin == member.etag for _, _, pin in store.ranges)
 
 
@@ -135,19 +135,19 @@ def test_changed_source_after_hash_before_parquet_decode_refuses(tmp_path, monke
     monkeypatch.setattr(remote._RemoteGenerationSource, "table_info", changed)
     with pytest.raises(OSError, match="PreconditionFailed"):
         publish(store, directory, member)
-    assert not store.copied and pub.INDEX_KEY not in store.objects
+    assert not store.copied and pub.INDEX_V2_KEY not in store.objects
 
 
 def test_changed_source_during_promotion_aborts_and_preserves_pointer(tmp_path):
     store = RemoteStore()
     old_dir, old, _, _ = prepared(tmp_path, store)
     prior = publish(store, old_dir, old)
-    prior_bytes = store.objects[pub.INDEX_KEY]
+    prior_bytes = store.objects[pub.INDEX_V2_KEY]
     directory, member, _, _ = prepared(tmp_path, store, "stage/two", value="new source")
     store.before_copy = lambda key: store.objects.__setitem__(key, b"changed")
     with pytest.raises(Exception, match="PreconditionFailed"):
         publish(store, directory, member, prior)
-    assert store.objects[pub.INDEX_KEY] == prior_bytes
+    assert store.objects[pub.INDEX_V2_KEY] == prior_bytes
     assert store.aborted and not store.uploads
 
 
@@ -162,7 +162,7 @@ def test_producer_receipt_is_not_independent_admission(tmp_path, bad_field):
             members=[replace(member, **{bad_field: wrong[bad_field]})], family="test",
             expected_keys=["body.parquet"], schemas=SCHEMAS,
         )
-    assert pub.INDEX_KEY not in store.objects and not store.writes
+    assert pub.INDEX_V2_KEY not in store.objects and not store.writes
 
 
 def test_extra_remote_object_is_not_filtered_out(tmp_path):
@@ -185,7 +185,7 @@ def test_existing_wrong_destination_cannot_pass_by_etag_or_size(tmp_path):
     store.objects[prefix + "/body.parquet"] = b"!" + original[1:]
     with pytest.raises(ArtifactVerificationError, match="digest"):
         publish(store, directory, member)
-    assert pub.INDEX_KEY not in store.objects
+    assert pub.INDEX_V2_KEY not in store.objects
     assert store.objects[prefix + "/body.parquet"] == b"!" + original[1:]
 
 
@@ -195,7 +195,7 @@ def test_corruption_after_promotion_never_updates_pointer(tmp_path):
     store.corrupt_key = "body.parquet"
     with pytest.raises(ArtifactVerificationError, match="digest"):
         publish(store, directory, member)
-    assert pub.INDEX_KEY not in store.objects
+    assert pub.INDEX_V2_KEY not in store.objects
 
 
 def test_concurrent_pointer_change_survives(tmp_path):
@@ -222,11 +222,11 @@ def test_stale_family_refuses_before_promotion(tmp_path):
     prior = publish(store, old_dir, old)
     new_dir, new, _, _ = prepared(tmp_path, store, "stage/two", value="new")
     publish(store, new_dir, new, prior)
-    before = store.objects[pub.INDEX_KEY]
+    before = store.objects[pub.INDEX_V2_KEY]
     copies = len(store.copied)
     with pytest.raises(pub.PublicationError, match="changed since"):
         publish(store, old_dir, old, prior)
-    assert store.objects[pub.INDEX_KEY] == before and len(store.copied) == copies
+    assert store.objects[pub.INDEX_V2_KEY] == before and len(store.copied) == copies
 
 
 def test_receipt_only_remote_generation_admits_and_selects_checkpoints(tmp_path):

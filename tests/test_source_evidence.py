@@ -471,7 +471,7 @@ def test_missing_corrupt_or_failed_evidence_never_advances_pointer(tmp_path, fai
             prior_index=pub.empty_index(),
             evidence_directories=() if failure == "missing" else (evidence.artifact_dir,),
         )
-    assert pub.INDEX_KEY not in store.objects
+    assert pub.INDEX_V2_KEY not in store.objects
     assert not any(key.startswith("generations/") for key in store.writes)
 
 
@@ -548,7 +548,7 @@ def test_evidence_backed_prior_and_new_source_pin_survive_publication(tmp_path, 
         directory, client=store, bucket="test", prior_index=prior, evidence_directories=(evidence.artifact_dir,)
     )
     assert index["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
-    assert store.writes[-1] == pub.INDEX_KEY
+    assert store.writes[-1] == pub.INDEX_V2_KEY
     assert (
         next(item for item in artifact.root["inputs"] if item["role"] == "prior-generation")["artifactDigest"]
         == old_artifact.pin.artifact_digest
@@ -614,7 +614,7 @@ def test_wrong_inherited_pin_refuses_generation_and_evidence_publication(tmp_pat
     old, old_artifact = build(tmp_path, keys=("a.parquet",))
     store = Store()
     prior = pub.publish_generation(old, client=store, bucket="test", prior_index=pub.empty_index())
-    old_pointer = store.objects[pub.INDEX_KEY]
+    old_pointer = store.objects[pub.INDEX_V2_KEY]
     old_writes = list(store.writes)
     evidence = CaptureEvidence(tmp_path, "test")
     evidence.prior_input = ArtifactInput("prior-generation", old_artifact.pin.logical_id, "sha256:" + "0" * 64)
@@ -637,7 +637,7 @@ def test_wrong_inherited_pin_refuses_generation_and_evidence_publication(tmp_pat
         pub.publish_generation(
             directory, client=store, bucket="test", prior_index=prior, evidence_directories=(evidence.artifact_dir,)
         )
-    assert store.objects[pub.INDEX_KEY] == old_pointer
+    assert store.objects[pub.INDEX_V2_KEY] == old_pointer
     assert store.writes == old_writes
 
 
@@ -671,7 +671,7 @@ def test_scheduled_pipeline_binds_and_uploads_nonhidden_evidence(tmp_path, monke
     artifact = verify_generation(generation)
     assert evidence.artifact is not None
     assert artifact.root["inputs"] == [{"role": "source-evidence", **evidence.artifact.pin.as_dict()}]
-    assert store.writes[-1] == pub.INDEX_KEY
+    assert store.writes[-1] == pub.INDEX_V2_KEY
     assert json.loads((evidence.directory / "run-outcome.json").read_bytes())["outcome"] == "complete"
 
 

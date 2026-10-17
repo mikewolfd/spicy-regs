@@ -63,7 +63,7 @@ def test_preparation_script_uses_same_preflight_before_object_download(tmp_path,
     fixture_owner(index, "members.parquet").pop("etlReceipts")
     client = object()
     monkeypatch.setattr(module.r2, "get_r2_client", lambda: client)
-    monkeypatch.setattr(module.publication, "_stored_index", lambda *args: (index, None, None))
+    monkeypatch.setattr(module.publication, "_stored_index", lambda *args: (index, None))
     monkeypatch.setattr(module, "load_dotenv", lambda *args: None)
     monkeypatch.setattr(sys, "argv", ["prepare_analysis.py", "--output", str(tmp_path / "refused")])
     with pytest.raises(publication.PublicationError, match="requires native receipts for: members, member_terms"):

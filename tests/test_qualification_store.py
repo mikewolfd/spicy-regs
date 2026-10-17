@@ -28,7 +28,6 @@ def test_actual_publisher_uploads_and_readmits_streamed_multipart_members(tmp_pa
     assert any(call['method'] == 'upload_part' for call in store.calls)
     assert store.uploads == {}
     assert publication.parse_index(store.objects[publication.INDEX_V2_KEY].read_bytes()) == selected
-    assert publication.parse_index(store.objects[publication.INDEX_KEY].read_bytes()) == publication.derive_v1(selected)
 
 
 def test_conditional_digest_and_bucket_refusals_preserve_private_bytes(tmp_path):

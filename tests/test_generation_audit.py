@@ -58,6 +58,15 @@ def codes(report, severity=None):
     return {f["code"] for f in report["findings"] if severity is None or f["severity"] == severity}
 
 
+def test_a_bucket_holding_only_the_retired_pointer_has_no_index_to_audit(tmp_path):
+    store = Store()
+    publish(tmp_path, store, "current", {"t.parquet": rows(("1", "a"))})
+    store.objects["publication.json"] = store.objects.pop(pub.INDEX_V2_KEY)
+
+    with pytest.raises(MemberNotFoundError):
+        audit(public_base(store, tmp_path / "public"), family="test", declarations=DECLARED)
+
+
 def test_a_duplicate_identity_is_found_before_rows_are_paired(tmp_path):
     store = Store()
     prior = publish(tmp_path, store, "prior", {"t.parquet": rows(("1", "a"), ("2", "b"))})
@@ -329,7 +338,7 @@ def test_changed_member_bytes_fail_admission_and_the_cli_exit(tmp_path, capsys):
 
 def test_a_frozen_index_without_its_base_refuses_before_any_read(tmp_path, capsys):
     """2026-09-26: a fork index audited against the defaulted upstream base failed all 57 checks."""
-    index = tmp_path / "publication.json"
+    index = tmp_path / "publication.v2.json"
     index.write_text("{}")
 
     with pytest.raises(SystemExit) as refused:

@@ -34,7 +34,7 @@ def main(argv=None):
     args.output.mkdir(parents=True)
     load_dotenv(args.env_file)
     client = r2.get_r2_client()
-    snapshot, _, _ = publication._stored_index(client, "spicy-regs")
+    snapshot, _ = publication._stored_index(client, "spicy-regs")
     entries = analysis_input_entries(snapshot, convert_published_official_inputs=args.convert_published_official_inputs)
     project_official = all("etlReceipts" in entries[name] for name in PROJECTED_NATIVE_OFFICIAL_TABLES)
     index_path = args.output / "publication.v2.json"

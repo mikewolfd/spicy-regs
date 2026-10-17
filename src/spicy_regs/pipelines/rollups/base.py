@@ -32,7 +32,7 @@ prior-generation input names it. Multi-output
 rollups declare ``outputs`` instead of ``output`` and return a tuple of paths
 from ``build()``; every declared output must be present, including successful
 empty tables, and each goes through the same per-file shrink guard on upload.
-Uploads use immutable generation paths, and ``publication.json`` changes only
+Uploads use immutable generation paths, and ``publication.v2.json`` changes only
 after the full family passes local schema checks, shrink checks and remote byte
 verification; readers capture that index once per operation. The old bare
 Parquet URLs are not rewritten by this path.
@@ -309,7 +309,7 @@ class RollupPipeline(Pipeline):
             )
             from spicy_regs.sources.cloudflare import purge_urls
 
-            purge_urls([f"{public_url.rstrip('/')}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
+            purge_urls([f"{public_url.rstrip('/')}/{publication.INDEX_V2_KEY}"])
         from spicy_regs.selected_generations import remember_generation
 
         remember_generation(output_dir, destination, artifact)

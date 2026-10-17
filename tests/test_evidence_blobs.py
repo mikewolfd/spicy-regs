@@ -56,7 +56,7 @@ def test_identical_evidence_uploads_and_reads_back_no_blob_bytes(tmp_path):
     sent, reads = dict(store.sent), dict(store.reads)
     publish(store, second_dir, second, prior)
     assert all(store.sent[key] == sent[key] and store.reads[key] == reads[key] for key in blobs)
-    assert store.writes[-1] == pub.INDEX_KEY
+    assert store.writes[-1] == pub.INDEX_V2_KEY
 
 
 def test_only_the_new_blob_of_a_mixed_run_is_sent_and_verified(tmp_path):
@@ -89,7 +89,7 @@ def test_damaged_shared_blob_refuses_before_the_pointer_moves(tmp_path, damage):
         store.before_put = delete
     with pytest.raises(ArtifactVerificationError):
         publish(store, directory, evidence)
-    assert pub.INDEX_KEY not in store.objects
+    assert pub.INDEX_V2_KEY not in store.objects
     assert not any(key.startswith("generations/") for key in store.writes)
 
 
@@ -208,5 +208,5 @@ def test_remote_stream_or_membership_failure_closes_body_and_never_publishes(tmp
     with pytest.raises((ArtifactVerificationError, OSError)):
         publish(store, directory, evidence)
     assert all(body.closed for body in opened)
-    assert pub.INDEX_KEY not in store.objects and pub.INDEX_V2_KEY not in store.objects
+    assert pub.INDEX_V2_KEY not in store.objects
     assert not any(key.startswith("generations/") for key in store.writes)

@@ -35,14 +35,10 @@ def index(version=2):
     "timestamp",
     ["2026-10-03T11:17:53Z", "2026-10-03T11:17:53.123456Z"],
 )
-def test_utc_publication_time_survives_parsing_but_legacy_v1_omits_it(version, timestamp):
+def test_utc_publication_time_survives_parsing(version, timestamp):
     value = index(version)
     value["families"]["members"]["publishedAt"] = timestamp
-    parsed = pub.parse_index(json.dumps(value).encode())
-    assert parsed == value
-    legacy = pub.derive_v1(parsed)
-    assert "publishedAt" not in legacy["families"]["members"]
-    assert legacy["families"]["members"] == index()["families"]["members"]
+    assert pub.parse_index(json.dumps(value).encode()) == value
 
 
 def test_publication_time_remains_optional():

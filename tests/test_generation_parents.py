@@ -56,7 +56,7 @@ def _serve(monkeypatch, store: Store, versions: list[dict]) -> bytes:
         if remote_key == "bare.parquet":
             local_path.write_bytes(bare_bytes)
             return True
-        location = pub.single_member(pub.parse_index(store.objects[pub.INDEX_KEY]), remote_key).path
+        location = pub.single_member(pub.parse_index(store.objects[pub.INDEX_V2_KEY]), remote_key).path
         local_path.write_bytes(store.objects[location])
         return True
 
@@ -66,14 +66,14 @@ def _serve(monkeypatch, store: Store, versions: list[dict]) -> bytes:
 
 
 def _parents(store: Store, family: str) -> dict:
-    entry = pub.parse_index(store.objects[pub.INDEX_KEY])["families"][family]
+    entry = pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"][family]
     root = json.loads(store.objects[f"{entry['prefix']}/artifact.json"])
     return root["spec"]["parents"]
 
 
 def test_a_derived_generation_records_each_parent_it_read(tmp_path, monkeypatch, remote):
     _Base(output_dir=tmp_path / "base", skip_upload=False).run()
-    base = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["base"]
+    base = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["base"]
     bare = _serve(monkeypatch, remote, [{"etag": '"v1"', "bytes": 10}, {"etag": '"v1"', "bytes": 10}])
 
     _Derived(output_dir=tmp_path / "derived", skip_upload=False).run()
@@ -172,7 +172,7 @@ def _fetch_from(store: Store, monkeypatch) -> None:
 
 def test_a_generation_refuses_its_own_family_as_a_parent(tmp_path, remote):
     _Base(output_dir=tmp_path / "base", skip_upload=False).run()
-    index = pub.parse_index(remote.objects[pub.INDEX_KEY])
+    index = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])
     entry = index["families"]["base"]
     own = {"sha256": entry["tables"]["base.parquet"]["sha256"], "byteSize": entry["tables"]["base.parquet"]["byteSize"],
            "family": "base", "artifactDigest": entry["artifactDigest"]}
@@ -188,7 +188,7 @@ def test_the_audit_still_admits_a_published_root_whose_parent_is_its_own_family(
     from spicy_regs.generations import _table_info, _write_generation_metadata, verify_generation
 
     _Base(output_dir=tmp_path / "base", skip_upload=False).run()
-    index = pub.parse_index(remote.objects[pub.INDEX_KEY])
+    index = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])
     entry = index["families"]["base"]
     directory = tmp_path / "historical"
     directory.mkdir()
@@ -208,13 +208,13 @@ def test_a_rollup_reading_its_own_prior_records_no_parent(tmp_path, monkeypatch,
     _Base(output_dir=tmp_path / "first", skip_upload=False).run()
     _fetch_from(remote, monkeypatch)
     _Self(output_dir=tmp_path / "second", skip_upload=False).run()
-    entry = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["base"]
+    entry = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["base"]
     assert "parents" not in json.loads(remote.objects[f"{entry['prefix']}/artifact.json"])["spec"]
 
 
 def test_a_soft_read_of_another_family_is_recorded_at_the_bytes_read(tmp_path, monkeypatch, remote):
     _Base(output_dir=tmp_path / "base", skip_upload=False).run()
-    base = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["base"]
+    base = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["base"]
     _fetch_from(remote, monkeypatch)
     _SoftReader(output_dir=tmp_path / "reader", skip_upload=False).run()
     assert _parents(remote, "reader") == {"base.parquet": {
@@ -225,5 +225,5 @@ def test_a_soft_read_of_another_family_is_recorded_at_the_bytes_read(tmp_path, m
 def test_an_absent_soft_input_records_nothing(tmp_path, monkeypatch, remote):
     _fetch_from(remote, monkeypatch)
     _SoftReader(output_dir=tmp_path / "reader", skip_upload=False).run()
-    entry = pub.parse_index(remote.objects[pub.INDEX_KEY])["families"]["reader"]
+    entry = pub.parse_index(remote.objects[pub.INDEX_V2_KEY])["families"]["reader"]
     assert "parents" not in json.loads(remote.objects[f"{entry['prefix']}/artifact.json"])["spec"]

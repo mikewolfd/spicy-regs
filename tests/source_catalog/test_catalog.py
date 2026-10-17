@@ -805,7 +805,7 @@ def publication_selection(tmp_path, *, cross_family=False, partitioned=False):
         ]
     publication = write(
         tmp_path,
-        "publication.json",
+        "publication.v2.json",
         {
             "format": "spicy-regs-publication",
             "version": 2,
@@ -836,7 +836,7 @@ def publication_selection(tmp_path, *, cross_family=False, partitioned=False):
                     "exit_code": 0,
                     "bytes": publication.stat().st_size,
                     "sha256": digest(publication).removeprefix("sha256:"),
-                    "url": "https://public.example/publication.json",
+                    "url": "https://public.example/publication.v2.json",
                 }
             ],
         },
@@ -877,7 +877,7 @@ def publication_selection(tmp_path, *, cross_family=False, partitioned=False):
         {
             "format": "spicy-retained-publication-selection",
             "version": 1,
-            "publication_url": "https://public.example/publication.json",
+            "publication_url": "https://public.example/publication.v2.json",
             "publication": pin(publication),
             "headers": pin(headers),
             "capture": pin(capture),
@@ -1012,7 +1012,7 @@ def test_retained_publication_requires_selected_response_url(corpus, tmp_path):
     config = write(tmp_path, "config.json", {"collections": [{"id": "family:test", "families": ["test"]}]})
     selection_path = publication_selection(tmp_path)
     selection = json.loads(selection_path.read_text())
-    selection["publication_url"] = "https://other.example/publication.json"
+    selection["publication_url"] = "https://other.example/publication.v2.json"
     selection_path.write_text(json.dumps(selection))
     with pytest.raises(ValueError, match="digest-matched response"):
         build(corpus, tmp_path / "refused.sqlite", config=config, publication_observations=[selection_path])

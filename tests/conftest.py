@@ -137,9 +137,12 @@ def remote(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "fake")
     monkeypatch.setenv("R2_BUCKET_NAME", "spicy-regs")
     monkeypatch.setattr(r2, "get_r2_client", lambda: store)
-    monkeypatch.setattr(pub, "load_index", lambda url: next(
-        (pub.parse_index(store.objects[key]) for key in (pub.INDEX_V2_KEY, pub.INDEX_KEY) if key in store.objects),
-        pub.empty_index()))
+
+    def load_index(url):
+        raw = store.objects.get(pub.INDEX_V2_KEY)
+        return pub.empty_index() if raw is None else pub.parse_index(raw)
+
+    monkeypatch.setattr(pub, "load_index", load_index)
     return store
 
 

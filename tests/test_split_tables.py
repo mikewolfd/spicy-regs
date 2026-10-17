@@ -97,15 +97,22 @@ def test_only_version_2_may_list_a_split_table():
         _parse({**_index(), "version": 1})
 
 
-def test_readers_prefer_the_version_2_index_and_fall_back_to_version_1(monkeypatch):
-    v1: dict[str, Any] = {**_index(), "version": 1}
-    v1["families"]["bills"]["tables"].pop("fixture_bill_sections.parquet")
-    served = {pub.INDEX_KEY: v1, pub.INDEX_V2_KEY: _index()}
-    monkeypatch.setattr(pub, "_bounded_get", lambda url, **_: (
-        json.dumps(served[key]).encode() if (key := url.rsplit("/", 1)[1]) in served else None))
+def test_readers_read_only_the_version_2_index(monkeypatch):
+    """A bucket serving only the retired ``publication.json`` has no pointer: its tables resolve as legacy."""
+    retired: dict[str, Any] = {**_index(), "version": 1}
+    retired["families"]["bills"]["tables"].pop("fixture_bill_sections.parquet")
+    served = {"publication.json": retired, pub.INDEX_V2_KEY: _index()}
+    requested = []
+
+    def get(url, **_):
+        requested.append(key := url.rsplit("/", 1)[1])
+        return json.dumps(served[key]).encode() if key in served else None
+
+    monkeypatch.setattr(pub, "_bounded_get", get)
     assert "fixture_bill_sections.parquet" in pub.load_index("https://test")["families"]["bills"]["tables"]
     del served[pub.INDEX_V2_KEY]
-    assert pub.load_index("https://test")["version"] == 1
+    assert pub.load_index("https://test") == pub.empty_index()
+    assert requested == [pub.INDEX_V2_KEY, pub.INDEX_V2_KEY]
 
 
 def test_the_mcp_serves_one_view_over_every_member_without_a_hive_column(tmp_path, monkeypatch):
@@ -185,8 +192,6 @@ def test_a_split_table_publishes_in_version_2_and_an_unchanged_partition_is_copi
     assert [(m["key"], m["rows"], m["partition"]) for m in split["members"]] == [
         ("fixture_bill_sections/congress=118/part-000000.parquet", 2, {"congress": "118"}),
         ("fixture_bill_sections/congress=119/part-000000.parquet", 1, {"congress": "119"})]
-    v1 = pub.parse_index(store.objects[pub.INDEX_KEY])
-    assert list(v1["families"]["bills"]["tables"]) == ["fixture_congress_bills.parquet"]
 
     # The builder's nightly shape: fetch the prior partitions, rewrite only the sitting Congress.
     _serve(monkeypatch, store)
@@ -241,7 +246,7 @@ def test_the_audit_finds_one_split_member_the_index_misstates_and_retains_versio
     assert {f["code"] for f in report["findings"]} >= {"index-equals-manifest-false",
                                                        "observed-bytes-equal-index-false"}
     assert (retained / pub.INDEX_V2_KEY).read_bytes() == store.objects[pub.INDEX_V2_KEY]
-    assert not (retained / pub.INDEX_KEY).exists()
+    assert not (retained / "publication.json").exists()
 
 
 def test_the_audit_rereads_the_etag_of_every_member_of_both_generations():

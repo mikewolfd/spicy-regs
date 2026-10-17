@@ -70,8 +70,10 @@ def test_single_output_rollup_uploads_its_one_file(tmp_path: Path, monkeypatch: 
     rollup = _SingleOutputRollup(output_dir=tmp_path, skip_upload=False)
     rollup.run()
 
-    assert uploads.writes[-1] == pub.INDEX_KEY
-    assert list(pub.parse_index(uploads.objects[pub.INDEX_KEY])["families"]["single"]["tables"]) == ["single.parquet"]
+    assert uploads.writes[-1] == pub.INDEX_V2_KEY
+    assert list(pub.parse_index(uploads.objects[pub.INDEX_V2_KEY])["families"]["single"]["tables"]) == [
+        "single.parquet"
+    ]
 
 
 def test_single_output_output_attribute_is_unchanged(tmp_path: Path) -> None:
@@ -89,8 +91,11 @@ def test_multi_output_rollup_uploads_every_file(tmp_path: Path, monkeypatch: pyt
     rollup = _MultiOutputRollup(output_dir=tmp_path, skip_upload=False)
     rollup.run()
 
-    assert uploads.writes[-1] == pub.INDEX_KEY
-    assert set(pub.parse_index(uploads.objects[pub.INDEX_KEY])["families"]["multi"]["tables"]) == {"a.parquet", "b.parquet"}
+    assert uploads.writes[-1] == pub.INDEX_V2_KEY
+    assert set(pub.parse_index(uploads.objects[pub.INDEX_V2_KEY])["families"]["multi"]["tables"]) == {
+        "a.parquet",
+        "b.parquet",
+    }
 
 
 def test_multi_output_output_property_reads_first_declared_key(tmp_path: Path) -> None:

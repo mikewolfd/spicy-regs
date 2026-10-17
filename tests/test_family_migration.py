@@ -33,7 +33,7 @@ class _Declared(_Grown):
 
 
 def _tables(store) -> set[str]:
-    return set(pub.parse_index(store.objects[pub.INDEX_KEY])["families"]["family"]["tables"])
+    return set(pub.parse_index(store.objects[pub.INDEX_V2_KEY])["families"]["family"]["tables"])
 
 
 def test_a_family_that_declares_nothing_republishes_as_before(tmp_path, remote):

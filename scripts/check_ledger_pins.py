@@ -5,7 +5,7 @@ The ledger records the audited generation per output as
 ``qualified at `<pin>…` (<YYYY-MM-DD>)``. Scheduled runs publish newer
 generations before audit, so prose calling a pin "live" goes stale. A rollup
 pin is the first 8 hex digits of its family's ``artifactDigest`` in
-``publication.json``; a ``snapshot_<8 hex>`` pin names the materialized
+``publication.v2.json``; a ``snapshot_<8 hex>`` pin names the materialized
 rulemaking generation behind ``materialized/rulemaking/latest.json``. A base
 object outside the index (dockets, documents, comments and its index) records
 ``verified at table digest `<8 hex>…` (<date>; ETag `<8 hex>…`)``, and its ETag is
@@ -150,7 +150,9 @@ def prose_not_live(tables: Mapping, live: set[str]) -> list[tuple[str, str, str,
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=LEDGER)
-    parser.add_argument("--index-url", help="Public base URL holding publication.json (default: the ledger's destination)")
+    parser.add_argument(
+        "--index-url", help="Public base URL holding publication.v2.json (default: the ledger's destination)"
+    )
     parser.add_argument("--descriptions", type=Path, default=DEFAULT_DESCRIPTIONS,
                         help="The dictionary whose pinned sentences the prose pass reads")
     args = parser.parse_args(argv)

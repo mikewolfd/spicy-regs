@@ -75,7 +75,7 @@ def main(argv=None):
         or client.meta.endpoint_url != "https://174055408ff1560e60601c4d12c561c4.r2.cloudflarestorage.com"
     ):
         raise ValueError("Deployment account or bucket differs from the verified target")
-    before, _, _ = publication._stored_index(client, bucket)
+    before, _ = publication._stored_index(client, bucket)
     (args.output / "before.json").write_text(json.dumps(before, indent=2) + "\n")
     evidence = (Path(prepared["evidence_directory"]),) if prepared.get("evidence_directory") else ()
     if args.observe_only:
@@ -89,7 +89,7 @@ def main(argv=None):
             directory, client=client, bucket=bucket, prior_index=prior, evidence_directories=evidence,
             receipt_only_tables=frozenset(args.receipt_only_table),
         )
-    observed, _, _ = publication._stored_index(client, bucket)
+    observed, _ = publication._stored_index(client, bucket)
     if observed["families"][family] != after["families"][family]:
         raise ValueError("Published family changed before authenticated readback")
     unexpected = [

@@ -32,7 +32,7 @@ def setup_candidate(tmp_path, monkeypatch, *, current=True, status="prepared_not
     monkeypatch.setattr(publish.r2, "get_r2_client", lambda: SimpleNamespace(meta=SimpleNamespace(
         endpoint_url="https://174055408ff1560e60601c4d12c561c4.r2.cloudflarestorage.com")))
     monkeypatch.setenv("R2_BUCKET_NAME", "spicy-regs")
-    monkeypatch.setattr(publish.publication, "_stored_index", lambda *args: (snapshot, None, None))
+    monkeypatch.setattr(publish.publication, "_stored_index", lambda *args: (snapshot, None))
 
     def no_write(*args, **kwargs):
         raise AssertionError("Observe-only must never upload or write a pointer")

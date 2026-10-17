@@ -311,7 +311,6 @@ def test_rollback_restores_the_captured_entry_and_keeps_the_converted_objects(tm
     rolled = conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
 
     assert publication.current_index(BASE)["families"]["cfr-sections"] == old == rolled["rolled_back"]["entry"]
-    assert json.loads(bucket.objects[publication.INDEX_KEY])["families"]["cfr-sections"]["artifactDigest"] == old["artifactDigest"]
     assert f"{converted['prefix']}/etl_receipts.parquet" in bucket.objects
     refused_read(tmp_path, "cfr_sections")
     # Rolling back again changes nothing, and a dry receipt has nothing to roll back.
@@ -387,14 +386,11 @@ def test_a_pointer_write_whose_response_was_lost_is_found_and_finished(tmp_path,
     assert receipt["publish_attempt"]["outcome"] == "moved to this conversion's generation"
     assert "Family changed since the build read its inputs" in receipt["publish_attempt"]["error"]
     assert receipt["read_back"]["anonymous_read_rows"] == {"cfr_sections": 2}
-    # The derived version 1 index was written although the publish call never reached it.
-    assert json.loads(bucket.objects[publication.INDEX_KEY])["families"]["cfr-sections"]["artifactDigest"] == stored(bucket)["artifactDigest"]
     assert "published and read back" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("failed_step", ["read-stored", "repair-v1"])
 def test_lost_publish_response_followed_by_recovery_failure_reports_actual_uncertainty(
-    tmp_path, monkeypatch, bucket, capsys, failed_step
+    tmp_path, monkeypatch, bucket, capsys
 ):
     from tests.generation_fakes import error
 
@@ -415,16 +411,14 @@ def test_lost_publish_response_followed_by_recovery_failure_reports_actual_uncer
     work = tmp_path / "work"
     with monkeypatch.context() as recovery:
         recovery.setattr(bucket, "put_object", put_object)
-        recovery.setattr(publication, "stored_family" if failed_step == "read-stored" else "rederive_v1", fail)
+        recovery.setattr(publication, "stored_family", fail)
         assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 1
     report = capsys.readouterr().err
     assert conversion.NOTHING_PUBLISHED not in report
-    assert ("result is not known" if failed_step == "read-stored" else "IS published") in report
+    assert "result is not known" in report
     receipt = json.loads((work / conversion.RECEIPT).read_text())
     assert stored(bucket)["artifactDigest"] == receipt["generation"]["artifactDigest"]
     assert receipt["captured"]["entry"] == old
-    if failed_step == "repair-v1":
-        assert receipt["published"]["entry"] == stored(bucket)
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
     assert stored(bucket) == old
 
@@ -479,8 +473,16 @@ def test_a_process_stopped_after_the_pointer_write_leaves_a_receipt_that_rolls_b
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
     work = tmp_path / "work"
+    put_pointer = publication._put_pointer
+
+    def stop_after_the_pointer_moved(client, bucket_name, key, raw, etag):
+        moved = put_pointer(client, bucket_name, key, raw, etag)
+        if key == V2:
+            raise KeyboardInterrupt()
+        return moved
+
     with monkeypatch.context() as stopped:
-        stopped.setattr(publication, "_write_v1", lambda *_a, **_k: (_ for _ in ()).throw(KeyboardInterrupt()))
+        stopped.setattr(publication, "_put_pointer", stop_after_the_pointer_moved)
         assert conversion.main(["cfr-sections", *COMMON, "--work", str(work), "--publish", "--expect-bucket", BUCKET]) == 130
     report = capsys.readouterr().err
     assert "a publish was attempted and its result is not known" in report
@@ -919,7 +921,7 @@ def test_a_family_whose_evidence_predates_version_2_hands_nothing_on_and_gets_cu
     assert evidence.inherited_event("congress-index-selection", table="treaties") is None
 
 
-def test_rollback_recovers_a_lost_response_and_rederives_v1(tmp_path, monkeypatch, bucket):
+def test_rollback_recovers_a_lost_response(tmp_path, monkeypatch, bucket):
     from tests.generation_fakes import error
 
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
@@ -938,11 +940,6 @@ def test_rollback_recovers_a_lost_response_and_rederives_v1(tmp_path, monkeypatc
     receipt = conversion.rollback(path, expect_bucket=BUCKET)
     assert receipt["rollback_attempt"]["outcome"] == "restored after lost response"
     assert receipt["rolled_back"]["entry"] == stored(bucket) == old
-    assert json.loads(bucket.objects[publication.INDEX_KEY]) == publication.derive_v1(publication.parse_index(bucket.objects[V2]))
-    # A retry after an interrupted v1 write repairs that view even if v2 is already restored.
-    bucket.objects[publication.INDEX_KEY] = b'{}'
-    conversion.rollback(path, expect_bucket=BUCKET)
-    assert json.loads(bucket.objects[publication.INDEX_KEY]) == publication.derive_v1(publication.parse_index(bucket.objects[V2]))
 
 
 def test_interrupted_rollback_reports_the_attempt_and_can_be_retried(tmp_path, monkeypatch, bucket, capsys):

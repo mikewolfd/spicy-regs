@@ -286,7 +286,7 @@ A missing managed generation member still refuses the connection.
 ## The rulemaking snapshot (`_spicy_rulemaking`)
 
 The materialized rulemaking dataset (`rule_targets` through
-`agency_lifecycle_stats`) is not in `publication.json`: it publishes all its
+`agency_lifecycle_stats`) is not in `publication.v2.json`: it publishes all its
 tables at once under `materialized/rulemaking/snapshots/<id>/` and then
 replaces `materialized/rulemaking/latest.json`. `_build_connection` reads that
 pointer and the manifest it names once, beside the index, through
@@ -308,7 +308,7 @@ second view path.
   managed member does.
 - **Blast radius.** A pointer or manifest that fails those checks refuses the
   whole connection, every table with it, exactly as an invalid
-  `publication.json` does through `load_index` today. Degrading to "rulemaking
+  `publication.v2.json` does through `load_index` today. Degrading to "rulemaking
   tables unavailable" would be possible but would make a broken publication look
   like an unpublished one; it is left as the index's behavior on purpose.
 - **No schema pin.** The manifest records bytes, digest and rows but no columns,
@@ -831,8 +831,7 @@ file its reader cannot page, so two of five personas never read a row.
   from. It is null until the publisher records it; the writer lands only after
   an image that reads the field is live, because the earlier `parse_index`
   required the family key set exactly and refuses the new key (a refresh would
-  keep the old connection and the next cold start would raise). `derive_v1`
-  strips it, so version-1 readers never see it. `_reply_pins` adds it for
+  keep the old connection and the next cold start would raise). `_reply_pins` adds it for
   `describe_table`, `query_sql` and the citation reply's `publication`; it is
   not in `_publication_status`, whose pins derived views embed, nor in
   `list_sources`. Reading each member's Parquet key-value metadata for a time

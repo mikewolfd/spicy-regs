@@ -36,7 +36,7 @@ def _publish_source(tmp_path, ids):
 
 
 def _published_ids(store: Store) -> list[str]:
-    location = pub.single_member(pub.parse_index(store.objects[pub.INDEX_KEY]), "dockets.parquet").path
+    location = pub.single_member(pub.parse_index(store.objects[pub.INDEX_V2_KEY]), "dockets.parquet").path
     return pl.read_parquet(io.BytesIO(store.objects[location]))["docket_id"].to_list()
 
 
@@ -123,7 +123,7 @@ def test_the_documents_family_carries_what_regulations_gov_last_said_of_each_doc
     monkeypatch.setattr(r2, "download_working_copy", working)
     monkeypatch.setattr(r2, "download", lambda key, path: pytest.fail(f"read a managed family: {key}"))
     DocumentsFamily(output_dir=tmp_path, skip_upload=False).run()
-    location = pub.single_member(pub.parse_index(remote.objects[pub.INDEX_KEY]), "documents.parquet").path
+    location = pub.single_member(pub.parse_index(remote.objects[pub.INDEX_V2_KEY]), "documents.parquet").path
     published = pl.read_parquet(io.BytesIO(remote.objects[location]))
     status = dict(published.select("document_id", "publisher_status").iter_rows())
     assert status == ({ids[0]: "removed", ids[1]: "listed", ids[2]: None} if reconciled else dict.fromkeys(ids))

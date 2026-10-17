@@ -221,7 +221,7 @@ def test_complete_analysis_preparation_converts_published_inputs_and_keeps_origi
             return {"Body": BytesIO(store.objects[Key])}
 
     monkeypatch.setattr(module.r2, "get_r2_client", Client)
-    monkeypatch.setattr(module.publication, "_stored_index", lambda *args: (index, None, None))
+    monkeypatch.setattr(module.publication, "_stored_index", lambda *args: (index, None))
     monkeypatch.setattr(module, "load_dotenv", lambda *args: None)
     monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example")
     # The synthetic prior contains no acquisition evidence to inherit. This

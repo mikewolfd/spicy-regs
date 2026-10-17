@@ -1376,12 +1376,6 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         attempt |= {"outcome": "moved to this conversion's generation", "error": reason}
         receipt["published"] = {"entry": entry}
         save()
-        try:
-            publication.rederive_v1(client, bucket)
-        except Exception as repair:
-            raise ConversionRefused(
-                f"{family}: published, but the derived index could not be repaired ({type(repair).__name__}: {repair})",
-                state=_published_state(family, entry, work / RECEIPT, bucket)) from repair
     else:
         attempt["outcome"] = "published"
     receipt["published"] = {"entry": entry}
@@ -1390,7 +1384,7 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
     try:
         from spicy_regs.sources.cloudflare import purge_urls
 
-        purge_urls([f"{base}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
+        purge_urls([f"{base}/{publication.INDEX_V2_KEY}"])
         read_index = publication.current_index(base)
         entry = read_index["families"].get(family) or {}
         read = {dataset: built.read_published(dataset, read_index) for dataset in tables}
@@ -1472,19 +1466,18 @@ def rollback(receipt_path: Path, *, discard_newer: bool = False, expect_bucket: 
     else:
         attempt["outcome"] = "restored"
     save()
-    # Also repairs an interrupted earlier rollback whose v2 write already landed.
     from spicy_regs.sources.cloudflare import purge_urls
 
     base = receipt["public_url"]
     try:
-        publication.rederive_v1(client, target["bucket"])
-        purge_urls([f"{base}/{key}" for key in (publication.INDEX_V2_KEY, publication.INDEX_KEY)])
+        purge_urls([f"{base}/{publication.INDEX_V2_KEY}"])
         entry = publication.current_index(base)["families"].get(family)
     except Exception as failure:
         raise ConversionRefused(
-            f"{family}: rollback read-back or derived index failed ({type(failure).__name__}: {failure})",
-            state=f"{family}'s stored v2 entry was restored; public read-back and derived index are unverified. "
-                  f"Retry {SCRIPT} --rollback {receipt_path} --expect-bucket {expect_bucket}") from failure
+            f"{family}: rollback read-back failed ({type(failure).__name__}: {failure})",
+            state=f"{family}'s stored v2 entry was restored; public read-back is unverified. "
+            f"Retry {SCRIPT} --rollback {receipt_path} --expect-bucket {expect_bucket}",
+        ) from failure
     receipt["rolled_back"] = {"at": _now(), "entry": entry, "discarded_newer": discard_newer,
                               "found": "this conversion's generation" if ours else
                                        "the captured generation" if _same_generation(stored, captured) else "another generation"}

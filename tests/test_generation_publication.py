@@ -8,7 +8,6 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from loguru import logger
 from rulespec_artifacts import ArtifactVerificationError, canonical_json_bytes, parse_canonical_json, stamp_root
 
 from spicy_regs.generations import build_generation, verify_generation
@@ -34,11 +33,15 @@ def publish(store, path, prior=None):
     return pub.publish_generation(path, client=store, bucket="test", prior_index=prior or pub.empty_index())
 
 
+#: The pointer publishing wrote before ``publication.v2.json`` was the only one. Nothing writes or reads it now.
+RETIRED_POINTER = "publication.json"
+
+
 def test_complete_generation_then_pointer_and_exact_readback(tmp_path):
     directory, artifact = build(tmp_path)
     store = Store()
     index = publish(store, directory)
-    assert store.writes[-2:] == [pub.INDEX_V2_KEY, pub.INDEX_KEY]
+    assert store.writes[-1] == pub.INDEX_V2_KEY
     assert index["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     for key in ("a.parquet", "b.parquet"):
         location, info = pub.single_member(index, key).path, pub.table_descriptor(index, key)
@@ -46,7 +49,21 @@ def test_complete_generation_then_pointer_and_exact_readback(tmp_path):
         assert store.objects[location] == (directory / key).read_bytes()
         assert info["rows"] == 1
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == index
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(index)
+
+
+def test_publishing_writes_only_the_version_2_pointer_and_leaves_a_retired_one_alone(tmp_path):
+    old, _ = build(tmp_path)
+    new, _ = build(tmp_path, "two", value="two")
+    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
+    store = Store()
+    prior = publish(store, old)
+    assert RETIRED_POINTER not in store.objects and RETIRED_POINTER not in store.writes
+    store.objects[RETIRED_POINTER] = b"published long ago"
+    current = publish(store, new, prior)
+    publish(store, sibling, current)
+    assert store.writes.count(pub.INDEX_V2_KEY) == 3
+    assert store.objects[RETIRED_POINTER] == b"published long ago"
+    assert RETIRED_POINTER not in store.writes[store.writes.index(pub.INDEX_V2_KEY) + 1 :]
 
 
 @pytest.mark.parametrize("failure", ["a.parquet", "b.parquet", "artifact.json", "members.json", pub.INDEX_V2_KEY])
@@ -55,7 +72,7 @@ def test_interruption_never_changes_previous_complete_generation(tmp_path, failu
     new, _ = build(tmp_path, "two", value="two")
     store = Store()
     prior = publish(store, old)
-    old_pointers = {key: store.objects[key] for key in (pub.INDEX_V2_KEY, pub.INDEX_KEY)}
+    old_pointers = {pub.INDEX_V2_KEY: store.objects[pub.INDEX_V2_KEY]}
     old_members = {key: store.objects[pub.single_member(prior, key).path] for key in ("a.parquet", "b.parquet")}
 
     def interrupt(key):
@@ -76,7 +93,7 @@ def test_corrupt_uploaded_bytes_never_become_published(tmp_path):
     store.corrupt_key = "b.parquet"
     with pytest.raises(ArtifactVerificationError, match="digest"):
         publish(store, directory)
-    assert pub.INDEX_KEY not in store.objects
+    assert pub.INDEX_V2_KEY not in store.objects
 
 
 def test_late_shrink_refusal_uploads_nothing(tmp_path):
@@ -127,7 +144,6 @@ def test_concurrent_sibling_family_is_merged_not_overwritten(tmp_path):
     assert published["families"]["other"] == rival
     assert published["families"]["test"]["artifactDigest"] == artifact.pin.artifact_digest
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == published
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(published)
 
 
 def test_conditional_request_conflict_is_retried_like_a_refused_pointer_write(tmp_path):
@@ -341,7 +357,7 @@ def test_rollup_ignores_stale_cached_prior_and_keeps_it_as_evidence(tmp_path, mo
 
     monkeypatch.setattr(r2, "download", download)
     Ingest(output_dir=retained, skip_upload=False).run()
-    current = pub.parse_index(store.objects[pub.INDEX_KEY])
+    current = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
     location = pub.single_member(current, "a.parquet").path
     from io import BytesIO
 
@@ -364,7 +380,7 @@ def test_unchanged_members_are_copied_not_reuploaded(tmp_path):
     store = Store()
     prior = publish(store, old)
     publish(store, new, prior=prior)
-    index = pub.parse_index(store.objects[pub.INDEX_KEY])
+    index = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
     b_loc, b_info = pub.single_member(index, "b.parquet").path, pub.table_descriptor(index, "b.parquet")
     assert b_info is not None
     assert b_info["sha256"] == prior["families"]["test"]["tables"]["b.parquet"]["sha256"]
@@ -382,7 +398,7 @@ def test_a_changed_member_still_uploads_bytes(tmp_path):
     store = Store()
     prior = publish(store, old)
     publish(store, new, prior=prior)
-    index = pub.parse_index(store.objects[pub.INDEX_KEY])
+    index = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
     for key in ("a.parquet", "b.parquet"):
         assert store.objects[pub.single_member(index, key).path] == (new / key).read_bytes()
     assert store.copies == []
@@ -427,7 +443,7 @@ def test_partial_writer_carries_exact_siblings_and_refuses_cold_start(tmp_path, 
 
     monkeypatch.setattr(r2, "download", download)
     Partial(output_dir=tmp_path / "warm", skip_upload=False).run()
-    current = pub.parse_index(store.objects[pub.INDEX_KEY])
+    current = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
     assert set(current["families"]) == {"test"}
     assert store.objects[pub.single_member(current, "b.parquet").path] == (old / "b.parquet").read_bytes()
     generation = next((tmp_path / "warm" / "generations").iterdir())
@@ -483,162 +499,21 @@ def test_partial_writer_carries_a_split_sibling_member_for_member(tmp_path, monk
     assert {key: (generation / key).read_bytes() for key in members} == members, "each member's bytes, unchanged"
 
 
-@pytest.mark.parametrize("failure", [OSError("interrupted transfer"), error("PreconditionFailed")])
-def test_a_failed_version_1_write_is_logged_and_repaired_by_the_next_publish(tmp_path, failure):
-    """Version 2 is the pointer, so the publish stands; version 1 stays behind until any writer derives it again.
-
-    Both a transport failure and a version 1 that keeps moving (every conditional write refused) are logged.
-    """
-    old, _ = build(tmp_path)
-    new, _ = build(tmp_path, "two", value="two")
-    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
-    store = Store()
-    prior = publish(store, old)
-    stale = store.objects[pub.INDEX_KEY]
-
-    def interrupt(key):
-        if key == pub.INDEX_KEY:
-            raise failure
-
-    store.before_put = interrupt
-    messages = []
-    sink = logger.add(lambda message: messages.append(message.record["message"]), level="ERROR")
-    try:
-        current = publish(store, new, prior)
-    finally:
-        logger.remove(sink)
-    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == current
-    assert current["families"]["test"] != prior["families"]["test"] and store.objects[pub.INDEX_KEY] == stale
-    assert [m for m in messages if "publication.json is behind publication.v2.json; the next publish rederives it" in m]
-
-    store.before_put = None
-    published = publish(store, sibling, current)
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(published)
-    assert published["families"]["test"] == current["families"]["test"]
-
-
-def _v1_only(store, index: dict) -> dict:
-    """Leave ``store`` as publishing before version 2 did: version 1 alone, in canonical bytes; return that index."""
-    del store.objects[pub.INDEX_V2_KEY]
-    store.objects[pub.INDEX_KEY] = canonical_json_bytes(pub.derive_v1(index))
-    return pub.parse_index(store.objects[pub.INDEX_KEY])
-
-
-def test_the_first_publish_after_the_merge_creates_version_2_from_version_1(tmp_path):
-    old, _ = build(tmp_path)
-    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
-    store = Store()
-    prior = _v1_only(store, publish(store, old))
-    assert prior["version"] == 1 and pub.INDEX_V2_KEY not in store.objects
-
-    published = publish(store, sibling, prior)
-    assert set(published["families"]) == {"test", "other"}
-    assert published["families"]["test"] == prior["families"]["test"]
-    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == published
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(published)
-
-
-def test_two_writers_creating_version_2_at_once_both_publish(tmp_path):
-    """Both read version 1 while version 2 is absent; the second to create it loses that write, rereads and merges."""
-    old, _ = build(tmp_path)
+def test_two_writers_creating_the_index_at_once_both_publish(tmp_path):
+    """Both read the index while it is absent; the second to create it loses that write, rereads and merges."""
     first, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
     second, _ = build(tmp_path, "third", family="third", keys=("d.parquet",))
     store = Store()
-    prior = _v1_only(store, publish(store, old))
 
     def rival(key):
         if key == pub.INDEX_V2_KEY:
             store.before_put = None
-            publish(store, second, prior)
+            publish(store, second)
 
     store.before_put = rival
-    published = publish(store, first, prior)
-    assert set(published["families"]) == {"test", "other", "third"}
+    published = publish(store, first)
+    assert set(published["families"]) == {"other", "third"}
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == published
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(published)
-
-
-def test_a_version_1_only_publish_during_the_bootstrap_is_folded_into_version_2(tmp_path):
-    """A writer predating version 2 publishes to version 1 alone after this writer created version 2 from it.
-
-    Deriving version 1 from version 2 would erase that publish from both pointers; it is folded into version 2 first.
-    """
-    old, _ = build(tmp_path)
-    newer, _ = build(tmp_path, "two", value="two")
-    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
-    store = Store()
-    prior = _v1_only(store, publish(store, old))
-    legacy = Store()
-    legacy.objects = dict(store.objects)
-    moved = pub.derive_v1(publish(legacy, newer, prior))["families"]["test"]
-
-    def predating(key):
-        if key == pub.INDEX_V2_KEY:
-            store.before_put = None
-            store.objects.update({k: v for k, v in legacy.objects.items() if k.startswith(moved["prefix"])})
-            store.objects[pub.INDEX_KEY] = canonical_json_bytes({**prior, "families": {"test": moved}})
-
-    store.before_put = predating
-    publish(store, sibling, prior)
-    final = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
-    assert set(final["families"]) == {"test", "other"} and final["families"]["test"] == moved
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(final)
-
-
-def test_folding_moves_only_families_version_1_alone_changed():
-    """``g`` appeared in version 1 alone, so a writer predating version 2 published it. ``f`` changed in version 1
-    because a writer derived it from version 2, which has moved on since; folding it would revert version 2."""
-    def index(version, **families):
-        return {"format": "spicy-regs-publication", "version": version, "families": {name: {
-            "prefix": f"generations/{name}/{digit * 64}", "logicalId": f"urn:x:{name}", "artifactDigest": "sha256:" + digit * 64,
-            "tables": {f"{name}.parquet": {"sha256": "sha256:" + digit * 64, "byteSize": 1, "rows": 1,
-                                           "columns": [["id", "VARCHAR"]]}}} for name, digit in families.items()}}
-
-    store = Store()
-    store.objects[pub.INDEX_V2_KEY] = canonical_json_bytes(index(2, f="3"))
-    pub._fold_v1(store, "test", canonical_json_bytes(index(1, f="0")), canonical_json_bytes(index(1, f="1", g="2")))
-    assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == index(2, f="3", g="2")
-
-
-def test_a_raced_version_1_write_rederives_from_the_newer_version_2(tmp_path, monkeypatch):
-    """A rival publishing after this writer read version 2 for its version-1 write leaves version 1 at the newer state.
-
-    The rival runs once this writer's read of version 2 has been answered, the interleaving that would let a writer
-    reading version 2 before version 1's token write an older state over a newer one.
-    """
-    old, _ = build(tmp_path)
-    new, _ = build(tmp_path, "two", value="two")
-    sibling, _ = build(tmp_path, "other", family="other", keys=("c.parquet",))
-    store = Store()
-    prior = publish(store, old)
-    armed = []
-    get_object = store.get_object
-
-    def get(*, Bucket, Key):
-        response = get_object(Bucket=Bucket, Key=Key)
-        if Key == pub.INDEX_V2_KEY and armed:
-            armed.clear()
-            store.before_put = None  # the rival's own version-2 write must not re-arm this
-            publish(store, sibling, pub.parse_index(store.objects[pub.INDEX_V2_KEY]))
-        return response
-
-    store.before_put = lambda key: armed.append(key) if key == pub.INDEX_V2_KEY else None
-    monkeypatch.setattr(store, "get_object", get)
-    publish(store, new, prior)
-    final = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
-    assert set(final["families"]) == {"test", "other"}
-    assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(final)
-
-
-def test_version_1_omits_split_tables_and_a_family_left_without_tables():
-    single = {"sha256": "sha256:" + "c" * 64, "byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]]}
-    split = {"byteSize": 1, "rows": 1, "columns": [["id", "VARCHAR"]], "partitionColumns": ["id"], "members": []}
-    family = {"prefix": "p", "logicalId": "urn:x", "artifactDigest": "sha256:" + "d" * 64}
-    index = {"format": "spicy-regs-publication", "version": 2, "families": {
-        "mixed": {**family, "publishedAt": "2026-10-01T03:12:26Z", "tables": {"one.parquet": single, "many.parquet": split}},
-        "split": {**family, "tables": {"all.parquet": split}}}}
-    assert pub.derive_v1(index) == {"format": "spicy-regs-publication", "version": 1, "families": {
-        "mixed": {**family, "tables": {"one.parquet": single}}}}
 
 
 _INSTANT = "%Y-%m-%dT%H:%M:%SZ"
@@ -652,7 +527,7 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def test_the_pointer_write_stamps_when_it_moved_the_pointer_and_version_1_omits_it(tmp_path):
+def test_the_pointer_write_stamps_when_it_moved_the_pointer(tmp_path):
     old, _ = build(tmp_path)
     new, _ = build(tmp_path, "two", value="two")
     store = Store()
@@ -664,8 +539,6 @@ def test_the_pointer_write_stamps_when_it_moved_the_pointer_and_version_1_omits_
         stored = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
         assert stored == prior
         assert before <= _stamp(stored) <= _now()
-        assert "publishedAt" not in pub.parse_index(store.objects[pub.INDEX_KEY])["families"]["test"]
-        assert pub.parse_index(store.objects[pub.INDEX_KEY]) == pub.derive_v1(stored)
         stamps.append(_stamp(stored))
     assert stamps[0] <= stamps[1]
 
@@ -721,7 +594,7 @@ def test_backfill_stamps_only_entries_lacking_the_instant_from_their_generation_
             store.modified[key] = datetime(2026, 9, 1, 12, 0, 0, tzinfo=timezone.utc)
     # The root is written first; the pointer moves after the last member and its read-back.
     store.modified[f"{prefix}/c.parquet"] = datetime(2026, 9, 1, 12, 15, 2, 750_000, tzinfo=timezone.utc)
-    v1, writes = store.objects[pub.INDEX_KEY], list(store.writes)
+    writes = list(store.writes)
 
     planned = pub.backfill_published_at(store, "test")
     assert planned["stamps"] == {"other": "2026-09-01T12:15:02Z"} and not planned["applied"]
@@ -732,7 +605,6 @@ def test_backfill_stamps_only_entries_lacking_the_instant_from_their_generation_
     stored = pub.parse_index(store.objects[pub.INDEX_V2_KEY])
     assert stored["families"]["other"] == {**index["families"]["other"], "publishedAt": "2026-09-01T12:15:02Z"}
     assert stored["families"]["test"] == published["families"]["test"]
-    assert store.objects[pub.INDEX_KEY] == v1
 
     writes = list(store.writes)
     again = pub.backfill_published_at(store, "test", apply=True)
@@ -759,7 +631,7 @@ def test_backfill_refuses_when_the_pointer_moved_since_it_read_it(tmp_path):
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == moved[0]
 
 
-def test_backfill_refuses_a_generation_without_its_root_or_an_index_without_version_2(tmp_path):
+def test_backfill_refuses_a_generation_without_its_root_or_an_absent_index(tmp_path):
     directory, _ = build(tmp_path)
     store = Store()
     index = _unstamped(store, *publish(store, directory)["families"])
@@ -767,7 +639,7 @@ def test_backfill_refuses_a_generation_without_its_root_or_an_index_without_vers
     writes = list(store.writes)
     with pytest.raises(pub.PublicationError, match="no root"):
         pub.backfill_published_at(store, "test", apply=True)
-    _v1_only(store, index)
+    del store.objects[pub.INDEX_V2_KEY]
     with pytest.raises(pub.PublicationError, match="absent"):
         pub.backfill_published_at(store, "test", apply=True)
     assert store.writes == writes
@@ -809,7 +681,6 @@ def test_staging_complete_generations_keeps_both_unselected(tmp_path):
         )
         assert store.objects[entry["prefix"] + "/" + key] == (directory / key).read_bytes()
         assert pub.INDEX_V2_KEY not in store.objects
-        assert pub.INDEX_KEY not in store.objects
 
 
 @pytest.mark.parametrize("predating_ok", [False, True])

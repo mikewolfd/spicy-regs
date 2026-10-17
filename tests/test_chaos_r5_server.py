@@ -382,10 +382,9 @@ def _index(**family):
                                     "columns": [["law_id", "VARCHAR"]]}}, **family}}}
 
 
-def test_the_index_admits_a_publication_instant_that_version_1_omits():
+def test_the_index_admits_a_publication_instant():
     index = pub.parse_index(json.dumps(_index(publishedAt="2026-10-01T03:12:26Z")).encode())
     assert index["families"]["laws"]["publishedAt"] == "2026-10-01T03:12:26Z"
-    assert "publishedAt" not in pub.derive_v1(index)["families"]["laws"]
     assert pub.parse_index(json.dumps(_index(publishedAt="2026-10-01T03:12:26.123456Z")).encode())
     for invalid in ("yesterday", "2026-10-01 03:12:26", "2026-10-01T03:12:26+00:00", "2026-13-01T03:12:26Z",
                     1759288346, None):

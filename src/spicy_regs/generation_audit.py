@@ -53,7 +53,6 @@ from spicy_regs.content_checks import (
 )
 from spicy_regs.sources.publication import (
     EVIDENCE_PREFIX,
-    INDEX_KEY,
     INDEX_LIMIT,
     INDEX_V2_KEY,
     PublicationError,
@@ -1020,7 +1019,7 @@ def audit(base: PublicBase, *, family: str | None = None, table: str | None = No
     """Audit one family's (or one table's) current generation against an optional prior pin; never writes remotely."""
     run = _Run(samples=samples, secrets={name: value.encode() for name, value in (secrets or {}).items()})
     started = _now()
-    raw_index = index_raw if index_raw is not None else _read_index(base)
+    raw_index = index_raw if index_raw is not None else base.read(INDEX_V2_KEY, limit=INDEX_LIMIT, fresh=True)
     index = parse_index(raw_index)
     family, keys = _select(index, family, table)
     entry = index["families"][family]
@@ -1171,19 +1170,9 @@ def _consistency(base: PublicBase, entry: Mapping, prior: Mapping | None, keys: 
     return {"checked": True, "etag_stable": stable}
 
 
-def _read_index(base: PublicBase) -> bytes:
-    """The version-2 index, or version 1 while no version 2 is published."""
-    from rulespec_artifacts import MemberNotFoundError
-
-    try:
-        return base.read(INDEX_V2_KEY, limit=INDEX_LIMIT, fresh=True)
-    except MemberNotFoundError:
-        return base.read(INDEX_KEY, limit=INDEX_LIMIT, fresh=True)
-
-
 def _retain(directory: Path, raw_index: bytes, sources: Sequence[_ArtifactSource]) -> None:
     """Write the index and every control object read (roots, manifests, journal) under their published keys."""
-    objects = {INDEX_V2_KEY if parse_index(raw_index)["version"] == 2 else INDEX_KEY: raw_index}
+    objects = {INDEX_V2_KEY: raw_index}
     for source in sources:
         objects.update({source.location(key): raw for key, raw in source.control.items()})
     for key, raw in objects.items():
@@ -1222,8 +1211,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                                         "'none' skips conservation (default: the captured prior)")
     parser.add_argument("--base", help="Public base URL or a local directory laid out like the bucket "
                                        "(default: SPICY_REGS_R2_URL, R2_PUBLIC_URL, then the project default)")
-    parser.add_argument("--index", type=Path, help="Audit against this frozen publication.json, not the live one; "
-                                                   "requires --base, the bucket the index was read from")
+    parser.add_argument(
+        "--index",
+        type=Path,
+        help="Audit against this frozen publication.v2.json, not the live one; "
+        "requires --base, the bucket the index was read from",
+    )
     parser.add_argument("--output", type=Path, help="Write the JSON report here (default: stdout)")
     parser.add_argument("--retain", type=Path, help="Write the index, roots, manifests and journal read here")
     parser.add_argument("--env-file", type=Path, action="append", default=[],

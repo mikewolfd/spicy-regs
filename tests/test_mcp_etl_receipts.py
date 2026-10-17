@@ -40,13 +40,9 @@ def retained(tmp_path):
     return value, source, receipts
 
 
-def test_receipt_pointer_is_admitted_without_breaking_legacy_readers(tmp_path):
+def test_receipt_pointer_is_admitted(tmp_path):
     value, _, _ = retained(tmp_path)
     assert pub.parse_index(json.dumps(value).encode()) == value
-    legacy = pub.derive_v1(value)
-    assert "etlReceipts" not in legacy["families"]["members"]
-    assert legacy["families"]["members"]["tables"] == value["families"]["members"]["tables"]
-    assert pub.parse_index(json.dumps(legacy).encode()) == legacy
     assert pub.receipt_members(value)[0].path.endswith("/etl_receipts.parquet")
 
 

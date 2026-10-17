@@ -1,7 +1,7 @@
 # Publish complete table generations
 
 Rollups now retain a complete local generation and, when upload is enabled,
-publish it through `publication.json`. Readers that understand this index resolve
+publish it through `publication.v2.json`, the one pointer. Readers that understand this index resolve
 its immutable table paths once per operation. Existing bare Parquet URLs remain
 legacy, unversioned data; this change does not rewrite or certify them.
 
@@ -99,7 +99,7 @@ job fails, but the families still publish whatever it served.
   source tables; local MCP verifies their hashes and never fetches replacement
   evidence remotely. A missing file or schema mismatch refuses the connection.
   Deploy a reader that admits this field before advancing a publication pointer
-  that includes it. The derived v1 index omits receipts for older readers.
+  that includes it.
 - Rollup reads share one captured index. Managed download failures and digest
   mismatches abort; only an index 404 permits legacy resolution.
 - MCP captures one index per cached connection, creates managed views at immutable
