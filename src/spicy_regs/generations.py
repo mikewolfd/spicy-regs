@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import json
 import re
 import shutil
 import stat
+import sys
+from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
@@ -22,6 +25,60 @@ import pyarrow.parquet as pq
 KIND = "spicy-regs-rollup-generation"
 MANIFEST = "members.json"
 _PART_NAME = re.compile(r"part-\d{6}\.parquet\Z")
+
+
+# Only the producing owner path uses these completed checks. Independent readers
+# always call verify_generation/verify_generation_source and perform full admission.
+_OWNER_ADMISSIONS: OrderedDict[str, None] = OrderedDict()
+
+
+def validation_identity() -> dict:
+    """Exact validator/policy sources and runtime; restart owner processes after code changes."""
+    import rulespec_artifacts
+
+    return {
+        "spicy_regs": source_digest(Path(__file__).parent, (".py", ".json", ".xsd")),
+        "rulespec_artifacts": source_digest(Path(rulespec_artifacts.__file__).parent, (".py", ".json")),
+        "runtime": sys.version,
+        "packages": {name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts", "duckdb", "pyarrow")},
+    }
+
+
+def admit_generation_for_publication(directory: Path, *, expected_pin=None):
+    """Renew bytes and reuse only this owner's completed local semantic check.
+
+    Misses check exact bytes both before and after semantic admission. Hits
+    perform fresh artifact admission once; producer metadata never creates a hit.
+    Independent verify_generation/verify_generation_source always remain deep.
+    """
+    from rulespec_artifacts import LocalMemberSource, admit_artifact
+    from spicy_regs.etl_policy_registry import require_registered_receipts
+
+    validator = validation_identity()
+    source = LocalMemberSource(directory)
+    artifact = admit_artifact(source, expected_pin=expected_pin)
+    identity = hashlib.sha256(json.dumps([artifact.pin.as_dict(), validator],
+                                        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    require_registered_receipts(artifact.root["spec"]["tables"], artifact.root["spec"].get("etlReceipts"))
+    if identity not in _OWNER_ADMISSIONS:
+        from spicy_regs.etl_receipts import validate_receipt_bundle
+
+        try:
+            _verify_admitted_generation(artifact, source, lambda key: _table_info(directory / key),
+                                        validate_receipt_bundle)
+        except BaseException:
+            close = getattr(artifact.local_member_states, "close", None)
+            if close is not None:
+                close()
+            raise
+        admit_artifact(source, expected_pin=artifact.pin)
+    if validation_identity() != validator:
+        raise ValueError("Generation validator changed during admission")
+    _OWNER_ADMISSIONS[identity] = None
+    _OWNER_ADMISSIONS.move_to_end(identity)
+    while len(_OWNER_ADMISSIONS) > 8:
+        _OWNER_ADMISSIONS.popitem(last=False)
+    return artifact
 
 
 def _table_info(path: Path) -> dict:
@@ -332,7 +389,8 @@ def build_generation(
         _validate_owned_outputs(owned_output_root, directory, files,
             receipt_path if adopt_owned_receipt else None, partitioned)
     directory.mkdir(parents=True, exist_ok=False)
-    table_info = _table_footer_info if read_operation is not None else _table_info
+    # Both final admissions (the read operation's and admit_generation_for_publication) decode every page.
+    table_info = _table_footer_info
     tables, rows = {}, {}
     for key, path in sorted(zip(names, files)):
         if key in partitioned:
@@ -411,7 +469,7 @@ def build_generation(
         return read_operation.admit_generation(directory, expected_pin=pin)[0]
     if canonical_root is not None:
         raise ValueError("Canonical adoption requires an owned conversion read operation")
-    return verify_generation(directory)
+    return admit_generation_for_publication(directory)
 
 
 def _validate_owned_outputs(root, destination, files, receipt, partitioned):

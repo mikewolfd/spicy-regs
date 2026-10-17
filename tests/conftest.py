@@ -47,6 +47,14 @@ class _NoBulkBillText:
 
 
 @pytest.fixture(autouse=True)
+def fresh_owner_admissions() -> None:
+    """Start every test with no process-wide owner admission, so a pin reused across tests never skips a check."""
+    from spicy_regs import generations
+
+    generations._OWNER_ADMISSIONS.clear()
+
+
+@pytest.fixture(autouse=True)
 def no_bulk_bill_text(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the bill family's default bulk bill-text acquirer off the network (see ``_NoBulkBillText``)."""
     monkeypatch.setattr("spicy_regs.transforms.build_bill_family.BulkBillsAcquirer", _NoBulkBillText, raising=False)

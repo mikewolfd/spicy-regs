@@ -31,6 +31,14 @@ Offline runs without a public URL can still use explicitly retained local inputs
 they produce local candidates and cannot publish. Completed artifacts live under
 `output/generations/<artifact-digest>/`.
 
+The producing owner keeps a bounded process-local record of final successful
+generation admission. Before publication, it freshly admits the exact artifact
+bytes and checks current installed policy. Matching owner completion avoids
+repeating semantic receipt joins and page decoding. A first completion checks
+member bytes before and after those semantic checks. Independent local and
+remote reader admission remains deep. Restart owner processes after code or
+policy changes; no producer-written success field supplies admission.
+
 ## Publication and failure
 
 All shrink guards run before any upload. Objects are created conditionally under

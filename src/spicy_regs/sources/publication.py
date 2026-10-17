@@ -1147,9 +1147,9 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     completely restored by this native-conversion invocation; it also requires the exact prior on every retry.
     """
     from rulespec_artifacts import LocalMemberSource
-    from spicy_regs.generations import verify_generation
+    from spicy_regs.generations import admit_generation_for_publication
 
-    artifact = verify_generation(directory)
+    artifact = admit_generation_for_publication(directory)
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
