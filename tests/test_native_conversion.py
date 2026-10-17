@@ -767,22 +767,14 @@ def publish_old_with_evidence(
     from spicy_regs import etl_policy_registry, source_evidence
     from spicy_regs.generations import build_generation
 
+    unversioned = unversioned or evidence_version == "absent"  # how bill-subjects, fec-query and lobbying-filings are published today
     directory = tmp_path / family
     directory.mkdir()
     path = directory / f"{table}.parquet"
     pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(column, pa.string()) for column in rows[0]])), path)
     with monkeypatch.context() as patch:
         # Everything published here, including the evidence, is written the way the live pre-v2 families were.
-        if evidence_version == "absent":  # how bill-subjects, fec-query and lobbying-filings are published today
-            patch.setattr(source_evidence, "_require_current_version", lambda spec: None)
-            build = source_evidence.build_artifact_root
-
-            def unversioned(**kwargs):
-                kwargs["spec"] = {name: value for name, value in kwargs["spec"].items() if name != "evidence_version"}
-                return build(**kwargs)
-
-            patch.setattr(source_evidence, "build_artifact_root", unversioned)
-        elif evidence_version is not None:
+        if evidence_version is not None and evidence_version != "absent":
             patch.setattr(source_evidence, "EVIDENCE_VERSION", evidence_version)
         if unversioned:
             # Publication verifies what it publishes at the version it believes current; let the old shape through.

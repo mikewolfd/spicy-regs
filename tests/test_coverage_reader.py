@@ -307,7 +307,7 @@ def test_identity_changes_with_the_bytes_of_the_earlier_receipt_chains(tmp_path,
 @pytest.fixture
 def route_warnings():
     messages = []
-    sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
+    sink = logger.add(lambda message: messages.append(message.record["message"]), level="INFO")
     yield messages
     logger.remove(sink)
 
@@ -398,7 +398,7 @@ def test_forced_batch_ineligibility_logs_the_row_route_and_restores_identically(
 
     monkeypatch.setattr(regulations_bulk, "_materialize_selected", forced)
     row = bridge.restore(_restore_request(tmp_path, selected, "row"))
-    assert route_warnings == [f"regulatory restore route=row dataset={dataset} reason=forced for the test"]
+    assert route_warnings == ["regulatory restore route=row reason=unsupported-semantics detail=forced for the test"]
     assert pq.read_table(row["urls"][0]).equals(pq.read_table(bulk["urls"][0]), check_metadata=True)
     assert row["rows"] == bulk["rows"]
 
