@@ -108,8 +108,25 @@ def bulk_limits(*, threads: int, memory_limit: str, require_bulk: bool = False):
 
 def bulk_failure(action: str, error: Exception) -> BulkValidationError:
     """``error`` as a failure that never retries by row: invalid input data, or an operational one."""
-    invalid = isinstance(error, (ValueError, duckdb.DataError, duckdb.IntegrityError, duckdb.InvalidInputException))
+    invalid = isinstance(
+        error, (ValueError, pa.ArrowTypeError, duckdb.DataError, duckdb.IntegrityError, duckdb.InvalidInputException)
+    )
     return (BulkInputError if invalid else BulkValidationError)(f"{action}; no row fallback: {error}")
+
+
+def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
+    """``rows`` from the shared mapper as an Arrow table; one the schema cannot hold is the row reader's to decide."""
+    try:
+        return pa.Table.from_pylist(rows, schema=schema)
+    except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
+        raise NotBulkEligible(f"{what} does not fit its schema; the row reader decides") from error
+
+
+def log_row_fallback(route: str, error: NotBulkEligible) -> None:
+    """Say that a bulk route handed its work to the (slow) row path, and why."""
+    from loguru import logger
+
+    logger.info("{} route=row reason=unsupported-semantics detail={}", route, error)
 
 
 def reference_fallback(error: NotBulkEligible) -> None:

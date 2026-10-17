@@ -261,7 +261,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
                     if any(not isinstance(value, Mapping) for value in raw):
                         raise etl_bulk.NotBulkEligible('Comments exact retained processor input is required')
                     shaped = [shape_record('comments', value) for value in raw]
-                    reproduced = pa.Table.from_pylist(shaped, schema=selected.subject_schema)
+                    reproduced = etl_bulk.mapper_table(shaped, selected.subject_schema, 'Comments reproduction')
                     actual = table.select(selected.subject_schema.names).cast(selected.subject_schema)
                     if not reproduced.equals(actual):
                         raise etl_bulk.NotBulkEligible('Comments processor input differs from selected native subjects')
@@ -270,7 +270,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
                            exact_json({name: values.get(name) for name in names})
                            for value, values in zip(shaped, held)):
                         raise etl_bulk.NotBulkEligible('Comments processor input differs from selected receipt values')
-                    writer.write_table(pa.Table.from_pylist(raw, schema=schema))
+                    writer.write_table(etl_bulk.mapper_table(raw, schema, 'Comments retained input'))
                     seen += batch.num_rows
             if seen != expected:
                 raise RuntimeError(f'comments: restored {seen} of {expected} native subjects')

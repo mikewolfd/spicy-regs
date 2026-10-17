@@ -157,6 +157,17 @@ def test_duckdb_failure_after_partial_restore_fails_fast_and_keeps_existing_dest
     assert not list(tmp_path.glob('comments-restore-*'))
 
 
+def test_mapper_output_the_schema_cannot_hold_goes_to_the_row_reader_not_a_failure(tmp_path, monkeypatch):
+    raw = {'comment_id': 'c', 'comment': 'text'}
+    pair = write_records('comments', [(raw, context(raw, 0))], tmp_path / 'pair',
+                         project=lambda row: normalize_source_record('comments', row))
+    from spicy_regs.transforms import regulations_shape
+    real = regulations_shape.shape_record
+    monkeypatch.setattr(regulations_shape, 'shape_record', lambda dataset, row: dict(real(dataset, row), comment_text=5))
+    with pytest.raises(etl_bulk.NotBulkEligible, match='does not fit its schema'):
+        comments_bulk.restore_catalog(*pair, tmp_path / 'out.parquet', generation_id='g')
+
+
 @pytest.mark.parametrize('batch_size', [1, 4])
 def test_fresh_deep_attachment_uses_reference_order_and_error(tmp_path, monkeypatch, batch_size):
     rows = [

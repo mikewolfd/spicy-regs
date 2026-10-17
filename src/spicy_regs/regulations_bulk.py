@@ -211,7 +211,8 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
                     receipt_path, prior_receipts, stage / "inherited.parquet",
                     inherit_observations=False, require_unique_prior=True,
                 )
-            except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
+            except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError) as error:
+                # Its integrity checks (count, order, decoding) are faults, not unsupported semantics.
                 raise etl_bulk.bulk_failure('Regulatory prior inheritance failed', error) from error
             inherited.replace(receipt_path)
         validate_receipt_bundle({dataset: [subject_path]}, [receipt_path], [declared], generation_id=generation_id)
@@ -278,7 +279,7 @@ def _materialize_selected(selected, destination, *, source_schema=None):
                     if source_schema is not None and any(set(value) != set(source_schema.names) for value in raw):
                         raise etl_bulk.NotBulkEligible("Exact regulatory source field presence differs from retained input")
                     shaped = shape_records(selected.dataset, raw)
-                    reproduced = pa.Table.from_pylist(shaped, schema=declared.subject_schema)
+                    reproduced = etl_bulk.mapper_table(shaped, declared.subject_schema, 'Regulatory base reproduction')
                     if not reproduced.equals(table.select(declared.subject_schema.names).cast(declared.subject_schema)):
                         raise etl_bulk.NotBulkEligible('Regulatory base retained processor input differs from subject')
                     names = RECEIPT_COLUMNS[selected.dataset]
@@ -286,7 +287,7 @@ def _materialize_selected(selected, destination, *, source_schema=None):
                            for row, values in zip(shaped, held)):
                         raise etl_bulk.NotBulkEligible('Regulatory base retained processing evidence differs')
                     assert writer is not None
-                    writer.write_table(pa.Table.from_pylist(raw, schema=schema))
+                    writer.write_table(etl_bulk.mapper_table(raw, schema, 'Regulatory base retained input'))
                     seen += batch.num_rows
             finally:
                 if writer is not None:

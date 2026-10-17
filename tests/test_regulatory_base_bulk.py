@@ -421,3 +421,40 @@ def test_mapper_rejecting_a_retained_input_still_leaves_the_exact_first_error_to
         materialize_internal(ReceiptInput('documents', (subject,), receipts, 'g'), tmp_path / 'out.parquet', bulk=True)
     assert calls == ['row']
     assert not isinstance(caught.value, etl_bulk.BulkValidationError)
+
+
+def test_mapper_output_the_schema_cannot_hold_goes_to_the_row_reader_not_a_failure(tmp_path, monkeypatch):
+    from spicy_regs.transforms import regulations_shape
+
+    subject, receipts = write_held_dataset('dockets', _dockets(tmp_path), tmp_path / 'native', generation_id='g')
+    real = regulations_shape.shape_records
+    drifted = lambda dataset, rows: [dict(row, title=5) for row in real(dataset, rows)]  # noqa: E731
+    monkeypatch.setattr(regulations_shape, 'shape_records', drifted)
+    calls = []
+    reference = regulations_receipts._qualified_rows
+
+    def row_reader(*args, **kwargs):
+        calls.append('row')
+        yield from reference(*args, **kwargs)
+
+    monkeypatch.setattr(regulations_receipts, '_qualified_rows', row_reader)
+    batch, refused = [], []
+    proof = regulations_bulk._materialize_selected
+
+    def observed(*args, **kwargs):
+        batch.append(1)
+        try:
+            return proof(*args, **kwargs)
+        except etl_bulk.NotBulkEligible as error:
+            refused.append(str(error))
+            raise
+
+    monkeypatch.setattr(regulations_bulk, '_materialize_selected', observed)
+    materialize_internal(ReceiptInput('dockets', (subject,), receipts, 'g'), tmp_path / 'out.parquet', bulk=True)
+    assert batch == [1] and 'does not fit its schema' in refused[0]
+    assert calls == ['row']
+
+
+def test_arrow_type_errors_are_input_errors():
+    error = etl_bulk.bulk_failure('x', pa.ArrowTypeError('Expected bytes, got int'))
+    assert isinstance(error, etl_bulk.BulkInputError)

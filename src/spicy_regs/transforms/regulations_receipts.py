@@ -207,8 +207,8 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
         from spicy_regs import etl_bulk, regulations_bulk
         try:
             return regulations_bulk.materialize_internal(selected, destination, source_schema=source_schema)
-        except etl_bulk.NotBulkEligible:
-            pass
+        except etl_bulk.NotBulkEligible as error:
+            etl_bulk.log_row_fallback("regulatory restore", error)
 
     rows = iter(_qualified_rows(selected))
     first = next(rows, None)
@@ -384,8 +384,8 @@ def write_held_dataset(
                 dataset, source, destination, generation_id=generation_id, processor=processor,
                 witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
             )
-        except etl_bulk.NotBulkEligible:
-            pass
+        except etl_bulk.NotBulkEligible as error:
+            etl_bulk.log_row_fallback("regulatory write", error)
     parquet = pq.ParquetFile(source)
     metadata = dict(parquet.schema_arrow.metadata or {})
     # The exact input metadata is receipt data, including byte-valued keys.
