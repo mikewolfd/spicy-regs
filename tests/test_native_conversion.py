@@ -707,6 +707,49 @@ def test_a_converted_family_keeps_its_evidence_lineage(tmp_path, monkeypatch, bu
             assert handed is not None and handed["unevidenced"] == [["119-1"]] and handed["shape_version"] == 2
 
 
+def test_a_family_whose_evidence_predates_the_current_version_is_refused_by_the_command(
+    tmp_path, monkeypatch, bucket, capsys
+):
+    """Evidence written under evidence_version 1 cannot be inherited: exit 1 with the rebuild hint, nothing published."""
+    from spicy_regs import etl_policy_registry, source_evidence
+    from spicy_regs.generations import build_generation
+
+    family = tmp_path / "cfr-sections"
+    family.mkdir()
+    path = family / "cfr_sections.parquet"
+    pq.write_table(pa.Table.from_pylist(CFR, schema=pa.schema([(column, pa.string()) for column in CFR[0]])), path)
+    with monkeypatch.context() as patch:
+        # Everything published here, including the evidence, is written the way the live pre-v2 families were.
+        patch.setattr(source_evidence, "EVIDENCE_VERSION", 1)
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        evidence = source_evidence.CaptureEvidence(family, "cfr-sections")
+        evidence.inherit(publication.current_index(BASE), public_url=BASE)
+        build_generation(
+            family / "generation",
+            family="cfr-sections",
+            files=[path],
+            expected_keys=[path.name],
+            inputs=evidence.inputs(),
+            read_snapshot=publication.current_index(BASE),
+        )
+        publication.publish_generation(
+            family / "generation",
+            client=bucket,
+            bucket=BUCKET,
+            prior_index=publication.current_index(BASE),
+            evidence_directories=(evidence.artifact_dir,),
+        )
+    evidence.finish()
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    written = list(bucket.writes)
+    arguments = ["cfr-sections", *COMMON, "--work", str(tmp_path / "work"), "--publish", "--expect-bucket", BUCKET]
+    assert conversion.main(arguments) == 1
+    error = capsys.readouterr().err
+    assert "REFUSED:" in error and "Inherited source evidence refused" in error
+    assert "expected 2. Rebuild the family to write current evidence" in error
+    assert f"STATE: {conversion.NOTHING_PUBLISHED}" in error and bucket.writes == written
+
+
 def test_rollback_recovers_a_lost_response_and_rederives_v1(tmp_path, monkeypatch, bucket):
     from tests.generation_fakes import error
 

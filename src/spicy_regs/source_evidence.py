@@ -871,7 +871,10 @@ def require_current_evidence_root(root) -> None:
 def _require_current_version(spec) -> None:
     version_ = spec.get("evidence_version")
     if type(version_) is not int or version_ != EVIDENCE_VERSION:
-        raise SourceEvidenceError(f"Unsupported source evidence version; expected {EVIDENCE_VERSION}")
+        raise SourceEvidenceError(
+            f"Unsupported source evidence version; expected {EVIDENCE_VERSION}. "
+            "Rebuild the family to write current evidence"
+        )
 
 
 def _verify_receipts(source: MemberSource, artifact) -> None:

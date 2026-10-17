@@ -48,7 +48,12 @@ detail, and its source coverage stays unqualified. A first run has no managed
 prior. Source-evidence runtime admission supports only the current integer
 `evidence_version`, kind `spicy-regs-source-evidence` and outcome
 `build-complete`, and validates its receipt bindings. Other artifacts stay as
-historical evidence but are not runtime inputs.
+historical evidence but are not runtime inputs. A live generation whose evidence
+predates `evidence_version` 2 cannot be audited, converted or inherited from
+until its family is rebuilt. Two such families have no schedule: run
+`rollup-fec-observations.yml` (`workflow_dispatch`) for fec-observations, and
+rebuild fec-query by its manual release procedure
+([FEC delivery plan](fec-delivery-plan.md)).
 
 The Congress.gov index tables re-read every held detail that no retained
 response backs, after the run's own new, changed and unread records and under
