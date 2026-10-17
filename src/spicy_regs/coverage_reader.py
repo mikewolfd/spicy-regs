@@ -10,8 +10,11 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import inspect
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, receipt_policies
 from spicy_regs.legislative_receipts import policy as legislative_policy
 from spicy_regs.native_types import described_schema
 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors, dataset_policy
@@ -39,6 +42,11 @@ def implementation_identity():
                 "selected_generations.py",
                 "native_types.py",
                 "pipelines/rollups/subject_receipts.py",
+                "etl_bulk.py",
+                "regulations_bulk.py",
+                "transforms/regulations_receipts.py",
+                "transforms/regulations_shape.py",
+                "transforms/fec_identity_receipts.py",
             )
         ),
     ]
@@ -65,32 +73,65 @@ def checked_member(value):
     return path
 
 
-def restore(request):
-    if not isinstance(request, dict) or set(request) != {
-        "dataset",
-        "generationId",
-        "subjects",
-        "receipts",
-        "destination",
-    }:
+def _equals(values, expected):
+    # Arrow generates its kernels at import time; use its typed entry point. A null never matches.
+    matches = pc.call_function("equal", [values, expected])
+    return pc.call_function("coalesce", [matches, False])
+
+
+def current_receipts(path, dataset, policy, generation):
+    """Admit only receipts of the selected dataset and generation under a current or declared earlier policy version.
+
+    Carried receipts keep the ``policy_version`` they were written under, so the declared earlier versions of
+    ``policy`` (see ``receipt_policies``) are admitted beside the current one; an undeclared or null version is
+    refused, as is any other or null generation. Coverage writers re-issue carried attempts under the new
+    generation, so ``generation`` must equal the caller's label: that binds it to the pinned bytes. A dataset
+    whose carried receipts keep original generations would need the generations the shared validator accepts.
+    """
+    versions = pa.array(sorted({item.policy_version for item in receipt_policies(policy)}))
+    found = False
+    with pq.ParquetFile(path) as source:
+        if not source.schema_arrow.equals(RECEIPT_SCHEMA):
+            raise ValueError("Unsupported coverage receipt format; refresh current-format data")
+        for batch in source.iter_batches(columns=["dataset", "policy_version", "generation_id"], batch_size=65536):
+            selected = batch.filter(_equals(batch.column("dataset"), dataset))
+            if not selected.num_rows:
+                continue
+            found = True
+            known = pc.call_function("is_in", [selected.column("policy_version")], pc.SetLookupOptions(versions))
+            if not pc.call_function("all", [pc.call_function("coalesce", [known, False])]).as_py():
+                raise ValueError("Unsupported coverage receipt policy; refresh current-format data")
+            if not pc.call_function("all", [_equals(selected.column("generation_id"), generation)]).as_py():
+                raise ValueError("Coverage receipts differ from the selected generation")
+    if not found:
+        raise ValueError("Selected coverage generation has no receipt context")
+
+
+REQUEST_FIELDS = frozenset({"dataset", "generationId", "subjects", "receipts", "destination"})
+
+
+def checked_request(request, policy_for, *, one_subject=False):
+    """Admit one selected restoration request: exact shape, byte identities, admitted receipts, new destination."""
+    if not isinstance(request, dict) or set(request) != REQUEST_FIELDS:
         raise ValueError("Unsupported coverage restoration request")
-    dataset = request["dataset"]
-    selected_policy = dataset_policy(dataset)
-    if not isinstance(request["generationId"], str) or not request["generationId"]:
+    generation = request["generationId"]
+    if not isinstance(generation, str) or not generation:
         raise ValueError("Missing coverage receipt generation")
-    if not isinstance(request["subjects"], list):
+    if not isinstance(request["subjects"], list) or (one_subject and len(request["subjects"]) != 1):
         raise ValueError("Coverage subjects must be explicit")
-    subjects = tuple(checked_member(member) for member in request["subjects"])
-    receipts = checked_member(request["receipts"])
-    with pq.ParquetFile(receipts) as source:
-        if not any(
-            request["generationId"] in batch.column(0).to_pylist()
-            for batch in source.iter_batches(columns=["generation_id"], batch_size=2000)
-        ):
-            raise ValueError("Selected coverage generation has no receipt context")
     destination = Path(request["destination"])
     if not destination.is_absolute() or destination.exists():
         raise ValueError("Coverage destination must be a new absolute directory")
+    policy = policy_for(request["dataset"])
+    subjects = tuple(checked_member(member) for member in request["subjects"])
+    receipts = checked_member(request["receipts"])
+    current_receipts(receipts, request["dataset"], policy, generation)
+    return policy, subjects, receipts, destination
+
+
+def restore(request):
+    selected_policy, subjects, receipts, destination = checked_request(request, dataset_policy)
+    dataset = request["dataset"]
     destination.mkdir(parents=True)
     remember_selection(destination, [SelectedDataset(dataset, subjects, receipts, request["generationId"])])
     selected = SelectedPriors(destination / "selected", root=destination, public_url="")
