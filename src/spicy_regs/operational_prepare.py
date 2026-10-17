@@ -7,7 +7,7 @@ import json
 import subprocess
 import sys
 
-from spicy_regs.operational_runner import durable, file_pin, pinned_bytes, read_json, require
+from spicy_regs.operational_runner import durable, file_pin, kernel_interface, pinned_bytes, read_json, require
 
 
 def canonical(pin):
@@ -35,7 +35,9 @@ def prepare_request(args):
     require(not adapter_path.exists(), "Fresh source adapter configuration required")
     old = read_json(args.preparation)
     inventory = read_json(args.runtime_inventory)
-    runtime = list(inventory["files"])
+    # An observed inventory also lists kernel state (psutil reads /proc/stat on Linux);
+    # the offline guard allows those reads and no pin can describe them.
+    runtime = [pin for pin in inventory["files"] if not kernel_interface(pin["path"])]
     inputs = [file_pin(args.preparation.resolve()), file_pin(args.runtime_inventory.resolve())]
     target = args.target.resolve()
     require(

@@ -147,6 +147,47 @@ def test_preparation_pins_the_whole_target_package_without_reading_source(tmp_pa
     assert historical.read_text() == json.dumps(value)
 
 
+PREPARE_PROBE = """
+import json, sys
+from pathlib import Path
+from types import SimpleNamespace
+from spicy_regs import operational_runner as r
+from spicy_regs.operational_prepare import prepare_request
+pseudo, preparation, inventory, run_root, output = map(Path, sys.argv[1:6])
+r.KERNEL_ROOTS = (pseudo,)
+args = SimpleNamespace(kind='h-annual', preparation=preparation, runtime_inventory=inventory, python=sys.executable,
+                       target=Path(sys.argv[6]), run_root=run_root, output=output)
+print(json.dumps([pin['path'] for pin in prepare_request(args)['runtime']]))
+"""
+
+
+def test_preparation_leaves_kernel_state_out_of_an_observed_inventory(tmp_path):
+    historical, _ = historical_h(tmp_path)
+    pseudo, real = tmp_path / "pseudo", tmp_path / "real.txt"
+    pseudo.mkdir()
+    (pseudo / "stat").write_text("ticks 1\n")
+    real.write_text("stable runtime file")
+    inventory = tmp_path / "runtime.json"
+    inventory.write_text(json.dumps({"files": [file_pin(pseudo / "stat"), file_pin(real)]}))
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            PREPARE_PROBE,
+            *map(str, (pseudo, historical, inventory, tmp_path / "future-run", tmp_path / "new-request.json")),
+            str(REPO / "src"),
+        ],
+        cwd=REPO,
+        env=ENV,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    runtime = json.loads(result.stdout.splitlines()[-1])
+    assert str(real) in runtime and str(pseudo / "stat") not in runtime
+
+
 def test_preparation_refuses_missing_inventory_pin_files_and_writes_nothing(tmp_path):
     historical, _ = historical_h(tmp_path)
     inventory = tmp_path / "runtime.json"

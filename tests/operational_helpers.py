@@ -21,7 +21,8 @@ FIRST_PARTY = (REPO / "src", REPO / "scripts")
 ENV = {**os.environ, "PYTHONPATH": str(REPO / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
 
 # Same launcher flags as the runner's payload. The audit hook records every
-# file the code opens, which is what an offline guard would later require pinned.
+# file the code opens, which is what an offline guard would later require pinned
+# (kernel state such as Linux /proc/stat is opened too; `inventory` drops it).
 OBSERVE = """
 import json, runpy, sys
 from pathlib import Path
@@ -76,11 +77,13 @@ def observed_files(code, paths, workdir):
 
 
 def inventory(files, exclude):
-    """A runtime inventory: every observed file not under an excluded root."""
+    """A runtime inventory: every observed file not under an excluded root and not kernel state."""
     roots = [Path(path).resolve() for path in exclude]
     return {
         "files": [
-            runner.file_pin(Path(path)) for path in files if not any(Path(path).is_relative_to(root) for root in roots)
+            runner.file_pin(Path(path))
+            for path in files
+            if not any(Path(path).is_relative_to(root) for root in roots) and not runner.kernel_interface(path)
         ]
     }
 

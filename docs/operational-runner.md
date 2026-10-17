@@ -34,7 +34,7 @@ or a field of the wrong shape, is refused before the run root is allocated:
 | `version` | `1` |
 | `run_root` | absolute, normalized (no `..`), symlink-free path that must not exist yet |
 | `python` | absolute launcher; its resolved binary must be a `runtime` pin |
-| `inputs`, `code`, `runtime` | lists of exact `{path, bytes, sha256}` pins |
+| `inputs`, `code`, `runtime` | lists of exact `{path, bytes, sha256}` pins of regular files; a kernel interface such as `/proc/stat` is refused |
 | `activation` | `{prefix, paths, base_paths, origins}`: import paths put first, the interpreter's initial paths, and package origins |
 | `offline_single_process` | boolean: apply the Python network/subprocess/write guards |
 | `limits` | wall, sampling interval, RSS, output, disk floors, optional scratch/data/evidence bytes |
@@ -82,7 +82,9 @@ grant and a free shared resource slot:
    `rulespec_artifacts` and `spicy_regs`, plus `pyproject.toml` and `uv.lock`
    when the target sits in a checkout. The tests derive one by observing the
    real commands with an audit hook under the payload's own launcher flags
-   (`tests/operational_helpers.py`, `observed_files`);
+   (`tests/operational_helpers.py`, `observed_files`). On Linux the hook also sees
+   kernel state such as `/proc/stat`, which importing `psutil` reads; `prepare`
+   drops it from an inventory (see Offline guard);
 3. for D, a new capture configuration whose bodies and records exist at the
    recorded paths in the current corpus catalog.
 
@@ -154,8 +156,14 @@ When `offline_single_process` is true the payload installs the retained Python
 guards after activation. Python network, subprocess and link operations are
 refused. Python signals may target only the payload itself (`os.kill` of another
 process or `os.killpg` is refused). Reads must come from the run root, a pinned
-path, a directory, or, on continuation, the previous attempt's already verified
-candidate.
+path, a directory, a kernel interface or, on continuation, the previous attempt's
+already verified candidate.
+
+A kernel interface is anything under `/proc` or `/sys` and any non-regular file
+under `/dev`, judged after symlinks resolve. It is live state, not a selected
+input: its bytes change between reads, so no pin can describe it and a request that
+pins one is refused. The guard allows reading it and still refuses writing it. A
+regular file under `/dev` (tmpfs such as `/dev/shm`) is ordinary data and needs a pin.
 
 Writes are limited to the payload's own scope: `scratch/`, `output/`,
 `candidate/` (build phase only), the phase's own `{phase}-imports.json`, and

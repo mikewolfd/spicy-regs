@@ -57,6 +57,8 @@ STOP_SECONDS = 30
 HASH_READS = {}
 ROOT_BINDINGS = {}
 RAW_OPEN = os.open
+# Live kernel state (Linux /proc/stat changes between reads), so no pin can describe it.
+KERNEL_ROOTS = (Path("/proc"), Path("/sys"), Path("/dev"))
 
 
 class OwnedRootChanged(ValueError):
@@ -94,6 +96,18 @@ def vanished_or_error(error):
 def require(value, message):
     if not value:
         raise ValueError(message)
+
+
+def kernel_interface(path):
+    """Kernel-provided state (procfs, sysfs, device nodes): read freely, never pinned.
+
+    Judge a resolved path, so a link into a kernel directory counts as its target.
+    A regular file under /dev (tmpfs such as /dev/shm) is ordinary data and keeps its pin.
+    """
+    path = Path(os.path.normpath(path))
+    return any(path.is_relative_to(base) for base in KERNEL_ROOTS) and not (
+        path.is_relative_to("/dev") and path.is_file()
+    )
 
 
 def digest(value):
@@ -442,6 +456,8 @@ def validate(request):
             type(request[kind]) is list and all(is_pin(pin) for pin in request[kind]),
             "Pin lists need exactly path, bytes and sha256: " + kind,
         )
+        kernel = [pin["path"] for pin in request[kind] if kernel_interface(pin["path"])]
+        require(not kernel, "Kernel interface cannot be pinned (" + kind + "): " + ", ".join(kernel[:1]))
     require(request.get("continue_from") is None or is_pin(request["continue_from"]), "Unsupported continue_from pin")
     require(type(request["run_root"]) is str, "Unsafe run root")
     root = Path(request["run_root"])
@@ -556,11 +572,12 @@ def offline_guard(root, request, readable=(), phase=None):
     (build phase only), the phase's own `{phase}-imports.json`, and hidden
     producer staging directories at the root (for example `.uscode-editions-*`).
     The runner's own records are never writable. Reads may also come from pinned
-    paths, directories, and `readable` roots (a reused, already verified
-    candidate). A descriptor-relative open or mutation is resolved through its
-    directory descriptor, so `shutil.rmtree` and `TemporaryDirectory` work. That
-    judgment applies to calls through the patched `os.open`/`posix.open`; a
-    reference captured before the guard was installed is not covered.
+    paths, directories, kernel interfaces (`/proc/stat`: live state no pin can
+    describe) and `readable` roots (a reused, already verified candidate). A
+    descriptor-relative open or mutation is resolved through its directory
+    descriptor, so `shutil.rmtree` and `TemporaryDirectory` work. That judgment
+    applies to calls through the patched `os.open`/`posix.open`; a reference
+    captured before the guard was installed is not covered.
     """
     allowed = {pin["path"] for kind in ("inputs", "code", "runtime") for pin in request[kind]}
     readable = [Path(path).resolve() for path in readable]
@@ -610,7 +627,8 @@ def offline_guard(root, request, readable=(), phase=None):
             path.is_relative_to(root)
             or any(path.is_relative_to(base) for base in readable)
             or str(path) in allowed
-            or path.is_dir(),
+            or path.is_dir()
+            or kernel_interface(path),
             "Undeclared Python read: " + str(path),
         )
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 import pytest
@@ -792,6 +793,82 @@ def test_offline_guard_scopes_writes_and_reads_a_reused_candidate_by_descriptor(
     assert (candidate / "value").read_text() == "verified candidate" and not (root / "scratch/made").exists()
     assert not (outside.parent / "made-outside").exists() and not (outside.parent / "made-posix").exists()
     assert (root / "owner.json").read_text() == "runner record" and not (root / "stray").exists()
+
+
+KERNEL_PROBE = """
+import json, sys
+from pathlib import Path
+from spicy_regs import operational_runner as r
+root, pseudo, outside = map(Path, sys.argv[1:4])
+r.KERNEL_ROOTS = (pseudo,)
+r.offline_guard(root, {'inputs': [], 'code': [], 'runtime': []}, phase='build')
+results = {}
+def attempt(name, action):
+    try:
+        action()
+        results[name] = 'allowed'
+    except ValueError as error:
+        results[name] = str(error)
+attempt('read kernel state', lambda: (pseudo / 'stat').read_text())
+attempt('write kernel state', lambda: (pseudo / 'stat').write_text('forged'))
+attempt('read outside through a kernel link', lambda: (pseudo / 'escape').read_text())
+attempt('read outside', lambda: outside.read_text())
+print(json.dumps(results))
+"""
+
+
+@pytest.fixture
+def pseudo(tmp_path, monkeypatch):
+    """A directory registered as kernel state, so the /proc behavior is the same on every platform."""
+    directory = tmp_path / "pseudo"
+    directory.mkdir()
+    (directory / "stat").write_text("ticks 1\n")
+    monkeypatch.setattr(runner, "KERNEL_ROOTS", (directory,))
+    return directory
+
+
+def test_offline_guard_reads_kernel_state_but_never_writes_it_or_follows_it_out(tmp_path, pseudo):
+    root, outside = tmp_path / "run", tmp_path / "outside.txt"
+    root.mkdir()
+    outside.write_text("unpinned outside file")
+    (pseudo / "escape").symlink_to(outside)
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", KERNEL_PROBE, str(root), str(pseudo), str(outside)],
+        env=ENV,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    outcome = json.loads(result.stdout.splitlines()[-1])
+    assert outcome["read kernel state"] == "allowed"
+    assert outcome["write kernel state"] == "Python write outside owned root"
+    assert outcome["read outside through a kernel link"].startswith("Undeclared Python read")
+    assert outcome["read outside"].startswith("Undeclared Python read")
+    assert (pseudo / "stat").read_text() == "ticks 1\n"
+
+
+def test_a_kernel_interface_is_never_a_pin_so_a_changing_read_cannot_fail_admission(selected, tmp_path, pseudo):
+    from tests.operational_helpers import request_files
+
+    request, count, _ = selected
+    stat, real = pseudo / "stat", Path(request["inputs"][0]["path"])
+    # An observed inventory keeps the real file and drops the kernel one.
+    assert [pin["path"] for pin in inventory([str(stat), str(real)], [])["files"]] == [str(real)]
+    for kind in ("inputs", "code", "runtime"):
+        path, grant = request_files(tmp_path, {**request, kind: [*request[kind], runner.file_pin(stat)]})
+        with pytest.raises(ValueError, match=r"Kernel interface cannot be pinned \(" + kind):
+            runner.execute(path, grant)
+    assert not Path(request["run_root"]).exists() and not count.exists()
+
+
+def test_kernel_interfaces_are_the_pseudo_filesystems_and_device_nodes_not_dev_data(tmp_path):
+    assert runner.kernel_interface("/proc/stat") and runner.kernel_interface("/sys/devices/system/cpu/online")
+    assert runner.kernel_interface("/dev/null")
+    assert not runner.kernel_interface("/proc/../" + str(tmp_path / "data").lstrip("/"))
+    assert not runner.kernel_interface(tmp_path / "data") and not runner.kernel_interface("/etc/hosts")
+    if os.access("/dev/shm", os.W_OK):  # Linux tmpfs: regular bytes there are ordinary data and keep their pin.
+        with tempfile.NamedTemporaryFile(dir="/dev/shm") as stream:
+            assert not runner.kernel_interface(stream.name)
 
 
 @pytest.mark.parametrize("route", ["tree", "group"])
