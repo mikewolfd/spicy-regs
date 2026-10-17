@@ -201,6 +201,9 @@ walks through querying the bucket directly with DuckDB.
 
 ## Running the pipeline yourself
 
+For bounded retained-source build/audit runs and explicit continuation, see
+[the maintained operational runner](docs/operational-runner.md).
+
 The pipeline reads raw JSON from the public Mirrulations S3 mirror, flattens it,
 and writes Parquet to `./output/`. Scope your first run tight so it finishes in
 minutes instead of hours:

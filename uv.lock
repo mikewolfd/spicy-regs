@@ -2202,6 +2202,9 @@ embed = [
     { name = "sentence-transformers" },
     { name = "torch" },
 ]
+operational-runner = [
+    { name = "psutil" },
+]
 source-readers = [
     { name = "deltatrack" },
     { name = "pypdf" },
@@ -2245,6 +2248,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=2.2,<3" },
     { name = "pandas" },
     { name = "polars" },
+    { name = "psutil", marker = "extra == 'operational-runner'", specifier = "==7.2.2" },
     { name = "pyarrow" },
     { name = "pyiceberg", extras = ["pyarrow"], marker = "extra == 'comments-reader'", specifier = "==0.12.0" },
     { name = "pypdf", marker = "extra == 'source-readers'", specifier = "==6.14.2" },
@@ -2258,7 +2262,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
-provides-extras = ["comments-reader", "source-readers", "embed"]
+provides-extras = ["operational-runner", "comments-reader", "source-readers", "embed"]
 
 [package.metadata.requires-dev]
 dev = [

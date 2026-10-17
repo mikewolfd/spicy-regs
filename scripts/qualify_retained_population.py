@@ -90,7 +90,7 @@ def capture_prerequisites(plan, *, required):
     return refs
 
 
-def handoff(output, dataset, family, generation, declared, entry, plan, frozen, *, fixture):
+def handoff(output, candidate, dataset, family, generation, declared, entry, plan, frozen, *, fixture):
     """Describe actual qualified pair bytes for a later selected-input consumer."""
     directory = output / 'generation'
     index = json.loads((output / 'private-publication.json').read_text())
@@ -104,6 +104,8 @@ def handoff(output, dataset, family, generation, declared, entry, plan, frozen, 
               'privatePublicationPath': str(output / 'private-publication.json'),
               'privatePublicationPin': publication.file_identity(output / 'private-publication.json'),
               'selectedFamily': index['families'][family],
+              'buildPhases': str(candidate / 'phases.jsonl'),
+              'buildPhasesPin': publication.file_identity(candidate / 'phases.jsonl'),
               'fullComparisonPhases': str(output / 'phases.jsonl'),
               'fullComparisonPhasesPin': publication.file_identity(output / 'phases.jsonl'),
               'resourceReleaseEvidenceRequired': True,
@@ -192,6 +194,26 @@ def produce(dataset, source, directory, generation, *, bulk=False):
     return regulations.write_held_dataset(dataset, source, directory, generation_id=generation, bulk=bulk)
 
 
+def selected_pair(dataset, directory):
+    """The produced subject and its selected receipts; court subjects are link-selected attempts."""
+    pointer = directory / (dataset + '.parquet')
+    if dataset == 'court_opinions':
+        receipt, _ = court_receipts.local_receipt_selection(pointer)
+        subject = pointer.resolve()
+        if not subject.is_relative_to(directory.resolve()):
+            raise ValueError('Court subject escapes its candidate bundle')
+        return subject, receipt
+    return pointer, directory / 'etl_receipts.parquet'
+
+
+def produce_selected(dataset, source, directory, generation, **options):
+    """Produce one candidate bundle and require it to be the one the audit will select."""
+    subject, receipt = produce(dataset, source, directory, generation, **options)
+    if tuple(map(Path.resolve, (subject, receipt))) != tuple(map(Path.resolve, selected_pair(dataset, directory))):
+        raise ValueError('Producer bundle differs from the maintained selection rule')
+    return subject, receipt
+
+
 def populations(dataset, source, subject, receipt):
     with etl_bulk.bulk_connection() as (con, _):
         counts = dict(con.execute('SELECT outcome,count(*) FROM read_parquet(?) GROUP BY outcome',
@@ -269,8 +291,8 @@ def restore(dataset, source, subject, receipt, destination, generation, *, bulk=
     return rows
 
 
-def qualify(plan_path, output, *, fixture=False):
-    started = time.monotonic()
+def build_candidates(plan_path, output, *, fixture=False):
+    """Produce the selected prior/current pair; owner closure seals reuse outside this child."""
     output.mkdir(parents=True, exist_ok=False)
     raw_plan = plan_path.read_bytes()
     (output / 'PLAN.json').write_bytes(raw_plan)
@@ -296,19 +318,69 @@ def qualify(plan_path, output, *, fixture=False):
     with phase(log, 'separate-selected-prior-producer-and-full-admission') as record, observe_validation_routes(record):
         if base:
             with observe_base_routes(record, 'write_held_dataset'):
-                prior_subject, prior = produce(dataset, source, output / 'selected-prior', generation + '-prior', bulk=True)
+                prior_subject, prior = produce_selected(dataset, source, output / 'selected-prior', generation + '-prior', bulk=True)
         else:
-            prior_subject, prior = produce(dataset, source, output / 'selected-prior', generation + '-prior')
+            prior_subject, prior = produce_selected(dataset, source, output / 'selected-prior', generation + '-prior')
         validate_receipt_bundle({dataset: [prior_subject]}, [prior], [declared], generation_id=generation + '-prior')
         record.update(populations(dataset, source, prior_subject, prior))
     with phase(log, 'fresh-current-producer-and-full-admission') as record, observe_validation_routes(record):
         if base:
             with observe_base_routes(record, 'write_held_dataset'):
-                subject, fresh = produce(dataset, source, output / 'current', generation, bulk=True)
+                subject, fresh = produce_selected(dataset, source, output / 'current', generation, bulk=True)
         else:
-            subject, fresh = produce(dataset, source, output / 'current', generation)
+            subject, fresh = produce_selected(dataset, source, output / 'current', generation)
         validate_receipt_bundle({dataset: [subject]}, [fresh], [declared], generation_id=generation)
         record.update(populations(dataset, source, subject, fresh))
+    descriptor = {'version': 1, 'planSha256': hashlib.sha256(raw_plan).hexdigest(),
+                  'codePins': frozen, 'policy': declared.descriptor(), 'fixture': fixture,
+                  'candidateBuildCalls': 2,
+                  'scope': 'Candidate description only; trusted run owner must close and seal bytes for reuse'}
+    (output / 'BUILD.json').write_text(json.dumps(descriptor, indent=2) + '\n')
+    return descriptor
+
+
+def audit_candidates(plan_path, candidate, output, *, fixture=False):
+    """Run the complete independent checks against a closed candidate in a fresh attempt.
+
+    This command does not authorize continuation: the enclosing operational
+    runner admits its separately granted owner completion before invoking it.
+    Reference/oracle production remains part of independent audit.
+    """
+    started = time.monotonic()
+    output.mkdir(parents=True, exist_ok=False)
+    raw_plan = plan_path.read_bytes()
+    (output / 'PLAN.json').write_bytes(raw_plan)
+    plan, log = json.loads(raw_plan), output / 'phases.jsonl'
+    entry = plan['source']
+    dataset, family = entry['dataset'], entry['family']
+    if DATASETS.get(dataset) != family:
+        raise ValueError('Explicit supported dataset and complete single-table family required')
+    base = dataset in BASE_DATASETS
+    declared, generation = declared_policy(dataset), 'qualification-' + family
+    with phase(log, 'frozen-code-and-dependency-pins') as record:
+        descriptor = json.loads((candidate / 'BUILD.json').read_text())
+        frozen = capture_code_pins()
+        if (descriptor['version'] != 1 or descriptor['codePins'] != frozen
+                or descriptor['planSha256'] != hashlib.sha256(raw_plan).hexdigest()
+                or descriptor['policy'] != declared.descriptor() or descriptor['fixture'] != fixture
+                or (candidate / 'PLAN.json').read_bytes() != raw_plan):
+            raise ValueError('Candidate code/dependency/policy/plan identity differs')
+        if not fixture and (frozen['dirty'] or frozen != plan['codePins']):
+            raise ValueError('Full qualification requires the exact clean reviewed code/dependencies')
+        capture_prerequisites(plan, required=base and not fixture)
+        record.update(frozen, fixture=fixture, planSha256=hashlib.sha256(raw_plan).hexdigest(), candidate=str(candidate))
+    source = candidate / 'original.parquet'
+    pin = {name: entry['bytes' if name == 'byteSize' else name] for name in ('sha256', 'byteSize', 'rows')}
+    assert_pin(source, pin)
+    prior_subject, prior = selected_pair(dataset, candidate / 'selected-prior')
+    subject, fresh = selected_pair(dataset, candidate / 'current')
+    # Re-admit the complete pair independently; a candidate description is not proof.
+    with phase(log, 'independent-closed-candidate-full-admission') as record:
+        for member, receipts, selected_generation in ((prior_subject, prior, generation + '-prior'),
+                                                       (subject, fresh, generation)):
+            validate_receipt_bundle({dataset: [member]}, [receipts], [declared], generation_id=selected_generation)
+            populations(dataset, source, member, receipts)
+        record.update(candidate=str(candidate), candidateBuildCalls=0, independentOracleProductionRequired=True)
     if base:
         with phase(log, 'full-original-row-producer-and-all-field-equivalence') as record:
             row_subject, row_receipt = produce(dataset, source, output / 'full-row-reference', generation + '-prior', bulk=False)
@@ -380,7 +452,7 @@ def qualify(plan_path, output, *, fixture=False):
         capture_prerequisites(plan, required=base and not fixture)
     verify_code_pins(log, frozen)
     if base:
-        handoff(output, dataset, family, generation, declared, entry, plan, frozen, fixture=fixture)
+        handoff(output, candidate, dataset, family, generation, declared, entry, plan, frozen, fixture=fixture)
     result = {'status': 'passed', 'seconds': time.monotonic() - started, 'fixture': fixture,
               'scope': 'Selected published legacy population replay/private DiskStore/actual loopback MCP',
               'unqualified': ['upstream CSV/REST acquisition/merge', 'hosted publication/MCP'], 'productionActions': []}
@@ -393,8 +465,18 @@ def main():
     parser.add_argument('plan', type=Path)
     parser.add_argument('output', type=Path)
     parser.add_argument('--fixture', action='store_true')
+    parser.add_argument('--stage', choices=('build', 'audit'), required=True)
+    parser.add_argument('--candidate', type=Path, help='Closed build root for the audit stage only')
     args = parser.parse_args()
-    print(json.dumps(qualify(args.plan, args.output, fixture=args.fixture)), flush=True)
+    if args.stage == 'build':
+        if args.candidate:
+            parser.error('--candidate applies only to audit')
+        result = build_candidates(args.plan, args.output, fixture=args.fixture)
+    elif args.stage == 'audit':
+        if not args.candidate:
+            parser.error('--stage audit requires --candidate')
+        result = audit_candidates(args.plan, args.candidate, args.output, fixture=args.fixture)
+    print(json.dumps(result), flush=True)
 
 
 if __name__ == '__main__':

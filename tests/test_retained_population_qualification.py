@@ -48,11 +48,17 @@ def selected_plan(tmp_path, dataset, *, refused=False):
 def test_actual_complete_fixture_pipeline(tmp_path, dataset):
     path, _, source = selected_plan(tmp_path, dataset)
     output = tmp_path / 'workflow'
+    candidate = tmp_path / 'candidate'
+    built = subprocess.run([sys.executable, '-m', 'scripts.qualify_retained_population', str(path),
+                             str(candidate), '--fixture', '--stage', 'build'],
+                           cwd=Path(__file__).parents[1], capture_output=True, text=True)
+    assert built.returncode == 0, built.stdout + built.stderr
     result = subprocess.run([sys.executable, '-m', 'scripts.qualify_retained_population', str(path),
-                             str(output), '--fixture'], cwd=Path(__file__).parents[1], capture_output=True, text=True)
+                             str(output), '--fixture', '--stage', 'audit', '--candidate', str(candidate)],
+                            cwd=Path(__file__).parents[1], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads((output / 'RESULT.json').read_text())['status'] == 'passed'
-    phases = [item for line in (output / 'phases.jsonl').read_text().splitlines()
+    phases = [item for line in ((candidate / 'phases.jsonl').read_text() + (output / 'phases.jsonl').read_text()).splitlines()
               if (item := json.loads(line))['status'] != 'running']
     assert all(item['status'] == 'passed' for item in phases)
     for name in ('separate-selected-prior-producer-and-full-admission', 'fresh-current-producer-and-full-admission'):
@@ -72,7 +78,7 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset):
     assert history['selectedPrior']['sha256'] != history['current']['sha256']
     assert history['rows'] == 2 + (dataset != 'court_opinions')
     if dataset in runner.BASE_DATASETS:
-        runner.compare_files(output / 'selected-prior' / 'etl_receipts.parquet', output / 'carried-receipts.parquet')
+        runner.compare_files(candidate / 'selected-prior' / 'etl_receipts.parquet', output / 'carried-receipts.parquet')
         handoff = json.loads((output / 'HANDOFF.json').read_text())
         assert handoff['fixture'] is True
         assert handoff['fullComparisonPhasesPin']['sha256'] == 'sha256:' + hashlib.sha256((output / 'phases.jsonl').read_bytes()).hexdigest()
@@ -87,11 +93,68 @@ def test_actual_complete_fixture_pipeline(tmp_path, dataset):
     assert pq.read_table(source).schema.metadata == {b'original': b'line\n'}
 
 
+def test_separate_closed_candidate_audit_keeps_full_oracles_without_candidate_build(tmp_path):
+    """Constructed dockets fixture; real audit/restore/private-serving checks run."""
+    from spicy_regs.operational_runner import census
+
+    path, _, _ = selected_plan(tmp_path, 'dockets')
+    candidate = tmp_path / 'closed-build'
+    command = [sys.executable, '-B', '-m', 'scripts.qualify_retained_population', str(path),
+               str(candidate), '--fixture', '--stage', 'build']
+    built = subprocess.run(command, cwd=Path(__file__).parents[1], capture_output=True, text=True)
+    assert built.returncode == 0, built.stdout + built.stderr
+    before = census(candidate)
+    audit = tmp_path / 'new-audit-attempt'
+    code = '''
+import json, sys
+from pathlib import Path
+from scripts import qualify_retained_population as runner
+real = runner.produce
+calls = []
+def produce(*args, **kwargs):
+    calls.append(Path(args[2]).name)
+    assert Path(args[2]).name not in ('selected-prior', 'current')
+    return real(*args, **kwargs)
+runner.produce = produce
+runner.audit_candidates(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), fixture=True)
+Path(sys.argv[4]).write_text(json.dumps(calls))
+'''
+    counts = tmp_path / 'oracle-calls.json'
+    result = subprocess.run([sys.executable, '-B', '-c', code, str(path), str(candidate), str(audit), str(counts)],
+                            cwd=Path(__file__).parents[1], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(counts.read_text()) == ['full-row-reference', 'reference-bundle']
+    assert census(candidate) == before
+    phases = [json.loads(line) for line in (audit / 'phases.jsonl').read_text().splitlines()]
+    completed = {phase['phase'] for phase in phases if phase['status'] == 'passed'}
+    assert {'independent-closed-candidate-full-admission', 'full-original-row-producer-and-all-field-equivalence',
+            'actual-full-processor-restore-original-and-canonical-conservation',
+            'actual-production-mcp-http-and-dataset-correct-controls',
+            'final-complete-artifact-stored-bytes-and-original-pins'} <= completed
+
+
+def test_staged_candidate_policy_drift_refuses_before_independent_work(tmp_path, monkeypatch):
+    from spicy_regs.operational_runner import census
+
+    path, _, _ = selected_plan(tmp_path, 'court_opinions')
+    candidate = tmp_path / 'build'
+    runner.build_candidates(path, candidate, fixture=True)
+    descriptor = candidate / 'BUILD.json'
+    value = json.loads(descriptor.read_text())
+    value['policy'] = {'tampered': True}
+    descriptor.write_text(json.dumps(value))
+    before = census(candidate)
+    monkeypatch.setattr(runner, 'produce', lambda *a, **k: pytest.fail('Must refuse before any producer'))
+    with pytest.raises(ValueError, match='identity differs'):
+        runner.audit_candidates(path, candidate, tmp_path / 'audit', fixture=True)
+    assert census(candidate) == before
+
+
 def test_refused_source_row_stops_full_claim_and_retains_evidence(tmp_path):
     path, _, _ = selected_plan(tmp_path, 'court_opinions', refused=True)
     output = tmp_path / 'refused'
     with pytest.raises(ValueError, match='refused/lost'):
-        runner.qualify(path, output, fixture=True)
+        runner.build_candidates(path, output, fixture=True)
     assert not (output / 'RESULT.json').exists()
     assert (output / 'original.parquet').exists()
     assert (output / 'phases.jsonl').exists()
@@ -121,7 +184,10 @@ def produce(*args, **kwargs):
     Path(sys.argv[3]).write_bytes(b'changed selected original after capture')
     return result
 runner.produce = produce
-runner.qualify(Path(sys.argv[1]), Path(sys.argv[2]), fixture=True)
+output = Path(sys.argv[2])
+candidate = output.with_name('candidate')
+runner.build_candidates(Path(sys.argv[1]), candidate, fixture=True)
+runner.audit_candidates(Path(sys.argv[1]), candidate, output, fixture=True)
 '''
     result = subprocess.run([sys.executable, '-c', code, str(path), str(output), str(source)],
                             cwd=Path(__file__).parents[1], capture_output=True, text=True)
@@ -131,7 +197,7 @@ runner.qualify(Path(sys.argv[1]), Path(sys.argv[2]), fixture=True)
     phases = [json.loads(line) for line in (output / 'phases.jsonl').read_text().splitlines()]
     assert phases[-1]['phase'] == 'final-complete-artifact-stored-bytes-and-original-pins'
     assert phases[-1]['status'] == 'failed'
-    assert pq.read_metadata(output / 'original.parquet').num_rows == 2
+    assert pq.read_metadata(output.with_name('candidate') / 'original.parquet').num_rows == 2
     assert source.read_bytes() == b'changed selected original after capture'
 
 
