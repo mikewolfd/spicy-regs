@@ -1,4 +1,5 @@
 """Native Arrow, Polars and SQL descriptions without a scalar-only lookup."""
+
 from __future__ import annotations
 
 import re
@@ -17,10 +18,10 @@ def arrow_type(name: str) -> pa.DataType:
     supplies native nested-type parsing; source values never enter the SQL.
     """
     tokens = re.findall(r'"(?:[^"]|"")*"|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[(),\[\]]', name)
-    if ''.join(tokens) != re.sub(r'\s+', '', name):
+    if "".join(tokens) != re.sub(r"\s+", "", name):
         # Whitespace inside a quoted field name must be preserved.
-        cleaned = re.sub(r'"(?:[^"]|"")*"|\s+', lambda m: m[0] if m[0].startswith('"') else '', name)
-        if ''.join(tokens) != cleaned:
+        cleaned = re.sub(r'"(?:[^"]|"")*"|\s+', lambda m: m[0] if m[0].startswith('"') else "", name)
+        if "".join(tokens) != cleaned:
             raise ValueError(f"Invalid declared native type: {name!r}")
     with _connect() as con:
         table = con.execute(f"SELECT CAST(NULL AS {name}) AS value").to_arrow_table()
@@ -41,39 +42,51 @@ def described_schema(schema: pa.Schema) -> list[tuple[str, str]]:
 
 def polars_sql_type(dtype) -> str:
     import polars as pl
+
     schema = pl.DataFrame(schema={"value": dtype}).to_arrow().schema
     return described_schema(schema)[0][1]
 
 
-def reject_extra_fields(row, schema, *, label="row") -> None:
-    """Refuse extra record/struct fields before Arrow or Polars can discard them."""
-    _check_extra_fields(row, pa.struct(schema), label)
-
-
 def extra_field_checker(schema, *, label="row"):
-    """Prepare the same field checks once for a batch writer's immutable schema."""
-    dtype = pa.struct(schema)
-    flat = all(not (pa.types.is_struct(f.type) or pa.types.is_list(f.type)
-                    or pa.types.is_large_list(f.type)) for f in dtype)
-    names = frozenset(schema.names) if flat else None
+    """Prepare, once for an immutable schema, the check that refuses undeclared record and struct fields.
 
-    def check(row):
-        if names is not None and type(row) is dict:
-            if extra := set(row) - names:
-                raise ValueError(f"{label}: unclassified fields {sorted(extra)}")
-        else:
-            _check_extra_fields(row, dtype, label)
-    return check
+    Refuses before Arrow or Polars can discard them. The declared names and every nested check are built here, so a
+    row costs one set test per struct it holds and one call per nested value, never a rebuild of the schema.
+    """
+    return _checker(pa.struct(schema), label)
 
 
-def _check_extra_fields(value, dtype, path):
-    if value is None:
-        return
-    if pa.types.is_struct(dtype) and isinstance(value, Mapping):
-        if extra := set(value) - {f.name for f in dtype}:
-            raise ValueError(f"{path}: unclassified fields {sorted(extra)}")
-        for f in dtype:
-            _check_extra_fields(value.get(f.name), f.type, f"{path}.{f.name}")
-    elif (pa.types.is_list(dtype) or pa.types.is_large_list(dtype)) and isinstance(value, (list, tuple)):
-        for item in value:
-            _check_extra_fields(item, dtype.value_type, path)
+def _declared(value) -> None:
+    """The check of a type that cannot hold a field: scalars, and lists of scalars."""
+
+
+def _checker(dtype, path):
+    """The prepared check of one declared type, or ``_declared`` when no value of it can hold an undeclared field."""
+    if pa.types.is_struct(dtype):
+        names = frozenset(field.name for field in dtype)
+        fields = tuple((field.name, _checker(field.type, f"{path}.{field.name}")) for field in dtype)
+        nested = tuple((name, check) for name, check in fields if check is not _declared)
+
+        def check_struct(value):
+            exact = type(value) is dict
+            if exact or isinstance(value, Mapping):
+                if not names.issuperset(value):
+                    raise ValueError(f"{path}: unclassified fields {sorted(set(value) - names)}")
+                # A plain dict has no side-effecting ``get``, so only the fields that can nest need reading; any other
+                # mapping may define ``get``, so each declared field is read as the unprepared check did.
+                for name, check in nested if exact else fields:
+                    check(value.get(name))
+
+        return check_struct
+    if pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
+        check_item = _checker(dtype.value_type, path)
+        if check_item is _declared:
+            return _declared
+
+        def check_list(value):
+            if isinstance(value, (list, tuple)):
+                for item in value:
+                    check_item(item)
+
+        return check_list
+    return _declared

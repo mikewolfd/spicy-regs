@@ -290,10 +290,11 @@ def restore_input(
     receipt that is not the plain shape or whose diagnostics mention a refused conversion, and returns None to leave
     the row out. Returns how many receipts went to it.
     """
-    from spicy_regs.native_types import reject_extra_fields
+    from spicy_regs.native_types import extra_field_checker
 
     if not all(pa.types.is_string(field.type) for field in schema):
         raise NotImplementedError("Only text source columns are decoded here")
+    check_fields = extra_field_checker(schema)
     columns, plain = source_fields_sql(schema)
     query = f"""
     SELECT {columns}, _position, _reference, CASE WHEN _reference THEN processing_json END AS _processing,
@@ -320,7 +321,7 @@ def restore_input(
                     for index in (index for index, flag in enumerate(flagged) if flag):
                         fields = row_fields(processing[index], diagnostic[index])
                         if fields is not None:
-                            reject_extra_fields(fields, schema)
+                            check_fields(fields)
                         decoded[index] = None if fields is None else dict(fields)
                     left += len(decoded)
                     rows = _with_insertions(rows, [not flag for flag in flagged], decoded)

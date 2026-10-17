@@ -45,6 +45,8 @@ def _identity_files():
                 "congress_subjects.py",
                 "selected_generations.py",
                 "native_types.py",
+                "parquet_rows.py",
+                "transforms/parquet_rows.py",
                 "pipelines/rollups/subject_receipts.py",
                 "etl_bulk.py",
                 "regulations_bulk.py",
