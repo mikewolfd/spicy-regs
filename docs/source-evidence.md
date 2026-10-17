@@ -50,7 +50,7 @@ prior. Source-evidence runtime admission supports only the current integer
 `build-complete`, and validates its receipt bindings. Other artifacts stay as
 historical evidence but are not runtime inputs. A live generation whose evidence
 is not current (another `evidence_version`, or an outcome other than
-`build-complete`) cannot be audited, converted or inherited from until its
+`build-complete`) cannot be audited or inherited from until its
 family is rebuilt. Which families are refused changes as they are rebuilt, so
 check the live generation rather than trust a list here. The read-only
 `scripts/audit_generation.py --family <family>` reports it in its `evidence`

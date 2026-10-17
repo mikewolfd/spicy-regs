@@ -165,6 +165,12 @@ input: its bytes change between reads, so no pin can describe it and a request t
 pins one is refused. The guard allows reading it and still refuses writing it. A
 regular file under `/dev` (tmpfs such as `/dev/shm`) is ordinary data and needs a pin.
 
+This is a blanket rule, chosen over an allowlist of the specific files observed
+(`/proc/stat`, `/proc/self/stat*`, cgroup files): the set differs by kernel and
+library version. It widens what an offline payload may read (for example
+`/proc/self/environ`, `/dev/urandom`) and so its determinism; network and writes
+stay refused.
+
 Writes are limited to the payload's own scope: `scratch/`, `output/`,
 `candidate/` (build phase only), the phase's own `{phase}-imports.json`, and
 hidden producer staging directories at the root (names starting with `.`, such as

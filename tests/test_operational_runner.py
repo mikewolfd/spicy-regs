@@ -866,6 +866,9 @@ def test_kernel_interfaces_are_the_pseudo_filesystems_and_device_nodes_not_dev_d
     assert runner.kernel_interface("/dev/null")
     assert not runner.kernel_interface("/proc/../" + str(tmp_path / "data").lstrip("/"))
     assert not runner.kernel_interface(tmp_path / "data") and not runner.kernel_interface("/etc/hosts")
+    link = tmp_path / "stat-link"
+    link.symlink_to("/proc/stat" if Path("/proc/stat").exists() else "/dev/null")
+    assert runner.kernel_interface(link)  # A link is judged by its target.
     if os.access("/dev/shm", os.W_OK):  # Linux tmpfs: regular bytes there are ordinary data and keep their pin.
         with tempfile.NamedTemporaryFile(dir="/dev/shm") as stream:
             assert not runner.kernel_interface(stream.name)

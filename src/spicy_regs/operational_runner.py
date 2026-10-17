@@ -101,12 +101,13 @@ def require(value, message):
 def kernel_interface(path):
     """Kernel-provided state (procfs, sysfs, device nodes): read freely, never pinned.
 
-    Judge a resolved path, so a link into a kernel directory counts as its target.
+    The path is resolved here, so a link into a kernel directory counts as its target.
     A regular file under /dev (tmpfs such as /dev/shm) is ordinary data and keeps its pin.
     """
-    path = Path(os.path.normpath(path))
-    return any(path.is_relative_to(base) for base in KERNEL_ROOTS) and not (
-        path.is_relative_to("/dev") and path.is_file()
+    path = Path(path).resolve()
+    dev = Path("/dev").resolve()
+    return any(path.is_relative_to(base.resolve()) for base in KERNEL_ROOTS) and not (
+        path.is_relative_to(dev) and path.is_file()
     )
 
 
