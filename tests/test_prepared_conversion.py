@@ -10,9 +10,9 @@ from rulespec_artifacts import canonical_json_bytes
 from spicy_regs import native_conversion as conversion
 from spicy_regs.sources import publication
 from tests.test_native_conversion import (
-    BASE, BUCKET, CFR, COMMON, DOCKET, MAIN, STATE, WHEEL,
+    BASE, BUCKET, CFR, COMMON, DOCKET, MAIN, PINNED_WHEEL, STATE, WHEEL,
     bucket as _bucket,
-    convert, publish_old, publish_split_sections, stored,
+    convert, publish_old, publish_old_with_evidence, publish_split_sections, stored,
 )
 
 bucket = _bucket  # Expose the existing hermetic fixture to pytest in this module.
@@ -147,6 +147,75 @@ def test_prepared_steps_report_a_bulk_failure_by_its_kind(tmp_path, monkeypatch,
         with pytest.raises(etl_bulk.BulkValidationError, match="no row fallback"):
             run()
     assert bucket.writes == before
+
+
+@pytest.mark.parametrize("step", ["publish", "resume"])
+def test_prepared_steps_refuse_non_current_inherited_evidence_before_hashing_retained_tables(
+    tmp_path, monkeypatch, bucket, step
+):
+    """The evidence the replaced generation hands on is read first: a runtime that cannot inherit it stops early.
+
+    The runtime moves to another evidence version after the dry run, so the prior's evidence is no longer readable.
+    """
+    from spicy_regs import source_evidence
+
+    publish_old_with_evidence(tmp_path, monkeypatch, bucket, "courtlistener", "court_dockets", [DOCKET])
+    work = tmp_path / "work"
+    generation = Path(convert("courtlistener", work)["generation"]["directory"])
+    if step == "resume":
+        (work / conversion.RECEIPT).unlink()
+        identity = json.loads((generation / "artifact.json").read_bytes())["producer"]["implementationId"]
+        locked = {"version": WHEEL, "wheels": [{"hash": PINNED_WHEEL["locked_sha256"]}]}
+        monkeypatch.setattr(conversion, "_historical_producer", lambda *_: (identity, locked))
+    monkeypatch.setattr(source_evidence, "EVIDENCE_VERSION", source_evidence.EVIDENCE_VERSION + 1)
+
+    def hashed(*args, **kwargs):
+        raise AssertionError("Retained tables were hashed before the inherited evidence was checked")
+
+    monkeypatch.setattr(conversion, "_retained_inputs", hashed)
+    run = {
+        "publish": lambda: publish_prepared(work / conversion.RECEIPT, "courtlistener"),
+        "resume": lambda: conversion.resume_prepared(
+            generation,
+            work=work,
+            allowed=["courtlistener"],
+            expected_main=MAIN,
+            expected_spicy_docs=WHEEL,
+            expected_producer=MAIN,
+            state=lambda _: dict(STATE),
+        ),
+    }[step]
+    before = list(bucket.writes)
+    with pytest.raises(
+        publication.PublicationError if step == "resume" else conversion.ConversionRefused,
+        match="Inherited source evidence refused: .*Rebuild the family",
+    ):
+        run()
+    assert bucket.writes == before
+
+
+def test_prepared_publication_of_a_family_whose_evidence_predates_version_2_hands_nothing_on(
+    tmp_path, monkeypatch, bucket
+):
+    """The prepared route reads the earlier evidence the way the dry run did: nothing handed on, version 2 written."""
+    remainder = {"table": "treaties", "unevidenced": [["119-1"]], "shape_version": 2}
+    publish_old_with_evidence(
+        tmp_path,
+        monkeypatch,
+        bucket,
+        "treaties",
+        "treaties",
+        [{"treaty_id": "119-1"}],
+        evidence_version=1,
+        congress_index_selection=remainder,
+    )
+    work = tmp_path / "work"
+    dry = convert("treaties", work)
+
+    done = publish_prepared(work / conversion.RECEIPT, "treaties")
+
+    assert dry["lineage"]["handed_on_events"] == done["lineage"]["handed_on_events"] == 0
+    assert done["published"]["entry"]["artifactDigest"] == dry["generation"]["artifactDigest"]
 
 
 @pytest.mark.parametrize("when", ["before-upload", "pointer-retry"])

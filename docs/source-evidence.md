@@ -50,7 +50,7 @@ prior. Source-evidence runtime admission supports only the current integer
 `build-complete`, and validates its receipt bindings. Other artifacts stay as
 historical evidence but are not runtime inputs. A live generation whose evidence
 is not current (another `evidence_version`, or an outcome other than
-`build-complete`) cannot be audited or inherited from until its
+`build-complete`) cannot be audited or inherited from by a run until its
 family is rebuilt. Which families are refused changes as they are rebuilt, so
 check the live generation rather than trust a list here. The read-only
 `scripts/audit_generation.py --family <family>` reports it in its `evidence`
@@ -64,6 +64,13 @@ accepted by these checks. Only `bill-subjects`, `fec-query` and
 `lobbying-filings` were refused. Rebuild a refused family before relying on
 it; fec-query has a manual release procedure
 ([FEC delivery plan](fec-delivery-plan.md)).
+
+Native conversion is the exception for evidence written before
+`evidence_version` 2 (unversioned, as all three of those families are, or
+version 1): it reads no source, so it leaves that evidence with the generation
+it replaces, hands nothing on from it, and writes `evidence_version` 2 evidence
+of its own. Evidence of the current version that is not a completed build still
+refuses the conversion, before any table is downloaded.
 
 The Congress.gov index tables re-read every held detail that no retained
 response backs, after the run's own new, changed and unread records and under

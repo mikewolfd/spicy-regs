@@ -812,9 +812,13 @@ def test_staging_complete_generations_keeps_both_unselected(tmp_path):
         assert pub.INDEX_KEY not in store.objects
 
 
+@pytest.mark.parametrize("predating_ok", [False, True])
 @pytest.mark.parametrize("change", [None, "outcome", "kind", "version", "unversioned"])
-def test_inherited_evidence_journal_requires_current_completed_evidence(tmp_path, monkeypatch, change):
-    """The inherited root is admitted before any member is requested: current kind, completed build, current version."""
+def test_inherited_evidence_journal_requires_current_completed_evidence(tmp_path, monkeypatch, change, predating_ok):
+    """The inherited root is admitted before any member is requested: current kind, completed build, current version.
+
+    A caller that inherits nothing (a native conversion) may let evidence from before version 2 pass as an empty journal.
+    """
     base = "https://test.invalid"
     evidence = CaptureEvidence(tmp_path, "test")
     evidence.inherit(pub.empty_index(), public_url=None)
@@ -845,11 +849,15 @@ def test_inherited_evidence_journal_requires_current_completed_evidence(tmp_path
     monkeypatch.setattr(pub, "_bounded_get", get)
     pin = {"logicalId": root["logicalId"], "artifactDigest": root["artifactDigest"]}
     if change is None:
-        assert b"congress-index-selection" in pub.load_evidence_journal(base, pin)
+        assert b"congress-index-selection" in pub.load_evidence_journal(base, pin, predating_ok=predating_ok)
+        return
+    if predating_ok and change in ("version", "unversioned"):
+        assert pub.load_evidence_journal(base, pin, predating_ok=True) == b""
+        assert requested == [f"{prefix}/artifact.json"]
         return
     message = (
         "Only completed-build evidence" if change in ("outcome", "kind") else "Unsupported source evidence version"
     )
     with pytest.raises(pub.PublicationError, match=message):
-        pub.load_evidence_journal(base, pin)
+        pub.load_evidence_journal(base, pin, predating_ok=predating_ok)
     assert requested == [f"{prefix}/artifact.json"]

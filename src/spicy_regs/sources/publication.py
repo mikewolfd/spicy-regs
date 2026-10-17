@@ -651,16 +651,23 @@ def read_pinned_root(base_url: str, entry: Mapping) -> dict:
     return root
 
 
-def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:
+def load_evidence_journal(base_url: str, pin: Mapping, *, predating_ok: bool = False) -> bytes:
     """Read one published source-evidence journal, each hop checked against the digest above it; no blob is read.
 
     The root must be the one ``pin`` names and current completed-build evidence
     (refused before any member is requested), its member manifest the bytes the
-    root declares, and the journal the bytes that manifest declares.
+    root declares, and the journal the bytes that manifest declares. With
+    ``predating_ok``, evidence written before ``evidence_version`` 2 reads as an
+    empty journal instead, for a caller that inherits nothing from it.
     """
     from rulespec_artifacts import ROOT_OBJECT_KEY, parse_admitted_json, sha256_digest
 
-    from spicy_regs.source_evidence import JOURNAL, SourceEvidenceError, require_current_evidence_root
+    from spicy_regs.source_evidence import (
+        JOURNAL,
+        SourceEvidenceError,
+        predates_current_evidence,
+        require_current_evidence_root,
+    )
 
     prefix = f"{base_url.rstrip('/')}/{EVIDENCE_PREFIX}/{pin['artifactDigest'].removeprefix('sha256:')}"
 
@@ -673,6 +680,8 @@ def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:
     raw_root = _bounded_get(f"{prefix}/{ROOT_OBJECT_KEY}", allow_missing=False)
     assert raw_root is not None
     root = family_root(raw_root, pin)
+    if predating_ok and predates_current_evidence(root):
+        return b""
     try:
         require_current_evidence_root(root)
     except SourceEvidenceError as error:

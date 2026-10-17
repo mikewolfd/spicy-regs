@@ -25,9 +25,16 @@ for a cheaper writer. Evidence for everything below:
 2. With `--publish`: checks the credentials and that `R2_BUCKET_NAME` is the
    `--expect-bucket`, and prints the bucket and endpoint host, before it
    converts anything.
-3. Captures the publication index, its ETag and the family's entry, and
-   downloads every published member by its hash and byte-size pins. Each
-   member must match its declared physical columns and row count.
+3. Captures the publication index, its ETag and the family's entry. Reads
+   the replaced generation's source evidence (roots, manifests and journal,
+   never a table) before anything is downloaded, and refuses unless it is
+   current completed-build evidence. Evidence written before
+   `evidence_version` 2 is not refused: it stays with the old generation,
+   nothing is handed on from it, and the converted generation gets version 2
+   evidence of its own. `--publish-prepared` and `--resume-generation` read it
+   before they hash a retained table. Then downloads every published member by
+   its hash and byte-size pins. Each member must match its declared physical
+   columns and row count.
 4. Runs the family's own writer over those tables with upload skipped: the
    rollup with its builder replaced by "return the retained tables", or the
    court writer for a court family. Field policies are read at run time.

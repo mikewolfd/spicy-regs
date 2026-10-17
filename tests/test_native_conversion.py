@@ -707,47 +707,158 @@ def test_a_converted_family_keeps_its_evidence_lineage(tmp_path, monkeypatch, bu
             assert handed is not None and handed["unevidenced"] == [["119-1"]] and handed["shape_version"] == 2
 
 
-def test_a_family_whose_evidence_predates_the_current_version_is_refused_by_the_command(
-    tmp_path, monkeypatch, bucket, capsys
+def publish_old_with_evidence(
+    tmp_path,
+    monkeypatch,
+    store,
+    family="cfr-sections",
+    table="cfr_sections",
+    rows=CFR,
+    *,
+    evidence_version=None,
+    outcome="build-complete",
+    **journaled,
 ):
-    """Evidence written under evidence_version 1 cannot be inherited: exit 1 with the rebuild hint, nothing published."""
+    """Publish ``family`` as it was before receipts, carrying source evidence of ``evidence_version`` (default: current).
+
+    ``journaled`` events (``name_with_underscores=fields``) are written to the evidence journal; an ``outcome`` other
+    than ``build-complete`` publishes evidence the way no live family has it, to test the refusal.
+    """
     from spicy_regs import etl_policy_registry, source_evidence
     from spicy_regs.generations import build_generation
 
-    family = tmp_path / "cfr-sections"
-    family.mkdir()
-    path = family / "cfr_sections.parquet"
-    pq.write_table(pa.Table.from_pylist(CFR, schema=pa.schema([(column, pa.string()) for column in CFR[0]])), path)
+    directory = tmp_path / family
+    directory.mkdir()
+    path = directory / f"{table}.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(column, pa.string()) for column in rows[0]])), path)
     with monkeypatch.context() as patch:
         # Everything published here, including the evidence, is written the way the live pre-v2 families were.
-        patch.setattr(source_evidence, "EVIDENCE_VERSION", 1)
+        if evidence_version is not None:
+            patch.setattr(source_evidence, "EVIDENCE_VERSION", evidence_version)
+        if outcome != "build-complete":
+            patch.setattr(source_evidence, "require_current_evidence_root", lambda root: None)
         patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
-        evidence = source_evidence.CaptureEvidence(family, "cfr-sections")
+        evidence = source_evidence.CaptureEvidence(directory, family)
         evidence.inherit(publication.current_index(BASE), public_url=BASE)
+        for event, fields in journaled.items():
+            evidence.event(event.replace("_", "-"), **fields)
+        evidence.seal(outcome=outcome)
         build_generation(
-            family / "generation",
-            family="cfr-sections",
+            directory / "generation",
+            family=family,
             files=[path],
             expected_keys=[path.name],
             inputs=evidence.inputs(),
             read_snapshot=publication.current_index(BASE),
         )
         publication.publish_generation(
-            family / "generation",
-            client=bucket,
+            directory / "generation",
+            client=store,
             bucket=BUCKET,
             prior_index=publication.current_index(BASE),
             evidence_directories=(evidence.artifact_dir,),
         )
     evidence.finish()
+
+
+def count_fetches(monkeypatch):
+    """The key of every table member a conversion downloads, in order."""
+    fetch, fetched = publication.fetch_member, []
+
+    def counting(base, member, *rest):
+        fetched.append(member.key)
+        return fetch(base, member, *rest)
+
+    monkeypatch.setattr(publication, "fetch_member", counting)
+    return fetched
+
+
+def test_a_family_with_current_evidence_downloads_its_tables_and_converts(tmp_path, monkeypatch, bucket):
+    """The control for the refusal below: the same family, with evidence this runtime reads, fetches and converts."""
+    publish_old_with_evidence(tmp_path, monkeypatch, bucket, "courtlistener", "court_dockets", [DOCKET])
+    fetched = count_fetches(monkeypatch)
+
+    receipt = convert("courtlistener", tmp_path / "work")
+
+    assert fetched == ["court_dockets.parquet"] and receipt["lineage"]["inputs"]
+
+
+def test_a_family_whose_evidence_is_not_a_completed_build_is_refused_before_any_download(
+    tmp_path, monkeypatch, bucket, capsys
+):
+    """Current-format evidence of an unfinished build cannot be inherited: exit 1, nothing downloaded or published.
+
+    The refusal comes from the evidence alone, so it precedes the first table download (fec-query is 54 tables).
+    """
+    publish_old_with_evidence(tmp_path, monkeypatch, bucket, outcome="failed")
+    fetched = count_fetches(monkeypatch)
     monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
     written = list(bucket.writes)
     arguments = ["cfr-sections", *COMMON, "--work", str(tmp_path / "work"), "--publish", "--expect-bucket", BUCKET]
     assert conversion.main(arguments) == 1
     error = capsys.readouterr().err
-    assert "REFUSED:" in error and "Inherited source evidence refused" in error
-    assert "expected 2. Rebuild the family to write current evidence" in error
+    assert "REFUSED:" in error and "Inherited source evidence refused: Only completed-build evidence" in error
     assert f"STATE: {conversion.NOTHING_PUBLISHED}" in error and bucket.writes == written
+    assert fetched == [] and not (tmp_path / "work" / "retained").exists()
+
+
+def evidence_root(store, pin):
+    prefix = f"{publication.EVIDENCE_PREFIX}/{pin['artifactDigest'].removeprefix('sha256:')}"
+    return json.loads(store.objects[f"{prefix}/artifact.json"])
+
+
+def published_evidence_pin(store, family):
+    from spicy_regs.source_evidence import INPUT_ROLE
+
+    entry = stored(store, family)
+    (pin,) = [
+        item
+        for item in json.loads(store.objects[entry["prefix"] + "/artifact.json"])["inputs"]
+        if item["role"] == INPUT_ROLE
+    ]
+    return pin
+
+
+def test_a_family_whose_evidence_predates_version_2_hands_nothing_on_and_gets_current_evidence(
+    tmp_path, monkeypatch, bucket, capsys
+):
+    """Evidence written under evidence_version 1 stays with its generation: no refusal, no events inherited, v2 written."""
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    remainder = {"table": "treaties", "unevidenced": [["119-1"]], "shape_version": 2}
+    publish_old_with_evidence(
+        tmp_path,
+        monkeypatch,
+        bucket,
+        "treaties",
+        "treaties",
+        [{"treaty_id": "119-1"}],
+        evidence_version=1,
+        congress_index_selection=remainder,
+    )
+    old_pin = published_evidence_pin(bucket, "treaties")
+    assert evidence_root(bucket, old_pin)["spec"]["evidence_version"] == 1
+    held = {key: value for key, value in bucket.objects.items() if key.startswith(publication.EVIDENCE_PREFIX)}
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    arguments = [
+        *("treaties", "--allow", "treaties", "--expect-main", MAIN, "--expect-spicy-docs", WHEEL, "--remote", "fork"),
+        *("--work", str(tmp_path / "work"), "--publish", "--expect-bucket", BUCKET),
+    ]
+
+    assert conversion.main(arguments) == 0
+
+    assert "published and read back" in capsys.readouterr().out
+    receipt = json.loads((tmp_path / "work" / conversion.RECEIPT).read_text())
+    assert receipt["lineage"]["handed_on_events"] == 0
+    new_pin = published_evidence_pin(bucket, "treaties")
+    new_evidence = evidence_root(bucket, new_pin)
+    assert new_pin != old_pin and new_evidence["spec"]["evidence_version"] == 2
+    assert new_evidence["spec"]["outcome"] == "build-complete"
+    assert all(bucket.objects[key] == value for key, value in held.items())  # the old evidence is untouched
+    # The next scheduled run reads the new evidence; it holds none of the earlier generation's journal.
+    evidence = CaptureEvidence(tmp_path / "next", "treaties")
+    evidence.inherit(publication.current_index(BASE), public_url=BASE)
+    assert evidence.inherited_event("congress-index-selection", table="treaties") is None
 
 
 def test_rollback_recovers_a_lost_response_and_rederives_v1(tmp_path, monkeypatch, bucket):

@@ -288,16 +288,26 @@ def _regulatory_base_class(family: str):
     return {cls.name: cls for cls in (DocketsFamily, DocumentsFamily)}.get(family)
 
 
-def _handed_on(base: str, replaced_root: Mapping) -> list[dict]:
-    """The replaced generation's journal events that its next run would have read back (:data:`INHERITED_EVENTS`)."""
+def _replaced_evidence(base: str, entry: Mapping) -> tuple[dict, list[dict]]:
+    """The generation ``entry`` names, and the journal events its next run would have read back (:data:`INHERITED_EVENTS`).
+
+    Reads only pinned roots, manifests and the journal, so it runs before any table is fetched or hashed. Evidence
+    written before ``evidence_version`` 2 is left with its old generation: nothing is handed on, and the conversion
+    writes current evidence. Any other evidence that is not current completed-build evidence refuses here, not after
+    the family's tables are held.
+    """
     from spicy_regs.source_evidence import INPUT_ROLE
 
-    pin = next((item for item in replaced_root["inputs"] if item.get("role") == INPUT_ROLE), None)
+    _, replaced = publication.load_family_root(base, entry)
+    pin = next((item for item in replaced["inputs"] if item.get("role") == INPUT_ROLE), None)
     if pin is None:
-        return []
-    journal = publication.load_evidence_journal(base, pin).splitlines()
-    return [{name: value for name, value in row.items() if name != "recorded_at"}
-            for row in map(json.loads, journal) if row.get("event") in INHERITED_EVENTS]
+        return replaced, []
+    journal = publication.load_evidence_journal(base, pin, predating_ok=True).splitlines()
+    return replaced, [
+        {name: value for name, value in row.items() if name != "recorded_at"}
+        for row in map(json.loads, journal)
+        if row.get("event") in INHERITED_EVENTS
+    ]
 
 
 def _journal(evidence, events: Sequence[Mapping]) -> None:
@@ -926,6 +936,7 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
                     or "etlReceipts" in old or previous.get("family", family) != family
                     or previous.get("captured", {}).get("entry", old) != old):
                 raise ConversionRefused("Resume generation does not bind its captured complete prior")
+            replaced, handed_on = _replaced_evidence(base, old)
             identity, locked = _historical_producer(Path(__file__).resolve().parents[2], expected_producer, now["checkout"])
             if (artifact.root["producer"]["implementationId"] != identity
                     or artifact.root["producer"]["verifierImplementationId"] != identity
@@ -940,11 +951,9 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
                              if json.loads(path.read_bytes()).get("artifactDigest") in pins)
             _prepared_evidence(artifact.root, family, evidence)
             built = _native_built(generation, retained, base, work, evidence, operation, original_pins)
-            _, replaced = publication.load_family_root(base, old)
             scheduled = _rollup_class(family, RollupPipeline)
             retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
-            proof, problems, _ = _qualify_conversion(family, built, old, retained, replaced, retains,
-                                                    _handed_on(base, replaced))
+            proof, problems, _ = _qualify_conversion(family, built, old, retained, replaced, retains, handed_on)
             if problems:
                 raise ConversionRefused(f"Retained generation does not qualify: {problems}")
             if state(remote) != now:
@@ -1007,6 +1016,7 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         target = _target(expect_bucket, "Publishing a prepared conversion")
         if publication.stored_family(r2.get_r2_client(), target["bucket"], family) != old:
             raise ConversionRefused("Prepared family's complete captured entry changed; nothing was uploaded")
+        replaced, handed_on = _replaced_evidence(base, old)
         retained, original_pins = _retained_inputs(captured, old, work)
         generation = _prepared_path(work, receipt["generation"]["directory"])
         artifact, _, _ = read_operation.admit_generation(generation)
@@ -1026,11 +1036,11 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
 
         _check_prepared_membership(family, old, spec)
         built = _native_built(generation, retained, base, work, evidence, read_operation, original_pins)
-        _, replaced = publication.load_family_root(base, old)
         scheduled = _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
         proof, problems, conversion_proof = _qualify_conversion(
-            family, built, old, retained, replaced, retains, _handed_on(base, replaced))
+            family, built, old, retained, replaced, retains, handed_on
+        )
         if problems or any(receipt.get(key) != value for key, value in proof.items()):
             raise ConversionRefused(f"Prepared restoration proof differs: {problems}")
     except (ConversionRefused, publication.PublicationError) as failure:
@@ -1111,6 +1121,11 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         from spicy_regs.fec_native_conversion import FAMILIES, check_membership
         if family in FAMILIES:
             check_membership(family, old)
+        # A family whose generations carry source evidence keeps carrying it: the converted generation names the
+        # one it replaces and hands on what that one's journal held for the next run. That evidence is read before
+        # any table, so evidence that is not current completed-build evidence refuses before gigabytes are
+        # downloaded; evidence from before version 2 stays with its generation and hands nothing on.
+        replaced, handed_on = _replaced_evidence(base, old)
         original_pins: dict = {}
         retained = {key: _retain_table(base, captured, key, work / "retained", original_pins, retained_members) for key in old["tables"]}
         if _original_states(retained) != original_pins:
@@ -1158,12 +1173,8 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             owned = {key.removesuffix(".parquet") for key in entry["tables"]} | set(entry.get("etlReceipts", {}).get("datasets", ()))
             if other != family and (shared := sorted(claimed & owned)):
                 raise ConversionRefused(f"{family}: its receipts would hold {shared}, which already belongs to family {other}")
-        # A family whose generations carry source evidence keeps carrying it: the converted generation names the
-        # one it replaces and hands on what that one's journal held for the next run.
-        _, replaced = publication.load_family_root(base, old)
         scheduled = _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
-        handed_on = _handed_on(base, replaced)
         _write_receipt(work / RECEIPT, receipt)
         elapsed = time.monotonic()
         try:

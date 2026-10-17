@@ -52,6 +52,17 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- Native family conversion reads the replaced generation's source evidence
+  before it downloads or hashes any table, so a family whose inherited
+  evidence is not current completed-build evidence (another kind, an
+  unfinished build) is refused at once, with the same message and exit 1,
+  instead of after every table is held. `--publish-prepared` and
+  `--resume-generation` check it before they hash retained tables. Evidence
+  written before `evidence_version` 2 (unversioned or 1) no longer refuses a
+  conversion (owner decision, 2026-10-17): it stays with the generation it
+  describes, nothing is handed on from it, and the converted generation gets
+  version 2 evidence of its own.
+
 - Selected native inputs record their publication pin from the build's captured
   index alongside admitted subject, receipt, and processing hashes. Dynamic
   member reads now reach generation parent tracking. Local selections retain
