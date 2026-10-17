@@ -3,6 +3,8 @@
 import hashlib
 import json
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import sys
 from unittest.mock import patch
@@ -244,3 +246,44 @@ def test_existing_destination_is_refused_before_hashing(tmp_path):
     with patch.object(bridge, "checked_member", side_effect=AssertionError("hashed before the destination check")):
         with pytest.raises(ValueError, match="new absolute directory"):
             bridge.restore(request)
+
+
+def test_identity_covers_every_policy_file_the_earlier_receipt_chains_read():
+    """current_receipts admits what the chains declare, so each file they read must be part of the packaged identity."""
+    root = bridge.PACKAGE_ROOT
+    source = (root / "earlier_receipt_policies.py").read_text()
+    reads = re.findall(r'files\("([\w.]+)"\)\s*\.joinpath\(\s*"([^"]+)"', source)
+    assert reads and len(reads) == source.count(".joinpath(")
+    covered = set(bridge._identity_files())
+    assert root / "earlier_receipt_policies.py" in covered
+    for package, name in reads:
+        folder = root.joinpath(*package.split(".")[1:])
+        # "etl_policies/" + dataset + ".json" names the directory: every policy file in it is read by some chain.
+        files = sorted((folder / name).glob("*.json")) if name.endswith("/") else [folder / name]
+        assert files and all(file.is_file() for file in files)
+        assert set(files) <= covered, name
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        "earlier_receipt_policies.py",
+        "navigation_policy_history.json",
+        "fec_policy_history.json",
+        "scorecards/historical_rating_policies.json",
+        "etl_policies/gao_reports.json",
+    ],
+)
+def test_identity_changes_with_the_bytes_of_the_earlier_receipt_chains(tmp_path, monkeypatch, changed):
+    copy = tmp_path / "package"
+    for file in bridge._identity_files():
+        if file != Path(bridge.__file__):
+            target = copy / file.relative_to(bridge.PACKAGE_ROOT)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(file, target)
+    original = bridge.implementation_identity()
+    monkeypatch.setattr(bridge, "PACKAGE_ROOT", copy)
+    assert bridge.implementation_identity() == original
+    with (copy / changed).open("ab") as stream:
+        stream.write(b"\n")
+    assert bridge.implementation_identity() != original

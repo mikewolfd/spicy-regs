@@ -26,9 +26,13 @@ def file_hash(path):
         return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def implementation_identity():
-    root = Path(inspect.getfile(legislative_policy)).parent
-    files = [
+PACKAGE_ROOT = Path(inspect.getfile(legislative_policy)).parent
+
+
+def _identity_files():
+    """Every file whose bytes decide what this reader admits, restores or describes."""
+    root = PACKAGE_ROOT
+    return [
         Path(__file__),
         *(
             root / name
@@ -47,11 +51,20 @@ def implementation_identity():
                 "transforms/regulations_receipts.py",
                 "transforms/regulations_shape.py",
                 "transforms/fec_identity_receipts.py",
+                # current_receipts admits every declared earlier policy version, so the chains and the policy
+                # files they are checked against decide what it admits.
+                "earlier_receipt_policies.py",
+                "scorecards/historical_rating_policies.json",
             )
         ),
+        *sorted(root.glob("*policy_history*.json")),
+        *sorted((root / "etl_policies").glob("*.json")),
     ]
+
+
+def implementation_identity():
     digest = hashlib.sha256()
-    for file in files:
+    for file in _identity_files():
         data = file.read_bytes()
         digest.update(len(data).to_bytes(8, "big"))
         digest.update(data)
