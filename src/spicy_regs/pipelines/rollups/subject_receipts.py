@@ -43,6 +43,7 @@ from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS as REGULATION
 from spicy_regs.transforms.fec_identity_receipts import dataset_policy as fec_policy
 from spicy_regs.transforms.fec_identity_context_fields import REGISTRY as FEC
 from spicy_regs.transforms.regulations_receipts import (
+    RESTORE_DATASETS,
     ReceiptInput,
     materialize_internal,
     policy as regulations_policy,
@@ -95,7 +96,10 @@ class SelectedPriors:
         directory.mkdir()
         scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)
         selected_policy = selected_subject_policy(selected_policy, subjects)
-        validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
+        # The regulatory restore below admits the pair itself: complete admission in
+        # regulations_bulk._materialize_selected, or the full read_with_receipts pass in _qualified_rows.
+        if dataset in CONGRESS or dataset in field_registry() or dataset in FEC:
+            validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
         self.selections[dataset] = (subjects, receipt_path, generation)
         output = directory / "processing" / (dataset + ".parquet")
         if dataset in CONGRESS:
@@ -155,8 +159,8 @@ class SelectedPriors:
         else:
             output.parent.mkdir(parents=True, exist_ok=True)
             materialize_internal(
-                ReceiptInput(dataset, tuple(subjects), receipt_path, generation), output,
-                bulk=dataset in {"dockets", "documents", "federal_register", "fr_docket_links"},
+                ReceiptInput(dataset, tuple(subjects), scoped, generation), output,
+                bulk=dataset in RESTORE_DATASETS, scoped=True,
             )
         self.restored[dataset] = output
         members = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)

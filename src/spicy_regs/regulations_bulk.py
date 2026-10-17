@@ -21,7 +21,8 @@ import pyarrow.parquet as pq
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA, WITNESS_TYPE, ReceiptContext,
-    decode_exact_json, exact_json, observation_receipt, select_receipts, validate_receipt_bundle,
+    decode_exact_json, exact_json, observation_receipt, select_receipts, selected_subject_policy,
+    validate_receipt_bundle,
 )
 from spicy_regs.native_types import described_schema
 from spicy_regs.transforms.regulations_shape import NATIVE_FIELDS, RECEIPT_COLUMNS, SOURCE_COLUMNS, TYPES, _native, _validate
@@ -220,12 +221,16 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
     return destination/subject_path.name, destination/receipt_path.name
 
 
-def materialize_internal(selected, destination, *, source_schema=None):
-    if (selected.dataset not in DATASETS and selected.dataset not in {'federal_register', 'fr_docket_links'}) or len(selected.subjects) != 1:
+def materialize_internal(selected, destination, *, source_schema=None, scoped=False):
+    """Restore one selected member; ``scoped`` says ``selected.receipts`` is already its dataset's receipts."""
+    from spicy_regs.transforms.regulations_receipts import RESTORE_DATASETS
+    if selected.dataset not in RESTORE_DATASETS or len(selected.subjects) != 1:
         raise etl_bulk.NotBulkEligible('Regulatory base restore requires one selected member')
+    if scoped:
+        return _materialize_selected(selected, destination, source_schema=source_schema)
     with TemporaryDirectory(prefix='regulatory-base-selected-') as temporary:
-        scoped = select_receipts(selected.receipts, Path(temporary)/'receipts.parquet', dataset=selected.dataset)
-        return _materialize_selected(replace(selected, receipts=scoped), destination, source_schema=source_schema)
+        receipts = select_receipts(selected.receipts, Path(temporary)/'receipts.parquet', dataset=selected.dataset)
+        return _materialize_selected(replace(selected, receipts=receipts), destination, source_schema=source_schema)
 
 
 def _materialize_selected(selected, destination, *, source_schema=None):
@@ -234,7 +239,9 @@ def _materialize_selected(selected, destination, *, source_schema=None):
 
     declared = policy(selected.dataset)
     subject, receipts = selected.subjects[0], selected.receipts
-    validate_receipt_bundle({selected.dataset: [subject]}, [receipts], [declared], generation_id=selected.generation_id)
+    # Admit under the policy the subject's schema selects, as the selected-prior readers do.
+    validate_receipt_bundle({selected.dataset: [subject]}, [receipts], [selected_subject_policy(declared, [subject])],
+                            generation_id=selected.generation_id)
     expected = pq.ParquetFile(subject).metadata.num_rows
     if not expected:
         raise etl_bulk.NotBulkEligible('Empty observed input metadata stays with the row reader')

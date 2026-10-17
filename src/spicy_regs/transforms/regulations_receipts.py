@@ -14,6 +14,7 @@ from hashlib import file_digest, sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from loguru import logger
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -40,6 +41,9 @@ from spicy_regs.transforms.regulations_shape import (
     shape_records,
     subject_schema,
 )
+
+# Datasets whose retained processing input restores through the private batch reader.
+RESTORE_DATASETS = frozenset({"dockets", "documents", "federal_register", "fr_docket_links"})
 
 NULLABLE_IDENTITIES = {
     "agency_lifecycle_stats": ("agency_code",),
@@ -77,24 +81,26 @@ class ReceiptInput:
             raise ValueError("Dataset subjects and selected generation are required")
 
 
-def _qualified_rows(selected: ReceiptInput) -> Iterable[dict]:
+def _qualified_rows(selected: ReceiptInput, *, scoped: bool = False) -> Iterable[dict]:
     """Validate the whole selected dataset before reconstructing processing input.
 
     Absence, ambiguity, a different subject version or a different generation
     refuses; no public projection can substitute for missing retry evidence.
+    ``scoped`` says ``selected.receipts`` is already this dataset's ``select_receipts`` output.
     """
     from spicy_regs.etl_receipts import selected_subject_policy
     admitted = selected_subject_policy(policy(selected.dataset), selected.subjects)
     with TemporaryDirectory(prefix="regulations-receipt-read-") as temporary:
-        scoped = select_receipts(selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
+        receipts = selected.receipts if scoped else select_receipts(
+            selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
         # Complete input consistency validation precedes any processor yield.
         # This stays bounded and catches a bad later row before an external fetch.
         for row in read_with_receipts(
-            selected.subjects, [scoped], admitted, generation_id=selected.generation_id
+            selected.subjects, [receipts], admitted, generation_id=selected.generation_id
         ):
             _processor_input(selected.dataset, row)
         yield from read_with_receipts(
-            selected.subjects, [scoped], admitted, generation_id=selected.generation_id
+            selected.subjects, [receipts], admitted, generation_id=selected.generation_id
         )
 
 
@@ -179,7 +185,7 @@ def processing_schema(dataset, *, metadata=None, source_schema=None):
     """The maintained restored Arrow schema, including the original field preservation rules."""
     if source_schema is not None:
         known = dict(SOURCE_COLUMNS[dataset])
-        if (dataset not in {"dockets", "documents", "federal_register", "fr_docket_links"}
+        if (dataset not in RESTORE_DATASETS
                 or len(set(source_schema.names)) != len(source_schema.names)
                 or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
             raise ValueError("Exact regulatory source schema differs from the declared input fields")
@@ -189,8 +195,11 @@ def processing_schema(dataset, *, metadata=None, source_schema=None):
 
 
 def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: bool = False,
-                         source_schema: pa.Schema | None = None) -> Path:
+                         source_schema: pa.Schema | None = None, scoped: bool = False) -> Path:
     """Bounded exact retained processor inputs, with qualified file metadata.
+
+    ``scoped=True`` says ``selected.receipts`` is already this dataset's ``select_receipts`` output,
+    so neither route selects it again. Either route still admits the pair completely.
 
     File-level placement/aggregation metadata is restored only when every row's
     receipt agrees. This keeps CFR incremental placement from becoming a blind
@@ -202,23 +211,27 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     """
     from spicy_regs.transforms.parquet_rows import write_rows
     processing_schema(selected.dataset, source_schema=source_schema)
-    if bulk and selected.dataset in {'dockets', 'documents', 'federal_register', 'fr_docket_links'} and all(
-            pq.read_schema(path).equals(subject_schema(selected.dataset)) for path in selected.subjects):
+    if bulk and selected.dataset in RESTORE_DATASETS:
         from spicy_regs import etl_bulk, regulations_bulk
-        try:
-            return regulations_bulk.materialize_internal(selected, destination, source_schema=source_schema)
-        except etl_bulk.NotBulkEligible as error:
-            etl_bulk.log_row_fallback("regulatory restore", error)
+        if all(pq.read_schema(path).equals(subject_schema(selected.dataset)) for path in selected.subjects):
+            try:
+                return regulations_bulk.materialize_internal(
+                    selected, destination, source_schema=source_schema, scoped=scoped)
+            except etl_bulk.NotBulkEligible as error:
+                etl_bulk.log_row_fallback("regulatory restore", error)
+        else:
+            logger.warning("regulatory restore route=row dataset={} reason=subject-schema-differs", selected.dataset)
 
-    rows = iter(_qualified_rows(selected))
+    rows = iter(_qualified_rows(selected, scoped=scoped))
     first = next(rows, None)
     metadata = first.get("input_metadata", {}) if first is not None else {}
     if first is None:
         with TemporaryDirectory(prefix="regulations-empty-metadata-") as temporary:
-            scoped = select_receipts(selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
+            receipts = selected.receipts if scoped else select_receipts(
+                selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
             observations = list(
                 read_attempts(
-                    [scoped],
+                    [receipts],
                     policy(selected.dataset),
                     generation_id=selected.generation_id,
                     outcomes=frozenset({"observed"}),

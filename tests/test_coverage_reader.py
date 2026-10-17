@@ -1,5 +1,6 @@
 """Coverage bridge uses selected receipts, with exact original source values."""
 
+from contextlib import ExitStack
 import hashlib
 import json
 from pathlib import Path
@@ -8,12 +9,25 @@ import shutil
 import subprocess
 import sys
 from unittest.mock import patch
+from loguru import logger
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_regs import coverage_reader as bridge
+from spicy_regs import etl_bulk, regulations_bulk
+from spicy_regs.etl_receipts import selected_subject_policy
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_receipts import write_legislative_outputs
+from spicy_regs.pipelines.rollups import subject_receipts
+from spicy_regs.transforms import regulations_receipts
+from spicy_regs.transforms.regulations_receipts import (
+    RESTORE_DATASETS,
+    ReceiptInput,
+    materialize_internal,
+    write_held_dataset,
+)
+from tests.test_federal_register_bulk_restore import _source as federal_register_source
+from tests.test_fr_docket_links_bulk_restore import _source as fr_docket_links_source
 
 
 def member(path):
@@ -287,3 +301,112 @@ def test_identity_changes_with_the_bytes_of_the_earlier_receipt_chains(tmp_path,
     with (copy / changed).open("ab") as stream:
         stream.write(b"\n")
     assert bridge.implementation_identity() != original
+
+
+# The selected regulatory restore admits and scopes its pair once, whichever route restores it.
+@pytest.fixture
+def route_warnings():
+    messages = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
+    yield messages
+    logger.remove(sink)
+
+
+def _regulatory_input(tmp_path, dataset):
+    if dataset == "federal_register":
+        rows = [{"document_number": "2026-00001", "publication_date": "2026-06-30"}]
+        return federal_register_source(tmp_path, rows)[0]
+    if dataset == "fr_docket_links":
+        return fr_docket_links_source(tmp_path)[0]
+    schema = pa.schema([("document_id", pa.string()), ("title", pa.string())], metadata={b"dump_date": b"2026-06-30"})
+    source = tmp_path / "source.parquet"
+    rows = [{"document_id": "D-1", "title": "one"}, {"document_id": "D-2", "title": "two"}]
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), source)
+    subject, receipts = write_held_dataset("documents", source, tmp_path / "native", generation_id="g")
+    return ReceiptInput("documents", (subject,), receipts, "g")
+
+
+def _restore_request(tmp_path, selected, name="restored"):
+    return {
+        "dataset": selected.dataset,
+        "generationId": selected.generation_id,
+        "subjects": [member(path) for path in selected.subjects],
+        "receipts": member(selected.receipts),
+        "destination": str(tmp_path / name),
+    }
+
+
+REGULATORY_RESTORES = ["federal_register", "fr_docket_links", "documents"]
+
+
+def test_regulatory_policies_agree_between_the_selected_prior_reader_and_the_materializers():
+    assert RESTORE_DATASETS == {"dockets", "documents", "federal_register", "fr_docket_links"}
+    for dataset in sorted(RESTORE_DATASETS):
+        assert bridge.dataset_policy(dataset) == regulations_receipts.policy(dataset)
+
+
+@pytest.mark.parametrize("dataset", REGULATORY_RESTORES)
+def test_regulatory_restore_admits_and_scopes_the_pair_once_under_the_selected_policy(
+    tmp_path, route_warnings, dataset
+):
+    selected = _regulatory_input(tmp_path, dataset)
+    admissions = [
+        patch.object(module, "validate_receipt_bundle", wraps=module.validate_receipt_bundle)
+        for module in (subject_receipts, regulations_bulk)
+    ]
+    scopings = [
+        patch.object(module, "select_receipts", wraps=module.select_receipts)
+        for module in (subject_receipts, regulations_bulk, regulations_receipts)
+    ]
+    with ExitStack() as stack:
+        admitted = [stack.enter_context(call) for call in admissions]
+        scoped = [stack.enter_context(call) for call in scopings]
+        restored = bridge.restore(_restore_request(tmp_path, selected))
+    assert [call.call_count for call in admitted] == [0, 1]
+    assert [call.call_count for call in scoped] == [1, 0, 0]
+    [(_, args, _)] = admitted[1].mock_calls
+    assert args[2] == [selected_subject_policy(bridge.dataset_policy(dataset), selected.subjects)]
+    assert route_warnings == []
+    assert restored["rows"] == pq.ParquetFile(selected.subjects[0]).metadata.num_rows
+
+
+@pytest.mark.parametrize("dataset", REGULATORY_RESTORES)
+def test_restored_regulatory_processing_member_is_the_member_each_materializer_route_writes(
+    tmp_path, route_warnings, dataset
+):
+    selected = _regulatory_input(tmp_path, dataset)
+    restored = bridge.restore(_restore_request(tmp_path, selected))
+    [processing] = restored["processingMembers"]
+    # Without ``scoped`` the materializer selects the shared receipts itself: the earlier two-pass route.
+    unscoped = materialize_internal(selected, tmp_path / "unscoped.parquet", bulk=True)
+    assert processing["sha256"] == bridge.file_hash(unscoped)
+    row = materialize_internal(selected, tmp_path / "row.parquet", bulk=False)
+    assert pq.read_table(unscoped).equals(pq.read_table(row), check_metadata=True)
+    assert route_warnings == []
+
+
+@pytest.mark.parametrize("dataset", REGULATORY_RESTORES)
+def test_forced_batch_ineligibility_logs_the_row_route_and_restores_identically(
+    tmp_path, monkeypatch, route_warnings, dataset
+):
+    selected = _regulatory_input(tmp_path, dataset)
+    bulk = bridge.restore(_restore_request(tmp_path, selected, "bulk"))
+    assert route_warnings == []
+
+    def forced(*args, **kwargs):
+        raise etl_bulk.NotBulkEligible("forced for the test")
+
+    monkeypatch.setattr(regulations_bulk, "_materialize_selected", forced)
+    row = bridge.restore(_restore_request(tmp_path, selected, "row"))
+    assert route_warnings == [f"regulatory restore route=row dataset={dataset} reason=forced for the test"]
+    assert pq.read_table(row["urls"][0]).equals(pq.read_table(bulk["urls"][0]), check_metadata=True)
+    assert row["rows"] == bulk["rows"]
+
+
+def test_a_subject_schema_other_than_the_declared_one_logs_the_row_route_before_it_refuses(tmp_path, route_warnings):
+    selected = _regulatory_input(tmp_path, "federal_register")
+    subject = pq.read_table(selected.subjects[0])
+    pq.write_table(subject.append_column("undeclared", pa.nulls(subject.num_rows, pa.string())), selected.subjects[0])
+    with pytest.raises(ValueError, match="Subject schema differs from policy"):
+        materialize_internal(selected, tmp_path / "refused.parquet", bulk=True)
+    assert route_warnings == ["regulatory restore route=row dataset=federal_register reason=subject-schema-differs"]
