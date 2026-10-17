@@ -1,0 +1,16 @@
+{
+  "filename": "spicy_docs-0.66.0-py3-none-any.whl",
+  "version": "0.66.0",
+  "sha256": "0ba69d888f5a8d8e918360407d4801d308317c465664d0f1d43a165839e428dc",
+  "byte_size": 2625381,
+  "source_base_commit": "743288d0a2384bab19bbfbbe11d2371c82df5e72",
+  "source_commit": "3fc47e353bd9472ea89a23c8945ef74bf1804182",
+  "source_state": "Committed local branch simplify-20261016 of spicy-docs (three commits over the 0.65.0 base); not pushed or tagged",
+  "build": "git archive of the source commit, then uv build --wheel (uv 0.11.21, offline); rebuilt three times byte-identical",
+  "installed_replay": {
+    "path": "/Users/mikewolfd/Work/spicy-stack-review-work/20261016-140229/integration/spicy-docs.result.json",
+    "sha256": "db4862652b8ee7f8dddd06492d55efafb902acd1bd9f369068a99010a7ac273b"
+  },
+  "scope": "Bounded response reads shared by HTTP acquisition adapters, retained-capture reuse (CompletedCapture, put_stream, bounded_response_chunks) and resumable OpenFEC API traversals (FecClient.api resume_dir, exclusive_run); no catalogue selection, acquisition or publication",
+  "other_consumers": "DocSpec, Engine and Search do not consume these APIs and are unchanged"
+}

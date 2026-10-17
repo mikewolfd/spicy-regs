@@ -5,6 +5,12 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.66.0`: built from spicy-docs `simplify-20261016` at `3fc47e35`
+  (base `743288d0`, 0.65.0); SHA-256
+  `0ba69d888f5a8d8e918360407d4801d308317c465664d0f1d43a165839e428dc`. It adds
+  bounded response reads, retained-capture reuse and resumable OpenFEC traversal.
+  Earlier wheels remain retained; see `spicy_docs-0.66.0.json`.
+
 - `spicy_docs-0.63.0`: complete release wheel built from the scorecard production
   refactor at `40927102`; SHA-256
   `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4`.
