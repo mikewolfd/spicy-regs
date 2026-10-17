@@ -9,9 +9,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from loguru import logger
-from rulespec_artifacts import ArtifactVerificationError, canonical_json_bytes
+from rulespec_artifacts import ArtifactVerificationError, canonical_json_bytes, parse_canonical_json, stamp_root
 
 from spicy_regs.generations import build_generation, verify_generation
+from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.sources import publication as pub, r2
 from tests.generation_fakes import Store, error
 
@@ -809,3 +810,46 @@ def test_staging_complete_generations_keeps_both_unselected(tmp_path):
         assert store.objects[entry["prefix"] + "/" + key] == (directory / key).read_bytes()
         assert pub.INDEX_V2_KEY not in store.objects
         assert pub.INDEX_KEY not in store.objects
+
+
+@pytest.mark.parametrize("change", [None, "outcome", "kind", "version", "unversioned"])
+def test_inherited_evidence_journal_requires_current_completed_evidence(tmp_path, monkeypatch, change):
+    """The inherited root is admitted before any member is requested: current kind, completed build, current version."""
+    base = "https://test.invalid"
+    evidence = CaptureEvidence(tmp_path, "test")
+    evidence.inherit(pub.empty_index(), public_url=None)
+    evidence.event("congress-index-selection", table="t", unevidenced=[])
+    evidence.seal(outcome="build-complete")
+    directory = evidence.artifact_dir
+    root = parse_canonical_json((directory / "artifact.json").read_bytes())
+    if change == "outcome":
+        root["spec"]["outcome"] = "failed"
+    elif change == "kind":
+        root["kind"] = "spicy-regs-rollup-generation"
+    elif change == "version":
+        root["spec"]["evidence_version"] = 1
+    elif change == "unversioned":
+        del root["spec"]["evidence_version"]
+    root = stamp_root(root)
+    prefix = f"{pub.EVIDENCE_PREFIX}/{root['artifactDigest'].removeprefix('sha256:')}"
+    objects = {
+        f"{prefix}/artifact.json": canonical_json_bytes(root),
+        **{f"{prefix}/{name}": (directory / name).read_bytes() for name in ("members.json", "journal.jsonl")},
+    }
+    requested = []
+
+    def get(url, **_):
+        requested.append(url.removeprefix(base + "/"))
+        return objects.get(requested[-1])
+
+    monkeypatch.setattr(pub, "_bounded_get", get)
+    pin = {"logicalId": root["logicalId"], "artifactDigest": root["artifactDigest"]}
+    if change is None:
+        assert b"congress-index-selection" in pub.load_evidence_journal(base, pin)
+        return
+    message = (
+        "Only completed-build evidence" if change in ("outcome", "kind") else "Unsupported source evidence version"
+    )
+    with pytest.raises(pub.PublicationError, match=message):
+        pub.load_evidence_journal(base, pin)
+    assert requested == [f"{prefix}/artifact.json"]

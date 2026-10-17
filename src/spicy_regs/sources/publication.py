@@ -654,12 +654,13 @@ def read_pinned_root(base_url: str, entry: Mapping) -> dict:
 def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:
     """Read one published source-evidence journal, each hop checked against the digest above it; no blob is read.
 
-    The root must be the one ``pin`` names, its member manifest the bytes the
+    The root must be the one ``pin`` names and current completed-build evidence
+    (refused before any member is requested), its member manifest the bytes the
     root declares, and the journal the bytes that manifest declares.
     """
     from rulespec_artifacts import ROOT_OBJECT_KEY, parse_admitted_json, sha256_digest
 
-    from spicy_regs.source_evidence import JOURNAL
+    from spicy_regs.source_evidence import JOURNAL, SourceEvidenceError, require_current_evidence_root
 
     prefix = f"{base_url.rstrip('/')}/{EVIDENCE_PREFIX}/{pin['artifactDigest'].removeprefix('sha256:')}"
 
@@ -671,7 +672,12 @@ def load_evidence_journal(base_url: str, pin: Mapping) -> bytes:
 
     raw_root = _bounded_get(f"{prefix}/{ROOT_OBJECT_KEY}", allow_missing=False)
     assert raw_root is not None
-    for reference in family_root(raw_root, pin)["memberManifests"]:
+    root = family_root(raw_root, pin)
+    try:
+        require_current_evidence_root(root)
+    except SourceEvidenceError as error:
+        raise PublicationError(f"Inherited source evidence refused: {error}") from error
+    for reference in root["memberManifests"]:
         manifest = parse_admitted_json(pinned(reference["objectKey"], reference["sha256"]))
         for member in manifest["members"]:
             if member["objectKey"] == JOURNAL:
