@@ -49,10 +49,20 @@ prior. Source-evidence runtime admission supports only the current integer
 `evidence_version`, kind `spicy-regs-source-evidence` and outcome
 `build-complete`, and validates its receipt bindings. Other artifacts stay as
 historical evidence but are not runtime inputs. A live generation whose evidence
-predates `evidence_version` 2 cannot be audited, converted or inherited from
-until its family is rebuilt. Two such families have no schedule: run
-`rollup-fec-observations.yml` (`workflow_dispatch`) for fec-observations, and
-rebuild fec-query by its manual release procedure
+is not current (another `evidence_version`, or an outcome other than
+`build-complete`) cannot be audited, converted or inherited from until its
+family is rebuilt. Which families are refused changes as they are rebuilt, so
+check the live generation rather than trust a list here. The read-only
+`scripts/audit_generation.py --family <family>` reports it in its `evidence`
+section, as `verify_evidence` admits or refuses it. It re-reads the whole
+generation: see
+[Auditing a published generation](generation-publication.md#auditing-a-published-generation).
+
+On 2026-10-17 that check found `fec-observations` (live generation `4cb0dffa`,
+evidence `07f0a1f4`) at `evidence_version` 2 with outcome `build-complete`,
+accepted by these checks. Only `bill-subjects`, `fec-query` and
+`lobbying-filings` were refused. Rebuild a refused family before relying on
+it; fec-query has a manual release procedure
 ([FEC delivery plan](fec-delivery-plan.md)).
 
 The Congress.gov index tables re-read every held detail that no retained
