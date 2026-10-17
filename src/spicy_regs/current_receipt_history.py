@@ -12,12 +12,14 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
     regardless of whether values changed. Matching observations inherit in prior
     file order, with repeated receipt identities ignored as ReceiptLineage does.
     Failed attempts remain fresh. No prior row replaces a current receipt.
+    ``require_unique_prior`` leaves any identity with more than one accepted prior to the row writer, as
+    :class:`NotBulkEligible`; without it, differing receipts for one identity are a ``ValueError``.
     SQL sorts ordinal pairs; full payloads are bounded by an output batch and
     the largest prior row group. Prior groups may be reread across batches.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
-    from spicy_regs.etl_bulk import bulk_connection, _literal
+    from spicy_regs.etl_bulk import NotBulkEligible, bulk_connection, _literal
     from spicy_regs.receipt_history import _take_prior_rows
     from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, decode_exact_json,
                                         exact_json, inherit_receipt, _digest as receipt_digest)
@@ -45,6 +47,8 @@ def inherit_current_receipts(current: Path, priors: Sequence[Path], destination:
         conflicting = con.execute("SELECT EXISTS(SELECT 1 FROM prior WHERE outcome='accepted' "
                                   f"GROUP BY dataset,record_id HAVING {conflicts})").fetchone()
         if conflicting == (True,):
+            if require_unique_prior:
+                raise NotBulkEligible("Ambiguous selected prior receipts require the original row writer")
             raise ValueError("Conflicting selected prior receipts")
         con.execute("CREATE TABLE accepted_keys AS SELECT dataset,record_id,min(ordinal) AS ordinal "
                     "FROM prior WHERE outcome='accepted' GROUP BY dataset,record_id")

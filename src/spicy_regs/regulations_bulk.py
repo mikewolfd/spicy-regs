@@ -3,6 +3,9 @@
 Shared parsers and row attempts decide unproven values. SQL handles declared
 strings and exact receipt hashing. Completed pairs undergo public admission
 before becoming visible; restoration proves every retained processor input.
+Only unsupported semantics raise ``NotBulkEligible`` for the caller's row path;
+a DuckDB or Arrow failure raises ``BulkValidationError`` (``BulkInputError``
+when the data caused it) and is never redone by row.
 """
 from collections.abc import Mapping
 from dataclasses import replace
@@ -198,7 +201,7 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
                     for batch in pq.ParquetFile(refusals).iter_batches(batch_size=_BATCH):
                         rw.write_batch(batch)
         except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
-            raise etl_bulk.NotBulkEligible('Regulatory base query requires the original row writer') from error
+            raise etl_bulk.bulk_failure('Regulatory base query failed', error) from error
         if seen != expected:
             raise RuntimeError(f'{dataset}: source population changed')
         if prior_receipts:
@@ -208,8 +211,8 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
                     receipt_path, prior_receipts, stage / "inherited.parquet",
                     inherit_observations=False, require_unique_prior=True,
                 )
-            except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
-                raise etl_bulk.NotBulkEligible("Regulatory prior inheritance requires the original row writer") from error
+            except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
+                raise etl_bulk.bulk_failure('Regulatory prior inheritance failed', error) from error
             inherited.replace(receipt_path)
         validate_receipt_bundle({dataset: [subject_path]}, [receipt_path], [declared], generation_id=generation_id)
         publish_directory_no_replace(stage, destination)
@@ -291,6 +294,9 @@ def _materialize_selected(selected, destination, *, source_schema=None):
             if seen != expected:
                 raise etl_bulk.NotBulkEligible('Regulatory base restored population differs')
             output.replace(destination)
-    except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError, RecursionError) as error:
+    except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
+        raise etl_bulk.bulk_failure('Regulatory base processing proof failed', error) from error
+    except (ValueError, TypeError, OverflowError, RecursionError) as error:
+        # The shared mapper rejected a retained input: the row reader decides the exact first error.
         raise etl_bulk.NotBulkEligible('Regulatory base processing proof requires the original row reader') from error
     return destination

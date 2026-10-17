@@ -2,11 +2,14 @@
 
 from pathlib import Path
 
+import duckdb
 import pytest
 
 from spicy_regs import native_conversion as conversion, regulations_bulk
 from spicy_regs.sources import publication
+from spicy_regs.transforms import regulations_receipts
 from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
+from tests.duckdb_faults import fail_streams_after
 from tests.test_native_conversion import (
     BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, publish_old,
 )
@@ -120,3 +123,31 @@ def test_regulatory_preparation_refuses_processing_changes_before_publication(tm
         convert("dockets", tmp_path / "prepared", publish=True)
     assert intercepted and set(intercepted) == {change}
     assert bucket.writes == written
+
+
+@pytest.mark.parametrize("failure, code, report", [
+    (duckdb.InvalidInputException("injected"), 1, "REFUSED: dockets: "),
+    (duckdb.OutOfMemoryException("injected"), 2, "FAILED: BulkValidationError: "),
+], ids=["invalid-input", "operational"])
+def test_a_regulatory_bulk_failure_is_reported_by_its_kind_and_never_redone_by_row(
+        tmp_path, monkeypatch, bucket, capsys, failure, code, report):
+    """Invalid input refuses (exit 1) and an operational failure does not (exit 2); nothing is rewritten by row."""
+    publish_old(bucket, monkeypatch, tmp_path, "dockets", {"dockets": rows("dockets")})
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    written = list(bucket.writes)
+
+    def row_path(*args, **kwargs):
+        pytest.fail("a bulk failure was retried by row")
+
+    monkeypatch.setattr(regulations_receipts, "write_records", row_path)
+    monkeypatch.setattr(regulations_bulk, "_BATCH", 1)
+    delivered = fail_streams_after(monkeypatch, failure)
+    arguments = [
+        "dockets", "--allow", "dockets", "--expect-main", MAIN, "--expect-spicy-docs", WHEEL, "--remote", "fork",
+        "--work", str(tmp_path / "work"), "--publish", "--expect-bucket", BUCKET,
+    ]
+    assert conversion.main(arguments) == code
+    error = capsys.readouterr().err
+    assert report in error and "Regulatory base query failed; no row fallback: " in error
+    assert f"STATE: {conversion.NOTHING_PUBLISHED}" in error
+    assert delivered == [1] and bucket.writes == written

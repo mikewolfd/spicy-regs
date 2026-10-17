@@ -4,8 +4,11 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from spicy_regs import current_receipt_history, etl_bulk, regulations_bulk
 from spicy_regs.etl_receipts import exact_json, validate_receipt_bundle
+from spicy_regs.transforms import regulations_receipts
 from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal, policy, write_held_dataset
+from tests.duckdb_faults import FAILURES, assert_raised_as, fail_streams_after
 
 
 @pytest.mark.parametrize('dataset', ['dockets', 'documents'])
@@ -304,3 +307,117 @@ def test_duplicate_prior_receipt_ids_require_exact_row_proof(tmp_path, tampered)
                                     prior_receipts=[receipts], bulk=True)
         for before, after in zip(expected, actual):
             assert pq.read_table(before).equals(pq.read_table(after), check_metadata=True)
+
+
+def _no_row_path(monkeypatch):
+    """Both reference paths fail the test: a bulk failure must not be redone by row."""
+    def row(*args, **kwargs):
+        pytest.fail('a bulk failure was retried by row')
+    monkeypatch.setattr(regulations_receipts, 'write_records', row)
+    monkeypatch.setattr(regulations_receipts, '_qualified_rows', row)
+
+
+def _dockets(tmp_path, rows=5):
+    source = tmp_path / 'source.parquet'
+    pq.write_table(pa.table({'docket_id': [f'd{i}' for i in range(rows)], 'title': ['t'] * rows}), source)
+    return source
+
+
+@pytest.mark.parametrize('failure, invalid', FAILURES)
+def test_duckdb_failure_after_partial_write_fails_fast_without_row_fallback(tmp_path, monkeypatch, failure, invalid):
+    source = _dockets(tmp_path)
+    monkeypatch.setattr(regulations_bulk, '_BATCH', 2)
+    _no_row_path(monkeypatch)
+    delivered = fail_streams_after(monkeypatch, failure)
+    destination = tmp_path / 'native'
+    with pytest.raises(etl_bulk.BulkValidationError) as caught:
+        write_held_dataset('dockets', source, destination, generation_id='g', bulk=True)
+    assert delivered == [2]
+    assert_raised_as(caught, failure, invalid)
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize('failure, invalid', FAILURES)
+def test_failure_inheriting_prior_receipts_fails_fast_without_row_fallback(tmp_path, monkeypatch, failure, invalid):
+    source = _dockets(tmp_path)
+    _, prior = write_held_dataset('dockets', source, tmp_path / 'prior', generation_id='prior')
+    staged = []
+
+    def inherit(current, *args, **kwargs):
+        staged.append(current.exists())
+        raise failure
+
+    monkeypatch.setattr(current_receipt_history, 'inherit_current_receipts', inherit)
+    _no_row_path(monkeypatch)
+    destination = tmp_path / 'native'
+    with pytest.raises(etl_bulk.BulkValidationError) as caught:
+        write_held_dataset('dockets', source, destination, generation_id='g', prior_receipts=[prior], bulk=True)
+    assert staged == [True]
+    assert_raised_as(caught, failure, invalid)
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize('failure, invalid', FAILURES)
+def test_duckdb_failure_after_partial_restore_fails_fast_without_row_fallback(tmp_path, monkeypatch, failure, invalid):
+    subject, receipts = write_held_dataset('dockets', _dockets(tmp_path), tmp_path / 'native', generation_id='g')
+    destination = tmp_path / 'existing.parquet'
+    destination.write_bytes(b'preserve')
+    monkeypatch.setattr(regulations_bulk, '_BATCH', 2)
+    _no_row_path(monkeypatch)
+    delivered = fail_streams_after(monkeypatch, failure)
+    with pytest.raises(etl_bulk.BulkValidationError) as caught:
+        materialize_internal(ReceiptInput('dockets', (subject,), receipts, 'g'), destination, bulk=True)
+    assert delivered == [2]
+    assert_raised_as(caught, failure, invalid)
+    assert destination.read_bytes() == b'preserve'
+    assert not list(tmp_path.glob('.regulatory-restore-*'))
+
+
+def test_ambiguous_priors_are_unsupported_semantics_only_when_unique_priors_are_required(tmp_path):
+    """The bulk lookup cannot pick among several accepted priors; the row writer decides them, or refuses."""
+    from spicy_regs.etl_receipts import _digest
+
+    source = _dockets(tmp_path, rows=1)
+    _, prior = write_held_dataset('dockets', source, tmp_path / 'prior', generation_id='prior')
+    _, current = write_held_dataset('dockets', source, tmp_path / 'current', generation_id='current')
+    held = pq.read_table(prior)
+    rows = held.to_pylist()
+    duplicate = dict(next(row for row in rows if row['outcome'] == 'accepted'))
+    duplicate['processing_json'] = exact_json({'raw_conversion_inputs': {'docket_id': 'd0', 'title': 'other'}})
+    duplicate['receipt_id'] = _digest({k: v for k, v in duplicate.items() if k != 'receipt_id'})
+    rows.append(duplicate)
+    pq.write_table(pa.Table.from_pylist(rows, schema=held.schema), prior)
+    with pytest.raises(etl_bulk.NotBulkEligible, match='Ambiguous selected prior'):
+        current_receipt_history.inherit_current_receipts(
+            current, [prior], tmp_path / 'strict.parquet', inherit_observations=False, require_unique_prior=True)
+    with pytest.raises(ValueError, match='Conflicting selected prior receipts'):
+        current_receipt_history.inherit_current_receipts(
+            current, [prior], tmp_path / 'lenient.parquet', inherit_observations=False)
+
+
+def test_mapper_rejecting_a_retained_input_still_leaves_the_exact_first_error_to_the_row_reader(tmp_path, monkeypatch):
+    from spicy_regs.etl_receipts import _digest, decode_exact_json
+
+    source = tmp_path / 'source.parquet'
+    pq.write_table(pa.table({'document_id': ['a'], 'attachments_json': ['[]']}), source)
+    subject, receipts = write_held_dataset('documents', source, tmp_path / 'native', generation_id='g')
+    table = pq.read_table(receipts)
+    rows = table.to_pylist()
+    accepted = next(row for row in rows if row['outcome'] == 'accepted')
+    held = decode_exact_json(accepted['processing_json'])
+    held['raw_conversion_inputs']['attachments_json'] = '{bad'
+    accepted['processing_json'] = exact_json(held)
+    accepted['receipt_id'] = _digest({k: v for k, v in accepted.items() if k != 'receipt_id'})
+    pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), receipts)
+    calls = []
+    reference = regulations_receipts._qualified_rows
+
+    def row_reader(*args, **kwargs):
+        calls.append('row')
+        yield from reference(*args, **kwargs)
+
+    monkeypatch.setattr(regulations_receipts, '_qualified_rows', row_reader)
+    with pytest.raises(ValueError) as caught:
+        materialize_internal(ReceiptInput('documents', (subject,), receipts, 'g'), tmp_path / 'out.parquet', bulk=True)
+    assert calls == ['row']
+    assert not isinstance(caught.value, etl_bulk.BulkValidationError)

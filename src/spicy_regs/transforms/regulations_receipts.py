@@ -198,6 +198,7 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     Dockets, documents, Federal Register and its docket links use a private batch
     proof before exposing the file;
     ``bulk=False`` retains the complete row reader as the reference authority.
+    A DuckDB or Arrow failure in the batch proof is raised, never retried by row.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
     processing_schema(selected.dataset, source_schema=source_schema)
@@ -374,6 +375,7 @@ def write_held_dataset(
     goes into each receipt. Neither source bytes nor their metadata are deleted.
     Dockets and documents can batch declared text inputs; ``bulk=False`` uses
     the reference writer. Unsupported batch values retain its exact decisions.
+    A DuckDB or Arrow failure in the batch writer is raised, never retried by row.
     """
     if bulk and dataset in {'dockets', 'documents'}:
         from spicy_regs import etl_bulk, regulations_bulk

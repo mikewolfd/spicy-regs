@@ -106,7 +106,7 @@ def bulk_limits(*, threads: int, memory_limit: str, require_bulk: bool = False):
         _limits.reset(token)
 
 
-def _bulk_failure(action: str, error: Exception) -> BulkValidationError:
+def bulk_failure(action: str, error: Exception) -> BulkValidationError:
     """``error`` as a failure that never retries by row: invalid input data, or an operational one."""
     invalid = isinstance(error, (ValueError, duckdb.DataError, duckdb.IntegrityError, duckdb.InvalidInputException))
     return (BulkInputError if invalid else BulkValidationError)(f"{action}; no row fallback: {error}")
@@ -631,7 +631,7 @@ def _check_receipts(
     if scoped and stopped is not None:
         if schema_mismatch:
             raise NotBulkEligible("select_receipts decides a receipt file that is not the shared schema")
-        raise _bulk_failure("Bulk receipt input could not be read", stopped) from stopped
+        raise bulk_failure("Bulk receipt input could not be read", stopped) from stopped
     con.execute(
         "CREATE TABLE receipts (n BIGINT, dataset VARCHAR, generation_id VARCHAR, receipt_id VARCHAR, outcome VARCHAR,"
         " record_id VARCHAR, subject_version VARCHAR, identity_json VARCHAR, unproven BOOLEAN"
@@ -878,7 +878,7 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
                                                         receipt_paths, held_policy, generation_id)
                 _check_retained_scan(con, retained_scan, subjects, receipt_paths, held_policy, generation_id)
         except duckdb.Error as error:
-            raise _bulk_failure("Bulk receipt validation failed", error) from error
+            raise bulk_failure("Bulk receipt validation failed", error) from error
         try:
             yield con
         finally:
@@ -1068,7 +1068,7 @@ def read_attempts(receipt_paths, policy, *, generation_id, outcomes):
         try:
             _check_receipts(con, temp, receipt_paths, {policy.dataset: policy}, generation_id, False)
         except duckdb.Error as error:
-            raise _bulk_failure("Bulk receipt read failed", error) from error
+            raise bulk_failure("Bulk receipt read failed", error) from error
         for path in receipt_paths:
             for receipt in _rows(path):
                 if outcomes is None or receipt["outcome"] in outcomes:

@@ -10,6 +10,7 @@ from spicy_regs import comments_bulk, etl_bulk
 from spicy_regs.etl_receipts import ReceiptContext, exact_json, validate_receipt_bundle
 from spicy_regs.sources.regulatory_catalog import normalize_source_record
 from spicy_regs.transforms.regulations_receipts import map_regulations_attempt, policy, write_records
+from tests.duckdb_faults import FAILURES, assert_raised_as, fail_streams_after
 
 
 def context(raw, ordinal):
@@ -135,6 +136,24 @@ def test_restore_failure_keeps_existing_destination(tmp_path, monkeypatch):
     with pytest.raises(etl_bulk.NotBulkEligible, match='processor input differs'):
         comments_bulk.restore_catalog(*pair, destination, generation_id='g')
     assert destination.read_bytes() == before
+    assert not list(tmp_path.glob('comments-restore-*'))
+
+
+@pytest.mark.parametrize('failure, invalid', FAILURES)
+def test_duckdb_failure_after_partial_restore_fails_fast_and_keeps_existing_destination(
+        tmp_path, monkeypatch, failure, invalid):
+    rows = [{'comment_id': f'c{i}', 'comment': f'text {i}'} for i in range(5)]
+    pair = write_records('comments', [(row, context(row, i)) for i, row in enumerate(rows)], tmp_path / 'pair',
+                         project=lambda row: normalize_source_record('comments', row))
+    destination = tmp_path / 'existing.parquet'
+    destination.write_bytes(b'preserve')
+    monkeypatch.setattr(comments_bulk, '_BATCH', 2)
+    delivered = fail_streams_after(monkeypatch, failure)
+    with pytest.raises(etl_bulk.BulkValidationError) as caught:
+        comments_bulk.restore_catalog(*pair, destination, generation_id='g')
+    assert delivered == [2]
+    assert_raised_as(caught, failure, invalid)
+    assert destination.read_bytes() == b'preserve'
     assert not list(tmp_path.glob('comments-restore-*'))
 
 

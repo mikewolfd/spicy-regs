@@ -220,8 +220,10 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
     Earlier receipts with explicit normalized inputs remain readable.
     Batch shaping uses the same mapper as _processor_input, followed by one Arrow
     conversion per batch. Any unproven value returns the whole pair to that row
-    reader so it decides the exact first error. No destination appears until all
-    joins, input values, and source-order checks pass.
+    reader so it decides the exact first error. A DuckDB or Arrow failure does
+    not: it raises ``BulkValidationError`` (``BulkInputError`` when the data
+    caused it) and the pair is never redone by row. No destination appears
+    until all joins, input values, and source-order checks pass.
     """
     from tempfile import TemporaryDirectory
     from spicy_regs.etl_receipts import decode_exact_json, exact_json
@@ -273,6 +275,9 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
             if seen != expected:
                 raise RuntimeError(f'comments: restored {seen} of {expected} native subjects')
             temporary.replace(destination)
-    except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError, RecursionError) as error:
+    except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
+        raise etl_bulk.bulk_failure('Comments batch processing proof failed', error) from error
+    except (ValueError, TypeError, OverflowError, RecursionError) as error:
+        # The shared mapper rejected a retained input: the row reader decides the exact first error.
         raise etl_bulk.NotBulkEligible('Comments batch processing proof requires the row reader') from error
     return seen

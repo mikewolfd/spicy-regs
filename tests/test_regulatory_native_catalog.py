@@ -4,9 +4,11 @@ import duckdb
 import polars as pl
 import pytest
 
+from spicy_regs import etl_bulk
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
 from spicy_regs.sources import regulatory_catalog as native
+from tests.duckdb_faults import FAILURES, assert_raised_as, fail_streams_after
 
 
 @pytest.fixture
@@ -451,6 +453,18 @@ def test_comments_batch_refusal_restores_exact_row_first_error(con, monkeypatch,
     monkeypatch.setattr(comments_bulk, '_BATCH', 2)
     with pytest.raises(ValueError, match='retained processor input differs from selected native subject'):
         native.processing_table(con, COMMENT)
+
+
+@pytest.mark.parametrize('failure, invalid', FAILURES)
+def test_comments_processing_duckdb_failure_surfaces_without_row_fallback(con, monkeypatch, failure, invalid):
+    source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+    monkeypatch.setattr(native, 'read_with_receipts', lambda *a, **k: pytest.fail('row fallback'))
+    delivered = fail_streams_after(monkeypatch, failure)
+    with pytest.raises(etl_bulk.BulkValidationError) as caught:
+        native.processing_table(con, COMMENT)
+    assert delivered == [1]
+    assert_raised_as(caught, failure, invalid)
 
 
 def test_empty_comments_processing_batch_preserves_declared_schema(con, monkeypatch):
