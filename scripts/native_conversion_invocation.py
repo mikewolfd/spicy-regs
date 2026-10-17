@@ -12,6 +12,7 @@ import re
 
 FAMILIES = frozenset({
     "dockets", "documents", "court-opinions", "roll-call-votes", "member-vote-terms", "bill-family", "bill-subjects",
+    "docket-attributes", "document-attributes", "court-opinion-clusters",
 })
 
 

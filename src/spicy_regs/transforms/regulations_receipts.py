@@ -185,7 +185,7 @@ def processing_schema(dataset, *, metadata=None, source_schema=None):
     """The maintained restored Arrow schema, including the original field preservation rules."""
     if source_schema is not None:
         known = dict(SOURCE_COLUMNS[dataset])
-        if (dataset not in RESTORE_DATASETS
+        if (dataset not in RESTORE_DATASETS | {"docket_attributes", "document_attributes"}
                 or len(set(source_schema.names)) != len(source_schema.names)
                 or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
             raise ValueError("Exact regulatory source schema differs from the declared input fields")

@@ -207,6 +207,31 @@ on main.
    the selection that refused every night since 2026-10-04 (on `congress_bills` until 10-06, then `bill_subjects`), then let the 21:15Z
    schedule publish.
 
+### Families the nightly refreshes wait on (audit of 2026-10-17)
+
+A scheduled rollup refuses an input family published without ETL receipts. Since
+2026-10-04 `etl-new` (dockets, documents, comments and every consumer behind
+`refresh-consumers`) fails on `docket_attributes`; `document_attributes` and
+`comment_attributes` are next. Each converts with the procedure for
+`bill-subjects` above (entry digest, `publish=false`, `publish=true`, readback),
+substituting the family; sizes are the 2026-10-17 pins and the time is the
+measured rate (this repository's per-row writer, one loaded laptop: 2.1k rows/s
+to convert, 0.86k/s with publication and readback; hosted court-opinions:
+10.8M rows in 182 minutes to prepare, 42 to publish).
+
+| Family | Rows / bytes | Estimate | Fits the workflow (240 prepare + 90 publish, 360 job) |
+|---|---|---|---|
+| `docket-attributes` | 0.28M / 5 MB | about 5 minutes | yes |
+| `document-attributes` | 2.0M / 79 MB | about 40 minutes | yes |
+| `comment-attributes` | 26.4M / 306 MB | 3.5 to 8.5 hours | no: not offered. It needs a bulk writer for the typed regulatory tables (`regulations_bulk` takes declared string columns only). `etl-new` stays blocked until it converts. |
+| `court-opinion-clusters` | 10.1M / 3.95 GB | about 3 hours to prepare, 45 minutes to publish, by `court-opinions`' rate | borderline; the runner's free disk (about 14 GB) holds the retained table, the native copy and the readback |
+| `court-citations` | 102M / 1.0 GB | more than a day | no: not offered; wait for the bulk writer. Its nightly also needs `court_opinion_clusters` published first. |
+
+The attribute families convert through the regulatory base converter
+(`_regulatory_base_class`, and the retained-source-schema rule in
+`regulations_receipts.processing_schema`); before 2026-10-17 only dockets and
+documents did.
+
 `lobbying-filings` is not converted by this command: its scheduled rollup converts
 it in its first native run, and refuses nothing on an old shape (it reads the old
 table as literal input). That conversion is per-row over every held row and does
@@ -402,7 +427,8 @@ set in the shell that the file contradicts is refused, by name.
 
 `convert-native-family.yml` runs the same maintained converter on a hosted
 runner, one named family per manual dispatch. It supports the bulk regulatory,
-court and votes families, `bill-family` and `bill-subjects`. Their owners still coordinate
+court and votes families, `bill-family`, `bill-subjects`, `docket-attributes`,
+`document-attributes` and `court-opinion-clusters`. Their owners still coordinate
 reader compatibility and concurrent ordinary writers.
 
 Bind `expected_entry_sha256` to the complete observed family entry with

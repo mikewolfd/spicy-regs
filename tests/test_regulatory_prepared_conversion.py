@@ -151,3 +151,29 @@ def test_a_regulatory_bulk_failure_is_reported_by_its_kind_and_never_redone_by_r
     assert report in error and "Regulatory base query failed; no row fallback: " in error
     assert f"STATE: {conversion.NOTHING_PUBLISHED}" in error
     assert delivered == [1] and bucket.writes == written
+
+
+@pytest.mark.parametrize("dataset,identity", [("docket_attributes", "docket_id"), ("document_attributes", "document_id")])
+def test_attribute_families_convert_from_their_typed_published_shape(tmp_path, monkeypatch, bucket, dataset, identity):
+    """Nightly etl-new restores each attribute table and refuses one that carries no receipts (since 2026-10-04)."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs import etl_policy_registry
+    from spicy_regs.generations import build_generation
+    from spicy_regs.transforms.regulations_receipts import TYPES
+
+    family = dataset.replace("_", "-")
+    schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS[dataset]])
+    original = [dict.fromkeys(schema.names) | {identity: f"A-{number}"} for number in (1, 2)]
+    path = tmp_path / "old" / f"{dataset}.parquet"
+    path.parent.mkdir()
+    pq.write_table(pa.Table.from_pylist(original, schema=schema), path)
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+        build_generation(tmp_path / "generation", family=family, files=[path], expected_keys=[path.name])
+        publication.publish_generation(tmp_path / "generation", client=bucket, bucket=BUCKET,
+                                       prior_index=publication.current_index(BASE))
+    receipt = convert(family, tmp_path / "work", publish=True)
+    assert receipt["read_back"]["anonymous_read_rows"][dataset] == 2
+    assert dataset in publication.current_index(BASE)["families"][family]["etlReceipts"]["datasets"]

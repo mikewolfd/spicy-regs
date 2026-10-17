@@ -283,9 +283,13 @@ def _rollup_class(family: str, base: type | None = None):
 
 
 def _regulatory_base_class(family: str):
-    from spicy_regs.pipelines.rollups.regulatory_base import DocketsFamily, DocumentsFamily
+    from spicy_regs.pipelines.rollups.regulatory_base import (
+        DocketAttributesFamily, DocketsFamily, DocumentAttributesFamily, DocumentsFamily,
+    )
 
-    return {cls.name: cls for cls in (DocketsFamily, DocumentsFamily)}.get(family)
+    # comment-attributes is deliberately absent: 26.4M typed rows do not convert per row inside the hosted job.
+    return {cls.name: cls for cls in (DocketsFamily, DocumentsFamily, DocketAttributesFamily,
+                                      DocumentAttributesFamily)}.get(family)
 
 
 def _replaced_evidence(base: str, entry: Mapping) -> tuple[dict, list[dict]]:
