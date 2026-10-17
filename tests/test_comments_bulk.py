@@ -168,6 +168,22 @@ def test_mapper_output_the_schema_cannot_hold_goes_to_the_row_reader_not_a_failu
         comments_bulk.restore_catalog(*pair, tmp_path / 'out.parquet', generation_id='g')
 
 
+def test_arrow_memory_failure_converting_a_batch_fails_fast(tmp_path, monkeypatch):
+    raw = {'comment_id': 'c', 'comment': 'text'}
+    pair = write_records('comments', [(raw, context(raw, 0))], tmp_path / 'pair',
+                         project=lambda row: normalize_source_record('comments', row))
+    failure = pa.ArrowMemoryError('injected')
+
+    def exhausted(*args, **kwargs):
+        raise failure
+
+    from types import SimpleNamespace
+    monkeypatch.setattr(etl_bulk, 'pa', SimpleNamespace(**{**vars(pa), 'Table': SimpleNamespace(from_pylist=exhausted)}))
+    with pytest.raises(etl_bulk.BulkValidationError) as caught:
+        comments_bulk.restore_catalog(*pair, tmp_path / 'out.parquet', generation_id='g')
+    assert_raised_as(caught, failure, False)
+
+
 @pytest.mark.parametrize('batch_size', [1, 4])
 def test_fresh_deep_attachment_uses_reference_order_and_error(tmp_path, monkeypatch, batch_size):
     rows = [

@@ -118,7 +118,7 @@ def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
     """``rows`` from the shared mapper as an Arrow table; one the schema cannot hold is the row reader's to decide."""
     try:
         return pa.Table.from_pylist(rows, schema=schema)
-    except (ValueError, TypeError, OverflowError, pa.ArrowException) as error:
+    except (ValueError, TypeError, OverflowError) as error:  # ArrowInvalid and ArrowTypeError; not memory or I/O
         raise NotBulkEligible(f"{what} does not fit its schema; the row reader decides") from error
 
 
