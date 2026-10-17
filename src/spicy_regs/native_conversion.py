@@ -294,7 +294,8 @@ def _replaced_evidence(base: str, entry: Mapping) -> tuple[dict, list[dict]]:
     Reads only pinned roots, manifests and the journal, so it runs before any table is fetched or hashed. Evidence
     written before ``evidence_version`` 2 is left with its old generation: nothing is handed on, and the conversion
     writes current evidence. Any other evidence that is not current completed-build evidence refuses here, not after
-    the family's tables are held.
+    the family's tables are held. The conversion's own ``CaptureEvidence`` still records the earlier pin, so nothing
+    on a conversion path may call ``inherited_event``: it would refuse after the downloads.
     """
     from spicy_regs.source_evidence import INPUT_ROLE
 

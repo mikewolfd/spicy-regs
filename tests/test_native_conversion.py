@@ -733,7 +733,16 @@ def publish_old_with_evidence(
     pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(column, pa.string()) for column in rows[0]])), path)
     with monkeypatch.context() as patch:
         # Everything published here, including the evidence, is written the way the live pre-v2 families were.
-        if evidence_version is not None:
+        if evidence_version == "absent":  # how bill-subjects, fec-query and lobbying-filings are published today
+            patch.setattr(source_evidence, "_require_current_version", lambda spec: None)
+            build = source_evidence.build_artifact_root
+
+            def unversioned(**kwargs):
+                kwargs["spec"] = {name: value for name, value in kwargs["spec"].items() if name != "evidence_version"}
+                return build(**kwargs)
+
+            patch.setattr(source_evidence, "build_artifact_root", unversioned)
+        elif evidence_version is not None:
             patch.setattr(source_evidence, "EVIDENCE_VERSION", evidence_version)
         if outcome != "build-complete":
             patch.setattr(source_evidence, "require_current_evidence_root", lambda root: None)
@@ -819,10 +828,11 @@ def published_evidence_pin(store, family):
     return pin
 
 
+@pytest.mark.parametrize("version", ["absent", 1])
 def test_a_family_whose_evidence_predates_version_2_hands_nothing_on_and_gets_current_evidence(
-    tmp_path, monkeypatch, bucket, capsys
+    tmp_path, monkeypatch, bucket, capsys, version
 ):
-    """Evidence written under evidence_version 1 stays with its generation: no refusal, no events inherited, v2 written."""
+    """Evidence with no evidence_version (as published today) or version 1 stays with its generation: no refusal, no events inherited, v2 written."""
     from spicy_regs.source_evidence import CaptureEvidence
 
     remainder = {"table": "treaties", "unevidenced": [["119-1"]], "shape_version": 2}
@@ -833,11 +843,11 @@ def test_a_family_whose_evidence_predates_version_2_hands_nothing_on_and_gets_cu
         "treaties",
         "treaties",
         [{"treaty_id": "119-1"}],
-        evidence_version=1,
+        evidence_version=version,
         congress_index_selection=remainder,
     )
     old_pin = published_evidence_pin(bucket, "treaties")
-    assert evidence_root(bucket, old_pin)["spec"]["evidence_version"] == 1
+    assert evidence_root(bucket, old_pin)["spec"].get("evidence_version") == (None if version == "absent" else 1)
     held = {key: value for key, value in bucket.objects.items() if key.startswith(publication.EVIDENCE_PREFIX)}
     monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
     arguments = [

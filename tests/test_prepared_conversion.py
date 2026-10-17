@@ -194,8 +194,9 @@ def test_prepared_steps_refuse_non_current_inherited_evidence_before_hashing_ret
     assert bucket.writes == before
 
 
+@pytest.mark.parametrize("version", ["absent", 1])
 def test_prepared_publication_of_a_family_whose_evidence_predates_version_2_hands_nothing_on(
-    tmp_path, monkeypatch, bucket
+    tmp_path, monkeypatch, bucket, version
 ):
     """The prepared route reads the earlier evidence the way the dry run did: nothing handed on, version 2 written."""
     remainder = {"table": "treaties", "unevidenced": [["119-1"]], "shape_version": 2}
@@ -206,7 +207,7 @@ def test_prepared_publication_of_a_family_whose_evidence_predates_version_2_hand
         "treaties",
         "treaties",
         [{"treaty_id": "119-1"}],
-        evidence_version=1,
+        evidence_version=version,
         congress_index_selection=remainder,
     )
     work = tmp_path / "work"

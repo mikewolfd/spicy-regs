@@ -872,8 +872,9 @@ def predates_current_evidence(root) -> bool:
     """Whether ``root`` is source evidence written before ``evidence_version`` 2: unversioned, or version 1.
 
     That evidence is history, not an input. A caller that inherits nothing from it (a native conversion, which
-    writes current evidence of its own) may leave it with its generation; any other root, a wrong kind or an
-    unfinished build among them, still goes through :func:`require_current_evidence_root`.
+    writes current evidence of its own) may leave it with its generation, whatever its outcome (an absent or null
+    ``evidence_version`` counts as unversioned). Any other root, a wrong kind or a version 2 unfinished build among
+    them, still goes through :func:`require_current_evidence_root`.
     """
     spec = root.get("spec")
     version_ = spec.get("evidence_version") if isinstance(spec, dict) else 0
