@@ -18,9 +18,11 @@ from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import version
 from pathlib import Path
+from time import monotonic
 
 import duckdb
 import pyarrow.parquet as pq
+from loguru import logger
 
 KIND = "spicy-regs-rollup-generation"
 MANIFEST = "members.json"
@@ -388,6 +390,8 @@ def build_generation(
     if owned_output_root is not None:
         _validate_owned_outputs(owned_output_root, directory, files,
             receipt_path if adopt_owned_receipt else None, partitioned)
+    preparation_started = monotonic()
+    logger.info("Generation {}: preparing members (copy or adopt, then hash)", family)
     directory.mkdir(parents=True, exist_ok=False)
     # Both final admissions (the read operation's and admit_generation_for_publication) decode every page.
     table_info = _table_footer_info
@@ -455,6 +459,9 @@ def build_generation(
         carried_forward=carried_forward, publication_status=publication_status, inputs=inputs,
         parents=parents, etl_receipts=receipt_spec,
     )
+    logger.info("Generation {}: preparation completed in {:.1f}s", family, monotonic() - preparation_started)
+    admission_started = monotonic()
+    logger.info("Generation {}: admission started", family)
     if read_operation is not None:
         from rulespec_artifacts import ArtifactPin, parse_admitted_json, publish_directory_no_replace
         if canonical_root is not None:
@@ -466,10 +473,13 @@ def build_generation(
             directory = destination
         else:
             pin = None
-        return read_operation.admit_generation(directory, expected_pin=pin)[0]
-    if canonical_root is not None:
-        raise ValueError("Canonical adoption requires an owned conversion read operation")
-    return admit_generation_for_publication(directory)
+        artifact = read_operation.admit_generation(directory, expected_pin=pin)[0]
+    else:
+        if canonical_root is not None:
+            raise ValueError("Canonical adoption requires an owned conversion read operation")
+        artifact = admit_generation_for_publication(directory)
+    logger.info("Generation {}: admission completed in {:.1f}s", family, monotonic() - admission_started)
+    return artifact
 
 
 def _validate_owned_outputs(root, destination, files, receipt, partitioned):

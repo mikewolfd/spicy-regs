@@ -1,12 +1,14 @@
 """The maintained mappers plus SQL receipts equal the independent row writers."""
 
+import json
+
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import congress_bulk
 from spicy_regs.congress_receipts import write_congress_dataset
-from spicy_regs.legislative_receipts import write_legislative_outputs
+from spicy_regs.legislative_receipts import restore_prior, write_legislative_outputs
 from tests.test_congress_receipts import shaped, RETURNED
 from tests.test_legislative_receipts import retained, row
 
@@ -74,6 +76,43 @@ def test_legislative_hybrid_matches_exact_bundle(tmp_path, monkeypatch, dataset,
     for path in (tmp_path / "False").rglob("*.parquet"):
         other = tmp_path / "True" / path.relative_to(tmp_path / "False")
         assert pq.ParquetFile(path).read().equals(pq.ParquetFile(other).read(), check_metadata=True)
+
+
+@pytest.mark.parametrize("dataset", ["bill_sections", "section_diff_items"])
+@pytest.mark.parametrize("exceptional", [False, True])
+def test_bill_unit_separators_keep_exact_receipts_without_row_decisions(tmp_path, monkeypatch, dataset, exceptional):
+    base = (dict(version_code="enr", source="govinfo") if dataset == "bill_sections" else
+            dict(from_version_code="ih", from_source="govinfo", to_version_code="enr", to_source="govinfo"))
+    paths = ["\x1f", "\\u001F", "\\\x1f\\\\u001F", "\x1f\x1f", 'section"one']
+    rows = [row(dataset, bill_id="119-hr-1", seq=str(i), **base,
+                match_path="section\x1f" + path, match_path_json=json.dumps(["section", path]))
+            for i, path in enumerate(paths)]
+    if exceptional:
+        rows[1]["match_path_json"] = "not-json"  # The reference mapper must still refuse this row.
+        rows[3]["match_path"] += "\x1b"  # Other unproven controls still take the reference route.
+    source = retained(tmp_path / "source", dataset, rows, {b"source": b"unit-separator-fixture"})
+    decisions, original = [], congress_bulk.write_mapped_bundle
+
+    def write(*args, **kwargs):
+        count = original(*args, **kwargs)
+        decisions.append(count)
+        return count
+
+    monkeypatch.setattr(congress_bulk, "write_mapped_bundle", write)
+    manifests = [write_legislative_outputs([source], tmp_path / str(bulk), generation_id="same", bulk=bulk)
+                 for bulk in (False, True)]
+    assert decisions == [2 if exceptional else 0]
+    assert manifests[0] == manifests[1]
+    for path in (tmp_path / "False").rglob("*.parquet"):
+        other = tmp_path / "True" / path.relative_to(tmp_path / "False")
+        assert pq.ParquetFile(path).read().equals(pq.ParquetFile(other).read(), check_metadata=True)
+    if exceptional:
+        for bulk in (False, True):
+            with pytest.raises(ValueError, match="conversion refusals"):
+                restore_prior(tmp_path / str(bulk), tmp_path / f"restored-{bulk}")
+    else:
+        restored = restore_prior(tmp_path / "True", tmp_path / "restored")
+        assert pq.read_table(restored[dataset]).equals(pq.read_table(source), check_metadata=True)
 
 
 @pytest.mark.parametrize("dataset", ["members", "committee_report_reads"])

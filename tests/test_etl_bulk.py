@@ -37,7 +37,7 @@ def test_every_code_point_encodes_like_the_reference_or_is_marked() -> None:
             assert _unpack(json.loads(text)) == value  # spelled differently, the same value: the row code can read it back
         else:
             assert text == exact_json(value), hex(point)
-    assert marked == UPPER_HEX
+    assert marked == UPPER_HEX - {0x1F}
 
 
 @pytest.mark.parametrize("value", [
@@ -48,10 +48,28 @@ def test_text_that_only_looks_like_an_escape_is_not_marked(value: str) -> None:
     assert not flagged and text == exact_json(value)
 
 
-@pytest.mark.parametrize("value", ["\x1b", "\x1b\x1b", "\\\x0b", "\\\\\x1f", "a\x0eb\x0fc", "\x1a" * 5])
+@pytest.mark.parametrize("value", ["\x1b", "\x1b\x1b", "\\\x0b", "\\\\\x1e", "a\x0eb\x0fc", "\x1a" * 5, "\x1f\x1b\x1f"])
 def test_an_upper_hex_escape_is_marked_wherever_it_stands(value: str) -> None:
     [(text, flagged)] = _encode([value], pa.string())
     assert flagged and text != exact_json(value) and text.lower() == exact_json(value).lower()
+
+
+@pytest.mark.parametrize("dtype", [pa.string(), pa.large_string()])
+def test_unit_separators_preserve_literal_escapes_and_backslash_runs(dtype):
+    values = [None, "", "\x1f", "\x1f\x1f", "\x1fstart", "end\x1f", 'a\x1f"b"\x1fc']
+    for count in range(9):
+        slashes = "\\" * count
+        values.extend([slashes + "u001F", slashes + "\x1f", "\x1f" + slashes,
+                       slashes + "u001F\x1f" + slashes + "u001f",
+                       slashes + "\x1f\x1f" + slashes + "u001F"])
+    assert _encode(values, dtype) == [(exact_json(value), False) for value in values]
+
+
+def test_nested_unit_separator_values_keep_exact_spelling():
+    dtype = pa.list_(pa.struct([("path", pa.list_(pa.string()))]))
+    values = [None, [], [None], [{"path": None}], [{"path": []}],
+              [{"path": [None, "", "a\x1fb", "\\u001F\x1f\\\\", "\x1f\x1f"]}]]
+    assert _encode(values, dtype) == [(exact_json(value), False) for value in values]
 
 
 def test_nested_values_integers_and_nulls() -> None:

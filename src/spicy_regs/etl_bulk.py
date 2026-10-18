@@ -5,8 +5,8 @@ column of an Arrow type, so a table's identities, versions and receipt ids come 
 row (2026-10-05: 26M comments took about 20 hours by row, and a million of them 82 seconds this way).
 
 The row functions stay the reference. DuckDB spells one class of text differently: a control character with no short
-JSON escape is written ``\\u001B`` where Python writes ``\\u001b``. :func:`needs_reference_sql` marks every text that
-holds such an escape, at any depth, and a marked row belongs to the row writer.
+JSON escape is written ``\\u001B`` where Python writes ``\\u001b``. Strings containing the unit separator used by bill
+paths receive an exact spelling here; :func:`needs_reference_sql` leaves other unproven escapes to the row writer.
 
 :func:`validate_bundle` is ``etl_receipts.validate_receipt_bundle`` over whole columns. SQL may only prove a row good:
 a row it cannot prove is read again by the row reader and decided by the row functions themselves.
@@ -473,7 +473,16 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     its spelling.
     """
     if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
-        body = f"'[\"str\",' || CAST(to_json({expression}) AS VARCHAR) || ']'"
+        # Split the actual unit separator before JSON encoding. Replacing its
+        # serialized escape would also change literal backslash-u001F text.
+        # Encoding each piece keeps quotes/backslashes exact, including empty
+        # pieces around adjacent separators; other controls remain unproven.
+        part = "CAST(to_json(_control_part) AS VARCHAR)"
+        joined = (f"array_to_string(list_transform(string_split({expression}, chr(31)), "
+                  f"_control_part -> substr({part}, 2, length({part}) - 2)), {_literal(r'\u001f')})")
+        text = (f"CASE WHEN contains({expression}, chr(31)) THEN '\"' || {joined} || '\"' "
+                f"ELSE CAST(to_json({expression}) AS VARCHAR) END")
+        body = f"'[\"str\",' || {text} || ']'"
     elif pa.types.is_integer(dtype):
         body = f"'[\"int\",' || CAST({expression} AS VARCHAR) || ']'"
     elif pa.types.is_boolean(dtype):
