@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from contextlib import ExitStack
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,7 +26,6 @@ from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     combine_receipts,
     failure_receipt,
     observation_receipt,
@@ -37,6 +35,7 @@ from spicy_regs.etl_receipts import (
     split_record,
     validate_receipt_bundle,
 )
+from spicy_regs.receipt_history import carry_receipt_history
 from spicy_regs.transforms.parquet_rows import write_rows
 
 PROCESSOR = "congress-subjects/1"
@@ -168,7 +167,7 @@ def write_congress_dataset(
     selected = policy(dataset)
     digest = _digest(source)
     directory.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary, ExitStack() as stack:
+    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary:
         stage = Path(temporary) / "bundle"
         stage.mkdir()
         subjects = None if selected.receipt_only else stage / (dataset + ".parquet")
@@ -183,21 +182,18 @@ def write_congress_dataset(
         prior_paths = []
         if prior is not None:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
-            validate_receipt_bundle({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id)
+            if validate:
+                validate_receipt_bundle({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id)
             prior_paths.append(scoped)
-        lineage = stack.enter_context(ReceiptLineage(prior_paths, dataset=dataset))
 
         def context(ordinal, diagnostics=None, subject=None, processing=None):
-            current = ReceiptContext(
+            return ReceiptContext(
                 generation_id,
                 f"{dataset}:{digest}:{ordinal}",
                 PROCESSOR,
                 [{**base_witness, "locator": str(ordinal)}, *witnesses],
                 diagnostics or {},
             )
-            if subject is not None:
-                return lineage.inherit(current, selected, subject)
-            return lineage.inherit_processing(current, processing) if processing is not None else current
 
         with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
             sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
@@ -256,9 +252,13 @@ def write_congress_dataset(
             finally:
                 if sw is not None:
                     sw.close()
-        validate_receipt_bundle(
-            {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
-        )
+        if prior_paths:
+            # The same carry rule as the batch writer: unchanged rows keep their prior receipt, changed ones name it.
+            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet").replace(receipts)
+        if validate:
+            validate_receipt_bundle(
+                {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
+            )
         publish_directory_no_replace(stage, directory)
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
 
@@ -303,7 +303,8 @@ def restore_processing_input(
     with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
         scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
         paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
-        validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
+        if validate:
+            validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
         # Exercise the shared exact matching reader before reconstructing original source rows.
         for _ in read_with_receipts(paths, [scoped], selected, generation_id=generation_id):
             pass

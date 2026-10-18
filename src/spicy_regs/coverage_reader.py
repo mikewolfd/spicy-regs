@@ -101,7 +101,8 @@ def current_receipts(path, dataset, policy):
     earlier versions of ``policy`` (see ``receipt_policies``) are admitted beside the current one, and a receipt
     may name an earlier generation (the shared validator requires only a nonempty generation label). An
     undeclared or null version is refused. What binds the receipts to the selection is the pinned receipt-member
-    bytes ``checked_member`` verified; the generation admission re-proves every subject-receipt join.
+    bytes ``checked_member`` verified; the generation admission re-proves every subject-receipt join. The request's
+    ``generationId`` is the caller's selection label, not something these receipts can confirm.
     """
     versions = pa.array(sorted({item.policy_version for item in receipt_policies(policy)}))
     found = False
@@ -116,7 +117,8 @@ def current_receipts(path, dataset, policy):
             known = pc.call_function("is_in", [selected.column("policy_version")], pc.SetLookupOptions(versions))
             if not pc.call_function("all", [pc.call_function("coalesce", [known, False])]).as_py():
                 raise ValueError("Unsupported coverage receipt policy; refresh current-format data")
-            if selected.column("generation_id").null_count:
+            ids = selected.column("generation_id")
+            if ids.null_count or pc.call_function("any", [pc.call_function("equal", [ids, ""])]).as_py():
                 raise ValueError("Coverage receipts lack a generation")
     if not found:
         raise ValueError("Selected coverage generation has no receipt context")

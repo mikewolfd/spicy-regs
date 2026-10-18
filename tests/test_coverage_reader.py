@@ -184,6 +184,10 @@ def test_declared_earlier_policy_receipts_are_admitted_and_undeclared_ones_refus
     carried = tmp_path / "carried.parquet"
     pq.write_table(replaced(table, "generation_id", ["earlier-generation"] + table["generation_id"].to_pylist()[1:]), carried)
     bridge.current_receipts(carried, "committee_meetings", policy)
+    emptied = tmp_path / "emptied.parquet"
+    pq.write_table(replaced(table, "generation_id", [""] + table["generation_id"].to_pylist()[1:]), emptied)
+    with pytest.raises(ValueError, match="lack a generation"):
+        bridge.current_receipts(emptied, "committee_meetings", policy)
 
 
 def test_refuses_receipts_missing_a_current_field(tmp_path):

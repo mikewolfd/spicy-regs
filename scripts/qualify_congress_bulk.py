@@ -140,12 +140,13 @@ def sample_writers(source: Path, output: Path, *, dataset: str, generation_id: s
         compare_files(expected, actual)
     from spicy_regs.congress_receipts import CongressInput
     prior = CongressInput(row[0], row[1], generation_id)
-    # The row writer inherits history; the batch writer carries it (unchanged source: every prior receipt verbatim).
-    inherited = write_congress_dataset(sample, output/'sample-bulk-prior', dataset=dataset,
-                                       generation_id=generation_id+'-next', prior=prior)
-    assert inherited[0] is not None and row[0] is not None
-    compare_files(row[0], inherited[0])
-    compare_files(row[1], inherited[1])
+    reference = current_row_writer(sample, output/'sample-row-prior', dataset=dataset,
+                                   generation_id=generation_id+'-next', prior=prior, bulk=False)
+    carried = write_congress_dataset(sample, output/'sample-bulk-prior', dataset=dataset,
+                                     generation_id=generation_id+'-next', prior=prior)
+    for expected, actual in zip(reference, carried):
+        assert expected is not None and actual is not None
+        compare_files(expected, actual)
     return {'sampleRows': count, 'bound': 20000, 'strata': ['Congress','chamber','accepted/rejected shape','reference route']}
 
 def main():

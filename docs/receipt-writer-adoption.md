@@ -16,8 +16,9 @@ history. Repeated carries keep processing payloads flat and deduplicated.
 Court, legislative, government, FEC identity, regulatory and scorecard writers
 retain their maintained history paths. The bounded regulatory path uses
 `current_receipt_history.inherit_current_receipts` where its input shape
-allows it; that helper calls the maintained `inherit_receipt`. The batch vote
-writer (`votes_batch_receipts`) carries with `receipt_history.carry_receipt_history`
+allows it; that helper calls the maintained `inherit_receipt`. The congress row
+writer (`congress_receipts.write_congress_dataset`) and the batch vote
+writer (`votes_batch_receipts`) carry with `receipt_history.carry_receipt_history`
 (owner decision 2026-10-17, bulk receipt writer plan): receipt size stays flat across nights, and
 `coverage_reader.current_receipts` accepts the carried receipts' earlier generations. Regulatory
 correction retains both the prior and fresh receipt inputs, in that order.

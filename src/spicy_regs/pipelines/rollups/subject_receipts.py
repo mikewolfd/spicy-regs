@@ -423,11 +423,12 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             by_dataset[path.name if path.is_dir() else path.stem] = (
                 sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
             )
+        # ``_defer_native_selection`` is set only by ``_run_tables``, whose ``build_generation`` admits this same pair
+        # (every policy, every subject member) before anything is visible or selected. That admission is the one
+        # validation; outside a run, ``remember_selection`` below pins "admitted members", so validate here.
         if not getattr(self, "_defer_native_selection", False):
-            # Inside a rollup run the generation's own admission (build_generation) is the one validation.
             validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
-        # The entire candidate is immutable and validated before any visible
-        # output or selected pointer changes. Failed attempts stay private.
+        # Private files are final here; the copies below make them visible.
         visible = []
         for source in subjects:
             target = output_dir / source.name

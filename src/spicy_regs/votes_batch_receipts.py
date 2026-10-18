@@ -58,7 +58,7 @@ def write_congress_dataset(
     carried by ``receipt_history.carry_receipt_history``: an unchanged row keeps its prior receipt
     verbatim (original generation and witnesses), a changed accepted row points to its direct
     predecessor, so receipt size does not grow with the number of nights. ``bulk=False`` delegates
-    to the current public row writer, which still inherits history, so the two differ when ``prior`` is given.
+    to the public row writer, which carries the same way, so it is the independent reference.
 
     ``validate=False`` leaves admission to the caller: the prior pair was admitted when it was selected and
     the new pair is admitted once with its generation. Standalone callers keep the default.
@@ -68,7 +68,7 @@ def write_congress_dataset(
     if not bulk:
         from spicy_regs.congress_receipts import write_congress_dataset as row_writer
         return row_writer(source, directory, dataset=dataset, generation_id=generation_id,
-                          witnesses=witnesses, prior=prior, bulk=False)
+                          witnesses=witnesses, prior=prior, bulk=False, validate=validate)
     if directory.exists():
         raise FileExistsError(directory)
     selected = policy(dataset)

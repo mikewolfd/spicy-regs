@@ -13,7 +13,7 @@ from spicy_regs import congress_bulk
 from spicy_regs.congress_receipts import PROCESSOR, CongressInput, policy
 from spicy_regs.votes_batch_receipts import restore_processing_input, write_congress_dataset
 from spicy_regs.congress_subjects import INPUT_COLUMNS, map_record
-from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, exact_json, failure_receipt
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, decode_exact_json, exact_json, failure_receipt
 
 GENERATION = "generation-1"
 WITNESS = {"source_id": "capture", "source_uri": "https://example.test/votes", "sha256": "ab" * 32, "locator": "page 1"}
@@ -150,6 +150,15 @@ def test_bulk_restore_equals_the_row_restore(tmp_path, monkeypatch, batch, datas
     assert restored.schema.equals(expected.schema, check_metadata=True)
     refused = sum(receipt["outcome"] == "refused" for receipt in pq.read_table(row_receipts).to_pylist())
     assert refused > 2 and restored.num_rows == len(rows) - refused  # every row but the refused conversions
+
+
+def test_refresh_carries_current_receipts_identically_in_both_paths(tmp_path, monkeypatch) -> None:
+    source, _, (subject, receipts) = _both(tmp_path, monkeypatch, "member_votes", _member_votes(40))
+    prior = CongressInput(subject, receipts, GENERATION)
+    fresh = write_congress_dataset(source, tmp_path / "next", dataset="member_votes", generation_id="generation-2", prior=prior)
+    row = write_congress_dataset(source, tmp_path / "next-row", dataset="member_votes", generation_id="generation-2", prior=prior, bulk=False)
+    assert pq.read_table(fresh[1]).equals(pq.read_table(receipts))  # nothing changed: every receipt is the prior's
+    assert pq.read_table(fresh[1]).equals(pq.read_table(row[1]))
 
 
 def test_a_scan_cut_short_is_refused(tmp_path, monkeypatch) -> None:
@@ -403,12 +412,103 @@ def test_roll_call_public_batch_fallback_matches_current_prior_and_restore(tmp_p
                                               generation_id='next', prior=prior)
     batch_next = current.write_congress_dataset(source, tmp_path/'batch-roll-next', dataset='roll_call_votes',
                                                 generation_id='next', prior=prior, bulk=True)
-    # The row writer re-inherits every row; the batch writer carries an unchanged source's prior receipts verbatim.
-    assert pq.read_table(row_next[0]).equals(pq.read_table(batch_next[0]), check_metadata=True)
-    assert pq.read_table(batch_next[1]).to_pylist() == pq.read_table(row[1]).to_pylist()
+    for expected, actual in zip(row_next, batch_next):
+        assert expected is not None and actual is not None
+        assert pq.read_table(expected).equals(pq.read_table(actual), check_metadata=True)
+    assert pq.read_table(batch_next[1]).to_pylist() == pq.read_table(row[1]).to_pylist()  # carried verbatim
     restored = []
     for name, enabled in [('row', False), ('batch', True)]:
         path = current.restore_processing_input(batch_next[0], batch_next[1], tmp_path/(name+'-roll-restore.parquet'),
                                                  dataset='roll_call_votes', generation_id='next', bulk=enabled)
         restored.append(pq.read_table(path))
     assert restored[0].equals(restored[1], check_metadata=True)
+
+
+@pytest.mark.parametrize('dataset,build,field,values', [
+    ('member_votes', _member_votes, 'position', ('Changed source value', 'Changed again')),
+    ('member_vote_terms', _member_vote_terms, 'vote_day', ('1990-01-24', '1990-01-25')),
+    ('roll_call_votes', None, 'tallies_json', ('{"Yea":99}', '{"Nay":5}'))])
+def test_batch_writer_with_a_prior_equals_the_row_writer_carried_over_it(tmp_path, dataset, build, field, values):
+    """The oracle: row writer without a prior, then ``carry_receipt_history``, equals the batch writer with it."""
+    from spicy_regs import congress_receipts as current
+    from spicy_regs.receipt_history import carry_receipt_history
+    if build is None:
+        rows = [{'vote_id': f'119-house-{i}', 'tallies_json': '{"Yea":%d}' % i} for i in range(30)]
+        rows[3]['tallies_json'] = 'invalid JSON'            # refused, in the prior and in the source
+    else:
+        rows = build(60)
+    (tmp_path / 'a').mkdir()
+    first = _source(tmp_path / 'a', dataset, rows)
+    subject, receipts = current.write_congress_dataset(first, tmp_path / 'prior', dataset=dataset, generation_id=GENERATION)
+    prior = CongressInput(subject, receipts, GENERATION)
+    changed = [dict(row) for row in rows]
+    changed[1][field], changed[2][field] = values  # accepted rows in every dataset's fixture
+    del changed[7]                                           # removed
+    changed.append(dict(rows[1]) | {'vote_id': '119-house-new'} if build is None else
+                   dict(rows[1]) | {'member_key': 'name:New'})  # added
+    (tmp_path / 'b').mkdir()
+    updated = _source(tmp_path / 'b', dataset, changed)
+    fresh = current.write_congress_dataset(updated, tmp_path / 'fresh', dataset=dataset, generation_id='next')
+    expected = carry_receipt_history(fresh[1], [receipts], tmp_path / 'expected.parquet')
+    row = current.write_congress_dataset(updated, tmp_path / 'row', dataset=dataset, generation_id='next', prior=prior)
+    batch = current.write_congress_dataset(updated, tmp_path / 'batch', dataset=dataset, generation_id='next', prior=prior,
+                                           bulk=True)
+    assert pq.read_table(batch[1]).to_pylist() == pq.read_table(expected).to_pylist()
+    for left, right in zip(row, batch, strict=True):
+        assert left is not None and right is not None
+        assert pq.read_table(left).equals(pq.read_table(right), check_metadata=True)
+    old = {r['record_id']: r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted'}
+    now = [r for r in pq.read_table(batch[1]).to_pylist() if r['outcome'] == 'accepted']
+    referenced = [r for r in now if 'prior_receipt' in decode_exact_json(r['diagnostic_json'])]
+    assert len(referenced) >= 1 and all(r['generation_id'] == 'next' for r in referenced)
+    assert all(decode_exact_json(r['diagnostic_json'])['prior_receipt']['receipt_id'] == old[r['record_id']]['receipt_id']
+               for r in referenced)
+    assert sum(r == old.get(r['record_id']) for r in now) >= len(now) - 4
+
+
+def test_a_prior_receipt_with_unverifiable_retained_history_is_refused_by_carry(tmp_path):
+    from spicy_regs import congress_receipts as current
+    from spicy_regs.etl_receipts import _digest
+    source = _source(tmp_path, 'member_votes', _member_votes(6))
+    subject, receipts = current.write_congress_dataset(source, tmp_path / 'prior-with-bad-history',
+                                                       dataset='member_votes', generation_id=GENERATION)
+    values = pq.read_table(receipts).to_pylist()
+    broken = next(row for row in values if row['outcome'] == 'accepted')
+    diagnostic = decode_exact_json(broken['diagnostic_json'])
+    diagnostic['retained_processing'] = {'sha256:' + '0' * 64: {'unverifiable': 'payload'}}
+    broken['diagnostic_json'] = exact_json(diagnostic)
+    broken['receipt_id'] = _digest({key: value for key, value in broken.items() if key != 'receipt_id'})
+    pq.write_table(pa.Table.from_pylist(values, schema=RECEIPT_SCHEMA), receipts)
+    prior = CongressInput(subject, receipts, GENERATION)
+    for bulk in (False, True):
+        with pytest.raises(ValueError, match='Retained processing digest differs'):
+            current.write_congress_dataset(source, tmp_path / f'next-{bulk}', dataset='member_votes',
+                                           generation_id='next', prior=prior, bulk=bulk, validate=False)
+
+
+def test_a_duckdb_failure_in_the_vote_scan_is_not_redone_by_row(tmp_path, monkeypatch):
+    import duckdb
+    from tests.duckdb_faults import fail_streams_after
+    source = _source(tmp_path, 'member_votes', _member_votes(300))
+    monkeypatch.setattr(congress_bulk, '_BATCH', 100)
+    fail_streams_after(monkeypatch, duckdb.OutOfMemoryException('injected'))
+    with pytest.raises(etl_bulk.BulkValidationError, match='no row fallback') as caught:
+        write_congress_dataset(source, tmp_path / 'out', dataset='member_votes', generation_id=GENERATION)
+    assert not isinstance(caught.value, etl_bulk.BulkInputError) and not (tmp_path / 'out').exists()
+
+
+def test_validate_false_skips_row_writer_and_row_restore_admission_too(tmp_path, monkeypatch):
+    """A non-vote congress dataset: the flag a rollup passes after admitting the pair is honoured by the row path."""
+    from spicy_regs import congress_receipts as current
+    source = tmp_path / 'source.parquet'
+    pq.write_table(pa.Table.from_pylist([{'congress': '119', 'chamber': 'house', 'event_id': '7'}]), source)
+    calls = []
+    real = current.validate_receipt_bundle
+    monkeypatch.setattr(current, 'validate_receipt_bundle', lambda *a, **k: calls.append(1) or real(*a, **k))
+    pair = current.write_congress_dataset(source, tmp_path / 'one', dataset='committee_meetings', generation_id='g1')
+    assert len(calls) == 1
+    current.write_congress_dataset(source, tmp_path / 'two', dataset='committee_meetings', generation_id='g2',
+                                   prior=CongressInput(pair[0], pair[1], 'g1'), validate=False)
+    current.restore_processing_input(*pair, tmp_path / 'restored.parquet', dataset='committee_meetings',
+                                     generation_id='g1', validate=False)
+    assert len(calls) == 1
