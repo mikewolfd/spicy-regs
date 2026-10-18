@@ -98,16 +98,15 @@ class SelectedPriors:
         selected_policy = selected_subject_policy(selected_policy, subjects)
         # The regulatory restore below admits the pair itself: complete admission in
         # regulations_bulk._materialize_selected, or the full read_with_receipts pass in _qualified_rows.
-        if dataset in CONGRESS or dataset in field_registry() or dataset in FEC:
+        if dataset in CONGRESS or dataset in FEC:
             validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
         self.selections[dataset] = (subjects, receipt_path, generation)
         output = directory / "processing" / (dataset + ".parquet")
         if dataset in CONGRESS:
             output.parent.mkdir(parents=True, exist_ok=True)
             restore_processing_input(
-                tuple(subjects), receipt_path, output, dataset=dataset, generation_id=generation,
-                bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
-                validate=False,  # admitted just above
+                tuple(subjects), scoped, output, dataset=dataset, generation_id=generation,
+                bulk=True, validate=False, scoped=True,  # this exact pair was admitted just above
             )
         elif dataset in field_registry():
             files = select_receipts(receipt_path, directory / "file-receipts.parquet", dataset=FILE_STATES)

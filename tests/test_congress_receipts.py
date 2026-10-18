@@ -464,3 +464,22 @@ def test_real_roster_producer_publishes_congress_basis_and_resumes_from_its_nati
     kept = seats(again["committee_assignments"], "senate")
     assert kept and kept == seats(published["committee_assignments"], "senate")
     assert seats(again["committee_assignments"], "house") == seats(published["committee_assignments"], "house")
+
+
+@pytest.mark.parametrize("dataset", RETURNED)
+def test_bulk_restore_uses_retained_schema_for_python_mapped_datasets(tmp_path, dataset, monkeypatch):
+    from spicy_regs import congress_bulk, etl_bulk
+
+    _, raw, _, _ = RETURNED[dataset]
+    source = shaped(tmp_path / "source.parquet", [raw])
+    pair = write_congress_dataset(source, tmp_path / "native", dataset=dataset, generation_id="g")
+    expected = restore_processing_input(*pair, tmp_path / "row.parquet", dataset=dataset, generation_id="g")
+    scans = []
+    restore = congress_bulk.restore_input
+    monkeypatch.setattr(congress_bulk, "restore_input", lambda *a, **kw: scans.append(kw["dataset"]) or restore(*a, **kw))
+    admissions = []
+    admit = etl_bulk.validate_bundle
+    monkeypatch.setattr(etl_bulk, "validate_bundle", lambda *a, **kw: admissions.append(1) or admit(*a, **kw))
+    actual = restore_processing_input(*pair, tmp_path / "bulk.parquet", dataset=dataset, generation_id="g", bulk=True)
+    assert pq.read_table(actual).equals(pq.read_table(expected), check_metadata=True)
+    assert scans == [dataset] and admissions == [1]

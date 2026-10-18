@@ -29,8 +29,6 @@ from spicy_regs.etl_receipts import (
     combine_receipts,
     failure_receipt,
     observation_receipt,
-    read_attempts,
-    read_with_receipts,
     select_receipts,
     split_record,
     validate_receipt_bundle,
@@ -283,48 +281,19 @@ def retained_source_rows(attempts, *, schema=None):
 
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str,
-    bulk: bool = False, validate: bool = True,
+    bulk: bool = False, validate: bool = True, scoped: bool = False,
 ) -> Path:
-    """Restore retained original source fields and schema after exact receipt admission.
+    """Restore exact retained input after one complete subject/receipt admission.
 
-    Rejected conversion attempts remain available for retry. Technical tables
-    and processing events remain receipt-only in the public generation. Footer
-    metadata includes bill-family completion scopes and per-reader refusal state.
+    The decoding route depends on the retained source schema, independently of
+    which Congress datasets the SQL mapper can write. Callers that just admitted
+    this exact pair may pass ``validate=False``; ``scoped`` avoids filtering an
+    already selected receipt file again.
     """
-    if bulk:
-        if dataset not in {'member_votes', 'member_vote_terms', 'roll_call_votes'}:
-            raise ValueError('Batch vote restoration requires a declared vote dataset')
-        from spicy_regs.votes_batch_receipts import restore_processing_input as restore_votes
-        return restore_votes(subject, receipts, destination, dataset=dataset,
-                             generation_id=generation_id, bulk=True, validate=validate)
+    from spicy_regs.votes_batch_receipts import restore_processing_input as restore_selected
 
-    selected = input_policy(dataset, subject)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
-        scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
-        paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
-        if validate:
-            validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
-        # Exercise the shared exact matching reader before reconstructing original source rows.
-        for _ in read_with_receipts(paths, [scoped], selected, generation_id=generation_id):
-            pass
-        metadata_rows = []
-        for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-            data = receipt["processing_fields"]
-            if data.get("entry_kind") == "table_metadata":
-                metadata_rows.append(data)
-        if not metadata_rows or any(row != metadata_rows[0] for row in metadata_rows[1:]):
-            raise ValueError("Congress input requires consistent retained source footers")
-        retained = metadata_rows[0]
-
-        # Source shapers use strings. Preserve discovered source columns and
-        # absent columns by reading the exact retained input dictionaries.
-        def original_rows():
-            yield from retained_source_rows(
-                read_attempts([scoped], selected, generation_id=generation_id), schema=schema)
-
-        schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
-        return write_rows(original_rows(), destination, schema)
+    return restore_selected(subject, receipts, destination, dataset=dataset,
+                            generation_id=generation_id, bulk=bulk, validate=validate, scoped=scoped)
 
 
 @dataclass(frozen=True)
