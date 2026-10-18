@@ -252,25 +252,29 @@ not test a newly published votes-to-terms handoff. In contrast,
 suppresses the later publication, not the catalog writes. It is not a read-only
 catalog rehearsal.
 
-The owner selected this Mac for the large court-citations conversion. It is a
-local invocation, with no new self-hosted runner or raised hosted timeout.
-Use a clean integrated main and a new work directory, record free disk before
-starting, and retain elapsed time and peak working-space evidence. First check
-the local corpus catalog and retained generations for the exact selected input
-digests; use `--retained-member-map` for verified matching members. The command
-below prepares only; the existing `--publish-prepared` procedure publishes those
-same reviewed bytes. The normal court-citations refresh also needs the native
-`court-opinion-clusters` generation published first.
+The owner selected this Mac for the large court-citations job. Use a clean
+integrated main and a new work directory, record free disk before starting,
+and retain elapsed time and resource measurements. First check the local
+corpus catalog and retained generations for the exact selected input digests.
+
+The productive first conversion is `court-opinion-clusters`: its normal refresh
+requires a native prior. Prepare the verified retained file using a member map,
+then publish those same bytes with `--publish-prepared`. After refreshing the
+clusters, the citations job requires their published cluster-ID ceiling to cover
+its selected export. Converting the old citations publication does not refresh
+its source edition and is unnecessary merely to test the bulk writer.
 
 ```sh
 UV=/opt/homebrew/bin/uv
 MAIN=$(git rev-parse HEAD)
 WHEEL=$($UV run --frozen python -c "from importlib.metadata import version; print(version('spicy-docs'))")
-COURT_WORK="$HOME/Work/spicy-stack-review-work/native-conversion-$(date +%Y%m%d-%H%M%S)/court-citations"
+COURT_WORK="$HOME/Work/spicy-stack-review-work/native-conversion-$(date +%Y%m%d-%H%M%S)/court-opinion-clusters"
+COURT_INPUT_MAP=/absolute/path/to/verified-court-cluster-members.json
 SPICY_REGS_REQUIRE_BULK=true R2_PUBLIC_URL=https://data.spicygov.ai \
-  $UV run --frozen python scripts/convert_family_to_native.py court-citations \
-  --allow court-citations --work "$COURT_WORK" --expect-main "$MAIN" \
-  --expect-spicy-docs "$WHEEL" --remote fork --require-bulk
+  $UV run --frozen python scripts/convert_family_to_native.py court-opinion-clusters \
+  --allow court-opinion-clusters --work "$COURT_WORK" --expect-main "$MAIN" \
+  --expect-spicy-docs "$WHEEL" --remote fork --require-bulk \
+  --retained-member-map "$COURT_INPUT_MAP"
 ```
 
 ### Families the nightly refreshes wait on (historical audit of 2026-10-17)
