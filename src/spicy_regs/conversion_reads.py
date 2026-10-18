@@ -13,7 +13,7 @@ from time import perf_counter
 
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import (
-    _bundle_policies, _index_processing, _joined_subjects, _load_receipts, _pack, _unpack,
+    _bundle_policies, _index_processing, _joined_subjects, _load_receipts, _pack, _unpack, select_receipts,
 )
 from spicy_regs.runtime_bounds import checkpoint
 
@@ -639,20 +639,24 @@ def _equal_original_report():
 
 
 @contextmanager
-def _open_family_reader(subjects, receipts, policies, *, generation_id, guard):
+def _open_family_reader(subjects, receipts, policies, *, generation_id, guard, scoped=False):
     """Admit all supplied family inputs once, retain bounded processing, then close on every exit.
 
     The owning conversion supplies an immutable-source change guard. It also
     checks complete descriptor/membership agreement before reaching this helper.
     No saved passed flag or validation bypass can create this reader.
+    A scoped single-dataset read selects shared receipts during bulk admission;
+    only its reference fallback needs a separate selected file.
     """
     registered = _bundle_policies(subjects, receipts, policies)
+    if scoped and len(registered) != 1:
+        raise ValueError("Scoped conversion reads require one selected dataset")
     guard()
     start = perf_counter()
     with ExitStack() as stack:
         try:
             connection = stack.enter_context(etl_bulk._validated_bundle(
-                subjects, receipts, policies, generation_id=generation_id, retain_processing=True))
+                subjects, receipts, policies, generation_id=generation_id, retain_processing=True, scoped=scoped))
             reference = False
         except etl_bulk.NotBulkEligible as error:
             etl_bulk.log_row_fallback("conversion admission", error, dataset=",".join(subjects))
@@ -661,7 +665,11 @@ def _open_family_reader(subjects, receipts, policies, *, generation_id, guard):
             # The reference index has the same finite disk ceiling as bulk spill.
             page_size = connection.execute("PRAGMA page_size").fetchone()[0]
             connection.execute(f"PRAGMA max_page_count={32 * 1024**3 // page_size}")
-            _load_receipts(connection, receipts, registered, generation_id, retain_diagnostics=True)
+            selected = receipts
+            if scoped:
+                selected = [select_receipts(path, temporary / f"receipts-{i}.parquet", dataset=next(iter(registered)))
+                            for i, path in enumerate(receipts)]
+            _load_receipts(connection, selected, registered, generation_id, retain_diagnostics=True)
             for _ in _joined_subjects(connection, subjects, registered):
                 pass
             reference = True

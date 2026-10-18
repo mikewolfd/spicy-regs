@@ -72,6 +72,67 @@ def test_restore_refuses_corrupt_selected_receipts_without_replacing_output(tmp_
     assert destination.read_bytes() == b'preserved'
 
 
+@pytest.mark.parametrize('reference', [False, True])
+def test_scoped_restore_uses_original_receipts_and_selects_only_for_reference(tmp_path, monkeypatch, reference):
+    from spicy_regs import conversion_reads, etl_bulk
+
+    dataset = 'court_citation_map'
+    source = _write(tmp_path / 'source.parquet', pa.table({
+        'citing_opinion_id': ['1'], 'cited_opinion_id': ['2'], 'depth': ['007'],
+    }))
+    native = court_receipts.write_court_bulk(dataset, source, tmp_path / 'native',
+                                            witnesses=WITNESSES, generation_id='selected')
+    receipts, _ = local_receipt_selection(native)
+    table = pq.read_table(receipts)
+    excluded = table.to_pylist()[0] | {'dataset': 'unselected', 'receipt_id': 'invalid'}
+    # A semantically invalid excluded receipt is still decoded, then left out.
+    # Its leading position also exercises noncontiguous selected receipt ordinals.
+    pq.write_table(pa.concat_tables([pa.Table.from_pylist([excluded], schema=table.schema), table]), receipts)
+    validate, select = etl_bulk._validated_bundle, conversion_reads.select_receipts
+    admissions, copies = [], []
+
+    def admitted(subjects, paths, policies, **kwargs):
+        admissions.append((paths, kwargs['scoped']))
+        if reference:
+            raise etl_bulk.NotBulkEligible('exercise the maintained reference admission')
+        return validate(subjects, paths, policies, **kwargs)
+
+    def selected(path, destination, **kwargs):
+        copies.append(path)
+        return select(path, destination, **kwargs)
+
+    monkeypatch.setattr(etl_bulk, '_validated_bundle', admitted)
+    monkeypatch.setattr(conversion_reads, 'select_receipts', selected)
+    monkeypatch.setattr(court_receipts, 'select_receipts',
+                        lambda *a, **kw: pytest.fail('court restore copied receipts before admission'))
+    restored = restore_processing_input(native, tmp_path / 'restored.parquet', dataset=dataset,
+                                        schema=pq.read_schema(source))
+    assert pq.read_table(restored).equals(pq.read_table(source))
+    assert admissions == [([receipts], True)]
+    assert copies == ([receipts] if reference else [])
+
+
+def test_scoped_restore_refuses_changed_original_receipt_before_replacing_output(tmp_path, monkeypatch):
+    dataset = 'court_citation_map'
+    source = _write(tmp_path / 'source.parquet', pa.table({'citing_opinion_id': ['1'], 'cited_opinion_id': ['2']}))
+    native = court_receipts.write_court_bulk(dataset, source, tmp_path / 'native',
+                                            witnesses=WITNESSES, generation_id='selected')
+    receipts, _ = local_receipt_selection(native)
+    materialize = court_restore.materialize
+
+    def changed(*args):
+        with receipts.open('ab') as stream:
+            stream.write(b'changed after admission')
+        return materialize(*args)
+
+    monkeypatch.setattr(court_restore, 'materialize', changed)
+    destination = tmp_path / 'existing.parquet'
+    destination.write_bytes(b'preserved')
+    with pytest.raises(ValueError, match='Selected court input changed'):
+        restore_processing_input(native, destination, dataset=dataset, schema=pq.read_schema(source))
+    assert destination.read_bytes() == b'preserved'
+
+
 def test_held_export_uses_restored_values_with_unicode_and_large_keys(tmp_path):
     from spicy_regs.transforms.build_court_opinion_clusters import _held_restored_export
 
