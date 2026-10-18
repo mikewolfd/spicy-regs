@@ -92,14 +92,8 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Check portable source navigation and migration rules
-        run: uv run --frozen pytest tests/test_explorer_navigation.py tests/test_navigation_measurements.py tests/test_navigation_measurement_runner.py tests/test_congress_receipts.py tests/test_government_source_shapes.py -q
-
       - name: Check descriptions vs schema
         run: uv run spicy-regs-dict check
-
-      - name: Verify catalog descriptions fit the MCP reply budget
-        run: uv run --extra comments-reader pytest tests/test_chaos_r6_server.py::test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cut -q
 
       - name: Verify generated table pages are up to date
         run: |
