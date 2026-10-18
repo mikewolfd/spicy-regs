@@ -3,9 +3,9 @@
 ``congress_receipts.write_congress_dataset`` maps, splits, serializes and validates one row at a time, and
 ``restore_processing_input`` decodes one receipt at a time, over several passes. For ``member_votes`` and
 ``member_vote_terms`` (10.56M rows each on 2026-10-05) that was about 3.3 hours a table against a 60-minute job.
-:func:`write_bundle` and :func:`restore_input` give the same receipts and the same restored rows from one DuckDB scan
-each (measured on the first million rows of both tables: every receipt equal and at the same position, the restored
-table equal to its source; 5.5 to 8.4 microseconds a row against 577 to 692).
+:func:`write_bundle` and :func:`restore_input` give the same receipts and the same restored rows from ordered source
+batches. The original flat-table benchmark on the first million rows of both tables checked every receipt at the
+same position and the restored table against its source: 5.5 to 8.4 microseconds a row against 577 to 692.
 
 The row code stays the reference and keeps the rows SQL cannot own: a row whose text ``etl_bulk`` spells differently
 from Python, and a row the mapper would refuse. Those come back from the ``row_receipt`` and ``row_fields`` callables
@@ -331,20 +331,28 @@ def footer_candidates(receipts: Path, *, dataset: str) -> list[str]:
         ).fetchall()]
 
 
-def source_fields_sql(schema: pa.Schema) -> tuple[str, str]:
+def _source_fields_values_sql(schema: pa.Schema) -> str:
+    # One list-of-paths extraction shares the JSON parse across names, type tags and values. Repeated extraction
+    # exhausted the configured memory limit on House communications before yielding its first restored batch.
+    paths = [f"$[1][1][1][1][{i}]{suffix}" for i in range(len(schema)) for suffix in ("[0]", "[1][0]", "[1][1]")]
+    return "json_extract_string(processing_json, [" + ", ".join(_text(path) for path in paths) + "])"
+
+
+def source_fields_sql(schema: pa.Schema, *, values: str | None = None) -> tuple[str, str]:
     """SQL over ``processing_json``: the retained source columns, and whether the text is the plain shape they read.
 
     Plain is a row attempt holding only ``source_fields``, with exactly ``schema``'s columns, each text or NULL.
+    ``values`` may name the already extracted list from :func:`_source_fields_values_sql`.
     """
     names = sorted(schema.names)
-    pairs = "json_extract(processing_json, '$[1][1][1][1]')"
+    values = _source_fields_values_sql(schema) if values is None else values
     plain = " AND ".join(
         [f"starts_with(processing_json, {_text(_ROW_OPENING)})", "json_array_length(processing_json, '$[1]') = 2",
-         f"json_array_length({pairs}) = {len(names)}"]
-        + [f"json_extract_string({pairs}, '$[{i}][0]') = {_text(name)}" for i, name in enumerate(names)]
-        + [f"json_extract_string({pairs}, '$[{i}][1][0]') IN ('str', 'null')" for i in range(len(names))]
+         f"json_array_length(processing_json, '$[1][1][1][1]') = {len(names)}"]
+        + [f"{values}[{3 * i + 1}] = {_text(name)}" for i, name in enumerate(names)]
+        + [f"{values}[{3 * i + 2}] IN ('str', 'null')" for i in range(len(names))]
     )
-    columns = ", ".join(f"json_extract_string({pairs}, '$[{names.index(field.name)}][1][1]') AS \"{field.name}\"" for field in schema)
+    columns = ", ".join(f'{values}[{3 * names.index(field.name) + 3}] AS "{field.name}"' for field in schema)
     return columns, plain
 
 
@@ -369,38 +377,58 @@ def restore_input(
     if not all(pa.types.is_string(field.type) for field in schema):
         raise NotImplementedError("Only text source columns are decoded here")
     check_fields = extra_field_checker(schema)
-    columns, plain = source_fields_sql(schema)
+    columns, plain = source_fields_sql(schema, values="_source_values")
     query = f"""
-    SELECT {columns}, _position, _reference, CASE WHEN _reference THEN processing_json END AS _processing,
+    WITH extracted AS MATERIALIZED (
+        SELECT *, {_source_fields_values_sql(schema)} AS _source_values
+        FROM restore_batch WHERE dataset = {_text(dataset)})
+    SELECT {columns}, file_row_number AS _position,
+           (NOT coalesce({plain}, false) OR contains(diagnostic_json, 'conversion_refused')) AS _reference,
+           CASE WHEN _reference THEN processing_json END AS _processing,
            CASE WHEN _reference THEN diagnostic_json END AS _diagnostic
-    FROM (SELECT *, file_row_number AS _position,
-                 (NOT coalesce({plain}, false) OR contains(diagnostic_json, 'conversion_refused')) AS _reference
-          FROM read_parquet({_text(receipts)}, file_row_number = true) WHERE dataset = {_text(dataset)}) ORDER BY _position"""
+    FROM extracted ORDER BY _position"""
     expected, seen, last, left = _rows_in(receipts, dataset), 0, -1, 0
     # As ``write_rows`` does: the destination appears only once every row is written.
     with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(dir=destination.parent) as scratch:
         temporary = Path(scratch) / "rows.parquet"
-        with pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
-            for batch in con.execute(query).to_arrow_reader(_BATCH):
-                table = pa.Table.from_batches([batch])
-                table.validate(full=True)
-                positions = table["_position"].to_pylist()
-                if positions != sorted(set(positions)) or (positions and positions[0] <= last):
-                    raise RuntimeError(f"{dataset}: receipts did not arrive in file order")
-                seen, last = seen + len(positions), positions[-1] if positions else last
-                flagged = table["_reference"].to_pylist()
-                rows = table.filter(pa.array([not flag for flag in flagged])).select(schema.names).cast(schema)
-                if any(flagged):
-                    processing, diagnostic, decoded = table["_processing"].to_pylist(), table["_diagnostic"].to_pylist(), {}
-                    for index in (index for index, flag in enumerate(flagged) if flag):
-                        fields = row_fields(processing[index], diagnostic[index])
-                        if fields is not None:
-                            check_fields(fields)
-                        decoded[index] = None if fields is None else dict(fields)
-                    left += len(decoded)
-                    rows = etl_bulk.with_insertions(rows, [not flag for flag in flagged], decoded)
-                if rows.num_rows:
-                    writer.write_table(rows)
+        # Sort only the current source batch. Sorting the full decoded file holds every wide value before the
+        # first result, and a parallel Parquet scan without ORDER BY can reorder healthy receipts.
+        with pq.ParquetFile(receipts) as source, pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
+            position = 0
+            for source_batch in source.iter_batches(batch_size=min(_BATCH, 2000),
+                                                   columns=["dataset", "processing_json", "diagnostic_json"]):
+                etl_bulk.checkpoint()
+                source_batch.validate(full=True)
+                # Reuse the shared logical-byte slices; one large row and backing Arrow buffers can exceed them.
+                for piece in etl_bulk._insert_batches(source_batch):
+                    numbered = pa.Table.from_batches([piece]).append_column(
+                        "file_row_number", pa.arange(position, position + piece.num_rows))
+                    position += piece.num_rows
+                    con.register("restore_batch", numbered)
+                    try:
+                        for batch in con.execute(query).to_arrow_reader(_BATCH):
+                            table = pa.Table.from_batches([batch])
+                            table.validate(full=True)
+                            positions = table["_position"].to_pylist()
+                            if positions != sorted(set(positions)) or (positions and positions[0] <= last):
+                                raise RuntimeError(f"{dataset}: receipts did not arrive in file order")
+                            seen, last = seen + len(positions), positions[-1] if positions else last
+                            flagged = table["_reference"].to_pylist()
+                            rows = table.filter(pa.array([not flag for flag in flagged])).select(schema.names).cast(schema)
+                            if any(flagged):
+                                processing, diagnostic, decoded = table["_processing"].to_pylist(), table["_diagnostic"].to_pylist(), {}
+                                for index in (index for index, flag in enumerate(flagged) if flag):
+                                    fields = row_fields(processing[index], diagnostic[index])
+                                    if fields is not None:
+                                        check_fields(fields)
+                                    decoded[index] = None if fields is None else dict(fields)
+                                left += len(decoded)
+                                rows = etl_bulk.with_insertions(rows, [not flag for flag in flagged], decoded)
+                            if rows.num_rows:
+                                writer.write_table(rows)
+                    finally:
+                        # The current result is exhausted before the connection sees another statement.
+                        con.unregister("restore_batch")
         if seen != expected:
             raise RuntimeError(f"{dataset}: read {seen} of the file's {expected} receipts")
         temporary.replace(destination)
