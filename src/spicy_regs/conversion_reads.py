@@ -18,6 +18,24 @@ from spicy_regs.etl_receipts import (
 from spicy_regs.runtime_bounds import checkpoint
 
 
+_GROUP_ROWS, _GROUP_BYTES = 16_384, 64 * 1024**2
+
+
+def _grouped(batches):
+    """Concatenate ordered record batches into tables of bounded rows and bytes, so one query spans many chunks."""
+    import pyarrow as pa
+
+    group, rows, size = [], 0, 0
+    for batch in batches:
+        if group and (rows + batch.num_rows > _GROUP_ROWS or size + batch.nbytes > _GROUP_BYTES):
+            yield pa.Table.from_batches(group)
+            group, rows, size = [], 0, 0
+        group.append(batch)
+        rows, size = rows + batch.num_rows, size + batch.nbytes
+    if group:
+        yield pa.Table.from_batches(group)
+
+
 class _FamilyReader:
     def __init__(self, connection, subjects, policies, guard, *, row_reference):
         self.connection, self.subjects, self.policies = connection, subjects, policies
@@ -279,7 +297,14 @@ class _FamilyReader:
             elif dataset.startswith('court_'):
                 from spicy_regs.court_receipts import processing_rows
                 schema = schema.remove_metadata()
-                rows = processing_rows(self.read_subjects(dataset), dataset=dataset, schema=schema)
+                with pq.ParquetFile(original) as parquet:
+                    if not schema.equals(parquet.schema_arrow, check_metadata=True):
+                        raise ValueError("Retained original schema or metadata changed")
+                # A bulk proof only ever accepts. Anything it cannot prove goes to the row comparison below.
+                if self._bulk_court_equal(dataset, original, schema):
+                    rows = None
+                else:
+                    rows = processing_rows(self.read_subjects(dataset), dataset=dataset, schema=schema)
             else:
                 from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
                 if dataset in SOURCE_COLUMNS:
@@ -293,7 +318,8 @@ class _FamilyReader:
                             originals = row['conversion_inputs']
                             yield {name: originals.get(name, row.get(name)) for name in schema.names}
                     rows = fec_rows()
-            compare(original, schema, rows)
+            if rows is not None:
+                compare(original, schema, rows)
         if {name: file_signature(path) for name, path in members.items()} != before:
             raise ValueError("Retained original changed during comparison")
         if original.is_dir() and set(p.relative_to(original).as_posix() for p in original.rglob('*.parquet')) != set(members):
@@ -304,6 +330,116 @@ class _FamilyReader:
             checked.update(members={name: _equal_original_report() | {'schema_changed': False} for name in members},
                            members_only_in_restored=[], members_only_in_retained=[], schema_changes=[])
         return checked
+
+    def _bulk_court_equal(self, dataset, original, schema):
+        """True only when SQL proves every restored court row equals its retained original row.
+
+        The row path lets ``conversion_inputs`` override the receipt's processing fields, which override the
+        subject, and keeps the declared columns. Here each column's exact encoding (``exact_json_sql``, equal to
+        Python's ``exact_json``) is compared, ordinal by ordinal, with the encoding stored in the receipt or
+        computed from the subject, so equal text means equal values, order and repetitions. Subject identity is
+        re-derived as the replay does. Whatever this cannot prove it answers False, and the row comparison, which
+        has the final word and every refusal message, runs instead.
+        """
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        policy, paths = self.policies[dataset], self.subjects[dataset]
+        if policy.receipt_only or len(paths) != 1:
+            return False
+        number = "n"
+        while number in {field.name.casefold() for field in policy.subject_schema}:
+            number += "_"
+        subject_types = {field.name: field.type for field in policy.subject_schema}
+        record_id, version, identity = etl_bulk.identity_sql(policy)
+        derived = [(record_id, "_btv_id"), (version, "_btv_version"), (identity, "_btv_identity"),
+                   (etl_bulk._subject_reference_sql(policy), "_btv_reference")]
+        ready = ("NOT _btv_unproven AND NOT _btv_receipt_unproven AND _btv_reference IS FALSE AND _btv_id = _btv_rid"
+                 " AND _btv_version = _btv_ver AND _btv_identity = _btv_ident")
+        equal = []
+        try:
+            for index, field in enumerate(schema):
+                key = etl_bulk._literal(field.name)
+                if field.name in subject_types:
+                    absent = etl_bulk.exact_json_sql('"' + field.name.replace('"', '""') + '"', subject_types[field.name])
+                elif dataset == 'court_dockets' and field.name in ('parties_json', 'attorneys_json', 'firms_json'):
+                    absent = "NULL"  # The row path builds these from the unserialized column; only it may.
+                else:
+                    absent = "'[\"null\",null]'"
+                restored = f"coalesce(_btv_ci[{key}], _btv_top[{key}], {absent})"
+                if dataset == 'court_opinion_clusters' and field.name == 'attributes':
+                    # The row path wraps a bare string in a list.
+                    restored = f"CASE WHEN {restored} LIKE '[\"str\",%' THEN NULL ELSE {restored} END"
+                text = f"coalesce(({restored}) = {etl_bulk.exact_json_sql(f'"__o{index}"', field.type)}, false)"
+                declared = subject_types.get(field.name)
+                if (declared is not None and declared.equals(field.type) and not pa.types.is_floating(field.type)
+                        and (dataset, field.name) != ('court_opinion_clusters', 'attributes')):
+                    # Receipt fields never share a subject column's name, so only conversion_inputs can override it.
+                    column = '"' + field.name.replace('"', '""') + '"'
+                    text = (f'CASE WHEN _btv_ci[{key}] IS NULL THEN {column} IS NOT DISTINCT FROM "__o{index}"'
+                            f" ELSE {text} END")
+                equal.append(text)
+        except NotImplementedError:
+            return False
+
+        def entries(text):
+            return ("map_from_entries(list_transform(CAST(json_extract(" + text + ", '$[1]') AS JSON[]),"
+                    " e -> {'k': e->>'$[0]', 'v': CAST(json_extract(e, '$[1]') AS VARCHAR)}))")
+
+        conversion = "_btv_top['conversion_inputs']"
+        query = (
+            "WITH s AS (SELECT *, " + ", ".join(f"{expression} AS {alias}" for expression, alias in derived)
+            + " FROM btv_subjects), j AS (SELECT s.*, btv_originals.*, d.unproven AS _btv_unproven,"
+            " r.unproven AS _btv_receipt_unproven, d.record_id AS _btv_rid, d.version AS _btv_ver,"
+            " d.identity AS _btv_ident, r.processing_json AS _btv_pj"
+            f' FROM s JOIN btv_originals ON s."{number}" = btv_originals.__row'
+            f' JOIN (SELECT * FROM subjects WHERE n >= ? AND n < ?) d ON d.n = s."{number}"'
+            " JOIN (SELECT * FROM subject_receipts WHERE n >= ? AND n < ?) m ON m.n = d.n"
+            " JOIN receipts r ON r.n = m.receipt),"
+            " t AS (SELECT *, " + entries("_btv_pj") + " AS _btv_top FROM j),"
+            f" c AS (SELECT *, CASE WHEN {conversion} LIKE '[\"dict\",%' THEN " + entries(conversion)
+            + " ELSE map_from_entries([]::STRUCT(k VARCHAR, v VARCHAR)[]) END AS _btv_ci FROM t)"
+            " SELECT count(*), count(*) FILTER (WHERE NOT coalesce("
+            + ready + " AND (" + conversion + " IS NULL OR " + conversion + " = '[\"null\",null]' OR "
+            + conversion + " LIKE '[\"dict\",%') AND " + " AND ".join(equal) + ", false)) FROM c")
+        first = self.connection.execute(
+            "SELECT coalesce(min(n),0) FROM subjects WHERE dataset=?", [dataset]).fetchone()[0]
+        count = 0
+        with self._stream(), etl_bulk._parquet(paths[0]) as parquet, pq.ParquetFile(original) as retained:
+            if (not parquet.schema_arrow.equals(policy.subject_schema)
+                    or parquet.metadata.num_rows != retained.metadata.num_rows):
+                return False
+            held, pending, read = retained.iter_batches(batch_size=etl_bulk._BATCH), [], [0, 0]
+            try:
+                with closing(etl_bulk._numbered(parquet, first, number, None, read)) as numbered:
+                    for subjects in _grouped(numbered):
+                        checkpoint()
+                        # Cut the original into the same row ranges, one ordinal per row.
+                        while sum(piece.num_rows for piece in pending) < subjects.num_rows and (
+                                more := next(held, None)):
+                            pending.append(more)
+                        table = pa.Table.from_batches(pending, schema=retained.schema_arrow)
+                        if table.num_rows < subjects.num_rows:
+                            return False
+                        pending = table.slice(subjects.num_rows).to_batches()
+                        low, high = first + count, first + count + subjects.num_rows
+                        originals = pa.table(
+                            [*table.slice(0, subjects.num_rows).columns, pa.array(range(low, high), pa.int64())],
+                            names=[*(f"__o{i}" for i in range(len(schema))), "__row"])
+                        self.connection.register("btv_subjects", subjects)
+                        self.connection.register("btv_originals", originals)
+                        try:
+                            total, bad = self.connection.execute(query, [low, high, low, high]).fetchone()
+                        finally:
+                            self.connection.unregister("btv_subjects")
+                            self.connection.unregister("btv_originals")
+                        if total != subjects.num_rows or bad:
+                            return False
+                        count += subjects.num_rows
+            except (etl_bulk.duckdb.Error, pa.ArrowException):
+                return False
+            return (count == parquet.metadata.num_rows and not any(piece.num_rows for piece in pending)
+                    and next(held, None) is None and read == [count, count])
 
     def _regulatory_original_rows(self, dataset, schema, *, source_schema=None):
         import pyarrow as pa
