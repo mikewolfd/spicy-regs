@@ -14,13 +14,13 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs import court_bulk, etl_bulk
-from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 from spicy_regs.court_subjects import (
     IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row,
 )
 from spicy_regs.etl_receipts import (
-    DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, ReceiptLineage, combine_receipts, failure_receipt,
-    read_with_receipts, select_receipts, split_record, write_dataset,
+    DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, combine_receipts, failure_receipt,
+    read_with_receipts, select_receipts, split_record, validate_receipt_bundle, write_dataset,
 )
 
 POLICIES = {
@@ -127,8 +127,7 @@ def write_court_rows(
     generation_id = generation_id or uuid4().hex
 
     def build(bundle: Path) -> Path:
-        with ReceiptLineage([] if prior_receipts is None else [prior_receipts], dataset=dataset) as lineage, \
-                TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
+        with TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
             failures_path = Path(temporary) / 'etl_receipts.parquet'
             with pq.ParquetWriter(failures_path, RECEIPT_SCHEMA, compression='zstd') as writer:
                 failures = []
@@ -142,7 +141,6 @@ def write_court_rows(
                             # Validate before inheriting evidence or replacing a subject.
                             mapped = _mapped(dataset, raw)
                             split_record(policy, mapped, context)
-                            context = lineage.inherit(context, policy, mapped)
                         except _REFUSED as error:
                             failures.append(_refusal(policy, context, error, raw))
                             if len(failures) >= 2000:
@@ -159,8 +157,12 @@ def write_court_rows(
                                 writer.write_table(pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA))
                     writer.close()
 
-                subject, _ = write_dataset(records(), bundle, policy, failures=parquet_rows(failures_path))
+                subject, receipt = write_dataset(records(), bundle, policy, failures=parquet_rows(failures_path),
+                                                  validate=False)
         assert subject is not None
+        if prior_receipts is not None:
+            _carry(dataset, receipt, prior_receipts)
+        validate_receipt_bundle({dataset: [subject]}, [receipt], [policy], generation_id=generation_id)
         return subject
 
     return _expose(dataset, output_dir, generation_id, witnesses, build)
@@ -191,40 +193,36 @@ def write_court_bulk(
             return None, _refusal(policy, context, error, raw)
 
     def build(bundle: Path) -> Path:
+        assert generation_id is not None
         with TemporaryDirectory(prefix='.court-bulk-', dir=bundle.parent) as temporary:
             stage = Path(temporary) / 'bundle'
             stage.mkdir()
             subject_path, receipt_path = stage / (dataset + '.parquet'), stage / 'etl_receipts.parquet'
             court_bulk.write_bundle(dataset, source, subject_path, receipt_path, policy=policy,
                 generation_id=generation_id, processor=processor, witnesses=witnesses,
-                diagnostics=diagnostics or {}, attempt_prefix=attempt_prefix, attempt=attempt)
+                diagnostics=diagnostics or {}, attempt_prefix=attempt_prefix, attempt=attempt,
+                last_receipts=() if refused_receipts is None else (
+                    receipt for receipt in parquet_rows(refused_receipts)
+                    if _check_refused(receipt, dataset, generation_id)))
             if prior_receipts is not None:
-                carry_receipt_history(receipt_path, [prior_receipts], receipt_path)
-            if refused_receipts is not None:
-                _append_refused(receipt_path, refused_receipts, dataset, generation_id)
+                _carry(dataset, receipt_path, prior_receipts)
             publish_directory_no_replace(stage, bundle)
         return bundle / subject_path.name
 
     return _expose(dataset, output_dir, generation_id, witnesses, build)
 
 
-def _append_refused(receipt_path: Path, refused_receipts: Path, dataset: str, generation_id: str) -> None:
-    """Refusals of rejected updates follow every other receipt, as the row writer orders them."""
-    refused = [receipt for receipt in parquet_rows(refused_receipts) if _check_refused(receipt, dataset, generation_id)]
-    if not refused:
-        return
-    with TemporaryDirectory(dir=receipt_path.parent) as scratch:
-        combined = Path(scratch) / 'etl_receipts.parquet'
-        with pq.ParquetWriter(combined, RECEIPT_SCHEMA, compression='zstd') as writer, pq.ParquetFile(receipt_path) as written:
-            for batch in written.iter_batches():
-                writer.write_batch(batch)
-            writer.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
-        combined.replace(receipt_path)
+def _carry(dataset: str, current: Path, prior: Path) -> None:
+    # Court keys are unchanged strings. Compare the refused raw key to the
+    # accepted declared identity, without reconstructing or normalizing it.
+    carry_receipt_history(current, [prior], current, refusal_identities={
+        dataset: RefusalIdentity(IDENTITIES[dataset], None, "raw_source_record")})
 
 
 def finish_court_output(dataset: str, staged: Path, output_dir: Path, *, witnesses=None,
                         generation_id: str | None = None, diagnostics: Mapping | None = None,
-                        refused_receipts: Path | None = None, prior_receipts: Path | None = None) -> Path:
+                        refused_receipts: Path | None = None, prior_receipts: Path | None = None,
+                        attempt_prefix: str = 'row') -> Path:
     """Split a completed private mapper output; keep its bytes as retained evidence.
 
     The tables ``court_bulk`` maps go through it, a column at a time. Any other table is the row writer's, and
@@ -234,22 +232,24 @@ def finish_court_output(dataset: str, staged: Path, output_dir: Path, *, witness
     schema = pq.read_schema(staged)
     if court_bulk.eligible(dataset, schema):
         return write_court_bulk(dataset, staged, output_dir, witnesses=witnesses, generation_id=generation_id,
-                                diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts)
+                                diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts,
+                                attempt_prefix=attempt_prefix)
     reason = etl_bulk.NotBulkEligible(f'{dataset} has no court bulk mapping for this source schema')
     if dataset in court_bulk.DATASETS:
         etl_bulk.log_row_fallback('court write', reason, dataset=dataset, rows=pq.ParquetFile(staged).metadata.num_rows)
     else:
-        from loguru import logger
-        logger.warning('court write route=row dataset={} reason={}', dataset, reason)
+        etl_bulk.log_row_eligibility('court write', dataset=dataset,
+            rows=pq.ParquetFile(staged).metadata.num_rows, reason=str(reason))
     return write_court_rows(dataset, parquet_rows(staged), output_dir,
                             witnesses=witnesses, generation_id=generation_id,
-                            diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts)
+                            diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts,
+                            attempt_prefix=attempt_prefix)
 
 
 def admit_court_updates(dataset: str, source: Path, directory: Path, *, schema: pa.Schema,
                         generation_id: str) -> tuple[Path, Path]:
     """Validate updates before merging identities; return accepted inputs and all refusal receipts."""
-    subject = write_court_rows(dataset, parquet_rows(source), directory,
+    subject = finish_court_output(dataset, source, directory,
         witnesses=[file_witness(source)], generation_id=generation_id, attempt_prefix='incoming')
     receipts, _ = local_receipt_selection(subject)
     accepted = restore_processing_input(subject, directory / 'accepted-inputs.parquet',
@@ -314,6 +314,37 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
                              receipt_path: Path | None = None, generation_id: str | None = None) -> Path:
     """Reconstruct the mapper's private merge columns, preserving exact raw literals."""
     from spicy_regs.transforms.parquet_rows import write_rows
+    from spicy_regs.conversion_reads import _open_family_reader
+    from spicy_regs.etl_receipts import selected_subject_policy
+    from spicy_regs.local_data import file_signature
+    from spicy_regs import court_restore
+
+    if court_bulk.eligible(dataset, schema):
+        if receipt_path is None:
+            receipt_path, generation_id = local_receipt_selection(path)
+        if not generation_id:
+            raise ValueError('Court internal read requires the selected receipt generation')
+        # Capture the immutable local bundle selected by the public link once.
+        path = path.resolve(strict=True)
+        policy = selected_subject_policy(POLICIES[dataset], [path])
+        paths = (path, receipt_path)
+        before = [file_signature(member) for member in paths]
+
+        def guard():
+            if [file_signature(member) for member in paths] != before:
+                raise ValueError('Selected court input changed during restoration')
+
+        with TemporaryDirectory(prefix='court-restore-admission-') as temporary:
+            selected = select_receipts(receipt_path, Path(temporary) / 'etl_receipts.parquet', dataset=dataset)
+            with _open_family_reader({dataset: [path]}, [selected], [policy], generation_id=generation_id,
+                                     guard=guard) as reader:
+                try:
+                    return court_restore.materialize(reader, dataset, schema, destination)
+                except etl_bulk.NotBulkEligible as error:
+                    etl_bulk.log_row_fallback('court restore', error, dataset=dataset,
+                                             rows=pq.read_metadata(path).num_rows)
+                    return write_rows(processing_rows(reader.read_subjects(dataset), dataset=dataset, schema=schema),
+                                      destination, schema)
 
     return write_rows(processing_rows(
         read_court_rows(path, dataset=dataset, receipt_path=receipt_path, generation_id=generation_id),
@@ -348,7 +379,7 @@ def generation_options(paths: Sequence[Path]) -> dict:
     directory.mkdir(parents=True)
     receipt = combine_receipts([path for path, _ in selections], directory / 'etl_receipts.parquet')
     return {'receipt_path': receipt, 'receipt_policies': [POLICIES[path.stem] for path in paths],
-            'receipt_generation_id': ids.pop()}
+            'receipt_generation_id': ids.pop(), 'adopt_owned_receipt': True}
 
 
 def build_court_generation(directory: Path, *, family: str, files: Sequence[Path], **kwargs):

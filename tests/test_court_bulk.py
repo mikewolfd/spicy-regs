@@ -34,7 +34,7 @@ def _write(path, table):
 def citations(rng, count):
     columns = ('citation_id', 'cluster_id', 'volume', 'reporter', 'page', 'citation_type', 'date_created',
                'date_modified', 'dump_date')
-    rows = [(str(i + 1), str(rng.randrange(1, 10**7)), str(rng.randrange(1, 900)), rng.choice(['U.S.', 'F.3d', 'S. Ct.']),
+    rows: list = [(str(i + 1), str(rng.randrange(1, 10**7)), str(rng.randrange(1, 900)), rng.choice(['U.S.', 'F.3d', 'S. Ct.']),
              str(rng.randrange(1, 2000)), rng.choice(['1', '2', None]), '2024-01-02T03:04:05.123456-08:00',
              rng.choice(['2024-05-06T07:08:09Z', None]), '2026-06-30') for i in range(count)]
     for n, text in enumerate(EDGE_TEXT):
@@ -45,7 +45,7 @@ def citations(rng, count):
 
 def citation_map(rng, count):
     columns = ('citing_opinion_id', 'cited_opinion_id', 'depth', 'dump_date')
-    rows = [(str(rng.randrange(1, 10**8)), str(rng.randrange(1, 10**8)), str(rng.randrange(1, 40)), '2026-06-30')
+    rows: list = [(str(rng.randrange(1, 10**8)), str(rng.randrange(1, 10**8)), str(rng.randrange(1, 40)), '2026-06-30')
             for _ in range(count)]
     depths = ['0', '007', '-0', '', 'abc', '99999999999999999999', '9223372036854775807', '9223372036854775808',
               '-9223372036854775808', '-9223372036854775809', None, '+5', ' 5', '5 ', '1.0', '٥', '1\n']
@@ -59,7 +59,7 @@ def parentheticals(rng, count):
                'dump_date')
     scores = [str(round(rng.random(), rng.randrange(1, 17))) for _ in range(count)]
     scores += [repr(rng.random()) for _ in range(count // 2)]
-    rows = [(str(n), '1', '2', rng.choice(EDGE_TEXT), score, rng.choice([None, '9']), '2026-06-30')
+    rows: list = [(str(n), '1', '2', rng.choice(EDGE_TEXT), score, rng.choice([None, '9']), '2026-06-30')
             for n, score in enumerate(scores)]
     edge = ['0', '1', '0.5', '.5', '5.', '1e-300', '1e-310', '4.9e-324', '1E-3', '1.0000000000000002', 'nan', 'inf',
             '-0', '-0.0', '0.0', '1.0', '', None, '0_5', ' 0.5', '0.5 ', '1e5', '1e-400', '0.1e1', '+0.5', '٥',
@@ -74,7 +74,7 @@ CLUSTER_COLUMNS = ('cluster_id', 'cl_docket_id', 'court_id', 'court_is_federal',
 
 
 def clusters(rng, count):
-    rows = [(str(n + 1), str(rng.randrange(1, 10**6)), 'scotus', rng.choice(['t', 'f', 'T', 'FALSE', 'True', None]),
+    rows: list = [(str(n + 1), str(rng.randrange(1, 10**6)), 'scotus', rng.choice(['t', 'f', 'T', 'FALSE', 'True', None]),
              'A v. B ' * rng.randrange(1, 5), '2001-01-01', rng.choice(['t', 'f']), str(rng.randrange(0, 5000)),
              rng.choice(['9', None, '0']), rng.choice(['A; B', None, '', 'Smith']), 'text ' * rng.randrange(0, 200),
              'f', f'slug-{n}', '2024-01-01T00:00:00Z', rng.choice(['bulk', None])) for n in range(count)]
@@ -90,7 +90,7 @@ OPINIONS = ('opinion_id', 'cluster_id', 'opinion_type', 'per_curiam', 'page_coun
 
 
 def opinions(rng, count):
-    rows = [(str(n + 1), str(rng.randrange(1, 100)), '010combined', rng.choice(['t', 'f', None]),
+    rows: list = [(str(n + 1), str(rng.randrange(1, 100)), '010combined', rng.choice(['t', 'f', None]),
              rng.choice(['3', None, '0']), '%040x' % rng.getrandbits(160), 'f', f'pdf/{n}.pdf', '2026-06-30')
             for n in range(count)]
     rows += [('x1', '1', 'o', 'maybe', 'many', 's', 'f', None, None), ('', '1', 'o', 't', '1', 's', 'f', None, None)]
@@ -103,7 +103,7 @@ FAMILIES = {'court_citations': citations, 'court_citation_map': citation_map, 'c
 
 def both(tmp_path, dataset, table, **options):
     source = _write(tmp_path / 'source.parquet', table)
-    options = {'witnesses': WITNESSES, 'generation_id': 'g-1', 'diagnostics': {'dump_date': '2026-06-30'}, **options}
+    options: dict = {'witnesses': WITNESSES, 'generation_id': 'g-1', 'diagnostics': {'dump_date': '2026-06-30'}, **options}
     expected = write_court_rows(dataset, parquet_rows(source), tmp_path / 'row', **options)
     routed = []
     original = court_bulk.write_bundle
@@ -111,11 +111,9 @@ def both(tmp_path, dataset, table, **options):
     def spy(*args, **kwargs):
         routed.append(original(*args, **kwargs))
         return routed[-1]
-    court_bulk.write_bundle = spy
-    try:
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(court_bulk, 'write_bundle', spy)
         actual = write_court_bulk(dataset, source, tmp_path / 'bulk', **options)
-    finally:
-        court_bulk.write_bundle = original
     return expected, actual, routed[0]
 
 
@@ -141,7 +139,7 @@ def test_attorneys_as_a_native_list_and_missing_columns(tmp_path):
     columns, rows = clusters(random.Random(3), 200)
     index = columns.index('attorneys')
     lists = [[None, 'A', '', 'A'], None, [], ['B']]
-    rows = [(*row[:index], lists[n % 4], *row[index + 1:]) for n, row in enumerate(rows)]
+    rows: list = [(*row[:index], lists[n % 4], *row[index + 1:]) for n, row in enumerate(rows)]
     schema = pa.schema([(name, pa.list_(pa.string()) if name == 'attorneys' else pa.string()) for name in columns])
     expected, actual, _ = both(tmp_path, 'court_opinion_clusters', _table(columns, rows, schema))
     assert pq.read_table(actual).equals(pq.read_table(expected))
@@ -160,6 +158,46 @@ def test_context_text_the_sql_spells_differently_routes_every_row(tmp_path):
                                     diagnostics={'note': 'esc\x1b'}, witnesses=[{**WITNESSES[0], 'source_uri': '/x\x1b'}])
     assert routed == len(rows)
     assert pq.read_table(local_receipt_selection(actual)[0]).equals(pq.read_table(local_receipt_selection(expected)[0]))
+
+
+@pytest.mark.parametrize('dataset', sorted(FAMILIES))
+def test_control_character_only_in_receipt_field_uses_exact_row_encoding(tmp_path, dataset):
+    from spicy_regs.court_subjects import IDENTITIES, RECEIPT_FIELDS
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    receipt_field = next(name for name in RECEIPT_FIELDS[dataset] if name not in
+                         {'conversion_inputs', 'raw_source_record', 'source_observation'})
+    row = {name: '1' for name in IDENTITIES[dataset]}
+    row[receipt_field] = 'receipt-only\x1b'
+    expected, actual, routed = both(tmp_path, dataset, pa.Table.from_pylist([row]))
+    assert routed == 1
+    actual_receipts = pq.read_table(local_receipt_selection(actual)[0])
+    assert actual_receipts.equals(pq.read_table(local_receipt_selection(expected)[0]))
+    assert decode_exact_json(actual_receipts['processing_json'][0].as_py())[receipt_field] == row[receipt_field]
+
+
+@pytest.mark.parametrize('bulk', [False, True])
+def test_unresolved_refusal_survives_then_exact_success_resolves_it(tmp_path, bulk):
+    def run(name, rows, prior=None):
+        options: dict = dict(witnesses=WITNESSES, generation_id=name, prior_receipts=prior)
+        if bulk:
+            schema = pa.schema([(name, pa.string()) for name in ('citing_opinion_id', 'cited_opinion_id', 'depth')])
+            source = _write(tmp_path / (name + '.parquet'), pa.Table.from_pylist(rows, schema=schema))
+            path = write_court_bulk('court_citation_map', source, tmp_path / name, **options)
+        else:
+            path = write_court_rows('court_citation_map', rows, tmp_path / name, **options)
+        return local_receipt_selection(path)[0]
+
+    bad = {'citing_opinion_id': '01', 'cited_opinion_id': '2', 'depth': 'bad'}
+    first = run('first', [bad])
+    refused, = list(parquet_rows(first))
+    second = run('second', [], first)
+    assert list(parquet_rows(second)) == [refused]
+    third = run('third', [{**bad, 'citing_opinion_id': '1', 'depth': '7'}], second)
+    assert list(parquet_rows(third))[-1] == refused
+    fourth = run('fourth', [{**bad, 'depth': '7'}], third)
+    accepted, = list(parquet_rows(fourth))
+    assert accepted['outcome'] == 'accepted'
 
 
 def test_refused_updates_follow_every_receipt_and_must_match_the_build(tmp_path):
@@ -206,7 +244,7 @@ def test_ineligible_sources_stay_on_the_row_writer_loudly(tmp_path, monkeypatch)
     with pytest.raises(etl_bulk.NotBulkEligible):
         court_bulk.write_bundle('court_citation_map', source, tmp_path / 's.parquet', tmp_path / 'r.parquet',
                                 policy=POLICIES['court_citation_map'], generation_id='g', processor='p',
-                                witnesses=WITNESSES, diagnostics={}, attempt_prefix='row', attempt=None)
+                                witnesses=WITNESSES, diagnostics={}, attempt_prefix='row', attempt=lambda raw, ordinal: (None, {}))
     with etl_bulk.bulk_limits(threads=1, memory_limit='1GB', require_bulk=True):
         with pytest.raises(ValueError, match='reference fallback disabled'):
             finish_court_output('court_citation_map', source, tmp_path / 'out', witnesses=WITNESSES)

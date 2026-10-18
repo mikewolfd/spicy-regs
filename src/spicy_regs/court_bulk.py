@@ -16,7 +16,7 @@ source schemas qualify is :func:`eligible`; the rest stay on the row writer.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
 import pyarrow as pa
@@ -113,28 +113,6 @@ def _processing_sql(dataset: str, schema: pa.Schema, originals: list[tuple[str, 
         f"'[\"{name}\",' || {value} || ']'" for name, value in sorted(items.items())) + " || ']]'"
 
 
-class _SourceRows:
-    """The source's rows by ordinal, for the few the row function decides: one row group stays in memory."""
-
-    def __init__(self, source: Path):
-        self._file = pq.ParquetFile(source)
-        self._ends, total = [], 0
-        for group in range(self._file.metadata.num_row_groups):
-            total += self._file.metadata.row_group(group).num_rows
-            self._ends.append(total)
-        self._group, self._table = -1, pa.table({})
-
-    def __call__(self, ordinal: int) -> dict:
-        group = next(index for index, end in enumerate(self._ends) if ordinal < end)
-        if group != self._group:
-            self._group, self._table = group, self._file.read_row_group(group)
-        start = self._ends[group - 1] if group else 0
-        return self._table.slice(ordinal - start, 1).to_pylist()[0]
-
-    def close(self) -> None:
-        self._file.close()
-
-
 def write_bundle(
     dataset: str,
     source: Path,
@@ -148,6 +126,7 @@ def write_bundle(
     diagnostics: Mapping,
     attempt_prefix: str,
     attempt: Callable[[Mapping, int], tuple[dict | None, dict]],
+    last_receipts: Iterable[Mapping] = (),
 ) -> int:
     """Write ``dataset``'s subject table and receipts to the two paths; return how many rows the row function decided.
 
@@ -183,18 +162,14 @@ def write_bundle(
     receipt AS (SELECT * FROM keyed CROSS JOIN court_constants)
     SELECT * EXCLUDE (_bad, _subject_json), {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id,
            (_bad OR {etl_bulk.needs_reference_sql('_subject_json')}
+            OR {etl_bulk.needs_reference_sql('processing_json')}
             OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _reference
     FROM receipt"""
-    rows = _SourceRows(source)
-    try:
-        with etl_bulk.bulk_connection() as (con, _):
-            con.register("court_constants", pa.table({"witnesses": pa.array(
-                [[dict(w) for w in witnesses]], type=pa.list_(WITNESS_TYPE))}))
-            return etl_bulk.write_split(
-                con, query, source=source, batch_rows=_BATCH.get(dataset, _DEFAULT_BATCH), expected_rows=expected,
-                subject_schema=policy.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
-                label=dataset, refusals_last=True,
-                row_attempt=lambda table, index: attempt(rows(table["_ordinal"][index].as_py()),
-                                                         table["_ordinal"][index].as_py()))
-    finally:
-        rows.close()
+    with etl_bulk.bulk_connection() as (con, _):
+        con.register("court_constants", pa.table({"witnesses": pa.array(
+            [[dict(w) for w in witnesses]], type=pa.list_(WITNESS_TYPE))}))
+        return etl_bulk.write_split(
+            con, query, source=source, batch_rows=_BATCH.get(dataset, _DEFAULT_BATCH), expected_rows=expected,
+            subject_schema=policy.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
+            label=dataset, refusals_last=True, last_refusals=last_receipts,
+            row_attempt=lambda table, index, source_row: attempt(source_row, table["_ordinal"][index].as_py()))

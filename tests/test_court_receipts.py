@@ -125,3 +125,23 @@ def test_installed_court_policies_refuse_generation_without_receipts(tmp_path):
     with pytest.raises(ValueError, match='require ETL receipts'):
         build_generation(tmp_path / 'bypass', family='court-opinion-clusters',
                          files=[path], expected_keys=[path.name])
+
+
+def test_generation_moves_owned_combined_receipts_and_preserves_selected_shards(tmp_path, monkeypatch):
+    from spicy_regs import court_receipts
+
+    path = write(tmp_path, 'court_opinion_clusters', [{'cluster_id': '1'}])
+    shard, _ = local_receipt_selection(path)
+    original_bytes = shard.read_bytes()
+    combined = []
+    combine = court_receipts.combine_receipts
+
+    def tracked(paths, destination):
+        combined.append(destination)
+        return combine(paths, destination)
+
+    monkeypatch.setattr(court_receipts, 'combine_receipts', tracked)
+    build_court_generation(tmp_path / 'generation', family='court-opinion-clusters', files=[path])
+    assert combined and not combined[0].exists()
+    assert shard.read_bytes() == original_bytes
+    assert (tmp_path / 'generation' / 'etl_receipts.parquet').is_file()
