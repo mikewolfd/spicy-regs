@@ -1,6 +1,7 @@
 """Actual Parquet families, interrupted writes and immutable reader snapshots."""
 
 import json
+import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -753,3 +754,23 @@ def test_a_generation_scoped_outcome_table_may_shrink_but_a_data_table_may_not(t
     store.objects["b.parquet"] = b"x" * 100_000
     with pytest.raises(RuntimeError, match="shrink"):
         publish(store, other)
+
+
+@pytest.mark.parametrize("key, shrinks", [
+    ("print_citations_document_file_outcomes.parquet", False),
+    ("a.parquet", True),
+])
+def test_a_smaller_generation_over_a_published_prior_is_guarded_only_for_data_tables(tmp_path, monkeypatch, key, shrinks):
+    """The live failure path: the prior generation's recorded size, not a probe of the remote object, is the comparison."""
+    from spicy_regs import etl_policy_registry
+
+    monkeypatch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+    large, _ = build(tmp_path, keys=(key,), value=os.urandom(50_000).hex())
+    store = Store()
+    prior = publish(store, large)
+    small, _ = build(tmp_path, "two", keys=(key,), value="two")
+    if shrinks:
+        with pytest.raises(RuntimeError, match="shrink"):
+            publish(store, small, prior)
+    else:
+        assert key in publish(store, small, prior)["families"]["test"]["tables"]

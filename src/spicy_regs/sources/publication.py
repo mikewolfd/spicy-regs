@@ -1137,6 +1137,7 @@ def _stage_verified_generation(
     _assert_parents_current(index, artifact.root["spec"].get("parents", {}))
     entry = generation_entry(artifact, members)
     prefix, tables = entry["prefix"], entry["tables"]
+    exempt = converted | _verified_replacement_tables | _generation_scoped_tables()
     # The guards run per table: a partition of a split table may legitimately shrink, but none may vanish,
     # since a build that forgot a partition would otherwise pass whenever the rest outweighs the shrink ratio.
     for key, table in tables.items():
@@ -1144,7 +1145,7 @@ def _stage_verified_generation(
         if missing := _partitions(prior) - _partitions(table):
             raise PublicationError(f"{key} lacks partitions its prior generation holds: "
                                    + ", ".join("/".join(f"{c}={v}" for c, v in p) for p in sorted(missing)))
-        if key not in converted | _verified_replacement_tables | _generation_scoped_tables():
+        if key not in exempt:
             old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
             _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)
