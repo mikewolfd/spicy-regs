@@ -260,10 +260,14 @@ def initialized(con, dataset):
     if len(rows) != 1:
         raise ValueError('Native catalog has ambiguous initialization receipts')
     row = rows[0]
-    from spicy_regs.etl_receipts import exact_json, ReceiptContext
+    from spicy_regs.etl_receipts import exact_json, ReceiptContext, receipt_policies
     ReceiptContext(row['generation_id'], row['attempt_id'], row['processor'], row['witnesses'])
     rebind_receipt(row, generation_id=row['generation_id'])  # Verify the exact receipt digest.
-    if (row['outcome'] != 'observed' or row['policy_version'] != policy(dataset).policy_version
+    # The marker states that an empty catalog was initialized, once. A later field-policy version does not undo that:
+    # comments moved to regulations-native-v2 on 2026-10-06 and the live marker is still v1 (every nightly check failed).
+    # Any declared version of the dataset's policy lineage qualifies it.
+    if (row['outcome'] != 'observed'
+            or row['policy_version'] not in {p.policy_version for p in receipt_policies(policy(dataset))}
             or row['record_id'] is not None or row['subject_version'] is not None
             or row['processing_json'] != exact_json({'input_metadata': {'catalog_initialized': True}})):
         raise ValueError('Native catalog initialization receipt differs from field policy')
