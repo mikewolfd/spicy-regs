@@ -20,6 +20,7 @@ import sqlite3
 from dataclasses import dataclass
 from contextvars import ContextVar
 from hashlib import sha256
+from itertools import batched
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
@@ -142,6 +143,13 @@ def log_row_fallback(route: str, error: NotBulkEligible, *, dataset: str, rows: 
     from loguru import logger
 
     logger.warning("{} route=row dataset={}{} reason={}", route, dataset, "" if rows is None else f" rows={rows}", error)
+
+
+def log_row_eligibility(route: str, *, dataset: str, rows: int, reason: str) -> None:
+    """Warn for a dataset with no bulk mapping; ``require_bulk`` governs mapped-route fallbacks only."""
+    from loguru import logger
+
+    logger.warning("{} route=row dataset={} rows={} reason={}", route, dataset, rows, reason)
 
 
 @dataclass(frozen=True)
@@ -304,7 +312,7 @@ def write_split(
     row_attempt: Callable[[pa.Table, int, dict], tuple[dict | None, dict]],
     label: str,
     first_receipts: Sequence[Mapping] = (),
-    last_receipts: Sequence[Mapping] = (),
+    last_receipts: Iterable[Mapping] = (),
     refusals_last: bool = False,
     segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
     isolate: str | None = None,
@@ -398,8 +406,8 @@ def write_split(
                                 routed += part(each)
                     finally:
                         con.unregister(SOURCE_BATCH)
-            if last_receipts:
-                emit(pa.Table.from_pylist(list(last_receipts), schema=RECEIPT_SCHEMA))
+            for receipt_batch in batched(last_receipts, _GROUP):
+                emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
             emit(RECEIPT_SCHEMA.empty_table(), final=True)
             refused.close()
             with pq.ParquetFile(scratch / "refused.parquet") as late:

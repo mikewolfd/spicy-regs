@@ -128,3 +128,54 @@ def test_an_isolated_row_is_its_own_receipt_row_group(tmp_path):
         pq.ParquetFile(tmp_path / "r.parquet").metadata.num_row_groups)]
     assert 1 in groups and sum(groups) == 23
     assert len(groups) <= 4  # 11 rows before it, it alone, 11 after: not 23 one-row groups
+
+
+def test_closing_receipts_stream_in_bounded_groups_before_generator_finishes(tmp_path, monkeypatch):
+    original = pq.ParquetWriter
+    written = []
+
+    class RecordingWriter:
+        def __init__(self, path, *args, **kwargs):
+            self.writer = original(path, *args, **kwargs)
+            self.record = path == tmp_path / "r.parquet"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.writer.close()
+
+        def __getattr__(self, name):
+            return getattr(self.writer, name)
+
+        def write_table(self, table, **kwargs):
+            if self.record:
+                written.append(table.num_rows)
+            self.writer.write_table(table, **kwargs)
+
+    def closing():
+        for i in range(4001):
+            if i == 2000:
+                assert written  # materializing the whole iterable would fail here
+            yield {"receipt_id": f"closing-{i}", "outcome": "refused", "witnesses": []}
+
+    monkeypatch.setattr(pq, "ParquetWriter", RecordingWriter)
+    _split(tmp_path, last_receipts=closing())
+    assert _ids(tmp_path / "r.parquet", "receipt_id")[-4001:] == [f"closing-{i}" for i in range(4001)]
+    assert max(written) <= etl_bulk.RECEIPT_ROW_GROUP
+
+
+def test_unmapped_eligibility_warns_with_count_while_mapped_fallback_still_refuses():
+    from loguru import logger
+
+    messages = []
+    sink = logger.add(messages.append, format="{message}")
+    try:
+        with etl_bulk.bulk_limits(threads=1, memory_limit="64MB", require_bulk=True):
+            etl_bulk.log_row_eligibility("court write", dataset="small", rows=17, reason="no bulk mapping")
+            with pytest.raises(ValueError, match="reference fallback disabled"):
+                etl_bulk.log_row_fallback("court write", etl_bulk.NotBulkEligible("schema differs"),
+                                          dataset="mapped", rows=19)
+    finally:
+        logger.remove(sink)
+    assert any("dataset=small rows=17 reason=no bulk mapping" in message for message in messages)
