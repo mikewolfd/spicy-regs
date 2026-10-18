@@ -3,7 +3,7 @@
 import json
 import random
 import sys
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import duckdb
 import pyarrow as pa
@@ -114,6 +114,22 @@ def test_fixed_point_decimal_spelling_matches_arrow_reference(precision, scale):
     assert _encode(values, dtype) == [(exact_json(value), False) for value in stored]
 
 
+@pytest.mark.parametrize("capitals", [0, 1])
+def test_scorecard_decimal_fixed_values_match_and_exponent_values_route(capitals):
+    dtype = pa.decimal128(38, 18)
+    fixed = [None, *map(Decimal, [
+        "99999999999999999999.999999999999999999", "-99999999999999999999.999999999999999999",
+        "1.200000000000000000", "-1.200000000000000000", "0.000001", "-0.000001",
+        "0.000001000000000001", "-0.000001000000000001",
+    ])]
+    routed = list(map(Decimal, ["0", "-0", "0.000000999999999999", "-0.000000999999999999", "1e-18", "-1e-18"]))
+    with localcontext() as context:
+        context.capitals = capitals
+        stored = pa.array(fixed, type=dtype).to_pylist()
+        expected = [(exact_json(value), False) for value in stored] + [(etl_bulk._ROUTE, True)] * len(routed)
+        assert _encode(fixed + routed, dtype) == expected
+
+
 def test_nested_decimal_lists_preserve_nulls_and_exact_versions():
     dtype = pa.list_(pa.struct([("amounts", pa.list_(pa.decimal128(38, 2)))]))
     values = [None, [], [None], [{"amounts": None}], [{"amounts": []}],
@@ -122,7 +138,17 @@ def test_nested_decimal_lists_preserve_nulls_and_exact_versions():
     assert _encode(values, dtype) == [(exact_json(value), False) for value in stored]
 
 
-@pytest.mark.parametrize("dtype", [pa.decimal128(38, 7), pa.decimal128(38, -2), pa.decimal256(76, 2)])
+def test_nested_scorecard_decimal_retains_nulls_and_routes_only_exponent_values():
+    dtype = pa.list_(pa.struct([("amounts", pa.list_(pa.decimal128(38, 18)))]))
+    fixed = [None, [], [None], [{"amounts": None}], [{"amounts": []}],
+             [{"amounts": [None, Decimal("-0.000001"), Decimal("99999999999999999999.999999999999999999")]}]]
+    routed = [[{"amounts": [Decimal("0")]}], [{"amounts": [Decimal("1e-18")]}]]
+    encoded = _encode(fixed + routed, dtype)
+    assert encoded[:len(fixed)] == [(exact_json(value), False) for value in pa.array(fixed, type=dtype).to_pylist()]
+    assert all(marked and etl_bulk._ROUTE in text for text, marked in encoded[len(fixed):])
+
+
+@pytest.mark.parametrize("dtype", [pa.decimal128(38, 7), pa.decimal128(37, 18), pa.decimal128(38, -2), pa.decimal256(76, 2)])
 def test_unproven_decimal_spelling_remains_reference_only(dtype):
     with pytest.raises(NotImplementedError, match="No proven SQL spelling"):
         etl_bulk.exact_json_sql('"v"', dtype)

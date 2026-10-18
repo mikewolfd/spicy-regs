@@ -131,13 +131,17 @@ def outcome(validate, *args, **kwargs):
 
 
 @pytest.mark.parametrize("damage", [None, "changed_amount", "duplicate_subject", "duplicate_receipt", "receipt_digest"])
-def test_decimal_bundle_keeps_reference_acceptance_and_refusals(tmp_path, damage):
-    dtype = pa.decimal128(38, 2)
+@pytest.mark.parametrize("scale", [2, 18])
+def test_decimal_bundle_keeps_reference_acceptance_and_refusals(tmp_path, damage, scale, monkeypatch):
+    dtype = pa.decimal128(38, scale)
     policy = DatasetPolicy("amounts", pa.schema([("id", pa.string()), ("amount", dtype),
                            ("amounts", pa.list_(dtype))]), ("id",), ("raw",))
     empty = DatasetPolicy("empty_amounts", pa.schema([("id", pa.string()), ("amount", dtype)]), ("id",), ())
     rows = [{"id": "a", "amount": Decimal("-0.01"), "amounts": [None, Decimal("1.20")], "raw": {"source": "a"}},
             {"id": "b", "amount": None, "amounts": [], "raw": {"source": "b"}}]
+    if scale == 18:
+        rows.extend([{"id": "zero", "amount": Decimal("0"), "amounts": [], "raw": {}},
+                     {"id": "tiny", "amount": Decimal("1e-18"), "amounts": [], "raw": {}}])
     subject, receipts = write_dataset(((row, ReceiptContext("g", f"a{i}", "test/1", [WITNESS]))
                                       for i, row in enumerate(rows)), tmp_path / "written", policy)
     empty_subject, empty_receipts = write_dataset([], tmp_path / "empty", empty)
@@ -156,8 +160,17 @@ def test_decimal_bundle_keeps_reference_acceptance_and_refusals(tmp_path, damage
     pq.write_table(pa.Table.from_pylist(evidence, schema=RECEIPT_SCHEMA), receipts)
     args = ({policy.dataset: [subject], empty.dataset: [empty_subject]}, [receipts, empty_receipts], [policy, empty])
     reference = outcome(validate_receipt_bundle, *args, generation_id="g")
+    decided, original = [], etl_bulk.subject_identity
+
+    def row_identity(policy, row):
+        decided.append(row["id"])
+        return original(policy, row)
+
+    monkeypatch.setattr(etl_bulk, "subject_identity", row_identity)
     assert outcome(etl_bulk.validate_bundle, *args, generation_id="g") == reference
     assert (reference is None) == (damage is None)
+    if damage is None:
+        assert decided == (["zero", "tiny"] if scale == 18 else [])
 
 
 @pytest.fixture(autouse=True)
