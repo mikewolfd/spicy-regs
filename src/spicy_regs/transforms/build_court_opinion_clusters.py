@@ -247,6 +247,26 @@ def held_export(table: Path, *, receipt_path: Path | None = None,
     return high, created[:10] if created else None
 
 
+def _held_restored_export(table: Path) -> tuple[int | None, str | None]:
+    """Scan the already restored inputs without another receipt admission or replay."""
+    from spicy_regs.etl_bulk import _literal, bulk_connection
+
+    with bulk_connection() as (con, _):
+        con.execute('CREATE VIEW held AS SELECT cluster_id,date_created FROM read_parquet('
+                    + _literal(str(table)) + ") WHERE ingest_source='bulk'")
+        high, created = con.execute("SELECT max(TRY_CAST(cluster_id AS HUGEINT)) FILTER "
+                                   "(WHERE regexp_full_match(cluster_id, '[0-9]+')), max(date_created) FROM held").fetchone()
+        # Preserve Python's Unicode decimal and arbitrary-size integer behavior
+        # for the exceptional keys that the bounded SQL integer cannot express.
+        for batch in con.execute("SELECT cluster_id FROM held WHERE cluster_id IS NOT NULL AND "
+                                 "(NOT regexp_full_match(cluster_id, '[0-9]+') OR "
+                                 "TRY_CAST(cluster_id AS HUGEINT) IS NULL)").to_arrow_reader(2000):
+            for identity in batch.column(0).to_pylist():
+                if identity and identity.isdecimal():
+                    high = max(high or 0, int(identity))
+    return high, created[:10] if created else None
+
+
 def build_court_opinion_clusters(
     output_dir: Path,
     *,
@@ -298,10 +318,10 @@ def build_court_opinion_clusters(
         receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_opinion_clusters')
         if receipt_path is not None:
             input_witnesses.append(file_witness(receipt_path))
-        prior_export = held_export(prior_file, receipt_path=receipt_path, generation_id=generation_id)
         prior_file = restore_processing_input(prior_file, output_dir / f'.clusters-prior-{uuid4().hex}.parquet',
             dataset='court_opinion_clusters', schema=_SCHEMA, receipt_path=receipt_path,
             generation_id=generation_id)
+        prior_export = _held_restored_export(prior_file)
     logger.info(
         "Opinion clusters: {}",
         f"merging against prior table {prior_file}" if have_prior else "no prior table — full build",

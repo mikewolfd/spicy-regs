@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from bisect import bisect_right
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -17,19 +17,50 @@ class RefusalIdentity:
     Values must match exactly, including their lossless type tags. A changed key
     spelling or missing field cannot resolve a refusal. Null is a present value.
     ``refused_raw_field`` defaults to the accepted input's container name.
+    An explicit ``accepted_raw_field=None`` uses the accepted declared identity;
+    the caller must supply the refused raw container and identical key names.
+    ``refused_identity`` may derive those declared keys through the family's
+    maintained identity function. Only unmatched refused inputs are decoded;
+    missing or invalid keys stay unresolved, and retained receipts never change.
     """
 
     fields: tuple[str, ...]
-    accepted_raw_field: str
+    accepted_raw_field: str | None
     refused_raw_field: str | None = None
+    refused_identity: Callable[[Mapping], Mapping | None] | None = None
 
     def __post_init__(self):
         if (not self.fields or len(set(self.fields)) != len(self.fields)
                 or any(not isinstance(field, str) or not field for field in self.fields)
-                or not isinstance(self.accepted_raw_field, str) or not self.accepted_raw_field
+                or (self.accepted_raw_field is not None
+                    and (not isinstance(self.accepted_raw_field, str) or not self.accepted_raw_field))
+                or (self.accepted_raw_field is None and self.refused_raw_field is None)
                 or (self.refused_raw_field is not None
                     and (not isinstance(self.refused_raw_field, str) or not self.refused_raw_field))):
             raise ValueError("Refusal resolution needs explicit raw input and natural-key fields")
+
+
+def _derived_refusal_keys(identity: RefusalIdentity):
+    """Bounded Arrow UDF for a family's explicit refusal identity derivation."""
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import decode_exact_json, exact_json
+
+    def derive(texts):
+        keys = []
+        for text in texts.to_pylist():
+            try:
+                processing = decode_exact_json(text)
+                raw = processing[identity.refused_raw_field or identity.accepted_raw_field]
+                assert identity.refused_identity is not None
+                values = identity.refused_identity(raw) if isinstance(raw, Mapping) else None
+                key = ("[" + ",".join(exact_json(values[field]) for field in identity.fields) + "]"
+                       if isinstance(values, Mapping) and all(field in values for field in identity.fields) else None)
+            except (ValueError, TypeError, KeyError):
+                key = None
+            keys.append(key)
+        return pa.array(keys, type=pa.string())
+
+    return derive
 
 
 def _raw_identity_sql(column: str, raw_field: str, fields: tuple[str, ...]) -> str:
@@ -67,14 +98,41 @@ def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
                             ("current", "outcome='accepted'")):
         parts: list[str] = [f"SELECT ordinal,dataset,'declared' AS kind,identity_json AS value FROM {name} "
                            f"WHERE {condition} AND record_id IS NOT NULL AND identity_json IS NOT NULL"]
-        for dataset, identity in identities.items():
+        derived_functions = []
+        for index, (dataset, identity) in enumerate(identities.items()):
             raw_field = (identity.refused_raw_field or identity.accepted_raw_field
                          if name == "prior" else identity.accepted_raw_field)
-            key = _raw_identity_sql("processing_json", raw_field, identity.fields)
+            if name == "prior" and identity.refused_identity is not None:
+                function = f"derived_refusal_key_{index}"
+                con.create_function(function, _derived_refusal_keys(identity), ["VARCHAR"], "VARCHAR",
+                                    type="arrow", null_handling="special")
+                derived_functions.append(function)
+                # Apply DuckDB's same JSON spelling to the callback's exact tags
+                # and the accepted key; no retained receipt is rewritten.
+                key = f"CAST(to_json(CAST({function}(processing_json) AS JSON)) AS VARCHAR)"
+            elif raw_field is None:
+                # Declared identity_json is an exact list of [field, value]
+                # pairs. Repackage only its existing tagged values so the raw
+                # comparison preserves types and never normalizes a key.
+                entries = "json_extract(identity_json, '$[1]')::JSON[]"
+                values = [
+                    "json_extract(list_extract(list_filter(" + entries
+                    + ", entry -> json_extract_string(entry, '$[1][0][1]')='"
+                    + field.replace("'", "''") + "'), 1), '$[1][1]')"
+                    for field in identity.fields
+                ]
+                key = ("CASE WHEN " + " AND ".join(f"{value} IS NOT NULL" for value in values)
+                       + " THEN CAST(to_json(list_value(" + ", ".join(values) + ")) AS VARCHAR) END")
+            else:
+                key = _raw_identity_sql("processing_json", raw_field, identity.fields)
             dataset_sql = "'" + dataset.replace("'", "''") + "'"
             parts.append(f"SELECT ordinal,dataset,'raw' AS kind,{key} AS value FROM {name} "
                          f"WHERE {condition} AND dataset={dataset_sql}")
-        con.execute(f"CREATE TABLE {name}_resolution_keys AS " + " UNION ALL ".join(parts))
+        try:
+            con.execute(f"CREATE TABLE {name}_resolution_keys AS " + " UNION ALL ".join(parts))
+        finally:
+            for function in derived_functions:
+                con.remove_function(function)
     con.execute("""DELETE FROM pending_refusals WHERE ordinal IN (
         SELECT p.ordinal FROM prior_resolution_keys p JOIN current_resolution_keys c
         ON p.dataset=c.dataset AND p.kind=c.kind AND p.value=c.value)""")
