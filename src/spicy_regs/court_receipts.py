@@ -424,17 +424,15 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
             if [file_signature(member) for member in paths] != before:
                 raise ValueError('Selected court input changed during restoration')
 
-        with TemporaryDirectory(prefix='court-restore-admission-') as temporary:
-            selected = select_receipts(receipt_path, Path(temporary) / 'etl_receipts.parquet', dataset=dataset)
-            with _open_family_reader({dataset: [path]}, [selected], [policy], generation_id=generation_id,
-                                     guard=guard) as reader:
-                try:
-                    return court_restore.materialize(reader, dataset, schema, destination)
-                except etl_bulk.NotBulkEligible as error:
-                    etl_bulk.log_row_fallback('court restore', error, dataset=dataset,
-                                             rows=pq.read_metadata(path).num_rows)
-                    return write_rows(processing_rows(reader.read_subjects(dataset), dataset=dataset, schema=schema),
-                                      destination, schema)
+        with _open_family_reader({dataset: [path]}, [receipt_path], [policy], generation_id=generation_id,
+                                 guard=guard, scoped=True) as reader:
+            try:
+                return court_restore.materialize(reader, dataset, schema, destination)
+            except etl_bulk.NotBulkEligible as error:
+                etl_bulk.log_row_fallback('court restore', error, dataset=dataset,
+                                         rows=pq.read_metadata(path).num_rows)
+                return write_rows(processing_rows(reader.read_subjects(dataset), dataset=dataset, schema=schema),
+                                  destination, schema)
 
     reason = etl_bulk.NotBulkEligible(f'{dataset} has no court bulk restore for this input schema')
     rows = pq.read_metadata(path).num_rows
