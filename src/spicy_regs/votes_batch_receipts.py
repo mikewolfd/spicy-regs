@@ -5,11 +5,11 @@ from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 import pyarrow as pa
 import pyarrow.parquet as pq
 from spicy_regs import congress_bulk, etl_bulk
-from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy, refusal_identities, input_policy
+from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy, refusal_identities, input_policy, has_unmatched_failures
 from spicy_regs.congress_subjects import map_record
 from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, _unpack,
     failure_receipt, observation_receipt, select_receipts, split_record, validate_receipt_bundle)
@@ -45,6 +45,7 @@ def write_congress_dataset(
     prior: CongressInput | None = None,
     bulk: bool = True,
     validate: bool = True,
+    on_fresh_failure: Callable[[], None] | None = None,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -52,6 +53,10 @@ def write_congress_dataset(
     conversion input; callers can additionally retain ordered native capture
     witnesses. The first witness never asserts that a shaped file is an original
     publisher response.
+
+    ``on_fresh_failure`` reports a fresh refused/error attempt before carry can
+    reuse its older receipt. The caller can retain the completed private bundle
+    while refusing its publication.
 
     A bulk-eligible dataset is written in one scan. Selected prior evidence is
     carried by ``receipt_history.carry_receipt_history``: an unchanged row keeps its prior receipt
@@ -67,7 +72,7 @@ def write_congress_dataset(
     if not bulk:
         from spicy_regs.congress_receipts import write_congress_dataset as row_writer
         return row_writer(source, directory, dataset=dataset, generation_id=generation_id,
-                          witnesses=witnesses, prior=prior, bulk=False, validate=validate)
+                          witnesses=witnesses, prior=prior, bulk=False, validate=validate, on_fresh_failure=on_fresh_failure)
     if directory.exists():
         raise FileExistsError(directory)
     selected = policy(dataset)
@@ -163,6 +168,8 @@ def write_congress_dataset(
                 finally:
                     if sw is not None:
                         sw.close()
+        if on_fresh_failure is not None and has_unmatched_failures(receipts):
+            on_fresh_failure()
         if prior_paths:
             carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
                                   refusal_identities=refusal_identities(dataset)).replace(receipts)

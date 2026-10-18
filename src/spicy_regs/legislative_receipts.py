@@ -303,6 +303,7 @@ def write_legislative_outputs(
             receipt_shards.append(receipts)
             manifest["outcome_subjects"][file_outcomes_table] = [f"{file_outcomes_table}.parquet"]
         combine_receipts(receipt_shards, stage / manifest["receipt_file"])
+        manifest["fresh_refused_rows"] = dict(manifest["refused_rows"])
         if prior_receipts:
             # Carry once over the complete dataset, including all partitions. A
             # shard cannot decide whether another shard resolved a prior refusal.
@@ -435,7 +436,7 @@ def restore_prior(bundle: Path, destination: Path, *, bulk: bool = True) -> dict
 
     bundle = Path(bundle)
     manifest = json.loads((bundle / "legislative-bundle.json").read_text())
-    if any(manifest["refused_rows"].values()):
+    if any(manifest.get("fresh_refused_rows", manifest["refused_rows"]).values()):
         raise ValueError("A bundle with conversion refusals cannot qualify an incremental prior")
     destination.mkdir(parents=True, exist_ok=False)
     generation = manifest["generation_id"]

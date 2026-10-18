@@ -69,6 +69,24 @@ def refusal_identities(dataset: str) -> dict[str, RefusalIdentity]:
     return {dataset: RefusalIdentity(keys, "source_fields")} if keys and set(keys) <= set(INPUT_COLUMNS[dataset]) else {}
 
 
+def has_unmatched_failures(receipts: Path, priors: Mapping[str, Sequence[Path]] | None = None) -> bool:
+    """A failed attempt is historical only when the selected prior retains its exact receipt id."""
+    from spicy_regs import etl_bulk
+
+    by_path: dict[Path, list[str]] = {}
+    for dataset, paths in (priors or {}).items():
+        for path in paths:
+            by_path.setdefault(path, []).append(dataset)
+    with etl_bulk.bulk_connection() as (con, _):
+        con.execute("CREATE TABLE historical_failures(receipt_id VARCHAR)")
+        for path, datasets in by_path.items():
+            con.execute("INSERT INTO historical_failures SELECT receipt_id FROM read_parquet(?) "
+                        "WHERE dataset=ANY(?) AND outcome IN ('refused','error')", [str(path), datasets])
+        return bool(con.execute("SELECT EXISTS(SELECT 1 FROM read_parquet(?) r WHERE outcome IN ('refused','error') "
+                                "AND NOT EXISTS(SELECT 1 FROM historical_failures p WHERE p.receipt_id=r.receipt_id))",
+                                [str(receipts)]).fetchone()[0])
+
+
 def input_policy(dataset: str, subjects: Path | tuple[Path, ...] | None) -> DatasetPolicy:
     """Admit only a current or explicitly retained historical subject schema."""
     selected = policy(dataset)
@@ -153,6 +171,7 @@ def write_congress_dataset(
     prior: CongressInput | None = None,
     bulk: bool = False,
     validate: bool = True,
+    on_fresh_failure: Callable[[], None] | None = None,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -160,13 +179,17 @@ def write_congress_dataset(
     conversion input; callers can additionally retain ordered native capture
     witnesses. The first witness never asserts that a shaped file is an original
     publisher response.
+
+    ``on_fresh_failure`` reports a fresh refused/error attempt before carry can
+    reuse its older receipt. The caller can retain the completed private bundle
+    while refusing its publication.
     """
     if bulk:
         if dataset not in INPUT_COLUMNS:
             raise ValueError("Batch Congress writing requires a declared Congress dataset")
         from spicy_regs.votes_batch_receipts import write_congress_dataset as write_votes
         return write_votes(source, directory, dataset=dataset, generation_id=generation_id,
-                           witnesses=witnesses, prior=prior, bulk=True, validate=validate)
+                           witnesses=witnesses, prior=prior, bulk=True, validate=validate, on_fresh_failure=on_fresh_failure)
 
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -260,6 +283,8 @@ def write_congress_dataset(
             finally:
                 if sw is not None:
                     sw.close()
+        if on_fresh_failure is not None and has_unmatched_failures(receipts):
+            on_fresh_failure()
         if prior_paths:
             # The same carry rule as the batch writer: unchanged rows keep their prior receipt, changed ones name it.
             carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
@@ -344,11 +369,13 @@ class CongressBuild:
     unclassified_outputs: tuple[Path, ...] = field(default=(), init=False)
     source_evidence: Any = field(default=None, init=False)
     completed: bool = field(default=False, init=False)
+    fresh_refusals: bool = field(default=False, init=False)
 
     def run(self, builder: Callable, output_dir: Path, **kwargs):
         import inspect
 
         self.completed = False
+        self.fresh_refusals = False
         if (
             not self.generation_id
             or self.generation_id in {".", ".."}
@@ -413,6 +440,7 @@ class CongressBuild:
                 generation_id=self.generation_id,
                 witnesses=self.witnesses,
                 prior=self.inputs.get(dataset),
+                on_fresh_failure=lambda: setattr(self, "fresh_refusals", True),
             )
             if subject is not None:
                 subjects.append(subject)
@@ -451,7 +479,7 @@ class CongressBuild:
             raise ValueError("Complete family awaits policies and receipts for sibling outputs")
         if not self.completed or self.receipt_path is None:
             raise ValueError("No completed Congress build to admit")
-        if any(r["outcome"] == "refused" for r in _rows(self.receipt_path)):
+        if self.fresh_refusals or has_unmatched_failures(self.receipt_path, {name: [held.receipts] for name, held in self.inputs.items()}):
             raise ValueError("Conversion refusals require review before complete generation admission")
         return build_generation(
             directory,

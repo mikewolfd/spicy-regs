@@ -158,3 +158,16 @@ def test_votes_rollup_admits_each_pair_once_and_carries(tmp_path, monkeypatch):
     restored = SelectedPriors(tmp_path / "third").get("member_votes")
     assert pq.read_table(restored).to_pylist() == pq.read_table(
         next(second_dir.glob(".builds/*/source-output/member_votes.parquet"))).to_pylist()
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+def test_fresh_refusal_is_reported_before_carry_can_reuse_old_receipt(tmp_path, bulk):
+    rows = [{"vote_id": None, "member_key": "k"}]
+    _, subject, receipts = _night(tmp_path, "member_votes", "prior", rows, bulk=bulk)
+    failures = []
+    _, _, current = _night(tmp_path, "member_votes", "next", rows, bulk=bulk,
+                           prior=CongressInput(subject, receipts, "prior"),
+                           on_fresh_failure=lambda: failures.append("refused"))
+    assert failures == ["refused"]
+    previous = next(r for r in pq.read_table(receipts).to_pylist() if r["outcome"] == "refused")
+    assert previous in pq.read_table(current).to_pylist()

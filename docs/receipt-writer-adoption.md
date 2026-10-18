@@ -36,7 +36,8 @@ reader and refusal-preservation checks.
 Legislative carry runs after combining every partition. It preserves unresolved
 refusals and resolves one only when a current accepted row supplies the same
 declared key or explicitly mapped raw key. The manifest still reports remaining
-refusals, so they cannot silently become a qualified prior. Changed processing
+refusals. Fresh refusals block candidate publication; exact historical refusals
+remain readable so a later successful input can resolve them. Changed processing
 creates a fresh receipt even when the native subject remains unchanged.
 
 Scheduled Congress and legislative writers leave admission to the finished

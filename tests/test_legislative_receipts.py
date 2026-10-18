@@ -420,8 +420,15 @@ def test_carry_resolves_refusals_across_partitions_and_preserves_unmatched(tmp_p
     unresolved = next(r for r in before if decode_exact_json(r["processing_json"])[RAW]["package_id"] == "Y")
     assert [r for r in after if r["outcome"] == "refused"] == [unresolved]
     assert manifest["refused_rows"] == {"budget_volumes": 1}
-    with pytest.raises(ValueError, match="conversion refusals"):
-        restore_prior(tmp_path / "two", tmp_path / "restored")
+    assert manifest["fresh_refused_rows"] == {"budget_volumes": 0}
+    restored = restore_prior(tmp_path / "two", tmp_path / "restored")
+    assert sum(pq.read_metadata(p).num_rows for p in restored["budget_volumes"].rglob("*.parquet")) == 2
+    third = retained(tmp_path / "third-source", "budget_volumes", [unchanged, bad_x | {"associated_bills_json": "[]"},
+                                                                  bad_y | {"associated_bills_json": "[]"}])
+    resolved = write_legislative_outputs([third], tmp_path / "three", generation_id="three",
+                                         prior_receipts=[tmp_path / "two/etl_receipts.parquet"])
+    assert resolved["refused_rows"] == resolved["fresh_refused_rows"] == {"budget_volumes": 0}
+    restore_prior(tmp_path / "three", tmp_path / "restored-three")
 
 
 def test_processing_change_with_unchanged_subject_receives_fresh_evidence(tmp_path):
