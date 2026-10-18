@@ -28,8 +28,9 @@ semantics: it reuses exact unchanged occurrences and gives changed accepted rows
 only a direct predecessor reference, without copying earlier witnesses or
 processing values. `write_dataset(prior_receipts=...)` exposes this helper to
 explicit callers. Replacing another family's history path with it needs the owner's
-decision for that family (government, congress and legislative are decided; regulatory
-and courts are not).
+decision for that family. The owner approved the rule for government, congress,
+legislative, regulatory and court receipts; the family changes land separately after
+reader and refusal-preservation checks.
 
 Boundary checks are in `tests/test_etl_receipts.py`,
 `tests/test_receipt_history.py`, `tests/test_regulatory_base_bulk.py`,

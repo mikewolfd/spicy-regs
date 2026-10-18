@@ -192,12 +192,14 @@ def carry_receipt_history(
         # was ~543 B/row; it is private disk, so keep it small. Candidate keys are checked against the raw values below.
         # Kept receipts are not decoded, so check the one embedded history that can be wrong: payloads that older
         # inheritance retained by digest. Only such legacy receipts mention it; a carried receipt never does.
-        for (text,) in con.execute(
+        histories = con.execute(
             "SELECT diagnostic_json FROM prior WHERE contains(diagnostic_json,'retained_processing')"
-        ).fetchall():
-            retained = decode_exact_json(text).get("retained_processing", {})
-            if any(_digest(value) != key for key, value in retained.items()):
-                raise ValueError("Retained processing digest differs")
+        ).to_arrow_reader(batch_size=2000)
+        for batch in histories:
+            for text in batch.column(0).to_pylist():
+                retained = decode_exact_json(text).get("retained_processing", {})
+                if not isinstance(retained, dict) or any(_digest(value) != key for key, value in retained.items()):
+                    raise ValueError("Retained processing digest differs")
         for name in ("current", "prior"):
             con.execute(
                 f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
