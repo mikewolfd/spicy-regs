@@ -19,6 +19,7 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-roll-call-votes
+      require_bulk: true
       timeout_minutes: 60
       free_disk: true
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
@@ -35,5 +36,6 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-member-vote-terms
+      require_bulk: true
       free_disk: true
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}

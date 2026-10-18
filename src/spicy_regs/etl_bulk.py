@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from contextvars import ContextVar
 from hashlib import sha256
 from itertools import batched
+from os import getenv
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
@@ -132,9 +133,16 @@ def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
 
 
 def reference_fallback(error: NotBulkEligible, route: str = "admission") -> None:
-    """Refuse a reference route when the caller has ruled out its capacity (``bulk_limits(require_bulk=True)``)."""
+    """Refuse a mapped route's wholesale fallback when its caller or runner requires bulk work.
+
+    The environment applies in worker threads and subprocesses too. It does not
+    change resource limits, unmapped eligibility, or sparse row decisions inside a bulk route.
+    """
+    required = getenv("SPICY_REGS_REQUIRE_BULK", "false")
+    if required not in {"true", "false"}:
+        raise ValueError("SPICY_REGS_REQUIRE_BULK must be 'true' or 'false'; reference fallback disabled") from error
     limits = _limits.get()
-    if limits is not None and limits.require_bulk:
+    if required == "true" or (limits is not None and limits.require_bulk):
         raise ValueError(f"Required bulk {route} failed; reference fallback disabled: {error}") from error
 
 

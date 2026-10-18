@@ -169,6 +169,7 @@ jobs:
           FULL_REFRESH: ${{ inputs.full_refresh }}
           ALLOW_FRESH_START: ${{ inputs.allow_fresh_start }}
           SKIP_UPLOAD: ${{ needs.setup.outputs.skip_upload }}
+          SPICY_REGS_REQUIRE_BULK: 'true'
         run: |
           set -euo pipefail
           if [ -n "$AGENCY" ] && ! printf '%s' "$AGENCY" | grep -Eq '^[A-Za-z0-9_-]+$'; then

@@ -84,6 +84,7 @@ jobs:
     secrets: inherit
     with:
       command: ${{ matrix.command }}
+      require_bulk: true
       skip_upload: ${{ inputs.skip_upload }}
       timeout_minutes: 30
   mirror:
