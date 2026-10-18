@@ -13,25 +13,27 @@ generation and processing evidence. `resolve_receipt_witness` resolves earlier
 `receipt.values.*` and `receipt-processing:` references through that retained
 history. Repeated carries keep processing payloads flat and deduplicated.
 
-Court, government, FEC identity, regulatory and scorecard writers
-retain their maintained history paths. The bounded regulatory path uses
-`current_receipt_history.inherit_current_receipts` where its input shape
-allows it; that helper calls the maintained `inherit_receipt`. The congress row
-writer (`congress_receipts.write_congress_dataset`), the batch Congress
-writer (`votes_batch_receipts`) and `legislative_receipts.write_legislative_outputs`
-carry with `receipt_history.carry_receipt_history`
-(owner decision 2026-10-17, bulk receipt writer plan): receipt size stays flat across nights, and
-`coverage_reader.current_receipts` accepts the carried receipts' earlier generations. Regulatory
-correction retains both the prior and fresh receipt inputs, in that order.
+`receipt_history.carry_receipt_history` reuses exact unchanged occurrences and
+gives changed accepted rows a direct predecessor reference, without copying
+earlier witnesses or processing values. `write_dataset(prior_receipts=...)`
+exposes it to explicit callers. Following the owner's 2026-10-17 bulk receipt
+writer decision, carry is active in these maintained paths:
 
-The `receipt_history.carry_receipt_history` helper has different
-semantics: it reuses exact unchanged occurrences and gives changed accepted rows
-only a direct predecessor reference, without copying earlier witnesses or
-processing values. `write_dataset(prior_receipts=...)` exposes this helper to
-explicit callers. Replacing another family's history path with it needs the owner's
-decision for that family. The owner approved the rule for government, congress,
-legislative, regulatory and court receipts; the family changes land separately after
-reader and refusal-preservation checks.
+- Government output migration (`transforms/government_receipts.migrate_outputs`),
+  including lobbying's native prior merge.
+- Court row and batch writers (`court_receipts`).
+- The Congress row writer (`congress_receipts.write_congress_dataset`), batch
+  writer (`votes_batch_receipts`) and `legislative_receipts.write_legislative_outputs`.
+- Regulatory row and bulk writers for `transforms/regulations_receipts.CARRY_DATASETS`:
+  `dockets`, `documents`, `comment_attributes`, `docket_attributes` and
+  `document_attributes`. This does not include the `comments` dataset.
+
+These paths retain unchanged receipts' original generation identities;
+`coverage_reader.current_receipts` accepts them in the newly admitted selection.
+FEC identity, scorecard and regulatory datasets outside `CARRY_DATASETS` keep
+their existing history behavior. Regulatory correction retains both prior and
+fresh receipt inputs, in that order. This caller list does not activate carry
+for another dataset or change the Comments rules below.
 
 Legislative carry runs after combining every partition. It preserves unresolved
 refusals and resolves one only when a current accepted row supplies the same
@@ -119,7 +121,8 @@ continues to refer to original receipt ordinals.
 This mapping was checked against merged source
 `fd4e80437722c63887c2dfb36c0d7336e4d78542` from
 [#60](https://github.com/mikewolfd/spicy-regs/pull/60). It describes disposition
-of the earlier proposals, not approval to activate the deferred policies.
+of the earlier proposals before the carry activation described above, not the
+current caller list or approval to activate the remaining deferred policies.
 
 | Earlier draft | Included replacement | Unique proposal disposition |
 | --- | --- | --- |
