@@ -523,6 +523,48 @@ def test_success_resolves_declared_identity_only_in_its_dataset(tmp_path, policy
     assert pq.read_table(result).to_pylist() == [*pq.read_table(current).to_pylist(), other]
 
 
+@pytest.mark.parametrize("declared", [True, False], ids=["declared", "raw"])
+@pytest.mark.parametrize("fresh_outcome", ["unrelated", "refused", "accepted"])
+def test_held_acceptance_requires_a_matching_fresh_success(tmp_path, policy, context, declared, fresh_outcome):
+    key = {"id": "1", "sub": None}
+    held = split_record(policy, key | {"text": "held", "raw": key}, context)[1]
+    refused = failure_receipt(policy, context, outcome="refused", raw_fields={"raw": key | {"text": "bad"}},
+                              identity=key if declared else None)
+    fresh_context = replace(context, generation_id="fresh", attempt_id="download")
+    fresh_key = key | {"id": "2"} if fresh_outcome == "unrelated" else key
+    fresh = (failure_receipt(policy, fresh_context, outcome="refused", raw_fields={"raw": fresh_key},
+                             identity=fresh_key)
+             if fresh_outcome == "refused" else
+             split_record(policy, fresh_key | {"text": "fresh", "raw": fresh_key}, fresh_context)[1])
+    current = write(tmp_path / "current.parquet", [held])
+    prior = write(tmp_path / "prior.parquet", [held, refused])
+    resolutions = write(tmp_path / "fresh.parquet", [fresh])
+    before = {path: path.read_bytes() for path in (current, prior, resolutions)}
+    result = carry_receipt_history(
+        current, [prior], tmp_path / "result.parquet", resolution_receipts=resolutions,
+        refusal_identities={} if declared else {"example": RefusalIdentity(("id", "sub"), "raw")})
+    assert pq.read_table(result).to_pylist() == ([held] if fresh_outcome == "accepted" else [held, refused])
+    assert all(path.read_bytes() == contents for path, contents in before.items())
+
+
+@pytest.mark.parametrize("declared", [True, False], ids=["declared", "raw"])
+@pytest.mark.parametrize("output_outcome", ["absent", "refused"])
+def test_fresh_success_must_also_be_accepted_in_output(tmp_path, policy, context, declared, output_outcome):
+    key = {"id": "1", "sub": None}
+    refused = failure_receipt(policy, context, outcome="refused", raw_fields={"raw": key},
+                              identity=key if declared else None)
+    fresh_context = replace(context, generation_id="fresh", attempt_id="download")
+    fresh = split_record(policy, key | {"text": "fresh", "raw": key}, fresh_context)[1]
+    current = ([] if output_outcome == "absent" else
+               [failure_receipt(policy, fresh_context, outcome="refused", raw_fields={"raw": key | {"retry": True}},
+                                identity=key)])
+    result = carry_receipt_history(
+        write(tmp_path / "current.parquet", current), [write(tmp_path / "prior.parquet", [refused])],
+        tmp_path / "result.parquet", resolution_receipts=write(tmp_path / "fresh.parquet", [fresh]),
+        refusal_identities={} if declared else {"example": RefusalIdentity(("id", "sub"), "raw")})
+    assert pq.read_table(result).to_pylist() == [*current, refused]
+
+
 @pytest.mark.parametrize("raw", [
     None, "unknown", ["1"],
     {"id": "1", "sub": None},

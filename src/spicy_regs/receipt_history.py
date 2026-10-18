@@ -83,7 +83,7 @@ def _raw_identity_sql(column: str, raw_field: str, fields: tuple[str, ...]) -> s
             f"THEN CAST(to_json(list_value({', '.join(values)})) AS VARCHAR) END")
 
 
-def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
+def _pending_refusals(con, identities: Mapping[str, RefusalIdentity], *, current_source: str = "current") -> None:
     """Keep unmatched prior refusals unless a current accepted input proves resolution.
 
     Matching operates only on narrow natural keys. No raw identity is guessed:
@@ -96,7 +96,8 @@ def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
         return
     for name, condition in (("prior", "ordinal IN (SELECT ordinal FROM pending_refusals)"),
                             ("current", "outcome='accepted'")):
-        parts: list[str] = [f"SELECT ordinal,dataset,'declared' AS kind,identity_json AS value FROM {name} "
+        source = current_source if name == "current" else name
+        parts: list[str] = [f"SELECT ordinal,dataset,'declared' AS kind,identity_json AS value FROM {source} "
                            f"WHERE {condition} AND record_id IS NOT NULL AND identity_json IS NOT NULL"]
         derived_functions = []
         for index, (dataset, identity) in enumerate(identities.items()):
@@ -126,7 +127,7 @@ def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
             else:
                 key = _raw_identity_sql("processing_json", raw_field, identity.fields)
             dataset_sql = "'" + dataset.replace("'", "''") + "'"
-            parts.append(f"SELECT ordinal,dataset,'raw' AS kind,{key} AS value FROM {name} "
+            parts.append(f"SELECT ordinal,dataset,'raw' AS kind,{key} AS value FROM {source} "
                          f"WHERE {condition} AND dataset={dataset_sql}")
         try:
             con.execute(f"CREATE TABLE {name}_resolution_keys AS " + " UNION ALL ".join(parts))
@@ -175,14 +176,18 @@ def _take_prior_rows(priors, file_ends, group_ends, ordinals, schema):
 def carry_receipt_history(
     current_path: Path, prior_paths: Sequence[Path], destination: Path, *,
     refusal_identities: Mapping[str, RefusalIdentity] | None = None,
+    resolution_receipts: Path | None = None,
 ) -> Path:
     """Keep identical attempts exactly; reference only the direct accepted predecessor on change.
 
-    Inputs are fresh current receipts and an already validated selected prior bundle.
+    Inputs are candidate current receipts and an already validated selected prior bundle.
     Unmatched old accepted rows and observations disappear. Unresolved prior
     refusals follow current receipts unchanged, in prior occurrence order.
     A current accepted receipt resolves a refusal with the same declared identity,
     or the exact raw natural key explicitly supplied in ``refusal_identities``.
+    With ``resolution_receipts``, that current row's (dataset, record_id) must also
+    be accepted in this already-admitted fresh receipt file. Use it when current
+    includes unchanged held rows; those alone cannot prove a fresh success.
     Missing or changed key spellings remain unresolved. Duplicate nonaccepted
     occurrences match FIFO, so repeated refusals do not accumulate copies.
     Narrow matching keys spill to private disk. Full prior rows are gathered by
@@ -282,7 +287,16 @@ def carry_receipt_history(
             AND predecessor.outcome='accepted'""")
         for name in ("current_ranked", "prior_ranked"):
             con.execute(f"DROP TABLE {name}")
-        _pending_refusals(con, refusal_identities or {})
+        resolution_source = "current"
+        if resolution_receipts is not None:
+            # Read only fresh acceptance keys. A semijoin does not duplicate current rows or copy their payloads.
+            con.execute(
+                "CREATE VIEW resolving_current AS SELECT c.* FROM current c SEMI JOIN "
+                f"read_parquet({quoted(resolution_receipts)}, hive_partitioning=false) fresh "
+                "ON c.dataset=fresh.dataset AND c.record_id=fresh.record_id AND fresh.outcome='accepted'"
+            )
+            resolution_source = "resolving_current"
+        _pending_refusals(con, refusal_identities or {}, current_source=resolution_source)
         # Only ordinals are sorted. Joining/sorting literal JSON and full rows
         # can exhaust the connection's memory even with spilling enabled.
         reader = con.execute("SELECT * FROM matches ORDER BY current_ordinal").to_arrow_reader(batch_size=2000)
