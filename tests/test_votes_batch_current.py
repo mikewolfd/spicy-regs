@@ -5,6 +5,7 @@ import sys
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+from decimal import Decimal
 import pytest
 
 from spicy_regs import congress_bulk
@@ -314,8 +315,8 @@ def test_unproven_bundle_dispatch_uses_exact_row_validator(tmp_path, monkeypatch
     from spicy_regs import votes_batch_receipts as congress_receipts, etl_bulk
     from spicy_regs.etl_receipts import DatasetPolicy, write_dataset
 
-    selected = DatasetPolicy("float_test", pa.schema([("id", pa.string()), ("n", pa.float64())]), ("id",), ())
-    subject, receipts = write_dataset([({"id": "one", "n": 1.5}, ReceiptContext(GENERATION, "a", "p", [WITNESS]))],
+    selected = DatasetPolicy("wide_test", pa.schema([("id", pa.string()), ("n", pa.decimal128(12, 8))]), ("id",), ())
+    subject, receipts = write_dataset([({"id": "one", "n": Decimal("1.50000000")}, ReceiptContext(GENERATION, "a", "p", [WITNESS]))],
                                       tmp_path / "bundle", selected)
     assert subject is not None
     calls, real = [], congress_receipts.validate_receipt_bundle

@@ -18,13 +18,8 @@ from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.current_receipt_history import inherit_current_receipts
 
 def _admit(subjects, receipts, policies, *, generation_id, bulk=True):
-    """Use bulk proof where eligible; the exact row validator decides every fallback."""
-    if bulk:
-        try:
-            return etl_bulk.validate_bundle(subjects, receipts, policies, generation_id=generation_id)
-        except etl_bulk.NotBulkEligible:
-            pass
-    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id, bulk=False)
+    """Bulk proof where it decides; a row fallback is logged (and refused where bulk is required)."""
+    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id, bulk=bulk)
 
 def congress_attempt(dataset: str, raw: Mapping, context: ReceiptContext) -> tuple[dict | None, dict]:
     """The reference attempt for one raw Congress row, shared with qualification."""

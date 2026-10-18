@@ -62,6 +62,9 @@ _MEMBER = r'\["([^"\\\x00-\x1f]*)",\x01\]'
 _DEPTH = 8
 #: ``ReceiptContext``'s rule for a witness digest.
 _WITNESS_SHA256 = r"(?:sha256:)?[0-9a-f]{64}"
+#: What :func:`exact_json_sql` spells for a value it does not own. It holds an upper-case hex control escape, which
+#: :func:`needs_reference_sql` matches, so a writer or validator that checks its encoded subject routes the row.
+_ROUTE = '["route","\\u001B"]'
 _BATCH = 2_000
 #: Target logical Arrow bytes per opt-in INSERT; one larger row stays intact.
 _INSERT_BYTES = 16 * 1024 * 1024
@@ -122,18 +125,22 @@ def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
         raise NotBulkEligible(f"{what} does not fit its schema; the row reader decides") from error
 
 
-def log_row_fallback(route: str, error: NotBulkEligible, *, dataset: str) -> None:
-    """Warn that a bulk route handed ``dataset``'s work to the (slow) row path, and why."""
-    from loguru import logger
-
-    logger.warning("{} route=row dataset={} reason={}", route, dataset, error)
-
-
-def reference_fallback(error: NotBulkEligible) -> None:
-    """Refuse a reference index when the caller has ruled out its capacity."""
+def reference_fallback(error: NotBulkEligible, route: str = "admission") -> None:
+    """Refuse a reference route when the caller has ruled out its capacity (``bulk_limits(require_bulk=True)``)."""
     limits = _limits.get()
     if limits is not None and limits.require_bulk:
-        raise ValueError(f"Required bulk admission failed; reference fallback disabled: {error}") from error
+        raise ValueError(f"Required bulk {route} failed; reference fallback disabled: {error}") from error
+
+
+def log_row_fallback(route: str, error: NotBulkEligible, *, dataset: str, rows: int | None = None) -> None:
+    """A bulk route handed ``dataset``'s work to the (slow) row path: refuse it where bulk is required, else warn.
+
+    Every such route is visible: a bundle that silently validated by row held 15.9M lobbying rows at 2.8k rows/s.
+    """
+    reference_fallback(error, route)
+    from loguru import logger
+
+    logger.warning("{} route=row dataset={}{} reason={}", route, dataset, "" if rows is None else f" rows={rows}", error)
 
 
 @dataclass(frozen=True)
@@ -259,6 +266,8 @@ def bulk_connection(directory: Path | None = None, *, threads: int = 4, memory_l
             "threads": threads, "memory_limit": memory_limit, "max_temp_directory_size": "32GB",
             "temp_directory": str(root / "spill"),
         })) as con, bounded_connection(con):
+            # Timestamp spellings and parses must not depend on the host's zone.
+            con.execute("SET TimeZone = 'UTC'")
             yield con, root
 
 
@@ -279,8 +288,11 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     """SQL text equal to ``exact_json`` of ``expression``'s value: the tagged encoding with keys in sorted order.
 
     Covers strings, integers, booleans, date32 in Python's date range, fixed-point decimal128 scales 0 through 6,
-    and structs and lists of them whose DuckDB text equals Python's.
-    Any other type refuses, so its table stays with the row writer until a test here proves its spelling.
+    timestamp[us, UTC] in years 1000 through 9998, finite normal float32/float64 (zero included), and structs and
+    lists of them whose DuckDB text equals Python's. A value this spells only as :data:`_ROUTE` (a timestamp outside
+    those years, a subnormal, infinite or NaN float) matches :func:`needs_reference_sql`, so its row goes to the row
+    functions, which decide it. Any other type refuses, so its table stays with the row writer until a test here proves
+    its spelling.
     """
     if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
         body = f"'[\"str\",' || CAST(to_json({expression}) AS VARCHAR) || ']'"
@@ -306,6 +318,16 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
         # '.0' in DuckDB while Arrow's Decimal spells it '0.0'.
         text = f"CAST(CAST({expression} AS DECIMAL(38,{dtype.scale})) AS VARCHAR)"
         body = f"'[\"decimal\",' || CAST(to_json({text}) AS VARCHAR) || ']'"
+    elif pa.types.is_timestamp(dtype) and dtype.unit == "us" and dtype.tz == "UTC":
+        # ``datetime.isoformat()``: seconds always, microseconds only when nonzero, then the offset. Years outside
+        # 1000-9998 are left to the row functions (``%Y`` is not four digits there, and Python's range ends at 9999).
+        utc = f"timezone('UTC', {expression})"
+        text = (f"strftime({utc}, '%Y-%m-%dT%H:%M:%S') || CASE WHEN strftime({utc}, '%f') = '000000' THEN '' "
+                f"ELSE '.' || strftime({utc}, '%f') END || '+00:00'")
+        body = (f"CASE WHEN isfinite({expression}) AND year({utc}) BETWEEN 1000 AND 9998 "
+                f"THEN '[\"datetime\",' || CAST(to_json({text}) AS VARCHAR) || ']' ELSE {_literal(_ROUTE)} END")
+    elif pa.types.is_float64(dtype) or pa.types.is_float32(dtype):
+        body = _float_sql(expression)
     elif pa.types.is_struct(dtype):
         body = record_json_sql(((field.name, field.type) for field in dtype), qualifier=expression + ".")
     elif pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
@@ -314,6 +336,32 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     else:
         raise NotImplementedError(f"No proven SQL spelling for {dtype}")
     return f"CASE WHEN {expression} IS NULL THEN '[\"null\",null]' ELSE {body} END"
+
+
+def _float_sql(expression: str) -> str:
+    """``["float", float.hex()]`` for a finite double, from its binary exponent and 52-bit mantissa.
+
+    ``log2`` may be off by one at a power of two, so the exponent is corrected against exact powers of two. A
+    subnormal, infinite or NaN value is :data:`_ROUTE`: ``_pack`` refuses the last two and the first is not worth a
+    spelling.
+    """
+    v = f"CAST({expression} AS DOUBLE)"
+    normal = "(isfinite(_v) AND abs(_v) >= 2.2250738585072014e-308)"
+    sign = "CASE WHEN starts_with(CAST(_v AS VARCHAR), '-') THEN '-' ELSE '' END"
+    significand = (
+        "lpad(lower(to_hex(CAST((_a / pow(2.0, _e) - 1.0) * 4503599627370496.0 AS BIGINT))), 13, '0')"
+    )
+    exponent = "CASE WHEN _e >= 0 THEN '+' ELSE '-' END || CAST(abs(_e) AS VARCHAR)"
+    spelled = (
+        f"list_transform([CASE WHEN {normal} THEN abs(_v) ELSE 1.0 END], _a -> "
+        f"list_transform([CAST(floor(log2(_a)) AS INTEGER)], _g -> "
+        "list_transform([CASE WHEN _a < pow(2.0, _g) THEN _g - 1 WHEN _a >= pow(2.0, _g + 1) THEN _g + 1 ELSE _g END], "
+        f"_e -> {sign} || '0x1.' || {significand} || 'p' || {exponent})[1])[1])[1]"
+    )
+    return (
+        f"list_transform([{v}], _v -> CASE WHEN _v = 0 THEN '[\"float\",\"' || {sign} || '0x0.0p+0\"]' "
+        f"WHEN {normal} THEN '[\"float\",\"' || {spelled} || '\"]' ELSE {_literal(_ROUTE)} END)[1]"
+    )
 
 
 def _concat_sql(parts: list[str]) -> str:

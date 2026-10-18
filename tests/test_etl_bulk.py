@@ -80,8 +80,8 @@ def test_nested_values_integers_and_nulls() -> None:
 
 
 def test_an_unproven_type_refuses() -> None:
-    with pytest.raises(NotImplementedError, match="double"):
-        etl_bulk.exact_json_sql('"v"', pa.float64())
+    with pytest.raises(NotImplementedError, match="decimal128"):
+        etl_bulk.exact_json_sql('"v"', pa.decimal128(12, 8))
 
 
 @pytest.mark.parametrize(("precision", "scale"), [(precision, scale) for precision in (1, 9, 18, 38)
