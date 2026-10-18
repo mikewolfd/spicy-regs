@@ -1,0 +1,11 @@
+{
+  "filename": "spicy_docs-0.66.3-py3-none-any.whl",
+  "version": "0.66.3",
+  "sha256": "6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96",
+  "byte_size": 2628622,
+  "source_commit": "0950db0a35742d07b075476b47f946d9931dba68",
+  "source_state": "Reviewed source commit for mikewolfd/spicy-docs PR14",
+  "build": "uv build --wheel --offline; one build from clean committed source",
+  "scope": "Optional CourtListener whole-search request/wait allocation and 429 Retry-After handling; incomplete traversal diagnostics preserve captured pages.",
+  "other_consumers": "Consumers without the optional allocation retain existing transport retry behavior."
+}

@@ -292,13 +292,16 @@ def test_source_failure_after_flush_preserves_output_and_original_error(
     assert not (tmp_path / f"_{kind}_new.parquet").exists()
 
 
-@pytest.mark.parametrize("failure", ["http", "count"])
+@pytest.mark.parametrize("failure", ["http", "count", "budget"])
 def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path, monkeypatch, failure):
     from spicy_regs.sources import courtlistener as source
+    from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
+    from spicy_regs.source_evidence import CaptureEvidence
 
     module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
     monkeypatch.setattr(module, "BATCH_ROWS", 1)
     monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
+    monkeypatch.setattr(source, "MIN_REQUEST_INTERVAL_SECONDS", 0)
     monkeypatch.delenv(source.API_TOKEN_ENV_VAR, raising=False)
     from spicy_regs.court_receipts import write_court_rows
     witness = dict(source_id='fixture', source_uri=None, sha256='sha256:' + 'a' * 64,
@@ -358,17 +361,27 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
         "CourtListenerOpinionSearchReader",
         lambda **kwargs: source.CourtListenerOpinionSearchReader(transport=transport, **kwargs),
     )
-    error_type, message = (
-        (httpx.HTTPStatusError, "HTTP 500") if failure == "http" else (ValueError, "declared count changed")
-    )
-    with pytest.raises(error_type, match=message):
-        module.build_court_opinion_clusters(tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True)
+    message = "declared count changed" if failure == "count" else "incomplete: deferred"
+    evidence = CaptureEvidence(tmp_path, 'court-opinion-clusters')
+    with pytest.raises(ValueError, match=message):
+        module.build_court_opinion_clusters(
+            tmp_path, local_file=dump, dump_date=DUMP_DATE, skip_court_scope=True,
+            search_through=3, evidence=evidence,
+            search_budget=CourtListenerTraversalBudget(1 if failure == "budget" else 50, 600),
+        )
 
-    assert len(requests) == 2
+    assert len(requests) == (1 if failure == "budget" else 2)
     assert requests[0].url.params["type"] == "o"
     # Every cluster created after the export's highest id, whatever its filing date.
-    assert requests[0].url.params["q"] == "cluster_id:[2 TO *]" and "filed_after" not in requests[0].url.params
-    assert str(requests[1].url) == next_url
+    assert requests[0].url.params["q"] == "cluster_id:[2 TO 3]" and "filed_after" not in requests[0].url.params
+    if failure != "budget":
+        assert str(requests[1].url) == next_url
+    assert any(b'"Search case"' in p.read_bytes() for p in (evidence.artifact_dir / 'blobs').rglob('*') if p.is_file())
+    events = [json.loads(line) for line in (evidence.artifact_dir / 'journal.jsonl').read_text().splitlines()]
+    refusal = next(event for event in events if event.get('stage') == 'courtlistener-traversal')
+    assert refusal['traversal']['nextUrl'] == next_url
+    if failure == 'budget':
+        assert refusal['allocation']['requestCount'] == 1
     assert [(row["cluster_id"], row["case_name"]) for row in written] == [("1", "Bulk case"), ("2", "Search case")]
     assert closed == [True]
     assert (prior.read_bytes(), output.read_bytes()) == before
@@ -428,7 +441,8 @@ def test_a_prior_holding_the_newest_export_is_only_caught_up(
     from spicy_regs.court_receipts import read_court_rows
     rows = {row["cluster_id"]: row for row in read_court_rows(out, dataset="court_opinion_clusters")}
     assert bool(exported) is reads_export
-    assert selections == [{"above": 8 if reads_export else 5}]
+    assert selections == [{"above": 8 if reads_export else 5, "through": None,
+                           "traversal_budget": None, "evidence": None}]
     assert sorted(rows) == (["5", "8", "9"] if reads_export else ["5", "9"])
     assert (rows["9"]["ingest_source"], rows["9"]["court_is_federal"]) == ("search", True)
     assert rows["5"]["ingest_source"] == "bulk"
