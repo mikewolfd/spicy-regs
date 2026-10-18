@@ -205,7 +205,8 @@ def write_family(
     for name, rows in tables.items():
         failures: list[dict] = list(attempt_failures) if name == "scorecard_snapshots" else []
         subject, receipt = write_dataset(
-            mapped_records(name, rows, failures), stage / name, POLICIES[name], failures=failures
+            mapped_records(name, rows, failures), stage / name, POLICIES[name], failures=failures,
+            validate=False,  # The complete private family is validated before final outputs are replaced.
         )
         receipts.append(receipt)
         if subject:

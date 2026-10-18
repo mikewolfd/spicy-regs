@@ -17,10 +17,24 @@ from tests.generation_fakes import Store
 from tests.test_scorecard_refresh import edition, tables, provider, evidence, run, combine
 
 
-def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tmp_path):
+def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tmp_path, monkeypatch):
+    from spicy_regs import etl_receipts
+    from spicy_regs.scorecards import etl
+
     before = tables(edition("2025"))
     directory = tmp_path / "candidate"
-    files = write_family(directory, before)
+    validations = []
+    validate = etl.validate_receipt_bundle
+
+    def validate_family(subjects, *args, **kwargs):
+        validations.append(set(subjects))
+        return validate(subjects, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(etl_receipts, "validate_receipt_bundle", lambda *a, **kw: pytest.fail("Repeated component check"))
+        patch.setattr(etl, "validate_receipt_bundle", validate_family)
+        files = write_family(directory, before)
+    assert validations == [set(before)]
     assert read_family(directory, SOURCE_NAMES) == before
     assert not list(directory.glob(".scorecard-etl-*"))
     assert (directory / "scorecard_snapshots.parquet").exists()
@@ -38,6 +52,32 @@ def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tm
     admitted = verify_generation(target)
     assert admitted.pin == artifact.pin
     assert admitted.root["spec"]["etlReceipts"]["rows"] == sum(map(len, before.values()))
+
+
+def test_corrupt_private_component_refuses_before_replacing_complete_family(tmp_path, monkeypatch):
+    from spicy_regs.scorecards import etl
+
+    directory = tmp_path / "candidate"
+    write_family(directory, tables(edition("2025")))
+    previous = {path.name: path.read_bytes() for path in directory.iterdir()}
+    write = etl.write_dataset
+
+    def corrupt_component(*args, **kwargs):
+        assert kwargs["validate"] is False
+        subject, receipt = write(*args, **kwargs)
+        if subject is not None and subject.name == "scorecards.parquet":
+            table = pq.read_table(subject)
+            rows = table.to_pylist()
+            rows[0]["title"] = "Changed after receipt creation"
+            pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), subject)
+        return subject, receipt
+
+    monkeypatch.setattr(etl, "write_dataset", corrupt_component)
+    with pytest.raises(ValueError, match="Missing, ambiguous or reused subject receipt: scorecards"):
+        write_family(directory, tables(edition("2026")))
+    assert {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()} == previous
+    retained = list(directory.glob(".scorecard-etl-*/etl_receipts.parquet"))
+    assert len(retained) == 1
 
 
 def test_exact_readback_visits_shuffled_rows_and_observed_snapshots_without_materializing(tmp_path, monkeypatch):
