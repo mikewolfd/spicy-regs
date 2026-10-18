@@ -179,3 +179,46 @@ def test_unmapped_eligibility_warns_with_count_while_mapped_fallback_still_refus
     finally:
         logger.remove(sink)
     assert any("dataset=small rows=17 reason=no bulk mapping" in message for message in messages)
+
+
+def test_subject_aliases_preserve_colliding_native_and_receipt_fields(tmp_path):
+    schema = pa.schema([("id", pa.string()), ("witnesses", pa.list_(pa.string()))])
+    source = _source(tmp_path, 6)
+    query = _query().replace("AS id,", "AS id, ['native-' || file_row_number] AS _subject_witnesses,")
+
+    def attempt(table, index, row):
+        return {"id": "row4", "witnesses": ["routed-native"]}, {
+            name: None for name in RECEIPT_SCHEMA.names
+        } | {"receipt_id": "row4", "outcome": "accepted", "witnesses": []}
+
+    with etl_bulk.bulk_connection() as (con, _):
+        routed = etl_bulk.write_split(
+            con, query, source=source, batch_rows=5, expected_rows=6,
+            subject_schema=schema, subject_columns=("id", "_subject_witnesses"),
+            subject_path=tmp_path / "s.parquet", receipt_path=tmp_path / "r.parquet",
+            row_attempt=attempt, label="aliased")
+    assert routed == 1
+    assert pq.read_schema(tmp_path / "s.parquet").equals(schema)
+    assert _ids(tmp_path / "s.parquet", "witnesses") == [
+        ["routed-native"] if i == 4 else [f"native-{i}"] for i in range(6)]
+    assert _ids(tmp_path / "r.parquet", "witnesses") == [[] for _ in range(6)]
+    assert _ids(tmp_path / "r.parquet", "receipt_id") == ["r0", "r1", "r2", "r3", "row4", "r5"]
+
+
+def test_routed_observations_keep_their_position_while_failures_follow_normal_rows(tmp_path):
+    source = _source(tmp_path, 4)
+    query = _query().replace("file_row_number % 5 = 4 AS _reference", "file_row_number IN (1, 2) AS _reference")
+
+    def attempt(table, index, row):
+        ordinal = int(row["v"])
+        return None, {name: None for name in RECEIPT_SCHEMA.names} | {
+            "receipt_id": f"row{ordinal}", "outcome": "observed" if ordinal == 1 else "refused", "witnesses": []}
+
+    with etl_bulk.bulk_connection() as (con, _):
+        assert etl_bulk.write_split(
+            con, query, source=source, batch_rows=4, expected_rows=4,
+            subject_schema=SUBJECT, subject_path=tmp_path / "s.parquet", receipt_path=tmp_path / "r.parquet",
+            row_attempt=attempt, label="observations", refusals_last=True) == 2
+    assert _ids(tmp_path / "s.parquet", "id") == ["0", "3"]
+    assert _ids(tmp_path / "r.parquet", "receipt_id") == ["r0", "row1", "r3", "row2"]
+    assert _ids(tmp_path / "r.parquet", "outcome") == ["accepted", "observed", "accepted", "refused"]
