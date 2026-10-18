@@ -160,7 +160,7 @@ def test_complete_bundle_read_preserves_exact_values_and_explicit_attempts(tmp_p
     assert counts == {name: len(values) for name, values in result.items()}
 
 
-@pytest.mark.parametrize("fault", ["late-subject", "orphan", "duplicate", "publisher", "receipt", "schema"])
+@pytest.mark.parametrize("fault", ["late-subject", "orphan", "duplicate", "identity", "publisher", "receipt", "schema"])
 def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, policy, context, row, fault):
     other = replace(policy, dataset="refunds")
     first, first_receipt = write_dataset([(row, context)], tmp_path / "payments", policy)
@@ -174,10 +174,14 @@ def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, polic
         pq.write_table(pa.Table.from_pylist([changed], schema=other.subject_schema), second)
     elif fault == "orphan":
         subjects["refunds"] = []
-    elif fault in {"duplicate", "receipt"}:
+    elif fault in {"duplicate", "identity", "receipt"}:
         receipts = pq.read_table(shared).to_pylist()
         if fault == "duplicate":
             receipts.append(receipts[-1])
+        elif fault == "identity":
+            duplicate = split_record(other, row, replace(context, attempt_id="other-attempt"))[1]
+            assert duplicate["receipt_id"] != receipts[-1]["receipt_id"]
+            receipts.append(duplicate)
         else:
             receipts[-1]["processor"] = "altered"
         pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), shared)
@@ -193,8 +197,10 @@ def test_complete_bundle_read_refuses_inconsistent_later_dataset(tmp_path, polic
     with pytest.raises(ValueError):
         visit_receipt_bundle(subjects, [shared], [policy, other], generation_id=selected_generation,
                              visit=lambda name, value: visited.append((name, value)))
-    if fault in {"late-subject", "orphan"}:
+    if fault in {"late-subject", "orphan", "schema"}:
         assert visited == [("payments", row)]  # Earlier visits are provisional; no counts return.
+    else:
+        assert visited == []  # Loading and uniqueness checks finish before the first visit.
 
 
 @pytest.mark.parametrize("outcomes", [{"missing": frozenset({"observed"})}, {"payments": frozenset({"accepted"})}, {"payments": frozenset({"unknown"})}])
@@ -219,6 +225,62 @@ def test_complete_bundle_read_checks_unselected_failed_receipts(tmp_path, policy
     with pytest.raises(ValueError, match="digest"):
         visit_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1",
                              visit=lambda *args: pytest.fail("Invalid receipts must refuse before visits"))
+
+
+@pytest.mark.parametrize("fault", ["digest", "schema"])
+@pytest.mark.parametrize("duplicate_first", [True, False])
+def test_receipt_load_preserves_first_refusal_before_visits(tmp_path, policy, context, row, fault, duplicate_first):
+    from spicy_regs.etl_receipts import visit_receipt_bundle
+
+    subject, receipt = write_dataset([(row, context)], tmp_path / "bundle", policy)
+    assert subject is not None
+    duplicate = combine_receipts([receipt, receipt], tmp_path / "duplicate.parquet")
+    damaged = tmp_path / "damaged.parquet"
+    table = pq.read_table(receipt)
+    if fault == "schema":
+        table = table.append_column("extra", pa.array(["x"]))
+    else:
+        rows = table.to_pylist()
+        rows[0]["processor"] = "altered"
+        table = pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA)
+    pq.write_table(table, damaged)
+    paths = [duplicate, damaged] if duplicate_first else [damaged, duplicate]
+    message = "Duplicate or ambiguous receipt join" if duplicate_first else fault
+    with pytest.raises(ValueError, match=message):
+        visit_receipt_bundle({"payments": [subject]}, paths, [policy], generation_id="build-1",
+                             visit=lambda *args: pytest.fail("Invalid receipts must refuse before visits"))
+    # The bulk validator preserves the row reader's first-error boundary too.
+    with pytest.raises(ValueError, match=message):
+        validate_receipt_bundle({"payments": [subject]}, paths, [policy], generation_id="build-1")
+
+
+def test_cancelled_receipt_load_does_not_build_indexes_or_visit(tmp_path, policy, context, row, monkeypatch):
+    from spicy_regs import etl_receipts as etl
+    from spicy_regs.runtime_bounds import RequestBound, checkpoint
+
+    subject, receipt = write_dataset([(row, context)], tmp_path / "bundle", policy)
+    assert subject is not None
+    bound = RequestBound(None, label="receipt load cancelled")
+    original_rows, original_connect = etl._rows, etl.sqlite3.connect
+    statements = []
+
+    def cancel_after_load(path):
+        yield from original_rows(path)
+        bound.cancel()
+        checkpoint()
+
+    def tracked_connection(*args, **kwargs):
+        connection = original_connect(*args, **kwargs)
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    monkeypatch.setattr(etl, "_rows", cancel_after_load)
+    monkeypatch.setattr(etl.sqlite3, "connect", tracked_connection)
+    with pytest.raises(TimeoutError, match="receipt load cancelled"), bound.scope():
+        etl.visit_receipt_bundle({"payments": [subject]}, [receipt], [policy], generation_id="build-1",
+                                 visit=lambda *args: pytest.fail("Cancelled receipts must not be visited"))
+    assert any(sql.startswith("INSERT INTO receipts") for sql in statements)
+    assert not any(sql.startswith("CREATE UNIQUE INDEX") for sql in statements)
 
 
 @pytest.mark.parametrize(
