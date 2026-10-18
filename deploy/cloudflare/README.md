@@ -76,28 +76,44 @@ FEC views disabled. Verify the returned release identities and refusal behavior
 against the running service before declaring delivery complete; see the
 [FEC release checks](../../docs/fec-delivery-plan.md#compatible-release-and-deployment-checkpoint).
 
-The manual **Build MCP reader image** Actions workflow builds this Dockerfile
-on a hosted runner. Supply the dispatched ref's full commit as
-`expected_source_sha`. Its artifact retains the image archive, source commit
-and tree, build log, installed runtime identity and archive checksum. The
-Dockerfile runs its native reader fixtures and locked package checks during
-the build. Download and load that same archive before pushing it to the
-registry; measure the registry digest before binding the release receipt.
-The workflow performs no publication or deployment. Actual prepared datasets
-and the running service still need their reader checks.
+For the next required consumer release, dispatch **Build and publish MCP reader
+image** (`build-mcp-image.yml`) with the ref's full commit as
+`expected_source_sha`. Configure the dedicated registry credential described in
+[fork setup](../fork-setup.md#mcp-image-registry-credential) first. A missing
+secret or account mismatch refuses before installation; registry authentication
+must succeed before Docker builds. The workflow uses the locked Wrangler CLI
+to obtain one temporary push/pull credential, then Docker publishes the same
+checked image to `registry.cloudflare.com/<ACCOUNT_ID>/spicy-regs-reader`.
+Temporary credentials stay outside the retained evidence and are removed at
+job completion. The 30-minute credential covers the job's 25-minute limit.
 
-For a new consumer release, build from the repository root with
-`docker build --platform linux/amd64 --provenance=false -f deploy/cloudflare/Dockerfile -t spicy-regs-fec:RELEASE_TAG .`,
-then push that tag using the project-local `wrangler containers push` from this
-directory. The build installs every runtime package at `uv.lock`'s version and
-fails if any differs; rerun that check inside the pushed image
-(`python /app/lock/lock_pins.py check /app/lock/uv.lock` exits 0 or names each
-package that differs) before you measure `runtime_consumer` there and construct
-the release receipt with the registry manifest digest. Publish and verify the receipt
-before updating all three configuration values: `containers[].image`,
-`SPICY_REGS_CONSUMER_IMAGE_DIGEST` and `SPICY_REGS_FEC_RELEASE_SHA256`.
-Deploying the existing configuration reuses its image even when local Python
-source has changed. Retain the prior image and Worker configuration for recovery.
+The Dockerfile runs native reader fixtures and locked package checks. The
+workflow also checks the installed packages and records `runtime_consumer`
+inside that image, then reads the pushed registry manifest by digest and
+requires its config digest to equal the checked image ID. The
+`mcp-reader-image-<COMMIT>` artifact retains source commit/tree, build-input
+checksums, build/push logs, image inspection, installed runtime identity and
+`registry-association.json`. That association binds the registry digest to the
+source, `uv.lock` and measured consumer. Keep this small artifact with the
+release evidence before its 14-day expiry. The normal route needs no image
+archive download or workstation relay; existing archives remain recovery
+evidence. See [Cloudflare image management](https://developers.cloudflare.com/containers/guides/image-management/#push-images-with-ci)
+and [Docker registry publication](https://docs.docker.com/reference/cli/docker/image/push/).
+
+Registry publication does not deploy the Worker or qualify a serving release.
+Use the successful association's immutable `registry_image` and `consumer` to
+construct the matching release receipt. Publish and verify that receipt before
+updating all three configuration values: `containers[].image`,
+`SPICY_REGS_CONSUMER_IMAGE_DIGEST` and `SPICY_REGS_FEC_RELEASE_SHA256`. Verify
+the actual provider image selection and bounded live MCP release checks after
+deployment. Prepared datasets still need their reader checks.
+
+Deploying existing configuration reuses its image even when local Python source
+has changed. Retain the prior registry digest, matching release receipt and
+Worker configuration/version. Roll back by selecting that compatible set and
+rechecking the running service; do not delete its registry image. If a workflow
+fails after pushing, inspect its retained push/manifest evidence before any
+retry. A failed or absent association is not an accepted image release.
 
 If a rollout leaves the native connection claiming to run while its port reports
 that the container is stopped, the Worker confirms that contradiction with a

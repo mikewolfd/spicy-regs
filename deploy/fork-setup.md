@@ -86,6 +86,27 @@ for the zone serving this bucket, using a token scoped to cache purge. This toke
 is separate from the local Wrangler login and deployment token. R2 development
 hostnames do not use a zone owned by this fork.
 
+## MCP image registry credential
+
+The manual reader-image workflow uses the dedicated repository secret
+`CLOUDFLARE_CONTAINER_REGISTRY_TOKEN`. Create an API token with the account
+**Containers Write** permission (shown as **Containers Edit** in some token
+interfaces), restricted to account `174055408ff1560e60601c4d12c561c4`. Cloudflare
+lists this under [account token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/#account-permissions).
+The workflow requests temporary `push` and `pull` credentials through the
+[registry credentials API](https://developers.cloudflare.com/api/resources/containers/subresources/registries/subresources/credentials/methods/generate/).
+It maps the dedicated secret to Wrangler's `CLOUDFLARE_API_TOKEN` only for that
+authentication step. Keep the existing zone cache-purge token unchanged.
+
+Set the dedicated secret through GitHub's secret UI or the secure input of
+`gh secret set CLOUDFLARE_CONTAINER_REGISTRY_TOKEN --repo mikewolfd/spicy-regs`.
+Keep `CLOUDFLARE_ACCOUNT_ID` equal to the account pinned in the Worker template.
+Do not copy a local OAuth login into GitHub. The token's presence alone does not
+prove registry access: the workflow's credential request and Docker login must
+succeed before the image build starts. Missing or insufficient credentials
+leave the required image build pending; no credential change or deployment is
+performed by this workflow. See the [image release procedure](cloudflare/README.md#qualified-fec-views).
+
 ## MCP hosting
 
 Export `SPICYREGS_DOMAIN=spicygov.ai` before running the Cloudflare npm commands.
