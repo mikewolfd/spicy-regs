@@ -121,8 +121,14 @@ def write_court_rows(
     generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
     diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
     attempt_prefix: str = "row", prior_receipts: Path | None = None,
+    resolution_receipts: Path | None = None,
 ) -> Path:
-    """Expose a complete subject/receipt pair only after validating both."""
+    """Expose a validated pair; optional fresh admission proves refusal resolution.
+
+    ``resolution_receipts`` does not append failures. It can therefore be supplied
+    separately when failed fresh inputs are already present in ``rows``.
+    Otherwise the admitted ``refused_receipts`` file supplies fresh success keys.
+    """
     policy = POLICIES[dataset]
     generation_id = generation_id or uuid4().hex
 
@@ -161,7 +167,8 @@ def write_court_rows(
                                                   validate=False)
         assert subject is not None
         if prior_receipts is not None:
-            _carry(dataset, receipt, prior_receipts, resolution_receipts=refused_receipts)
+            _carry(dataset, receipt, prior_receipts,
+                   resolution_receipts=resolution_receipts if resolution_receipts is not None else refused_receipts)
         validate_receipt_bundle({dataset: [subject]}, [receipt], [policy], generation_id=generation_id)
         return subject
 

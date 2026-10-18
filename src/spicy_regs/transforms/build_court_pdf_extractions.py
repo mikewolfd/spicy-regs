@@ -15,7 +15,7 @@ import pyarrow.parquet as pq
 from spicy_regs.generations import verify_generation
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 from spicy_regs.court_receipts import (
-    _pdf_failure, build_court_generation, read_court_rows, write_court_rows,
+    _pdf_failure, build_court_generation, local_receipt_selection, read_court_rows, write_court_rows,
 )
 from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.pdf_text import PdfTextResult, extract_pdf_text
@@ -195,11 +195,18 @@ def prepare_captured_opinions(
     witnesses = [{'source_id': str(opinion['opinion_id']), 'source_uri': capture.url,
                   'sha256': 'sha256:' + hashlib.sha256(capture.body).hexdigest(), 'locator': None,
                   'body_version': None} for opinion, capture in items]
+    resolution_receipts = None
+    if receipt_path is not None:
+        # Admit only this bounded fresh cohort. Held successes cannot resolve a
+        # prior failed update; fresh failures are already in the merged raw rows.
+        fresh = write_court_rows('court_opinion_pdf_extractions', rows, output / '.court-updates', witnesses=witnesses)
+        resolution_receipts, _ = local_receipt_selection(fresh)
     if prior_member is not None:
         witnesses.append({'source_id': KEY, 'source_uri': prior_member.path,
                           'sha256': prior_member.sha256, 'locator': None,
                           'body_version': read_snapshot['families'][FAMILY]['artifactDigest']})
-    path = write_court_rows('court_opinion_pdf_extractions', table.to_pylist(), output, witnesses=witnesses, prior_receipts=receipt_path)
+    path = write_court_rows('court_opinion_pdf_extractions', table.to_pylist(), output, witnesses=witnesses,
+                           prior_receipts=receipt_path, resolution_receipts=resolution_receipts)
     artifact = build_court_generation(output / 'generation', family=FAMILY, files=[path],
                                 read_snapshot=read_snapshot, inputs=evidence.inputs(),
                                 parents={'court_opinions.parquet': {
