@@ -152,16 +152,6 @@ def test_bulk_restore_equals_the_row_restore(tmp_path, monkeypatch, batch, datas
     assert refused > 2 and restored.num_rows == len(rows) - refused  # every row but the refused conversions
 
 
-def test_refresh_inherits_current_receipts_exactly_in_both_paths(tmp_path, monkeypatch) -> None:
-    source, _, (subject, receipts) = _both(tmp_path, monkeypatch, "member_votes", _member_votes(40))
-    prior = CongressInput(subject, receipts, GENERATION)
-    fresh = write_congress_dataset(source, tmp_path / "next", dataset="member_votes", generation_id="generation-2", prior=prior)
-    row = write_congress_dataset(source, tmp_path / "next-row", dataset="member_votes", generation_id="generation-2", prior=prior, bulk=False)
-    assert not pq.read_table(fresh[1]).equals(pq.read_table(receipts))
-    assert pq.read_table(fresh[1]).equals(pq.read_table(row[1]))
-
-
-
 def test_a_scan_cut_short_is_refused(tmp_path, monkeypatch) -> None:
     """A stream that ends early leaves a bundle consistent with itself; only the file's own count can tell."""
     source, (subject, receipts), _ = _both(tmp_path, monkeypatch, "member_votes", _member_votes(40))
@@ -392,34 +382,6 @@ def test_current_public_vote_route_refuses_other_dataset_before_output(tmp_path)
     assert not (tmp_path / 'absent-output').exists()
 
 
-@pytest.mark.parametrize('dataset,build', [('member_votes', _member_votes), ('member_vote_terms', _member_vote_terms)])
-def test_current_public_prior_history_matches_batch_after_changes(tmp_path, dataset, build):
-    from spicy_regs import congress_receipts as current
-    original = _source(tmp_path, dataset, build(35))
-    subject, receipts = current.write_congress_dataset(original, tmp_path/'prior-public', dataset=dataset,
-                                                       generation_id=GENERATION)
-    prior = CongressInput(subject, receipts, GENERATION)
-    table = pq.read_table(original)
-    values = table.to_pylist()
-    changed_field = 'position' if dataset == 'member_votes' else 'term_match'
-    values[0][changed_field] = 'Changed source value'
-    updated = tmp_path/'changed.parquet'
-    pq.write_table(pa.Table.from_pylist(values, schema=table.schema), updated)
-    assert pq.read_table(updated).to_pylist()[0][changed_field] == 'Changed source value'
-    row = current.write_congress_dataset(updated, tmp_path/'row-current-prior', dataset=dataset,
-                                         generation_id='next-current', prior=prior)
-    bulk = current.write_congress_dataset(updated, tmp_path/'batch-current-prior', dataset=dataset,
-                                          generation_id='next-current', prior=prior, bulk=True)
-    for expected, actual in zip(row, bulk):
-        assert expected is not None and actual is not None
-        assert pq.read_table(expected).equals(pq.read_table(actual), check_metadata=True)
-    old = {r['record_id']: r for r in pq.read_table(receipts).to_pylist() if r['outcome']=='accepted'}
-    inherited = [r for r in pq.read_table(bulk[1]).to_pylist() if r['outcome']=='accepted']
-    assert inherited and all(r['generation_id']=='next-current' for r in inherited)
-    assert all(r['receipt_id'] != old[r['record_id']]['receipt_id'] for r in inherited)
-    assert all('prior-etl-processing' in {v['source_id'] for v in r['witnesses']} for r in inherited)
-
-
 def test_roll_call_public_batch_fallback_matches_current_prior_and_restore(tmp_path):
     from spicy_regs import congress_receipts as current
     source = _source(tmp_path, 'roll_call_votes', [
@@ -441,40 +403,12 @@ def test_roll_call_public_batch_fallback_matches_current_prior_and_restore(tmp_p
                                               generation_id='next', prior=prior)
     batch_next = current.write_congress_dataset(source, tmp_path/'batch-roll-next', dataset='roll_call_votes',
                                                 generation_id='next', prior=prior, bulk=True)
-    for expected, actual in zip(row_next, batch_next):
-        assert expected is not None and actual is not None
-        assert pq.read_table(expected).equals(pq.read_table(actual), check_metadata=True)
+    # The row writer re-inherits every row; the batch writer carries an unchanged source's prior receipts verbatim.
+    assert pq.read_table(row_next[0]).equals(pq.read_table(batch_next[0]), check_metadata=True)
+    assert pq.read_table(batch_next[1]).to_pylist() == pq.read_table(row[1]).to_pylist()
     restored = []
     for name, enabled in [('row', False), ('batch', True)]:
         path = current.restore_processing_input(batch_next[0], batch_next[1], tmp_path/(name+'-roll-restore.parquet'),
                                                  dataset='roll_call_votes', generation_id='next', bulk=enabled)
         restored.append(pq.read_table(path))
     assert restored[0].equals(restored[1], check_metadata=True)
-
-
-def test_malformed_prior_payload_uses_current_subject_refusal(tmp_path):
-    from spicy_regs import congress_receipts as current
-    from spicy_regs.etl_receipts import _digest, decode_exact_json
-    source = _source(tmp_path, 'member_votes', _member_votes(6))
-    subject, receipts = current.write_congress_dataset(source, tmp_path/'prior-with-bad-history',
-                                                      dataset='member_votes', generation_id=GENERATION)
-    values = pq.read_table(receipts).to_pylist()
-    broken = next(row for row in values if row['outcome']=='accepted')
-    diagnostic = decode_exact_json(broken['diagnostic_json'])
-    diagnostic['retained_processing'] = {'sha256:'+'0'*64: {'unverifiable': 'payload'}}
-    broken['diagnostic_json'] = exact_json(diagnostic)
-    broken['receipt_id'] = _digest({key: value for key, value in broken.items() if key != 'receipt_id'})
-    pq.write_table(pa.Table.from_pylist(values, schema=RECEIPT_SCHEMA), receipts)
-    prior = CongressInput(subject, receipts, GENERATION)
-    row = current.write_congress_dataset(source, tmp_path/'row-bad-prior', dataset='member_votes',
-                                         generation_id='next', prior=prior)
-    batch = current.write_congress_dataset(source, tmp_path/'batch-bad-prior', dataset='member_votes',
-                                           generation_id='next', prior=prior, bulk=True)
-    for expected, actual in zip(row, batch):
-        assert expected is not None and actual is not None
-        assert pq.read_table(expected).equals(pq.read_table(actual), check_metadata=True)
-    assert row[0] is not None and subject is not None
-    assert pq.read_metadata(row[0]).num_rows == pq.read_metadata(subject).num_rows-1
-    refusals = [item for item in pq.read_table(batch[1]).to_pylist() if item['outcome']=='refused']
-    assert len(refusals)==1
-    assert decode_exact_json(refusals[0]['diagnostic_json']) == {'reason':'conversion_refused', 'error_type':'ValueError'}

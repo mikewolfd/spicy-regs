@@ -107,6 +107,7 @@ class SelectedPriors:
             restore_processing_input(
                 tuple(subjects), receipt_path, output, dataset=dataset, generation_id=generation,
                 bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
+                validate=False,  # admitted just above
             )
         elif dataset in field_registry():
             files = select_receipts(receipt_path, directory / "file-receipts.parquet", dataset=FILE_STATES)
@@ -361,6 +362,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 subject, receipt = write_congress_dataset(
                     path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held,
                     bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
+                    validate=False,  # the prior was admitted when selected; the new pair is admitted with its generation
                 )
             else:
                 subject, receipt = write_held_dataset(
@@ -421,7 +423,9 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             by_dataset[path.name if path.is_dir() else path.stem] = (
                 sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
             )
-        validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
+        if not getattr(self, "_defer_native_selection", False):
+            # Inside a rollup run the generation's own admission (build_generation) is the one validation.
+            validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
         # The entire candidate is immutable and validated before any visible
         # output or selected pointer changes. Failed attempts stay private.
         visible = []

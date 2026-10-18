@@ -25,7 +25,8 @@ import pyarrow.parquet as pq
 
 from spicy_regs import congress_bulk, etl_bulk
 from spicy_regs.congress_receipts import PROCESSOR, _digest, policy
-from spicy_regs.votes_batch_receipts import inherit_current_receipts, congress_attempt, restore_processing_input, write_congress_dataset
+from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.votes_batch_receipts import congress_attempt, restore_processing_input, write_congress_dataset
 from spicy_regs.etl_receipts import ReceiptContext
 
 
@@ -204,7 +205,7 @@ def main():
         record.update(generation=prior_generation, receiptSha256=_digest(prior_receipts),
                       receiptBytes=prior_receipts.stat().st_size, subjectRows=compare_files(subjects, prior_subjects))
     with measured(log, 'unchanged-history-full') as record:
-        carried = inherit_current_receipts(receipts, [prior_receipts], args.output/'carried-receipts.parquet')
+        carried = carry_receipt_history(receipts, [prior_receipts], args.output/'carried-receipts.parquet')
         record.update(rows=compare_files(receipts, carried, processing_only=True), currentGeneration=args.generation,
                       selectedPriorGeneration=prior_generation, currentReceiptSha256=_digest(receipts),
                       selectedPriorReceiptSha256=_digest(prior_receipts), carriedReceiptSha256=_digest(carried),

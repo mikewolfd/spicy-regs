@@ -145,6 +145,7 @@ def write_congress_dataset(
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
     bulk: bool = False,
+    validate: bool = True,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -158,7 +159,7 @@ def write_congress_dataset(
             raise ValueError('Batch vote writing requires a declared vote dataset')
         from spicy_regs.votes_batch_receipts import write_congress_dataset as write_votes
         return write_votes(source, directory, dataset=dataset, generation_id=generation_id,
-                           witnesses=witnesses, prior=prior, bulk=True)
+                           witnesses=witnesses, prior=prior, bulk=True, validate=validate)
 
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -282,7 +283,7 @@ def retained_source_rows(attempts, *, schema=None):
 
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str,
-    bulk: bool = False,
+    bulk: bool = False, validate: bool = True,
 ) -> Path:
     """Restore retained original source fields and schema after exact receipt admission.
 
@@ -295,7 +296,7 @@ def restore_processing_input(
             raise ValueError('Batch vote restoration requires a declared vote dataset')
         from spicy_regs.votes_batch_receipts import restore_processing_input as restore_votes
         return restore_votes(subject, receipts, destination, dataset=dataset,
-                             generation_id=generation_id, bulk=True)
+                             generation_id=generation_id, bulk=True, validate=validate)
 
     selected = input_policy(dataset, subject)
     destination.parent.mkdir(parents=True, exist_ok=True)

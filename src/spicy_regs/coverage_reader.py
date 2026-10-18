@@ -94,14 +94,14 @@ def _equals(values, expected):
     return pc.call_function("coalesce", [matches, False])
 
 
-def current_receipts(path, dataset, policy, generation):
-    """Admit only receipts of the selected dataset and generation under a current or declared earlier policy version.
+def current_receipts(path, dataset, policy):
+    """Admit only receipts of the selected dataset under a current or declared earlier policy version.
 
-    Carried receipts keep the ``policy_version`` they were written under, so the declared earlier versions of
-    ``policy`` (see ``receipt_policies``) are admitted beside the current one; an undeclared or null version is
-    refused, as is any other or null generation. Coverage writers re-issue carried attempts under the new
-    generation, so ``generation`` must equal the caller's label: that binds it to the pinned bytes. A dataset
-    whose carried receipts keep original generations would need the generations the shared validator accepts.
+    Carried receipts keep the ``policy_version`` and the ``generation_id`` they were written under, so the declared
+    earlier versions of ``policy`` (see ``receipt_policies``) are admitted beside the current one, and a receipt
+    may name an earlier generation (the shared validator requires only a nonempty generation label). An
+    undeclared or null version is refused. What binds the receipts to the selection is the pinned receipt-member
+    bytes ``checked_member`` verified; the generation admission re-proves every subject-receipt join.
     """
     versions = pa.array(sorted({item.policy_version for item in receipt_policies(policy)}))
     found = False
@@ -116,8 +116,8 @@ def current_receipts(path, dataset, policy, generation):
             known = pc.call_function("is_in", [selected.column("policy_version")], pc.SetLookupOptions(versions))
             if not pc.call_function("all", [pc.call_function("coalesce", [known, False])]).as_py():
                 raise ValueError("Unsupported coverage receipt policy; refresh current-format data")
-            if not pc.call_function("all", [_equals(selected.column("generation_id"), generation)]).as_py():
-                raise ValueError("Coverage receipts differ from the selected generation")
+            if selected.column("generation_id").null_count:
+                raise ValueError("Coverage receipts lack a generation")
     if not found:
         raise ValueError("Selected coverage generation has no receipt context")
 
@@ -140,7 +140,7 @@ def checked_request(request, policy_for, *, one_subject=False):
     policy = policy_for(request["dataset"])
     subjects = tuple(checked_member(member) for member in request["subjects"])
     receipts = checked_member(request["receipts"])
-    current_receipts(receipts, request["dataset"], policy, generation)
+    current_receipts(receipts, request["dataset"], policy)
     return policy, subjects, receipts, destination
 
 

@@ -14,18 +14,21 @@ generation and processing evidence. `resolve_receipt_witness` resolves earlier
 history. Repeated carries keep processing payloads flat and deduplicated.
 
 Court, legislative, government, FEC identity, regulatory and scorecard writers
-retain their maintained history paths. The bounded regulatory and vote paths
-use `current_receipt_history.inherit_current_receipts` where their input shape
-allows it; that helper calls the maintained `inherit_receipt`. Regulatory
+retain their maintained history paths. The bounded regulatory path uses
+`current_receipt_history.inherit_current_receipts` where its input shape
+allows it; that helper calls the maintained `inherit_receipt`. The batch vote
+writer (`votes_batch_receipts`) carries with `receipt_history.carry_receipt_history`
+(owner decision 2026-10-17, bulk receipt writer plan): receipt size stays flat across nights, and
+`coverage_reader.current_receipts` accepts the carried receipts' earlier generations. Regulatory
 correction retains both the prior and fresh receipt inputs, in that order.
 
 The separately included `receipt_history.carry_receipt_history` has different
 semantics: it reuses exact unchanged occurrences and gives changed accepted rows
 only a direct predecessor reference, without copying earlier witnesses or
 processing values. `write_dataset(prior_receipts=...)` exposes this helper to
-explicit callers. Its presence does not authorize replacing maintained family
-history paths. Such a replacement needs a reviewed source-value and witness
-resolution path that preserves the required evidence through repeated refreshes.
+explicit callers. Replacing another family's history path with it needs the owner's
+decision for that family (government, congress and legislative are decided; regulatory
+and courts are not).
 
 Boundary checks are in `tests/test_etl_receipts.py`,
 `tests/test_receipt_history.py`, `tests/test_regulatory_base_bulk.py`,

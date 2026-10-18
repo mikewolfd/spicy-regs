@@ -15,7 +15,7 @@ from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, _unpack,
     failure_receipt, observation_receipt, read_attempts, read_with_receipts,
     select_receipts, split_record, validate_receipt_bundle)
 from spicy_regs.transforms.parquet_rows import write_rows
-from spicy_regs.current_receipt_history import inherit_current_receipts
+from spicy_regs.receipt_history import carry_receipt_history
 
 def _admit(subjects, receipts, policies, *, generation_id, bulk=True):
     """Bulk proof where it decides; a row fallback is logged (and refused where bulk is required)."""
@@ -45,6 +45,7 @@ def write_congress_dataset(
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
     bulk: bool = True,
+    validate: bool = True,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -54,9 +55,13 @@ def write_congress_dataset(
     publisher response.
 
     A bulk-eligible dataset is written in one scan. Selected prior evidence is
-    inherited through the maintained current receipt function, including its
-    original witnesses and retained processing payloads. ``bulk=False`` delegates
-    to the current public row writer as the independent reference.
+    carried by ``receipt_history.carry_receipt_history``: an unchanged row keeps its prior receipt
+    verbatim (original generation and witnesses), a changed accepted row points to its direct
+    predecessor, so receipt size does not grow with the number of nights. ``bulk=False`` delegates
+    to the current public row writer, which still inherits history, so the two differ when ``prior`` is given.
+
+    ``validate=False`` leaves admission to the caller: the prior pair was admitted when it was selected and
+    the new pair is admitted once with its generation. Standalone callers keep the default.
     """
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -85,7 +90,8 @@ def write_congress_dataset(
         prior_paths = []
         if prior is not None:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
-            _admit({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id, bulk=bulk)
+            if validate:
+                _admit({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id, bulk=bulk)
             prior_paths.append(scoped)
 
         def context(ordinal, diagnostics=None, subject=None, processing=None):
@@ -141,19 +147,10 @@ def write_congress_dataset(
                     if sw is not None:
                         sw.close()
         if prior_paths:
-            try:
-                carried = inherit_current_receipts(receipts, prior_paths, stage / "inherited-receipts.parquet")
-            except (ValueError, TypeError, OverflowError, pa.ArrowException):
-                # Inheritance can refuse a single accepted subject. The current
-                # row writer determines those precise refusals and subject omissions.
-                # No staged batch output has been published before this fallback.
-                from spicy_regs.congress_receipts import write_congress_dataset as row_writer
-                return row_writer(source, directory, dataset=dataset, generation_id=generation_id,
-                                  witnesses=witnesses, prior=prior, bulk=False)
-            carried.replace(receipts)
-        _admit(
-            {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id, bulk=bulk
-        )
+            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet").replace(receipts)
+        if validate:
+            _admit({dataset: [] if subjects is None else [subjects]}, [receipts], [selected],
+                   generation_id=generation_id, bulk=bulk)
         publish_directory_no_replace(stage, directory)
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
 
@@ -165,6 +162,7 @@ def restore_processing_input(
     dataset: str,
     generation_id: str,
     bulk: bool = True,
+    validate: bool = True,
 ) -> Path:
     """Restore retained original source fields and schema after exact receipt admission.
 
@@ -173,15 +171,16 @@ def restore_processing_input(
     metadata includes bill-family completion scopes and per-reader refusal state.
 
     A dataset ``congress_bulk.eligible`` accepts is decoded in one scan after the
-    one admission. ``bulk=False`` is the row readers for any dataset: the
-    reference a bulk restore is checked against.
+    one admission, which ``validate=False`` leaves to a caller that has just admitted the same pair.
+    ``bulk=False`` is the row readers for any dataset: the reference a bulk restore is checked against.
     """
     selected = policy(dataset)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
         scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
         paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
-        _admit({dataset: paths}, [scoped], [selected], generation_id=generation_id, bulk=bulk)
+        if validate:
+            _admit({dataset: paths}, [scoped], [selected], generation_id=generation_id, bulk=bulk)
 
         def source_fields(data, diagnostic):
             kept = data.get("entry_kind") == "row" and diagnostic.get("reason") != "conversion_refused"

@@ -86,15 +86,13 @@ def test_restores_receipt_only_reads_without_a_public_subject(tmp_path):
     assert pq.read_table(result["urls"][0]).to_pylist() == [raw]
 
 
-@pytest.mark.parametrize("change", ["sha", "size", "generation"])
-def test_refuses_changed_or_wrong_generation_inputs(tmp_path, change):
+@pytest.mark.parametrize("change", ["sha", "size"])
+def test_refuses_changed_inputs(tmp_path, change):
     _, request = fixture(tmp_path, "bill_versions", {"bill_id": "hr1-119", "version_code": "is", "source": "govinfo"})
     if change == "sha":
         request["receipts"]["sha256"] = "sha256:" + "f" * 64
-    elif change == "size":
-        request["receipts"]["byteSize"] += 1
     else:
-        request["generationId"] = "unrelated-generation"
+        request["receipts"]["byteSize"] += 1
     with pytest.raises(ValueError):
         bridge.restore(request)
 
@@ -174,18 +172,18 @@ def test_declared_earlier_policy_receipts_are_admitted_and_undeclared_ones_refus
         pq.write_table(replaced(table, "policy_version", [version] + table["policy_version"].to_pylist()[1:]), path)
         return path
 
-    bridge.current_receipts(receipts, "committee_meetings", policy, "congress-coverage")
+    bridge.current_receipts(receipts, "committee_meetings", policy)
     bridge.current_receipts(
-        relabelled("declared.parquet", "congress-subjects/1"), "committee_meetings", policy, "congress-coverage"
+        relabelled("declared.parquet", "congress-subjects/1"), "committee_meetings", policy
     )
     with pytest.raises(ValueError, match="Unsupported coverage receipt policy"):
         bridge.current_receipts(
-            relabelled("undeclared.parquet", "congress-subjects/0"), "committee_meetings", policy, "congress-coverage"
+            relabelled("undeclared.parquet", "congress-subjects/0"), "committee_meetings", policy
         )
-    with pytest.raises(ValueError, match="differ from the selected generation"):
-        bridge.current_receipts(
-            relabelled("declared.parquet", "congress-subjects/1"), "committee_meetings", policy, "other"
-        )
+    # A carried receipt keeps the generation that first wrote it; the pinned receipt bytes bind it, not its label.
+    carried = tmp_path / "carried.parquet"
+    pq.write_table(replaced(table, "generation_id", ["earlier-generation"] + table["generation_id"].to_pylist()[1:]), carried)
+    bridge.current_receipts(carried, "committee_meetings", policy)
 
 
 def test_refuses_receipts_missing_a_current_field(tmp_path):
@@ -196,7 +194,7 @@ def test_refuses_receipts_missing_a_current_field(tmp_path):
     assert not Path(request["destination"]).exists()
 
 
-def test_other_dataset_rows_are_ignored_but_mixed_generation_refuses(tmp_path):
+def test_other_dataset_rows_are_ignored_and_carried_generations_restore(tmp_path):
     raw, request = fixture(tmp_path, "bill_versions", {"bill_id": "hr1-119", "version_code": "is", "source": "govinfo"})
     path = Path(request["receipts"]["path"])
     original = path.read_bytes()
@@ -212,18 +210,22 @@ def test_other_dataset_rows_are_ignored_but_mixed_generation_refuses(tmp_path):
     path.write_bytes(original)
     request["receipts"] = member(path)
     request["destination"] = str(tmp_path / "mixed")
-    rewrite_receipts(
-        request, lambda t: replaced(t, "generation_id", ["other"] + t.column("generation_id").to_pylist()[1:])
-    )
-    with pytest.raises(ValueError, match="differ from the selected generation"):
-        bridge.restore(request)
+    # A receipt carried from an earlier generation restores: the file hash pins the bytes, not the label.
+    def carried(table):
+        rows = table.to_pylist()
+        rows[0]["generation_id"] = "earlier"
+        rows[0]["receipt_id"] = _digest({k: v for k, v in rows[0].items() if k != "receipt_id"})
+        return pa.Table.from_pylist(rows, schema=table.schema)
+
+    rewrite_receipts(request, carried)
+    assert pq.read_table(bridge.restore(request)["urls"][0]).to_pylist() == [raw]
 
 
 @pytest.mark.parametrize(
     ("column", "message"),
     [
         ("policy_version", "Unsupported coverage receipt policy"),
-        ("generation_id", "differ from the selected generation"),
+        ("generation_id", "lack a generation"),
     ],
 )
 def test_null_policy_or_generation_refuses(tmp_path, column, message):
