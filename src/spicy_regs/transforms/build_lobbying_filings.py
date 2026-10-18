@@ -42,7 +42,9 @@ from loguru import logger
 
 from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
-from spicy_regs.transforms.government_receipts import BUILD_METADATA, _digest, has_native_prior, internal_prior, receipt_builder
+from spicy_regs.transforms.government_receipts import (
+    BUILD_METADATA, _digest, has_native_prior, internal_prior, receipt_builder, selected_native_prior,
+)
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -332,7 +334,9 @@ def build_lobbying_filings(
     prior_file = output_dir / "_lda_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
-    have_prior = _stage_prior(output_dir, OUTPUT, prior_file)
+    selected = selected_native_prior("lobbying_filings")
+    have_prior = selected is not None or _stage_prior(output_dir, OUTPUT, prior_file)
+    prior_file = selected or prior_file
     if have_prior:
         prior_file = internal_prior("lobbying_filings", prior_file, keep_native=True)
     if have_prior:
@@ -407,7 +411,9 @@ def build_lobbying_filings(
                 table_prior, table_has_prior = priors[key]
             else:
                 table_prior = output_dir / f"_{key.removesuffix('.parquet')}_prior.parquet"
-                table_has_prior = _stage_prior(output_dir, key, table_prior)
+                selected = selected_native_prior(key.removesuffix(".parquet"))
+                table_has_prior = selected is not None or _stage_prior(output_dir, key, table_prior)
+                table_prior = selected or table_prior
                 if table_has_prior:
                     table_prior = internal_prior(key.removesuffix(".parquet"), table_prior, keep_native=True)
             schema = pa.schema([(c, pa.string()) for c in columns])

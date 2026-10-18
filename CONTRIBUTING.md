@@ -20,29 +20,28 @@ Prerequisites: **Python 3.12** and [**uv**](https://docs.astral.sh/uv/getting-st
    ```bash
    git checkout -b my-change
    ```
-3. Install dependencies (creates a `.venv` in the project directory):
+3. Install the locked dependencies and the same extra used by CI (creates a
+   `.venv` in the project directory):
    ```bash
-   uv sync
+   uv sync --frozen --extra comments-reader
    ```
-4. Run the tests to confirm your environment works:
+4. Run the small offline example to confirm your environment works:
    ```bash
-   uv run pytest
+   uv run --frozen --extra comments-reader pytest tests/test_example_pipeline.py -q
    ```
-5. Run the linter:
-   ```bash
-   uv run ruff check .
-   uv run ruff format .   # auto-format
-   ```
-6. (Recommended) Install the pre-commit hooks so ruff and ty run
+5. Use the affected tests and scoped lint/type checks below while making changes.
+6. Optionally install the pre-commit hooks so ruff and ty run
    automatically on `git commit`:
    ```bash
    uv run pre-commit install
    ```
    The hooks run `ruff check --fix`, `ruff format`, and `ty check`. You
-   can also run them manually:
+   can also run them manually for changed files:
    ```bash
-   uv run pre-commit run --all-files
+   uv run pre-commit run --files path/to/changed.py
    ```
+   The type-check hook checks the whole project; it is optional during local
+   iteration. The scoped commands below are sufficient before pushing.
 
 You don't need any credentials to run the tests or hack on most of the code.
 A `.env` file (copy from `.env.example`) is only required to *upload* to live
@@ -92,7 +91,18 @@ the maintainers publish.
 - Keep changes focused and scoped to one concern per PR.
 - Follow existing code style and conventions (ruff handles most of this).
 - Add or update tests for any behavior change.
-- Run `uv run pytest` and `uv run ruff check .` before pushing.
+- Run the affected tests and scoped lint/type checks before pushing. Replace
+  these example paths with the changed code, tests and affected callers:
+  ```bash
+  uv run --frozen --extra comments-reader pytest tests/test_example_pipeline.py -q
+  uv run --frozen --extra comments-reader ruff check src/spicy_regs/transforms/extract.py tests/test_example_pipeline.py
+  uv run --frozen --extra comments-reader ty check src/spicy_regs/transforms/extract.py tests/test_example_pipeline.py
+  ```
+  Widen the selected tests when shared behavior or dependencies change. Use the
+  normal full hosted CI gate for the final PR candidate; a full local suite is
+  not required first. Main-branch CI still covers the merged tree and direct
+  main changes. Reuse passing results for unchanged code when handing work to
+  another reviewer; a handoff alone does not require another run.
 - Never call `load_dotenv()` at module scope. Importing the package must not
   mutate `os.environ` — that leaks a developer's `.env` into unit tests and
   points them at production R2. Call it in the CLI entry point instead (the

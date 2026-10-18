@@ -1,10 +1,11 @@
 name: Integration (live data)
 
-# Exercises the ETL extract -> staging -> merge path against a REAL document
-# fetched live from the public Mirrulations S3 mirror (the pipeline's upstream
-# source). Kept separate from ci.yml because it needs outbound network access
-# and can be affected by upstream availability — the hermetic unit suite in
-# ci.yml stays fast and deterministic. The weekly run catches source-shape drift.
+# Exercises live Mirrulations extraction, published-data checks and real catalog
+# operations. Kept separate from ci.yml because it needs outbound network access
+# and can be affected by upstream availability; ci.yml stays deterministic.
+# PRs that change only passive documentation or reader deployment metadata skip
+# the live steps while retaining this job's status. Weekly and manual runs
+# always exercise the live checks; the weekly run catches source-shape drift.
 
 on:
   pull_request:
@@ -20,25 +21,66 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select live checks
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGE_BASE: ${{ github.event.pull_request.base.sha }}
+          CHANGE_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "$CHANGE_BASE" ] || [ -z "$CHANGE_HEAD" ] || ! CHANGED_FILES=$(git diff --name-only --no-renames "$CHANGE_BASE...$CHANGE_HEAD"); then
+            echo "::warning::Cannot determine changed paths; running live checks."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          RUN_LIVE=false
+          while IFS= read -r path; do
+            case "$path" in
+              # Only passive pages and reader deployment metadata skip. Live
+              # tests also read dictionary/ledger inputs and restore legislation.
+              docs/tables/*|README.md|CONTRIBUTING.md|CHANGELOG.md|LICENSE|mkdocs.yml|deploy/cloudflare/wrangler.template.jsonc) ;;
+              "") ;;
+              # Shared code, dependencies, runtime, tests, workflows and new
+              # paths run by default; this is deliberately a short skip list.
+              *) RUN_LIVE=true; break ;;
+            esac
+          done <<< "$CHANGED_FILES"
+          echo "run=$RUN_LIVE" >> "$GITHUB_OUTPUT"
+          if [ "$RUN_LIVE" = false ]; then
+            echo "Only passive documentation or reader deployment metadata changed; skipping live data checks."
+          fi
 
       - name: Set up Python
+        if: steps.changes.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install uv
+        if: steps.changes.outputs.run == 'true'
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
+        if: steps.changes.outputs.run == 'true'
         run: uv sync
 
-      - name: Run integration tests (live Mirrulations S3)
+      - name: Run integration tests (live data)
+        if: steps.changes.outputs.run == 'true'
         # -s disables pytest output capture so loguru's step-by-step logs
         # (which write to stderr) stream live into the Actions log, not just
         # on failure. -v prints each test id.
         run: uv run pytest -m integration -v -s
 
       - name: Probe catalog MERGE and rollback on a throwaway table
+        if: steps.changes.outputs.run == 'true'
         # Unit tests run replace_rows on in-memory DuckDB, which accepts SQL the
         # Iceberg engine has refused before (f70e2e1). This drives the real
         # catalog on probe_catalog_replace_<run>, never comments, and drops it.

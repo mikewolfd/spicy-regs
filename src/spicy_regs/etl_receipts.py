@@ -15,7 +15,7 @@ import sqlite3
 import zlib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -823,6 +823,39 @@ def _read_with_receipts_rows(subject_paths, receipt_paths, policy, *, generation
             yield subject | processing
 
 
+def _select_receipt_batches(parquet, destinations: Mapping[str, Path]) -> None:
+    """Decode every source cell once and preserve each dataset's complete ordered outcomes."""
+    with ExitStack() as stack:
+        writers = {dataset: stack.enter_context(pq.ParquetWriter(path, RECEIPT_SCHEMA, compression="zstd"))
+                   for dataset, path in destinations.items()}
+        for batch in parquet.iter_batches(batch_size=2000):
+            checkpoint()
+            batch.validate(full=True)
+            for dataset, writer in writers.items():
+                selected = batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)]))
+                if selected.num_rows:
+                    writer.write_table(pa.Table.from_batches([selected], schema=RECEIPT_SCHEMA))
+
+
+def select_receipt_family(path: ParquetInput, directory: Path, *, datasets: Sequence[str]) -> dict[str, Path]:
+    """Split an exact shared-schema member in one bounded pass; publish only completed selections."""
+    if not datasets or any(type(dataset) is not str for dataset in datasets) or len(set(datasets)) != len(datasets):
+        raise ValueError("Receipt family selection requires distinct dataset names")
+    directory.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=directory.parent) as scratch:
+        staging = Path(scratch) / "selected"
+        staging.mkdir()
+        destinations = {dataset: staging / f"dataset-{index}.parquet" for index, dataset in enumerate(datasets)}
+        with _parquet(path) as parquet:
+            if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                raise ValueError("Receipt family member is not the shared receipt schema")
+            _select_receipt_batches(parquet, destinations)
+        from rulespec_artifacts import publish_directory_no_replace
+
+        publish_directory_no_replace(staging, directory)
+    return {dataset: directory / target.name for dataset, target in destinations.items()}
+
+
 def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> Path:
     """Select all outcomes in source order; receipt admission remains a separate check.
 
@@ -839,13 +872,7 @@ def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> P
                 with _parquet(path) as parquet:
                     shared = parquet.schema_arrow.equals(RECEIPT_SCHEMA)
                     if shared:
-                        with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
-                            for batch in parquet.iter_batches(batch_size=2000):
-                                checkpoint()
-                                batch.validate(full=True)
-                                selected = batch.filter(pc.call_function("equal", [batch.column("dataset"), pa.scalar(dataset)]))
-                                if selected.num_rows:
-                                    writer.write_table(pa.Table.from_batches([selected], schema=RECEIPT_SCHEMA))
+                        _select_receipt_batches(parquet, {dataset: temporary})
                 if shared:
                     temporary.replace(destination)
                     return destination

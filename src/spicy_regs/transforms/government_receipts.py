@@ -44,6 +44,7 @@ from spicy_regs.etl_receipts import (
 )
 from spicy_regs.native_merge import native_merge
 from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
+from spicy_regs.selected_generations import SelectedDataset, SelectedInputs
 from spicy_regs.sources import publication
 from spicy_regs.transforms.government_source_shapes import (
     IDENTITY_FIELDS,
@@ -114,6 +115,8 @@ EARLIER_POLICIES["fcc_filings"] = tuple(
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)
 _NATIVE_PRIORS: ContextVar[dict[str, tuple[Path, Path]] | None] = ContextVar("government_native_priors", default=None)
+_SELECTED_PRIORS: ContextVar[tuple[SelectedInputs, dict[str, SelectedDataset | None]] | None] = ContextVar(
+    "government_selected_priors", default=None)
 # This is local build metadata for forwarding the shared API's admission arguments,
 # not another receipt format. The receipts themselves use etl_receipts.RECEIPT_SCHEMA.
 BUILD_METADATA = ".government-etl-build.json"
@@ -165,6 +168,21 @@ def _prior_policy(dataset: str, path: Path) -> DatasetPolicy:
     )
 
 
+def selected_native_prior(dataset: str) -> Path | None:
+    """The immutable subject already selected for this native family build."""
+    held = _SELECTED_PRIORS.get()
+    if held is None:
+        return None
+    session, selections = held
+    session.check()
+    selected = selections.get(dataset)
+    if selected is None:
+        return None
+    if len(selected.subjects) != 1:
+        raise ValueError(f"{dataset}: government prior requires one subject member")
+    return selected.subjects[0]
+
+
 def internal_prior(
     dataset: str, path: Path, *, receipt_path: Path | None = None, generation_id: str | None = None,
     keep_native: bool = False,
@@ -185,8 +203,16 @@ def internal_prior(
     scratch = path.parent / f".{path.name}.receipts.parquet"
     selected = path.parent / f".{path.name}.selected-receipts.parquet"
     restored = path.parent / f".{path.name}.processing.parquet"
+    held = _SELECTED_PRIORS.get()
+    scoped = held[1].get(dataset) if held is not None and receipt_path is None else None
     try:
-        if receipt_path is None:
+        if scoped is not None:
+            assert held is not None
+            held[0].check()
+            if scoped.subjects != (path,):
+                raise ValueError("Government prior differs from the shared native selection")
+            selected, receipt_path, generation_id = scoped.receipts, scoped.receipts, scoped.generation_id
+        elif receipt_path is None:
             local = path.parent / BUILD_METADATA
             metadata = json.loads(local.read_text()) if local.exists() else None
             if metadata and metadata.get("subjects", {}).get(dataset, {}).get("sha256") == _digest(path):
@@ -213,7 +239,8 @@ def internal_prior(
                 generation_id = owner[1]["etlReceipts"]["generationId"]
         if generation_id is None:
             raise ValueError("An explicit receipt generation identity is required")
-        select_receipts(receipt_path, selected, dataset=dataset)
+        if scoped is None:
+            select_receipts(receipt_path, selected, dataset=dataset)
         inherited = _INHERITED.get()
         if inherited is not None:
             inherited[dataset] = selected
@@ -223,6 +250,8 @@ def internal_prior(
             if native_priors is None:
                 raise ValueError("Native priors require an active receipt builder")
             validate_receipt_bundle({dataset: [path]}, [selected], [policy], generation_id=generation_id)
+            if held is not None:
+                held[0].check()
             native_priors[dataset] = (path, selected)
             return path
         try:
@@ -239,7 +268,7 @@ def internal_prior(
         return restored
     finally:
         scratch.unlink(missing_ok=True)
-        if _INHERITED.get() is None:
+        if scoped is None and _INHERITED.get() is None:
             selected.unlink(missing_ok=True)
 
 
@@ -445,6 +474,10 @@ def migrate_outputs(
     if any(value["refused"] for value in counts.values()):
         (work / "refusal-summary.json").write_text(json.dumps(counts, indent=2) + "\n")
         raise GovernmentShapeError(f"Government conversion refused inputs; preserved candidate at {work}")
+    # All prior reads are complete. Refuse mutation before replacing outputs or
+    # writing completion metadata that a retry would accept as its local prior.
+    if held := _SELECTED_PRIORS.get():
+        held[0].check()
     for original, subject, _ in bundles:
         staged = original.with_name("." + original.name + ".native")
         shutil.copyfile(subject, staged)
@@ -501,8 +534,23 @@ def receipt_builder(function=None, *, output_argument: str | None = None, datase
             token = _ACTIVE.set(True)
             inherited_token = _INHERITED.set({})
             native_token = _NATIVE_PRIORS.set({})
+            selection_token = _SELECTED_PRIORS.set(None)
             try:
+                # The remote native family shares one immutable receipt member. Legacy
+                # inputs and completed local builds keep their existing selection paths.
+                prior_datasets = tuple(native_orders or ())
+                directory = Path(bound.arguments["output_dir"]) if prior_datasets else None
+                public_url = os.getenv("R2_PUBLIC_URL")
+                if directory is not None and public_url and not (directory / BUILD_METADATA).exists():
+                    index = publication.current_index(public_url)
+                    if any((owner := publication.table_owner(index, name + ".parquet")) is not None
+                           and "etlReceipts" in owner[1] for name in prior_datasets):
+                        session = SelectedInputs(directory, directory / (".selected-priors-" + uuid4().hex),
+                                                 index=index, public_url=public_url)
+                        _SELECTED_PRIORS.set((session, session.select_scoped(prior_datasets)))
                 result = builder(*args, **kwargs)
+                if held := _SELECTED_PRIORS.get():
+                    held[0].check()
                 paths = (
                     (Path(bound.arguments[output_argument]),)
                     if output_argument
@@ -522,6 +570,7 @@ def receipt_builder(function=None, *, output_argument: str | None = None, datase
                 _ACTIVE.reset(token)
                 _INHERITED.reset(inherited_token)
                 _NATIVE_PRIORS.reset(native_token)
+                _SELECTED_PRIORS.reset(selection_token)
 
         return build
 
