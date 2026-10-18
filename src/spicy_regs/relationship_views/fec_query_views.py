@@ -154,12 +154,10 @@ _RULE_IDENTITY_COLUMNS = (
 )
 
 
-def _selected_scope(source_generation_pin, population, as_of, namespace_evidence):
-    if (
-        not isinstance(source_generation_pin, str)
-        or re.fullmatch(r"sha256:[0-9a-f]{64}", source_generation_pin) is None
-    ):
-        raise ValueError("FEC views require an explicit selected source-generation pin")
+def _selected_scope(source_generation_pin, selected_observations_pin, population, as_of, namespace_evidence):
+    for name, pin in (("historical source", source_generation_pin), ("selected observations", selected_observations_pin)):
+        if not isinstance(pin, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", pin) is None:
+            raise ValueError(f"FEC views require an explicit {name} generation pin")
     if any(not isinstance(value, str) or not value.strip() for value in (population, as_of)):
         raise ValueError("FEC views require explicit population and as-of declarations")
     proofs = dict(namespace_evidence)
@@ -205,6 +203,7 @@ def fec_query_views(
     population: str,
     as_of: str,
     namespace_evidence: Mapping[str, str],
+    selected_observations_pin: str | None = None,
     package_root: Path | None = None,
     processing_schemas: Mapping[str, tuple[str, ...]] | None = None,
     legacy_associations: bool = False,
@@ -213,6 +212,11 @@ def fec_query_views(
 
     Namespace witnesses bind retained source definitions for native FILE_NUM
     equivalence. An empty explicit mapping produces unresolved association rules.
+    ``source_generation_pin`` stays in historical SQL and witness locators.
+    ``selected_observations_pin`` names the accepted serving representation;
+    omit it when both generations are the same. A different pin is a reviewed
+    installed scope choice, never inferred from the current publication index.
+    The release receipt must independently bind that exact selection.
     ``package_root`` is a trusted installed-package location, not receipt input.
     Receipt-separated families require processing_schemas from the private,
     receipt-validated relations built by register_internal_fec_table. These are
@@ -221,7 +225,9 @@ def fec_query_views(
     change scope, columns or witnesses. No source processors are imported.
     """
     association_policy = "fec-retained-filing-association/1" if legacy_associations else ASSOCIATION_POLICY
-    proofs = _selected_scope(source_generation_pin, population, as_of, namespace_evidence)
+    if selected_observations_pin is None:
+        selected_observations_pin = source_generation_pin
+    proofs = _selected_scope(source_generation_pin, selected_observations_pin, population, as_of, namespace_evidence)
     root = package_root or Path(__file__).resolve().parent.parent
     dictionary = root / "table_metadata.json"
     metadata = json.loads(dictionary.read_text(encoding="utf-8"))
@@ -266,7 +272,7 @@ def fec_query_views(
                 },
                 population,
                 as_of,
-                {"fec-observations": source_generation_pin},
+                {"fec-observations": selected_observations_pin},
             )
         )
 
