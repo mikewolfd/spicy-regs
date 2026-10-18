@@ -375,10 +375,11 @@ def retained_source_rows(dataset, dataset_policy, records):
         yield raw
 
 
-def _bulk_source_rows(con, dataset, selected_policy, subjects, states, start):
-    """Decode plain retained text in SQL, retaining the mapper's complete reproduction check."""
+def _bulk_source_rows(con, dataset, selected_policy, subjects, states, start, receipts):
+    """Decode ordered source batches, retaining the mapper's complete reproduction check."""
     from spicy_regs import etl_bulk
     from spicy_regs.etl_receipts import decode_exact_json
+    import pyarrow.dataset as ds
 
     schemas = [pa.ipc.read_schema(pa.BufferReader(state["schema"])) for state in states if state["relative_path"] is not None]
     if not schemas:
@@ -387,41 +388,74 @@ def _bulk_source_rows(con, dataset, selected_policy, subjects, states, start):
     if not all(all(pa.types.is_string(field.type) for field in item) and item.equals(schema) for item in schemas):
         raise etl_bulk.NotBulkEligible("Legislative retained source schemas require the exact row decoder")
     names = sorted(schema.names)
-    pairs = "json_extract(r.processing_json, '$[1][0][1][1]')"
+    # Share the JSON parse across names, type tags and values, as Congress restore does.
+    paths = [f"$[1][0][1][1][{i}]{suffix}" for i in range(len(names)) for suffix in ("[0]", "[1][0]", "[1][1]")]
+    values = "json_extract_string(processing_json, [" + ", ".join(etl_bulk._literal(path) for path in paths) + "])"
     plain = " AND ".join([
-        "json_array_length(r.processing_json, '$[1]') = 1",
-        "json_extract_string(r.processing_json, '$[1][0][0]') = 'raw_source_row'",
-        "json_extract_string(r.processing_json, '$[1][0][1][0]') = 'dict'",
-        f"json_array_length({pairs}) = {len(names)}",
-        *[f"json_extract_string({pairs}, '$[{i}][0]') = {etl_bulk._literal(name)}" for i, name in enumerate(names)],
-        *[f"json_extract_string({pairs}, '$[{i}][1][0]') IN ('str','null')" for i in range(len(names))],
+        "json_array_length(processing_json, '$[1]') = 1",
+        "json_extract_string(processing_json, '$[1][0][0]') = 'raw_source_row'",
+        "json_extract_string(processing_json, '$[1][0][1][0]') = 'dict'",
+        f"json_array_length(processing_json, '$[1][0][1][1]') = {len(names)}",
+        *[f"_source_values[{3 * i + 1}] = {etl_bulk._literal(name)}" for i, name in enumerate(names)],
+        *[f"_source_values[{3 * i + 2}] IN ('str','null')" for i in range(len(names))],
     ])
-    columns = ", ".join(f"json_extract_string({pairs}, '$[{names.index(field.name)}][1][1]') AS \"{field.name}\"" for field in schema)
-    if selected_policy.receipt_only:
-        joined = f"receipts r WHERE r.dataset = {etl_bulk._literal(dataset)} AND r.outcome = 'observed'"
-        native = "NULL AS _selected_subject"
-        order = "r.n"
-    else:
-        parts, offset = [], start
-        for path in subjects:
-            parts.append(f"SELECT *, file_row_number + {offset} AS _held_ordinal FROM read_parquet({etl_bulk._literal(str(path))}, file_row_number=true, hive_partitioning=false)")
-            offset += pq.read_metadata(path).num_rows
-        if not parts:
-            return iter(())
+    columns = ", ".join(f'_source_values[{3 * names.index(field.name) + 3}] AS "{field.name}"' for field in schema)
+    query = f"""WITH extracted AS MATERIALIZED (
+        SELECT *, {values} AS _source_values FROM legislative_restore_batch)
+        SELECT {columns}, _selected_subject,
+            CASE WHEN NOT coalesce({plain}, false) THEN processing_json END AS _raw_reference
+        FROM extracted ORDER BY _held_ordinal"""
+
+    def source_batches():
+        if selected_policy.receipt_only:
+            # This file is already selected and admitted. Preserve its physical observed-row order.
+            with pq.ParquetFile(receipts) as source:
+                position = 0
+                for batch in source.iter_batches(batch_size=2000, columns=["outcome", "processing_json"]):
+                    etl_bulk.checkpoint()
+                    table = pa.Table.from_batches([batch]).filter(ds.field("outcome") == "observed").select(["processing_json"])
+                    yield table.append_column("_selected_subject", pa.nulls(table.num_rows)).append_column(
+                        "_held_ordinal", pa.arange(position, position + table.num_rows))
+                    position += table.num_rows
+            return
+        offset = start
         fields = ", ".join(f'"{field.name}" := held."{field.name}"' for field in selected_policy.subject_schema)
-        native = f"struct_pack({fields}) AS _selected_subject"
-        joined = "(" + " UNION ALL ".join(parts) + ") held JOIN subject_receipts m ON m.n=held._held_ordinal JOIN receipts r ON r.n=m.receipt"
-        order = "held._held_ordinal"
-    query = f"SELECT {columns}, {native}, CASE WHEN NOT coalesce({plain}, false) THEN r.processing_json END AS _raw_reference FROM {joined} ORDER BY {order}"
+        joined = f"""SELECT struct_pack({fields}) AS _selected_subject, r.processing_json, held._held_ordinal
+            FROM legislative_restore_subjects held
+            JOIN (SELECT * FROM subject_receipts WHERE n >= ? AND n < ?) m ON m.n=held._held_ordinal
+            JOIN receipts r ON r.n=m.receipt ORDER BY held._held_ordinal"""
+        for path in subjects:
+            with pq.ParquetFile(path) as source:
+                for batch in source.iter_batches(batch_size=2000):
+                    etl_bulk.checkpoint()
+                    held = pa.Table.from_batches([batch]).append_column("_held_ordinal", pa.arange(offset, offset + batch.num_rows))
+                    con.register("legislative_restore_subjects", held)
+                    try:
+                        # Finish this bounded join before starting another statement on the same connection.
+                        restored = con.execute(joined, [offset, offset + batch.num_rows]).to_arrow_table()
+                    finally:
+                        con.unregister("legislative_restore_subjects")
+                    if restored.num_rows != batch.num_rows:
+                        raise ValueError("Receipt replay did not reconstruct every legislative source batch")
+                    yield restored
+                    offset += batch.num_rows
 
     def records():
-        for batch in con.execute(query).to_arrow_reader(2000):
-            table = pa.Table.from_batches([batch])
-            raws = table.select(schema.names).to_pylist()
-            for raw, subject, reference in zip(raws, table['_selected_subject'].to_pylist(), table['_raw_reference'].to_pylist(), strict=True):
-                if reference is not None:
-                    raw = decode_exact_json(reference)[RAW]
-                yield (subject or {}) | {RAW: raw}
+        for source in source_batches():
+            for batch in source.to_batches(max_chunksize=2000):
+                # Slice the retained JSON too: narrow subjects can carry large original source text.
+                # One row and Arrow backing buffers can exceed this logical-byte bound.
+                for piece in etl_bulk._insert_batches(batch):
+                    con.register("legislative_restore_batch", piece)
+                    try:
+                        table = con.execute(query).to_arrow_table()
+                    finally:
+                        con.unregister("legislative_restore_batch")
+                    raws = table.select(schema.names).to_pylist()
+                    for raw, subject, reference in zip(raws, table['_selected_subject'].to_pylist(), table['_raw_reference'].to_pylist(), strict=True):
+                        if reference is not None:
+                            raw = decode_exact_json(reference)[RAW]
+                        yield (subject or {}) | {RAW: raw}
 
     return retained_source_rows(dataset, selected_policy, records())
 
@@ -483,7 +517,7 @@ def restore_prior(bundle: Path, destination: Path, *, bulk: bool = True) -> dict
             expected = None
             if con is not None:
                 try:
-                    expected = _bulk_source_rows(con, dataset, dataset_policy, subject_paths[dataset], states, starts[dataset])
+                    expected = _bulk_source_rows(con, dataset, dataset_policy, subject_paths[dataset], states, starts[dataset], dataset_receipts)
                 except etl_bulk.NotBulkEligible as error:
                     etl_bulk.log_row_fallback("legislative-decode", error, dataset=dataset)
                     etl_bulk.reference_fallback(error)
