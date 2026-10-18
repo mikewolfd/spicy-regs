@@ -36,6 +36,7 @@ def _comment_rows():
         {"comment_id": "unknown-key", "display_properties_json": '[{"nope":1}]'},
         {"comment_id": "old", "postmark_date": dt.datetime(1969, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)},
         {"comment_id": "year-1000", "postmark_date": dt.datetime(1000, 1, 1, tzinfo=UTC)},
+        {"comment_id": "year-999", "postmark_date": dt.datetime(999, 1, 1, tzinfo=UTC)},
         {"comment_id": None, "page_count": 1},
         {"comment_id": "last", "page_count": 2**31 - 1, "display_properties_json": DISPLAY},
     ]
@@ -54,7 +55,7 @@ def _same(left, right):
         {"docket_id": "d2", "keywords": [], "category": "x\x0b"}, {"docket_id": "d3"}]),
     ("document_attributes", [
         {"document_id": "x1", "allow_late_comments": True, "authors": ["z"], "author_date": dt.datetime(2020, 1, 1, tzinfo=UTC)},
-        {"document_id": "x2", "allow_late_comments": None, "page_count": 3} if False else {"document_id": "x2"}]),
+        {"document_id": "x2"}]),
 ])
 def test_typed_bulk_pair_and_restore_equal_the_row_writer_and_reader(tmp_path, monkeypatch, dataset, rows):
     source = tmp_path / "source.parquet"
@@ -121,7 +122,9 @@ def test_the_bulk_validator_proves_datetime_evidence_and_leaves_the_rest_to_the_
 
     def proven(value):
         text = json.dumps(["datetime", value]).replace(" ", "")
-        return con.execute("SELECT " + etl_bulk.decodes_sql("'" + text.replace("'", "''") + "'")).fetchone()[0]
+        result = con.execute("SELECT " + etl_bulk.decodes_sql("'" + text.replace("'", "''") + "'")).fetchone()
+        assert result is not None
+        return result[0]
     assert proven("2021-05-01T12:30:05+00:00") and proven("1000-01-01T00:00:00.000005+00:00")
     for unproven in ("2021-02-30T00:00:00+00:00", "2021-05-01T24:00:00+00:00", "0999-01-01T00:00:00+00:00",
                      "2021-05-01T12:30:05+05:00", "2021-05-01 12:30:05+00:00"):

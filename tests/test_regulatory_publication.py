@@ -141,9 +141,9 @@ def test_file_generation_retains_resolvable_inputs_after_source_removal(tmp_path
     assert pq.read_table(restored)['docket_id'].to_pylist() == ['D']
 
 
-def test_file_rewrites_keep_original_api_evidence_after_input_removal(tmp_path):
+def test_file_rewrites_reference_immutable_original_api_evidence(tmp_path):
     from hashlib import sha256
-    from spicy_regs.etl_receipts import ReceiptContext, exact_json, resolve_receipt_witness
+    from spicy_regs.etl_receipts import ReceiptContext, decode_exact_json, exact_json, resolve_receipt_witness
     from spicy_regs.selected_generations import SelectedDataset, SelectedInputs, remember_selection
     from spicy_regs.transforms.regulations_receipts import write_records
 
@@ -154,14 +154,17 @@ def test_file_rewrites_keep_original_api_evidence_after_input_removal(tmp_path):
     subject, receipts = write_records('dockets', [(original, ReceiptContext('initial', 'api', 'api-reader', [witness]))],
                                       tmp_path / 'initial', project=lambda row: {'docket_id': row['source_api']['id']})
     remember_selection(tmp_path, [SelectedDataset('dockets', (subject,), receipts, 'initial')])
+    original_bytes = receipts.read_bytes()
+    initial = next(row for row in pq.read_table(receipts).to_pylist() if row['outcome'] == 'accepted')
     for ordinal in range(2):
         source = tmp_path / f'processing-{ordinal}.parquet'
         assert restore_dataset(tmp_path, 'dockets', source)
         finish_dataset(tmp_path, 'dockets', source, publish=False)
         source.unlink()
-    subject.unlink()
-    receipts.unlink()
     selected = SelectedInputs(tmp_path, tmp_path / 'checked', public_url='').select('dockets')
     assert selected is not None
     [current] = [r for r in pq.read_table(selected.receipts).to_pylist() if r['outcome'] == 'accepted']
-    assert resolve_receipt_witness(current, witness) == exact_json(original).encode()
+    assert decode_exact_json(current['diagnostic_json'])['prior_receipt']['receipt_id'] == initial['receipt_id']
+    assert receipts.read_bytes() == original_bytes
+    assert resolve_receipt_witness(initial, witness) == exact_json(original).encode()
+    assert witness not in current['witnesses']

@@ -99,11 +99,9 @@ def _subject_sql(dataset, declared, source):
 
 def write_held_dataset(dataset, source, destination, *, generation_id, processor, witnesses,
                        include_source_witness, prior_receipts, validate=True):
-    from spicy_regs.transforms.regulations_receipts import map_regulations_attempt, policy
+    from spicy_regs.transforms.regulations_receipts import carry_regulatory_receipts, map_regulations_attempt, policy
     from rulespec_artifacts import publish_directory_no_replace
 
-    if len(prior_receipts) > 1:
-        raise etl_bulk.NotBulkEligible("Ordered multiple regulatory prior bundles require the original row writer")
     schema = pq.read_schema(source)
     if not eligible(dataset, schema):
         raise etl_bulk.NotBulkEligible('Regulatory base bulk requires input columns at their declared types')
@@ -182,17 +180,7 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
                 label=dataset, refusals_last=True,
                 last_receipts=[observation_receipt(declared, observed, processing_fields={'input_metadata': metadata})],
                 row_attempt=lambda table, index, row: attempt(row, table['_ordinal'][index].as_py()))
-        if prior_receipts:
-            from spicy_regs.current_receipt_history import inherit_current_receipts
-            try:
-                inherited = inherit_current_receipts(
-                    receipt_path, prior_receipts, stage / "inherited.parquet",
-                    inherit_observations=False, require_unique_prior=True,
-                )
-            except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError) as error:
-                # Its integrity checks (count, order, decoding) are faults, not unsupported semantics.
-                raise etl_bulk.bulk_failure('Regulatory prior inheritance failed', error) from error
-            inherited.replace(receipt_path)
+        carry_regulatory_receipts(dataset, receipt_path, prior_receipts)
         if validate:
             validate_receipt_bundle({dataset: [subject_path]}, [receipt_path], [declared], generation_id=generation_id)
         publish_directory_no_replace(stage, destination)
@@ -292,7 +280,7 @@ def _plain_query(dataset, declared, schema):
         CASE WHEN _plain THEN CAST(json_extract(_processing, '$[1][0][1]') AS VARCHAR) END AS _meta,
         CASE WHEN _plain THEN NULL ELSE _processing END AS _processing,
         {', '.join(f'"{name}"' for name in names)}
-    FROM p'''
+    FROM p ORDER BY _i'''
 
 
 def _prove_rows(dataset, declared, subjects, held, source_schema):
@@ -362,6 +350,8 @@ def _materialize_selected(selected, destination, *, source_schema=None):
                     finally:
                         con.unregister('s')
                         con.unregister('r')
+                    if not result['_i'].combine_chunks().equals(index):
+                        raise etl_bulk.BulkValidationError('Regulatory restore changed source order or population')
                     if not all(result['_identity_ok'].to_pylist()):
                         raise etl_bulk.NotBulkEligible('Regulatory base restored membership or order differs')
                     flags = result['_plain'].to_pylist()
