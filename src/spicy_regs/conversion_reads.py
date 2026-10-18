@@ -308,7 +308,9 @@ class _FamilyReader:
             else:
                 from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
                 if dataset in SOURCE_COLUMNS:
-                    rows = self._regulatory_original_rows(dataset, schema, source_schema=source_schema)
+                    self._regulatory_original_schema(dataset, schema, source_schema=source_schema)
+                    rows = (None if self._bulk_regulatory_equal(dataset, original, schema) else
+                            self._regulatory_original_rows(dataset, schema, source_schema=source_schema))
                 else:
                     from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
                     if dataset not in REGISTRY:
@@ -465,9 +467,8 @@ class _FamilyReader:
         except (ValueError, TypeError, KeyError):
             return False
 
-    def _regulatory_original_rows(self, dataset, schema, *, source_schema=None):
-        import pyarrow as pa
-        from spicy_regs.transforms.regulations_receipts import _processor_inputs, processing_schema
+    def _regulatory_original_schema(self, dataset, schema, *, source_schema=None):
+        from spicy_regs.transforms.regulations_receipts import processing_schema
         from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS, TYPES
 
         known = dict(SOURCE_COLUMNS[dataset])
@@ -478,6 +479,136 @@ class _FamilyReader:
         restored_schema = processing_schema(dataset, source_schema=source_schema, metadata=expected_metadata)
         if not restored_schema.equals(schema, check_metadata=True):
             raise ValueError("Maintained regulatory restored schema differs from retained original")
+        return expected_metadata
+
+    def _bulk_regulatory_equal(self, dataset, original, schema):
+        """Prove original equality with the maintained regulatory restore query and sparse row replay.
+
+        This reuses the admitted ordinal map and R's raw-input/mapper proof. Every held subject is bound again to
+        its admitted identity and version. Plain rows compare as Arrow values; only unproven rows run the maintained
+        Python mapper. A failed proof returns to the complete comparator for its original refusal.
+        """
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        from spicy_regs import regulations_bulk
+        from spicy_regs.etl_receipts import exact_json
+        from spicy_regs.transforms.regulations_receipts import policy as regulatory_policy
+
+        policy, paths = self.policies[dataset], self.subjects[dataset]
+        if (self.row_reference or dataset not in regulations_bulk.DATASETS or len(paths) != 1
+                or policy.descriptor() != regulatory_policy(dataset).descriptor()):
+            return False
+        try:
+            plain = regulations_bulk._plain_query(dataset, policy, schema)
+            if plain is None:
+                return False
+            metadata = exact_json({key.decode('utf-8'): value for key, value in (schema.metadata or {}).items()})
+            record_id, version, identity = etl_bulk.identity_sql(policy)
+            reference = etl_bulk._subject_reference_sql(policy)
+        except (NotImplementedError, UnicodeError):
+            return False
+        number = 'n'
+        while number in {field.name.casefold() for field in policy.subject_schema}:
+            number += '_'
+        query = (
+            f'SELECT s."{number}" AS _i, r.identity_json, r.processing_json, '
+            'CASE WHEN s._reference IS FALSE THEN s._id=d.record_id AND s._version=d.version '
+            'AND s._identity=d.identity END AS _bound, d.record_id, d.version, d.identity '
+            f'FROM (SELECT *, {record_id} AS _id, {version} AS _version, {identity} AS _identity, '
+            f'{reference} AS _reference FROM btv_regulatory_subjects) s '
+            f'JOIN (SELECT * FROM subjects WHERE NOT unproven AND n>=? AND n<?) d ON d.n=s."{number}" '
+            'JOIN (SELECT * FROM subject_receipts WHERE n>=? AND n<?) m ON m.n=d.n '
+            f'JOIN receipts r ON r.n=m.receipt ORDER BY s."{number}"')
+        first = self.connection.execute('SELECT coalesce(min(n),0) FROM subjects WHERE dataset=?', [dataset]).fetchone()[0]
+        count, functions = 0, []
+        with self._stream(), etl_bulk._parquet(paths[0]) as parquet, pq.ParquetFile(original) as retained:
+            if (not parquet.schema_arrow.equals(policy.subject_schema) or not parquet.metadata.num_rows
+                    or parquet.metadata.num_rows != retained.metadata.num_rows):
+                return False  # Empty files also require the maintained observation-metadata check.
+            pending, read = [], [0, 0]
+            originals = retained.iter_batches(batch_size=etl_bulk._BATCH)
+            try:
+                for name, dtype in regulations_bulk._subject_sql(dataset, policy, schema)[0]:
+                    self.connection.create_function(f'parse_{name}', regulations_bulk._parser(dataset, name, dtype),
+                        ['VARCHAR'], 'STRUCT(native VARCHAR, reference BOOLEAN)', type='arrow', null_handling='special')
+                    functions.append(f'parse_{name}')
+                with closing(etl_bulk._numbered(parquet, first, number, None, read)) as numbered:
+                    for subjects in _grouped(numbered):
+                        checkpoint()
+                        while sum(piece.num_rows for piece in pending) < subjects.num_rows and (more := next(originals, None)):
+                            pending.append(more)
+                        table = pa.Table.from_batches(pending, schema=retained.schema_arrow)
+                        if table.num_rows < subjects.num_rows:
+                            return False
+                        pending = table.slice(subjects.num_rows).to_batches()
+                        table = table.slice(0, subjects.num_rows)
+                        low, high = first + count, first + count + subjects.num_rows
+                        index = pa.array(range(low, high), pa.int64())
+                        self.connection.register('btv_regulatory_subjects', subjects)
+                        try:
+                            receipts = self.connection.execute(query, [low, high, low, high]).to_arrow_table()
+                        finally:
+                            self.connection.unregister('btv_regulatory_subjects')
+                        if not receipts['_i'].combine_chunks().equals(index):
+                            return False
+                        subject = subjects.select(policy.subject_schema.names)
+                        self.connection.register('s', subject.rename_columns([f'_s_{name}' for name in subject.column_names])
+                                                 .append_column('_i', index))
+                        self.connection.register('r', receipts.select(['_i', 'identity_json', 'processing_json']))
+                        try:
+                            result = self.connection.execute(plain).to_arrow_table()
+                        finally:
+                            self.connection.unregister('s')
+                            self.connection.unregister('r')
+                        if not result['_i'].combine_chunks().equals(index):
+                            return False
+                        flags = [bound is True and identity_ok and proven and meta == metadata
+                                 for bound, identity_ok, proven, meta in zip(receipts['_bound'].to_pylist(),
+                                 result['_identity_ok'].to_pylist(), result['_plain'].to_pylist(),
+                                 result['_meta'].to_pylist(), strict=True)]
+                        mask = pa.array(flags, pa.bool_())
+                        if not result.filter(mask).select(schema.names).cast(schema).equals(table.filter(mask)):
+                            return False
+                        rest = [i for i, flag in enumerate(flags) if not flag]
+                        if rest and not self._regulatory_subset_equal(dataset, schema, subject.take(rest),
+                                                                     receipts.take(rest), table.take(rest)):
+                            return False
+                        count += subjects.num_rows
+            except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
+                raise etl_bulk.bulk_failure('Regulatory comparison proof failed', error) from error
+            finally:
+                for name in functions:
+                    self.connection.remove_function(name)
+            return (count == parquet.metadata.num_rows and not any(piece.num_rows for piece in pending)
+                    and next(originals, None) is None and read == [count, count])
+
+    def _regulatory_subset_equal(self, dataset, schema, subjects, receipts, original):
+        import pyarrow as pa
+        from spicy_regs.etl_receipts import subject_identity
+        from spicy_regs.transforms.regulations_receipts import _processor_inputs
+
+        try:
+            rows = []
+            for subject, receipt in zip(subjects.to_pylist(), receipts.to_pylist(), strict=True):
+                if subject_identity(self.policies[dataset], subject) != (
+                        receipt['record_id'], receipt['version'], receipt['identity']):
+                    return False
+                row = subject | _unpack(json.loads(receipt['processing_json']))
+                if (pa.schema([], metadata=row.get('input_metadata', {})).metadata or {}) != (schema.metadata or {}):
+                    return False
+                rows.append(row)
+            raw = _processor_inputs(dataset, rows)
+            if any(set(row) != set(schema.names) for row in raw):
+                return False
+            return pa.Table.from_pylist(raw, schema=schema).equals(original)
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            return False
+
+    def _regulatory_original_rows(self, dataset, schema, *, source_schema=None):
+        import pyarrow as pa
+        from spicy_regs.transforms.regulations_receipts import _processor_inputs
+
+        expected_metadata = self._regulatory_original_schema(dataset, schema, source_schema=source_schema)
         rows = iter(self.read_subjects(dataset))
         count = 0
         while batch := list(islice(rows, 2000)):

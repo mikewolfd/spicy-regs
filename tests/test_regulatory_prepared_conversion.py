@@ -88,14 +88,18 @@ def test_regulatory_converter_refuses_duplicate_base_identity_without_publicatio
 
 
 @pytest.mark.parametrize("change", ["order", "value", "metadata"])
-def test_regulatory_preparation_refuses_processing_changes_before_publication(tmp_path, monkeypatch, bucket, change):
+def test_regulatory_row_comparison_refuses_processing_changes_before_publication(tmp_path, monkeypatch, bucket, change):
     from spicy_regs.transforms import regulations_receipts
+    from spicy_regs.conversion_reads import _FamilyReader
+
+    # This oracle mutates the maintained Python decoder. SQL equality and actual retained-data mutations are
+    # exercised separately; select the row route here so these injected decoder faults reach the comparison.
+    monkeypatch.setattr(_FamilyReader, '_bulk_regulatory_equal', lambda *a: False)
 
     publish_old(bucket, monkeypatch, tmp_path, "dockets", {"dockets": rows("dockets")})
     written = list(bucket.writes)
     intercepted = []
     if change == "metadata":
-        from spicy_regs.conversion_reads import _FamilyReader
         read = _FamilyReader.read_subjects
 
         def changed_metadata(reader, dataset):
