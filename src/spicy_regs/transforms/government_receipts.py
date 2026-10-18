@@ -1,8 +1,8 @@
 """Government-source adoption of the shared ETL receipt writer and internal reader.
 
-Legacy source shapers and precedence rules run on their literal inputs. Public
-outputs are replaced only after the typed subjects and receipts validate. An
-incremental read of a migrated subject requires its matching selected receipts.
+Legacy source shapers and precedence rules run on their literal inputs. The
+generation admits the completed typed subjects and receipts once. An incremental
+read of a migrated subject requires its matching selected receipts.
 """
 
 from __future__ import annotations
@@ -13,32 +13,37 @@ import json
 import os
 import re
 import shutil
-import sqlite3
 from contextvars import ContextVar
+from collections.abc import Mapping
 from dataclasses import replace
 from functools import wraps
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import uuid4
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from spicy_regs import etl_bulk, government_bulk
 from spicy_regs.earlier_receipt_policies import earlier_policies
 from spicy_regs.etl_receipts import (
+    RECEIPT_KEY,
     RECEIPT_SCHEMA,
     DatasetPolicy,
     ReceiptContext,
     combine_receipts,
     failure_receipt,
     observation_receipt,
-    rebind_receipt,
     read_with_receipts,
     select_receipts,
+    split_record,
     subject_identity,
     validate_receipt_bundle,
-    write_dataset,
 )
+from spicy_regs.native_merge import native_merge
+from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 from spicy_regs.sources import publication
 from spicy_regs.transforms.government_source_shapes import (
     IDENTITY_FIELDS,
@@ -70,6 +75,16 @@ POLICIES = {
     )
     for dataset, schema in SUBJECT_SCHEMAS.items()
 }
+REFUSAL_IDENTITIES = {
+    dataset: RefusalIdentity(tuple(IDENTITY_FIELDS[dataset]), "raw_record") for dataset in POLICIES
+}
+
+
+def _row_route(route: str, error: etl_bulk.NotBulkEligible, *, dataset: str, rows: int) -> None:
+    if dataset in government_bulk.BULK_DATASETS:
+        etl_bulk.log_row_fallback(route, error, dataset=dataset, rows=rows)
+    else:
+        etl_bulk.log_row_eligibility(route, dataset=dataset, rows=rows, reason=str(error))
 
 
 def _without(dataset: str, *columns: str) -> DatasetPolicy:
@@ -98,6 +113,7 @@ EARLIER_POLICIES["fcc_filings"] = tuple(
 )
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)
+_NATIVE_PRIORS: ContextVar[dict[str, tuple[Path, Path]] | None] = ContextVar("government_native_priors", default=None)
 # This is local build metadata for forwarding the shared API's admission arguments,
 # not another receipt format. The receipts themselves use etl_receipts.RECEIPT_SCHEMA.
 BUILD_METADATA = ".government-etl-build.json"
@@ -150,7 +166,8 @@ def _prior_policy(dataset: str, path: Path) -> DatasetPolicy:
 
 
 def internal_prior(
-    dataset: str, path: Path, *, receipt_path: Path | None = None, generation_id: str | None = None
+    dataset: str, path: Path, *, receipt_path: Path | None = None, generation_id: str | None = None,
+    keep_native: bool = False,
 ) -> Path:
     """Restore literal processing input from a validated native subject/receipt pair.
 
@@ -158,6 +175,8 @@ def internal_prior(
     file must pin the subject bytes, or the captured publication index must pin
     them. Missing, changed, wrong-generation or ambiguous receipts always refuse.
     Legacy source-shaped inputs remain explicitly distinguishable by schema.
+    ``keep_native`` admits the selected pair once and leaves it for the builder's
+    native merge, avoiding restoration of unchanged rows.
     """
     if not _native(path, dataset):
         if unknown := set(pq.read_schema(path).names) - set(LEGACY_COLUMNS[dataset]):
@@ -198,11 +217,25 @@ def internal_prior(
         inherited = _INHERITED.get()
         if inherited is not None:
             inherited[dataset] = selected
-        restored_rows = (
-            row["raw_record"]
-            for row in read_with_receipts([path], [selected], _prior_policy(dataset, path), generation_id=generation_id)
-        )
-        write_rows(restored_rows, restored, _legacy_schema(dataset))
+        policy = _prior_policy(dataset, path)
+        if keep_native:
+            native_priors = _NATIVE_PRIORS.get()
+            if native_priors is None:
+                raise ValueError("Native priors require an active receipt builder")
+            validate_receipt_bundle({dataset: [path]}, [selected], [policy], generation_id=generation_id)
+            native_priors[dataset] = (path, selected)
+            return path
+        try:
+            government_bulk.restore_legacy(
+                path, selected, restored, dataset=dataset, policy=policy, generation_id=generation_id,
+                schema=_legacy_schema(dataset),
+            )
+        except etl_bulk.NotBulkEligible as error:
+            _row_route("prior restore", error, dataset=dataset, rows=pq.ParquetFile(path).metadata.num_rows)
+            restored_rows = (
+                row["raw_record"] for row in read_with_receipts([path], [selected], policy, generation_id=generation_id)
+            )
+            write_rows(restored_rows, restored, _legacy_schema(dataset))
         return restored
     finally:
         scratch.unlink(missing_ok=True)
@@ -210,14 +243,141 @@ def internal_prior(
             selected.unlink(missing_ok=True)
 
 
+def has_native_prior(dataset: str) -> bool:
+    """Whether this build retained an admitted pair for a window-only native merge."""
+    return dataset in (_NATIVE_PRIORS.get() or {})
+
+
+def attempt(
+    dataset: str, raw: dict, ordinal: int, *, generation_id: str, source_uri: str, digest: str
+) -> tuple[dict | None, dict]:
+    """One retained producer row's conversion: its subject (None when refused) and its receipt.
+
+    The one step both writers share: ``migrate_outputs`` runs it per row for datasets SQL does not own, and
+    ``government_bulk`` for the rows SQL cannot prove. A malformed record is a refused receipt that keeps the whole
+    raw row and has no subject.
+    """
+    policy = POLICIES[dataset]
+    witnesses = [
+        {
+            "source_id": "spicy-regs:producer-output:" + dataset,
+            "source_uri": source_uri,
+            "sha256": digest,
+            "locator": f"row:{ordinal}",
+            "body_version": None,
+        }
+    ]
+    mapping_error = None
+    subject = None
+    try:
+        subject = map_subject(dataset, raw, generation_id=generation_id)
+        subject_identity(policy, subject)
+    except (GovernmentShapeError, ValueError, TypeError) as error:
+        mapping_error = error  # Retain the complete failed conversion below.
+    # The explicit page digest remains a second source witness. It is
+    # not replaced with the current run's time on carried USAspending rows.
+    if raw.get("source_capture_sha256") and (
+        not isinstance(raw["source_capture_sha256"], str)
+        or not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", raw["source_capture_sha256"])
+    ):
+        mapping_error = GovernmentShapeError("Invalid retained source capture digest")
+    elif raw.get("source_capture_sha256"):
+        witnesses.append(
+            {
+                "source_id": "usaspending:ranking-page",
+                "source_uri": None,
+                "sha256": raw["source_capture_sha256"],
+                "locator": None,
+                "body_version": None,
+            }
+        )
+    diagnostics = {"source_qualification": "producer-output; original capture coverage unchanged"}
+    if mapping_error is not None or subject is None:
+        mapping_error = mapping_error or GovernmentShapeError("No subject")
+        context = ReceiptContext(
+            generation_id,
+            f"{dataset}:{ordinal}",
+            policy.policy_version,
+            witnesses,
+            {**diagnostics, "error_type": type(mapping_error).__name__, "message": str(mapping_error)},
+        )
+        return None, failure_receipt(policy, context, outcome="refused", raw_fields={"raw_record": raw})
+    context = ReceiptContext(generation_id, f"{dataset}:{ordinal}", policy.policy_version, witnesses, diagnostics)
+    return split_record(policy, {**subject, "raw_record": raw}, context)
+
+
+def _write_by_row(retained: Path, subject_path: Path, receipt_path: Path, dataset: str, **context) -> None:
+    """The reference writer: ``attempt`` per row; refusals follow the accepted receipts."""
+    policy = POLICIES[dataset]
+    subjects, receipts, refused = [], [], []
+    with (
+        pq.ParquetWriter(subject_path, policy.subject_schema, compression="zstd") as subject_writer,
+        pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression="zstd") as receipt_writer,
+        TemporaryDirectory(dir=receipt_path.parent) as scratch,
+        pq.ParquetWriter(Path(scratch) / "refused.parquet", RECEIPT_SCHEMA, compression="zstd") as refused_writer,
+    ):
+        def flush():
+            if subjects:
+                subject_writer.write_table(pa.Table.from_pylist(subjects, schema=policy.subject_schema))
+            if receipts:
+                receipt_writer.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA))
+            if refused:
+                refused_writer.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
+            subjects.clear(), receipts.clear(), refused.clear()
+
+        attempted = 0
+        for ordinal, raw in enumerate(_rows(retained)):
+            attempted += 1
+            subject, receipt = attempt(dataset, raw, ordinal, **context)
+            if subject is None:
+                refused.append(receipt)
+            else:
+                subjects.append(subject)
+                receipts.append(receipt)
+            if len(receipts) + len(refused) >= 2000:
+                flush()
+        if attempted == 0:
+            receipts.append(_empty_observation(dataset, context["source_uri"], context["digest"], context["generation_id"]))
+        flush()
+        refused_writer.close()
+        with pq.ParquetFile(Path(scratch) / "refused.parquet") as late:
+            for batch in late.iter_batches(batch_size=2000):
+                receipt_writer.write_batch(batch)
+
+
+def _empty_observation(dataset: str, source_uri: str, digest: str, generation_id: str) -> dict:
+    policy = POLICIES[dataset]
+    return observation_receipt(
+        policy,
+        ReceiptContext(
+            generation_id,
+            dataset + ":empty",
+            policy.policy_version,
+            [
+                {
+                    "source_id": "spicy-regs:producer-output:" + dataset,
+                    "source_uri": source_uri,
+                    "sha256": digest,
+                    "locator": None,
+                    "body_version": None,
+                }
+            ],
+            {"subject_rows": 0},
+        ),
+        processing_fields={"raw_record": None},
+    )
+
+
 def migrate_outputs(
-    paths: tuple[Path, ...], *, generation_id: str | None = None, datasets: tuple[str, ...] | None = None, evidence=None
+    paths: tuple[Path, ...], *, generation_id: str | None = None, datasets: tuple[str, ...] | None = None, evidence=None,
+    native_orders: Mapping[str, tuple[str, ...]] | None = None,
 ) -> dict[str, Any]:
     """Convert every family output and retain the exact pre-conversion Parquet.
 
-    A malformed record receives a refused receipt and no subject. The writer
-    still validates the complete subject/receipt pairing before replacing any
-    caller-visible file. Pre-conversion inputs stay under .government-inputs.
+    A malformed record receives a refused receipt and no subject. Nothing is validated here: the generation's
+    admission is the one validation of the new bundle. A row the prior selected receipts already hold unchanged keeps
+    its prior receipt verbatim, and a changed one references its direct predecessor (``carry_receipt_history``).
+    Pre-conversion inputs stay under .government-inputs.
     """
     if not paths:
         raise ValueError("No government outputs")
@@ -234,162 +394,51 @@ def migrate_outputs(
     work.mkdir(parents=True)
     inputs = directory / ".government-inputs" / generation_id
     inputs.mkdir(parents=True)
-    inherited = sqlite3.connect(work / "prior-witnesses.sqlite")
-    try:
-        inherited.execute(
-            "CREATE TABLE witnesses (dataset TEXT, record_id TEXT, witnesses TEXT, receipt_id TEXT, generation_id TEXT, PRIMARY KEY(dataset,record_id))"
-        )
-        for dataset, prior_receipts in (_INHERITED.get() or {}).items():
-            inherited.executemany(
-                "INSERT INTO witnesses VALUES (?,?,?,?,?)",
-                (
-                    (dataset, row["record_id"], json.dumps(row["witnesses"]), row["receipt_id"], row["generation_id"])
-                    for row in _rows(prior_receipts)
-                    if row["outcome"] == "accepted"
-                ),
+    bundles = []
+    counts = {}
+    for path, dataset in zip(paths, datasets, strict=True):
+        policy = POLICIES[dataset]
+        retained = inputs / path.name
+        # Preserve, do not reclassify, the exact bytes the existing producer wrote.
+        shutil.copyfile(path, retained)
+        digest = _digest(retained)
+        if evidence is not None:
+            evidence.retain_file(retained, stage="government-producer-output", dataset=dataset)
+        shard = work / dataset
+        shard.mkdir()
+        subject_path, receipt_path = shard / f"{dataset}.parquet", shard / RECEIPT_KEY
+        context = {"generation_id": generation_id, "source_uri": str(retained), "digest": digest}
+        rows = pq.ParquetFile(retained).metadata.num_rows
+        try:
+            government_bulk.write_dataset(
+                retained, subject_path, receipt_path, dataset=dataset, policy=policy, generation_id=generation_id,
+                source_uri=str(retained), digest=digest,
+                last_receipts=[] if rows else [_empty_observation(dataset, str(retained), digest, generation_id)],
+                row_attempt=lambda raw, ordinal, dataset=dataset: attempt(dataset, raw, ordinal, **context),
             )
-        inherited.commit()
-        bundles = []
-        policies = []
-        counts = {}
-        for path, dataset in zip(paths, datasets, strict=True):
-            policy = POLICIES[dataset]
-            policies.append(policy)
-            retained = inputs / path.name
-            # Preserve, do not reclassify, the exact bytes the existing producer wrote.
-            shutil.copyfile(path, retained)
-            digest = _digest(retained)
-            if evidence is not None:
-                evidence.retain_file(retained, stage="government-producer-output", dataset=dataset)
-            failure_path = work / f"{dataset}.failures.parquet"
-            failure_writer = pq.ParquetWriter(failure_path, RECEIPT_SCHEMA, compression="zstd")
-            failure_batch = []
-            prior_attempts = (_INHERITED.get() or {}).get(dataset)
-            if prior_attempts is not None:
-                for attempt in _rows(prior_attempts):
-                    if attempt["outcome"] != "accepted":
-                        failure_batch.append(rebind_receipt(attempt, generation_id=generation_id))
-                        if len(failure_batch) >= 2000:
-                            failure_writer.write_table(pa.Table.from_pylist(failure_batch, schema=RECEIPT_SCHEMA))
-                            failure_batch.clear()
-            attempted = accepted = refused_count = 0
-
-            def records():
-                nonlocal attempted, accepted, refused_count
-                for ordinal, raw in enumerate(_rows(retained)):
-                    attempted += 1
-                    witnesses = [
-                        {
-                            "source_id": "spicy-regs:producer-output:" + dataset,
-                            "source_uri": str(retained),
-                            "sha256": digest,
-                            "locator": f"row:{ordinal}",
-                            "body_version": None,
-                        }
-                    ]
-                    # Carry the prior selected receipt's ordered witnesses across
-                    # incremental merges. These are merge inputs, not claims that
-                    # every fresh field came from the prior source.
-                    mapping_error = None
-                    old = None
-                    try:
-                        subject = map_subject(dataset, raw, generation_id=generation_id)
-                        record_id = subject_identity(policy, subject)[0]
-                        old = inherited.execute(
-                            "SELECT witnesses, receipt_id, generation_id FROM witnesses WHERE dataset=? AND record_id=?",
-                            (dataset, record_id),
-                        ).fetchone()
-                        if old:
-                            witnesses = json.loads(old[0]) + witnesses
-                    except (GovernmentShapeError, ValueError, TypeError) as error:
-                        mapping_error = error  # Retain the complete failed conversion below.
-                    # The explicit page digest remains a second source witness. It is
-                    # not replaced with the current run's time on carried USAspending rows.
-                    if raw.get("source_capture_sha256") and (
-                        not isinstance(raw["source_capture_sha256"], str)
-                        or not re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", raw["source_capture_sha256"])
-                    ):
-                        mapping_error = GovernmentShapeError("Invalid retained source capture digest")
-                    elif raw.get("source_capture_sha256"):
-                        witnesses.append(
-                            {
-                                "source_id": "usaspending:ranking-page",
-                                "source_uri": None,
-                                "sha256": raw["source_capture_sha256"],
-                                "locator": None,
-                                "body_version": None,
-                            }
-                        )
-                    diagnostics = {"source_qualification": "producer-output; original capture coverage unchanged"}
-                    if old:
-                        diagnostics["prior_receipt_id"] = old[1]
-                        diagnostics["prior_generation_id"] = old[2]
-                    context = ReceiptContext(
-                        generation_id, f"{dataset}:{ordinal}", policy.policy_version, witnesses, diagnostics
-                    )
-                    try:
-                        if mapping_error is not None:
-                            raise mapping_error
-                    except (GovernmentShapeError, ValueError, TypeError) as error:
-                        refused = ReceiptContext(
-                            generation_id,
-                            f"{dataset}:{ordinal}",
-                            policy.policy_version,
-                            witnesses,
-                            {**diagnostics, "error_type": type(error).__name__, "message": str(error)},
-                        )
-                        refused_count += 1
-                        failure_batch.append(
-                            failure_receipt(policy, refused, outcome="refused", raw_fields={"raw_record": raw})
-                        )
-                        if len(failure_batch) >= 2000:
-                            failure_writer.write_table(pa.Table.from_pylist(failure_batch, schema=RECEIPT_SCHEMA))
-                            failure_batch.clear()
-                        continue
-                    accepted += 1
-                    yield {**subject, "raw_record": raw}, context
-                if attempted == 0:
-                    failure_batch.append(
-                        observation_receipt(
-                            policy,
-                            ReceiptContext(
-                                generation_id,
-                                dataset + ":empty",
-                                policy.policy_version,
-                                [
-                                    {
-                                        "source_id": "spicy-regs:producer-output:" + dataset,
-                                        "source_uri": str(retained),
-                                        "sha256": digest,
-                                        "locator": None,
-                                        "body_version": None,
-                                    }
-                                ],
-                                {"subject_rows": 0},
-                            ),
-                            processing_fields={"raw_record": None},
-                        )
-                    )
-                if failure_batch:
-                    failure_writer.write_table(pa.Table.from_pylist(failure_batch, schema=RECEIPT_SCHEMA))
-                failure_writer.close()
-
-            try:
-                subject_path, receipts = write_dataset(records(), work / dataset, policy, failures=_rows(failure_path))
-            finally:
-                failure_writer.close()
-            assert subject_path is not None
-            bundles.append((path, subject_path, receipts))
-            counts[dataset] = {"inputs": attempted, "subjects": accepted, "refused": refused_count}
-    finally:
-        inherited.close()
-    combined = combine_receipts([bundle[2] for bundle in bundles], work / "etl_receipts.parquet")
-    validate_receipt_bundle(
-        {dataset: [bundle[1]] for dataset, bundle in zip(datasets, bundles, strict=True)},
-        [combined],
-        policies,
-        generation_id=generation_id,
-    )
+        except etl_bulk.NotBulkEligible as error:
+            _row_route("receipt write", error, dataset=dataset, rows=rows)
+            _write_by_row(retained, subject_path, receipt_path, dataset, **context)
+        with pq.ParquetFile(receipt_path) as receipts:
+            refused = sum(pc.call_function("sum", [pc.call_function("equal", [batch.column(0), "refused"])]).as_py() or 0
+                          for batch in receipts.iter_batches(columns=["outcome"]))
+        if native_prior := (_NATIVE_PRIORS.get() or {}).get(dataset):
+            if native_orders is None or dataset not in native_orders:
+                raise ValueError(f"{dataset}: retained native prior has no declared output order")
+            merged = native_merge(
+                policy, fresh=(subject_path, receipt_path), prior=native_prior, order_by=native_orders[dataset],
+                subjects=shard / "merged-subjects.parquet", receipts=shard / "merged-receipts.parquet",
+                refusal_identity=REFUSAL_IDENTITIES[dataset])
+            merged.subjects.replace(subject_path)
+            merged.receipts.replace(receipt_path)
+        elif prior := (_INHERITED.get() or {}).get(dataset):
+            carry_receipt_history(receipt_path, [prior], shard / "carried.parquet",
+                                  refusal_identities={dataset: REFUSAL_IDENTITIES[dataset]})
+            (shard / "carried.parquet").replace(receipt_path)
+        subjects = pq.ParquetFile(subject_path).metadata.num_rows
+        bundles.append((path, subject_path, receipt_path))
+        counts[dataset] = {"inputs": rows, "subjects": subjects, "refused": refused}
+    combined = combine_receipts([bundle[2] for bundle in bundles], work / RECEIPT_KEY)
     # A refused conversion is inspectable but never silently replaces a complete
     # producer output with a smaller subject table. Explicit qualification decides
     # whether to admit such a candidate; ordinary ingest refuses the replacement.
@@ -400,7 +449,7 @@ def migrate_outputs(
         staged = original.with_name("." + original.name + ".native")
         shutil.copyfile(subject, staged)
         staged.replace(original)
-    receipt_path = directory / "etl_receipts.parquet"
+    receipt_path = directory / RECEIPT_KEY
     shutil.copyfile(combined, receipt_path)
     metadata = {
         "generation_id": generation_id,
@@ -433,7 +482,8 @@ def generation_receipt_args(paths: tuple[Path, ...]) -> dict[str, Any]:
     }
 
 
-def receipt_builder(function=None, *, output_argument: str | None = None, dataset: str | None = None):
+def receipt_builder(function=None, *, output_argument: str | None = None, dataset: str | None = None,
+                    native_orders: Mapping[str, tuple[str, ...]] | None = None):
     """Adopt actual producers; nested family builders share the outer conversion."""
 
     def decorate(builder):
@@ -450,6 +500,7 @@ def receipt_builder(function=None, *, output_argument: str | None = None, datase
             evidence = bound.arguments.get("evidence") or getattr(owner, "source_evidence", None)
             token = _ACTIVE.set(True)
             inherited_token = _INHERITED.set({})
+            native_token = _NATIVE_PRIORS.set({})
             try:
                 result = builder(*args, **kwargs)
                 paths = (
@@ -464,11 +515,13 @@ def receipt_builder(function=None, *, output_argument: str | None = None, datase
                     generation_id=generation_id,
                     datasets=(dataset,) if dataset else None,
                     evidence=evidence,
+                    native_orders=native_orders,
                 )
                 return result
             finally:
                 _ACTIVE.reset(token)
                 _INHERITED.reset(inherited_token)
+                _NATIVE_PRIORS.reset(native_token)
 
         return build
 

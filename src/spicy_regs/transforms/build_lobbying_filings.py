@@ -17,16 +17,20 @@ the R2 catastrophic-shrink guard on any short run. Instead we:
 1. Best-effort download the prior ``lobbying_filings.parquet`` from R2.
 2. Fetch only filings posted since its max ``dt_posted`` (minus a short overlap
    to catch late-posted / amended filings).
-3. Dedup the union on ``filing_uuid``, preferring the freshly fetched row.
+3. Write receipts for the fetched window, then merge the native tables on their
+   keys, preferring freshly fetched rows and retaining unchanged prior receipts.
 
-With no prior table (first run) step 2 becomes a full backfill. The reader is
-functional keyless, so this runs in CI with or without ``LDA_API_KEY``.
+With no prior table (first run) step 2 becomes a full backfill. A legacy prior
+is converted once with the fetched window; a native prior is admitted and
+merged without restoring all source rows. The reader is functional keyless,
+so this runs in CI with or without ``LDA_API_KEY``.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
@@ -38,7 +42,7 @@ from loguru import logger
 
 from spicy_regs.transforms.parquet_rows import str_or_none
 from spicy_regs.sources import r2
-from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.government_receipts import BUILD_METADATA, _digest, has_native_prior, internal_prior, receipt_builder
 from spicy_regs.transforms.table_merge import merge_local_prior
 
 if TYPE_CHECKING:
@@ -290,7 +294,29 @@ def _prior_max_dt_posted(prior_file: Path) -> date | None:
         return None
 
 
-@receipt_builder
+def _stage_prior(output_dir: Path, key: str, target: Path) -> bool:
+    """Reuse the last completed local build before an older staged or remote prior.
+
+    ``internal_prior`` checks the selected subject and receipt hashes after this
+    copy. The staged pair stays intact while the producer writes the next window.
+    """
+    local = output_dir / key
+    metadata_path = output_dir / BUILD_METADATA
+    metadata = json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+    expected = metadata.get("subjects", {}).get(key.removesuffix(".parquet"), {}).get("sha256")
+    if expected is not None and local.exists() and _digest(local) == expected:
+        shutil.copyfile(local, target)
+        return True
+    # A failed producer may have replaced the public path with its raw window;
+    # keep the prior staged before that attempt until a completed build pins it.
+    return target.exists() or r2.download(key, target)
+
+
+@receipt_builder(native_orders={
+    "lobbying_filings": ("dt_posted DESC", "filing_uuid"),
+    "lobbying_activities": ("filing_uuid", "activity_index"),
+    "lobbying_activity_lobbyists": ("filing_uuid", "activity_index", "lobbyist_index"),
+})
 def build_lobbying_filings(
     output_dir: Path,
     *,
@@ -306,9 +332,9 @@ def build_lobbying_filings(
     prior_file = output_dir / "_lda_prior.parquet"
 
     # 1. Pull the prior table (best effort — absence just means full backfill).
-    have_prior = prior_file.exists() or r2.download(OUTPUT, prior_file)
+    have_prior = _stage_prior(output_dir, OUTPUT, prior_file)
     if have_prior:
-        prior_file = internal_prior("lobbying_filings", prior_file)
+        prior_file = internal_prior("lobbying_filings", prior_file, keep_native=True)
     if have_prior:
         logger.info("LDA: merging against prior table {}", prior_file)
     else:
@@ -354,7 +380,8 @@ def build_lobbying_filings(
     logger.info("LDA: fetched {:,} filings ({:,} activities, {:,} lobbyist rows) this run", len(filings),
                 len(fresh[ACTIVITIES_OUTPUT][1]), len(fresh[LOBBYISTS_OUTPUT][1]))
 
-    # 4. Merge each table's prior + new, dedup on its identity preferring the new row.
+    # 4. Dedup the fetched rows. Only a legacy prior joins here; the receipt
+    # builder merges a native prior after converting this window.
     spill_dir = output_dir / ".duckdb_tmp"
     spill_dir.mkdir(exist_ok=True)
     con = duckdb.connect()
@@ -380,19 +407,24 @@ def build_lobbying_filings(
                 table_prior, table_has_prior = priors[key]
             else:
                 table_prior = output_dir / f"_{key.removesuffix('.parquet')}_prior.parquet"
-                table_has_prior = table_prior.exists() or r2.download(key, table_prior)
+                table_has_prior = _stage_prior(output_dir, key, table_prior)
                 if table_has_prior:
-                    table_prior = internal_prior(key.removesuffix(".parquet"), table_prior)
+                    table_prior = internal_prior(key.removesuffix(".parquet"), table_prior, keep_native=True)
             schema = pa.schema([(c, pa.string()) for c in columns])
             new_file = output_dir / f"_{key.removesuffix('.parquet')}_new.parquet"
             pq.write_table(pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table(), new_file,
                            compression="zstd")
             out = output_dir / key
+            # A selected native pair stays immutable until the receipt builder upserts
+            # these fetched rows. Only a legacy first run needs the full source merge.
+            native_prior = has_native_prior(key.removesuffix(".parquet"))
             merge_local_prior(con, columns=columns, identity=identity, order_by=order_by,
-                              prior_file=table_prior if table_has_prior else None, new_file=new_file, out_file=out)
+                              prior_file=table_prior if table_has_prior and not native_prior else None,
+                              new_file=new_file, out_file=out)
             # Housekeeping: drop scratch files so they aren't mistaken for outputs.
             for scratch in (table_prior, new_file):
-                scratch.unlink(missing_ok=True)
+                if scratch != table_prior or not native_prior:
+                    scratch.unlink(missing_ok=True)
             outputs.append(out)
             logger.info("{}: {:,} rows", key, pq.ParquetFile(out).metadata.num_rows)
     finally:
