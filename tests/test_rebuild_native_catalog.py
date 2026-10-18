@@ -4,6 +4,7 @@ import duckdb
 import hashlib
 import polars as pl
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.schemas import COMMENT
@@ -92,7 +93,7 @@ def test_rebuild_copies_published_rows_and_receipts_unchanged(live, published, t
     kept = f"SELECT {names} FROM read_parquet('{published.receipts}') WHERE dataset='comments' AND outcome='accepted'"
     assert live.execute(f'SELECT count(*) FROM (({carried} EXCEPT ALL {kept}) UNION ALL ({kept} EXCEPT ALL {carried}))').fetchone() == (0,)
     assert live.execute(f"SELECT count(*) FROM {native.receipts_table()} WHERE processor='regulatory-catalog-initialization-v1'").fetchone() == (1,)
-    result = native.verify_rebuilt(live, COMMENT, published, tmp_path / 'readback')
+    result = native.verify_rebuilt(live, COMMENT, published)
     assert result['rows'] == 4 and result['smoke_docket'] in {'B-2', 'C-3'}
     with pytest.raises(ValueError, match='already rebuilt'):
         rebuild(live, published)
@@ -203,7 +204,7 @@ def test_interrupted_final_transaction_leaves_an_empty_table_and_a_rerun_resumes
     assert native.rebuild_state(live, COMMENT) == 'empty'
     assert live.execute(f'SELECT count(*) FROM {native.qualified(COMMENT)}').fetchone() == (0,)
     assert rebuild(live, published, expected_snapshot=None)['state'] == 'empty'
-    native.verify_rebuilt(live, COMMENT, published, published.receipts.parent / 'readback')
+    native.verify_rebuilt(live, COMMENT, published)
 
 
 def test_rerun_resumes_when_the_table_was_dropped(live, published):
@@ -220,28 +221,28 @@ def test_readback_catches_a_corrupted_copy(live, published, tmp_path, damage):
         live.execute(f"UPDATE {native.qualified(COMMENT)} SET text_content='tampered' WHERE comment_id='c0'")
     elif damage == 'receipt':
         live.execute(f"UPDATE {native.receipts_table()} SET subject_version='0'*64 WHERE outcome='accepted' "
-                     f"AND record_id=(SELECT min(record_id) FROM {native.receipts_table()} WHERE outcome='accepted')")
+                     f"AND record_id=(SELECT record_id FROM {native.receipts_table()} WHERE outcome='accepted' AND identity_json LIKE '%c0%')")
     else:
         live.execute(f"DELETE FROM {native.receipts_table()} WHERE processor='regulatory-catalog-initialization-v1'")
     with pytest.raises((ValueError, RuntimeError)) as refused:
-        native.verify_rebuilt(live, COMMENT, published, tmp_path / 'readback')
+        native.verify_rebuilt(live, COMMENT, published)
     assert str(refused.value)
 
 
 def test_readback_refuses_valid_replacement_receipt_with_changed_provenance(live, published, tmp_path):
     from spicy_regs.etl_receipts import rebind_receipt
     rebuild(live, published)
-    original = live.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted' LIMIT 1").to_arrow_table().to_pylist()[0]
+    original = live.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted' AND identity_json LIKE '%c0%'").to_arrow_table().to_pylist()[0]
     changed = rebind_receipt(original, generation_id='another-generation')
     assert changed['record_id'] == original['record_id'] and changed['subject_version'] == original['subject_version']
     live.register('replacement', pa.Table.from_pylist([changed], schema=RECEIPT_SCHEMA))
     live.execute(f'DELETE FROM {native.receipts_table()} WHERE receipt_id=?', [original['receipt_id']])
     live.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM replacement')
     with pytest.raises(RuntimeError, match='receipts differ from the published generation'):
-        native.verify_rebuilt(live, COMMENT, published, tmp_path / 'readback')
+        native.verify_rebuilt(live, COMMENT, published)
 
 
-@pytest.mark.parametrize('dockets', [[], [None]])
+@pytest.mark.parametrize('dockets', [[], [None], [None] * 101])
 def test_readback_smoke_accepts_empty_or_unknown_docket_population(tmp_path, state, dockets):
     with _connection() as writer:
         rows = [{**dict.fromkeys(COMMENT.schema), 'comment_id': f'c{i}', 'docket_id': docket}
@@ -252,10 +253,68 @@ def test_readback_smoke_accepts_empty_or_unknown_docket_population(tmp_path, sta
         pair = native.export_pair(writer, COMMENT, tmp_path / 'published', generation_id='unknown-docket')
     with _v1(pair) as con:
         rebuild(con, pair)
-        result = native.verify_rebuilt(con, COMMENT, pair, tmp_path / 'readback')
+        result = native.verify_rebuilt(con, COMMENT, pair)
     assert result['rows'] == len(dockets)
-    if dockets:
+    if len(dockets) > 100:
+        assert result['smoke_skipped'] == 'smallest docket exceeds 100 rows'
+    elif dockets:
         assert 'smoke_docket' in result and result['smoke_docket'] is None
+
+
+@pytest.mark.parametrize('column', V2)
+def test_readback_compares_every_new_comment_column(live, published, column):
+    rebuild(live, published)
+    live.execute(f'UPDATE {native.qualified(COMMENT)} SET "{column}"=? WHERE comment_id=?', ['tampered', 'c2'])
+    with pytest.raises(RuntimeError, match='Sampled subjects differ'):
+        native.verify_rebuilt(live, COMMENT, published, smoke=False)
+
+
+@pytest.mark.parametrize('damage', ['subject-missing', 'receipt-missing', 'subject-schema', 'receipt-schema'])
+def test_readback_checks_counts_and_schemas_beyond_sample(live, published, damage):
+    rebuild(live, published)
+    if damage == 'subject-missing':
+        live.execute(f"DELETE FROM {native.qualified(COMMENT)} WHERE comment_id='c1'")
+    elif damage == 'receipt-missing':
+        live.execute(f"DELETE FROM {native.receipts_table()} WHERE identity_json LIKE '%c1%'")
+    elif damage == 'subject-schema':
+        live.execute(f'ALTER TABLE {native.qualified(COMMENT)} DROP COLUMN text_extraction_status')
+    else:
+        live.execute(f'ALTER TABLE {native.receipts_table()} ADD COLUMN extra VARCHAR')
+    with pytest.raises((ValueError, RuntimeError)):
+        native.verify_rebuilt(live, COMMENT, published, smoke=False)
+
+
+def test_readback_samples_nonaccepted_provenance_and_scopes_receipt_counts(live, published, tmp_path):
+    from dataclasses import replace
+    from spicy_regs.etl_receipts import ReceiptContext, failure_receipt
+    witnesses = pq.read_table(published.receipts).to_pylist()[0]['witnesses']
+    failed = failure_receipt(native.policy('comments'), ReceiptContext('generation', 'attempt', 'reader', witnesses),
+                             outcome='refused', raw_fields={'raw_source_record': {'comment_id': 'bad'}})
+    other = {**failed, 'dataset': 'comments_index'}
+    mixed = tmp_path / 'mixed-receipts.parquet'
+    pq.write_table(pa.concat_tables([pq.read_table(published.receipts),
+                                    pa.Table.from_pylist([failed, other], schema=RECEIPT_SCHEMA)]), mixed)
+    pair = replace(published, receipts=mixed)
+    rebuild(live, pair)
+    live.register('other_receipt', pa.Table.from_pylist([other], schema=RECEIPT_SCHEMA))
+    live.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM other_receipt')
+    result = native.verify_rebuilt(live, COMMENT, pair, smoke=False)
+    assert result['verification'] == 'sampled'
+    assert result['sampled_subjects'] == 3 and result['sampled_receipts'] == 4
+    assert result['receipts'] == 6  # Four accepted comments, one refusal, one checked marker; not comments_index.
+    live.execute(f"UPDATE {native.receipts_table()} SET diagnostic_json=? WHERE dataset='comments' AND outcome='refused'",
+                 ['{"changed":true}'])
+    with pytest.raises(RuntimeError, match='including provenance'):
+        native.verify_rebuilt(live, COMMENT, pair, smoke=False)
+
+
+def test_readback_does_not_export_or_build_a_second_validation_database(live, published, monkeypatch):
+    from spicy_regs import etl_bulk
+    rebuild(live, published)
+    monkeypatch.setattr(native, '_copy', lambda *a, **k: pytest.fail('must not export the catalog'))
+    monkeypatch.setattr(etl_bulk, 'validate_bundle', lambda *a, **k: pytest.fail('must not validate the full catalog'))
+    result = native.verify_rebuilt(live, COMMENT, published, smoke=False)
+    assert result['verification'] == 'sampled' and result['sampled_subjects'] == 3
 
 
 @pytest.fixture
@@ -288,14 +347,14 @@ def test_command_dry_run_prints_the_plan_and_writes_nothing(command, live, capsy
     before = untouched(live)
     assert command() == 0
     out = capsys.readouterr().out
-    assert 'rows 4' in out and 'estimated additional disk' in out and 'default_native' in out and 'dry run' in out
+    assert 'rows 4' in out and 'missing input bytes' in out and 'not reserved' in out and 'default_native' in out and 'dry run' in out
     assert untouched(live) == before
     assert command('--dry-run') == 0 and untouched(live) == before
 
 
 def test_command_publish_rebuilds_and_reads_back_and_verify_only_rechecks(command, live, capsys):
     assert command('--publish') == 0
-    assert 'Readback passed' in capsys.readouterr().out
+    assert 'Sampled readback passed' in capsys.readouterr().out
     assert native.rebuild_state(live, COMMENT) == 'done'
     assert command('--verify-only') == 0
 
@@ -339,3 +398,23 @@ def test_command_passes_resources_and_work_volume_to_nested_validation(command, 
     monkeypatch.setattr(native, 'verify_rebuilt', verify)
     assert command('--publish', '--threads', '2', '--memory', '1GB') == 0
     assert tempfile.tempdir == previous and etl_bulk._limits.get() is None
+
+
+
+def test_command_does_not_reserve_the_spill_cap(command, published, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from scripts import rebuild_native_catalog as script
+    missing = published.subjects[0].stat().st_size + published.receipts.stat().st_size
+    monkeypatch.setattr(script.shutil, 'disk_usage', lambda _: SimpleNamespace(free=missing))
+    assert command('--spill', '64GiB') == 0
+    output = capsys.readouterr().out
+    assert 'configured spill cap 64GiB (not reserved)' in output and 'peak disk use is unmeasured' in output
+
+
+def test_command_requires_space_only_for_missing_inputs_before_download(command, monkeypatch):
+    from types import SimpleNamespace
+    from scripts import rebuild_native_catalog as script
+    monkeypatch.setattr(script.shutil, 'disk_usage', lambda _: SimpleNamespace(free=0))
+    monkeypatch.setattr(publication, 'fetch_member', lambda *a: pytest.fail('must refuse before downloading'))
+    with pytest.raises(SystemExit, match='missing published inputs'):
+        command()
