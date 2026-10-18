@@ -126,3 +126,81 @@ def test_the_bulk_validator_proves_datetime_evidence_and_leaves_the_rest_to_the_
     for unproven in ("2021-02-30T00:00:00+00:00", "2021-05-01T24:00:00+00:00", "0999-01-01T00:00:00+00:00",
                      "2021-05-01T12:30:05+05:00", "2021-05-01 12:30:05+00:00"):
         assert not proven(unproven)
+
+
+def _comment(comment_id, **attributes):
+    return {"data": {"id": comment_id, "type": "comments", "attributes": attributes}}
+
+
+def _fresh(tmp_path, name, records):
+    from tests.test_regulations_attributes import _parts
+    from spicy_regs.transforms.regulations_attributes import merge_attribute_parts
+    _parts(tmp_path / name, "comment_attributes", records)
+    out = tmp_path / f"{name}.parquet"
+    merge_attribute_parts("comment_attributes", tmp_path / name / "comment_attributes", None, out)
+    return out
+
+
+def _receipts_by_id(subject_path, receipts_path):
+    receipts = pq.read_table(receipts_path).to_pylist()
+    ids = {r["record_id"]: r for r in receipts if r["outcome"] == "accepted"}
+    order = [json.loads(r["identity_json"])[1][0][1][1][1] for r in receipts if r["outcome"] == "accepted"]
+    return ids, order, receipts
+
+
+def test_the_nights_attribute_rows_upsert_over_the_selected_native_table_without_restoring_it(tmp_path, monkeypatch):
+    from spicy_regs.pipelines.regulatory_publication import finish_attribute_dataset, finish_dataset, restore_dataset
+    from spicy_regs.selected_generations import SelectedInputs
+
+    root = tmp_path / "root"
+    seed = _fresh(tmp_path, "seed", [
+        _comment(f"C-{i}", pageCount=i, city=f"town{i}", withdrawn=False,
+                 displayProperties=[{"name": "n", "label": "l", "tooltip": "t"}]) for i in range(6)])
+    # The table was converted from a file that carried metadata: the night's rows state the same, or no restore agrees.
+    pq.write_table(pq.read_table(seed).replace_schema_metadata({"placement": "kept"}), seed)
+    finish_dataset(root, "comment_attributes", seed, publish=False)
+    inputs = SelectedInputs(root, root / "selected", public_url="")
+    prior = inputs.select("comment_attributes")
+    before, _, _ = _receipts_by_id(prior.subjects[0], prior.receipts)
+
+    fresh = _fresh(tmp_path, "night", [
+        _comment("C-2", pageCount=2, city="town2", withdrawn=False,
+                 displayProperties=[{"name": "n", "label": "l", "tooltip": "t"}]),   # refetched, unchanged
+        _comment("C-4", pageCount=40, city="moved", withdrawn=False),              # refetched, changed
+        _comment("C-9", pageCount=9, postmarkDate="2021-01-01T05:00:00Z"),          # new
+        _comment("A-0", pageCount=1),                                               # new, sorts first
+    ])
+    # Nothing is restored to rows, nor re-receipted beyond the night's four rows.
+    monkeypatch.setattr(regulations_receipts, "_qualified_rows", lambda *a, **k: pytest.fail("restored by row"))
+    monkeypatch.setattr(regulations_bulk, "materialize_internal", lambda *a, **k: pytest.fail("restored"))
+    monkeypatch.setattr(etl_receipts, "_validate_receipt_bundle_rows",
+                        lambda *a, **k: pytest.fail("row validation of a bundle the SQL validator proves"))
+    finish_attribute_dataset(root, "comment_attributes", fresh, publish=False, inputs=inputs)
+    monkeypatch.undo()
+
+    inputs = SelectedInputs(root, root / "selected-after", public_url="")
+    after = inputs.select("comment_attributes")
+    assert after.generation_id != prior.generation_id
+    table = pq.read_table(after.subjects[0])
+    assert table.schema.equals(policy("comment_attributes").subject_schema)
+    assert table["comment_id"].to_pylist() == ["A-0", "C-0", "C-1", "C-2", "C-3", "C-4", "C-5", "C-9"]
+    assert {r["comment_id"]: r["city"] for r in table.to_pylist()}["C-4"] == "moved"
+    now, order, receipts = _receipts_by_id(after.subjects[0], after.receipts)
+    assert order == table["comment_id"].to_pylist(), "accepted receipts follow their subjects"
+    by_id = {json.loads(r["identity_json"])[1][0][1][1][1]: r for r in receipts if r["outcome"] == "accepted"}
+    prior_by_id = {json.loads(r["identity_json"])[1][0][1][1][1]: r
+                   for r in pq.read_table(prior.receipts).to_pylist() if r["outcome"] == "accepted"}
+    for kept in ("C-0", "C-1", "C-3", "C-5", "C-2"):   # kept rows and the unchanged refetch: the prior receipt, verbatim
+        assert by_id[kept] == prior_by_id[kept]
+    assert by_id["C-4"]["receipt_id"] != prior_by_id["C-4"]["receipt_id"]
+    assert prior_by_id["C-4"]["receipt_id"] in by_id["C-4"]["diagnostic_json"], "a change names its predecessor"
+    assert {by_id[i]["generation_id"] for i in ("C-4", "C-9", "A-0")} == {by_id["C-4"]["generation_id"]}
+    assert by_id["C-4"]["generation_id"] != prior_by_id["C-0"]["generation_id"]
+    assert len(before) == 6 and len(now) == 8
+
+    # The next night's restore reproduces the table from the merged receipts.
+    restored = tmp_path / "restored.parquet"
+    assert restore_dataset(root, "comment_attributes", restored, inputs=inputs)
+    assert pq.read_table(restored)["comment_id"].to_pylist() == table["comment_id"].to_pylist()
+    assert pq.read_table(restored).to_pylist()[5]["page_count"] == 40
+    assert pq.read_schema(restored).metadata == {b"placement": b"kept"}
