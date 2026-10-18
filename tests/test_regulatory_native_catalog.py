@@ -1,5 +1,6 @@
 """Native catalog writes admit subject/receipt pairs with rollback and exact reads."""
 
+import dataclasses
 import duckdb
 import polars as pl
 import pytest
@@ -571,8 +572,9 @@ def test_an_initialization_marker_written_under_an_earlier_policy_version_still_
     con.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM marker")
     assert native.initialized(con, 'comments') is True
     native.require_initialized(con, COMMENT)
-    # A marker of a version outside the lineage is still refused.
-    marker = observation_receipt(current, context, processing_fields={'input_metadata': {'catalog_initialized': False}})
+    # The exact initialization value under a version outside the lineage is refused by the version check alone.
+    undeclared = dataclasses.replace(current, policy_version='regulations-native-v0')
+    marker = observation_receipt(undeclared, context, processing_fields={'input_metadata': {'catalog_initialized': True}})
     con.execute(f"DELETE FROM {native.receipts_table()}")
     con.register('bad', pl.DataFrame([marker]).to_arrow())
     con.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM bad")
