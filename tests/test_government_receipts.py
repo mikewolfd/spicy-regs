@@ -470,9 +470,8 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
     assert decode_exact_json(receipt["diagnostic_json"])["prior_receipt"]["generation_id"] == "earlier"
     assert [w["source_id"] for w in receipt["witnesses"]] == ["spicy-regs:producer-output:" + dataset]
     if with_prior_refusal:
-        # The carry rule drops an old attempt the new generation did not repeat: the row was re-converted from its
-        # accepted receipt, so the earlier refusal is not carried forward (it stays in the earlier generation).
-        assert not list(read_attempts([selected], POLICIES[dataset], generation_id="upgrade", outcomes=frozenset({"refused"})))
+        # No identity can link this raw input to a successful conversion: retain it unchanged.
+        assert [item for item in receipt_rows if item["outcome"] == "refused"] == [refused]
 
     # The run that holds the letters' capture: the same row, now under the current policy, takes its letter.
     output.rename(prior)

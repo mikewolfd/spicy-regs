@@ -160,8 +160,10 @@ def test_a_dataset_with_its_own_mapper_rules_stays_on_the_row_path_loudly(tmp_pa
     try:
         gr.migrate_outputs((source,), generation_id="loud")
         assert any("route=row dataset=gao_reports" in m for m in messages)
-        with etl_bulk.bulk_limits(threads=1, memory_limit="1GB", require_bulk=True), pytest.raises(ValueError, match="reference fallback disabled"):
+        _source(tmp_path, dataset, [{"report_id": "R"}])
+        with etl_bulk.bulk_limits(threads=1, memory_limit="1GB", require_bulk=True):
             gr.migrate_outputs((source,), generation_id="strict")
+        assert any("dataset=gao_reports rows=1" in m for m in messages)
     finally:
         logger.remove(sink)
 
@@ -233,3 +235,11 @@ def test_the_restore_decodes_a_receipt_that_is_not_the_plain_shape_in_python(tmp
     left = government_bulk.restore_legacy(source, selected, destination, dataset=dataset, policy=gr.POLICIES[dataset],
                                           generation_id="g", schema=gr._legacy_schema(dataset))
     assert left == 0 and pq.read_table(destination).num_rows == len(rows)
+
+
+def test_mapped_dataset_refuses_changed_source_schema_when_bulk_is_required(tmp_path):
+    source = tmp_path / "crs_reports.parquet"
+    pq.write_table(pa.table({"report_id": [1]}), source)
+    with etl_bulk.bulk_limits(threads=1, memory_limit="1GB", require_bulk=True):
+        with pytest.raises(ValueError, match="reference fallback disabled"):
+            gr.migrate_outputs((source,), generation_id="refuse-mapped-row-route")

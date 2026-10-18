@@ -32,7 +32,8 @@ from spicy_regs.transforms.government_source_shapes import (
 
 #: Datasets whose mapper does more than pass columns through typed (FCC arrays and extractions, GAO's captions and
 #: product ids): they stay on the row path.
-SPECIAL = frozenset({"fcc_filings", "gao_decisions", "gao_reports"})
+SPECIAL = frozenset({"fcc_filings", "gao_decisions", "gao_reports", "usaspending_recipients"})
+BULK_DATASETS = frozenset(SUBJECT_SCHEMAS) - SPECIAL
 _BATCH = 20_000
 _DIGITS = "'-?[0-9]+'"
 _MONEY = "'-?[0-9]{1,32}([.][0-9]{1,6})?'"
@@ -176,8 +177,7 @@ def write_dataset(
             con, query, source=source, batch_rows=_BATCH, expected_rows=pq.ParquetFile(source).metadata.num_rows,
             subject_schema=policy.subject_schema, subject_path=subject_path, receipt_path=receipt_path, label=dataset,
             first_receipts=first_receipts, last_receipts=last_receipts, refusals_last=True,
-            row_attempt=lambda table, index: row_attempt(
-                _unpack(json.loads(table["_raw"][index].as_py())), table["_ordinal"][index].as_py()),
+            row_attempt=lambda table, index, source_row: row_attempt(source_row, table["_ordinal"][index].as_py()),
         )
 
 

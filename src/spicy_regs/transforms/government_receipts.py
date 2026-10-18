@@ -1,8 +1,8 @@
 """Government-source adoption of the shared ETL receipt writer and internal reader.
 
-Legacy source shapers and precedence rules run on their literal inputs. Public
-outputs are replaced only after the typed subjects and receipts validate. An
-incremental read of a migrated subject requires its matching selected receipts.
+Legacy source shapers and precedence rules run on their literal inputs. The
+generation admits the completed typed subjects and receipts once. An incremental
+read of a migrated subject requires its matching selected receipts.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 from contextvars import ContextVar
+from collections.abc import Mapping
 from dataclasses import replace
 from functools import wraps
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Any
 from uuid import uuid4
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from spicy_regs import etl_bulk, government_bulk
@@ -38,8 +40,10 @@ from spicy_regs.etl_receipts import (
     select_receipts,
     split_record,
     subject_identity,
+    validate_receipt_bundle,
 )
-from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.native_merge import native_merge
+from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 from spicy_regs.sources import publication
 from spicy_regs.transforms.government_source_shapes import (
     IDENTITY_FIELDS,
@@ -71,6 +75,16 @@ POLICIES = {
     )
     for dataset, schema in SUBJECT_SCHEMAS.items()
 }
+REFUSAL_IDENTITIES = {
+    dataset: RefusalIdentity(tuple(IDENTITY_FIELDS[dataset]), "raw_record") for dataset in POLICIES
+}
+
+
+def _row_route(route: str, error: etl_bulk.NotBulkEligible, *, dataset: str, rows: int) -> None:
+    if dataset in government_bulk.BULK_DATASETS:
+        etl_bulk.log_row_fallback(route, error, dataset=dataset, rows=rows)
+    else:
+        etl_bulk.log_row_eligibility(route, dataset=dataset, rows=rows, reason=str(error))
 
 
 def _without(dataset: str, *columns: str) -> DatasetPolicy:
@@ -99,6 +113,7 @@ EARLIER_POLICIES["fcc_filings"] = tuple(
 )
 _ACTIVE: ContextVar[bool] = ContextVar("government_receipt_build", default=False)
 _INHERITED: ContextVar[dict[str, Path] | None] = ContextVar("government_prior_receipts", default=None)
+_NATIVE_PRIORS: ContextVar[dict[str, tuple[Path, Path]] | None] = ContextVar("government_native_priors", default=None)
 # This is local build metadata for forwarding the shared API's admission arguments,
 # not another receipt format. The receipts themselves use etl_receipts.RECEIPT_SCHEMA.
 BUILD_METADATA = ".government-etl-build.json"
@@ -151,7 +166,8 @@ def _prior_policy(dataset: str, path: Path) -> DatasetPolicy:
 
 
 def internal_prior(
-    dataset: str, path: Path, *, receipt_path: Path | None = None, generation_id: str | None = None
+    dataset: str, path: Path, *, receipt_path: Path | None = None, generation_id: str | None = None,
+    keep_native: bool = False,
 ) -> Path:
     """Restore literal processing input from a validated native subject/receipt pair.
 
@@ -159,6 +175,8 @@ def internal_prior(
     file must pin the subject bytes, or the captured publication index must pin
     them. Missing, changed, wrong-generation or ambiguous receipts always refuse.
     Legacy source-shaped inputs remain explicitly distinguishable by schema.
+    ``keep_native`` admits the selected pair once and leaves it for the builder's
+    native merge, avoiding restoration of unchanged rows.
     """
     if not _native(path, dataset):
         if unknown := set(pq.read_schema(path).names) - set(LEGACY_COLUMNS[dataset]):
@@ -200,13 +218,20 @@ def internal_prior(
         if inherited is not None:
             inherited[dataset] = selected
         policy = _prior_policy(dataset, path)
+        if keep_native:
+            native_priors = _NATIVE_PRIORS.get()
+            if native_priors is None:
+                raise ValueError("Native priors require an active receipt builder")
+            validate_receipt_bundle({dataset: [path]}, [selected], [policy], generation_id=generation_id)
+            native_priors[dataset] = (path, selected)
+            return path
         try:
             government_bulk.restore_legacy(
                 path, selected, restored, dataset=dataset, policy=policy, generation_id=generation_id,
                 schema=_legacy_schema(dataset),
             )
         except etl_bulk.NotBulkEligible as error:
-            etl_bulk.log_row_fallback("prior restore", error, dataset=dataset)
+            _row_route("prior restore", error, dataset=dataset, rows=pq.ParquetFile(path).metadata.num_rows)
             restored_rows = (
                 row["raw_record"] for row in read_with_receipts([path], [selected], policy, generation_id=generation_id)
             )
@@ -216,6 +241,11 @@ def internal_prior(
         scratch.unlink(missing_ok=True)
         if _INHERITED.get() is None:
             selected.unlink(missing_ok=True)
+
+
+def has_native_prior(dataset: str) -> bool:
+    """Whether this build retained an admitted pair for a window-only native merge."""
+    return dataset in (_NATIVE_PRIORS.get() or {})
 
 
 def attempt(
@@ -339,7 +369,8 @@ def _empty_observation(dataset: str, source_uri: str, digest: str, generation_id
 
 
 def migrate_outputs(
-    paths: tuple[Path, ...], *, generation_id: str | None = None, datasets: tuple[str, ...] | None = None, evidence=None
+    paths: tuple[Path, ...], *, generation_id: str | None = None, datasets: tuple[str, ...] | None = None, evidence=None,
+    native_orders: Mapping[str, tuple[str, ...]] | None = None,
 ) -> dict[str, Any]:
     """Convert every family output and retain the exact pre-conversion Parquet.
 
@@ -386,14 +417,27 @@ def migrate_outputs(
                 row_attempt=lambda raw, ordinal, dataset=dataset: attempt(dataset, raw, ordinal, **context),
             )
         except etl_bulk.NotBulkEligible as error:
-            etl_bulk.log_row_fallback("receipt write", error, dataset=dataset, rows=rows)
+            _row_route("receipt write", error, dataset=dataset, rows=rows)
             _write_by_row(retained, subject_path, receipt_path, dataset, **context)
-        if prior := (_INHERITED.get() or {}).get(dataset):
-            carry_receipt_history(receipt_path, [prior], shard / "carried.parquet")
+        with pq.ParquetFile(receipt_path) as receipts:
+            refused = sum(pc.call_function("sum", [pc.call_function("equal", [batch.column(0), "refused"])]).as_py() or 0
+                          for batch in receipts.iter_batches(columns=["outcome"]))
+        if native_prior := (_NATIVE_PRIORS.get() or {}).get(dataset):
+            if native_orders is None or dataset not in native_orders:
+                raise ValueError(f"{dataset}: retained native prior has no declared output order")
+            merged = native_merge(
+                policy, fresh=(subject_path, receipt_path), prior=native_prior, order_by=native_orders[dataset],
+                subjects=shard / "merged-subjects.parquet", receipts=shard / "merged-receipts.parquet",
+                refusal_identity=REFUSAL_IDENTITIES[dataset])
+            merged.subjects.replace(subject_path)
+            merged.receipts.replace(receipt_path)
+        elif prior := (_INHERITED.get() or {}).get(dataset):
+            carry_receipt_history(receipt_path, [prior], shard / "carried.parquet",
+                                  refusal_identities={dataset: REFUSAL_IDENTITIES[dataset]})
             (shard / "carried.parquet").replace(receipt_path)
         subjects = pq.ParquetFile(subject_path).metadata.num_rows
         bundles.append((path, subject_path, receipt_path))
-        counts[dataset] = {"inputs": rows, "subjects": subjects, "refused": rows - subjects}
+        counts[dataset] = {"inputs": rows, "subjects": subjects, "refused": refused}
     combined = combine_receipts([bundle[2] for bundle in bundles], work / RECEIPT_KEY)
     # A refused conversion is inspectable but never silently replaces a complete
     # producer output with a smaller subject table. Explicit qualification decides
@@ -438,7 +482,8 @@ def generation_receipt_args(paths: tuple[Path, ...]) -> dict[str, Any]:
     }
 
 
-def receipt_builder(function=None, *, output_argument: str | None = None, dataset: str | None = None):
+def receipt_builder(function=None, *, output_argument: str | None = None, dataset: str | None = None,
+                    native_orders: Mapping[str, tuple[str, ...]] | None = None):
     """Adopt actual producers; nested family builders share the outer conversion."""
 
     def decorate(builder):
@@ -455,6 +500,7 @@ def receipt_builder(function=None, *, output_argument: str | None = None, datase
             evidence = bound.arguments.get("evidence") or getattr(owner, "source_evidence", None)
             token = _ACTIVE.set(True)
             inherited_token = _INHERITED.set({})
+            native_token = _NATIVE_PRIORS.set({})
             try:
                 result = builder(*args, **kwargs)
                 paths = (
@@ -469,11 +515,13 @@ def receipt_builder(function=None, *, output_argument: str | None = None, datase
                     generation_id=generation_id,
                     datasets=(dataset,) if dataset else None,
                     evidence=evidence,
+                    native_orders=native_orders,
                 )
                 return result
             finally:
                 _ACTIVE.reset(token)
                 _INHERITED.reset(inherited_token)
+                _NATIVE_PRIORS.reset(native_token)
 
         return build
 
