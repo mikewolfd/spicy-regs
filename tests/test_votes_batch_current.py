@@ -152,6 +152,42 @@ def test_bulk_restore_equals_the_row_restore(tmp_path, monkeypatch, batch, datas
     assert refused > 2 and restored.num_rows == len(rows) - refused  # every row but the refused conversions
 
 
+def test_wide_restore_stays_bounded_and_ordered_across_receipt_batches(tmp_path) -> None:
+    """House communications' many retained columns must fit without a whole-file JSON parse and sort."""
+    dataset = "house_communications"
+    schema = pa.schema([(name, pa.string()) for name in INPUT_COLUMNS[dataset]], metadata={b"window": b"118"})
+    fields = [
+        {name: (None if column % 7 == 0 else f"{i}:{name}: Peña \"quoted\" \\ path")
+         for column, name in enumerate(schema.names)}
+        for i in range(4203)
+    ]
+    processing = [{"entry_kind": "row", "source_fields": row} for row in fields]
+    processing[1999]["extra"] = "another writer's retained context"
+    processing[4000] = {"entry_kind": "table_metadata"}
+    diagnostics = [{} for _ in fields]
+    diagnostics[2000] = {"reason": "conversion_refused"}
+    datasets = [dataset] * len(fields)
+    datasets[4001] = "another_dataset"
+    receipts, destination = tmp_path / "receipts.parquet", tmp_path / "restored.parquet"
+    pq.write_table(pa.table({"dataset": datasets, "processing_json": [exact_json(row) for row in processing],
+                             "diagnostic_json": [exact_json(row) for row in diagnostics]}), receipts, row_group_size=257)
+    routed = []
+
+    def row_fields(processing_text, diagnostic_text):
+        row, notes = decode_exact_json(processing_text), decode_exact_json(diagnostic_text)
+        routed.append((row, notes))
+        if row.get("entry_kind") == "row" and notes.get("reason") != "conversion_refused":
+            return row["source_fields"]
+        return None
+
+    with etl_bulk.bulk_limits(threads=4, memory_limit="256MB"):
+        count = congress_bulk.restore_input(receipts, destination, dataset=dataset, schema=schema, row_fields=row_fields)
+    expected = pa.Table.from_pylist([row for i, row in enumerate(fields) if i not in {2000, 4000, 4001}], schema=schema)
+    assert pq.read_table(destination).equals(expected, check_metadata=True)
+    assert count == 3
+    assert routed == [(processing[i], diagnostics[i]) for i in (1999, 2000, 4000)]
+
+
 def test_refresh_carries_current_receipts_identically_in_both_paths(tmp_path, monkeypatch) -> None:
     source, _, (subject, receipts) = _both(tmp_path, monkeypatch, "member_votes", _member_votes(40))
     prior = CongressInput(subject, receipts, GENERATION)
