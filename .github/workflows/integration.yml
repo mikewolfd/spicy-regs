@@ -3,7 +3,7 @@ name: Integration (live data)
 # Exercises live Mirrulations extraction, published-data checks and real catalog
 # operations. Kept separate from ci.yml because it needs outbound network access
 # and can be affected by upstream availability; ci.yml stays deterministic.
-# PRs that change only passive documentation or reader deployment metadata skip
+# PRs that change only independent offline tests, passive documentation or reader deployment metadata skip
 # the live steps while retaining this job's status. Weekly and manual runs
 # always exercise the live checks; the weekly run catches source-shape drift.
 
@@ -34,6 +34,11 @@ jobs:
         run: |
           if [ "$EVENT_NAME" != "pull_request" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if python3 -B scripts/run_ci_tests.py --leaf-test-only; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Only independent offline tests changed; skipping live data checks."
             exit 0
           fi
           if [ -z "$CHANGE_BASE" ] || [ -z "$CHANGE_HEAD" ] || ! CHANGED_FILES=$(git diff --name-only --no-renames "$CHANGE_BASE...$CHANGE_HEAD"); then
