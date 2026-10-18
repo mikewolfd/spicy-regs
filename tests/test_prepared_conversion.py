@@ -207,7 +207,8 @@ def test_prepared_publication_of_a_family_whose_evidence_predates_version_2_hand
         "treaties",
         "treaties",
         [{"treaty_id": "119-1"}],
-        evidence_version=version,
+        evidence_version=None if version == "absent" else version,
+        unversioned=version == "absent",
         congress_index_selection=remainder,
     )
     work = tmp_path / "work"

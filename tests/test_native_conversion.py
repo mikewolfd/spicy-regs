@@ -767,14 +767,13 @@ def publish_old_with_evidence(
     from spicy_regs import etl_policy_registry, source_evidence
     from spicy_regs.generations import build_generation
 
-    unversioned = unversioned or evidence_version == "absent"  # how bill-subjects, fec-query and lobbying-filings are published today
     directory = tmp_path / family
     directory.mkdir()
     path = directory / f"{table}.parquet"
     pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(column, pa.string()) for column in rows[0]])), path)
     with monkeypatch.context() as patch:
         # Everything published here, including the evidence, is written the way the live pre-v2 families were.
-        if evidence_version is not None and evidence_version != "absent":
+        if evidence_version is not None:
             patch.setattr(source_evidence, "EVIDENCE_VERSION", evidence_version)
         if unversioned:
             # Publication verifies what it publishes at the version it believes current; let the old shape through.
@@ -885,7 +884,8 @@ def test_a_family_whose_evidence_predates_version_2_hands_nothing_on_and_gets_cu
         "treaties",
         "treaties",
         [{"treaty_id": "119-1"}],
-        evidence_version=version,
+        evidence_version=None if version == "absent" else version,
+        unversioned=version == "absent",
         congress_index_selection=remainder,
     )
     old_pin = published_evidence_pin(bucket, "treaties")

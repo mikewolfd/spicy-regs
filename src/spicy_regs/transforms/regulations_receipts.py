@@ -44,6 +44,8 @@ from spicy_regs.transforms.regulations_shape import (
 
 # Datasets whose retained processing input restores through the private batch reader.
 RESTORE_DATASETS = frozenset({"dockets", "documents", "federal_register", "fr_docket_links"})
+#: Datasets whose restore keeps the captured source schema: the batch-restored ones and the typed attribute tables.
+SOURCE_SCHEMA_DATASETS = RESTORE_DATASETS | {"docket_attributes", "document_attributes"}
 
 NULLABLE_IDENTITIES = {
     "agency_lifecycle_stats": ("agency_code",),
@@ -185,7 +187,7 @@ def processing_schema(dataset, *, metadata=None, source_schema=None):
     """The maintained restored Arrow schema, including the original field preservation rules."""
     if source_schema is not None:
         known = dict(SOURCE_COLUMNS[dataset])
-        if (dataset not in RESTORE_DATASETS | {"docket_attributes", "document_attributes"}
+        if (dataset not in SOURCE_SCHEMA_DATASETS
                 or len(set(source_schema.names)) != len(source_schema.names)
                 or any(field.name not in known or field.type != TYPES[known[field.name]] for field in source_schema)):
             raise ValueError("Exact regulatory source schema differs from the declared input fields")

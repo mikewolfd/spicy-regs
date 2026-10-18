@@ -209,10 +209,11 @@ on main.
 
 ### Families the nightly refreshes wait on (audit of 2026-10-17)
 
-A scheduled rollup refuses an input family published without ETL receipts. Since
-2026-10-04 `etl-new` (dockets, documents, comments and every consumer behind
-`refresh-consumers`) fails on `docket_attributes`; `document_attributes` and
-`comment_attributes` are next. Each converts with the procedure for
+A scheduled rollup refuses an input family published without ETL receipts. `etl-new`
+(dockets, documents, comments and every consumer behind `refresh-consumers`) failed
+on `dockets` until it was converted on 2026-10-06, and has failed on
+`docket_attributes` since 2026-10-10; `document_attributes` and `comment_attributes`
+are next. Each converts with the procedure for
 `bill-subjects` above (entry digest, `publish=false`, `publish=true`, readback),
 substituting the family; sizes are the 2026-10-17 pins and the time is the
 measured rate (this repository's per-row writer, one loaded laptop: 2.1k rows/s
@@ -224,7 +225,7 @@ to convert, 0.86k/s with publication and readback; hosted court-opinions:
 | `docket-attributes` | 0.28M / 5 MB | about 5 minutes | yes |
 | `document-attributes` | 2.0M / 79 MB | about 40 minutes | yes |
 | `comment-attributes` | 26.4M / 306 MB | 3.5 to 8.5 hours | no: not offered. It needs a bulk writer for the typed regulatory tables (`regulations_bulk` takes declared string columns only). `etl-new` stays blocked until it converts. |
-| `court-opinion-clusters` | 10.1M / 3.95 GB | about 3 hours to prepare, 45 minutes to publish, by `court-opinions`' rate | borderline; the runner's free disk (about 14 GB) holds the retained table, the native copy and the readback |
+| `court-opinion-clusters` | 10.1M / 3.95 GB | about 3 hours to prepare, 45 minutes to publish, by `court-opinions`' rate | borderline: the `publish=false` dispatch is the measurement, since its bytes are 9.6 times `court-opinions`' for a similar row count and the row-based estimate may be low; the runner's free disk (about 14 GB) holds the retained table, the native copy and the readback |
 | `court-citations` | 102M / 1.0 GB | more than a day | no: not offered; wait for the bulk writer. Its nightly also needs `court_opinion_clusters` published first. |
 
 The attribute families convert through the regulatory base converter

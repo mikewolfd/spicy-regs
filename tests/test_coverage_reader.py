@@ -460,7 +460,7 @@ def _restore_through_selected_priors(tmp_path, selected, route, monkeypatch):
 
         monkeypatch.setattr(regulations_bulk, "_materialize_selected", forced)
     priors = SelectedPriors(tmp_path / "selected", index=empty_index(), public_url="https://example.invalid")
-    setattr(priors.selected, "select", lambda _: selected)
+    monkeypatch.setattr(priors.selected, "select", lambda _: selected)
     try:
         return priors.get(selected.dataset)
     except Exception as error:  # the refusal is the observation
@@ -489,13 +489,13 @@ def test_a_corrupted_selected_pair_refuses_identically_on_the_bulk_and_the_row_r
 
 
 @pytest.mark.parametrize("change", ["ambiguous", "missing", "digest", "undeclared-policy"])
-def test_a_corrupted_pair_of_a_dataset_without_a_batch_route_refuses_through_the_row_reader(tmp_path, change):
+def test_a_corrupted_pair_of_a_dataset_without_a_batch_route_refuses_through_the_row_reader(tmp_path, monkeypatch, change):
     """cfr_sections has no batch restore: the row reader's own admission is the only one."""
     source = tmp_path / "cfr.parquet"
     pq.write_table(pa.table({"granule_id": ["CFR-2025-title1-vol1-sec1-1"], "last_modified": ["2025-01-01"]}), source)
     subject, receipts = write_held_dataset("cfr_sections", source, tmp_path / "cfr", generation_id="cfr1")
     selected = ReceiptInput("cfr_sections", (subject,), receipts, "cfr1")
-    assert isinstance(_restore_through_selected_priors(tmp_path / "ok", selected, "bulk", pytest.MonkeyPatch()), Path)
+    assert isinstance(_restore_through_selected_priors(tmp_path / "ok", selected, "bulk", monkeypatch), Path)
     _corrupt(selected, change)
-    outcome = _restore_through_selected_priors(tmp_path / "bad", selected, "bulk", pytest.MonkeyPatch())
+    outcome = _restore_through_selected_priors(tmp_path / "bad", selected, "bulk", monkeypatch)
     assert isinstance(outcome, str), "a corrupted pair was restored"
