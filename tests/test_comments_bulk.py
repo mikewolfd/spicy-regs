@@ -101,14 +101,15 @@ def test_large_rows_keep_exact_values_order_and_individual_output(tmp_path, monk
         routed.append(ordinal)
         return map_regulations_attempt('comments', raw, context(raw, ordinal), project=project)
     segments = []
-    real_segment = comments_bulk._write_segment
-    def checked_segment(table, *args):
-        if any(table['_large'].to_pylist()):
-            assert len(table) == 1
-            segments.extend(table['_ordinal'].to_pylist())
-        return real_segment(table, *args)
+    real_segments = comments_bulk._segments
+    def checked_segments(table):
+        for part in real_segments(table):
+            if any(part['_large'].to_pylist()):
+                assert len(part) == 1
+                segments.extend(part['_ordinal'].to_pylist())
+            yield part
     monkeypatch.setattr(comments_bulk, '_BULK_ROW_BYTES', 64)
-    monkeypatch.setattr(comments_bulk, '_write_segment', checked_segment)
+    monkeypatch.setattr(comments_bulk, '_segments', checked_segments)
     actual = tmp_path / 'subjects.parquet', tmp_path / 'receipts.parquet'
     assert comments_bulk.write_bundle(source, *actual, policy=policy('comments'), generation_id='g',
                                       source_label='source', row_attempt=attempt) == 5

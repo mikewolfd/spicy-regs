@@ -20,8 +20,8 @@ import pyarrow.parquet as pq
 
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import (
-    RECEIPT_SCHEMA, WITNESS_TYPE, ReceiptContext,
-    decode_exact_json, exact_json, observation_receipt, select_receipts, selected_subject_policy,
+    WITNESS_TYPE, ReceiptContext,
+    _unpack, decode_exact_json, exact_json, observation_receipt, select_receipts, selected_subject_policy,
     validate_receipt_bundle,
 )
 from spicy_regs.native_types import described_schema
@@ -31,19 +31,7 @@ def _text(value: Any) -> str:
     return "CAST(NULL AS VARCHAR)" if value is None else "'" + str(value).replace("'", "''") + "'"
 
 
-def _with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, dict | None]) -> pa.Table:
-    """Merge reference rows in original order using one Arrow table per batch."""
-    positions = [index for index, flag in enumerate(mask) if flag]
-    replacements = [(index, row) for index, row in insertions.items() if row is not None]
-    if not replacements:
-        return kept
-    added = pa.Table.from_pylist([row for _, row in replacements], schema=kept.schema)
-    positions.extend(index for index, _ in replacements)
-    order = sorted(range(len(positions)), key=positions.__getitem__)
-    return pa.concat_tables([kept, added]).take(order)
-
-
-_BATCH = 1000
+_BATCH = 10_000
 _PARSED = pa.struct([('native', pa.string()), ('reference', pa.bool_())])
 DATASETS = frozenset({'dockets', 'documents'})
 
@@ -136,7 +124,7 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
     native_select = ', '.join(native + ( [retained] if retained else []))
     query = f'''
     WITH original AS (SELECT *, file_row_number AS _ordinal, {raw} AS _raw
-        FROM read_parquet({_text(str(Path(source).resolve()))}, file_row_number=true)),
+        FROM {etl_bulk.SOURCE_BATCH}),
     input AS (SELECT {source_columns}, _ordinal, _raw FROM original),
     parsed AS (SELECT * {', ' + parse_sql if parse_sql else ''} FROM input),
     native AS (SELECT {native_select}, _ordinal, _raw,
@@ -159,52 +147,18 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
         stage = Path(temporary)/'bundle'
         stage.mkdir()
         subject_path, receipt_path = stage/f'{dataset}.parquet', stage/'etl_receipts.parquet'
-        expected, seen = pq.ParquetFile(source).metadata.num_rows, 0
-        try:
-            with etl_bulk.bulk_connection() as (con, work):
-                con.register('held_constants', pa.table({'_extra': pa.array([list(witnesses)], type=pa.list_(WITNESS_TYPE))}))
-                for name, dtype in parsed:
-                    con.create_function(f'parse_{name}', _parser(dataset, name, dtype), ['VARCHAR'],
-                                        'STRUCT(native VARCHAR, reference BOOLEAN)', type='arrow', null_handling='special')
-                refusals = work/'refused.parquet'
-                with pq.ParquetWriter(subject_path, declared.subject_schema, compression='zstd') as sw, \
-                        pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression='zstd') as rw, \
-                        pq.ParquetWriter(refusals, RECEIPT_SCHEMA, compression='zstd') as fw:
-                    for batch in con.execute(query).to_arrow_reader(_BATCH):
-                        table = pa.Table.from_batches([batch])
-                        table.validate(full=True)
-                        ordinals = table['_ordinal'].to_pylist()
-                        if ordinals != list(range(seen, seen+batch.num_rows)):
-                            raise RuntimeError(f'{dataset}: source order changed')
-                        seen += batch.num_rows
-                        flags = table['_reference'].to_pylist()
-                        mask = [not flag for flag in flags]
-                        kept_subjects = table.filter(pa.array(mask)).select(declared.subject_schema.names).cast(declared.subject_schema)
-                        kept_receipts = table.filter(pa.array(mask)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
-                        added_subjects, added_receipts, refused = {}, {}, []
-                        if any(flags):
-                            from spicy_regs.etl_receipts import _unpack
-                            texts = table['_raw'].to_pylist()
-                            for index, flag in enumerate(flags):
-                                if flag:
-                                    subject, receipt = attempt(_unpack(json.loads(texts[index])), ordinals[index])
-                                    added_subjects[index] = subject
-                                    if receipt['outcome'] == 'accepted':
-                                        added_receipts[index] = receipt
-                                    else:
-                                        refused.append(receipt)
-                        if refused:
-                            fw.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
-                        sw.write_table(_with_insertions(kept_subjects, mask, added_subjects))
-                        rw.write_table(_with_insertions(kept_receipts, mask, added_receipts))
-                    rw.write_table(pa.Table.from_pylist([observation_receipt(declared, observed, processing_fields={'input_metadata': metadata})], schema=RECEIPT_SCHEMA))
-                    fw.close()
-                    for batch in pq.ParquetFile(refusals).iter_batches(batch_size=_BATCH):
-                        rw.write_batch(batch)
-        except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
-            raise etl_bulk.bulk_failure('Regulatory base query failed', error) from error
-        if seen != expected:
-            raise RuntimeError(f'{dataset}: source population changed')
+        with etl_bulk.bulk_connection() as (con, _):
+            con.register('held_constants', pa.table({'_extra': pa.array([list(witnesses)], type=pa.list_(WITNESS_TYPE))}))
+            for name, dtype in parsed:
+                con.create_function(f'parse_{name}', _parser(dataset, name, dtype), ['VARCHAR'],
+                                    'STRUCT(native VARCHAR, reference BOOLEAN)', type='arrow', null_handling='special')
+            etl_bulk.write_split(
+                con, query, source=source, batch_rows=_BATCH, expected_rows=pq.ParquetFile(source).metadata.num_rows,
+                subject_schema=declared.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
+                label=dataset, refusals_last=True,
+                last_receipts=[observation_receipt(declared, observed, processing_fields={'input_metadata': metadata})],
+                row_attempt=lambda table, index: attempt(_unpack(json.loads(table['_raw'][index].as_py())),
+                                                         table['_ordinal'][index].as_py()))
         if prior_receipts:
             from spicy_regs.current_receipt_history import inherit_current_receipts
             try:

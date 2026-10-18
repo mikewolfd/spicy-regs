@@ -271,6 +271,134 @@ def bulk_connection(directory: Path | None = None, *, threads: int = 4, memory_l
             yield con, root
 
 
+#: Receipt columns worth a footer bound; the payload and witness columns are never filtered on.
+_STATISTICS = ["dataset", "record_id", "receipt_id", "outcome", "generation_id", "attempt_id", "policy_version"]
+_GROUP = 2000
+#: The table a :func:`write_split` query reads: the source's batch, with ``file_row_number`` as ``read_parquet`` gives it.
+SOURCE_BATCH = "source_batch"
+
+
+def with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, dict | None]) -> pa.Table:
+    """Merge the row functions' rows (at their batch positions; None leaves a row out) into the SQL-proven ``kept`` ones."""
+    positions = [index for index, flag in enumerate(mask) if flag]
+    replacements = [(index, row) for index, row in insertions.items() if row is not None]
+    if not replacements:
+        return kept
+    added = pa.Table.from_pylist([row for _, row in replacements], schema=kept.schema)
+    positions.extend(index for index, _ in replacements)
+    order = sorted(range(len(positions)), key=positions.__getitem__)
+    return pa.concat_tables([kept, added]).take(order)
+
+
+def write_split(
+    con: duckdb.DuckDBPyConnection,
+    query: str,
+    *,
+    source: Path,
+    batch_rows: int,
+    expected_rows: int,
+    subject_schema: pa.Schema,
+    subject_path: Path,
+    receipt_path: Path,
+    row_attempt: Callable[[pa.Table, int], tuple[dict | None, dict]],
+    label: str,
+    first_receipts: Sequence[Mapping] = (),
+    last_receipts: Sequence[Mapping] = (),
+    refusals_last: bool = False,
+    segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
+) -> int:
+    """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
+
+    ``query`` reads :data:`SOURCE_BATCH` (the source's rows with a ``file_row_number`` column, as ``read_parquet(...,
+    file_row_number = true)`` gives them) and yields the subject columns, the receipt columns, ``_ordinal`` and
+    ``_reference``, plus ``_accepted`` where a row can be proven receipted without a subject. The source is fed to
+    DuckDB as ordered registered batches, because a parallel ``read_parquet`` stream was seen to emit a later row group
+    first. A row marked ``_reference`` is given to ``row_attempt(batch, index)``, the family's own row function, and
+    merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
+    writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
+
+    No receipt is validated here: the generation's admission is the one validation. A DuckDB or Arrow failure raises
+    :func:`bulk_failure`, never a row retry. Rows arriving out of order, or fewer than ``expected_rows``, raise
+    ``RuntimeError``: a stream cut short leaves a bundle that is consistent with itself.
+    """
+    seen, routed = 0, 0
+    pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
+    with ExitStack() as stack:
+        scratch = Path(stack.enter_context(TemporaryDirectory(dir=Path(receipt_path).parent, prefix=".split-")))
+        subjects = stack.enter_context(pq.ParquetWriter(subject_path, subject_schema, compression="zstd"))
+        receipts = stack.enter_context(
+            pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS))
+        refused = stack.enter_context(pq.ParquetWriter(scratch / "refused.parquet", RECEIPT_SCHEMA, compression="zstd"))
+
+        def emit(table: pa.Table, final: bool = False) -> None:
+            nonlocal pending
+            pending = pa.concat_tables([pending, table])
+            whole = pending.num_rows if final else pending.num_rows - pending.num_rows % _GROUP
+            if whole:
+                receipts.write_table(pending.slice(0, whole), row_group_size=_GROUP)
+                pending = pending.slice(whole)
+
+        def part(table: pa.Table) -> int:
+            names = table.column_names
+            flags = table["_reference"].to_pylist()
+            proven = [not flag for flag in flags]
+            accepted = table["_accepted"].to_pylist() if "_accepted" in names else proven
+            written = table.filter(pa.array(proven)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
+            kept = table.filter(pa.array(accepted)).select(subject_schema.names).cast(subject_schema)
+            decided_subjects, decided_receipts, refusals = {}, {}, []
+            for index in (index for index, flag in enumerate(flags) if flag):
+                subject, receipt = row_attempt(table, index)
+                decided_subjects[index] = subject
+                if refusals_last and receipt["outcome"] != "accepted":
+                    refusals.append(receipt)
+                else:
+                    decided_receipts[index] = receipt
+            if refusals:
+                refused.write_table(pa.Table.from_pylist(refusals, schema=RECEIPT_SCHEMA))
+            if decided_subjects:
+                written = with_insertions(written, proven, decided_receipts)
+                kept = with_insertions(kept, accepted, decided_subjects)
+            if kept.num_rows:
+                subjects.write_table(kept)
+            emit(written)
+            return len(decided_subjects)
+
+        try:
+            with pq.ParquetFile(source) as original:
+                start = 0
+                for piece in original.iter_batches(batch_size=batch_rows):
+                    checkpoint()
+                    piece.validate(full=True)
+                    numbered = pa.Table.from_batches([piece]).append_column(
+                        "file_row_number", pa.array(range(start, start + piece.num_rows), pa.int64()))
+                    start += piece.num_rows
+                    con.register(SOURCE_BATCH, numbered)
+                    try:
+                        for batch in con.execute(query).to_arrow_reader(batch_rows):
+                            table = pa.Table.from_batches([batch])
+                            table.validate(full=True)
+                            ordinals = table["_ordinal"].to_pylist()
+                            if ordinals != list(range(seen, seen + len(ordinals))):
+                                raise RuntimeError(f"{label}: source rows did not arrive in file order")
+                            seen += len(ordinals)
+                            for each in (table,) if segments is None else segments(table):
+                                routed += part(each)
+                    finally:
+                        con.unregister(SOURCE_BATCH)
+            if last_receipts:
+                emit(pa.Table.from_pylist(list(last_receipts), schema=RECEIPT_SCHEMA))
+            emit(RECEIPT_SCHEMA.empty_table(), final=True)
+            refused.close()
+            with pq.ParquetFile(scratch / "refused.parquet") as late:
+                for batch in late.iter_batches(batch_size=1):
+                    receipts.write_batch(batch)
+        except (duckdb.Error, pa.ArrowException) as error:
+            raise bulk_failure(f"Bulk {label} write failed", error) from error
+    if seen != expected_rows:
+        raise RuntimeError(f"{label}: read {seen} of the source's {expected_rows} rows")
+    return routed
+
+
 def _ordinal_file(con, query: str, parameters, path: Path) -> Iterator[int]:
     """Finish the SQL query before streaming its bounded ordinal batches."""
     con.execute(f"COPY ({query}) TO {_literal(str(path))} (FORMAT PARQUET)", parameters)

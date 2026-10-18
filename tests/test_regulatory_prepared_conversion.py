@@ -148,7 +148,7 @@ def test_a_regulatory_bulk_failure_is_reported_by_its_kind_and_never_redone_by_r
     ]
     assert conversion.main(arguments) == code
     error = capsys.readouterr().err
-    assert report in error and "Regulatory base query failed; no row fallback: " in error
+    assert report in error and "Bulk dockets write failed; no row fallback: " in error
     assert f"STATE: {conversion.NOTHING_PUBLISHED}" in error
     assert delivered == [1] and bucket.writes == written
 
