@@ -103,6 +103,37 @@ ID" means the id is outside its grammar. A legacy `-RULEMAKING` id whose base
 id is served is recorded as an alias of it. If a request gets no answer, the
 job fails, but the families still publish whatever it served.
 
+## Completion and freshness for active releases
+
+Candidate completion means the selected source scope finished and its complete
+family passed existing admission. Release also requires the existing publication
+checks. A publication timestamp
+says when those bytes became current; it does not advance their source edition,
+prove full historical coverage, or erase unresolved source outcomes. Retain the
+selected scope and earlier coverage when refreshing it.
+
+| Family | Selected coverage and completion | Freshness claim and current signal | Smallest useful consumer check |
+| --- | --- | --- | --- |
+| Court opinion clusters | Complete selected bulk edition with its docket-to-court map and receipts; keep the existing prior-ID preservation check for the recovery. An explicitly offline edition can finish without live search. | Name the bulk edition and any separately completed search scope. The [cluster workflow](../.github/workflows/rollup-court-opinion-clusters.yml) checks weekly; its usual catch-up is not evidence that an offline candidate includes later decisions. | Read a selected decision with its court fields and receipt. |
+| Court citations | Every declared citation-family output from one common bulk edition. The [builder](../src/spicy_regs/transforms/build_court_bulk_tables.py) requires published clusters and refuses a referenced cluster ID above their maximum. | Name the quarterly edition; the [citation workflow](../.github/workflows/rollup-court-citations.yml) follows that source cadence. Additional cluster coverage is required when the actual dependency check fails or selected product scope requires later decisions; bounded catch-up is one route. | Read a citation through the intended court relationship; retain explicit missing/ambiguous endpoints. The maximum-ID guard does not prove every endpoint exists. |
+| Legislative families | Finish the selected Congresses, bill types and declared family outputs; retain carried siblings' provenance and unresolved outcomes. The [vote/term chain](../.github/workflows/refresh-congress-vote-terms.yml) needs both votes and members before terms. | State each input's acquisition scope and carried generation. Daily workflows do not imply historical completeness; bill `update_date` and `latest_action_date` are the existing lag signals. | Read a selected bill or vote with its receipt and the relationship the release changes. |
+| Lobbying filings | Finish the requested posted-date window or filing year and all declared [family outputs](../src/spicy_regs/pipelines/rollups/lobbying_filings.py), merged with the selected prior. Incomplete acquisition or fresh conversion refusals block completion. | Record the actual bounded window/year. The [workflow](../.github/workflows/rollup-lobbying-filings.yml) runs daily; the freshness monitor uses `dt_posted` as its lag signal. A recent filing does not prove all history was read. | Read a filing with its activities/lobbyists and a carried receipt field through the intended reader. |
+| Regulatory release | Complete the selected sweep and publish its base families before dependent refreshes capture their pins, as above. Preserve docket-gap outcomes and existing dependency/input checks. | Report sweep scope and source watermarks separately from publication time. Dockets/documents use `modify_date`; comment coverage is separate. | Read the affected base row or dependent view at the selected pins; keep unavailable source outcomes explicit. |
+
+These consumer checks describe the evidence needed from an already required
+release check, not additional full scans or workflow dispatches. They do not
+replace existing qualification, refresh-before-coverage or deployment checks.
+Operational holds recorded in the active work ticket still apply; this guidance
+does not authorize resuming held work.
+
+The age budgets in [the freshness monitor](../scripts/check_rollup_freshness.py)
+are alerts, not agreed product tolerances. Acceptable product lag for these
+families remains unresolved: a decision must name the consumer need, required
+source scope and allowed delay before changing cadence or coverage. Existing
+schedules stay in force. Do not make a completed selected bulk edition wait for
+optional enrichment or open-ended catch-up; retain a pending dependency when
+its actual required check fails.
+
 ## Readers
 
 - A family can publish processing evidence in an optional `etlReceipts` member.
