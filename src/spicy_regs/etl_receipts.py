@@ -26,7 +26,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from spicy_regs.runtime_bounds import checkpoint
+from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 
 if TYPE_CHECKING:
     from spicy_regs.receipt_history import RefusalIdentity
@@ -545,19 +545,18 @@ def validate_receipt_row(receipt: Mapping, policies: Mapping[str, DatasetPolicy]
 def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain_processing=True, retain_diagnostics=False):
     connection.execute(
         "CREATE TABLE receipts (dataset TEXT, record_id TEXT, version TEXT, identity_json TEXT, "
-        "receipt_id TEXT UNIQUE, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0"
+        "receipt_id TEXT, outcome TEXT, processing BLOB, used INTEGER DEFAULT 0"
         + (", diagnostics BLOB" if retain_diagnostics else "") + ")"
     )
-    connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
     validate_publisher_generation(generation_id)
     accepted_policies = {(name, p.policy_version): p for name, policy in policies.items() for p in receipt_policies(policy)}
-    for path in receipt_paths:
-        with _parquet(path) as parquet:
-            if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
-                raise ValueError("Receipt schema differs from the shared schema")
-        for receipt in _rows(path):
-            validate_receipt_row(receipt, policies, accepted_policies=accepted_policies)
-            try:
+    try:
+        for path in receipt_paths:
+            with _parquet(path) as parquet:
+                if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                    raise ValueError("Receipt schema differs from the shared schema")
+            for receipt in _rows(path):
+                validate_receipt_row(receipt, policies, accepted_policies=accepted_policies)
                 connection.execute(
                     "INSERT INTO receipts VALUES (?,?,?,?,?,?,?,0" + (",?" if retain_diagnostics else "") + ")",
                     [
@@ -573,8 +572,22 @@ def _load_receipts(connection, receipt_paths, policies, generation_id, *, retain
                     ] + [zlib.compress(receipt["processing_json"].encode(), level=1) if retain_processing else None]
                     + ([zlib.compress(receipt["diagnostic_json"].encode(), level=1)] if retain_diagnostics else []),
                 )
-            except sqlite3.IntegrityError as exc:
-                raise ValueError("Duplicate or ambiguous receipt join") from exc
+    except Exception:
+        # An earlier duplicate must still outrank a later row or schema error.
+        _index_receipts(connection)
+        raise
+    _index_receipts(connection)
+
+
+def _index_receipts(connection):
+    # Build each index once after loading, before any joins or visits can begin.
+    # Receipt IDs and accepted subject identities must both be unique.
+    try:
+        with bounded_connection(connection):
+            connection.execute("CREATE UNIQUE INDEX receipt_identity ON receipts(receipt_id)")
+            connection.execute("CREATE UNIQUE INDEX accepted_identity ON receipts(dataset, record_id) WHERE outcome='accepted'")
+    except sqlite3.IntegrityError as exc:
+        raise ValueError("Duplicate or ambiguous receipt join") from exc
 
 
 def _index_processing(body):
