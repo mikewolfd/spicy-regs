@@ -375,7 +375,7 @@ def restore_input(
            CASE WHEN _reference THEN diagnostic_json END AS _diagnostic
     FROM (SELECT *, file_row_number AS _position,
                  (NOT coalesce({plain}, false) OR contains(diagnostic_json, 'conversion_refused')) AS _reference
-          FROM read_parquet({_text(receipts)}, file_row_number = true) WHERE dataset = {_text(dataset)})"""
+          FROM read_parquet({_text(receipts)}, file_row_number = true) WHERE dataset = {_text(dataset)}) ORDER BY _position"""
     expected, seen, last, left = _rows_in(receipts, dataset), 0, -1, 0
     # As ``write_rows`` does: the destination appears only once every row is written.
     with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(dir=destination.parent) as scratch:

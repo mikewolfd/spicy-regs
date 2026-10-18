@@ -126,3 +126,21 @@ def test_decoded_json_control_routes_before_subject_digest(tmp_path, dataset):
         for bulk in (False, True):
             write_legislative_outputs([source], tmp_path / str(bulk), generation_id="same", bulk=bulk)
         assert pq.read_table(tmp_path / "False/etl_receipts.parquet").equals(pq.read_table(tmp_path / "True/etl_receipts.parquet"))
+
+
+@pytest.mark.parametrize("dataset", ["members", "member_votes", "budget_volumes"])
+def test_required_bulk_allows_bounded_exceptional_row_decisions(tmp_path, dataset):
+    from spicy_regs import etl_bulk
+
+    with etl_bulk.bulk_limits(threads=2, memory_limit="512MiB", require_bulk=True):
+        if dataset == "budget_volumes":
+            source = retained(tmp_path / "source", dataset, [row(dataset, package_id="X", associated_laws_json='["\\u001b"]')])
+            write_legislative_outputs([source], tmp_path / "bundle", generation_id="same", bulk=True, validate=False)
+            receipt = tmp_path / "bundle/etl_receipts.parquet"
+        else:
+            raw = ({"bioguide_id": "X", "name_first": "A\x1b"} if dataset == "members" else
+                   {"vote_id": "v", "member_key": "k", "member_name": "A\x1b"})
+            source = shaped(tmp_path / "source.parquet", [raw])
+            _, receipt = write_congress_dataset(source, tmp_path / "bundle", dataset=dataset,
+                                                  generation_id="same", bulk=True, validate=False)
+    assert "accepted" in pq.read_table(receipt)["outcome"].to_pylist()

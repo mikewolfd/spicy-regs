@@ -134,8 +134,8 @@ def write_congress_dataset(
             if subjects is None:
                 native_path.unlink()
         if routed:
-            etl_bulk.log_row_fallback("congress-write", etl_bulk.NotBulkEligible("mapper or exact encoding requires row decision"),
-                                      dataset=dataset, rows=routed)
+            from loguru import logger
+            logger.warning("congress-write route=bulk dataset={} row_decisions={}", dataset, routed)
         if not in_bulk:
             etl_bulk.log_row_fallback("congress-write", etl_bulk.NotBulkEligible("source value types have no proven SQL spelling"),
                                       dataset=dataset, rows=pq.ParquetFile(source).metadata.num_rows)

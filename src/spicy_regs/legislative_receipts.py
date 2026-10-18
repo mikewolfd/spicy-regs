@@ -255,8 +255,8 @@ def write_legislative_outputs(
                         locator_prefix="row:", refusals_last=True,
                     )
                     if routed:
-                        etl_bulk.log_row_fallback("legislative-write", etl_bulk.NotBulkEligible("mapper or exact encoding requires row decision"),
-                                                  dataset=dataset, rows=routed)
+                        from loguru import logger
+                        logger.warning("legislative-write route=bulk dataset={} row_decisions={}", dataset, routed)
                     subject = None if selected.receipt_only else subject_path
                 else:
                     if bulk:
