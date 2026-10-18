@@ -117,6 +117,9 @@ def test_large_rows_keep_exact_values_order_and_individual_output(tmp_path, monk
     assert segments == [prefix + i for i in (1, 2, 4, 5)]
     for expected, got in zip(reference, actual):
         assert pq.read_table(expected).equals(pq.read_table(got))
+    groups = pq.ParquetFile(actual[1]).metadata
+    sizes = [groups.row_group(i).num_rows for i in range(groups.num_row_groups)]
+    assert sizes.count(1) >= 2  # the oversized rows keep receipt row groups of their own
     validate_receipt_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g', bulk=False)
 
 

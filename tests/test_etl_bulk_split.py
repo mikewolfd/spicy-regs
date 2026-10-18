@@ -31,8 +31,9 @@ def _source(tmp_path, rows):
 def _split(tmp_path, rows=23, *, query=None, expected=None, **options):
     seen = []
 
-    def attempt(table, index):
+    def attempt(table, index, row):
         ordinal = table["_ordinal"][index].as_py()
+        assert row == {"v": str(ordinal)}
         seen.append(ordinal)
         receipt = {name: None for name in RECEIPT_SCHEMA.names} | {
             "receipt_id": f"row{ordinal}", "outcome": "refused" if ordinal % 10 == 9 else "accepted",
@@ -88,3 +89,42 @@ def test_a_bulk_failure_is_never_retried_by_row(tmp_path, monkeypatch, failure, 
         _split(tmp_path)
     assert delivered and delivered[0] > 0
     assert_raised_as(caught, failure, invalid)
+
+
+def test_a_routed_row_gets_the_source_row_not_the_encoded_text(tmp_path):
+    """A typed value SQL does not own (a year-999 timestamp) spells as a marker in ``_raw``; the row code never sees it."""
+    import datetime as dt
+
+    ancient = dt.datetime(999, 1, 2, tzinfo=dt.timezone.utc)
+    source = tmp_path / "typed.parquet"
+    pq.write_table(pa.table({"t": pa.array([ancient, dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)], pa.timestamp("us", tz="UTC"))}),
+                   source)
+    raw = etl_bulk.record_json_sql([("t", pa.timestamp("us", tz="UTC"))])
+    query = (_query().replace("file_row_number % 5 = 4 AS _reference", f"{etl_bulk.needs_reference_sql(raw)} AS _reference")
+             .replace("FROM " + etl_bulk.SOURCE_BATCH, f", {raw} AS _raw FROM " + etl_bulk.SOURCE_BATCH))
+    rows = []
+
+    def attempt(table, index, row):
+        assert "route" in table["_raw"][index].as_py()  # the marker is in the query's text, as the review probed
+        rows.append(row)
+        return {"id": "x"}, {name: None for name in RECEIPT_SCHEMA.names} | {"receipt_id": "x", "outcome": "accepted", "witnesses": []}
+
+    with etl_bulk.bulk_connection() as (con, _):
+        assert etl_bulk.write_split(
+            con, query, source=source, batch_rows=5, expected_rows=2, subject_schema=SUBJECT, subject_path=tmp_path / "s.parquet",
+            receipt_path=tmp_path / "r.parquet", row_attempt=attempt, label="typed") == 1
+    assert rows == [{"t": ancient}]
+
+
+def test_an_isolated_row_is_its_own_receipt_row_group(tmp_path):
+    def isolating(table):
+        for index in range(len(table)):
+            yield table.slice(index, 1)
+
+    query = _query().replace("file_row_number % 5 = 4 AS _reference", "file_row_number % 5 = 4 AS _reference, "
+                                                                        "file_row_number = 11 AS _big")
+    _split(tmp_path, query=query, segments=isolating, isolate="_big")
+    groups = [pq.ParquetFile(tmp_path / "r.parquet").metadata.row_group(i).num_rows for i in range(
+        pq.ParquetFile(tmp_path / "r.parquet").metadata.num_row_groups)]
+    assert 1 in groups and sum(groups) == 23
+    assert len(groups) <= 4  # 11 rows before it, it alone, 11 after: not 23 one-row groups

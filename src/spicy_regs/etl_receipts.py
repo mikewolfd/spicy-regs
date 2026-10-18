@@ -57,6 +57,8 @@ RECEIPT_SCHEMA = pa.schema(
         ("diagnostic_json", pa.string()),
     ]
 )
+#: Receipt row-group size: readers gather single receipts by whole row group, so it stays small (2000 since write_rows).
+RECEIPT_ROW_GROUP = 2000
 _COMBINE_BATCH = 50_000
 OUTCOMES = frozenset({"accepted", "rejected", "refused", "error", "observed"})
 _NAME = re.compile(r"[a-z][a-z0-9_]*\Z")
@@ -448,7 +450,7 @@ def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
     """Combine dataset shards, keeping every row and witness, with the shared schema.
 
     Whole Arrow batches are copied, never decoded into rows (a million receipts took minutes through Python); a shard
-    that is not exactly ``RECEIPT_SCHEMA`` is refused, and ``destination`` appears only once every shard is copied.
+    that is not exactly ``RECEIPT_SCHEMA`` is refused, the output has ``RECEIPT_ROW_GROUP``-row groups as before, and ``destination`` appears only once every shard is copied.
     """
     with TemporaryDirectory(dir=destination.parent) as scratch:
         temporary = Path(scratch) / "rows.parquet"
@@ -460,7 +462,7 @@ def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
                     for batch in parquet.iter_batches(batch_size=_COMBINE_BATCH):
                         checkpoint()
                         batch.validate(full=True)
-                        writer.write_table(pa.Table.from_batches([batch]))
+                        writer.write_table(pa.Table.from_batches([batch]), row_group_size=RECEIPT_ROW_GROUP)
         temporary.replace(destination)
     return destination
 

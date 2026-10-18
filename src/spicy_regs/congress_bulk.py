@@ -196,7 +196,7 @@ def write_bundle(
         return etl_bulk.write_split(
             con, query, source=source, batch_rows=_BATCH, expected_rows=_rows_in(source), subject_schema=subject,
             subject_path=subjects_path, receipt_path=receipts_path, label=dataset, first_receipts=first_receipts,
-            row_attempt=lambda table, index: row_receipt(table["processing_json"][index].as_py(),
+            row_attempt=lambda table, index, row: row_receipt(table["processing_json"][index].as_py(),
                                                          table["_ordinal"][index].as_py()),
         )
 

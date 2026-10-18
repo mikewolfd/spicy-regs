@@ -31,6 +31,7 @@ import pyarrow.parquet as pq
 
 from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 from spicy_regs.etl_receipts import (
+    RECEIPT_ROW_GROUP,
     RECEIPT_SCHEMA,
     DatasetPolicy,
     ParquetInput,
@@ -273,7 +274,7 @@ def bulk_connection(directory: Path | None = None, *, threads: int = 4, memory_l
 
 #: Receipt columns worth a footer bound; the payload and witness columns are never filtered on.
 _STATISTICS = ["dataset", "record_id", "receipt_id", "outcome", "generation_id", "attempt_id", "policy_version"]
-_GROUP = 2000
+_GROUP = RECEIPT_ROW_GROUP
 #: The table a :func:`write_split` query reads: the source's batch, with ``file_row_number`` as ``read_parquet`` gives it.
 SOURCE_BATCH = "source_batch"
 
@@ -300,12 +301,13 @@ def write_split(
     subject_schema: pa.Schema,
     subject_path: Path,
     receipt_path: Path,
-    row_attempt: Callable[[pa.Table, int], tuple[dict | None, dict]],
+    row_attempt: Callable[[pa.Table, int, dict], tuple[dict | None, dict]],
     label: str,
     first_receipts: Sequence[Mapping] = (),
     last_receipts: Sequence[Mapping] = (),
     refusals_last: bool = False,
     segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
+    isolate: str | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
 
@@ -313,15 +315,20 @@ def write_split(
     file_row_number = true)`` gives them) and yields the subject columns, the receipt columns, ``_ordinal`` and
     ``_reference``, plus ``_accepted`` where a row can be proven receipted without a subject. The source is fed to
     DuckDB as ordered registered batches, because a parallel ``read_parquet`` stream was seen to emit a later row group
-    first. A row marked ``_reference`` is given to ``row_attempt(batch, index)``, the family's own row function, and
-    merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
+    first (the order relies on registering one table per query; the ordinal guard below stays). A row marked
+    ``_reference`` is given to ``row_attempt(batch, index, source_row)``, the family's own row function, with the row as
+    the source file holds it (never decoded from the query's encoded text, which spells a value SQL does not own as a
+    marker), and merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
     writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
+    ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
+    written as a receipt row group of its own, so a reader fetching a neighbour does not load it.
 
     No receipt is validated here: the generation's admission is the one validation. A DuckDB or Arrow failure raises
     :func:`bulk_failure`, never a row retry. Rows arriving out of order, or fewer than ``expected_rows``, raise
     ``RuntimeError``: a stream cut short leaves a bundle that is consistent with itself.
     """
-    seen, routed = 0, 0
+    seen, routed, piece_start = 0, 0, 0
+    piece: pa.RecordBatch | None = None
     pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
     with ExitStack() as stack:
         scratch = Path(stack.enter_context(TemporaryDirectory(dir=Path(receipt_path).parent, prefix=".split-")))
@@ -347,7 +354,9 @@ def write_split(
             kept = table.filter(pa.array(accepted)).select(subject_schema.names).cast(subject_schema)
             decided_subjects, decided_receipts, refusals = {}, {}, []
             for index in (index for index, flag in enumerate(flags) if flag):
-                subject, receipt = row_attempt(table, index)
+                assert piece is not None
+                offset = table["_ordinal"][index].as_py() - piece_start
+                subject, receipt = row_attempt(table, index, piece.slice(offset, 1).to_pylist()[0])
                 decided_subjects[index] = subject
                 if refusals_last and receipt["outcome"] != "accepted":
                     refusals.append(receipt)
@@ -360,13 +369,17 @@ def write_split(
                 kept = with_insertions(kept, accepted, decided_subjects)
             if kept.num_rows:
                 subjects.write_table(kept)
-            emit(written)
+            alone = isolate is not None and any(table[isolate].to_pylist())
+            if alone:
+                emit(RECEIPT_SCHEMA.empty_table(), final=True)
+            emit(written, final=alone)
             return len(decided_subjects)
 
         try:
             with pq.ParquetFile(source) as original:
                 start = 0
                 for piece in original.iter_batches(batch_size=batch_rows):
+                    piece_start = start
                     checkpoint()
                     piece.validate(full=True)
                     numbered = pa.Table.from_batches([piece]).append_column(

@@ -21,7 +21,7 @@ import pyarrow.parquet as pq
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import (
     WITNESS_TYPE, ReceiptContext,
-    _unpack, decode_exact_json, exact_json, observation_receipt, select_receipts, selected_subject_policy,
+    decode_exact_json, exact_json, observation_receipt, select_receipts, selected_subject_policy,
     validate_receipt_bundle,
 )
 from spicy_regs.native_types import described_schema
@@ -157,8 +157,7 @@ def write_held_dataset(dataset, source, destination, *, generation_id, processor
                 subject_schema=declared.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
                 label=dataset, refusals_last=True,
                 last_receipts=[observation_receipt(declared, observed, processing_fields={'input_metadata': metadata})],
-                row_attempt=lambda table, index: attempt(_unpack(json.loads(table['_raw'][index].as_py())),
-                                                         table['_ordinal'][index].as_py()))
+                row_attempt=lambda table, index, row: attempt(row, table['_ordinal'][index].as_py()))
         if prior_receipts:
             from spicy_regs.current_receipt_history import inherit_current_receipts
             try:

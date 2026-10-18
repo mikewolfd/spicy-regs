@@ -116,3 +116,24 @@ def test_a_repeated_identity_is_refused(tmp_path):
     pq.write_table(pa.concat_tables([table, table]), doubled)
     with pytest.raises(ValueError, match="repeat an identity"):
         _merge(tmp_path, prior, (doubled, fresh[1]))
+
+
+def test_a_descending_order_equals_merge_local_prior_and_only_routed_rows_are_decoded(tmp_path, monkeypatch):
+    import duckdb
+
+    from spicy_regs import native_merge as module
+    from spicy_regs.transforms.table_merge import merge_local_prior
+
+    prior = _generation(tmp_path, "prior", "g0", [_row(i, n=k % 3) for k, i in enumerate("abcdefgh")] + [_row(ESCAPE)])
+    fresh = _generation(tmp_path, "fresh", "g1", [_row("c", n=2), _row("zz", n=1), _row(ESCAPE, note="new")])
+    decoded = []
+    real = module.subject_identity
+    monkeypatch.setattr(module, "subject_identity", lambda policy, row: decoded.append(row["id"]) or real(policy, row))
+    merged = native_merge(POLICY, fresh=fresh, prior=prior, order_by=("n DESC", "id"), subjects=tmp_path / "s.parquet",
+                          receipts=tmp_path / "r.parquet")
+    assert decoded == [ESCAPE, ESCAPE]  # the routed row of each side, not the other 10
+    with duckdb.connect() as con:
+        merge_local_prior(con, columns=tuple(POLICY.subject_schema.names), identity="id", order_by='"n" DESC, "id"',
+                          prior_file=prior[0], new_file=fresh[0], out_file=tmp_path / "expected.parquet")
+    assert pq.read_table(merged.subjects)["id"].to_pylist() == pq.read_table(tmp_path / "expected.parquet")["id"].to_pylist()
+    validate_receipt_bundle({"items": [merged.subjects]}, [merged.receipts], [POLICY])
