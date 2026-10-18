@@ -16,8 +16,9 @@ def test_installed_registry_uses_retained_application_scope():
     scope = json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text())
     specs = mcp_server.FEC_QUALIFIED_VIEWS
     assert len(specs) == len({s.view.name for s in specs}) == 72
-    assert set(scope) == {"source_generation_pin", "namespace_evidence", "population", "as_of"}
+    assert set(scope) == {"source_generation_pin", "selected_observations_pin", "namespace_evidence", "population", "as_of"}
     assert scope["source_generation_pin"] == "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0"
+    assert all(s.evidence_generations == {"fec-observations": scope["selected_observations_pin"]} for s in specs)
     assert len(scope["namespace_evidence"]) == 6
     assert all(s.population == scope["population"] and s.as_of == scope["as_of"] for s in specs)
     association = next(s for s in specs if s.view.name == "fec_receipts_native_filing_associations")
