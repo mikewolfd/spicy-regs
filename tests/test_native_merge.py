@@ -137,3 +137,23 @@ def test_a_descending_order_equals_merge_local_prior_and_only_routed_rows_are_de
                           prior_file=prior[0], new_file=fresh[0], out_file=tmp_path / "expected.parquet")
     assert pq.read_table(merged.subjects)["id"].to_pylist() == pq.read_table(tmp_path / "expected.parquet")["id"].to_pylist()
     validate_receipt_bundle({"items": [merged.subjects]}, [merged.receipts], [POLICY])
+
+
+def test_native_merge_keeps_unanswered_refusals_and_resolves_only_successes(tmp_path):
+    from spicy_regs.receipt_history import RefusalIdentity
+
+    context = ReceiptContext("g0", "refused", "p", [WITNESS])
+    refusals = [failure_receipt(POLICY, context, outcome="refused", raw_fields={"raw": {"id": key}})
+                for key in ("fixed", "unanswered")]
+    prior = write_dataset([], tmp_path / "prior", POLICY, failures=refusals, validate=False)
+    fresh = write_dataset([(_row("fixed") | {"raw": {"id": "fixed"}},
+                            ReceiptContext("g1", "fixed", "p", [WITNESS]))],
+                          tmp_path / "fresh", POLICY, validate=False)
+    merged = _merge(tmp_path, prior, fresh, refusal_identity=RefusalIdentity(("id",), "raw"))
+    assert pq.read_table(merged.receipts).to_pylist() == [*pq.read_table(fresh[1]).to_pylist(), refusals[1]]
+    validate_receipt_bundle({"items": [merged.subjects]}, [merged.receipts], [POLICY])
+    empty = write_dataset([], tmp_path / "empty", POLICY, validate=False)
+    again = native_merge(POLICY, fresh=empty, prior=(merged.subjects, merged.receipts), order_by=("id",),
+                         subjects=tmp_path / "again-s.parquet", receipts=tmp_path / "again-r.parquet",
+                         refusal_identity=RefusalIdentity(("id",), "raw"))
+    assert pq.read_table(again.receipts).equals(pq.read_table(merged.receipts))

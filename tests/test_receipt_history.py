@@ -17,7 +17,7 @@ from spicy_regs.etl_receipts import (
     observation_receipt,
     _digest,
 )
-from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 
 
 @pytest.fixture
@@ -225,7 +225,9 @@ def test_null_matching_key_does_not_authorize_prior_substitution(tmp_path, polic
             }
         )
         expected["receipt_id"] = _digest({k: v for k, v in expected.items() if k != "receipt_id"})
-    assert pq.read_table(result).to_pylist() == [expected]
+    # Missing diagnostics never authorize substitution. The unresolved old refusal
+    # still remains separately; admission, not this matcher, rejects its bad schema.
+    assert pq.read_table(result).to_pylist() == [expected, *([old] if outcome == "refused" else [])]
 
 
 def test_changed_row_direct_predecessor_does_not_copy_history_or_witnesses(tmp_path, policy, context):
@@ -265,7 +267,9 @@ def test_nonaccepted_diagnostic_change_is_new_attempt(tmp_path, policy, context)
     result = carry_receipt_history(
         write(tmp_path / "new.parquet", [fresh]), [write(tmp_path / "old.parquet", [old])], tmp_path / "result.parquet"
     )
-    assert pq.read_table(result).to_pylist() == [fresh]
+    assert pq.read_table(result).to_pylist() == [fresh, old]
+    again = carry_receipt_history(tmp_path / "new.parquet", [result], tmp_path / "again.parquet")
+    assert pq.read_table(again).to_pylist() == [fresh, old]
 
 
 def test_empty_and_partitioned_prior(tmp_path, policy, context):
@@ -488,3 +492,65 @@ def test_wide_changed_attempt_keeps_current_witnesses_and_only_direct_predecesso
     )
     expected["receipt_id"] = _digest({k: v for k, v in expected.items() if k != "receipt_id"})
     assert actual == expected
+
+
+def test_unanswered_refusals_survive_empty_nights_without_repeating_observations(tmp_path, policy, context):
+    refused = [failure_receipt(policy, replace(context, attempt_id=str(i)), outcome="refused",
+                               raw_fields={"raw": {"id": "unanswered"}}) for i in range(2)]
+    observation = observation_receipt(policy, context, processing_fields={"raw": "empty-file"})
+    prior = [write(tmp_path / "part0.parquet", [refused[0], observation]),
+             write(tmp_path / "part1.parquet", [refused[1]])]
+    empty = write(tmp_path / "empty.parquet", [])
+    first = carry_receipt_history(empty, prior, tmp_path / "night1.parquet")
+    assert pq.read_table(first).to_pylist() == refused
+    second = carry_receipt_history(empty, [first], tmp_path / "night2.parquet")
+    assert pq.read_table(second).to_pylist() == refused
+    # One repeated attempt matches FIFO; the other old occurrence remains once.
+    repeated = failure_receipt(policy, replace(context, generation_id="new"), outcome="refused",
+                               raw_fields={"raw": {"id": "unanswered"}})
+    third = carry_receipt_history(write(tmp_path / "repeated.parquet", [repeated]), [second],
+                                  tmp_path / "night3.parquet")
+    assert pq.read_table(third).to_pylist() == refused
+
+
+def test_success_resolves_declared_identity_only_in_its_dataset(tmp_path, policy, context):
+    refused = failure_receipt(policy, context, outcome="refused", raw_fields={"raw": "bad"},
+                              identity={"id": "1", "sub": None})
+    other = dict(refused, dataset="other")
+    current = write(tmp_path / "current.parquet", [accepted(policy, replace(context, generation_id="new"))])
+    prior = write(tmp_path / "prior.parquet", [refused, other])
+    result = carry_receipt_history(current, [prior], tmp_path / "result.parquet")
+    assert pq.read_table(result).to_pylist() == [*pq.read_table(current).to_pylist(), other]
+
+
+@pytest.mark.parametrize("raw", [
+    None, "unknown", ["1"],
+    {"id": "1", "sub": None},
+    {"id": 1, "sub": None},
+    {"id": "1"},
+    {"id": "2", "sub": None},
+    {"id": "1", "sub": ""},
+])
+def test_raw_resolution_requires_all_exact_typed_natural_key_values(tmp_path, policy, context, raw):
+    old = failure_receipt(policy, context, outcome="refused", raw_fields={"raw": raw})
+    fresh = split_record(policy, {"id": "1", "sub": None, "text": "fixed",
+                                  "raw": {"id": "1", "sub": None, "payload": "repaired"}},
+                         replace(context, generation_id="new"))[1]
+    result = carry_receipt_history(
+        write(tmp_path / "current.parquet", [fresh]), [write(tmp_path / "prior.parquet", [old])],
+        tmp_path / "result.parquet", refusal_identities={"example": RefusalIdentity(("id", "sub"), "raw")})
+    assert pq.read_table(result).to_pylist() == ([fresh] if raw == {"id": "1", "sub": None} else [fresh, old])
+
+
+def test_raw_resolution_is_explicit_and_supports_different_input_containers(tmp_path, context):
+    policy = DatasetPolicy("example", pa.schema([("id", pa.string())]), ("id",), ("original", "failed"))
+    key = "quote' and escape\x1b and unicode \u03bb"
+    old = failure_receipt(policy, context, outcome="refused", raw_fields={"failed": {"id": key, "data": "bad"}})
+    fresh = split_record(policy, {"id": key, "original": {"id": key, "data": "good"}},
+                         replace(context, generation_id="new"))[1]
+    current, prior = write(tmp_path / "current.parquet", [fresh]), write(tmp_path / "prior.parquet", [old])
+    unresolved = carry_receipt_history(current, [prior], tmp_path / "unresolved.parquet")
+    assert pq.read_table(unresolved).to_pylist() == [fresh, old]
+    result = carry_receipt_history(current, [prior], tmp_path / "resolved.parquet",
+                                  refusal_identities={"example": RefusalIdentity(("id",), "original", "failed")})
+    assert pq.read_table(result).to_pylist() == [fresh]

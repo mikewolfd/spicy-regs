@@ -875,3 +875,18 @@ def test_reference_write_rejects_duplicate_bindings_without_installing(tmp_path,
         write_dataset([(row, context), (row, context)], output, policy, validation_backend="reference")
     assert not output.exists()
     assert not list(tmp_path.glob(".etl-*"))
+
+
+def test_combine_keeps_receipt_groups_bounded_across_shards(tmp_path):
+    from spicy_regs.etl_receipts import RECEIPT_ROW_GROUP
+
+    shards = []
+    for number, count in enumerate((2001, 2002)):
+        path = tmp_path / f"part{number}.parquet"
+        pq.write_table(pa.Table.from_pylist([{"attempt_id": str(i)} for i in range(count)], schema=RECEIPT_SCHEMA), path)
+        shards.append(path)
+    combined = combine_receipts(shards, tmp_path / "combined.parquet")
+    with pq.ParquetFile(combined) as parquet:
+        sizes = [parquet.metadata.row_group(i).num_rows for i in range(parquet.metadata.num_row_groups)]
+    assert sum(sizes) == 4003 and max(sizes) <= RECEIPT_ROW_GROUP
+    assert pq.read_table(combined).equals(pa.concat_tables([pq.read_table(path) for path in shards]))

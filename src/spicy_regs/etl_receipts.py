@@ -20,13 +20,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from spicy_regs.runtime_bounds import checkpoint
+
+if TYPE_CHECKING:
+    from spicy_regs.receipt_history import RefusalIdentity
 
 ParquetInput = Path | Callable[[], AbstractContextManager[BinaryIO]]
 
@@ -1096,7 +1099,8 @@ def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict
     return result
 
 
-def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path) -> Path:
+def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path, *,
+                          refusal_identities: Mapping[str, RefusalIdentity] | None = None) -> Path:
     """Finalize fresh attempts against the exact selected prior occurrences."""
     from spicy_regs.receipt_history import carry_receipt_history as carry
-    return carry(current_path, prior_paths, destination)
+    return carry(current_path, prior_paths, destination, refusal_identities=refusal_identities)

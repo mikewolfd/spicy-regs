@@ -10,8 +10,9 @@ DuckDB and Arrow:
   against the prior receipts they replace: a refetched row that did not change keeps its prior receipt, a changed one
   references only its direct predecessor, a new one is fresh. Accepted receipts follow their subjects' order, as the
   restore readers expect; the fresh pair's other receipts (refusals, observations) come last, in their own order.
-  A prior non-accepted receipt survives only if the fresh pair repeats it (carry semantics): a family that keeps
-  per-file observations for the kept rows (regulatory ``input_metadata``) must repeat them in its fresh pair.
+  Unresolved prior refusals survive unchanged until a fresh accepted receipt proves the same input converted.
+  Other prior non-accepted receipts survive only if repeated: a family that keeps per-file observations for the kept
+  rows (regulatory ``input_metadata``) must repeat them in its fresh pair.
 
 Only narrow keys are ever sorted or joined (ordinals and record ids, about 100 bytes a row); wide subject and receipt
 rows are gathered by ordinal, one output batch at a time, each source row group read once per batch. Kept prior rows
@@ -33,7 +34,7 @@ import pyarrow.parquet as pq
 
 from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA, DatasetPolicy, subject_identity
-from spicy_regs.receipt_history import _take_prior_rows, carry_receipt_history
+from spicy_regs.receipt_history import RefusalIdentity, _take_prior_rows, carry_receipt_history
 
 _BATCH = 50_000
 
@@ -138,6 +139,7 @@ def native_merge(
     order_by: Sequence[str],
     subjects: Path,
     receipts: Path,
+    refusal_identity: RefusalIdentity | None = None,
 ) -> Merged:
     """Write the merged pair to ``subjects`` and ``receipts``; ``fresh`` and ``prior`` are ``(subjects, receipts)`` files.
 
@@ -184,7 +186,9 @@ def native_merge(
                 "SELECT _o FROM prior_r WHERE outcome <> 'accepted' OR record_id IN "
                 "(SELECT record_id FROM fresh_r WHERE outcome = 'accepted') ORDER BY _o",
                 prior_receipt_files, RECEIPT_SCHEMA, out) if prior_receipts else 0
-        carried = carry_receipt_history(Path(fresh_receipts), [replaced] if replaced_rows else [], root / "carried.parquet")
+        carried = carry_receipt_history(
+            Path(fresh_receipts), [replaced] if replaced_rows else [], root / "carried.parquet",
+            refusal_identities={policy.dataset: refusal_identity} if refusal_identity is not None else None)
         con.execute(f"CREATE VIEW carried_r AS SELECT *, file_row_number AS _o "
                     f"FROM read_parquet({lit(str(carried))}, file_row_number = true)")
 
