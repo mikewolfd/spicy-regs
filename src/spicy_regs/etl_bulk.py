@@ -311,6 +311,11 @@ def with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, d
     return pa.concat_tables([kept, added]).take(order)
 
 
+def new_receipt_writer(path: Path) -> pq.ParquetWriter:
+    """Open a receipt writer; its caller owns closing the shared member."""
+    return pq.ParquetWriter(path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS)
+
+
 def write_split(
     con: duckdb.DuckDBPyConnection,
     query: str,
@@ -330,6 +335,7 @@ def write_split(
     segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
     isolate: str | None = None,
     subject_columns: Sequence[str] | None = None,
+    receipt_writer: pq.ParquetWriter | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
 
@@ -343,6 +349,7 @@ def write_split(
     marker), and merged back in place; with ``refusals_last`` its failure receipt goes after normal accepted/observed
     records, as the row writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
     ``last_refusals`` follows the routed refusals, retaining the order of separately rejected updates.
+    ``receipt_writer`` borrows an already open family member; this call flushes its rows but does not close it.
     ``subject_columns`` optionally names query aliases in subject-schema order when a native field name collides with
     a receipt field; aliases are renamed before routed subjects are inserted.
     ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
@@ -361,8 +368,7 @@ def write_split(
     with ExitStack() as stack:
         scratch = Path(stack.enter_context(TemporaryDirectory(dir=Path(receipt_path).parent, prefix=".split-")))
         subjects = stack.enter_context(pq.ParquetWriter(subject_path, subject_schema, compression="zstd"))
-        receipts = stack.enter_context(
-            pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS))
+        receipts = receipt_writer if receipt_writer is not None else stack.enter_context(new_receipt_writer(receipt_path))
         refused = stack.enter_context(pq.ParquetWriter(scratch / "refused.parquet", RECEIPT_SCHEMA, compression="zstd"))
 
         def emit(table: pa.Table, final: bool = False) -> None:

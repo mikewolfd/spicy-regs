@@ -181,6 +181,69 @@ def test_downloaded_and_preexisting_exports_remain_retained(tmp_path, monkeypatc
     assert [path.name for path in built] == [CITATIONS.output, CITATION_MAP.output]
     assert files["citations"].exists(), "receipt witnesses retain downloaded source bytes"
     assert files["citation-map"].exists(), "a retained export is never removed"
+    from spicy_regs.court_receipts import local_receipt_selection, parquet_rows
+
+    receipts = {local_receipt_selection(path)[0] for path in built}
+    assert len(receipts) == 1
+    for receipt in parquet_rows(receipts.pop()):
+        assert all(Path(witness['source_uri']).is_file() for witness in receipt['witnesses'])
+    assert all(not (tmp_path / 'out' / path.name).exists() for path in built)
+
+
+@pytest.mark.parametrize('failure', ['later-table', 'close', 'descriptor'])
+def test_family_failure_preserves_previous_pairs_and_selects_no_partial_family(tmp_path, monkeypatch, failure):
+    from spicy_regs import etl_bulk
+    from spicy_regs.court_receipts import court_bulk_family, local_receipt_selection, write_court_rows
+
+    datasets = ('court_citations', 'court_citation_map')
+    records = ({'citation_id': '1'}, {'citing_opinion_id': '1', 'cited_opinion_id': '2', 'depth': '3'})
+    witness = [{'source_id': 'fixture', 'source_uri': None, 'sha256': 'a' * 64,
+                'locator': None, 'body_version': None}]
+    output = tmp_path / 'out'
+    previous = [write_court_rows(dataset, [row], output, witnesses=witness) for dataset, row in zip(datasets, records)]
+    pairs = [(path, path.read_bytes(), *local_receipt_selection(path)) for path in previous]
+    receipt_bytes = {receipt: receipt.read_bytes() for _, _, receipt, _ in pairs}
+    source = tmp_path / 'source.parquet'
+    import pyarrow as pa
+    pq.write_table(pa.table({'citation_id': ['2']}), source)
+    original = etl_bulk.new_receipt_writer
+    closes = []
+
+    def open_writer(path):
+        writer = original(path)
+        close = writer.close
+        def counted_close():
+            closes.append(path)
+            close()
+            if failure == 'close':
+                raise OSError('injected close failure')
+        monkeypatch.setattr(writer, 'close', counted_close)
+        return writer
+
+    monkeypatch.setattr(etl_bulk, 'new_receipt_writer', open_writer)
+    if failure == 'descriptor':
+        write_text = Path.write_text
+        def fail_descriptor(path, *args, **kwargs):
+            if path.name == 'court-family.json':
+                raise OSError('injected descriptor failure')
+            return write_text(path, *args, **kwargs)
+        monkeypatch.setattr(Path, 'write_text', fail_descriptor)
+    with pytest.raises((OSError, etl_bulk.NotBulkEligible), match='injected|schema'):
+        with court_bulk_family(output, datasets, generation_id='attempt') as write:
+            write(datasets[0], source, witnesses=witness)
+            if failure == 'later-table':
+                write(datasets[1], source, witnesses=witness)  # wrong source schema, after the first table finished
+            else:
+                map_source = tmp_path / 'map.parquet'
+                pq.write_table(pa.Table.from_pylist([records[1]]), map_source)
+                write(datasets[1], map_source, witnesses=witness)
+    assert len(closes) == 1
+    assert not list(output.rglob('court-family.json'))
+    for path, content, receipt, generation in pairs:
+        assert (output / path.name).resolve() == path and path.read_bytes() == content
+        assert local_receipt_selection(path) == (receipt, generation)
+        assert receipt.read_bytes() == receipt_bytes[receipt]
+    assert source.exists()
 
 
 _CITATIONS_OF_CLUSTER_9 = (

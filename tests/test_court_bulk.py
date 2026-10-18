@@ -135,6 +135,65 @@ def test_bulk_bundle_equals_row_bundle(tmp_path, dataset):
         validate_receipt_bundle({dataset: [actual]}, [receipts], [POLICIES[dataset]], generation_id=generation)
 
 
+def test_shared_family_keeps_exact_rows_and_sources_and_adopts_one_receipt(tmp_path, monkeypatch):
+    from spicy_regs import court_receipts
+    from spicy_regs.court_receipts import build_court_generation, court_bulk_family, generation_options, read_court_rows
+    from spicy_regs.etl_receipts import combine_receipts
+    from spicy_regs.generations import verify_generation
+    from spicy_regs.local_data import local_selection
+    from spicy_regs.selected_generations import remember_generation
+    from spicy_regs.sources import publication
+    from tests.generation_fakes import Store
+
+    datasets = ('court_citations', 'court_citation_map', 'court_parentheticals')
+    baseline, shared, sources = [], [], []
+    for dataset in datasets:
+        columns, rows = FAMILIES[dataset](random.Random(7), 2)
+        source = _write(tmp_path / (dataset + '-source.parquet'), _table(columns, rows))
+        sources.append(source)
+        baseline.append(write_court_bulk(dataset, source, tmp_path / 'standalone',
+                                        witnesses=WITNESSES, generation_id='shared-build'))
+    shards = [local_receipt_selection(path)[0] for path in baseline]
+    combined = combine_receipts(shards, tmp_path / 'combined.parquet')
+    with court_bulk_family(tmp_path / 'shared', datasets, generation_id='shared-build') as write:
+        for dataset, source in zip(datasets, sources):
+            shared.append(write(dataset, source, witnesses=WITNESSES))
+            assert not shared[-1].exists()
+    receipt, generation = local_receipt_selection(shared[0])
+    assert generation == 'shared-build'
+    assert list((tmp_path / 'shared').rglob('etl_receipts.parquet')) == [receipt]
+    assert pq.read_table(receipt).equals(pq.read_table(combined))
+    for dataset, expected, actual in zip(datasets, baseline, shared):
+        assert pq.read_table(actual).equals(pq.read_table(expected), check_metadata=True)
+        assert list(read_court_rows(actual, dataset=dataset)) == list(read_court_rows(expected, dataset=dataset))
+    old_files = [*shards, combined]
+    before = sum(path.stat().st_blocks * 512 for path in old_files)
+    after = receipt.stat().st_blocks * 512
+    print(f'Receipt fixture allocation: shards+combined={before}B; shared={after}B; saved={before - after}B')
+    assert after < before
+    foreign = write_court_bulk(datasets[-1], sources[-1], tmp_path / 'foreign',
+                               witnesses=WITNESSES, generation_id='shared-build')
+    for selection in (shared[:-1], [*shared, shared[-1]], [*shared[:-1], foreign], list(reversed(shared))):
+        with pytest.raises(ValueError, match='complete receipt family'):
+            generation_options(selection)
+    monkeypatch.setattr(court_receipts, 'combine_receipts', lambda *args: pytest.fail('shared receipt must not copy'))
+    inode = receipt.stat().st_ino
+    directory = tmp_path / 'generation'
+    artifact = build_court_generation(directory, family='court-citations', files=shared)
+    assert not receipt.exists() and (directory / 'etl_receipts.parquet').stat().st_ino == inode
+    verify_generation(directory, expected_pin=artifact.pin)
+    remember_generation(tmp_path, directory, artifact)
+    selected = local_selection(tmp_path)
+    for dataset in datasets:
+        assert selected.native[dataset].receipts == directory / 'etl_receipts.parquet'
+        assert selected.paths(dataset) == (directory / (dataset + '.parquet'),)
+    store = Store()
+    index = publication.publish_generation(directory, client=store, bucket='test', prior_index=publication.empty_index())
+    for dataset in datasets:
+        member, = publication.receipt_members(index, dataset=dataset)
+        assert store.objects[member.path] == (directory / 'etl_receipts.parquet').read_bytes()
+
+
 def test_attorneys_as_a_native_list_and_missing_columns(tmp_path):
     columns, rows = clusters(random.Random(3), 200)
     index = columns.index('attorneys')
