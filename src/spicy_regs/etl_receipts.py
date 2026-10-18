@@ -20,13 +20,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from spicy_regs.runtime_bounds import checkpoint
+
+if TYPE_CHECKING:
+    from spicy_regs.receipt_history import RefusalIdentity
 
 ParquetInput = Path | Callable[[], AbstractContextManager[BinaryIO]]
 
@@ -57,6 +60,9 @@ RECEIPT_SCHEMA = pa.schema(
         ("diagnostic_json", pa.string()),
     ]
 )
+#: Receipt row-group size: readers gather single receipts by whole row group, so it stays small (2000 since write_rows).
+RECEIPT_ROW_GROUP = 2000
+_COMBINE_BATCH = 50_000
 OUTCOMES = frozenset({"accepted", "rejected", "refused", "error", "observed"})
 _NAME = re.compile(r"[a-z][a-z0-9_]*\Z")
 
@@ -390,6 +396,7 @@ def write_dataset(
     batch_size: int = 2000,
     prior_receipts: Sequence[Path] = (),
     validation_backend: str = "bulk",
+    validate: bool = True,
 ) -> tuple[Path | None, Path]:
     """Atomically expose a new local directory with subject data and receipts.
 
@@ -397,7 +404,8 @@ def write_dataset(
     Existing directories are never replaced. Combine dataset receipts into one
     shared member with ``combine_receipts`` before generation admission.
     ``validation_backend="reference"`` selects the maintained row validator;
-    the default retains bulk validation and its existing fallback behavior.
+    the default retains bulk validation and its existing fallback behavior. A caller that goes on to admit the
+    combined generation (``validate=False``) leaves the one validation to that admission.
     """
     if type(batch_size) is not int or batch_size <= 0:
         raise ValueError("batch_size must be positive")
@@ -428,12 +436,13 @@ def write_dataset(
                 receipt_writer.write_table(receipt)
         if prior_receipts:
             carry_receipt_history(receipt_path, prior_receipts, receipt_path)
-        validate_receipt_bundle(
-            {policy.dataset: [] if policy.receipt_only else [subject_path]},
-            [receipt_path],
-            [policy],
-            bulk=validation_backend == "bulk",
-        )
+        if validate:
+            validate_receipt_bundle(
+                {policy.dataset: [] if policy.receipt_only else [subject_path]},
+                [receipt_path],
+                [policy],
+                bulk=validation_backend == "bulk",
+            )
         from rulespec_artifacts import publish_directory_no_replace
 
         publish_directory_no_replace(stage, directory)
@@ -441,10 +450,24 @@ def write_dataset(
 
 
 def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
-    """Combine dataset shards, keeping every row and witness, with the shared schema."""
-    from spicy_regs.parquet_rows import write_rows
+    """Combine dataset shards, keeping every row and witness, with the shared schema.
 
-    return write_rows((row for path in paths for row in _rows(path)), destination, RECEIPT_SCHEMA)
+    Whole Arrow batches are copied, never decoded into rows (a million receipts took minutes through Python); a shard
+    that is not exactly ``RECEIPT_SCHEMA`` is refused, the output has ``RECEIPT_ROW_GROUP``-row groups as before, and ``destination`` appears only once every shard is copied.
+    """
+    with TemporaryDirectory(dir=destination.parent) as scratch:
+        temporary = Path(scratch) / "rows.parquet"
+        with pq.ParquetWriter(temporary, RECEIPT_SCHEMA, compression="zstd") as writer:
+            for path in paths:
+                with _parquet(path) as parquet:
+                    if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                        raise ValueError(f"Receipt shard is not the shared receipt schema: {path}")
+                    for batch in parquet.iter_batches(batch_size=_COMBINE_BATCH):
+                        checkpoint()
+                        batch.validate(full=True)
+                        writer.write_table(pa.Table.from_batches([batch]), row_group_size=RECEIPT_ROW_GROUP)
+        temporary.replace(destination)
+    return destination
 
 
 @contextmanager
@@ -645,6 +668,22 @@ def _bundle_policies(subjects, receipt_paths, policies):
     return registered
 
 
+def _datasets(policies: Sequence[DatasetPolicy]) -> str:
+    return ",".join(policy.dataset for policy in policies)
+
+
+def _parquet_rows(paths: Iterable[ParquetInput]) -> int | None:
+    """Rows in the files, for a fallback warning; None where a footer cannot be read."""
+    try:
+        total = 0
+        for path in paths:
+            with _parquet(path) as parquet:
+                total += parquet.metadata.num_rows
+        return total
+    except (OSError, ValueError, pa.ArrowException):
+        return None
+
+
 def validate_receipt_bundle(
     subjects: Mapping[str, Sequence[ParquetInput]],
     receipt_paths: Sequence[ParquetInput],
@@ -659,15 +698,13 @@ def validate_receipt_bundle(
     Qualified refusals propagate unchanged; fallback never turns them into acceptance.
     """
     if bulk:
-        from spicy_regs.etl_bulk import NotBulkEligible, reference_fallback, validate_bundle
+        from spicy_regs.etl_bulk import NotBulkEligible, log_row_fallback, validate_bundle
         try:
             validate_bundle(subjects, receipt_paths, policies, generation_id=generation_id)
             return
         except NotBulkEligible as error:
-            reference_fallback(error)
-            from loguru import logger
-
-            logger.info("receipt validation route=row reason=unsupported-semantics detail={}", error)
+            log_row_fallback("receipt validation", error, dataset=_datasets(policies),
+                             rows=_parquet_rows([*(p for paths in subjects.values() for p in paths), *receipt_paths]))
     _validate_receipt_bundle_rows(subjects, receipt_paths, policies, generation_id=generation_id)
 
 
@@ -765,12 +802,13 @@ def read_with_receipts(
     schemas use that reader before any reconstructed row is returned.
     """
     if bulk:
-        from spicy_regs.etl_bulk import NotBulkEligible, reference_fallback, read_with_receipts as read_bulk
+        from spicy_regs.etl_bulk import NotBulkEligible, log_row_fallback, read_with_receipts as read_bulk
         try:
             yield from read_bulk(subject_paths, receipt_paths, policy, generation_id=generation_id)
             return
         except NotBulkEligible as error:
-            reference_fallback(error)
+            log_row_fallback("receipt read", error, dataset=policy.dataset,
+                             rows=_parquet_rows([*subject_paths, *receipt_paths]))
     yield from _read_with_receipts_rows(subject_paths, receipt_paths, policy, generation_id=generation_id)
 
 
@@ -889,12 +927,12 @@ def read_attempts(
     if outcomes is not None and not outcomes <= OUTCOMES:
         raise ValueError("Unknown attempt outcome")
     if bulk:
-        from spicy_regs.etl_bulk import NotBulkEligible, reference_fallback, read_attempts as read_bulk
+        from spicy_regs.etl_bulk import NotBulkEligible, log_row_fallback, read_attempts as read_bulk
         try:
             yield from read_bulk(receipt_paths, policy, generation_id=generation_id, outcomes=outcomes)
             return
         except NotBulkEligible as error:
-            reference_fallback(error)
+            log_row_fallback("receipt attempts read", error, dataset=policy.dataset, rows=_parquet_rows(receipt_paths))
     yield from _read_attempts_rows(receipt_paths, policy, generation_id=generation_id, outcomes=outcomes)
 
 
@@ -1061,7 +1099,8 @@ def retire_receipt(receipt: Mapping, *, generation_id: str, reason: str) -> dict
     return result
 
 
-def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path) -> Path:
+def carry_receipt_history(current_path: Path, prior_paths: Sequence[Path], destination: Path, *,
+                          refusal_identities: Mapping[str, RefusalIdentity] | None = None) -> Path:
     """Finalize fresh attempts against the exact selected prior occurrences."""
     from spicy_regs.receipt_history import carry_receipt_history as carry
-    return carry(current_path, prior_paths, destination)
+    return carry(current_path, prior_paths, destination, refusal_identities=refusal_identities)

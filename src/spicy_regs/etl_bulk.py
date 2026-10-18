@@ -20,6 +20,7 @@ import sqlite3
 from dataclasses import dataclass
 from contextvars import ContextVar
 from hashlib import sha256
+from itertools import batched
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
@@ -31,6 +32,7 @@ import pyarrow.parquet as pq
 
 from spicy_regs.runtime_bounds import bounded_connection, checkpoint
 from spicy_regs.etl_receipts import (
+    RECEIPT_ROW_GROUP,
     RECEIPT_SCHEMA,
     DatasetPolicy,
     ParquetInput,
@@ -62,6 +64,9 @@ _MEMBER = r'\["([^"\\\x00-\x1f]*)",\x01\]'
 _DEPTH = 8
 #: ``ReceiptContext``'s rule for a witness digest.
 _WITNESS_SHA256 = r"(?:sha256:)?[0-9a-f]{64}"
+#: What :func:`exact_json_sql` spells for a value it does not own. It holds an upper-case hex control escape, which
+#: :func:`needs_reference_sql` matches, so a writer or validator that checks its encoded subject routes the row.
+_ROUTE = '["route","\\u001B"]'
 _BATCH = 2_000
 #: Target logical Arrow bytes per opt-in INSERT; one larger row stays intact.
 _INSERT_BYTES = 16 * 1024 * 1024
@@ -122,18 +127,29 @@ def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
         raise NotBulkEligible(f"{what} does not fit its schema; the row reader decides") from error
 
 
-def log_row_fallback(route: str, error: NotBulkEligible, *, dataset: str) -> None:
-    """Warn that a bulk route handed ``dataset``'s work to the (slow) row path, and why."""
-    from loguru import logger
-
-    logger.warning("{} route=row dataset={} reason={}", route, dataset, error)
-
-
-def reference_fallback(error: NotBulkEligible) -> None:
-    """Refuse a reference index when the caller has ruled out its capacity."""
+def reference_fallback(error: NotBulkEligible, route: str = "admission") -> None:
+    """Refuse a reference route when the caller has ruled out its capacity (``bulk_limits(require_bulk=True)``)."""
     limits = _limits.get()
     if limits is not None and limits.require_bulk:
-        raise ValueError(f"Required bulk admission failed; reference fallback disabled: {error}") from error
+        raise ValueError(f"Required bulk {route} failed; reference fallback disabled: {error}") from error
+
+
+def log_row_fallback(route: str, error: NotBulkEligible, *, dataset: str, rows: int | None = None) -> None:
+    """A bulk route handed ``dataset``'s work to the (slow) row path: refuse it where bulk is required, else warn.
+
+    Every such route is visible: a bundle that silently validated by row held 15.9M lobbying rows at 2.8k rows/s.
+    """
+    reference_fallback(error, route)
+    from loguru import logger
+
+    logger.warning("{} route=row dataset={}{} reason={}", route, dataset, "" if rows is None else f" rows={rows}", error)
+
+
+def log_row_eligibility(route: str, *, dataset: str, rows: int, reason: str) -> None:
+    """Warn for a dataset with no bulk mapping; ``require_bulk`` governs mapped-route fallbacks only."""
+    from loguru import logger
+
+    logger.warning("{} route=row dataset={} rows={} reason={}", route, dataset, rows, reason)
 
 
 @dataclass(frozen=True)
@@ -259,7 +275,149 @@ def bulk_connection(directory: Path | None = None, *, threads: int = 4, memory_l
             "threads": threads, "memory_limit": memory_limit, "max_temp_directory_size": "32GB",
             "temp_directory": str(root / "spill"),
         })) as con, bounded_connection(con):
+            # Timestamp spellings and parses must not depend on the host's zone.
+            con.execute("SET TimeZone = 'UTC'")
             yield con, root
+
+
+#: Receipt columns worth a footer bound; the payload and witness columns are never filtered on.
+_STATISTICS = ["dataset", "record_id", "receipt_id", "outcome", "generation_id", "attempt_id", "policy_version"]
+_GROUP = RECEIPT_ROW_GROUP
+#: The table a :func:`write_split` query reads: the source's batch, with ``file_row_number`` as ``read_parquet`` gives it.
+SOURCE_BATCH = "source_batch"
+
+
+def with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, dict | None]) -> pa.Table:
+    """Merge the row functions' rows (at their batch positions; None leaves a row out) into the SQL-proven ``kept`` ones."""
+    positions = [index for index, flag in enumerate(mask) if flag]
+    replacements = [(index, row) for index, row in insertions.items() if row is not None]
+    if not replacements:
+        return kept
+    added = pa.Table.from_pylist([row for _, row in replacements], schema=kept.schema)
+    positions.extend(index for index, _ in replacements)
+    order = sorted(range(len(positions)), key=positions.__getitem__)
+    return pa.concat_tables([kept, added]).take(order)
+
+
+def write_split(
+    con: duckdb.DuckDBPyConnection,
+    query: str,
+    *,
+    source: Path,
+    batch_rows: int,
+    expected_rows: int,
+    subject_schema: pa.Schema,
+    subject_path: Path,
+    receipt_path: Path,
+    row_attempt: Callable[[pa.Table, int, dict], tuple[dict | None, dict]],
+    label: str,
+    first_receipts: Sequence[Mapping] = (),
+    last_receipts: Iterable[Mapping] = (),
+    refusals_last: bool = False,
+    segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
+    isolate: str | None = None,
+) -> int:
+    """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
+
+    ``query`` reads :data:`SOURCE_BATCH` (the source's rows with a ``file_row_number`` column, as ``read_parquet(...,
+    file_row_number = true)`` gives them) and yields the subject columns, the receipt columns, ``_ordinal`` and
+    ``_reference``, plus ``_accepted`` where a row can be proven receipted without a subject. The source is fed to
+    DuckDB as ordered registered batches, because a parallel ``read_parquet`` stream was seen to emit a later row group
+    first (the order relies on registering one table per query; the ordinal guard below stays). A row marked
+    ``_reference`` is given to ``row_attempt(batch, index, source_row)``, the family's own row function, with the row as
+    the source file holds it (never decoded from the query's encoded text, which spells a value SQL does not own as a
+    marker), and merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
+    writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
+    ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
+    written as a receipt row group of its own, so a reader fetching a neighbour does not load it.
+
+    No receipt is validated here: the generation's admission is the one validation. A DuckDB or Arrow failure raises
+    :func:`bulk_failure`, never a row retry. Rows arriving out of order, or fewer than ``expected_rows``, raise
+    ``RuntimeError``: a stream cut short leaves a bundle that is consistent with itself.
+    """
+    seen, routed, piece_start = 0, 0, 0
+    piece: pa.RecordBatch | None = None
+    pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
+    with ExitStack() as stack:
+        scratch = Path(stack.enter_context(TemporaryDirectory(dir=Path(receipt_path).parent, prefix=".split-")))
+        subjects = stack.enter_context(pq.ParquetWriter(subject_path, subject_schema, compression="zstd"))
+        receipts = stack.enter_context(
+            pq.ParquetWriter(receipt_path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS))
+        refused = stack.enter_context(pq.ParquetWriter(scratch / "refused.parquet", RECEIPT_SCHEMA, compression="zstd"))
+
+        def emit(table: pa.Table, final: bool = False) -> None:
+            nonlocal pending
+            pending = pa.concat_tables([pending, table])
+            whole = pending.num_rows if final else pending.num_rows - pending.num_rows % _GROUP
+            if whole:
+                receipts.write_table(pending.slice(0, whole), row_group_size=_GROUP)
+                pending = pending.slice(whole)
+
+        def part(table: pa.Table) -> int:
+            names = table.column_names
+            flags = table["_reference"].to_pylist()
+            proven = [not flag for flag in flags]
+            accepted = table["_accepted"].to_pylist() if "_accepted" in names else proven
+            written = table.filter(pa.array(proven)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
+            kept = table.filter(pa.array(accepted)).select(subject_schema.names).cast(subject_schema)
+            decided_subjects, decided_receipts, refusals = {}, {}, []
+            for index in (index for index, flag in enumerate(flags) if flag):
+                assert piece is not None
+                offset = table["_ordinal"][index].as_py() - piece_start
+                subject, receipt = row_attempt(table, index, piece.slice(offset, 1).to_pylist()[0])
+                decided_subjects[index] = subject
+                if refusals_last and receipt["outcome"] != "accepted":
+                    refusals.append(receipt)
+                else:
+                    decided_receipts[index] = receipt
+            if refusals:
+                refused.write_table(pa.Table.from_pylist(refusals, schema=RECEIPT_SCHEMA))
+            if decided_subjects:
+                written = with_insertions(written, proven, decided_receipts)
+                kept = with_insertions(kept, accepted, decided_subjects)
+            if kept.num_rows:
+                subjects.write_table(kept)
+            alone = isolate is not None and any(table[isolate].to_pylist())
+            if alone:
+                emit(RECEIPT_SCHEMA.empty_table(), final=True)
+            emit(written, final=alone)
+            return len(decided_subjects)
+
+        try:
+            with pq.ParquetFile(source) as original:
+                start = 0
+                for piece in original.iter_batches(batch_size=batch_rows):
+                    piece_start = start
+                    checkpoint()
+                    piece.validate(full=True)
+                    numbered = pa.Table.from_batches([piece]).append_column(
+                        "file_row_number", pa.array(range(start, start + piece.num_rows), pa.int64()))
+                    start += piece.num_rows
+                    con.register(SOURCE_BATCH, numbered)
+                    try:
+                        for batch in con.execute(query).to_arrow_reader(batch_rows):
+                            table = pa.Table.from_batches([batch])
+                            table.validate(full=True)
+                            ordinals = table["_ordinal"].to_pylist()
+                            if ordinals != list(range(seen, seen + len(ordinals))):
+                                raise RuntimeError(f"{label}: source rows did not arrive in file order")
+                            seen += len(ordinals)
+                            for each in (table,) if segments is None else segments(table):
+                                routed += part(each)
+                    finally:
+                        con.unregister(SOURCE_BATCH)
+            for receipt_batch in batched(last_receipts, _GROUP):
+                emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
+            emit(RECEIPT_SCHEMA.empty_table(), final=True)
+            refused.close()
+            with pq.ParquetFile(scratch / "refused.parquet") as late:
+                for batch in late.iter_batches(batch_size=1):
+                    receipts.write_batch(batch)
+        except (duckdb.Error, pa.ArrowException) as error:
+            raise bulk_failure(f"Bulk {label} write failed", error) from error
+    if seen != expected_rows:
+        raise RuntimeError(f"{label}: read {seen} of the source's {expected_rows} rows")
+    return routed
 
 
 def _ordinal_file(con, query: str, parameters, path: Path) -> Iterator[int]:
@@ -279,8 +437,11 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     """SQL text equal to ``exact_json`` of ``expression``'s value: the tagged encoding with keys in sorted order.
 
     Covers strings, integers, booleans, date32 in Python's date range, fixed-point decimal128 scales 0 through 6,
-    and structs and lists of them whose DuckDB text equals Python's.
-    Any other type refuses, so its table stays with the row writer until a test here proves its spelling.
+    timestamp[us, UTC] in years 1000 through 9998, finite normal float32/float64 (zero included), and structs and
+    lists of them whose DuckDB text equals Python's. A value this spells only as :data:`_ROUTE` (a timestamp outside
+    those years, a subnormal, infinite or NaN float) matches :func:`needs_reference_sql`, so its row goes to the row
+    functions, which decide it. Any other type refuses, so its table stays with the row writer until a test here proves
+    its spelling.
     """
     if pa.types.is_string(dtype) or pa.types.is_large_string(dtype):
         body = f"'[\"str\",' || CAST(to_json({expression}) AS VARCHAR) || ']'"
@@ -306,6 +467,16 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
         # '.0' in DuckDB while Arrow's Decimal spells it '0.0'.
         text = f"CAST(CAST({expression} AS DECIMAL(38,{dtype.scale})) AS VARCHAR)"
         body = f"'[\"decimal\",' || CAST(to_json({text}) AS VARCHAR) || ']'"
+    elif pa.types.is_timestamp(dtype) and dtype.unit == "us" and dtype.tz == "UTC":
+        # ``datetime.isoformat()``: seconds always, microseconds only when nonzero, then the offset. Years outside
+        # 1000-9998 are left to the row functions (``%Y`` is not four digits there, and Python's range ends at 9999).
+        utc = f"timezone('UTC', {expression})"
+        text = (f"strftime({utc}, '%Y-%m-%dT%H:%M:%S') || CASE WHEN strftime({utc}, '%f') = '000000' THEN '' "
+                f"ELSE '.' || strftime({utc}, '%f') END || '+00:00'")
+        body = (f"CASE WHEN isfinite({expression}) AND year({utc}) BETWEEN 1000 AND 9998 "
+                f"THEN '[\"datetime\",' || CAST(to_json({text}) AS VARCHAR) || ']' ELSE {_literal(_ROUTE)} END")
+    elif pa.types.is_float64(dtype) or pa.types.is_float32(dtype):
+        body = _float_sql(expression)
     elif pa.types.is_struct(dtype):
         body = record_json_sql(((field.name, field.type) for field in dtype), qualifier=expression + ".")
     elif pa.types.is_list(dtype) or pa.types.is_large_list(dtype):
@@ -314,6 +485,32 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     else:
         raise NotImplementedError(f"No proven SQL spelling for {dtype}")
     return f"CASE WHEN {expression} IS NULL THEN '[\"null\",null]' ELSE {body} END"
+
+
+def _float_sql(expression: str) -> str:
+    """``["float", float.hex()]`` for a finite double, from its binary exponent and 52-bit mantissa.
+
+    ``log2`` may be off by one at a power of two, so the exponent is corrected against exact powers of two. A
+    subnormal, infinite or NaN value is :data:`_ROUTE`: ``_pack`` refuses the last two and the first is not worth a
+    spelling.
+    """
+    v = f"CAST({expression} AS DOUBLE)"
+    normal = "(isfinite(_v) AND abs(_v) >= 2.2250738585072014e-308)"
+    sign = "CASE WHEN starts_with(CAST(_v AS VARCHAR), '-') THEN '-' ELSE '' END"
+    significand = (
+        "lpad(lower(to_hex(CAST((_a / pow(2.0, _e) - 1.0) * 4503599627370496.0 AS BIGINT))), 13, '0')"
+    )
+    exponent = "CASE WHEN _e >= 0 THEN '+' ELSE '-' END || CAST(abs(_e) AS VARCHAR)"
+    spelled = (
+        f"list_transform([CASE WHEN {normal} THEN abs(_v) ELSE 1.0 END], _a -> "
+        f"list_transform([CAST(floor(log2(_a)) AS INTEGER)], _g -> "
+        "list_transform([CASE WHEN _a < pow(2.0, _g) THEN _g - 1 WHEN _a >= pow(2.0, _g + 1) THEN _g + 1 ELSE _g END], "
+        f"_e -> {sign} || '0x1.' || {significand} || 'p' || {exponent})[1])[1])[1]"
+    )
+    return (
+        f"list_transform([{v}], _v -> CASE WHEN _v = 0 THEN '[\"float\",\"' || {sign} || '0x0.0p+0\"]' "
+        f"WHEN {normal} THEN '[\"float\",\"' || {spelled} || '\"]' ELSE {_literal(_ROUTE)} END)[1]"
+    )
 
 
 def _concat_sql(parts: list[str]) -> str:

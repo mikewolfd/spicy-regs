@@ -5,7 +5,9 @@ import sys
 import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+from decimal import Decimal
 import pytest
+from spicy_regs import etl_bulk
 
 from spicy_regs import congress_bulk
 from spicy_regs.congress_receipts import PROCESSOR, CongressInput, policy
@@ -314,8 +316,8 @@ def test_unproven_bundle_dispatch_uses_exact_row_validator(tmp_path, monkeypatch
     from spicy_regs import votes_batch_receipts as congress_receipts, etl_bulk
     from spicy_regs.etl_receipts import DatasetPolicy, write_dataset
 
-    selected = DatasetPolicy("float_test", pa.schema([("id", pa.string()), ("n", pa.float64())]), ("id",), ())
-    subject, receipts = write_dataset([({"id": "one", "n": 1.5}, ReceiptContext(GENERATION, "a", "p", [WITNESS]))],
+    selected = DatasetPolicy("wide_test", pa.schema([("id", pa.string()), ("n", pa.decimal128(12, 8))]), ("id",), ())
+    subject, receipts = write_dataset([({"id": "one", "n": Decimal("1.50000000")}, ReceiptContext(GENERATION, "a", "p", [WITNESS]))],
                                       tmp_path / "bundle", selected)
     assert subject is not None
     calls, real = [], congress_receipts.validate_receipt_bundle
@@ -350,7 +352,13 @@ def test_bulk_source_decode_failure_uses_exact_row_error(tmp_path, damage):
             write_congress_dataset(source, destination, dataset="member_votes", generation_id=GENERATION, bulk=bulk)
         errors.append((type(caught.value), str(caught.value)))
         assert not destination.exists()
-    assert errors[0] == errors[1]
+    if damage == "utf8":
+        # Bulk never redoes a failure by row: the invalid input is reported as bulk input data (the row writer's own
+        # first decoding error stays what bulk=False reports).
+        assert errors[0][0] is UnicodeDecodeError and errors[1][0] is etl_bulk.BulkInputError
+        assert "no row fallback" in errors[1][1]
+    else:
+        assert errors[0] == errors[1]
 
 
 @pytest.mark.parametrize('dataset,build', [('member_votes', _member_votes), ('member_vote_terms', _member_vote_terms)])

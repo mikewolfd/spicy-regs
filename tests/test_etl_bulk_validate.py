@@ -344,12 +344,12 @@ def test_scoped_read_agrees_with_a_selected_copy(tmp_path, name) -> None:
 
 
 def test_invalid_utf8_data_fails_bulk_without_row_retry(tmp_path) -> None:
-    measured = DatasetPolicy("measured", pa.schema([("id", pa.string()), ("ratio", pa.float64())]), ("id",), ())
+    measured = DatasetPolicy("measured", pa.schema([("id", pa.string()), ("ratio", pa.decimal128(12, 8))]), ("id",), ())
     context = ReceiptContext("g1", "a", "test/1", [WITNESS])
-    subject, receipts = write_dataset([({"id": "a", "ratio": 0.5}, context)], tmp_path / "measured", measured)
+    subject, receipts = write_dataset([({"id": "a", "ratio": Decimal("0.50000000")}, context)], tmp_path / "measured", measured)
     assert subject is not None
     validate_receipt_bundle({"measured": [subject]}, [receipts], [measured])
-    with pytest.raises(etl_bulk.NotBulkEligible, match="double"):
+    with pytest.raises(etl_bulk.NotBulkEligible, match="decimal128"):
         etl_bulk.validate_bundle({"measured": [subject]}, [receipts], [measured])
     cased = DatasetPolicy("cased", pa.schema([("id", pa.string()), ("pair", pa.struct([("a", pa.string()), ("A", pa.string())]))]), ("id",), ())
     cased_subject, cased_receipts = write_dataset(
@@ -530,8 +530,8 @@ def test_execution_failure_after_partial_work_never_retries_by_row(tmp_path, mon
 def test_unsupported_encoding_still_routes_to_row_validator(tmp_path, monkeypatch):
     from spicy_regs import etl_receipts
 
-    selected = DatasetPolicy("ratios", pa.schema([("id", pa.string()), ("v", pa.float64())]), ("id",), ())
-    subject, receipt = write_dataset([({"id": "one", "v": 0.5}, ReceiptContext("g", "a", "test", [WITNESS]))],
+    selected = DatasetPolicy("ratios", pa.schema([("id", pa.string()), ("v", pa.decimal128(12, 8))]), ("id",), ())
+    subject, receipt = write_dataset([({"id": "one", "v": Decimal("0.50000000")}, ReceiptContext("g", "a", "test", [WITNESS]))],
                                      tmp_path / "ratios", selected)
     assert subject is not None
     original, calls = etl_receipts._validate_receipt_bundle_rows, []

@@ -59,7 +59,7 @@ def test_date32_outside_python_range_refuses(days, nested):
             con.execute(f"SELECT {expression} FROM dates").fetchall()
 
 
-@pytest.mark.parametrize("dtype", [pa.date64(), pa.timestamp("s"), pa.timestamp("us", tz="UTC"), pa.time32("s")])
+@pytest.mark.parametrize("dtype", [pa.date64(), pa.timestamp("s"), pa.timestamp("ns", tz="UTC"), pa.timestamp("us"), pa.time32("s")])
 def test_other_temporal_types_remain_unproven(dtype):
     with pytest.raises(NotImplementedError, match="No proven SQL spelling"):
         etl_bulk.exact_json_sql('"value"', dtype)

@@ -42,16 +42,13 @@ from spicy_regs.congress_subjects import (
     subject_schema,
     target_name,
 )
-from spicy_regs.etl_receipts import RECEIPT_SCHEMA, WITNESS_TYPE, DatasetPolicy
+from spicy_regs.etl_receipts import WITNESS_TYPE, DatasetPolicy
 
 #: ``congress_subjects.integer`` reads an ASCII digit string; 18 digits always fit the subject's int64.
 _DIGITS = "'[0-9]{1,18}'"
 #: The rows ``congress_subjects.map_record`` gives no subject, as SQL over the source columns. A test holds each to
 #: the mapper's own answer.
 NO_SUBJECT = {"member_vote_terms": '"term_index" IS NULL AND "term_match" IS NOT NULL'}
-#: Receipt columns worth a footer bound; the payload and witness columns are never filtered on.
-_STATISTICS = ["dataset", "record_id", "receipt_id", "outcome", "generation_id", "attempt_id", "policy_version"]
-_GROUP = 2000
 #: Rows held in memory at a time; a receipt is about a kilobyte.
 _BATCH = 100_000
 
@@ -91,8 +88,12 @@ def _witnesses_sql(first: Mapping[str, Any], rest: Sequence[Mapping[str, Any]]) 
     return "[" + ", ".join(["{" + own + "}", *others]) + "]"
 
 
-def _source_sql(source: Path, file_schema: pa.Schema, dataset: str, policy: DatasetPolicy, context_reference: bool = False) -> str:
-    """The source rows, each with its ordinal, its exact text, whether it has no subject, and whether it is the row code's."""
+def _source_sql(source: Path, file_schema: pa.Schema, dataset: str, policy: DatasetPolicy, context_reference: bool = False,
+                table: str | None = None) -> str:
+    """The source rows, each with its ordinal, its exact text, whether it has no subject, and whether it is the row code's.
+
+    They come from ``table`` (a registered batch of the source) or, without it, from the file.
+    """
     integers = [field.name for field in policy.subject_schema if pa.types.is_integer(field.type) and field.name in file_schema.names]
     bad_integer = " OR ".join(f'("{name}" IS NOT NULL AND NOT regexp_full_match("{name}", {_DIGITS}))' for name in integers) or "false"
     no_identity = " OR ".join(
@@ -105,7 +106,7 @@ def _source_sql(source: Path, file_schema: pa.Schema, dataset: str, policy: Data
     raw = etl_bulk.record_json_sql((name, file_schema.field(name).type) for name in file_schema.names)
     return f"""SELECT *, ((NOT _rejected AND (({no_identity}) OR ({bad_integer}))) OR {etl_bulk.needs_reference_sql("_raw")} OR {str(context_reference).lower()}) AS _reference
                FROM (SELECT *, file_row_number AS _ordinal, {raw} AS _raw, ({no_subject}) AS _rejected
-                     FROM read_parquet({_text(source)}, file_row_number = true))"""
+                     FROM {table or f"read_parquet({_text(source)}, file_row_number = true)"})"""
 
 
 def _context_reference(source, dataset, policy, generation_id, processor, witnesses) -> bool:
@@ -145,18 +146,6 @@ def _rows_in(path: Path, dataset: str | None = None) -> int:
     return ds.dataset(path, format="parquet").count_rows(filter=ds.field("dataset") == dataset)
 
 
-def _with_insertions(kept: pa.Table, mask: list[bool], insertions: Mapping[int, dict | None]) -> pa.Table:
-    """Merge reference rows in original order using one Arrow table per batch."""
-    positions = [index for index, flag in enumerate(mask) if flag]
-    replacements = [(index, row) for index, row in insertions.items() if row is not None]
-    if not replacements:
-        return kept
-    added = pa.Table.from_pylist([row for _, row in replacements], schema=kept.schema)
-    positions.extend(index for index, _ in replacements)
-    order = sorted(range(len(positions)), key=positions.__getitem__)
-    return pa.concat_tables([kept, added]).take(order)
-
-
 def write_bundle(
     source: Path,
     subjects_path: Path,
@@ -191,7 +180,7 @@ def write_bundle(
     own_witness = {"source_id": "shaped-observation:" + dataset, "source_uri": str(source), "sha256": digest, "body_version": None}
     reference = _context_reference(source, dataset, policy, generation_id, processor, witnesses)
     query = f"""
-    WITH read AS ({_source_sql(source, file_schema, dataset, policy, reference)}),
+    WITH read AS ({_source_sql(source, file_schema, dataset, policy, reference, etl_bulk.SOURCE_BATCH)}),
     shaped AS (SELECT {columns}, _ordinal, _raw, _rejected, _reference FROM read),
     keyed AS (SELECT *, CASE WHEN NOT _rejected THEN {record_id} END AS record_id, CASE WHEN NOT _rejected THEN {version} END AS subject_version,
                      CASE WHEN NOT _rejected THEN {identity} END AS identity_json,
@@ -203,40 +192,13 @@ def write_bundle(
     SELECT {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id, * EXCLUDE (_reference),
            (_reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _reference,
            NOT (_rejected OR _reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _accepted FROM receipt"""
-    expected, seen, left = _rows_in(source), 0, 0
-    with etl_bulk.bulk_connection() as (con, _), pq.ParquetWriter(subjects_path, subject, compression="zstd") as subjects, \
-            pq.ParquetWriter(receipts_path, RECEIPT_SCHEMA, compression="zstd", write_statistics=_STATISTICS) as receipts:
-        pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
-        for batch in con.execute(query).to_arrow_reader(_BATCH):
-            table = pa.Table.from_batches([batch])
-            table.validate(full=True)
-            ordinals = table["_ordinal"].to_pylist()
-            if ordinals != list(range(seen, seen + len(ordinals))):
-                raise RuntimeError(f"{dataset}: source rows did not arrive in file order")
-            seen += len(ordinals)
-            flagged = table["_reference"].to_pylist()
-            written = table.filter(pa.array([not flag for flag in flagged])).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
-            kept = table.filter(table["_accepted"]).select(subject.names).cast(subject)
-            if any(flagged):
-                texts, row_subjects, row_receipts = table["processing_json"].to_pylist(), {}, {}
-                for index in (index for index, flag in enumerate(flagged) if flag):
-                    row_subject, receipt = row_receipt(texts[index], ordinals[index])
-                    row_subjects[index] = row_subject
-                    row_receipts[index] = receipt
-                left += len(row_receipts)
-                written = _with_insertions(written, [not flag for flag in flagged], row_receipts)
-                kept = _with_insertions(kept, table["_accepted"].to_pylist(), row_subjects)
-            pending = pa.concat_tables([pending, written])
-            if whole := pending.num_rows - pending.num_rows % _GROUP:
-                receipts.write_table(pending.slice(0, whole), row_group_size=_GROUP)
-                pending = pending.slice(whole)
-            if kept.num_rows:
-                subjects.write_table(kept)
-        if pending.num_rows:
-            receipts.write_table(pending, row_group_size=_GROUP)
-    if seen != expected:
-        raise RuntimeError(f"{dataset}: read {seen} of the source's {expected} rows")
-    return left
+    with etl_bulk.bulk_connection() as (con, _):
+        return etl_bulk.write_split(
+            con, query, source=source, batch_rows=_BATCH, expected_rows=_rows_in(source), subject_schema=subject,
+            subject_path=subjects_path, receipt_path=receipts_path, label=dataset, first_receipts=first_receipts,
+            row_attempt=lambda table, index, row: row_receipt(table["processing_json"][index].as_py(),
+                                                         table["_ordinal"][index].as_py()),
+        )
 
 
 #: How ``exact_json`` spells a table-metadata entry, at any depth.
@@ -324,7 +286,7 @@ def restore_input(
                             check_fields(fields)
                         decoded[index] = None if fields is None else dict(fields)
                     left += len(decoded)
-                    rows = _with_insertions(rows, [not flag for flag in flagged], decoded)
+                    rows = etl_bulk.with_insertions(rows, [not flag for flag in flagged], decoded)
                 if rows.num_rows:
                     writer.write_table(rows)
         if seen != expected:

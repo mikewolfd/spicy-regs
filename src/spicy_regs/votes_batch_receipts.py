@@ -8,7 +8,7 @@ from typing import Any
 from collections.abc import Mapping, Sequence
 import pyarrow as pa
 import pyarrow.parquet as pq
-from spicy_regs import congress_bulk, etl_bulk
+from spicy_regs import congress_bulk
 from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy
 from spicy_regs.congress_subjects import map_record
 from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, _unpack,
@@ -18,13 +18,8 @@ from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.current_receipt_history import inherit_current_receipts
 
 def _admit(subjects, receipts, policies, *, generation_id, bulk=True):
-    """Use bulk proof where eligible; the exact row validator decides every fallback."""
-    if bulk:
-        try:
-            return etl_bulk.validate_bundle(subjects, receipts, policies, generation_id=generation_id)
-        except etl_bulk.NotBulkEligible:
-            pass
-    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id, bulk=False)
+    """Bulk proof where it decides; a row fallback is logged (and refused where bulk is required)."""
+    return validate_receipt_bundle(subjects, receipts, policies, generation_id=generation_id, bulk=bulk)
 
 def congress_attempt(dataset: str, raw: Mapping, context: ReceiptContext) -> tuple[dict | None, dict]:
     """The reference attempt for one raw Congress row, shared with qualification."""
@@ -115,16 +110,11 @@ def write_congress_dataset(
         # One scan for a flat dataset; the row loop below is its reference.
         if in_bulk:
             assert subjects is not None
-            try:
-                congress_bulk.write_bundle(
-                    source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
-                    processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
-                    row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
-                )
-            except (etl_bulk.duckdb.Error, pa.ArrowInvalid):
-                # The same staged row reader establishes the exact first source
-                # decoding error. Count/order guard failures still abort directly.
-                in_bulk = False
+            congress_bulk.write_bundle(
+                source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
+                processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
+                row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
+            )
         if not in_bulk:
             with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
                 sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
