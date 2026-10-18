@@ -422,8 +422,15 @@ def write_split(
                 emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
             refused.close()
             with pq.ParquetFile(scratch / "refused.parquet") as late:
-                for batch in late.iter_batches(batch_size=_GROUP):
-                    emit(pa.Table.from_batches([batch]))
+                if isolate is not None:
+                    # The deferred file does not retain route flags. Preserve the
+                    # isolation guarantee for every deferred failure on this route.
+                    emit(RECEIPT_SCHEMA.empty_table(), final=True)
+                    for batch in late.iter_batches(batch_size=1):
+                        receipts.write_batch(batch)
+                else:
+                    for batch in late.iter_batches(batch_size=_GROUP):
+                        emit(pa.Table.from_batches([batch]))
             for receipt_batch in batched(last_refusals, _GROUP):
                 emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
             emit(RECEIPT_SCHEMA.empty_table(), final=True)

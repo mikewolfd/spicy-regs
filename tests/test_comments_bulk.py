@@ -120,6 +120,11 @@ def test_large_rows_keep_exact_values_order_and_individual_output(tmp_path, monk
     groups = pq.ParquetFile(actual[1]).metadata
     sizes = [groups.row_group(i).num_rows for i in range(groups.num_row_groups)]
     assert sizes.count(1) >= 2  # the oversized rows keep receipt row groups of their own
+    with pq.ParquetFile(actual[1]) as receipts:
+        refused_groups = [receipts.read_row_group(i, columns=['outcome']) for i in range(receipts.num_row_groups)
+                          if 'refused' in receipts.read_row_group(i, columns=['outcome']).column(0).to_pylist()]
+    assert len(refused_groups) == 1
+    assert refused_groups[0].num_rows == 1  # fetching an ordinary receipt cannot load the large refused original
     validate_receipt_bundle({'comments': [actual[0]]}, [actual[1]], [policy('comments')], generation_id='g', bulk=False)
 
 
