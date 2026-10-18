@@ -156,6 +156,9 @@ def test_a_regulatory_bulk_failure_is_reported_by_its_kind_and_never_redone_by_r
 @pytest.mark.parametrize("dataset,identity", [("docket_attributes", "docket_id"), ("document_attributes", "document_id")])
 def test_attribute_families_convert_from_their_typed_published_shape(tmp_path, monkeypatch, bucket, dataset, identity):
     """Nightly etl-new restores each attribute table and refuses one that carries no receipts (since 2026-10-04)."""
+    import json
+    from datetime import date, datetime, timezone
+
     import pyarrow as pa
     import pyarrow.parquet as pq
 
@@ -165,7 +168,16 @@ def test_attribute_families_convert_from_their_typed_published_shape(tmp_path, m
 
     family = dataset.replace("_", "-")
     schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS[dataset]])
-    original = [dict.fromkeys(schema.names) | {identity: f"A-{number}"} for number in (1, 2)]
+    # One non-null value of every declared kind, so a value that changed in conversion would be seen.
+    samples = {
+        "BIGINT": lambda n: n, "INTEGER": lambda n: n, "DOUBLE": lambda n: n + 0.5, "BOOLEAN": lambda n: n % 2 == 1,
+        "DATE": lambda n: date(2026, 1, n),
+        "TIMESTAMP WITH TIME ZONE": lambda n: datetime(2026, 1, n, 12, 30, tzinfo=timezone.utc),
+        "VARCHAR[]": lambda n: [f"k{n}", f"j{n}"], "VARCHAR": lambda n: f"v{n}",
+    }
+    original = [{name: json.dumps([{"name": f"n{number}", "label": "L", "tooltip": "T"}]) if name.endswith("_json") else samples[kind](number)
+                 for name, kind in SOURCE_COLUMNS[dataset]} | {identity: f"A-{number}"}
+                for number in (1, 2)]
     path = tmp_path / "old" / f"{dataset}.parquet"
     path.parent.mkdir()
     pq.write_table(pa.Table.from_pylist(original, schema=schema), path)
