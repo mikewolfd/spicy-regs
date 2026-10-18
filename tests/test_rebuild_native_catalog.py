@@ -1,6 +1,7 @@
 """The comments v1 -> v2 catalog rebuild: guards, bulk copy, resumption and readback, on a local catalog."""
 
 import duckdb
+import hashlib
 import polars as pl
 import pyarrow as pa
 import pytest
@@ -159,6 +160,29 @@ def test_refuses_a_published_pair_whose_receipts_do_not_match_its_rows(live, pub
     assert untouched(live) == before
 
 
+def test_refuses_a_different_expected_prior_before_dropping_the_live_table(live, published, tmp_path):
+    import shutil
+    other = tmp_path / 'other-prior.parquet'
+    shutil.copyfile(published.subjects[0], other)
+    before = untouched(live)
+    with pytest.raises(ValueError, match='same published subject'):
+        rebuild(live, published, expected_prior=other)
+    assert untouched(live) == before
+
+
+def test_refuses_a_different_dataset_or_incomplete_receipt_schema_before_writing(live, published, tmp_path):
+    from dataclasses import replace
+    before = untouched(live)
+    with pytest.raises(ValueError, match='another dataset'):
+        rebuild(live, replace(published, dataset='documents'))
+    missing = tmp_path / 'missing-receipt-field.parquet'
+    native._copy(live, 'SELECT * EXCLUDE (witnesses) FROM read_parquet(?)', missing,
+                 parameters=[str(published.receipts)])
+    with pytest.raises(ValueError, match='receipt schema'):
+        rebuild(live, replace(published, receipts=missing))
+    assert untouched(live) == before
+
+
 def test_refuses_partial_copies(live, published):
     rebuild(live, published)
     live.execute(f'DELETE FROM {native.receipts_table()} WHERE processor=\'regulatory-catalog-initialization-v1\'')
@@ -204,6 +228,36 @@ def test_readback_catches_a_corrupted_copy(live, published, tmp_path, damage):
     assert str(refused.value)
 
 
+def test_readback_refuses_valid_replacement_receipt_with_changed_provenance(live, published, tmp_path):
+    from spicy_regs.etl_receipts import rebind_receipt
+    rebuild(live, published)
+    original = live.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='accepted' LIMIT 1").to_arrow_table().to_pylist()[0]
+    changed = rebind_receipt(original, generation_id='another-generation')
+    assert changed['record_id'] == original['record_id'] and changed['subject_version'] == original['subject_version']
+    live.register('replacement', pa.Table.from_pylist([changed], schema=RECEIPT_SCHEMA))
+    live.execute(f'DELETE FROM {native.receipts_table()} WHERE receipt_id=?', [original['receipt_id']])
+    live.execute(f'INSERT INTO {native.receipts_table()} SELECT * FROM replacement')
+    with pytest.raises(RuntimeError, match='receipts differ from the published generation'):
+        native.verify_rebuilt(live, COMMENT, published, tmp_path / 'readback')
+
+
+@pytest.mark.parametrize('dockets', [[], [None]])
+def test_readback_smoke_accepts_empty_or_unknown_docket_population(tmp_path, state, dockets):
+    with _connection() as writer:
+        rows = [{**dict.fromkeys(COMMENT.schema), 'comment_id': f'c{i}', 'docket_id': docket}
+                for i, docket in enumerate(dockets)]
+        writer.register('source', pl.DataFrame(rows, schema=COMMENT.schema).to_arrow())
+        native.ensure_native(writer, COMMENT)
+        iceberg.replace_rows(writer, COMMENT, 'source')
+        pair = native.export_pair(writer, COMMENT, tmp_path / 'published', generation_id='unknown-docket')
+    with _v1(pair) as con:
+        rebuild(con, pair)
+        result = native.verify_rebuilt(con, COMMENT, pair, tmp_path / 'readback')
+    assert result['rows'] == len(dockets)
+    if dockets:
+        assert 'smoke_docket' in result and result['smoke_docket'] is None
+
+
 @pytest.fixture
 def command(live, published, state, monkeypatch, tmp_path):
     """scripts/rebuild_native_catalog.py against the local catalog and a stubbed publication index."""
@@ -212,7 +266,7 @@ def command(live, published, state, monkeypatch, tmp_path):
 
     digest = 'sha256:08e42ccc' + '0' * 56
     def member(path):
-        return publication.Member(path.name, 'sha256:' + '1' * 64, path.stat().st_size, 4)
+        return publication.Member(path.name, 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size, 4)
     monkeypatch.setenv('R2_PUBLIC_URL', 'https://example.invalid')
     monkeypatch.setattr(iceberg, 'is_configured', lambda: True)
     monkeypatch.setattr(publication, 'load_index', lambda base: {})
@@ -234,7 +288,7 @@ def test_command_dry_run_prints_the_plan_and_writes_nothing(command, live, capsy
     before = untouched(live)
     assert command() == 0
     out = capsys.readouterr().out
-    assert 'rows 4' in out and 'expected peak disk' in out and 'default_native' in out and 'dry run' in out
+    assert 'rows 4' in out and 'estimated additional disk' in out and 'default_native' in out and 'dry run' in out
     assert untouched(live) == before
     assert command('--dry-run') == 0 and untouched(live) == before
 
@@ -252,3 +306,36 @@ def test_command_refuses_other_generations_and_conflicting_flags(command, live):
     from scripts import rebuild_native_catalog as script
     with pytest.raises(SystemExit, match='is not'):
         script.main(['--work', 'unused', '--expect-artifact-digest', 'ffffffffffff'])
+
+
+def test_command_reuses_verified_inputs_on_rerun_and_refuses_changed_bytes(command, monkeypatch, tmp_path):
+    assert command() == 0
+    monkeypatch.setattr(publication, 'fetch_member', lambda *_: pytest.fail('must reuse verified input'))
+    assert command() == 0
+    subject = tmp_path / 'work' / 'published' / 'comments.parquet'
+    subject.write_bytes(b'changed by another task')
+    with pytest.raises(ValueError, match='left untouched'):
+        command()
+    assert subject.read_bytes() == b'changed by another task'
+
+
+def test_command_reuses_explicit_corpus_members_in_place(command, published, monkeypatch, tmp_path):
+    monkeypatch.setattr(publication, 'fetch_member', lambda *_: pytest.fail('must not download retained inputs'))
+    assert command('--subject-file', str(published.subjects[0]), '--receipts-file', str(published.receipts)) == 0
+    assert list((tmp_path / 'work' / 'published').iterdir()) == []
+
+
+def test_command_passes_resources_and_work_volume_to_nested_validation(command, monkeypatch, tmp_path):
+    import tempfile
+    from spicy_regs import etl_bulk
+    previous = tempfile.tempdir
+    real = native.verify_rebuilt
+    def verify(*args, **kwargs):
+        assert tempfile.tempdir == str(tmp_path / 'work' / 'temporary')
+        limits = etl_bulk._limits.get()
+        assert limits is not None and limits.threads == 2
+        assert limits.memory_limit == '1GB'
+        return real(*args, **kwargs)
+    monkeypatch.setattr(native, 'verify_rebuilt', verify)
+    assert command('--publish', '--threads', '2', '--memory', '1GB') == 0
+    assert tempfile.tempdir == previous and etl_bulk._limits.get() is None

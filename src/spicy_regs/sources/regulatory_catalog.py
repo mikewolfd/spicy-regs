@@ -575,10 +575,16 @@ def rebuild_native(con, record_type, pair, *, expected_snapshot, expected_prior,
     declared = policy(dataset)
     columns = declared.subject_schema.names
     key = '"' + record_type.dedup_key + '"'
+    if pair.dataset != dataset:
+        raise ValueError('Published pair belongs to another dataset')
     (subjects,) = pair.subjects
+    if not Path(subjects).samefile(expected_prior):
+        raise ValueError('Expected prior must be the same published subject that will be copied')
     # Published pair: exactly the declared columns, one accepted receipt per subject row.
     if not pq.read_schema(subjects).equals(declared.subject_schema, check_metadata=False):
         raise ValueError('Published subject schema differs from the declared policy')
+    if not pq.read_schema(pair.receipts).equals(RECEIPT_SCHEMA, check_metadata=False):
+        raise ValueError('Published receipt schema differs from the declared schema')
     rows = pq.ParquetFile(subjects).metadata.num_rows
     receipt_rows, accepted = con.execute(
         f"SELECT count(*), count(*) FILTER (WHERE outcome='accepted') FROM read_parquet(?) WHERE dataset=? AND {_NOT_MARKER}",
@@ -647,8 +653,9 @@ def verify_rebuilt(con, record_type, pair, work, *, smoke=True):
     """Read-only readback of a rebuilt comments catalog; raises on the first difference.
 
     Initialization, row count, schema, then one bulk admission of the catalog rows against their copied receipts
-    (every ``subject_version`` re-derived from the rows) and equality of the accepted ``(record_id,
-    subject_version)`` multiset with the published receipts. ``smoke`` also reads the smallest docket back.
+    (every ``subject_version`` re-derived from the rows) and equality of every non-marker receipt's digest
+    with the published receipts. Those checked digests cover all receipt fields, including provenance.
+    ``smoke`` also reads the smallest docket back, including an unknown docket.
     """
     from spicy_regs import etl_bulk
     dataset = record_type.name
@@ -667,17 +674,18 @@ def verify_rebuilt(con, record_type, pair, work, *, smoke=True):
         _copy(con, f'SELECT * FROM {target}', copied)
         _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", copied_receipts)
     etl_bulk.validate_bundle({dataset: [copied]}, [copied_receipts], [declared])
-    pairs = "SELECT record_id, subject_version FROM read_parquet('{}') WHERE dataset='{}' AND outcome='accepted'"
+    pairs = "SELECT receipt_id FROM read_parquet('{}') WHERE dataset='{}' AND " + _NOT_MARKER
     published, live = (pairs.format(path.as_posix().replace("'", "''"), dataset) for path in (pair.receipts, copied_receipts))
     differing = con.execute(f'SELECT count(*) FROM (({published} EXCEPT ALL {live}) UNION ALL ({live} EXCEPT ALL {published}))').fetchone()[0]
     if differing:
-        raise RuntimeError(f'{differing} accepted receipts differ from the published generation')
+        raise RuntimeError(f'{differing} receipts differ from the published generation')
     result = {'rows': counted, 'receipts': pq.ParquetFile(copied_receipts).metadata.num_rows}
     copied.unlink()
     copied_receipts.unlink()
-    if smoke:
+    if smoke and counted:
         docket, expected = con.execute(f'SELECT docket_id, count(*) FROM {target} GROUP BY 1 ORDER BY 2, 1 LIMIT 1').fetchone()
-        restored = processing_table(con, record_type, where=f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'")
+        predicate = 'docket_id IS NULL' if docket is None else f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'"
+        restored = processing_table(con, record_type, where=predicate)
         if con.execute(f'SELECT count(*) FROM {restored}').fetchone()[0] != expected:
             raise RuntimeError(f'Processing read of docket {docket} returned a different row count')
         con.execute(f'DROP TABLE {restored}')

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Rebuild the live native comments catalog in the regulations-native-v2 shape from the published generation.
 
-A dry run unless ``--publish``: it downloads and byte-checks the published subject and receipts, pins the catalog
+A dry run unless ``--publish``: it reuses byte-verified local subject and receipt files, downloads missing files, pins the catalog
 snapshot, proves the live 21 shared columns equal the published subject (per-key SHA-256), prints the plan (rows,
-bytes, expected disk, target namespace) and writes nothing. ``--publish`` then drops the v1 table and its receipts,
+bytes, estimated additional disk, target namespace) and writes nothing to the catalog. ``--publish`` drops the v1 table and its receipts,
 creates the v2 table, bulk-copies rows and receipts, writes one v2 marker and reads the result back once.
 ``--verify-only`` runs just that readback against an already rebuilt catalog. Needs the R2 Data Catalog variables
 and ``R2_PUBLIC_URL``. Run it under the heavy-check lock, with ``--work`` on a volume with the printed free space.
@@ -12,8 +12,10 @@ See ``spicy_regs.sources.regulatory_catalog.rebuild_native``.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import shutil
 import sys
+import tempfile
 from collections.abc import Sequence
 from os import getenv
 from pathlib import Path
@@ -21,19 +23,46 @@ from pathlib import Path
 from loguru import logger
 
 from spicy_regs.duckdb_settings import ExportResources
+from spicy_regs import etl_bulk
+from spicy_regs.local_data import file_signature
+from spicy_regs.runtime_bounds import stream_sha256
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import iceberg, publication
 from spicy_regs.sources import regulatory_catalog as native
 from spicy_regs.transforms.regulations_receipts import ReceiptInput
 
 GIB = 2**30
-#: DuckDB spill and Iceberg encode scratch beyond the inputs and the readback copy (plan section 2l).
-SPILL_BYTES = 8 * GIB
+#: The bulk validator permits this much spill; its database also needs space.
+SPILL_BYTES = 32 * GIB
 
 
-def expected_disk(subject_bytes: int, receipt_bytes: int) -> int:
-    """Inputs plus the readback copy of both, plus spill."""
-    return 2 * (subject_bytes + receipt_bytes) + SPILL_BYTES
+def expected_disk(subject_bytes: int, receipt_bytes: int, *, missing_bytes: int | None = None) -> int:
+    """Additional input bytes, a readback copy, and a scratch allowance; not a hard peak bound."""
+    members = subject_bytes + receipt_bytes
+    return (members if missing_bytes is None else missing_bytes) + members + SPILL_BYTES
+
+
+def verified_local_member(member, path):
+    """Reuse only an unchanged regular file whose bytes match the publication pin."""
+    before = file_signature(path)
+    with path.open('rb') as source:
+        digest = 'sha256:' + stream_sha256(source)
+    if before[2] != member.byte_size or digest != member.sha256 or file_signature(path) != before:
+        raise ValueError(f'Local member differs from its publication pin; left untouched: {path}')
+
+
+@contextmanager
+def execution_scratch(work, resources):
+    """Keep this standalone command's nested validators on the selected work volume."""
+    directory = work / 'temporary'
+    directory.mkdir(exist_ok=True)
+    previous = tempfile.tempdir
+    tempfile.tempdir = str(directory.resolve())
+    try:
+        with etl_bulk.bulk_limits(threads=resources.threads, memory_limit=resources.memory):
+            yield
+    finally:
+        tempfile.tempdir = previous
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -46,9 +75,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--verify-only", action="store_true", help="Only read an already rebuilt catalog back against the generation")
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--memory", default="12GB")
+    parser.add_argument("--subject-file", type=Path, help="Existing published comments member to verify and reuse in place")
+    parser.add_argument("--receipts-file", type=Path, help="Existing published receipt member to verify and reuse in place")
     args = parser.parse_args(argv)
     if args.publish and (args.dry_run or args.verify_only):
         parser.error("--publish cannot combine with --dry-run or --verify-only")
+    resources = ExportResources(memory=args.memory, threads=args.threads)
     base = (getenv("R2_PUBLIC_URL") or "").rstrip("/")
     if not base or not iceberg.is_configured():
         parser.error("R2_PUBLIC_URL and the R2 Data Catalog variables must be set")
@@ -67,44 +99,59 @@ def main(argv: Sequence[str] | None = None) -> int:
     if any(m.sha256 is None or m.byte_size is None or m.rows is None for m in (subject, receipts)):
         raise SystemExit("The published comments members are not byte-pinned; refusing")
     assert subject.byte_size is not None and receipts.byte_size is not None  # for the type checker, after the refusal
-    needed = expected_disk(subject.byte_size, receipts.byte_size)
     args.work.mkdir(parents=True, exist_ok=True)
+    inputs = args.work / "published"
+    paths = {'comments.parquet': args.subject_file or inputs / 'comments.parquet',
+             'etl_receipts.parquet': args.receipts_file or inputs / 'etl_receipts.parquet'}
+    members = ((subject, 'comments.parquet', args.subject_file), (receipts, 'etl_receipts.parquet', args.receipts_file))
+    missing_bytes = 0
+    for member, name, explicit in members:
+        path = paths[name]
+        if path.exists() or path.is_symlink():
+            verified_local_member(member, path)
+        elif explicit is not None:
+            raise ValueError(f'Explicit local member is missing: {path}')
+        else:
+            assert member.byte_size is not None  # All publication pins were checked above.
+            missing_bytes += member.byte_size
+    needed = expected_disk(subject.byte_size, receipts.byte_size, missing_bytes=missing_bytes)
     free = shutil.disk_usage(args.work).free
     print(f"Plan: rebuild {native.qualified(record_type)} (namespace {native.namespace()}) from generation "
           f"{owner[1]['artifactDigest']}\n"
           f"  rows {subject.rows:,}; subject {subject.byte_size / GIB:.1f} GiB; receipts {receipts.rows:,} rows, "
           f"{receipts.byte_size / GIB:.1f} GiB\n"
-          f"  expected peak disk {needed / GIB:.1f} GiB; free in {args.work}: {free / GIB:.1f} GiB\n"
+          f"  estimated additional disk {needed / GIB:.1f} GiB; free in {args.work}: {free / GIB:.1f} GiB\n"
+          f"  scratch allowance {SPILL_BYTES / GIB:.0f} GiB; database growth can increase actual peak use\n"
           f"  mode: {'PUBLISH (writes the live catalog)' if args.publish else 'verify-only' if args.verify_only else 'dry run (writes nothing)'}",
           flush=True)
     if free < needed:
         raise SystemExit("Not enough free disk for the plan; use a larger --work volume")
 
-    inputs = args.work / "published"
     inputs.mkdir(exist_ok=True)
-    paths = {}
-    for member, name in ((subject, "comments.parquet"), (receipts, "etl_receipts.parquet")):
-        paths[name] = inputs / name
-        publication.fetch_member(base, member, paths[name], name)  # Raises unless the bytes equal the pin.
+    for member, name, _ in members:
+        if not paths[name].exists():
+            publication.fetch_member(base, member, paths[name], name)  # Checks bytes against the pin.
     pair = ReceiptInput("comments", (paths["comments.parquet"],), paths["etl_receipts.parquet"], owner[1]["artifactDigest"])
 
-    con = iceberg._connect()
-    try:
-        ExportResources(memory=args.memory, threads=args.threads).configure(con, args.work / "spill")
-        if not args.verify_only:
-            state = native.rebuild_state(con, record_type)
-            snapshot = iceberg._read_pair_snapshot(con, record_type, namespace=native.namespace()) if state == "v1" else None
-            plan = native.rebuild_native(con, record_type, pair, expected_snapshot=snapshot,
-                                         expected_prior=pair.subjects[0], dry_run=not args.publish)
-            print(f"Checks passed; live state {plan['state']}, {plan['rows']:,} rows"
-                  + ("" if args.publish else "; dry run, nothing written"), flush=True)
-            if not args.publish:
-                return 0
-        result = native.verify_rebuilt(con, record_type, pair, args.work / "readback")
-        print(f"Readback passed: {result}", flush=True)
-        logger.info("Next: dispatch check-comments-freshness and dedupe-comments-catalog with skip_upload")
-    finally:
-        con.close()
+    with execution_scratch(args.work, resources):
+        con = iceberg._connect()
+        try:
+            resources.configure(con, args.work / "spill")
+            con.execute('SET max_temp_directory_size = ?', [f'{SPILL_BYTES // GIB}GiB'])
+            if not args.verify_only:
+                state = native.rebuild_state(con, record_type)
+                snapshot = iceberg._read_pair_snapshot(con, record_type, namespace=native.namespace()) if state == "v1" else None
+                plan = native.rebuild_native(con, record_type, pair, expected_snapshot=snapshot,
+                                             expected_prior=pair.subjects[0], dry_run=not args.publish)
+                print(f"Checks passed; live state {plan['state']}, {plan['rows']:,} rows"
+                      + ("" if args.publish else "; dry run, nothing written"), flush=True)
+                if not args.publish:
+                    return 0
+            result = native.verify_rebuilt(con, record_type, pair, args.work / "readback")
+            print(f"Readback passed: {result}", flush=True)
+            logger.info("Next: dispatch check-comments-freshness; dispatch dedupe-comments-catalog with probe_partition=false")
+        finally:
+            con.close()
     return 0
 
 
