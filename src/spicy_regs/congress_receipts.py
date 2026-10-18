@@ -33,7 +33,7 @@ from spicy_regs.etl_receipts import (
     split_record,
     validate_receipt_bundle,
 )
-from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 from spicy_regs.transforms.parquet_rows import write_rows
 
 PROCESSOR = "congress-subjects/1"
@@ -57,6 +57,16 @@ def policy(dataset: str) -> DatasetPolicy:
         policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications", "member_vote_terms"} else "congress-subjects/1",
         receipt_only=dataset in RECEIPT_ONLY,
     )
+
+
+def refusal_identities(dataset: str) -> dict[str, RefusalIdentity]:
+    """Resolve a refused raw row only when every declared key is retained literally.
+
+    Derived native keys have no raw-field declaration here and remain unresolved.
+    Missing raw keys never substitute another column or an ordinal.
+    """
+    keys = policy(dataset).identity_fields
+    return {dataset: RefusalIdentity(keys, "source_fields")} if keys and set(keys) <= set(INPUT_COLUMNS[dataset]) else {}
 
 
 def input_policy(dataset: str, subjects: Path | tuple[Path, ...] | None) -> DatasetPolicy:
@@ -252,7 +262,8 @@ def write_congress_dataset(
                     sw.close()
         if prior_paths:
             # The same carry rule as the batch writer: unchanged rows keep their prior receipt, changed ones name it.
-            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet").replace(receipts)
+            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
+                                  refusal_identities=refusal_identities(dataset)).replace(receipts)
         if validate:
             validate_receipt_bundle(
                 {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id

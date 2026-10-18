@@ -378,3 +378,65 @@ def test_bulk_partition_restore_matches_row_paths_metadata_and_emptiness(tmp_pat
     assert files == sorted(path.relative_to(actual) for path in actual.rglob("*.parquet"))
     for member in files:
         assert pq.ParquetFile(actual/member).read().equals(pq.ParquetFile(expected/member).read(), check_metadata=True)
+
+
+@pytest.mark.parametrize("validate", [True, False])
+def test_writer_admits_only_finished_bundle_when_requested(tmp_path, monkeypatch, validate):
+    from spicy_regs import etl_receipts, legislative_receipts
+
+    source = retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0")])
+    calls = []
+    original = etl_receipts.validate_receipt_bundle
+    def admit(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(etl_receipts, "validate_receipt_bundle", admit)
+    monkeypatch.setattr(legislative_receipts, "validate_receipt_bundle", admit)
+    write_legislative_outputs([source], tmp_path / "bundle", generation_id="g", validate=validate)
+    assert len(calls) == int(validate)
+
+
+def test_carry_resolves_refusals_across_partitions_and_preserves_unmatched(tmp_path):
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    first = tmp_path / "first-source" / "budget_volumes"
+    bad_x = row("budget_volumes", package_id="X", associated_bills_json="bad")
+    bad_y = row("budget_volumes", package_id="Y", associated_bills_json="bad")
+    unchanged = row("budget_volumes", package_id="Z")
+    retained(first / "a", "budget_volumes", [bad_x, unchanged])
+    retained(first / "b", "budget_volumes", [bad_y])
+    write_legislative_outputs([first], tmp_path / "one", generation_id="one")
+    old = pq.read_table(tmp_path / "one/etl_receipts.parquet").to_pylist()
+    before = [r for r in old if r["dataset"] == "budget_volumes"]
+    second = tmp_path / "second-source" / "budget_volumes"
+    retained(second / "a", "budget_volumes", [unchanged])
+    retained(second / "z", "budget_volumes", [bad_x | {"associated_bills_json": "[]"}])
+    manifest = write_legislative_outputs([second], tmp_path / "two", generation_id="two",
+                                          prior_receipts=[tmp_path / "one/etl_receipts.parquet"])
+    after = [r for r in pq.read_table(tmp_path / "two/etl_receipts.parquet").to_pylist()
+             if r["dataset"] == "budget_volumes"]
+    accepted_before = next(r for r in before if r["outcome"] == "accepted")
+    assert accepted_before in after
+    unresolved = next(r for r in before if decode_exact_json(r["processing_json"])[RAW]["package_id"] == "Y")
+    assert [r for r in after if r["outcome"] == "refused"] == [unresolved]
+    assert manifest["refused_rows"] == {"budget_volumes": 1}
+    with pytest.raises(ValueError, match="conversion refusals"):
+        restore_prior(tmp_path / "two", tmp_path / "restored")
+
+
+def test_processing_change_with_unchanged_subject_receives_fresh_evidence(tmp_path):
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    initial = row("laws", congress="119", law_type="public", number="1", law_id="119-public-1",
+                  uslm_reader_version="reader-1")
+    source = retained(tmp_path / "source1", "laws", [initial])
+    write_legislative_outputs([source], tmp_path / "one", generation_id="one")
+    revised = retained(tmp_path / "source2", "laws", [initial | {"uslm_reader_version": "reader-2"}])
+    write_legislative_outputs([revised], tmp_path / "two", generation_id="two",
+                              prior_receipts=[tmp_path / "one/etl_receipts.parquet"])
+    first, second = [next(r for r in pq.read_table(tmp_path / name / "etl_receipts.parquet").to_pylist()
+                         if r["dataset"] == "laws" and r["outcome"] == "accepted") for name in ("one", "two")]
+    assert first["subject_version"] == second["subject_version"]
+    assert first["processing_json"] != second["processing_json"]
+    assert second["generation_id"] == "two"
+    assert decode_exact_json(second["diagnostic_json"])["prior_receipt"]["receipt_id"] == first["receipt_id"]

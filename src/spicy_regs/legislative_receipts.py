@@ -22,9 +22,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from spicy_regs.etl_receipts import (
+    RECEIPT_SCHEMA,
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     combine_receipts,
     failure_receipt,
     read_with_receipts,
@@ -120,6 +120,7 @@ def write_legislative_outputs(
     source_witnesses: Sequence[Mapping] = (),
     prior_receipts: Sequence[Path] = (),
     file_outcomes_table: str | None = None,
+    validate: bool = True,
 ) -> dict:
     """Create a new local bundle from explicit producer outputs, preserving partitions.
 
@@ -231,16 +232,10 @@ def write_legislative_outputs(
                             )
                             manifest["refused_rows"][dataset] += 1
                             continue
-                        yield (
-                            mapped,
-                            lineage.inherit(context, policy(dataset), mapped)
-                            if not policy(dataset).receipt_only
-                            else lineage.inherit_processing(context, mapped),
-                        )
+                        yield mapped, context
 
                 shard_dir = stage / ".shards" / dataset / str(member_index)
-                with ReceiptLineage(prior_receipts, dataset=dataset) as lineage:
-                    subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures)
+                subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures, validate=False)
                 receipt_shards.append(receipts)
                 if subject is not None:
                     final_relative = f"{dataset}/{relative}" if output.is_dir() else f"{dataset}.parquet"
@@ -258,7 +253,7 @@ def write_legislative_outputs(
                             [{"source_id": dataset, "source_uri": None, "sha256": checkpoint_digest,
                               "locator": f"row:{ordinal}", "body_version": None}])
                 subject, receipts = write_dataset(recorded_checkpoints(), stage / ".outcomes" / name,
-                                                   OUTCOME_POLICIES[name])
+                                                   OUTCOME_POLICIES[name], validate=False)
                 if subject is None:
                     raise ValueError(f"Main read-outcome policy has no subject: {name}")
                 shutil.copyfile(subject, stage / f"{name}.parquet")
@@ -266,7 +261,7 @@ def write_legislative_outputs(
                 manifest["outcome_subjects"][name] = [f"{name}.parquet"]
         if not manifest["datasets"]:
             raise ValueError("No owned legislative producer outputs selected")
-        _, state_receipts = write_dataset(states, stage / ".shards" / FILE_STATES, FILE_POLICY)
+        _, state_receipts = write_dataset(states, stage / ".shards" / FILE_STATES, FILE_POLICY, validate=False)
         receipt_shards.append(state_receipts)
         if file_outcomes_table is not None:
             selected_policy = OUTCOME_POLICIES[file_outcomes_table]
@@ -274,21 +269,48 @@ def write_legislative_outputs(
             subject, receipts = write_dataset(
                 ((row | {"recorded_event": raw}, context) for row, raw, context in
                  file_rows(states, mapped, stage, generation_id=generation_id)),
-                stage / ".outcomes" / file_outcomes_table, selected_policy)
+                stage / ".outcomes" / file_outcomes_table, selected_policy, validate=False)
             if subject is None:
                 raise ValueError(f"Main file-outcome policy has no subject: {file_outcomes_table}")
             shutil.copyfile(subject, stage / f"{file_outcomes_table}.parquet")
             receipt_shards.append(receipts)
             manifest["outcome_subjects"][file_outcomes_table] = [f"{file_outcomes_table}.parquet"]
         combine_receipts(receipt_shards, stage / manifest["receipt_file"])
-        validate_receipt_bundle(
-            {name: [stage / f for f in paths] for name, paths in
-             (manifest["subjects"] | manifest["outcome_subjects"]).items()} | {FILE_STATES: []},
-            [stage / manifest["receipt_file"]],
-            [policy(n) for n in manifest["datasets"]] + [FILE_POLICY] +
-            [OUTCOME_POLICIES[n] for n in manifest["outcome_subjects"]],
-            generation_id=generation_id,
-        )
+        if prior_receipts:
+            # Carry once over the complete dataset, including all partitions. A
+            # shard cannot decide whether another shard resolved a prior refusal.
+            import pyarrow.dataset as ds
+            from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
+
+            active = [*manifest["datasets"], *manifest["outcome_subjects"], FILE_STATES]
+            scoped = stage / ".shards" / "selected-prior.parquet"
+            with pq.ParquetWriter(scoped, RECEIPT_SCHEMA, compression="zstd") as writer:
+                for path in prior_receipts:
+                    with pq.ParquetFile(path) as previous:
+                        for batch in previous.iter_batches(batch_size=2000):
+                            writer.write_table(pa.Table.from_batches([batch]).filter(
+                                ds.field("dataset").isin(active)))
+            identities = {}
+            for name in manifest["datasets"]:
+                keys = policy(name).identity_fields
+                raw_names = {field["name"] for field in field_registry()[name]["fields"]}
+                if keys and set(keys) <= raw_names:
+                    identities[name] = RefusalIdentity(keys, RAW)
+            receipt_path = stage / manifest["receipt_file"]
+            carry_receipt_history(receipt_path, [scoped], receipt_path, refusal_identities=identities)
+            held = ds.dataset(receipt_path, format="parquet")
+            for name in manifest["datasets"]:
+                manifest["refused_rows"][name] = held.count_rows(
+                    filter=(ds.field("dataset") == name) & (ds.field("outcome") == "refused"))
+        if validate:
+            validate_receipt_bundle(
+                {name: [stage / f for f in paths] for name, paths in
+                 (manifest["subjects"] | manifest["outcome_subjects"]).items()} | {FILE_STATES: []},
+                [stage / manifest["receipt_file"]],
+                [policy(n) for n in manifest["datasets"]] + [FILE_POLICY] +
+                [OUTCOME_POLICIES[n] for n in manifest["outcome_subjects"]],
+                generation_id=generation_id,
+            )
         # Staging shards are private duplicates; the admitted bundle has one shared receipt member.
         shutil.rmtree(stage / ".shards")
         if (stage / ".outcomes").exists():

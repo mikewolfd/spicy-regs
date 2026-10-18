@@ -8,8 +8,8 @@ from typing import Any
 from collections.abc import Mapping, Sequence
 import pyarrow as pa
 import pyarrow.parquet as pq
-from spicy_regs import congress_bulk
-from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy
+from spicy_regs import congress_bulk, etl_bulk
+from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy, refusal_identities
 from spicy_regs.congress_subjects import map_record
 from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, _unpack,
     failure_receipt, observation_receipt, select_receipts, split_record, validate_receipt_bundle)
@@ -146,7 +146,8 @@ def write_congress_dataset(
                     if sw is not None:
                         sw.close()
         if prior_paths:
-            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet").replace(receipts)
+            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
+                                  refusal_identities=refusal_identities(dataset)).replace(receipts)
         if validate:
             _admit({dataset: [] if subjects is None else [subjects]}, [receipts], [selected],
                    generation_id=generation_id, bulk=bulk)

@@ -380,6 +380,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 generation_id=self.receipt_generation_id,
                 prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
                 file_outcomes_table=FILE_TABLES.get(getattr(self, "publication_family", None) or self.name),
+                validate=False,  # the completed generation admits these exact bytes once
             )
             if manifest["unowned_outputs"] or any(manifest["refused_rows"].values()):
                 raise ValueError("Legislative output conversion refused")
