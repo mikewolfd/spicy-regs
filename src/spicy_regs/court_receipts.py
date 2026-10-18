@@ -16,7 +16,7 @@ import pyarrow.parquet as pq
 from spicy_regs import court_bulk, etl_bulk
 from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 from spicy_regs.court_subjects import (
-    IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row,
+    IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row, opinion_body_id,
 )
 from spicy_regs.etl_receipts import (
     DatasetPolicy, RECEIPT_SCHEMA, ReceiptContext, combine_receipts, failure_receipt,
@@ -212,11 +212,20 @@ def write_court_bulk(
     return _expose(dataset, output_dir, generation_id, witnesses, build)
 
 
+def _pdf_refusal_identity(raw: Mapping) -> dict | None:
+    """Prove a refused body key by the same function used by its successful mapper."""
+    identity = opinion_body_id(raw['opinion_id'], raw['source_sha256'])
+    if raw.get('opinion_body_id') not in (None, identity):
+        return None
+    return {'opinion_body_id': identity}
+
+
 def _carry(dataset: str, current: Path, prior: Path) -> None:
-    # Court keys are unchanged strings. Compare the refused raw key to the
-    # accepted declared identity, without reconstructing or normalizing it.
+    # Match literal court keys to accepted declared identities. PDF body keys
+    # alone use the maintained derivation from the exact opinion id and digest.
     carry_receipt_history(current, [prior], current, refusal_identities={
-        dataset: RefusalIdentity(IDENTITIES[dataset], None, "raw_source_record")})
+        dataset: RefusalIdentity(IDENTITIES[dataset], None, "raw_source_record",
+                                _pdf_refusal_identity if dataset == 'court_opinion_pdf_extractions' else None)})
 
 
 def finish_court_output(dataset: str, staged: Path, output_dir: Path, *, witnesses=None,
@@ -346,6 +355,12 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
                     return write_rows(processing_rows(reader.read_subjects(dataset), dataset=dataset, schema=schema),
                                       destination, schema)
 
+    reason = etl_bulk.NotBulkEligible(f'{dataset} has no court bulk restore for this input schema')
+    rows = pq.read_metadata(path).num_rows
+    if dataset in court_bulk.DATASETS:
+        etl_bulk.log_row_fallback('court restore', reason, dataset=dataset, rows=rows)
+    else:
+        etl_bulk.log_row_eligibility('court restore', dataset=dataset, rows=rows, reason=str(reason))
     return write_rows(processing_rows(
         read_court_rows(path, dataset=dataset, receipt_path=receipt_path, generation_id=generation_id),
         dataset=dataset, schema=schema), destination, schema)

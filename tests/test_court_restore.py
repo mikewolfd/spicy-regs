@@ -87,3 +87,37 @@ def test_unknown_schema_has_no_bulk_restore_query():
     with pytest.raises(court_restore.etl_bulk.NotBulkEligible):
         court_restore._query('court_citation_map', court_receipts.POLICIES['court_citation_map'],
                              pa.schema([('unknown', pa.string())]))
+
+
+def test_mapped_restore_schema_drift_refuses_under_require_bulk(tmp_path):
+    from spicy_regs import etl_bulk
+
+    dataset = 'court_citation_map'
+    native = court_receipts.write_court_rows(dataset, [{'citing_opinion_id': '1', 'cited_opinion_id': '2', 'depth': '3'}],
+                                            tmp_path / 'native', witnesses=WITNESSES, generation_id='selected')
+    schema = pa.schema([('citing_opinion_id', pa.string()), ('cited_opinion_id', pa.string()), ('depth', pa.int64())])
+    destination = tmp_path / 'existing.parquet'
+    destination.write_bytes(b'preserved')
+    with etl_bulk.bulk_limits(threads=1, memory_limit='1GB', require_bulk=True):
+        with pytest.raises(ValueError, match='reference fallback disabled'):
+            restore_processing_input(native, destination, dataset=dataset, schema=schema)
+    assert destination.read_bytes() == b'preserved'
+
+
+def test_unmapped_restore_remains_eligible_with_count_under_require_bulk(tmp_path):
+    from loguru import logger
+    from spicy_regs import etl_bulk
+
+    dataset = 'court_docket_groups'
+    native = court_receipts.write_court_rows(dataset, [{'parent_cl_docket_id': 'group', 'cl_docket_id': '1'}],
+                                            tmp_path / 'native', witnesses=WITNESSES, generation_id='selected')
+    schema = pa.schema([('parent_cl_docket_id', pa.string()), ('cl_docket_id', pa.string())])
+    messages = []
+    sink = logger.add(messages.append, format='{message}')
+    try:
+        with etl_bulk.bulk_limits(threads=1, memory_limit='1GB', require_bulk=True):
+            destination = restore_processing_input(native, tmp_path / 'restored.parquet', dataset=dataset, schema=schema)
+    finally:
+        logger.remove(sink)
+    assert pq.read_table(destination).to_pylist() == [{'parent_cl_docket_id': 'group', 'cl_docket_id': '1'}]
+    assert any('dataset=court_docket_groups rows=1' in message for message in messages)

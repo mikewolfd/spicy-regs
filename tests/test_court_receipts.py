@@ -107,6 +107,34 @@ def test_distinct_pdf_bodies_keep_distinct_business_keys_and_valid_receipt_gener
     assert artifact.root['spec']['etlReceipts']['generationId'] == 'chosen-build'
 
 
+def test_prior_pdf_refusal_requires_the_same_proven_opinion_and_body_to_resolve(tmp_path):
+    dataset = 'court_opinion_pdf_extractions'
+    missing = _pdf(text=None, status='empty')
+    failures = [missing, {**missing, 'opinion_id': '2'}, _pdf(b'other', text=None, status='empty'),
+                {**missing, 'opinion_id': '01'}, {key: value for key, value in missing.items() if key != 'source_sha256'},
+                {**missing, 'opinion_body_id': 'conflicting-declared-key'}]
+    first = write(tmp_path / 'first', dataset, failures, generation='first')
+    prior, _ = local_receipt_selection(first)
+    before = prior.read_bytes()
+    expected = pq.read_table(prior).to_pylist()
+    assert all(row['outcome'] == 'refused' for row in expected)
+
+    def next_run(name, rows, selected):
+        output = write_court_rows(dataset, rows, tmp_path / name, witnesses=[WITNESS, WITNESS],
+                                 generation_id=name, prior_receipts=selected)
+        return local_receipt_selection(output)[0]
+
+    unanswered = next_run('unanswered', [], prior)
+    assert pq.read_table(unanswered).to_pylist() == expected
+    repeated = next_run('repeated', failures, unanswered)
+    assert pq.read_table(repeated).to_pylist() == expected
+    resolved = next_run('resolved', [_pdf()], repeated)
+    receipts = pq.read_table(resolved).to_pylist()
+    assert receipts[0]['outcome'] == 'accepted'
+    assert receipts[1:] == expected[1:]
+    assert prior.read_bytes() == before
+
+
 def test_processing_inputs_cannot_be_used_as_native_prior(tmp_path):
     path = tmp_path / 'old.parquet'
     pq.write_table(pa.Table.from_pylist([{'cluster_id': '1', 'ingest_source': 'bulk'}]), path)

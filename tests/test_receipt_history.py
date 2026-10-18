@@ -556,3 +556,46 @@ def test_raw_resolution_is_explicit_and_supports_different_input_containers(tmp_
     result = carry_receipt_history(current, [prior], tmp_path / "resolved.parquet",
                                   refusal_identities={"example": RefusalIdentity(("id",), "original", "failed")})
     assert pq.read_table(result).to_pylist() == [fresh]
+
+
+def test_family_derivation_visits_only_unmatched_refusals_and_matches_exact_tags(tmp_path, policy, context):
+    key = "derived-\x1b-λ"
+    prior_rows = [failure_receipt(policy, context, outcome="refused", raw_fields={"raw": {"source": value}})
+                  for value in ("repeated", "resolved", "invalid")]
+    fresh_context = replace(context, generation_id="new")
+    fresh = [accepted(policy, fresh_context, key),
+             failure_receipt(policy, fresh_context, outcome="refused", raw_fields={"raw": {"source": "repeated"}}),
+             observation_receipt(policy, fresh_context, processing_fields={"raw": {"source": "observed"}})]
+    seen = []
+
+    def derive(raw):
+        seen.append(raw["source"])
+        if raw["source"] == "invalid":
+            raise ValueError("No proven key")
+        return {"id": key, "sub": None}
+
+    current, prior = write(tmp_path / "current.parquet", fresh), write(tmp_path / "prior.parquet", prior_rows)
+    before = prior.read_bytes()
+    result = carry_receipt_history(current, [prior], tmp_path / "result.parquet",
+                                  refusal_identities={"example": RefusalIdentity(("id", "sub"), None, "raw", derive)})
+    assert sorted(seen) == ["invalid", "resolved"]
+    assert pq.read_table(result).to_pylist() == [fresh[0], prior_rows[0], fresh[2], prior_rows[2]]
+    assert prior.read_bytes() == before
+
+
+def test_refusal_derivation_operational_failure_preserves_destination(tmp_path, policy, context):
+    import duckdb
+
+    old = failure_receipt(policy, context, outcome="refused", raw_fields={"raw": {"source": "bad"}})
+    current = write(tmp_path / "current.parquet", [accepted(policy, replace(context, generation_id="new"))])
+    prior = write(tmp_path / "prior.parquet", [old])
+    destination = write(tmp_path / "destination.parquet", [old])
+    before = destination.read_bytes()
+
+    def failed(raw):
+        raise OSError("injected operational failure")
+
+    with pytest.raises(duckdb.Error, match="injected operational failure"):
+        carry_receipt_history(current, [prior], destination,
+                              refusal_identities={"example": RefusalIdentity(("id", "sub"), None, "raw", failed)})
+    assert destination.read_bytes() == before
