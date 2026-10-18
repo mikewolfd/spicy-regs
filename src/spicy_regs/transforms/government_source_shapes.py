@@ -435,6 +435,15 @@ def _structs(values: Any, fields: tuple[tuple[str, str], ...]) -> list | None:
     return result
 
 
+def list_value(name: str, source: Any) -> list | None:
+    """The native list column ``name`` from its source ``<name>_json`` text (the one rule, also run by the bulk writer)."""
+    old = name + "_json"
+    values = _json(source, list)
+    if old in STRUCT_ARRAYS:
+        return _structs(values, tuple((k, k) for k in STRUCT_ARRAYS[old]))
+    return None if values is None else [_text(v) for v in values]
+
+
 def _fcc_arrays(row: Mapping[str, Any]) -> dict[str, Any]:
     literal = row.get("native_fields_json")
     native = _json(literal, dict)
@@ -525,12 +534,7 @@ def map_subject(dataset: str, row: Mapping[str, Any], *, generation_id: str | No
         if name in fcc:
             value = fcc[name]
         elif pa.types.is_list(field.type):
-            old = name + "_json"
-            values = _json(row.get(old), list)
-            if old in STRUCT_ARRAYS:
-                value = _structs(values, tuple((k, k) for k in STRUCT_ARRAYS[old]))
-            else:
-                value = None if values is None else [_text(v) for v in values]
+            value = list_value(name, row.get(name + "_json"))
         elif pa.types.is_integer(field.type):
             value = _integer(value)
         elif pa.types.is_boolean(field.type):

@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.etl_receipts import read_attempts, read_with_receipts, validate_receipt_bundle
+from spicy_regs.etl_receipts import decode_exact_json, read_attempts, read_with_receipts, validate_receipt_bundle
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.native_types import described_schema
 from spicy_regs.relationship_views.lobbying_native import LOBBYING_NATIVE_VIEWS
@@ -98,7 +98,7 @@ def test_invalid_source_digest_is_a_retained_refusal(tmp_path):
     assert len(rows[0]["witnesses"]) == 1  # The valid retained input digest; invalid source claim stays raw.
 
 
-def test_incremental_money_keeps_original_observation_and_all_witnesses(tmp_path):
+def test_an_unchanged_row_keeps_its_prior_receipt_verbatim_across_a_rebuild(tmp_path):
     dataset = "usaspending_recipients"
     path = literal(
         tmp_path,
@@ -129,8 +129,10 @@ def test_incremental_money_keeps_original_observation_and_all_witnesses(tmp_path
     assert rows[0]["total_award_amount"] == Decimal("9007199254740993.12")
     assert rows[0]["raw_record"]["observed_at"] == "2026-01-01T00:00:00Z"
     receipts = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
-    assert receipts[0]["witnesses"][:2] == prior_receipts[0]["witnesses"]
-    assert len(receipts[0]["witnesses"]) == 4
+    # The carry rule: an identical attempt keeps the prior receipt as it was (generation, witnesses, id), so
+    # a night adds history only for a row that changed.
+    assert receipts == prior_receipts
+    assert receipts[0]["generation_id"] == "first"
 
 
 def test_complete_generation_requires_paired_receipts_and_verifies(tmp_path):
@@ -208,11 +210,9 @@ def test_empty_processing_observations_survive_incremental_rebuild(tmp_path):
 
     rebuild(tmp_path, receipt_generation_id="empty-second")
     attempts = list(read_attempts([tmp_path / "etl_receipts.parquet"], POLICIES[dataset], generation_id="empty-second"))
-    assert [attempt["outcome"] for attempt in attempts] == ["observed", "observed"]
+    assert [attempt["outcome"] for attempt in attempts] == ["observed"]
     assert pq.ParquetFile(path).metadata.num_rows == 0
-    assert any(
-        attempt["diagnostics"].get("carried_from", {}).get("generation_id") == "empty-first" for attempt in attempts
-    )
+    assert attempts[0]["generation_id"] == "empty-first"  # carried verbatim
 
 
 def test_later_listing_keeps_held_gao_caption_and_domain_status(tmp_path, monkeypatch):
@@ -331,7 +331,9 @@ def test_gao_prior_published_without_the_cut_flag_is_read_once_and_rewritten_wit
     assert joined["raw_record"]["b_numbers_truncated"] == "true"
     [receipt] = pq.read_table(tmp_path / "etl_receipts.parquet").to_pylist()
     assert receipt["policy_version"] == POLICIES[dataset].policy_version
-    assert receipt["witnesses"][0]["source_id"] == "test:listing"
+    # The row's subject changed (it gained columns): a fresh receipt that references only its predecessor.
+    assert decode_exact_json(receipt["diagnostic_json"])["prior_receipt"]["generation_id"] == "earlier"
+    assert [w["source_id"] for w in receipt["witnesses"]] == ["spicy-regs:producer-output:" + dataset]
 
 
 def test_gao_recommendations_prior_published_without_its_seen_dates_restores_them(tmp_path):
@@ -464,13 +466,13 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
     receipt_rows = pq.read_table(selected).to_pylist()
     [receipt] = [item for item in receipt_rows if item["outcome"] == "accepted"]
     assert receipt["policy_version"] == POLICIES[dataset].policy_version
-    assert receipt["witnesses"][0]["source_id"] == "test:listing"
+    # The row's subject changed (it gained columns): a fresh receipt that references only its predecessor.
+    assert decode_exact_json(receipt["diagnostic_json"])["prior_receipt"]["generation_id"] == "earlier"
+    assert [w["source_id"] for w in receipt["witnesses"]] == ["spicy-regs:producer-output:" + dataset]
     if with_prior_refusal:
-        [attempt] = read_attempts([selected], POLICIES[dataset], generation_id="upgrade", outcomes=frozenset({"refused"}))
-        assert attempt["policy_version"] == earlier.policy_version
-        assert attempt["attempt_id"] == "prior-refusal"
-        assert attempt["processing_fields"]["raw_record"] == refused_raw
-        assert attempt["witnesses"] == refused["witnesses"]
+        # The carry rule drops an old attempt the new generation did not repeat: the row was re-converted from its
+        # accepted receipt, so the earlier refusal is not carried forward (it stays in the earlier generation).
+        assert not list(read_attempts([selected], POLICIES[dataset], generation_id="upgrade", outcomes=frozenset({"refused"})))
 
     # The run that holds the letters' capture: the same row, now under the current policy, takes its letter.
     output.rename(prior)
@@ -479,11 +481,6 @@ def test_gao_reports_prior_published_before_the_letter_columns_is_read_once_and_
     [row] = pq.read_table(output).to_pylist()
     assert (row["major_rule_rins"], row["major_rule_fr_citations"]) == (["0910-AC40"], ["68-58894"])
     assert row["major_rule_agency"].startswith("Department of Health and Human Services")
-    if with_prior_refusal:
-        select_receipts(tmp_path / "etl_receipts.parquet", selected, dataset=dataset)
-        [attempt] = read_attempts([selected], POLICIES[dataset], generation_id="letters", outcomes=frozenset({"refused"}))
-        assert attempt["policy_version"] == earlier.policy_version
-        assert attempt["processing_fields"]["raw_record"] == refused_raw
     assert {name: row[name] for name in earlier.subject_schema.names} == subject
 
 
