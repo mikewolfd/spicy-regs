@@ -14,7 +14,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import pyarrow as pa
 
-from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, read_with_receipts, selected_subject_policy, write_dataset
+from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, read_with_receipts, select_receipts, selected_subject_policy, write_dataset
 
 DETAIL_TABLES = {
     "nominations": "nominations_detail_reads",
@@ -349,7 +349,9 @@ def write_recorded_outcomes(journal, directory, *, generation_id, tables, priors
         with selection.receipts.open("rb") as stream:
             prior_digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
         prior_policy = selected_subject_policy(POLICIES[name], selection.subjects)
-        for recorded in read_with_receipts(selection.subjects, [selection.receipts], prior_policy,
+        # The selected receipts are the family's one shared member: its rows for other datasets have no policy here.
+        scoped = select_receipts(selection.receipts, Path(directory).parent / f".{name}.scoped-receipts.parquet", dataset=name)
+        for recorded in read_with_receipts(selection.subjects, [scoped], prior_policy,
                                             generation_id=selection.generation_id):
             if name in (HOUSE_TABLE, DETAIL_TABLES["house_communications"]):
                 event = recorded["recorded_event"]

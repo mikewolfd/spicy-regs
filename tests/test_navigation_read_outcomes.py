@@ -272,3 +272,26 @@ def test_house_repeated_recorded_attempts_remain_separate_rows(tmp_path):
     rows = list(read_with_receipts(subjects, receipts, POLICIES['house_record_enrichment_results'], generation_id='g'))
     assert [r['communication_id'] for r in rows] == ['119-ec-2', '119-ec-2']
     assert [r['attempt_id'] for r in rows] == ['journal:0', 'journal:1']
+
+
+def test_a_prior_in_a_shared_receipts_member_is_read_by_its_own_dataset_only(tmp_path):
+    """The family's receipts file carries every dataset's rows; the other datasets' have no policy in this read."""
+    import pyarrow as pa
+
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA
+
+    names = ("nominations_detail_reads", "committee_meetings_detail_reads")
+    written = {}
+    for name in names:
+        (tmp_path / name).mkdir()
+        path = journal(tmp_path / name, [
+            {"event": "congress-detail-result", "table": name.removesuffix("_detail_reads"), "congress": "119",
+             "citation": "PN1", "read_outcome": "read"}])
+        written[name] = write_recorded_outcomes(path, tmp_path / name / "out", generation_id="first", tables=[name])
+    shared = tmp_path / "shared-receipts.parquet"
+    pq.write_table(pa.concat_tables([pq.read_table(written[name][1][0]) for name in names]).cast(RECEIPT_SCHEMA), shared)
+    held = SelectedDataset("nominations_detail_reads", tuple(written[names[0]][0]), shared, "first")
+    subjects, receipts = write_recorded_outcomes(None, tmp_path / "next", generation_id="next",
+                                                 tables=[names[0]], priors={names[0]: held})
+    [row] = read_with_receipts(subjects, receipts, POLICIES[names[0]], generation_id="next")
+    assert (row["generation_id"], row["attempt_id"]) == ("first", "journal:0")
