@@ -529,8 +529,9 @@ def _catalog_metadata(con, namespace: str, table: str) -> dict:
     return json.loads(raw) if isinstance(raw, str) else raw
 
 
-def _receipt_metadata(con, record_type: RecordType) -> dict:
-    return _catalog_metadata(con, _selected_catalog_namespace(con, record_type), "etl_receipts")
+def _receipt_metadata(con, record_type: RecordType, *, namespace: str | None = None) -> dict:
+    selected_namespace = namespace if namespace is not None else _selected_catalog_namespace(con, record_type)
+    return _catalog_metadata(con, selected_namespace, "etl_receipts")
 
 
 def _current_snapshot(metadata: dict) -> CatalogSnapshot:
@@ -545,9 +546,10 @@ def _read_snapshot(con, record_type: RecordType, *, namespace: str | None = None
     return snapshot
 
 
-def _read_pair_snapshot(con, record_type: RecordType) -> CatalogPairSnapshot:
-    subject = _read_snapshot(con, record_type)
-    receipts = _current_snapshot(_receipt_metadata(con, record_type))
+def _read_pair_snapshot(con, record_type: RecordType, *, namespace: str | None = None) -> CatalogPairSnapshot:
+    """Pin both tables; an explicit ``namespace`` skips the initialization check (a rebuild reads an uninitialized pair)."""
+    subject = _read_snapshot(con, record_type, namespace=namespace)
+    receipts = _current_snapshot(_receipt_metadata(con, record_type, namespace=namespace))
     if not receipts.table_uuid or receipts.snapshot_id < 0:
         raise RuntimeError("Catalog receipts have no usable snapshot")
     return CatalogPairSnapshot(subject.table_uuid, subject.snapshot_id, subject.schema_id, receipts)
