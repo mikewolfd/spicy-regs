@@ -127,6 +127,7 @@ def write_bundle(
     attempt_prefix: str,
     attempt: Callable[[Mapping, int], tuple[dict | None, dict]],
     last_receipts: Iterable[Mapping] = (),
+    receipt_writer: pq.ParquetWriter | None = None,
 ) -> int:
     """Write ``dataset``'s subject table and receipts to the two paths; return how many rows the row function decided.
 
@@ -171,5 +172,6 @@ def write_bundle(
         return etl_bulk.write_split(
             con, query, source=source, batch_rows=_BATCH.get(dataset, _DEFAULT_BATCH), expected_rows=expected,
             subject_schema=policy.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
+            receipt_writer=receipt_writer,
             label=dataset, refusals_last=True, last_refusals=last_receipts,
             row_attempt=lambda table, index, source_row: attempt(source_row, table["_ordinal"][index].as_py()))

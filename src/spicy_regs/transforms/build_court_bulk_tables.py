@@ -29,7 +29,7 @@ from loguru import logger
 
 from spicy_regs.duckdb_settings import load_public_http
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS
-from spicy_regs.court_receipts import file_witness, finish_court_output, record_source_failure
+from spicy_regs.court_receipts import court_bulk_family, file_witness, finish_court_output, record_source_failure
 from spicy_regs.transforms._courtlistener_writer import check_headroom
 
 if TYPE_CHECKING:
@@ -208,6 +208,7 @@ def export_file(published: BulkObject, work_dir: Path) -> tuple[Path, bool]:
 def build_court_bulk_table(
     table: BulkTable, output_dir: Path, *, local_file: Path, dump_date: date, cluster_ceiling: int | None = None,
     generation_id: str | None = None,
+    family_writer=None,
 ) -> Path:
     """Write ``table.output`` from one whole export; the previous file survives any failure.
 
@@ -254,9 +255,10 @@ def build_court_bulk_table(
                 error.add_note(f'Failed to retain source failure receipt: {receipt_error}')
         staging.unlink(missing_ok=True)
         raise
-    out_file = finish_court_output(table.output.removesuffix('.parquet'), staging, output_dir,
-                                  witnesses=[file_witness(local_file), file_witness(staging)],
-                                  generation_id=generation_id)
+    dataset = table.output.removesuffix('.parquet')
+    witnesses = [file_witness(local_file), file_witness(staging)]
+    out_file = (finish_court_output(dataset, staging, output_dir, witnesses=witnesses, generation_id=generation_id)
+                if family_writer is None else family_writer(dataset, staging, witnesses=witnesses))
     logger.info(
         "{}: {:,} rows from {} ({:.2f} GB of CSV, {} pieces)",
         table.output,
@@ -283,15 +285,17 @@ def build_court_bulk_tables(
             raise RuntimeError(f"CourtListener bulk: {CLUSTERS_TABLE} is not published; publish it before its children")
     built = []
     generation_id = uuid4().hex
-    for table in tables:
-        published = find_dump(objects, table.dataset, edition)
-        if published is None:
-            raise RuntimeError(f"CourtListener bulk: no {table.dataset} export for {edition}")
-        local_file, _ = export_file(published, output_dir)
-        built.append(
-            build_court_bulk_table(
-                table, output_dir, local_file=local_file, dump_date=edition, cluster_ceiling=ceiling,
-                generation_id=generation_id,
+    with court_bulk_family(output_dir, [table.output.removesuffix('.parquet') for table in tables],
+                           generation_id=generation_id) as writer:
+        for table in tables:
+            published = find_dump(objects, table.dataset, edition)
+            if published is None:
+                raise RuntimeError(f"CourtListener bulk: no {table.dataset} export for {edition}")
+            local_file, _ = export_file(published, output_dir)
+            built.append(
+                build_court_bulk_table(
+                    table, output_dir, local_file=local_file, dump_date=edition, cluster_ceiling=ceiling,
+                    generation_id=generation_id, family_writer=writer,
+                )
             )
-        )
     return tuple(built)

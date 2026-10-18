@@ -100,6 +100,20 @@ def test_refusals_follow_every_accepted_receipt_after_the_closing_receipts(tmp_p
     assert _ids(tmp_path / "r.parquet", "receipt_id") == [*accepted, "footer", "row9", "row19"]
 
 
+def test_a_borrowed_receipt_writer_flushes_each_table_without_closing_it(tmp_path):
+    receipt = tmp_path / 'shared.parquet'
+    footer = {name: None for name in RECEIPT_SCHEMA.names} | {'receipt_id': 'footer', 'witnesses': []}
+    with etl_bulk.new_receipt_writer(receipt) as writer:
+        for name in ('first', 'second'):
+            directory = tmp_path / name
+            directory.mkdir()
+            _split(directory, receipt_writer=writer, refusals_last=True,
+                   last_receipts=[footer], last_refusals=[{**footer, 'receipt_id': 'explicit-refusal'}])
+            assert writer.is_open
+    accepted = [f'row{i}' if i % 5 == 4 else f'r{i}' for i in range(23) if i % 10 != 9]
+    assert _ids(receipt, 'receipt_id') == [*accepted, 'footer', 'row9', 'row19', 'explicit-refusal'] * 2
+
+
 def test_an_out_of_order_stream_is_refused(tmp_path):
     with pytest.raises(RuntimeError, match="items: source rows did not arrive in file order"):
         _split(tmp_path, query=_query(descending=True))

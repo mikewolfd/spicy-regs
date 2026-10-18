@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -188,8 +189,29 @@ def write_court_bulk(
     """
     from rulespec_artifacts import publish_directory_no_replace
 
-    policy = POLICIES[dataset]
     generation_id = generation_id or uuid4().hex
+
+    def build(bundle: Path) -> Path:
+        assert generation_id is not None
+        with TemporaryDirectory(prefix='.court-bulk-', dir=bundle.parent) as temporary:
+            stage = Path(temporary) / 'bundle'
+            stage.mkdir()
+            subject_path, receipt_path = stage / (dataset + '.parquet'), stage / 'etl_receipts.parquet'
+            _write_bulk_pair(dataset, source, subject_path, receipt_path,
+                generation_id=generation_id, processor=processor, witnesses=witnesses,
+                diagnostics=diagnostics, attempt_prefix=attempt_prefix, refused_receipts=refused_receipts)
+            if prior_receipts is not None:
+                _carry(dataset, receipt_path, prior_receipts, resolution_receipts=refused_receipts)
+            publish_directory_no_replace(stage, bundle)
+        return bundle / subject_path.name
+
+    return _expose(dataset, output_dir, generation_id, witnesses, build)
+
+
+def _write_bulk_pair(dataset, source, subject, receipt, *, generation_id, witnesses,
+                     processor='spicy_regs/courts/1', diagnostics=None, attempt_prefix='row',
+                     refused_receipts=None, receipt_writer=None):
+    policy = POLICIES[dataset]
 
     def attempt(raw: Mapping, ordinal: int):
         context = ReceiptContext(generation_id, f'{dataset}:{attempt_prefix}:{ordinal}', processor,
@@ -199,24 +221,70 @@ def write_court_bulk(
         except _REFUSED as error:
             return None, _refusal(policy, context, error, raw)
 
-    def build(bundle: Path) -> Path:
-        assert generation_id is not None
-        with TemporaryDirectory(prefix='.court-bulk-', dir=bundle.parent) as temporary:
+    court_bulk.write_bundle(dataset, source, subject, receipt, policy=policy,
+        generation_id=generation_id, processor=processor, witnesses=witnesses,
+        diagnostics=diagnostics or {}, attempt_prefix=attempt_prefix, attempt=attempt,
+        receipt_writer=receipt_writer,
+        last_receipts=() if refused_receipts is None else (
+            row for row in parquet_rows(refused_receipts) if _check_refused(row, dataset, generation_id)))
+
+
+@contextmanager
+def court_bulk_family(output_dir: Path, datasets: Sequence[str], *, generation_id: str):
+    """Build fresh whole-family outputs privately, with one receipt member and no prior-history carry.
+
+    The yielded writer returns final private paths. They exist only after every table and the receipt footer
+    finish, and remain unselected until ordinary generation admission. Retained sources must live outside this
+    temporary bundle. Standalone builders keep their own selected subject/receipt pairs.
+    """
+    from rulespec_artifacts import publish_directory_no_replace
+
+    datasets = tuple(datasets)
+    if not datasets or len(set(datasets)) != len(datasets) or not set(datasets) <= court_bulk.DATASETS:
+        raise ValueError('Court bulk family requires distinct mapped datasets')
+    bundle = output_dir / '.court-etl' / uuid4().hex
+    bundle.parent.mkdir(parents=True, exist_ok=True)
+    current, current_witnesses = datasets[0], ()
+    completed = False
+    try:
+        with TemporaryDirectory(prefix='.court-family-', dir=bundle.parent) as temporary:
             stage = Path(temporary) / 'bundle'
             stage.mkdir()
-            subject_path, receipt_path = stage / (dataset + '.parquet'), stage / 'etl_receipts.parquet'
-            court_bulk.write_bundle(dataset, source, subject_path, receipt_path, policy=policy,
-                generation_id=generation_id, processor=processor, witnesses=witnesses,
-                diagnostics=diagnostics or {}, attempt_prefix=attempt_prefix, attempt=attempt,
-                last_receipts=() if refused_receipts is None else (
-                    receipt for receipt in parquet_rows(refused_receipts)
-                    if _check_refused(receipt, dataset, generation_id)))
-            if prior_receipts is not None:
-                _carry(dataset, receipt_path, prior_receipts, resolution_receipts=refused_receipts)
-            publish_directory_no_replace(stage, bundle)
-        return bundle / subject_path.name
+            receipt = stage / 'etl_receipts.parquet'
+            written = []
+            with etl_bulk.new_receipt_writer(receipt) as writer:
+                def write(dataset, source, *, witnesses):
+                    nonlocal current, current_witnesses
+                    current = dataset
+                    current_witnesses = witnesses
+                    if len(written) >= len(datasets) or dataset != datasets[len(written)]:
+                        raise ValueError('Court bulk family tables differ from the declared order')
+                    try:
+                        _write_bulk_pair(dataset, source, stage / (dataset + '.parquet'), receipt,
+                                         generation_id=generation_id, witnesses=witnesses, receipt_writer=writer)
+                    except Exception as error:
+                        try:
+                            record_source_failure(dataset, output_dir, witnesses=witnesses, error=error)
+                        except Exception as receipt_error:
+                            error.add_note(f'Failed to retain source failure receipt: {receipt_error}')
+                        raise
+                    written.append(dataset)
+                    return bundle / (dataset + '.parquet')
 
-    return _expose(dataset, output_dir, generation_id, witnesses, build)
+                yield write
+                if tuple(written) != datasets:
+                    raise ValueError('Court bulk family is incomplete')
+                completed = True
+            (stage / 'court-family.json').write_text(json.dumps({
+                'generation_id': generation_id, 'datasets': datasets}) + '\n')
+            publish_directory_no_replace(stage, bundle)
+    except Exception as error:
+        if completed:
+            try:
+                record_source_failure(current, output_dir, witnesses=current_witnesses, error=error)
+            except Exception as receipt_error:
+                error.add_note(f'Failed to retain source failure receipt: {receipt_error}')
+        raise
 
 
 def _pdf_refusal_identity(raw: Mapping) -> dict | None:
@@ -276,6 +344,12 @@ def admit_court_updates(dataset: str, source: Path, directory: Path, *, schema: 
 def local_receipt_selection(path: Path) -> tuple[Path, str]:
     bundle = path.resolve().parent
     descriptor = bundle / 'court-build.json'
+    family = bundle / 'court-family.json'
+    if family.exists() and (bundle / 'etl_receipts.parquet').is_file():
+        values = json.loads(family.read_text())
+        if path.resolve().stem not in values['datasets']:
+            raise ValueError('Court receipt family names another dataset')
+        return bundle / 'etl_receipts.parquet', values['generation_id']
     if not descriptor.exists() or not (bundle / 'etl_receipts.parquet').is_file():
         raise ValueError(f'Court subject has no selected receipt bundle: {path}')
     values = json.loads(descriptor.read_text())
@@ -374,7 +448,7 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
 
 def prior_receipt_selection(path: Path, *, dataset: str) -> tuple[Path | None, str | None]:
     """Select receipts from a local bundle or the same pinned publication as the prior."""
-    if path.is_symlink() or (path.parent / 'court-build.json').exists():
+    if path.is_symlink() or (path.parent / 'court-build.json').exists() or (path.parent / 'court-family.json').exists():
         return local_receipt_selection(path)
     from spicy_regs.sources import publication
     base = os.getenv('R2_PUBLIC_URL')
@@ -393,6 +467,19 @@ def prior_receipt_selection(path: Path, *, dataset: str) -> tuple[Path | None, s
 
 def generation_options(paths: Sequence[Path]) -> dict:
     """Arguments for shared build_generation; receipts are never ordinary subject outputs."""
+    resolved = [path.resolve() for path in paths]
+    families = {path.parent for path in resolved if (path.parent / 'court-family.json').exists()}
+    if families:
+        if len(families) != 1:
+            raise ValueError('Court outputs mix receipt families')
+        bundle, = families
+        values = json.loads((bundle / 'court-family.json').read_text())
+        expected = [bundle / (dataset + '.parquet') for dataset in values['datasets']]
+        if resolved != expected or len(set(resolved)) != len(resolved):
+            raise ValueError('Court outputs differ from the complete receipt family')
+        receipt, generation = local_receipt_selection(resolved[0])
+        return {'receipt_path': receipt, 'receipt_policies': [POLICIES[path.stem] for path in resolved],
+                'receipt_generation_id': generation, 'adopt_owned_receipt': True}
     selections = [local_receipt_selection(path) for path in paths]
     ids = {generation for _, generation in selections}
     if len(ids) != 1:
