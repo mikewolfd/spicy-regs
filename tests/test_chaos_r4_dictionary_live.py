@@ -79,21 +79,53 @@ def test_w4_one_supreme_court_decision_can_be_several_clusters(urls, con):
 
     Groups Supreme Court clusters by the heuristic the dictionary names, `cl_docket_id` plus a U.S. Reports
     citation from `court_citations` (a separate publisher export), and requires a split decision to exist, with
-    none of its clusters carrying `scdb_id`, the publisher's decision key, which the dictionary says is unset
-    after 2019. Cannot see: a decision with no reporter citation yet, whose later print is a second cluster the
-    grouping cannot pair, so it undercounts splits.
+    none of its clusters carrying a nonblank `scdb_id`, the publisher's decision key. The latter is a drift
+    guard for the dictionary's dated June observation, not an assumption that later exports cannot fill it.
+    Native source rows can retain blanks: SQL non-NULL does not establish an identifier. Cannot see: a decision
+    with no reporter citation yet, whose later print is a second cluster the grouping cannot pair, so it
+    undercounts splits.
     """
     assert "not per decision" in _column("court_opinion_clusters", "cluster_id")
     assert "heuristic" in _column("court_opinion_clusters", "cluster_id")
-    split, with_scdb = con.execute(f"""
-        WITH c AS (SELECT cluster_id, volume, page FROM {_scan(urls, 'court_citations')} WHERE reporter = 'U.S.'),
-             k AS (SELECT cluster_id, cl_docket_id, scdb_id FROM {_scan(urls, 'court_opinion_clusters')}
+    split, with_scdb = _supreme_court_cluster_splits(
+        con, _scan(urls, "court_opinion_clusters"), _scan(urls, "court_citations")
+    )
+    assert split > 0
+    assert with_scdb == 0, (
+        "CourtListener now supplies nonblank scdb_id after 2019: update the dictionary's dated observation "
+        "and this drift guard; retain scdb_id where available and the documented fallback where missing"
+    )
+
+
+def _supreme_court_cluster_splits(con, clusters, citations):
+    return con.execute(f"""
+        WITH c AS (SELECT cluster_id, volume, page FROM {citations} WHERE reporter = 'U.S.'),
+             k AS (SELECT cluster_id, cl_docket_id, scdb_id FROM {clusters}
                    WHERE court_id = 'scotus' AND date_filed >= '2020-01-01'),
-             g AS (SELECT cl_docket_id, volume, page, count(DISTINCT cluster_id) AS clusters, count(scdb_id) AS scdb
+             g AS (SELECT cl_docket_id, volume, page, count(DISTINCT cluster_id) AS clusters,
+                          count(nullif(trim(scdb_id), '')) AS scdb
                    FROM c JOIN k USING (cluster_id) GROUP BY ALL)
         SELECT count(*) FILTER (WHERE clusters > 1), coalesce(sum(scdb), 0) FROM g""").fetchone()
-    assert split > 0
-    assert with_scdb == 0, "CourtListener now sets scdb_id after 2019: name it as the key for those decisions"
+
+
+@pytest.mark.parametrize("scdb_id", [None, "", "   ", "2020-001-01"])
+def test_w4_scdb_identifier_count_distinguishes_source_blanks(scdb_id):
+    """The live guard ignores missing source values but still detects a real identifier."""
+    with duckdb.connect() as connection:
+        connection.execute("""
+            CREATE TABLE clusters AS
+            SELECT cluster_id, 10 AS cl_docket_id, ?::VARCHAR AS scdb_id,
+                   'scotus' AS court_id, DATE '2020-01-01' AS date_filed
+            FROM (VALUES (1), (2)) AS ids(cluster_id)
+        """, [scdb_id])
+        connection.execute("""
+            CREATE TABLE citations AS
+            SELECT cluster_id, 'U.S.' AS reporter, '600' AS volume, '1' AS page
+            FROM clusters
+        """)
+        split, with_scdb = _supreme_court_cluster_splits(connection, "clusters", "citations")
+    assert split == 1
+    assert with_scdb == (2 if scdb_id == "2020-001-01" else 0)
 
 
 #: A column's description stating the column holds nothing: NULL in every row, or `[]` in every row.
