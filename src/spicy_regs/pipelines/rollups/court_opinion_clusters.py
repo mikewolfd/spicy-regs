@@ -25,9 +25,10 @@ class CourtOpinionClustersRollup(RollupPipeline):
     name: ClassVar[str] = "court-opinion-clusters"
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "court_opinion_clusters.parquet"
+    retain_source_evidence: ClassVar[bool] = True
 
     def build(self, output_dir: Path) -> Path:
-        return build_court_opinion_clusters(output_dir)
+        return build_court_opinion_clusters(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(CourtOpinionClustersRollup)

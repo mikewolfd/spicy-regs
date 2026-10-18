@@ -228,6 +228,56 @@ def test_opinion_selection_above_an_id_ignores_filing_date():
         CourtListenerOpinionSearchReader(above=-1)
 
 
+def test_opinion_catchup_stops_at_selected_export_ceiling():
+    transport = Transport(_page([11, 13], kind="o"))
+    rows = list(CourtListenerOpinionSearchReader(above=10, through=13, transport=transport).iter_records())
+    assert [row["cluster_id"] for row in rows] == [11, 13]
+    assert transport.calls[0].url.params["q"] == "cluster_id:[11 TO 13]"
+
+
+def test_caller_traversal_budget_stops_before_next_page():
+    from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
+
+    transport = Transport(_page([11], NEXT, total=2, kind="o"))
+    reader = CourtListenerOpinionSearchReader(
+        above=10, through=13, transport=transport,
+        traversal_budget=CourtListenerTraversalBudget(max_requests=1, max_wait_seconds=0),
+    )
+    walk = reader.iter_records()
+    assert next(walk) == {"cluster_id": 11}
+    with pytest.raises(ValueError, match="incomplete: deferred.*total request"):
+        next(walk)
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize("identity", [10, 14])
+def test_opinion_catchup_refuses_out_of_range_result(identity):
+    transport = Transport(_page([identity], kind="o"))
+    with pytest.raises(source.CourtListenerError, match="outside the selected cluster range"):
+        list(CourtListenerOpinionSearchReader(above=10, through=13, transport=transport).iter_records())
+
+
+@pytest.mark.parametrize("above,through", [(None, 13), (10, 10), (10, 9), (10, True), (10, 12.5)])
+def test_opinion_catchup_refuses_invalid_range(above, through):
+    with pytest.raises(ValueError, match="greater than above"):
+        CourtListenerOpinionSearchReader(above=above, through=through)
+
+
+def test_capped_opinion_read_checks_whole_page_and_journals_range_refusal(tmp_path):
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    evidence = CaptureEvidence(tmp_path, "court-opinion-clusters")
+    reader = CourtListenerOpinionSearchReader(
+        above=10, through=13, max_records=1, evidence=evidence,
+        transport=Transport(_page([11, 14], kind="o")),
+    )
+    with pytest.raises(source.CourtListenerError, match="outside the selected cluster range"):
+        next(reader.iter_records())
+    events = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    assert any(event["event"] == "refusal" and event["stage"] == "courtlistener-traversal"
+               and "outside the selected cluster range" in event["error"] for event in events)
+
+
 @pytest.mark.parametrize("status", [401, 403, 404, 429, 500])
 def test_source_refusal_is_not_empty_success(status):
     with pytest.raises((ValueError, ConnectionError, httpx.HTTPError, CredentialRefusedError)):

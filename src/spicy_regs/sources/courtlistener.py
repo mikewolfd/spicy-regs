@@ -13,14 +13,15 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
     from spicy_regs.source_evidence import CaptureEvidence
 
 import httpx
@@ -89,6 +90,7 @@ class CourtListenerReader(Reader):
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
         evidence: CaptureEvidence | None = None,
+        traversal_budget: CourtListenerTraversalBudget | None = None,
     ) -> None:
         if max_records is not None and (type(max_records) is not int or max_records < 1):
             raise ValueError("max_records must be a positive integer")
@@ -99,11 +101,19 @@ class CourtListenerReader(Reader):
         self.verbose = verbose
         self.transport = transport
         self.evidence = evidence
+        self.traversal_budget = traversal_budget
+
+    def _validate_record(self, record: Mapping[str, Any], seen: set[int]) -> None:
+        identity = record.get(self.identity_field)
+        if type(identity) is not int or identity <= 0 or identity in seen:
+            raise CourtListenerError("CourtListener search has a missing, invalid or repeated identity")
 
     def iter_records(self) -> Iterator[dict]:
         try:
             from spicy_docs.reading.paged_json import PagedJsonBudget
-            from spicy_docs.sources.courtlistener.search import CourtListenerSearchReader, is_exact_count, search_url
+            from spicy_docs.sources.courtlistener.search import (
+                CourtListenerSearchReader, CourtListenerTraversalBudget, is_exact_count, search_url,
+            )
         except ModuleNotFoundError as error:
             if error.name == "spicy_docs":
                 raise RuntimeError(
@@ -132,34 +142,49 @@ class CourtListenerReader(Reader):
             self.evidence.credential = self.api_token or ""
             self.evidence.event("selection", stage="courtlistener", url=url, max_records=self.max_records)
             transport = self.evidence.transport(transport, stage="courtlistener-response", max_bytes=budget.max_page_bytes)
-        with CourtListenerSearchReader(budget=budget, api_key=self.api_token, transport=transport) as reader:
-            for page in reader.search(url, max_pages=_MAX_PAGES):
-                if page.declared_count is None:
-                    raise CourtListenerError("CourtListener search omitted its declared count")
-                if declared is None:
-                    declared = page.declared_count
-                # Validate the whole received page even when a record cap stops
-                # midway through it; malformed rows are not successful selection.
-                records = []
-                for record in page.records:
-                    identity = record.get(self.identity_field)
-                    if type(identity) is not int or identity <= 0 or identity in seen:
-                        raise CourtListenerError("CourtListener search has a missing, invalid or repeated identity")
-                    seen.add(identity)
-                    records.append(dict(record))
-                if is_exact_count(self.kind, declared) and page.next_url is None and len(seen) != declared:
-                    raise CourtListenerError("CourtListener terminal page disagrees with its declared count")
-                # Large RECAP counts can be cardinality estimates; the terminal cursor,
-                # not equality with that estimate, ends a nonempty docket walk.
-                if page.next_url is None and not seen and page.declared_count:
-                    raise CourtListenerError("CourtListener empty search has a positive declared count")
-                if page.next_url is not None and not records:
-                    raise CourtListenerError("CourtListener continuation follows an empty page")
-                for record in records:
-                    yield record
-                    yielded += 1
-                    if self.max_records is not None and yielded >= self.max_records:
-                        return
+        # This is one caller's allocation, not a claim about the token's remaining quota.
+        traversal = self.traversal_budget or CourtListenerTraversalBudget(max_requests=50, max_wait_seconds=600)
+        try:
+            with CourtListenerSearchReader(budget=budget, traversal_budget=traversal,
+                                           api_key=self.api_token, transport=transport) as reader:
+                for page in reader.search(url, max_pages=_MAX_PAGES):
+                    if page.declared_count is None:
+                        raise CourtListenerError("CourtListener search omitted its declared count")
+                    if declared is None:
+                        declared = page.declared_count
+                    # Validate the whole received page even when a record cap stops
+                    # midway through it; malformed rows are not successful selection.
+                    records = []
+                    for record in page.records:
+                        self._validate_record(record, seen)
+                        seen.add(record[self.identity_field])
+                        records.append(dict(record))
+                    if is_exact_count(self.kind, declared) and page.next_url is None and len(seen) != declared:
+                        raise CourtListenerError("CourtListener terminal page disagrees with its declared count")
+                    # Large RECAP counts can be cardinality estimates; the terminal cursor,
+                    # not equality with that estimate, ends a nonempty docket walk.
+                    if page.next_url is None and not seen and page.declared_count:
+                        raise CourtListenerError("CourtListener empty search has a positive declared count")
+                    if page.next_url is not None and not records:
+                        raise CourtListenerError("CourtListener continuation follows an empty page")
+                    for record in records:
+                        yield record
+                        yielded += 1
+                        if self.max_records is not None and yielded >= self.max_records:
+                            return
+        except Exception as error:
+            if self.evidence:
+                allocation = getattr(error, "traversal_allocation", None)
+                if allocation is not None:
+                    # The evidence JSON forbids binary floats; keep exact diagnostic text.
+                    allocation = {name: str(value) if isinstance(value, float) else value
+                                  for name, value in allocation.items()}
+                self.evidence.event(
+                    "refusal", stage="courtlistener-traversal", error=str(error),
+                    traversal=getattr(error, "courtlistener_traversal", None),
+                    allocation=allocation,
+                )
+            raise
 
 
 class CourtListenerOpinionSearchReader(CourtListenerReader):
@@ -167,7 +192,8 @@ class CourtListenerOpinionSearchReader(CourtListenerReader):
 
     ``above`` selects every cluster whose id is greater, whatever its filing date:
     the publisher numbers clusters in creation order, so it names exactly the
-    decisions created after an export that ended at that id.
+    decisions created after an export that ended at that id. ``through`` limits
+    that catch-up to the highest cluster needed by a selected sibling export.
     """
 
     kind: Literal["r", "o"] = "o"
@@ -178,20 +204,34 @@ class CourtListenerOpinionSearchReader(CourtListenerReader):
         *,
         since: date | None = None,
         above: int | None = None,
+        through: int | None = None,
         court: str | None = None,
         max_records: int | None = None,
         api_token: str | None = None,
         verbose: bool = False,
         transport: httpx.BaseTransport | None = None,
         evidence: CaptureEvidence | None = None,
+        traversal_budget: CourtListenerTraversalBudget | None = None,
     ) -> None:
         if above is not None and (type(above) is not int or above < 0):
             raise ValueError("above must be a non-negative integer cluster id")
+        if through is not None and (type(through) is not int or above is None or through <= above):
+            raise ValueError("through must be an integer cluster id greater than above")
         super().__init__(
-            since=since, max_records=max_records, api_token=api_token, verbose=verbose, transport=transport, evidence=evidence
+            since=since, max_records=max_records, api_token=api_token, verbose=verbose, transport=transport,
+            evidence=evidence, traversal_budget=traversal_budget,
         )
         self.court = court
-        self.query = None if above is None else f"cluster_id:[{above + 1} TO *]"
+        self.above = above
+        self.through = through
+        self.query = None if above is None else f"cluster_id:[{above + 1} TO {through if through is not None else '*'}]"
+
+    def _validate_record(self, record: Mapping[str, Any], seen: set[int]) -> None:
+        super()._validate_record(record, seen)
+        identity = record[self.identity_field]
+        if ((self.above is not None and identity <= self.above) or
+                (self.through is not None and identity > self.through)):
+            raise CourtListenerError("CourtListener opinion lies outside the selected cluster range")
 
 
 def docket_id_queries(docket_ids: Iterable[str]) -> list[str]:

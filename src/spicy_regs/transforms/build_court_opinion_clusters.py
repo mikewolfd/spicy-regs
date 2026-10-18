@@ -30,7 +30,7 @@ from collections.abc import Generator
 from contextlib import closing
 from datetime import date
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 import pyarrow as pa
@@ -50,6 +50,10 @@ from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 from spicy_regs.court_receipts import (
     finish_court_output, file_witness, read_court_rows, prior_receipt_selection, restore_processing_input, admit_court_updates,
 )
+
+if TYPE_CHECKING:
+    from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
+    from spicy_regs.source_evidence import CaptureEvidence
 
 OUTPUT = "court_opinion_clusters.parquet"
 DATASET = "opinion-clusters"
@@ -278,6 +282,9 @@ def build_court_opinion_clusters(
     courts_local_file: Path | None = None,
     skip_court_scope: bool = False,
     include_prior: bool = True,
+    search_through: int | None = None,
+    search_budget: CourtListenerTraversalBudget | None = None,
+    evidence: CaptureEvidence | None = None,
 ) -> Path:
     """Build ``court_opinion_clusters.parquet`` (bulk dump + search catch-up).
 
@@ -296,6 +303,9 @@ def build_court_opinion_clusters(
     without downloading, reading or removing a retained prior table. Combine
     these with ``local_file`` and ``skip_search_catchup=True`` for an offline
     build from pinned originals.
+
+    ``search_through`` bounds catch-up to a selected sibling export's ceiling;
+    ``search_budget`` limits the entire search and ``evidence`` retains its pages.
     """
     import duckdb
 
@@ -396,7 +406,9 @@ def build_court_opinion_clusters(
         search_rows = 0
         if not skip_search_catchup and export_high is not None:
             logger.info("Opinion clusters: search catch-up for clusters above id {:,}", export_high)
-            for result in CourtListenerOpinionSearchReader(above=export_high).iter_records():
+            for result in CourtListenerOpinionSearchReader(
+                above=export_high, through=search_through, traversal_budget=search_budget, evidence=evidence,
+            ).iter_records():
                 writer.add(_shape_search(result, scope=scope))
                 search_rows += 1
         writer.close()
