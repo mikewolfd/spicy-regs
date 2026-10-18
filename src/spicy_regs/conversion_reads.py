@@ -338,14 +338,14 @@ class _FamilyReader:
         subject, and keeps the declared columns. Here each column's exact encoding (``exact_json_sql``, equal to
         Python's ``exact_json``) is compared, ordinal by ordinal, with the encoding stored in the receipt or
         computed from the subject, so equal text means equal values, order and repetitions. Subject identity is
-        re-derived as the replay does. Whatever this cannot prove it answers False, and the row comparison, which
-        has the final word and every refusal message, runs instead.
+        re-derived as the replay does. Only rows SQL cannot prove go through the maintained Python decoder. If
+        that subset differs, the full row comparison supplies its original refusal message.
         """
         import pyarrow as pa
         import pyarrow.parquet as pq
 
         policy, paths = self.policies[dataset], self.subjects[dataset]
-        if policy.receipt_only or len(paths) != 1:
+        if self.row_reference or policy.receipt_only or len(paths) != 1:
             return False
         number = "n"
         while number in {field.name.casefold() for field in policy.subject_schema}:
@@ -367,13 +367,13 @@ class _FamilyReader:
                 else:
                     absent = "'[\"null\",null]'"
                 restored = f"coalesce(_btv_ci[{key}], _btv_top[{key}], {absent})"
-                if dataset == 'court_opinion_clusters' and field.name == 'attributes':
+                if dataset == 'court_opinion_clusters' and field.name == 'attorneys':
                     # The row path wraps a bare string in a list.
                     restored = f"CASE WHEN {restored} LIKE '[\"str\",%' THEN NULL ELSE {restored} END"
                 text = f"coalesce(({restored}) = {etl_bulk.exact_json_sql(f'"__o{index}"', field.type)}, false)"
                 declared = subject_types.get(field.name)
                 if (declared is not None and declared.equals(field.type) and not pa.types.is_floating(field.type)
-                        and (dataset, field.name) != ('court_opinion_clusters', 'attributes')):
+                        and (dataset, field.name) != ('court_opinion_clusters', 'attorneys')):
                     # Receipt fields never share a subject column's name, so only conversion_inputs can override it.
                     column = '"' + field.name.replace('"', '""') + '"'
                     text = (f'CASE WHEN _btv_ci[{key}] IS NULL THEN {column} IS NOT DISTINCT FROM "__o{index}"'
@@ -393,13 +393,14 @@ class _FamilyReader:
             " r.unproven AS _btv_receipt_unproven, d.record_id AS _btv_rid, d.version AS _btv_ver,"
             " d.identity AS _btv_ident, r.processing_json AS _btv_pj"
             f' FROM s JOIN btv_originals ON s."{number}" = btv_originals.__row'
-            f' JOIN (SELECT * FROM subjects WHERE n >= ? AND n < ?) d ON d.n = s."{number}"'
+            f' JOIN (SELECT * FROM subjects WHERE NOT unproven AND n >= ? AND n < ?) d ON d.n = s."{number}"'
             " JOIN (SELECT * FROM subject_receipts WHERE n >= ? AND n < ?) m ON m.n = d.n"
             " JOIN receipts r ON r.n = m.receipt),"
             " t AS (SELECT *, " + entries("_btv_pj") + " AS _btv_top FROM j),"
             f" c AS (SELECT *, CASE WHEN {conversion} LIKE '[\"dict\",%' THEN " + entries(conversion)
             + " ELSE map_from_entries([]::STRUCT(k VARCHAR, v VARCHAR)[]) END AS _btv_ci FROM t)"
-            " SELECT count(*), count(*) FILTER (WHERE NOT coalesce("
+            " SELECT count(*), list(struct_pack(ordinal := __row, processing := _btv_pj,"
+            " record_id := _btv_rid, version := _btv_ver, identity := _btv_ident)) FILTER (WHERE NOT coalesce("
             + ready + " AND (" + conversion + " IS NULL OR " + conversion + " = '[\"null\",null]' OR "
             + conversion + " LIKE '[\"dict\",%') AND " + " AND ".join(equal) + ", false)) FROM c")
         first = self.connection.execute(
@@ -429,17 +430,40 @@ class _FamilyReader:
                         self.connection.register("btv_subjects", subjects)
                         self.connection.register("btv_originals", originals)
                         try:
-                            total, bad = self.connection.execute(query, [low, high, low, high]).fetchone()
+                            total, unproven = self.connection.execute(query, [low, high, low, high]).fetchone()
                         finally:
                             self.connection.unregister("btv_subjects")
                             self.connection.unregister("btv_originals")
-                        if total != subjects.num_rows or bad:
+                        if total != subjects.num_rows:
+                            return False
+                        if unproven and not self._court_subset_equal(
+                                dataset, schema, subjects, table, low, unproven):
                             return False
                         count += subjects.num_rows
             except (etl_bulk.duckdb.Error, pa.ArrowException):
                 return False
             return (count == parquet.metadata.num_rows and not any(piece.num_rows for piece in pending)
                     and next(held, None) is None and read == [count, count])
+
+    def _court_subset_equal(self, dataset, schema, subjects, originals, first, unproven):
+        """Replay only the bounded batch's unproven ordinals, with the same subject binding as full replay."""
+        import pyarrow as pa
+        from spicy_regs.court_receipts import processing_rows
+        from spicy_regs.etl_receipts import subject_identity
+
+        policy = self.policies[dataset]
+        positions = [row['ordinal'] - first for row in unproven]
+        selected = subjects.take(positions).select(policy.subject_schema.names).to_pylist()
+        rows = []
+        for subject, receipt in zip(selected, unproven, strict=True):
+            if subject_identity(policy, subject) != (receipt['record_id'], receipt['version'], receipt['identity']):
+                return False
+            rows.append(subject | _unpack(json.loads(receipt['processing'])))
+        try:
+            restored = pa.Table.from_pylist(list(processing_rows(rows, dataset=dataset, schema=schema)), schema=schema)
+            return originals.take(positions).equals(restored)
+        except (ValueError, TypeError, KeyError):
+            return False
 
     def _regulatory_original_rows(self, dataset, schema, *, source_schema=None):
         import pyarrow as pa
