@@ -275,6 +275,21 @@ def initialized(con, dataset):
     return True
 
 
+def _schema_difference(observed, declared) -> str:
+    """Name what differs, so a refusal says which columns and types to migrate (it once said only "differs")."""
+    held, wanted = dict(observed), dict(declared)
+    parts = []
+    if missing := [n for n, _ in declared if n not in held]:
+        parts.append(f'missing {missing}')
+    if extra := [n for n, _ in observed if n not in wanted]:
+        parts.append(f'unexpected {extra}')
+    if retyped := [f'{n}: {held[n]} != {wanted[n]}' for n, _ in declared if n in held and held[n] != wanted[n]]:
+        parts.append(f'retyped {retyped}')
+    if not parts:
+        parts.append('same columns in a different order')
+    return '; '.join(parts)
+
+
 def require_initialized(con, record_type):
     """Refuse an absent or merely prepared catalog; physical existence is not selection."""
     if not supports(record_type):
@@ -283,8 +298,9 @@ def require_initialized(con, record_type):
     if not _exists(con, target) or not initialized(con, record_type.name):
         raise ValueError('Native catalog has no qualified initialization receipt')
     observed = [(r[0], r[1]) for r in con.execute(f'DESCRIBE {target}').fetchall()]
-    if observed != described_schema(policy(record_type.name).subject_schema):
-        raise ValueError('Native catalog schema differs from declared policy')
+    declared = described_schema(policy(record_type.name).subject_schema)
+    if observed != declared:
+        raise ValueError('Native catalog schema differs from declared policy: ' + _schema_difference(observed, declared))
 
 
 def ensure_native(con, record_type):

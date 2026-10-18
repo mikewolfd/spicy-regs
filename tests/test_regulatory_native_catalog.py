@@ -580,3 +580,11 @@ def test_an_initialization_marker_written_under_an_earlier_policy_version_still_
     con.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM bad")
     with pytest.raises(ValueError, match='differs from field policy'):
         native.initialized(con, 'comments')
+
+
+def test_a_catalog_in_an_earlier_shape_is_refused_naming_its_columns(con):
+    """The live comments catalog is still the 21-column regulations-native-v1 table; the policy has 24."""
+    native.ensure_native(con, COMMENT)
+    con.execute(f'ALTER TABLE {native.qualified(COMMENT)} DROP COLUMN pdf_extraction_results_json')
+    with pytest.raises(ValueError, match=r"differs from declared policy: missing \['pdf_extraction_results_json'\]"):
+        native.require_initialized(con, COMMENT)
