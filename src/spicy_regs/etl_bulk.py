@@ -313,6 +313,7 @@ def write_split(
     label: str,
     first_receipts: Sequence[Mapping] = (),
     last_receipts: Iterable[Mapping] = (),
+    last_refusals: Iterable[Mapping] = (),
     refusals_last: bool = False,
     segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
     isolate: str | None = None,
@@ -327,7 +328,8 @@ def write_split(
     ``_reference`` is given to ``row_attempt(batch, index, source_row)``, the family's own row function, with the row as
     the source file holds it (never decoded from the query's encoded text, which spells a value SQL does not own as a
     marker), and merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
-    writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
+    writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow accepted rows.
+    ``last_refusals`` follows the routed refusals, retaining the order of separately rejected updates.
     ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
     written as a receipt row group of its own, so a reader fetching a neighbour does not load it.
 
@@ -408,11 +410,13 @@ def write_split(
                         con.unregister(SOURCE_BATCH)
             for receipt_batch in batched(last_receipts, _GROUP):
                 emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
-            emit(RECEIPT_SCHEMA.empty_table(), final=True)
             refused.close()
             with pq.ParquetFile(scratch / "refused.parquet") as late:
-                for batch in late.iter_batches(batch_size=1):
-                    receipts.write_batch(batch)
+                for batch in late.iter_batches(batch_size=_GROUP):
+                    emit(pa.Table.from_batches([batch]))
+            for receipt_batch in batched(last_refusals, _GROUP):
+                emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
+            emit(RECEIPT_SCHEMA.empty_table(), final=True)
         except (duckdb.Error, pa.ArrowException) as error:
             raise bulk_failure(f"Bulk {label} write failed", error) from error
     if seen != expected_rows:

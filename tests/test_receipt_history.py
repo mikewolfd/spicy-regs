@@ -531,14 +531,16 @@ def test_success_resolves_declared_identity_only_in_its_dataset(tmp_path, policy
     {"id": "2", "sub": None},
     {"id": "1", "sub": ""},
 ])
-def test_raw_resolution_requires_all_exact_typed_natural_key_values(tmp_path, policy, context, raw):
+@pytest.mark.parametrize("accepted_field", ["raw", None])
+def test_raw_resolution_requires_all_exact_typed_natural_key_values(tmp_path, policy, context, raw, accepted_field):
     old = failure_receipt(policy, context, outcome="refused", raw_fields={"raw": raw})
     fresh = split_record(policy, {"id": "1", "sub": None, "text": "fixed",
                                   "raw": {"id": "1", "sub": None, "payload": "repaired"}},
                          replace(context, generation_id="new"))[1]
     result = carry_receipt_history(
         write(tmp_path / "current.parquet", [fresh]), [write(tmp_path / "prior.parquet", [old])],
-        tmp_path / "result.parquet", refusal_identities={"example": RefusalIdentity(("id", "sub"), "raw")})
+        tmp_path / "result.parquet", refusal_identities={
+            "example": RefusalIdentity(("id", "sub"), accepted_field, "raw")})
     assert pq.read_table(result).to_pylist() == ([fresh] if raw == {"id": "1", "sub": None} else [fresh, old])
 
 

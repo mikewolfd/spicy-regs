@@ -17,16 +17,20 @@ class RefusalIdentity:
     Values must match exactly, including their lossless type tags. A changed key
     spelling or missing field cannot resolve a refusal. Null is a present value.
     ``refused_raw_field`` defaults to the accepted input's container name.
+    An explicit ``accepted_raw_field=None`` uses the accepted declared identity;
+    the caller must supply the refused raw container and identical key names.
     """
 
     fields: tuple[str, ...]
-    accepted_raw_field: str
+    accepted_raw_field: str | None
     refused_raw_field: str | None = None
 
     def __post_init__(self):
         if (not self.fields or len(set(self.fields)) != len(self.fields)
                 or any(not isinstance(field, str) or not field for field in self.fields)
-                or not isinstance(self.accepted_raw_field, str) or not self.accepted_raw_field
+                or (self.accepted_raw_field is not None
+                    and (not isinstance(self.accepted_raw_field, str) or not self.accepted_raw_field))
+                or (self.accepted_raw_field is None and self.refused_raw_field is None)
                 or (self.refused_raw_field is not None
                     and (not isinstance(self.refused_raw_field, str) or not self.refused_raw_field))):
             raise ValueError("Refusal resolution needs explicit raw input and natural-key fields")
@@ -70,7 +74,21 @@ def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
         for dataset, identity in identities.items():
             raw_field = (identity.refused_raw_field or identity.accepted_raw_field
                          if name == "prior" else identity.accepted_raw_field)
-            key = _raw_identity_sql("processing_json", raw_field, identity.fields)
+            if raw_field is None:
+                # Declared identity_json is an exact list of [field, value]
+                # pairs. Repackage only its existing tagged values so the raw
+                # comparison preserves types and never normalizes a key.
+                entries = "json_extract(identity_json, '$[1]')::JSON[]"
+                values = [
+                    "json_extract(list_extract(list_filter(" + entries
+                    + ", entry -> json_extract_string(entry, '$[1][0][1]')='"
+                    + field.replace("'", "''") + "'), 1), '$[1][1]')"
+                    for field in identity.fields
+                ]
+                key = ("CASE WHEN " + " AND ".join(f"{value} IS NOT NULL" for value in values)
+                       + " THEN CAST(to_json(list_value(" + ", ".join(values) + ")) AS VARCHAR) END")
+            else:
+                key = _raw_identity_sql("processing_json", raw_field, identity.fields)
             dataset_sql = "'" + dataset.replace("'", "''") + "'"
             parts.append(f"SELECT ordinal,dataset,'raw' AS kind,{key} AS value FROM {name} "
                          f"WHERE {condition} AND dataset={dataset_sql}")
