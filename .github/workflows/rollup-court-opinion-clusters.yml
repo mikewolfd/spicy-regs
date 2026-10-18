@@ -18,6 +18,7 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-court-opinion-clusters
+      require_bulk: true
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       # A new export streams two bulk dumps, not one: opinion-clusters for the
       # decisions and dockets for the court each was decided in, because the

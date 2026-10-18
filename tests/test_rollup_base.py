@@ -134,6 +134,45 @@ def test_skip_upload_leaves_every_file_local_and_uploads_nothing(
     assert (generation / "b.parquet").exists()
 
 
+@pytest.mark.parametrize("mapped", [False, True])
+def test_rollup_cli_inherits_required_bulk_and_skip_upload_needs_no_write_credentials(tmp_path, monkeypatch, mapped):
+    from spicy_regs import etl_bulk
+    from spicy_regs.pipelines.rollups import base
+
+    monkeypatch.setattr(base, "load_dotenv", lambda: None)
+    for name in ("R2_PUBLIC_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SPICY_REGS_REQUIRE_BULK", "true")
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("A build-only rollup must not obtain write credentials or publish")
+
+    monkeypatch.setattr(upload_r2, "get_r2_client", unexpected)
+    monkeypatch.setattr(upload_r2, "require_credentials", unexpected)
+    monkeypatch.setattr(pub, "publish_generation", unexpected)
+
+    class RoutedRollup(_SingleOutputRollup):
+        def build(self, output_dir):
+            if mapped:
+                etl_bulk.log_row_fallback("test-write", etl_bulk.NotBulkEligible("schema differs"), dataset="single", rows=1)
+            else:
+                etl_bulk.log_row_eligibility("test-write", dataset="single", rows=1, reason="no mapping")
+            return super().build(output_dir)
+
+    app = base.make_rollup_app(RoutedRollup)
+    args = ["--skip-upload", "--output-dir", str(tmp_path)]
+    if mapped:
+        with pytest.raises(ValueError, match="Required bulk test-write failed"):
+            app(args)
+        assert not (tmp_path / "single.parquet").exists()
+    else:
+        with pytest.raises(SystemExit) as completed:
+            app(args)
+        assert completed.value.code == 0
+        [generation] = list((tmp_path / "generations").iterdir())
+        assert (generation / "single.parquet").exists()
+
+
 def test_neither_output_nor_outputs_raises(tmp_path: Path) -> None:
     class _Unconfigured(RollupPipeline):
         name: ClassVar[str] = "unconfigured"

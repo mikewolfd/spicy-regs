@@ -7,7 +7,7 @@ on:
         required: true
         type: choice
         options: [dockets, documents, court-opinions, roll-call-votes, member-vote-terms, bill-family, bill-subjects,
-                  docket-attributes, document-attributes, court-opinion-clusters]
+                  docket-attributes, document-attributes, comment-attributes, court-opinion-clusters]
       expected_entry_sha256:
         description: 'sha256: digest of the complete prior family entry (canonical sorted JSON, compact separators)'
         required: true
@@ -49,6 +49,7 @@ jobs:
       EXPECTED_BUCKET: ${{ inputs.expected_bucket }}
       R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
       SPICY_REGS_DISK_FLOOR_GIB: '4'
+      SPICY_REGS_REQUIRE_BULK: 'true'
       PYTHONUNBUFFERED: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       OMP_NUM_THREADS: '4'

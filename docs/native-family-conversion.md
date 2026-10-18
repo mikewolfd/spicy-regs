@@ -207,7 +207,73 @@ on main.
    the selection that refused every night since 2026-10-04 (on `congress_bills` until 10-06, then `bill_subjects`), then let the 21:15Z
    schedule publish.
 
-### Families the nightly refreshes wait on (audit of 2026-10-17)
+### Bulk execution and remaining operational checks
+
+The scheduled lobbying, bill-family, votes/terms, mapped court and regulatory
+refresh paths set `SPICY_REGS_REQUIRE_BULK=true`. The reusable rollup's
+`require_bulk` input defaults to false for its other callers. The setting
+reaches the existing CLI process, worker threads and child processes, and keeps
+each writer's existing thread and memory limits. An explicit
+`bulk_limits(require_bulk=False)` does not override the runner's requirement.
+Only the literal values `true` and `false` are accepted; an invalid value
+refuses a requested row fallback.
+
+This setting refuses a **whole mapped dataset or bundle** falling back to the
+reference reader or writer. A dataset without a bulk mapping still logs its
+row count and reason and uses its supported row path. Sparse exceptions inside
+a bulk scan, such as an unusual JSON escape, still use the reference mapper for
+those rows. A failed bulk operation never retries the whole dataset by row.
+Local callers can use the same environment setting without changing their CLI
+arguments. Initial conversions also support the existing `--require-bulk`,
+`--bulk-threads` and `--bulk-memory-limit` options.
+
+`comment-attributes` is now offered in the hosted conversion menu and accepted
+by the converter's regulatory-family selection. It uses the typed regulatory
+bulk writer. The preparation and publication limits are unchanged; the
+full-size preparation still has to establish its runtime and disk use before
+publication. The historical estimates below describe the earlier row writer.
+
+For votes, dispatch `refresh-congress-vote-terms.yml` with `skip_upload=true`
+after the integrated producer is available. Its votes and terms jobs already
+free hosted toolchain space and sample available disk every 20 seconds. Each
+`rollup-audit-*` artifact now retains `disk-watch.log`, including start and end
+samples; the log reports the lowest **sampled** free space, not an instantaneous
+peak-use guarantee. The manual votes and terms repair workflows enable the same
+probe. The scheduled votes limit remains 60 minutes, and manual repair limits
+remain unchanged. Record the producer revision, exit status, output sizes and
+lowest sampled free space from the actual run before claiming hosted capacity.
+No hosted measurement is established by this wiring change.
+
+The vote rollups' `skip_upload` option leaves verified generations local and
+does not require publication credentials; source requests still happen. The
+chain's terms job reads the current published inputs, so this rehearsal does
+not test a newly published votes-to-terms handoff. In contrast,
+`etl-new --skip-upload --use-iceberg` still merges into the catalog: its flag
+suppresses the later publication, not the catalog writes. It is not a read-only
+catalog rehearsal.
+
+The owner selected this Mac for the large court-citations conversion. It is a
+local invocation, with no new self-hosted runner or raised hosted timeout.
+Use a clean integrated main and a new work directory, record free disk before
+starting, and retain elapsed time and peak working-space evidence. First check
+the local corpus catalog and retained generations for the exact selected input
+digests; use `--retained-member-map` for verified matching members. The command
+below prepares only; the existing `--publish-prepared` procedure publishes those
+same reviewed bytes. The normal court-citations refresh also needs the native
+`court-opinion-clusters` generation published first.
+
+```sh
+UV=/opt/homebrew/bin/uv
+MAIN=$(git rev-parse HEAD)
+WHEEL=$($UV run --frozen python -c "from importlib.metadata import version; print(version('spicy-docs'))")
+COURT_WORK=~/Work/corpora/native-conversion-<date>/court-citations
+SPICY_REGS_REQUIRE_BULK=true R2_PUBLIC_URL=https://data.spicygov.ai \
+  $UV run --frozen python scripts/convert_family_to_native.py court-citations \
+  --allow court-citations --work "$COURT_WORK" --expect-main "$MAIN" \
+  --expect-spicy-docs "$WHEEL" --remote fork --require-bulk
+```
+
+### Families the nightly refreshes wait on (historical audit of 2026-10-17)
 
 A scheduled rollup refuses an input family published without ETL receipts. `etl-new`
 (dockets, documents, comments and every consumer behind `refresh-consumers`) failed
@@ -429,7 +495,7 @@ set in the shell that the file contradicts is refused, by name.
 `convert-native-family.yml` runs the same maintained converter on a hosted
 runner, one named family per manual dispatch. It supports the bulk regulatory,
 court and votes families, `bill-family`, `bill-subjects`, `docket-attributes`,
-`document-attributes` and `court-opinion-clusters`. Their owners still coordinate
+`document-attributes`, `comment-attributes` and `court-opinion-clusters`. Their owners still coordinate
 reader compatibility and concurrent ordinary writers.
 
 Bind `expected_entry_sha256` to the complete observed family entry with

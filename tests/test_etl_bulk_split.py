@@ -62,6 +62,37 @@ def test_rows_arrive_in_order_across_source_batches_and_the_row_code_decides_its
     assert _ids(tmp_path / "r.parquet", "receipt_id") == [f"row{i}" if i % 5 == 4 else f"r{i}" for i in range(23)]
 
 
+def test_required_bulk_keeps_sparse_row_decisions(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPICY_REGS_REQUIRE_BULK", "true")
+    routed, seen = _split(tmp_path)
+    assert routed == 4 and seen == [4, 9, 14, 19]
+    assert len(_ids(tmp_path / "r.parquet", "receipt_id")) == 23
+
+
+@pytest.mark.parametrize("configured", [None, "false", "true", "TRUE", "", "typo"])
+@pytest.mark.parametrize("context_requires", [False, True])
+def test_runner_setting_and_explicit_context_both_enforce_bulk(monkeypatch, configured, context_requires):
+    if configured is None:
+        monkeypatch.delenv("SPICY_REGS_REQUIRE_BULK", raising=False)
+    else:
+        monkeypatch.setenv("SPICY_REGS_REQUIRE_BULK", configured)
+    with etl_bulk.bulk_limits(threads=1, memory_limit="64MB", require_bulk=context_requires):
+        if context_requires or configured not in {None, "false"}:
+            with pytest.raises(ValueError, match="reference fallback disabled"):
+                etl_bulk.reference_fallback(etl_bulk.NotBulkEligible("schema differs"))
+        else:
+            etl_bulk.reference_fallback(etl_bulk.NotBulkEligible("schema differs"))
+
+
+def test_runner_requirement_is_inherited_by_worker_threads(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    monkeypatch.setenv("SPICY_REGS_REQUIRE_BULK", "true")
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with pytest.raises(ValueError, match="reference fallback disabled"):
+            pool.submit(etl_bulk.reference_fallback, etl_bulk.NotBulkEligible("schema differs")).result()
+
+
 def test_refusals_follow_every_accepted_receipt_after_the_closing_receipts(tmp_path):
     _split(tmp_path, refusals_last=True, last_receipts=[{name: None for name in RECEIPT_SCHEMA.names} | {
         "receipt_id": "footer", "witnesses": []}])
