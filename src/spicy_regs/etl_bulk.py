@@ -122,11 +122,11 @@ def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
         raise NotBulkEligible(f"{what} does not fit its schema; the row reader decides") from error
 
 
-def log_row_fallback(route: str, error: NotBulkEligible) -> None:
-    """Say that a bulk route handed its work to the (slow) row path, and why."""
+def log_row_fallback(route: str, error: NotBulkEligible, *, dataset: str) -> None:
+    """Warn that a bulk route handed ``dataset``'s work to the (slow) row path, and why."""
     from loguru import logger
 
-    logger.info("{} route=row reason=unsupported-semantics detail={}", route, error)
+    logger.warning("{} route=row dataset={} reason={}", route, dataset, error)
 
 
 def reference_fallback(error: NotBulkEligible) -> None:

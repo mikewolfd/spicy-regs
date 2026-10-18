@@ -224,7 +224,7 @@ def _stage(con, source, dataset, work, generation, *, prior_receipts=None, bulk=
             comments_bulk.write_bundle(source_path, subject, receipts, policy=policy(dataset),
                 generation_id=generation, source_label=source, row_attempt=row_attempt)
         except etl_bulk.NotBulkEligible as error:
-            etl_bulk.log_row_fallback("comments write", error)
+            etl_bulk.log_row_fallback("comments write", error, dataset=dataset)
             subject = receipts = None
     if subject is None:
         subject, receipts = write_records(dataset, records, work / 'mapped', project=normalized)
@@ -387,7 +387,7 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                     comments_bulk.restore_catalog(subject, receipts, restored, generation_id=generation)
                     batch_restored = True
                 except etl_bulk.NotBulkEligible as error:
-                    etl_bulk.log_row_fallback("comments restore", error)  # The row reader decides the first error.
+                    etl_bulk.log_row_fallback("comments restore", error, dataset=dataset)  # The row reader decides the first error.
             if not batch_restored:
                 write_rows(source_rows(), restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
             con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [str(restored)])

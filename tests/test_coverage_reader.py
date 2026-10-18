@@ -1,6 +1,7 @@
 """Coverage bridge uses selected receipts, with exact original source values."""
 
 from contextlib import ExitStack
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -15,10 +16,12 @@ import pyarrow.parquet as pq
 import pytest
 from spicy_regs import coverage_reader as bridge
 from spicy_regs import etl_bulk, regulations_bulk
-from spicy_regs.etl_receipts import selected_subject_policy
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, _digest, decode_exact_json, exact_json, selected_subject_policy
 from spicy_regs.legislative_documents import field_registry
 from spicy_regs.legislative_receipts import write_legislative_outputs
 from spicy_regs.pipelines.rollups import subject_receipts
+from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
+from spicy_regs.sources.publication import empty_index
 from spicy_regs.transforms import regulations_receipts
 from spicy_regs.transforms.regulations_receipts import (
     RESTORE_DATASETS,
@@ -307,7 +310,7 @@ def test_identity_changes_with_the_bytes_of_the_earlier_receipt_chains(tmp_path,
 @pytest.fixture
 def route_warnings():
     messages = []
-    sink = logger.add(lambda message: messages.append(message.record["message"]), level="INFO")
+    sink = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
     yield messages
     logger.remove(sink)
 
@@ -398,7 +401,7 @@ def test_forced_batch_ineligibility_logs_the_row_route_and_restores_identically(
 
     monkeypatch.setattr(regulations_bulk, "_materialize_selected", forced)
     row = bridge.restore(_restore_request(tmp_path, selected, "row"))
-    assert route_warnings == ["regulatory restore route=row reason=unsupported-semantics detail=forced for the test"]
+    assert route_warnings == [f"regulatory restore route=row dataset={dataset} reason=forced for the test"]
     assert pq.read_table(row["urls"][0]).equals(pq.read_table(bulk["urls"][0]), check_metadata=True)
     assert row["rows"] == bulk["rows"]
 
@@ -410,3 +413,89 @@ def test_a_subject_schema_other_than_the_declared_one_logs_the_row_route_before_
     with pytest.raises(ValueError, match="Subject schema differs from policy"):
         materialize_internal(selected, tmp_path / "refused.parquet", bulk=True)
     assert route_warnings == ["regulatory restore route=row dataset=federal_register reason=subject-schema-differs"]
+
+
+def _corrupt(selected, change):
+    """Rewrite the selected pair's last accepted receipt (or add one) so admission must refuse it."""
+    rows = pq.read_table(selected.receipts).to_pylist()
+    last = next(row for row in reversed(rows) if row["outcome"] == "accepted")
+
+    def sealed(row):
+        row["receipt_id"] = _digest({key: value for key, value in row.items() if key != "receipt_id"})
+
+    def processing(row, edit):
+        values = decode_exact_json(row["processing_json"])
+        edit(values)
+        row["processing_json"] = exact_json(values)
+
+    if change == "orphan":  # a second accepted receipt whose subject row does not exist
+        extra = copy.deepcopy(last)
+        extra["attempt_id"] += "-orphan"
+        processing(extra, lambda values: values["raw_conversion_inputs"].update(document_number="2099-99999"))
+        extra["identity_json"] = extra["identity_json"].replace("2026-00001", "2099-99999")
+        sealed(extra)
+        rows.append(extra)
+    elif change == "ambiguous":
+        extra = copy.deepcopy(last)
+        extra["attempt_id"] += "-another"
+        sealed(extra)
+        rows.append(extra)
+    elif change == "missing":
+        rows.remove(last)
+    elif change == "digest":
+        last["receipt_id"] = "sha256:" + "0" * 64
+    elif change == "undeclared-policy":
+        last["policy_version"] = "regulations-native-v0"
+        sealed(last)
+    elif change == "raw":
+        processing(last, lambda values: values["raw_conversion_inputs"].update(title="changed"))
+        sealed(last)
+    pq.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA), selected.receipts)
+
+
+def _restore_through_selected_priors(tmp_path, selected, route, monkeypatch):
+    if route == "row":
+        def forced(*args, **kwargs):
+            raise etl_bulk.NotBulkEligible("forced for the test")
+
+        monkeypatch.setattr(regulations_bulk, "_materialize_selected", forced)
+    priors = SelectedPriors(tmp_path / "selected", index=empty_index(), public_url="https://example.invalid")
+    priors.selected.select = lambda _: selected
+    try:
+        return priors.get(selected.dataset)
+    except Exception as error:  # the refusal is the observation
+        return f"{type(error).__name__}: {error}"
+
+
+FR_ROWS = [
+    {"document_number": "2026-00001", "publication_date": "2025-06-30", "title": "first"},
+    {"document_number": "2026-00002", "publication_date": "2026-06-30", "title": "second"},
+]
+
+
+@pytest.mark.parametrize("change", ["orphan", "ambiguous", "missing", "digest", "undeclared-policy", "raw"])
+def test_a_corrupted_selected_pair_refuses_identically_on_the_bulk_and_the_row_route(tmp_path, monkeypatch, change):
+    """Removing get()'s own admission must not let any corruption through on either restore route."""
+    outcomes = {}
+    for route in ("bulk", "row"):
+        directory = tmp_path / route
+        directory.mkdir()
+        selected = federal_register_source(directory, FR_ROWS)[0]
+        _corrupt(selected, change)
+        with monkeypatch.context() as patch_route:
+            outcomes[route] = _restore_through_selected_priors(directory, selected, route, patch_route)
+    assert isinstance(outcomes["bulk"], str), "the bulk route restored a corrupted pair"
+    assert outcomes["bulk"] == outcomes["row"]
+
+
+@pytest.mark.parametrize("change", ["ambiguous", "missing", "digest", "undeclared-policy"])
+def test_a_corrupted_pair_of_a_dataset_without_a_batch_route_refuses_through_the_row_reader(tmp_path, change):
+    """cfr_sections has no batch restore: the row reader's own admission is the only one."""
+    source = tmp_path / "cfr.parquet"
+    pq.write_table(pa.table({"granule_id": ["CFR-2025-title1-vol1-sec1-1"], "last_modified": ["2025-01-01"]}), source)
+    subject, receipts = write_held_dataset("cfr_sections", source, tmp_path / "cfr", generation_id="cfr1")
+    selected = ReceiptInput("cfr_sections", (subject,), receipts, "cfr1")
+    assert isinstance(_restore_through_selected_priors(tmp_path / "ok", selected, "bulk", pytest.MonkeyPatch()), Path)
+    _corrupt(selected, change)
+    outcome = _restore_through_selected_priors(tmp_path / "bad", selected, "bulk", pytest.MonkeyPatch())
+    assert isinstance(outcome, str), "a corrupted pair was restored"

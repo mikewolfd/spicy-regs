@@ -218,7 +218,7 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
                 return regulations_bulk.materialize_internal(
                     selected, destination, source_schema=source_schema, scoped=scoped)
             except etl_bulk.NotBulkEligible as error:
-                etl_bulk.log_row_fallback("regulatory restore", error)
+                etl_bulk.log_row_fallback("regulatory restore", error, dataset=selected.dataset)
         else:
             logger.warning("regulatory restore route=row dataset={} reason=subject-schema-differs", selected.dataset)
 
@@ -398,7 +398,7 @@ def write_held_dataset(
                 witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
             )
         except etl_bulk.NotBulkEligible as error:
-            etl_bulk.log_row_fallback("regulatory write", error)
+            etl_bulk.log_row_fallback("regulatory write", error, dataset=dataset)
     parquet = pq.ParquetFile(source)
     metadata = dict(parquet.schema_arrow.metadata or {})
     # The exact input metadata is receipt data, including byte-valued keys.
