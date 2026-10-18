@@ -41,25 +41,17 @@ def write(tmp_path, dataset, rows, generation="g1", label="input"):
     return ReceiptInput(dataset, (subjects,), receipts, generation)
 
 
-def assert_full_prior_history(receipt, prior):
-    from spicy_regs.etl_receipts import decode_exact_json, exact_json, resolve_receipt_witness
+def assert_direct_prior_reference(receipt, prior):
+    from hashlib import sha256
+    from spicy_regs.etl_receipts import decode_exact_json
 
     diagnostics = decode_exact_json(receipt["diagnostic_json"])
-    [reference] = [entry for entry in diagnostics["prior_receipts"]
-                   if entry["receipt_id"] == prior["receipt_id"] and entry["generation_id"] == prior["generation_id"]]
-    for field in ("processor", "attempt_id", "outcome"):
-        assert reference[field] == prior[field]
-    previous = decode_exact_json(prior["diagnostic_json"])
-    assert reference["diagnostics"] == {
-        key: value for key, value in previous.items() if key not in {"prior_receipts", "retained_processing"}
+    assert diagnostics["prior_receipt"] == {
+        "receipt_id": prior["receipt_id"],
+        "generation_id": prior["generation_id"],
+        "processing_sha256": "sha256:" + sha256(prior["processing_json"].encode()).hexdigest(),
     }
-    processing = decode_exact_json(prior["processing_json"])
-    assert diagnostics["retained_processing"][reference["processing_sha256"]] == processing
-    [witness] = [entry for entry in receipt["witnesses"]
-                 if entry["source_uri"] == "receipt-processing:" + reference["processing_sha256"]
-                 and entry["body_version"] == prior["receipt_id"]]
-    assert resolve_receipt_witness(receipt, witness) == exact_json(processing).encode()
-    assert all(witness in receipt["witnesses"] for witness in prior["witnesses"])
+    assert "prior_receipts" not in diagnostics and "retained_processing" not in diagnostics
 
 
 @pytest.mark.parametrize("dataset", list(SOURCE_COLUMNS))
@@ -134,7 +126,10 @@ def test_local_generation_admits_receipts_separately_from_domain_tables(tmp_path
 
 
 def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
+    from hashlib import sha256
+
     from spicy_regs.enrich_pdf import enrich_receipted_dataset
+    from spicy_regs.etl_receipts import decode_exact_json
     from tests.pdf_fixtures import make_pdf
 
     selected = write(
@@ -175,7 +170,13 @@ def test_receipt_pdf_retries_skip_prior_status_and_keep_global_limit(tmp_path):
             if (receipt['subject_version'], receipt['processing_json']) == (prior['subject_version'], prior['processing_json']):
                 assert receipt == prior
             else:
-                assert_full_prior_history(receipt, prior)
+                diagnostics = decode_exact_json(receipt['diagnostic_json'])
+                assert diagnostics['prior_receipt'] == {
+                    'receipt_id': prior['receipt_id'],
+                    'generation_id': prior['generation_id'],
+                    'processing_sha256': 'sha256:' + sha256(prior['processing_json'].encode()).hexdigest(),
+                }
+                assert 'prior_receipts' not in diagnostics and 'retained_processing' not in diagnostics
     assert "text_extraction_status" in pq.read_schema(subject).names
 
 
@@ -195,6 +196,8 @@ def test_pdf_requires_receipt_validation_before_fetch(tmp_path):
 
 
 def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
+    from hashlib import file_digest
+
     from spicy_regs.transforms.regulations_correction import correct_receipted_dataset
 
     prior = write(
@@ -238,12 +241,49 @@ def test_correction_keeps_text_status_and_diagnostics_together(tmp_path):
     assert "pdf_extraction_results_json" in pq.read_schema(subject).names
     [receipt] = [r for r in pq.read_table(receipts).to_pylist() if r['outcome'] == 'accepted']
     [prior_receipt] = [r for r in pq.read_table(prior.receipts).to_pylist() if r['outcome'] == 'accepted']
-    [fresh_receipt] = [r for r in pq.read_table(fresh.receipts).to_pylist() if r['outcome'] == 'accepted']
-    assert_full_prior_history(receipt, prior_receipt)
-    assert_full_prior_history(receipt, fresh_receipt)
-    receipt_sources = {w['source_uri'] for w in receipt['witnesses']}
-    assert str(prior.receipts) in receipt_sources
-    assert str(fresh.receipts) in receipt_sources
+    assert_direct_prior_reference(receipt, prior_receipt)
+    for selected in (prior, fresh):
+        for path in (*selected.subjects, selected.receipts):
+            with path.open("rb") as body:
+                digest = file_digest(body, "sha256").hexdigest()
+            assert {"source_id": f"documents:{path.name}", "source_uri": str(path), "sha256": digest,
+                    "locator": None, "body_version": selected.generation_id} in receipt["witnesses"]
+
+
+def test_correction_keeps_current_failures_and_resolves_only_prior_refusals(tmp_path):
+    from spicy_regs.etl_receipts import decode_exact_json
+    from spicy_regs.transforms.regulations_correction import correct_receipted_dataset
+
+    held_row = dict.fromkeys(column for column, _ in SOURCE_COLUMNS["documents"])
+    held_row.update(document_id="held", title="unchanged")
+    prior = write(tmp_path, "documents", [
+        held_row,
+        {"document_id": "resolved", "attachments_json": "{bad"},
+        {"document_id": "prior-unmatched", "attachments_json": "{bad"},
+    ], label="prior")
+    fresh = write(tmp_path, "documents", [
+        {"document_id": "resolved", "attachments_json": "[]"},
+        {"document_id": "held", "attachments_json": "{bad"},
+        {"document_id": "fresh-unmatched", "attachments_json": "{bad"},
+    ], generation="g2", label="fresh")
+
+    def refused(path):
+        return {decode_exact_json(r["processing_json"])["raw_conversion_inputs"]["document_id"]: r
+                for r in pq.read_table(path).to_pylist() if r["outcome"] == "refused"}
+
+    subject, receipts = correct_receipted_dataset(prior, fresh, tmp_path / "corrected", generation_id="g3")
+    corrected = ReceiptInput("documents", (subject,), receipts, "g3")
+    assert {r["document_id"] for r in read_internal(corrected)} == {"held", "resolved"}
+    prior_failed, fresh_failed = refused(prior.receipts), refused(fresh.receipts)
+    expected = {"prior-unmatched": prior_failed["prior-unmatched"], **fresh_failed}
+    assert refused(receipts) == expected
+    [held] = [r for r in pq.read_table(prior.receipts).to_pylist() if r["outcome"] == "accepted"]
+    assert held in pq.read_table(receipts).to_pylist()
+
+    successful = write(tmp_path, "documents", [{"document_id": "held", "title": "corrected"}],
+                       generation="g4", label="successful")
+    _, following = correct_receipted_dataset(corrected, successful, tmp_path / "following", generation_id="g5")
+    assert refused(following) == {key: value for key, value in expected.items() if key != "held"}
 
 
 def test_real_rulemaking_producers_build_native_outputs_from_qualified_inputs(tmp_path):

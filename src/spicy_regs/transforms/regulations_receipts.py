@@ -347,6 +347,7 @@ def write_records(
     project: Callable[[Mapping], Mapping] | None = None,
     observation_context: ReceiptContext | None = None,
     prior_receipts: Sequence[Path] = (),
+    additional_failures: Iterable[dict] = (),
     validate: bool = True,
 ) -> tuple[Path, Path]:
     """Write one dataset and preserve malformed-input attempts without subjects.
@@ -354,6 +355,8 @@ def write_records(
     Unknown or invalid source values remain in a refused receipt with their full
     source row. The exception class and reason are diagnostic fields. Successful
     rows require a stable subject identity and exactly one matching receipt.
+    Already qualified current failed attempts can follow the mapped attempts
+    through ``additional_failures``; they are not prior history to resolve.
     """
     declared = policy(dataset)
     carry = dataset in CARRY_DATASETS and bool(prior_receipts)
@@ -398,6 +401,7 @@ def write_records(
                 )
             for batch in pq.ParquetFile(refusal_path).iter_batches(batch_size=2000):
                 yield from batch.to_pylist()
+            yield from additional_failures
 
         try:
             target = Path(temp) / 'bundle' if carry else destination

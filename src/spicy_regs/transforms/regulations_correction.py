@@ -127,4 +127,24 @@ def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
                     )
                     ordinal += 1
 
+        if dataset == "documents":
+            def fresh_failures():
+                import pyarrow as pa
+                import pyarrow.compute as pc
+                import pyarrow.parquet as pq
+
+                with pq.ParquetFile(fresh.receipts) as source:
+                    for batch in source.iter_batches(batch_size=2000):
+                        selected = pc.call_function("and", [
+                            pc.call_function("equal", [batch.column("dataset"), dataset]),
+                            pc.call_function("is_in", [batch.column("outcome")],
+                                             pc.SetLookupOptions(pa.array(["refused", "rejected", "error"]))),
+                        ])
+                        yield from batch.filter(selected).to_pylist()
+
+            # The old selected row is the predecessor. Both input files remain
+            # witnessed; fresh failures are current attempts, not old history
+            # that an unchanged held subject could incorrectly resolve.
+            return write_records(dataset, records(), destination, prior_receipts=[prior.receipts],
+                                 additional_failures=fresh_failures())
         return write_records(dataset, records(), destination, prior_receipts=[prior.receipts, fresh.receipts])
