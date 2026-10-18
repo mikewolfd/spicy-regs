@@ -317,6 +317,30 @@ def test_readback_does_not_export_or_build_a_second_validation_database(live, pu
     assert result['verification'] == 'sampled' and result['sampled_subjects'] == 3
 
 
+
+def test_smoke_count_and_processing_read_share_one_transaction(live, published, monkeypatch):
+    rebuild(live, published)
+    state = {'transaction': None, 'count_snapshot': None}
+    class Connection:
+        def execute(self, query, *args):
+            if query == 'BEGIN':
+                state['transaction'] = object()
+            elif query in ('COMMIT', 'ROLLBACK'):
+                state['transaction'] = None
+            elif query.startswith('SELECT docket_id, count(*)'):
+                state['count_snapshot'] = state['transaction']
+            return live.execute(query, *args)
+        def __getattr__(self, name):
+            return getattr(live, name)
+    original = native.processing_table
+    def restore(con, record_type, **kwargs):
+        assert kwargs['in_transaction'] is True
+        assert state['transaction'] is not None and state['transaction'] is state['count_snapshot']
+        return original(con, record_type, **kwargs)
+    monkeypatch.setattr(native, 'processing_table', restore)
+    assert 'smoke_docket' in native.verify_rebuilt(Connection(), COMMENT, published)
+
+
 @pytest.fixture
 def command(live, published, state, monkeypatch, tmp_path):
     """scripts/rebuild_native_catalog.py against the local catalog and a stubbed publication index."""

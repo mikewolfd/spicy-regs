@@ -654,7 +654,8 @@ def verify_rebuilt(con, record_type, pair, *, smoke=True):
 
     Compare every field of the first/middle/last subjects and their accepted receipts, plus the first
     nonaccepted receipt when present. This is sampled readback, not full-corpus validation. No full catalog
-    export or second validation database is built. The smallest-docket processing smoke is capped at 100 rows.
+    export or second full-corpus validation database is built. The smallest-docket processing smoke uses a
+    small validator and is capped at 100 rows within one catalog transaction.
     """
     dataset = record_type.name
     declared = policy(dataset)
@@ -707,18 +708,19 @@ def verify_rebuilt(con, record_type, pair, *, smoke=True):
     result = {'rows': counted, 'receipts': copied + 1, 'verification': 'sampled',
               'sampled_subjects': len(sample), 'sampled_receipts': len(expected)}
     if smoke and counted:
-        docket, expected_rows = con.execute(f'SELECT docket_id, count(*) FROM {target} GROUP BY 1 ORDER BY 2, 1 LIMIT 1').fetchone()
-        if expected_rows > 100:
-            result['smoke_skipped'] = 'smallest docket exceeds 100 rows'
-        else:
-            predicate = 'docket_id IS NULL' if docket is None else f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'"
-            restored = processing_table(con, record_type, where=predicate)
-            try:
-                if con.execute(f'SELECT count(*) FROM {restored}').fetchone()[0] != expected_rows:
-                    raise RuntimeError(f'Processing read of docket {docket} returned a different row count')
-            finally:
-                con.execute(f'DROP TABLE {restored}')
-            result['smoke_docket'] = docket
+        with _transaction(con):
+            docket, expected_rows = con.execute(f'SELECT docket_id, count(*) FROM {target} GROUP BY 1 ORDER BY 2, 1 LIMIT 1').fetchone()
+            if expected_rows > 100:
+                result['smoke_skipped'] = 'smallest docket exceeds 100 rows'
+            else:
+                predicate = 'docket_id IS NULL' if docket is None else f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'"
+                restored = processing_table(con, record_type, where=predicate, in_transaction=True)
+                try:
+                    if con.execute(f'SELECT count(*) FROM {restored}').fetchone()[0] != expected_rows:
+                        raise RuntimeError(f'Processing read of docket {docket} returned a different row count')
+                finally:
+                    con.execute(f'DROP TABLE {restored}')
+                result['smoke_docket'] = docket
     return result
 
 
