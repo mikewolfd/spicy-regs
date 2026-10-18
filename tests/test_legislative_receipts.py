@@ -343,6 +343,31 @@ def test_bulk_restore_admits_once_and_matches_row_restore_for_multiple_datasets(
         assert pq.read_table(actual[dataset]).equals(pq.read_table(expected[dataset]), check_metadata=True)
 
 
+def test_wide_bulk_restore_preserves_source_order_values_and_metadata_across_batches(tmp_path):
+    """The bill refresh must yield bounded source batches before parsing and sorting the next one."""
+    from spicy_regs import etl_bulk
+
+    text = 'Peña "quoted" \\ path \x1b\n' * 50
+    versions = [row("bill_versions", bill_id=f"119-hr-{i + 1}", version_code="ih", source="govinfo",
+                    label=f"{i}: {text}", requested_url=None if i % 7 == 0 else f"https://example.test/{i}",
+                    resolved_url="" if i % 3 == 0 else f"https://example.test/held/{i}") for i in range(4203)]
+    reads = [row("committee_report_reads", package_id=f"CRPT-119hrpt{i}", outcome="complete",
+                 rule_version="reader-1", last_modified=None if i % 2 else "") for i in range(2103)]
+    sources = [
+        retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0")]),
+        retained(tmp_path / "source", "bill_versions", versions, {b"retained-source": b"wide-version-window"}),
+        retained(tmp_path / "source", "committee_report_reads", reads, {b"retained-source": b"read-window"}),
+    ]
+    write_legislative_outputs(sources, tmp_path / "bundle", generation_id="g")
+    # Physical row groups need not coincide with decoding batches or global subject ordinals.
+    path = tmp_path / "bundle/bill_versions.parquet"
+    pq.write_table(pq.read_table(path), path, row_group_size=257)
+    with etl_bulk.bulk_limits(threads=4, memory_limit="256MB"):
+        actual = restore_prior(tmp_path / "bundle", tmp_path / "restored")
+    for source in sources:
+        assert pq.read_table(actual[source.stem]).equals(pq.read_table(source), check_metadata=True)
+
+
 @pytest.mark.parametrize("bulk", [False, True])
 def test_retained_source_still_must_reproduce_the_admitted_subject(tmp_path, bulk):
     from spicy_regs.etl_receipts import _digest, decode_exact_json, exact_json
