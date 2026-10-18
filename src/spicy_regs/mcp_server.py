@@ -2315,11 +2315,15 @@ def _tools() -> list[Tool]:
         async def call(**arguments: Any) -> CallToolResult:
             bound = RequestBound(STATEMENT_TIMEOUT_SECONDS, f"Request exceeded the {STATEMENT_TIMEOUT} timeout, including input admission")
             def run():
-                token = _discovery_only.set(getattr(fn, "__name__", None) in ("list_sources", "describe_table"))
+                name = getattr(fn, "__name__", None)
+                # Receipt lookups admit their selected index themselves. Keep local
+                # native row validation, without restoring unrelated remote views.
+                token = _discovery_only.set(name in ("list_sources", "describe_table") or
+                                            (name == "read_receipt_fields" and DATA_DIR is None))
                 requested_token = None
                 try:
                     with bound.scope():
-                        if getattr(fn, '__name__', None) == 'query_sql':
+                        if name == 'query_sql':
                             # Inspect the unbound parse tree before opening source
                             # views. Never execute caller SQL on this parser.
                             with duckdb.connect() as parser:
