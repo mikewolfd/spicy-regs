@@ -161,7 +161,7 @@ def write_court_rows(
                                                   validate=False)
         assert subject is not None
         if prior_receipts is not None:
-            _carry(dataset, receipt, prior_receipts)
+            _carry(dataset, receipt, prior_receipts, resolution_receipts=refused_receipts)
         validate_receipt_bundle({dataset: [subject]}, [receipt], [policy], generation_id=generation_id)
         return subject
 
@@ -205,7 +205,7 @@ def write_court_bulk(
                     receipt for receipt in parquet_rows(refused_receipts)
                     if _check_refused(receipt, dataset, generation_id)))
             if prior_receipts is not None:
-                _carry(dataset, receipt_path, prior_receipts)
+                _carry(dataset, receipt_path, prior_receipts, resolution_receipts=refused_receipts)
             publish_directory_no_replace(stage, bundle)
         return bundle / subject_path.name
 
@@ -220,10 +220,10 @@ def _pdf_refusal_identity(raw: Mapping) -> dict | None:
     return {'opinion_body_id': identity}
 
 
-def _carry(dataset: str, current: Path, prior: Path) -> None:
+def _carry(dataset: str, current: Path, prior: Path, *, resolution_receipts: Path | None = None) -> None:
     # Match literal court keys to accepted declared identities. PDF body keys
     # alone use the maintained derivation from the exact opinion id and digest.
-    carry_receipt_history(current, [prior], current, refusal_identities={
+    carry_receipt_history(current, [prior], current, resolution_receipts=resolution_receipts, refusal_identities={
         dataset: RefusalIdentity(IDENTITIES[dataset], None, "raw_source_record",
                                 _pdf_refusal_identity if dataset == 'court_opinion_pdf_extractions' else None)})
 

@@ -405,3 +405,14 @@ def test_refused_refresh_keeps_prior_and_records_rejected_update(tmp_path, monke
     # The rejected update leaves the accepted attempt unchanged, including its
     # original provenance; only changed accepted rows add predecessor evidence.
     assert retained == old_receipt
+
+    # An unrelated next download does not make that rejected update succeed.
+    rows[:] = [{"docket_id": 2, "caseName": "New", "party": []}]
+    third = build_courtlistener(tmp_path, max_records=10)
+    third_receipts = pq.read_table(local_receipt_selection(third)[0]).to_pylist()
+    assert [r for r in third_receipts if r['outcome'] == 'refused'] == refused
+
+    # A newly fetched valid version of the held key resolves its earlier refusal.
+    rows[:] = [{"docket_id": 1, "caseName": "Held", "party": ["Agency"]}]
+    fourth = build_courtlistener(tmp_path, max_records=10)
+    assert not [r for r in pq.read_table(local_receipt_selection(fourth)[0]).to_pylist() if r['outcome'] == 'refused']
