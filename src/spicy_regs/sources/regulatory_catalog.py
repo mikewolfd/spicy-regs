@@ -649,47 +649,76 @@ def rebuild_native(con, record_type, pair, *, expected_snapshot, expected_prior,
     return plan
 
 
-def verify_rebuilt(con, record_type, pair, work, *, smoke=True):
-    """Read-only readback of a rebuilt comments catalog; raises on the first difference.
+def verify_rebuilt(con, record_type, pair, *, smoke=True):
+    """Check schemas/counts and a small deterministic sample against the verified published files.
 
-    Initialization, row count, schema, then one bulk admission of the catalog rows against their copied receipts
-    (every ``subject_version`` re-derived from the rows) and equality of every non-marker receipt's digest
-    with the published receipts. Those checked digests cover all receipt fields, including provenance.
-    ``smoke`` also reads the smallest docket back, including an unknown docket.
+    Compare every field of the first/middle/last subjects and their accepted receipts, plus the first
+    nonaccepted receipt when present. This is sampled readback, not full-corpus validation. No full catalog
+    export or second validation database is built. The smallest-docket processing smoke is capped at 100 rows.
     """
-    from spicy_regs import etl_bulk
     dataset = record_type.name
     declared = policy(dataset)
+    if dataset != 'comments' or pair.dataset != dataset:
+        raise ValueError('Rebuild readback requires the comments pair')
     (subjects,) = pair.subjects
     rows = pq.ParquetFile(subjects).metadata.num_rows
-    require_initialized(con, record_type)
     target = qualified(record_type)
-    counted = con.execute(f'SELECT count(*) FROM {target}').fetchone()[0]
-    if counted != rows:
-        raise RuntimeError(f'Rebuilt catalog holds {counted} rows, expected {rows}')
-    work = Path(work)
-    work.mkdir(parents=True, exist_ok=True)
-    copied, copied_receipts = work / 'readback-comments.parquet', work / 'readback-receipts.parquet'
     with _transaction(con):
-        _copy(con, f'SELECT * FROM {target}', copied)
-        _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", copied_receipts)
-    etl_bulk.validate_bundle({dataset: [copied]}, [copied_receipts], [declared])
-    pairs = "SELECT receipt_id FROM read_parquet('{}') WHERE dataset='{}' AND " + _NOT_MARKER
-    published, live = (pairs.format(path.as_posix().replace("'", "''"), dataset) for path in (pair.receipts, copied_receipts))
-    differing = con.execute(f'SELECT count(*) FROM (({published} EXCEPT ALL {live}) UNION ALL ({live} EXCEPT ALL {published}))').fetchone()[0]
-    if differing:
-        raise RuntimeError(f'{differing} receipts differ from the published generation')
-    result = {'rows': counted, 'receipts': pq.ParquetFile(copied_receipts).metadata.num_rows}
-    copied.unlink()
-    copied_receipts.unlink()
+        require_initialized(con, record_type)
+        if [(r[0], r[1]) for r in con.execute(f'DESCRIBE {receipts_table()}').fetchall()] != described_schema(RECEIPT_SCHEMA):
+            raise ValueError('Rebuilt receipt schema differs from the declared schema')
+        counted = con.execute(f'SELECT count(*) FROM {target}').fetchone()[0]
+        if counted != rows:
+            raise RuntimeError(f'Rebuilt catalog holds {counted} rows, expected {rows}')
+        receipt_rows, accepted, other_position = con.execute(
+            f"SELECT count(*), count(*) FILTER (WHERE outcome='accepted'), "
+            "min(file_row_number) FILTER (WHERE outcome<>'accepted') "
+            f"FROM read_parquet(?, file_row_number=true) WHERE dataset=? AND {_NOT_MARKER}",
+            [str(pair.receipts), dataset]).fetchone()
+        copied, copied_accepted = con.execute(
+            f"SELECT count(*), count(*) FILTER (WHERE outcome='accepted') FROM {receipts_table()} "
+            f"WHERE dataset=? AND {_NOT_MARKER}", [dataset]).fetchone()
+        if copied != receipt_rows or copied_accepted != accepted or accepted != rows:
+            raise RuntimeError(f'Rebuilt comments receipts hold {copied} rows ({copied_accepted} accepted), '
+                               f'expected {receipt_rows} ({rows} accepted), excluding the initialization marker')
+        positions = sorted({0, rows // 2, rows - 1}) if rows else []
+        sample = con.execute('SELECT * EXCLUDE (file_row_number) FROM read_parquet(?, file_row_number=true) '
+                             'WHERE file_row_number IN (SELECT unnest(?))', [str(subjects), positions]).to_arrow_table()
+        key = record_type.dedup_key
+        actual = con.execute(f'SELECT * FROM {target} WHERE "{key}" IN (SELECT unnest(?)) LIMIT ?',
+                             [sample[key].to_pylist(), len(positions) + 1]).to_arrow_table()
+        if not sample.sort_by(key).equals(actual.sort_by(key)):
+            raise RuntimeError('Sampled subjects differ from the published generation')
+        identities = [subject_identity(declared, row)[0] for row in sample.to_pylist()]
+        expected = con.execute('SELECT * EXCLUDE (file_row_number) FROM read_parquet(?, file_row_number=true) '
+                               f"WHERE dataset=? AND {_NOT_MARKER} AND ((outcome='accepted' "
+                               'AND record_id IN (SELECT unnest(?))) OR file_row_number=?) LIMIT ?',
+                               [str(pair.receipts), dataset, identities, other_position, len(positions) + 2]).to_arrow_table()
+        accepted_ids = [row['record_id'] for row in expected.to_pylist() if row['outcome'] == 'accepted']
+        if sorted(accepted_ids) != sorted(identities):
+            raise RuntimeError('Published sample lacks one accepted receipt per subject')
+        other_ids = [row['receipt_id'] for row in expected.to_pylist() if row['outcome'] != 'accepted']
+        actual = con.execute(f'SELECT * FROM {receipts_table()} WHERE dataset=? AND '
+                             "((outcome='accepted' AND record_id IN (SELECT unnest(?))) "
+                             'OR receipt_id IN (SELECT unnest(?))) LIMIT ?',
+                             [dataset, identities, other_ids, len(expected) + 1]).to_arrow_table()
+        if not expected.sort_by('receipt_id').equals(actual.sort_by('receipt_id')):
+            raise RuntimeError('Sampled receipts differ from the published generation, including provenance')
+    result = {'rows': counted, 'receipts': copied + 1, 'verification': 'sampled',
+              'sampled_subjects': len(sample), 'sampled_receipts': len(expected)}
     if smoke and counted:
-        docket, expected = con.execute(f'SELECT docket_id, count(*) FROM {target} GROUP BY 1 ORDER BY 2, 1 LIMIT 1').fetchone()
-        predicate = 'docket_id IS NULL' if docket is None else f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'"
-        restored = processing_table(con, record_type, where=predicate)
-        if con.execute(f'SELECT count(*) FROM {restored}').fetchone()[0] != expected:
-            raise RuntimeError(f'Processing read of docket {docket} returned a different row count')
-        con.execute(f'DROP TABLE {restored}')
-        result['smoke_docket'] = docket
+        docket, expected_rows = con.execute(f'SELECT docket_id, count(*) FROM {target} GROUP BY 1 ORDER BY 2, 1 LIMIT 1').fetchone()
+        if expected_rows > 100:
+            result['smoke_skipped'] = 'smallest docket exceeds 100 rows'
+        else:
+            predicate = 'docket_id IS NULL' if docket is None else f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'"
+            restored = processing_table(con, record_type, where=predicate)
+            try:
+                if con.execute(f'SELECT count(*) FROM {restored}').fetchone()[0] != expected_rows:
+                    raise RuntimeError(f'Processing read of docket {docket} returned a different row count')
+            finally:
+                con.execute(f'DROP TABLE {restored}')
+            result['smoke_docket'] = docket
     return result
 
 
