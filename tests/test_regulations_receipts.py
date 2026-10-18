@@ -280,9 +280,16 @@ def test_correction_keeps_current_failures_and_resolves_only_prior_refusals(tmp_
     [held] = [r for r in pq.read_table(prior.receipts).to_pylist() if r["outcome"] == "accepted"]
     assert held in pq.read_table(receipts).to_pylist()
 
+    unrelated = write(tmp_path, "documents", [{"document_id": "other", "title": "unrelated correction"}],
+                      generation="g4", label="unrelated")
+    next_subject, next_receipts = correct_receipted_dataset(corrected, unrelated, tmp_path / "untouched", generation_id="g5")
+    assert refused(next_receipts) == expected
+    assert held in pq.read_table(next_receipts).to_pylist()
+
+    untouched = ReceiptInput("documents", (next_subject,), next_receipts, "g5")
     successful = write(tmp_path, "documents", [{"document_id": "held", "title": "corrected"}],
-                       generation="g4", label="successful")
-    _, following = correct_receipted_dataset(corrected, successful, tmp_path / "following", generation_id="g5")
+                       generation="g6", label="successful")
+    _, following = correct_receipted_dataset(untouched, successful, tmp_path / "following", generation_id="g7")
     assert refused(following) == {key: value for key, value in expected.items() if key != "held"}
 
 

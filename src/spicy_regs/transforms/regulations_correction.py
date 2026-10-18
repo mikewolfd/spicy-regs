@@ -146,5 +146,5 @@ def correct_receipted_dataset(prior, fresh, destination, *, generation_id: str):
             # witnessed; fresh failures are current attempts, not old history
             # that an unchanged held subject could incorrectly resolve.
             return write_records(dataset, records(), destination, prior_receipts=[prior.receipts],
-                                 additional_failures=fresh_failures())
+                                 additional_failures=fresh_failures(), resolution_receipts=fresh.receipts)
         return write_records(dataset, records(), destination, prior_receipts=[prior.receipts, fresh.receipts])

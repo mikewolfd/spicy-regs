@@ -76,7 +76,7 @@ def refusal_identity(dataset):
     return RefusalIdentity(IDENTITIES[dataset], "raw_conversion_inputs")
 
 
-def carry_regulatory_receipts(dataset, receipts, priors):
+def carry_regulatory_receipts(dataset, receipts, priors, *, resolution_receipts: Path | None = None):
     """Carry a selected dataset's immutable history; keep other family receipts outside this pair."""
     from spicy_regs import etl_bulk
     from spicy_regs.receipt_history import carry_receipt_history
@@ -88,7 +88,8 @@ def carry_regulatory_receipts(dataset, receipts, priors):
             scoped = [select_receipts(path, work / f'prior-{i}.parquet', dataset=dataset)
                       for i, path in enumerate(priors)]
             carried = carry_receipt_history(receipts, scoped, work / 'carried.parquet',
-                                           refusal_identities={dataset: refusal_identity(dataset)})
+                                           refusal_identities={dataset: refusal_identity(dataset)},
+                                           resolution_receipts=resolution_receipts)
             carried.replace(receipts)
     except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError) as error:
         raise etl_bulk.bulk_failure('Regulatory receipt carry failed', error) from error
@@ -348,6 +349,7 @@ def write_records(
     observation_context: ReceiptContext | None = None,
     prior_receipts: Sequence[Path] = (),
     additional_failures: Iterable[dict] = (),
+    resolution_receipts: Path | None = None,
     validate: bool = True,
 ) -> tuple[Path, Path]:
     """Write one dataset and preserve malformed-input attempts without subjects.
@@ -357,6 +359,8 @@ def write_records(
     rows require a stable subject identity and exactly one matching receipt.
     Already qualified current failed attempts can follow the mapped attempts
     through ``additional_failures``; they are not prior history to resolve.
+    ``resolution_receipts`` restricts historical refusal resolution to records
+    with accepted attempts in that qualified input.
     """
     declared = policy(dataset)
     carry = dataset in CARRY_DATASETS and bool(prior_receipts)
@@ -410,7 +414,8 @@ def write_records(
             if carry:
                 from rulespec_artifacts import publish_directory_no_replace
                 from spicy_regs.etl_receipts import validate_receipt_bundle
-                carry_regulatory_receipts(dataset, receipts, prior_receipts)
+                carry_regulatory_receipts(dataset, receipts, prior_receipts,
+                                          resolution_receipts=resolution_receipts)
                 if validate:
                     validate_receipt_bundle({dataset: [subject]}, [receipts], [declared])
                 publish_directory_no_replace(target, destination)
