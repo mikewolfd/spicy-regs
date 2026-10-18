@@ -471,7 +471,8 @@ def _literal(text: str) -> str:
 def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
     """SQL text equal to ``exact_json`` of ``expression``'s value: the tagged encoding with keys in sorted order.
 
-    Covers strings, integers, booleans, date32 in Python's date range, fixed-point decimal128 scales 0 through 6,
+    Covers strings, integers, booleans, date32 in Python's date range, fixed-point decimal128 scales 0 through 6
+    and decimal128(38,18) values whose absolute value is at least 0.000001,
     timestamp[us, UTC] in years 1000 through 9998, finite normal float32/float64 (zero included), and structs and
     lists of them whose DuckDB text equals Python's. A value this spells only as :data:`_ROUTE` (a timestamp outside
     those years, a subnormal, infinite or NaN float) matches :func:`needs_reference_sql`, so its row goes to the row
@@ -503,14 +504,18 @@ def exact_json_sql(expression: str, dtype: pa.DataType) -> str:
             f"THEN '[\"date\",' || CAST(to_json({text}) AS VARCHAR) || ']' "
             "ELSE error('date32 outside Python date range') END"
         )
-    elif pa.types.is_decimal128(dtype) and 0 <= dtype.scale <= 6:
+    elif pa.types.is_decimal128(dtype) and (0 <= dtype.scale <= 6 or (dtype.precision, dtype.scale) == (38, 18)):
         # Arrow's Decimal and DuckDB both retain fixed-point spelling at these
-        # scales. Higher scales can use Python's exponent spelling and remain
-        # with the reference validator until their exact encoding is proven.
+        # scales; the additional scorecard type needs the value guard below.
         # Widen precision without changing scale: DECIMAL(1,1) otherwise writes
         # '.0' in DuckDB while Arrow's Decimal spells it '0.0'.
         text = f"CAST(CAST({expression} AS DECIMAL(38,{dtype.scale})) AS VARCHAR)"
         body = f"'[\"decimal\",' || CAST(to_json({text}) AS VARCHAR) || ']'"
+        if dtype.scale == 18:
+            # Smaller values, including zero, use Decimal's exponent spelling.
+            # Keep those with the reference, including its context's E/e choice.
+            body = (f"CASE WHEN abs({expression}) >= CAST('0.000001' AS DECIMAL(38,18)) "
+                    f"THEN {body} ELSE {_literal(_ROUTE)} END")
     elif pa.types.is_timestamp(dtype) and dtype.unit == "us" and dtype.tz == "UTC":
         # ``datetime.isoformat()``: seconds always, microseconds only when nonzero, then the offset. Years outside
         # 1000-9998 are left to the row functions (``%Y`` is not four digits there, and Python's range ends at 9999).
