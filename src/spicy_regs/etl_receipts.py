@@ -460,7 +460,7 @@ def combine_receipts(paths: Sequence[Path], destination: Path) -> Path:
                     for batch in parquet.iter_batches(batch_size=_COMBINE_BATCH):
                         checkpoint()
                         batch.validate(full=True)
-                        writer.write_batch(batch)
+                        writer.write_table(pa.Table.from_batches([batch]))
         temporary.replace(destination)
     return destination
 
