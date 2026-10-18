@@ -525,7 +525,7 @@ def test_a_refused_pointer_write_reports_the_state_it_left(tmp_path, monkeypatch
     assert "REFUSED: cfr-sections: PublicationError: Refusing to shrink" in report and f"STATE: {conversion.NOTHING_PUBLISHED}" in report
 
 
-@pytest.mark.parametrize("call", [1, 3], ids=["writer-validation", "generation-admission"])
+@pytest.mark.parametrize("call", [1, 2], ids=["writer-validation", "generation-admission"])
 @pytest.mark.parametrize(
     "failure, code, report",
     [

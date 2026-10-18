@@ -140,13 +140,12 @@ def sample_writers(source: Path, output: Path, *, dataset: str, generation_id: s
         compare_files(expected, actual)
     from spicy_regs.congress_receipts import CongressInput
     prior = CongressInput(row[0], row[1], generation_id)
-    reference = current_row_writer(sample, output/'sample-row-prior', dataset=dataset,
-                                   generation_id=generation_id+'-next', prior=prior, bulk=False)
+    # The row writer inherits history; the batch writer carries it (unchanged source: every prior receipt verbatim).
     inherited = write_congress_dataset(sample, output/'sample-bulk-prior', dataset=dataset,
                                        generation_id=generation_id+'-next', prior=prior)
-    for expected, actual in zip(reference, inherited):
-        assert expected is not None and actual is not None
-        compare_files(expected, actual)
+    assert inherited[0] is not None and row[0] is not None
+    compare_files(row[0], inherited[0])
+    compare_files(row[1], inherited[1])
     return {'sampleRows': count, 'bound': 20000, 'strata': ['Congress','chamber','accepted/rejected shape','reference route']}
 
 def main():
@@ -206,7 +205,7 @@ def main():
                       receiptBytes=prior_receipts.stat().st_size, subjectRows=compare_files(subjects, prior_subjects))
     with measured(log, 'unchanged-history-full') as record:
         carried = carry_receipt_history(receipts, [prior_receipts], args.output/'carried-receipts.parquet')
-        record.update(rows=compare_files(receipts, carried, processing_only=True), currentGeneration=args.generation,
+        record.update(rows=compare_files(prior_receipts, carried), currentGeneration=args.generation,
                       selectedPriorGeneration=prior_generation, currentReceiptSha256=_digest(receipts),
                       selectedPriorReceiptSha256=_digest(prior_receipts), carriedReceiptSha256=_digest(carried),
                       historyQueryThreads=4, historyQueryMemory='1GB', historyQuerySpill='32GB')
