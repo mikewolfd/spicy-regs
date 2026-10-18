@@ -440,3 +440,29 @@ def test_processing_change_with_unchanged_subject_receives_fresh_evidence(tmp_pa
     assert first["processing_json"] != second["processing_json"]
     assert second["generation_id"] == "two"
     assert decode_exact_json(second["diagnostic_json"])["prior_receipt"]["receipt_id"] == first["receipt_id"]
+
+
+@pytest.mark.parametrize("force_fallback", [False, True])
+def test_reference_restore_loads_and_admits_receipts_once(tmp_path, monkeypatch, force_fallback):
+    from contextlib import contextmanager
+    from spicy_regs import etl_bulk, etl_receipts
+
+    sources = [retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0")]),
+               retained(tmp_path / "source", "laws", [row("laws", congress="119", law_type="public", number="1")])]
+    write_legislative_outputs(sources, tmp_path / "bundle", generation_id="g")
+    calls = []
+    original = etl_receipts._load_receipts
+    def load(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(etl_receipts, "_load_receipts", load)
+    if force_fallback:
+        @contextmanager
+        def unproven(*args, **kwargs):
+            raise etl_bulk.NotBulkEligible("forced reference admission")
+            yield
+        monkeypatch.setattr(etl_bulk, "_validated_bundle", unproven)
+    restored = restore_prior(tmp_path / "bundle", tmp_path / "prior", bulk=force_fallback)
+    assert len(calls) == 1
+    for source in sources:
+        assert pq.read_table(source).equals(pq.read_table(restored[source.stem]), check_metadata=True)

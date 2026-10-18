@@ -27,7 +27,6 @@ from spicy_regs.etl_receipts import (
     ReceiptContext,
     combine_receipts,
     failure_receipt,
-    read_with_receipts,
     select_receipts,
     split_record,
     validate_receipt_bundle,
@@ -454,8 +453,19 @@ def restore_prior(bundle: Path, destination: Path, *, bulk: bool = True) -> dict
             except etl_bulk.NotBulkEligible as error:
                 etl_bulk.log_row_fallback("legislative-restore", error, dataset=",".join(manifest["datasets"]))
                 etl_bulk.reference_fallback(error)
+        row_con = None
         if con is None:
-            validate_receipt_bundle(subject_paths, [receipts], policies, generation_id=generation, bulk=False)
+            import sqlite3
+            from spicy_regs import etl_receipts
+
+            # Keep the reference reader's admitted index for replay rather than
+            # loading and validating the same receipts again for each dataset.
+            row_con = sqlite3.connect(str(selected / "reference.db"))
+            stack.callback(row_con.close)
+            registered = etl_receipts._bundle_policies(subject_paths, [receipts], policies)
+            etl_receipts._load_receipts(row_con, [receipts], registered, generation)
+            for _ in etl_receipts._match_subjects(row_con, subject_paths, registered):
+                pass
         starts, offset = {}, 0
         for name, paths in subject_paths.items():
             starts[name] = offset
@@ -482,7 +492,10 @@ def restore_prior(bundle: Path, destination: Path, *, bulk: bool = True) -> dict
                 elif con is not None:
                     records = etl_bulk._replay_admitted_subjects(con, subject_paths[dataset], dataset_policy, start=starts[dataset])
                 else:
-                    records = read_with_receipts(subject_paths[dataset], [dataset_receipts], dataset_policy, generation_id=generation, bulk=False)
+                    assert row_con is not None
+                    row_con.execute("UPDATE receipts SET used=0 WHERE dataset=?", [dataset])
+                    records = (subject | processing for subject, processing in etl_receipts._match_subjects(
+                        row_con, {dataset: subject_paths[dataset]}, {dataset: dataset_policy}))
                 expected = retained_source_rows(dataset, dataset_policy, records)
             expected = iter(expected)
             for state in states:
