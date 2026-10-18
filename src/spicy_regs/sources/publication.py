@@ -1100,6 +1100,19 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     )
 
 
+def _generation_scoped_tables() -> frozenset[str]:
+    """Tables that describe only the generation holding them: its producer members, their footers and conversions.
+
+    Their size follows the writer that produced the members, not the amount of data: DuckDB's merge writes no
+    ``ARROW:schema`` footer, a pyarrow writer writes one the size of the schema's field metadata (49,720 bytes for
+    ``document_citations``), and the recorded footers halved this table on 2026-10-14 (ratio 0.461) with every
+    row and checkpoint intact. A byte-size guard against the previous generation cannot see data loss in them.
+    """
+    from spicy_regs.navigation_read_outcomes import FILE_TABLES
+
+    return frozenset(name + ".parquet" for name in FILE_TABLES.values())
+
+
 def _stage_verified_generation(
     artifact, source, *, upload_member, client, bucket: str, index: dict,
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
@@ -1131,7 +1144,7 @@ def _stage_verified_generation(
         if missing := _partitions(prior) - _partitions(table):
             raise PublicationError(f"{key} lacks partitions its prior generation holds: "
                                    + ", ".join("/".join(f"{c}={v}" for c, v in p) for p in sorted(missing)))
-        if key not in converted | _verified_replacement_tables:
+        if key not in converted | _verified_replacement_tables | _generation_scoped_tables():
             old_size = prior["byteSize"] if prior else _get_remote_size(client, bucket, key)
             _assert_upload_safe(table["byteSize"], old_size, key)
     old_family = index["families"].get(family)

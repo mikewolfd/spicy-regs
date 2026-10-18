@@ -732,3 +732,24 @@ def test_inherited_evidence_journal_requires_current_completed_evidence(tmp_path
     with pytest.raises(pub.PublicationError, match=message):
         pub.load_evidence_journal(base, pin, predating_ok=predating_ok)
     assert requested == [f"{prefix}/artifact.json"]
+
+
+def test_a_generation_scoped_outcome_table_may_shrink_but_a_data_table_may_not(tmp_path, monkeypatch):
+    """print_citations_document_file_outcomes recorded producer footers: 60,464 bytes became 25,137 with no row lost.
+
+    Its size follows the writer that made the members (an ``ARROW:schema`` footer per member), so the byte-size guard
+    exempts the per-generation file-outcome tables and nothing else.
+    """
+    from spicy_regs import etl_policy_registry
+
+    monkeypatch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
+    outcomes = "print_citations_document_file_outcomes.parquet"
+    directory, _ = build(tmp_path, keys=("a.parquet", outcomes))
+    store = Store()
+    store.objects[outcomes] = b"x" * 100_000
+    publish(store, directory)
+    other, _ = build(tmp_path, "two", keys=("a.parquet", "b.parquet"))
+    store = Store()
+    store.objects["b.parquet"] = b"x" * 100_000
+    with pytest.raises(RuntimeError, match="shrink"):
+        publish(store, other)
