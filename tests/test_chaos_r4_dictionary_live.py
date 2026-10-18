@@ -22,6 +22,9 @@ from spicy_regs.sources import publication
 
 pytestmark = pytest.mark.integration
 
+#: How long a newly enacted public law may lack both enactment dates (capture lag of the PLAW and of the bill read).
+PENDING_DAYS = 30
+
 
 @pytest.fixture(scope="module")
 def urls() -> dict[str, list[str]]:
@@ -48,8 +51,12 @@ def test_w3_the_enactment_date_is_approved_date_or_signed_date_and_the_latest_ac
 
     Two publisher records are compared: `approved_date` is the PLAW USLM file's (GovInfo), `signed_date` the
     coded became-law action of the bill's BILLSTATUS document. `latest_action_date`, the law list route's latest
-    action, may follow enactment (119-public-68) but never precede it. Cannot see: a law whose PLAW is uncaptured
-    and whose bill has no coded became-law action, where neither date exists.
+    action, may follow enactment (119-public-68) but never precede it. A law enacted in the last ``PENDING_DAYS``
+    days may have neither date yet: GovInfo's PLAW lags the law list, and the bill's became-law action arrives with
+    the bill family's next BILLSTATUS read (2026-10-18: four laws 119-119, 119-122, 119-123 and 119-124, latest
+    actions 2026-10-07 to 2026-10-15, the bill family's last run being 2026-10-07). An older public law without
+    either date is the failure. Cannot see: a law whose PLAW stays uncaptured and whose bill has no coded
+    became-law action, where neither date exists, until it ages past the window.
     """
     # The sentence is the contract's own text for the column since the 0.54.0 build (the interim note that carried
     # it in data_quality left with that build).
@@ -58,7 +65,8 @@ def test_w3_the_enactment_date_is_approved_date_or_signed_date_and_the_latest_ac
     disagree, undated_public, earlier = con.execute(f"""
         SELECT count(*) FILTER (WHERE l.approved_date IS NOT NULL AND b.signed_date IS NOT NULL
                                 AND l.approved_date <> b.signed_date),
-               count(*) FILTER (WHERE l.law_type = 'public' AND coalesce(l.approved_date, b.signed_date) IS NULL),
+               count(*) FILTER (WHERE l.law_type = 'public' AND coalesce(l.approved_date, b.signed_date) IS NULL
+                                AND try_cast(l.latest_action_date AS DATE) < current_date - INTERVAL {PENDING_DAYS} DAY),
                count(*) FILTER (WHERE l.approved_date IS NOT NULL AND l.latest_action_date < l.approved_date)
         FROM {_scan(urls, 'laws')} l LEFT JOIN {_scan(urls, 'congress_bills')} b USING (bill_id)""").fetchone()
     assert (disagree, undated_public, earlier) == (0, 0, 0)
