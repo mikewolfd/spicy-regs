@@ -13,6 +13,8 @@ from uuid import uuid4
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from spicy_regs import court_bulk, etl_bulk
+from spicy_regs.receipt_history import carry_receipt_history
 from spicy_regs.court_subjects import (
     IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row,
 )
@@ -61,71 +63,40 @@ def _pdf_failure(row: Mapping) -> str | None:
     return None if status == 'ok' and isinstance(row.get('text_content'), str) else status or 'missing_body'
 
 
-def write_court_rows(
-    dataset: str, rows: Iterable[Mapping], output_dir: Path, *, witnesses: Sequence[Mapping],
-    generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
-    diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
-    attempt_prefix: str = "row", prior_receipts: Path | None = None,
-) -> Path:
-    """Expose a complete subject/receipt pair only after validating both.
+def _refusal(policy, context, error, raw):
+    failed = replace(context, diagnostics={**context.diagnostics, 'error_type': type(error).__name__, 'error': str(error)})
+    return failure_receipt(policy, failed, outcome='refused', raw_fields={'raw_source_record': dict(raw)})
 
-    The public local filename points into the immutable shared-writer bundle.
-    Replacing that one link keeps a previous subject and its receipts together
-    on a partial source read, failed conversion, or interrupted retry.
+
+_REFUSED = (ValueError, TypeError, KeyError, pa.ArrowException)
+
+
+def _mapped(dataset: str, raw: Mapping) -> dict:
+    """The mapped row; a refused one raises ``_REFUSED``."""
+    mapped = normalize_court_row(dataset, raw)
+    reason = _pdf_failure(mapped) if dataset == 'court_opinion_pdf_extractions' else None
+    if reason:
+        raise ValueError(f'Opinion body unavailable: {reason}')
+    return mapped
+
+
+def _expose(dataset: str, output_dir: Path, generation_id: str, witnesses: Sequence[Mapping], build) -> Path:
+    """Build a bundle with ``build(bundle) -> subject path``, then point the public name at it.
+
+    The public local filename points into the immutable shared-writer bundle. Replacing that one link keeps a
+    previous subject and its receipts together on a partial source read, failed conversion, or interrupted retry.
     """
-    policy = POLICIES[dataset]
-    generation_id = generation_id or uuid4().hex
     output_dir.mkdir(parents=True, exist_ok=True)
     bundle = output_dir / '.court-etl' / uuid4().hex
     bundle.parent.mkdir(exist_ok=True)
-    with ReceiptLineage([] if prior_receipts is None else [prior_receipts], dataset=dataset) as lineage, \
-            TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
-        failures_path = Path(temporary) / 'etl_receipts.parquet'
-        with pq.ParquetWriter(failures_path, RECEIPT_SCHEMA, compression='zstd') as writer:
-            failures = []
-
-            def records():
-                for ordinal, raw in enumerate(rows):
-                    context = ReceiptContext(generation_id, f'{dataset}:{attempt_prefix}:{ordinal}', processor,
-                        [dict(w) for w in witnesses],
-                        diagnostics or {})
-                    try:
-                        mapped = normalize_court_row(dataset, raw)
-                        reason = _pdf_failure(mapped) if dataset == 'court_opinion_pdf_extractions' else None
-                        if reason:
-                            raise ValueError(f'Opinion body unavailable: {reason}')
-                        # Validate before inheriting evidence or replacing a subject.
-                        split_record(policy, mapped, context)
-                        context = lineage.inherit(context, policy, mapped)
-                    except (ValueError, TypeError, KeyError, pa.ArrowException) as error:
-                        failed = replace(context, diagnostics={**context.diagnostics,
-                            'error_type': type(error).__name__, 'error': str(error)})
-                        failures.append(failure_receipt(policy, failed, outcome='refused',
-                                                        raw_fields={'raw_source_record': dict(raw)}))
-                        if len(failures) >= 2000:
-                            writer.write_table(pa.Table.from_pylist(failures, schema=RECEIPT_SCHEMA))
-                            failures.clear()
-                    else:
-                        yield mapped, context
-                if failures:
-                    writer.write_table(pa.Table.from_pylist(failures, schema=RECEIPT_SCHEMA))
-                    failures.clear()
-                if refused_receipts is not None:
-                    for receipt in parquet_rows(refused_receipts):
-                        if receipt['dataset'] != dataset or receipt['generation_id'] != generation_id:
-                            raise ValueError('Rejected updates differ from the selected court build')
-                        if receipt['outcome'] == 'refused':
-                            writer.write_table(pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA))
-                writer.close()
-
-            try:
-                subject, _ = write_dataset(records(), bundle, policy, failures=parquet_rows(failures_path))
-            except Exception as error:
-                try:
-                    record_source_failure(dataset, output_dir, witnesses=witnesses, error=error)
-                except Exception as receipt_error:
-                    error.add_note(f'Failed to retain source failure receipt: {receipt_error}')
-                raise
+    try:
+        subject = build(bundle)
+    except Exception as error:
+        try:
+            record_source_failure(dataset, output_dir, witnesses=witnesses, error=error)
+        except Exception as receipt_error:
+            error.add_note(f'Failed to retain source failure receipt: {receipt_error}')
+        raise
     assert subject is not None
     (bundle / 'court-build.json').write_text(json.dumps({'generation_id': generation_id, 'dataset': dataset}) + '\n')
     public = output_dir / (dataset + '.parquet')
@@ -139,12 +110,139 @@ def write_court_rows(
     return public.resolve()
 
 
+def _check_refused(receipt: Mapping, dataset: str, generation_id: str) -> bool:
+    if receipt['dataset'] != dataset or receipt['generation_id'] != generation_id:
+        raise ValueError('Rejected updates differ from the selected court build')
+    return receipt['outcome'] == 'refused'
+
+
+def write_court_rows(
+    dataset: str, rows: Iterable[Mapping], output_dir: Path, *, witnesses: Sequence[Mapping],
+    generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
+    diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
+    attempt_prefix: str = "row", prior_receipts: Path | None = None,
+) -> Path:
+    """Expose a complete subject/receipt pair only after validating both."""
+    policy = POLICIES[dataset]
+    generation_id = generation_id or uuid4().hex
+
+    def build(bundle: Path) -> Path:
+        with ReceiptLineage([] if prior_receipts is None else [prior_receipts], dataset=dataset) as lineage, \
+                TemporaryDirectory(prefix='.court-failures-', dir=output_dir) as temporary:
+            failures_path = Path(temporary) / 'etl_receipts.parquet'
+            with pq.ParquetWriter(failures_path, RECEIPT_SCHEMA, compression='zstd') as writer:
+                failures = []
+
+                def records():
+                    for ordinal, raw in enumerate(rows):
+                        context = ReceiptContext(generation_id, f'{dataset}:{attempt_prefix}:{ordinal}', processor,
+                            [dict(w) for w in witnesses],
+                            diagnostics or {})
+                        try:
+                            # Validate before inheriting evidence or replacing a subject.
+                            mapped = _mapped(dataset, raw)
+                            split_record(policy, mapped, context)
+                            context = lineage.inherit(context, policy, mapped)
+                        except _REFUSED as error:
+                            failures.append(_refusal(policy, context, error, raw))
+                            if len(failures) >= 2000:
+                                writer.write_table(pa.Table.from_pylist(failures, schema=RECEIPT_SCHEMA))
+                                failures.clear()
+                        else:
+                            yield mapped, context
+                    if failures:
+                        writer.write_table(pa.Table.from_pylist(failures, schema=RECEIPT_SCHEMA))
+                        failures.clear()
+                    if refused_receipts is not None:
+                        for receipt in parquet_rows(refused_receipts):
+                            if _check_refused(receipt, dataset, generation_id):
+                                writer.write_table(pa.Table.from_pylist([receipt], schema=RECEIPT_SCHEMA))
+                    writer.close()
+
+                subject, _ = write_dataset(records(), bundle, policy, failures=parquet_rows(failures_path))
+        assert subject is not None
+        return subject
+
+    return _expose(dataset, output_dir, generation_id, witnesses, build)
+
+
+def write_court_bulk(
+    dataset: str, source: Path, output_dir: Path, *, witnesses: Sequence[Mapping],
+    generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
+    diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
+    attempt_prefix: str = "row", prior_receipts: Path | None = None,
+) -> Path:
+    """``write_court_rows`` over a staged Parquet source, a column at a time (``court_bulk``).
+
+    Unchanged rows keep their prior receipt (``carry_receipt_history``, as ``write_dataset(prior_receipts=)``).
+    No receipt is validated here: the generation's admission is the one validation.
+    """
+    from rulespec_artifacts import publish_directory_no_replace
+
+    policy = POLICIES[dataset]
+    generation_id = generation_id or uuid4().hex
+
+    def attempt(raw: Mapping, ordinal: int):
+        context = ReceiptContext(generation_id, f'{dataset}:{attempt_prefix}:{ordinal}', processor,
+                                 [dict(w) for w in witnesses], diagnostics or {})
+        try:
+            return split_record(policy, _mapped(dataset, raw), context)
+        except _REFUSED as error:
+            return None, _refusal(policy, context, error, raw)
+
+    def build(bundle: Path) -> Path:
+        with TemporaryDirectory(prefix='.court-bulk-', dir=bundle.parent) as temporary:
+            stage = Path(temporary) / 'bundle'
+            stage.mkdir()
+            subject_path, receipt_path = stage / (dataset + '.parquet'), stage / 'etl_receipts.parquet'
+            court_bulk.write_bundle(dataset, source, subject_path, receipt_path, policy=policy,
+                generation_id=generation_id, processor=processor, witnesses=witnesses,
+                diagnostics=diagnostics or {}, attempt_prefix=attempt_prefix, attempt=attempt)
+            if prior_receipts is not None:
+                carry_receipt_history(receipt_path, [prior_receipts], receipt_path)
+            if refused_receipts is not None:
+                _append_refused(receipt_path, refused_receipts, dataset, generation_id)
+            publish_directory_no_replace(stage, bundle)
+        return bundle / subject_path.name
+
+    return _expose(dataset, output_dir, generation_id, witnesses, build)
+
+
+def _append_refused(receipt_path: Path, refused_receipts: Path, dataset: str, generation_id: str) -> None:
+    """Refusals of rejected updates follow every other receipt, as the row writer orders them."""
+    refused = [receipt for receipt in parquet_rows(refused_receipts) if _check_refused(receipt, dataset, generation_id)]
+    if not refused:
+        return
+    with TemporaryDirectory(dir=receipt_path.parent) as scratch:
+        combined = Path(scratch) / 'etl_receipts.parquet'
+        with pq.ParquetWriter(combined, RECEIPT_SCHEMA, compression='zstd') as writer, pq.ParquetFile(receipt_path) as written:
+            for batch in written.iter_batches():
+                writer.write_batch(batch)
+            writer.write_table(pa.Table.from_pylist(refused, schema=RECEIPT_SCHEMA))
+        combined.replace(receipt_path)
+
+
 def finish_court_output(dataset: str, staged: Path, output_dir: Path, *, witnesses=None,
                         generation_id: str | None = None, diagnostics: Mapping | None = None,
                         refused_receipts: Path | None = None, prior_receipts: Path | None = None) -> Path:
-    """Split a completed private mapper output; keep its bytes as retained evidence."""
+    """Split a completed private mapper output; keep its bytes as retained evidence.
+
+    The tables ``court_bulk`` maps go through it, a column at a time. Any other table is the row writer's, and
+    says so: a scheduled run (``bulk_limits(require_bulk=True)``) refuses a mappable table that cannot be bulk.
+    """
+    witnesses = witnesses or [file_witness(staged)]
+    schema = pq.read_schema(staged)
+    if court_bulk.eligible(dataset, schema):
+        return write_court_bulk(dataset, staged, output_dir, witnesses=witnesses, generation_id=generation_id,
+                                diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts)
+    reason = etl_bulk.NotBulkEligible(f'{dataset} has no court bulk mapping for this source schema')
+    if dataset in court_bulk.DATASETS:
+        etl_bulk.log_row_fallback('court write', reason, dataset=dataset, rows=pq.ParquetFile(staged).metadata.num_rows)
+    else:
+        from loguru import logger
+        logger.warning('court write route=row dataset={} reason={}', dataset, reason)
     return write_court_rows(dataset, parquet_rows(staged), output_dir,
-                            witnesses=witnesses or [file_witness(staged)], generation_id=generation_id,
+                            witnesses=witnesses, generation_id=generation_id,
                             diagnostics=diagnostics, refused_receipts=refused_receipts, prior_receipts=prior_receipts)
 
 
