@@ -24,6 +24,8 @@ pytestmark = pytest.mark.integration
 
 #: How long a newly enacted public law may lack both enactment dates (capture lag of the PLAW and of the bill read).
 PENDING_DAYS = 30
+#: A latest action that is missing or unreadable is of unknown age, so it counts as old: such a law is never excused.
+OLDER_THAN_WINDOW = f"NOT coalesce(try_cast(l.latest_action_date AS DATE) >= current_date - INTERVAL {PENDING_DAYS} DAY, false)"
 
 
 @pytest.fixture(scope="module")
@@ -66,7 +68,7 @@ def test_w3_the_enactment_date_is_approved_date_or_signed_date_and_the_latest_ac
         SELECT count(*) FILTER (WHERE l.approved_date IS NOT NULL AND b.signed_date IS NOT NULL
                                 AND l.approved_date <> b.signed_date),
                count(*) FILTER (WHERE l.law_type = 'public' AND coalesce(l.approved_date, b.signed_date) IS NULL
-                                AND try_cast(l.latest_action_date AS DATE) < current_date - INTERVAL {PENDING_DAYS} DAY),
+                                AND {OLDER_THAN_WINDOW}),
                count(*) FILTER (WHERE l.approved_date IS NOT NULL AND l.latest_action_date < l.approved_date)
         FROM {_scan(urls, 'laws')} l LEFT JOIN {_scan(urls, 'congress_bills')} b USING (bill_id)""").fetchone()
     assert (disagree, undated_public, earlier) == (0, 0, 0)
