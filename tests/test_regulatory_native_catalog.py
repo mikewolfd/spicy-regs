@@ -553,3 +553,28 @@ def test_fresh_batch_refusal_commits_no_partial_subjects(con, monkeypatch):
     assert con.execute(f"SELECT count(*) FROM {native.receipts_table()} WHERE outcome='accepted'").fetchone() == (0,)
     [refused] = con.execute(f"SELECT * FROM {native.receipts_table()} WHERE outcome='refused'").to_arrow_table().to_pylist()
     assert decode_exact_json(refused['processing_json'])['raw_source_record']['attachments_json'] == 'not-json'
+
+
+def test_an_initialization_marker_written_under_an_earlier_policy_version_still_qualifies(con):
+    """The live comments catalog was initialized under regulations-native-v1; the policy has been v2 since 2026-10-06."""
+    from spicy_regs.etl_receipts import ReceiptContext, observation_receipt, receipt_policies
+    from spicy_regs.transforms.regulations_receipts import policy
+
+    native.ensure_native(con, COMMENT)
+    current, earlier = receipt_policies(policy('comments'))[:2]
+    assert earlier.policy_version == 'regulations-native-v1' != current.policy_version
+    old = con.execute(f"SELECT generation_id, attempt_id, processor, witnesses FROM {native.receipts_table()}").fetchone()
+    context = ReceiptContext(old[0], old[1], old[2], old[3])
+    marker = observation_receipt(earlier, context, processing_fields={'input_metadata': {'catalog_initialized': True}})
+    con.execute(f"DELETE FROM {native.receipts_table()}")
+    con.register('marker', pl.DataFrame([marker]).to_arrow())
+    con.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM marker")
+    assert native.initialized(con, 'comments') is True
+    native.require_initialized(con, COMMENT)
+    # A marker of a version outside the lineage is still refused.
+    marker = observation_receipt(current, context, processing_fields={'input_metadata': {'catalog_initialized': False}})
+    con.execute(f"DELETE FROM {native.receipts_table()}")
+    con.register('bad', pl.DataFrame([marker]).to_arrow())
+    con.execute(f"INSERT INTO {native.receipts_table()} SELECT * FROM bad")
+    with pytest.raises(ValueError, match='differs from field policy'):
+        native.initialized(con, 'comments')
