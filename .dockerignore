@@ -5,6 +5,8 @@
 # Original dev/deploy hygiene
 .venv/
 node_modules/
+deploy/cloudflare/node_modules/
+image-output/
 .git/
 .github/
 output/
