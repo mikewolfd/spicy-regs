@@ -152,8 +152,9 @@ def test_native_merge_keeps_unanswered_refusals_and_resolves_only_successes(tmp_
     merged = _merge(tmp_path, prior, fresh, refusal_identity=RefusalIdentity(("id",), "raw"))
     assert pq.read_table(merged.receipts).to_pylist() == [*pq.read_table(fresh[1]).to_pylist(), refusals[1]]
     validate_receipt_bundle({"items": [merged.subjects]}, [merged.receipts], [POLICY])
-    empty = write_dataset([], tmp_path / "empty", POLICY, validate=False)
-    again = native_merge(POLICY, fresh=empty, prior=(merged.subjects, merged.receipts), order_by=("id",),
+    empty_subject, empty_receipts = write_dataset([], tmp_path / "empty", POLICY, validate=False)
+    assert empty_subject is not None
+    again = native_merge(POLICY, fresh=(empty_subject, empty_receipts), prior=(merged.subjects, merged.receipts), order_by=("id",),
                          subjects=tmp_path / "again-s.parquet", receipts=tmp_path / "again-r.parquet",
                          refusal_identity=RefusalIdentity(("id",), "raw"))
     assert pq.read_table(again.receipts).equals(pq.read_table(merged.receipts))
