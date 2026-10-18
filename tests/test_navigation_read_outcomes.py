@@ -291,7 +291,10 @@ def test_a_prior_in_a_shared_receipts_member_is_read_by_its_own_dataset_only(tmp
     shared = tmp_path / "shared-receipts.parquet"
     pq.write_table(pa.concat_tables([pq.read_table(written[name][1][0]) for name in names]).cast(RECEIPT_SCHEMA), shared)
     held = SelectedDataset("nominations_detail_reads", tuple(written[names[0]][0]), shared, "first")
+    before = set(tmp_path.rglob("*"))
     subjects, receipts = write_recorded_outcomes(None, tmp_path / "next", generation_id="next",
                                                  tables=[names[0]], priors={names[0]: held})
     [row] = read_with_receipts(subjects, receipts, POLICIES[names[0]], generation_id="next")
     assert (row["generation_id"], row["attempt_id"]) == ("first", "journal:0")
+    # The scoped receipts are scratch: nothing is left beside the output directory, only under it.
+    assert {path for path in set(tmp_path.rglob("*")) - before if "next" not in path.relative_to(tmp_path).parts} == set()

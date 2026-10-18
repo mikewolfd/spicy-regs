@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
@@ -350,20 +351,21 @@ def write_recorded_outcomes(journal, directory, *, generation_id, tables, priors
             prior_digest = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
         prior_policy = selected_subject_policy(POLICIES[name], selection.subjects)
         # The selected receipts are the family's one shared member: its rows for other datasets have no policy here.
-        scoped = select_receipts(selection.receipts, Path(directory).parent / f".{name}.scoped-receipts.parquet", dataset=name)
-        for recorded in read_with_receipts(selection.subjects, [scoped], prior_policy,
-                                            generation_id=selection.generation_id):
-            if name in (HOUSE_TABLE, DETAIL_TABLES["house_communications"]):
-                event = recorded["recorded_event"]
-                identity = event.get("source_identity") or event
-                identity = event | identity
-                recorded.update(_house_communication_key(identity))
-            context = ReceiptContext(generation_id,
-                "inherited:" + recorded["generation_id"] + ":" + recorded["attempt_id"],
-                "navigation-read-outcomes/1", [{"source_id": "selected-outcomes", "source_uri": None,
-                    "sha256": prior_digest,
-                    "locator": recorded["attempt_id"], "body_version": None}])
-            rows[name].append((recorded, context))
+        with TemporaryDirectory(prefix="outcomes-scoped-") as scratch:
+            scoped = select_receipts(selection.receipts, Path(scratch) / "receipts.parquet", dataset=name)
+            for recorded in read_with_receipts(selection.subjects, [scoped], prior_policy,
+                                                generation_id=selection.generation_id):
+                if name in (HOUSE_TABLE, DETAIL_TABLES["house_communications"]):
+                    event = recorded["recorded_event"]
+                    identity = event.get("source_identity") or event
+                    identity = event | identity
+                    recorded.update(_house_communication_key(identity))
+                context = ReceiptContext(generation_id,
+                    "inherited:" + recorded["generation_id"] + ":" + recorded["attempt_id"],
+                    "navigation-read-outcomes/1", [{"source_id": "selected-outcomes", "source_uri": None,
+                        "sha256": prior_digest,
+                        "locator": recorded["attempt_id"], "body_version": None}])
+                rows[name].append((recorded, context))
     digest = None
     if journal is not None and journal.exists():
         digest = "sha256:" + hashlib.sha256(journal.read_bytes()).hexdigest()
