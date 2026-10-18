@@ -50,7 +50,7 @@ def test_complete_composite_editions_match_row_authority_without_fallback(tmp_pa
     assert held.equals(pq.read_table(source), check_metadata=True)
     assert len(held) == 2 * repeated_numbers
     assert held['publication_date'].to_pylist() == [row['publication_date'] for row in rows]
-    assert regulations_bulk.DATASETS == frozenset({'dockets', 'documents'})
+    assert regulations_bulk.DATASETS == frozenset({'dockets', 'documents', *regulations_bulk.ATTRIBUTES})
     assert not regulations_bulk.eligible('federal_register', schema)
 
 

@@ -14,7 +14,6 @@ from hashlib import file_digest, sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from loguru import logger
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -45,7 +44,11 @@ from spicy_regs.transforms.regulations_shape import (
 # Datasets whose retained processing input restores through the private batch reader.
 RESTORE_DATASETS = frozenset({"dockets", "documents", "federal_register", "fr_docket_links"})
 #: Datasets whose restore keeps the captured source schema: the batch-restored ones and the typed attribute tables.
-SOURCE_SCHEMA_DATASETS = RESTORE_DATASETS | {"docket_attributes", "document_attributes"}
+ATTRIBUTE_DATASETS = frozenset({"comment_attributes", "docket_attributes", "document_attributes"})
+SOURCE_SCHEMA_DATASETS = RESTORE_DATASETS | ATTRIBUTE_DATASETS
+#: Datasets the private batch reader restores: the retained-input ones and the typed attribute tables.
+BATCH_RESTORE_DATASETS = RESTORE_DATASETS | ATTRIBUTE_DATASETS
+CARRY_DATASETS = frozenset({"dockets", "documents"}) | ATTRIBUTE_DATASETS
 
 NULLABLE_IDENTITIES = {
     "agency_lifecycle_stats": ("agency_code",),
@@ -66,6 +69,29 @@ def policy(dataset: str) -> DatasetPolicy:
         policy_version=("regulations-native-v2" if dataset in {"comment_periods", "lifecycle_events", "comments", "documents", "agenda_item_proceedings", "rule_targets", "proceedings", "regulatory_agenda_items"} else "regulations-native-v1"),
         nullable_identity_fields=NULLABLE_IDENTITIES.get(dataset, ()),
     )
+
+
+def refusal_identity(dataset):
+    from spicy_regs.receipt_history import RefusalIdentity
+    return RefusalIdentity(IDENTITIES[dataset], "raw_conversion_inputs")
+
+
+def carry_regulatory_receipts(dataset, receipts, priors):
+    """Carry a selected dataset's immutable history; keep other family receipts outside this pair."""
+    from spicy_regs import etl_bulk
+    from spicy_regs.receipt_history import carry_receipt_history
+    if not priors:
+        return
+    try:
+        with TemporaryDirectory(prefix='.regulatory-carry-', dir=receipts.parent) as temporary:
+            work = Path(temporary)
+            scoped = [select_receipts(path, work / f'prior-{i}.parquet', dataset=dataset)
+                      for i, path in enumerate(priors)]
+            carried = carry_receipt_history(receipts, scoped, work / 'carried.parquet',
+                                           refusal_identities={dataset: refusal_identity(dataset)})
+            carried.replace(receipts)
+    except (etl_bulk.duckdb.Error, pa.ArrowException, ValueError, TypeError, OverflowError) as error:
+        raise etl_bulk.bulk_failure('Regulatory receipt carry failed', error) from error
 
 
 @dataclass(frozen=True)
@@ -213,8 +239,8 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     """
     from spicy_regs.transforms.parquet_rows import write_rows
     processing_schema(selected.dataset, source_schema=source_schema)
-    if bulk and selected.dataset in RESTORE_DATASETS:
-        from spicy_regs import etl_bulk, regulations_bulk
+    from spicy_regs import etl_bulk, regulations_bulk
+    if bulk and selected.dataset in BATCH_RESTORE_DATASETS:
         if all(pq.read_schema(path).equals(subject_schema(selected.dataset)) for path in selected.subjects):
             try:
                 return regulations_bulk.materialize_internal(
@@ -222,7 +248,12 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
             except etl_bulk.NotBulkEligible as error:
                 etl_bulk.log_row_fallback("regulatory restore", error, dataset=selected.dataset)
         else:
-            logger.warning("regulatory restore route=row dataset={} reason=subject-schema-differs", selected.dataset)
+            etl_bulk.log_row_fallback("regulatory restore", etl_bulk.NotBulkEligible("subject-schema-differs"),
+                                      dataset=selected.dataset)
+    elif bulk:
+        etl_bulk.log_row_eligibility("regulatory restore", dataset=selected.dataset,
+                                    rows=sum(pq.ParquetFile(path).metadata.num_rows for path in selected.subjects),
+                                    reason="no bulk mapping")
 
     rows = iter(_qualified_rows(selected, scoped=scoped))
     first = next(rows, None)
@@ -316,6 +347,7 @@ def write_records(
     project: Callable[[Mapping], Mapping] | None = None,
     observation_context: ReceiptContext | None = None,
     prior_receipts: Sequence[Path] = (),
+    validate: bool = True,
 ) -> tuple[Path, Path]:
     """Write one dataset and preserve malformed-input attempts without subjects.
 
@@ -324,11 +356,14 @@ def write_records(
     rows require a stable subject identity and exactly one matching receipt.
     """
     declared = policy(dataset)
-    with TemporaryDirectory(prefix="regulations-refusals-") as temp, ExitStack() as stack:
+    carry = dataset in CARRY_DATASETS and bool(prior_receipts)
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix="regulations-refusals-", dir=destination.parent) as temp, ExitStack() as stack:
         # Comments retains its current original input once. Earlier catalog
         # snapshots/selected generations hold earlier inputs; do not copy them
         # into each new receipt's diagnostics.
-        lineages = ([] if dataset == "comments" else
+        lineages = ([] if dataset == "comments" or carry else
                     [stack.enter_context(ReceiptLineage([path], dataset=dataset)) for path in prior_receipts])
         refusal_path = Path(temp) / "refused.parquet"
         writer = pq.ParquetWriter(refusal_path, RECEIPT_SCHEMA, compression="zstd")
@@ -365,7 +400,17 @@ def write_records(
                 yield from batch.to_pylist()
 
         try:
-            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures())
+            target = Path(temp) / 'bundle' if carry else destination
+            subject, receipts = write_dataset(mapped(), target, declared, failures=failures(), validate=validate and not carry)
+            assert subject is not None
+            if carry:
+                from rulespec_artifacts import publish_directory_no_replace
+                from spicy_regs.etl_receipts import validate_receipt_bundle
+                carry_regulatory_receipts(dataset, receipts, prior_receipts)
+                if validate:
+                    validate_receipt_bundle({dataset: [subject]}, [receipts], [declared])
+                publish_directory_no_replace(target, destination)
+                subject, receipts = destination / subject.name, destination / receipts.name
         finally:
             writer.close()
         assert subject is not None
@@ -383,6 +428,7 @@ def write_held_dataset(
     include_source_witness: bool = True,
     prior_receipts: Sequence[Path] = (),
     bulk: bool = False,
+    validate: bool = True,
 ) -> tuple[Path, Path]:
     """Convert retained rows with witnesses to their exact receipt-held input.
 
@@ -390,17 +436,23 @@ def write_held_dataset(
     goes into each receipt. Neither source bytes nor their metadata are deleted.
     Dockets and documents can batch declared text inputs; ``bulk=False`` uses
     the reference writer. Unsupported batch values retain its exact decisions.
+    ``validate=False`` leaves the one validation to the caller's generation admission.
     A DuckDB or Arrow failure in the batch writer is raised, never retried by row.
     """
-    if bulk and dataset in {'dockets', 'documents'}:
-        from spicy_regs import etl_bulk, regulations_bulk
+    from spicy_regs import etl_bulk, regulations_bulk
+    if bulk and dataset in regulations_bulk.DATASETS:
         try:
             return regulations_bulk.write_held_dataset(
                 dataset, source, destination, generation_id=generation_id, processor=processor,
                 witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
+                validate=validate,
             )
         except etl_bulk.NotBulkEligible as error:
-            etl_bulk.log_row_fallback("regulatory write", error, dataset=dataset)
+            etl_bulk.log_row_fallback("regulatory write", error, dataset=dataset,
+                                      rows=pq.ParquetFile(source).metadata.num_rows)
+    elif bulk:
+        etl_bulk.log_row_eligibility("regulatory write", dataset=dataset,
+                                    rows=pq.ParquetFile(source).metadata.num_rows, reason="no bulk mapping")
     parquet = pq.ParquetFile(source)
     metadata = dict(parquet.schema_arrow.metadata or {})
     # The exact input metadata is receipt data, including byte-valued keys.
@@ -443,7 +495,7 @@ def write_held_dataset(
         {"kind": "input_file_metadata", "rows": parquet.metadata.num_rows},
     )
     return write_records(dataset, records(), destination, input_metadata=metadata, observation_context=observed,
-                         prior_receipts=prior_receipts)
+                         prior_receipts=prior_receipts, validate=validate)
 
 
 def build_local_generation(
@@ -480,6 +532,8 @@ def build_local_generation(
                 witnesses=witnesses,
                 include_source_witness=include_source_witness,
                 prior_receipts=(prior_receipts or {}).get(name, ()),
+                bulk=True,
+                validate=False,  # build_generation below admits the pair
             )
             subjects.append(subject)
             receipts.append(receipt)
