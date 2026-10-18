@@ -518,7 +518,6 @@ EVIDENCE_EXEMPT = {
     "CfrSectionsRollup": _UNWIRED,
     "CommitteeRostersRollup": _UNWIRED,
     "CourtCitationsRollup": _UNWIRED,
-    "CourtOpinionClustersRollup": _UNWIRED,
     "CourtOpinionsRollup": _UNWIRED,
     "FecCommitteesRollup": _UNWIRED + "; its captures live only as an expiring workflow artifact",
     "FecSourceCatalogRollup": _UNWIRED,
