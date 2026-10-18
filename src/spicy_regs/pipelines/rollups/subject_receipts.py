@@ -360,7 +360,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 held = None if selection is None else CongressInput(tuple(selection[0]), selection[1], selection[2])
                 subject, receipt = write_congress_dataset(
                     path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held,
-                    bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
+                    bulk=True,
                     validate=False,  # the prior was admitted when selected; the new pair is admitted with its generation
                 )
             else:

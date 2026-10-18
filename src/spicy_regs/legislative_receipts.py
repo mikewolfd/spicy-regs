@@ -121,6 +121,7 @@ def write_legislative_outputs(
     prior_receipts: Sequence[Path] = (),
     file_outcomes_table: str | None = None,
     validate: bool = True,
+    bulk: bool = True,
 ) -> dict:
     """Create a new local bundle from explicit producer outputs, preserving partitions.
 
@@ -213,14 +214,13 @@ def write_legislative_outputs(
                 states.append(({"file_state": file_state}, member_context))
                 failures = []
 
+                def row_context(row_index):
+                    return ReceiptContext(generation_id, f"{dataset}/{member_index}/{row_index}",
+                                          _processor(dataset), [dict(witness, locator=f"row:{row_index}"), *source_witnesses])
+
                 def records():
                     for row_index, row in enumerate(_rows(member)):
-                        context = ReceiptContext(
-                            generation_id,
-                            f"{dataset}/{member_index}/{row_index}",
-                            _processor(dataset),
-                            [dict(witness, locator=f"row:{row_index}"), *source_witnesses],
-                        )
+                        context = row_context(row_index)
                         try:
                             mapped = mapped_record(dataset, row)
                         except LegislativeShapeError as error:
@@ -235,7 +235,35 @@ def write_legislative_outputs(
                         yield mapped, context
 
                 shard_dir = stage / ".shards" / dataset / str(member_index)
-                subject, receipts = write_dataset(records(), shard_dir, policy(dataset), failures=failures, validate=False)
+                from spicy_regs import congress_bulk, etl_bulk
+
+                selected = policy(dataset)
+                if bulk and congress_bulk.mapped_eligible(pq.read_schema(member), selected):
+                    shard_dir.mkdir(parents=True)
+                    subject_path, receipts = shard_dir / f"{dataset}.parquet", shard_dir / "etl_receipts.parquet"
+                    def mapper(raw):
+                        converted = mapped_record(dataset, raw)
+                        return None if selected.receipt_only else {name: converted[name] for name in selected.subject_schema.names}
+                    def attempt(raw, ordinal):
+                        result = split_source_row(dataset, raw, row_context(ordinal))
+                        if result[1]["outcome"] == "refused":
+                            manifest["refused_rows"][dataset] += 1
+                        return result
+                    routed = congress_bulk.write_mapped_bundle(
+                        member, subject_path, receipts, policy=selected, generation_id=generation_id,
+                        processor=_processor(dataset), mapper=mapper, row_attempt=attempt, processing_field=RAW,
+                        attempt_prefix=f"{dataset}/{member_index}/", witness=witness, witnesses=source_witnesses,
+                        locator_prefix="row:", refusals_last=True,
+                    )
+                    if routed:
+                        etl_bulk.log_row_fallback("legislative-write", etl_bulk.NotBulkEligible("mapper or exact encoding requires row decision"),
+                                                  dataset=dataset, rows=routed)
+                    subject = None if selected.receipt_only else subject_path
+                else:
+                    if bulk:
+                        etl_bulk.log_row_fallback("legislative-write", etl_bulk.NotBulkEligible("source value types have no proven SQL spelling"),
+                                                  dataset=dataset, rows=pq.ParquetFile(member).metadata.num_rows)
+                    subject, receipts = write_dataset(records(), shard_dir, selected, failures=failures, validate=False)
                 receipt_shards.append(receipts)
                 if subject is not None:
                     final_relative = f"{dataset}/{relative}" if output.is_dir() else f"{dataset}.parquet"

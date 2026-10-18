@@ -383,10 +383,10 @@ def test_current_public_row_writer_is_independent_and_batching_requires_opt_in(t
     assert pq.read_table(row_restore).equals(pq.read_table(batch_restore), check_metadata=True)
 
 
-def test_current_public_vote_route_refuses_other_dataset_before_output(tmp_path):
+def test_current_public_batch_route_refuses_undeclared_dataset_before_output(tmp_path):
     from spicy_regs.congress_receipts import write_congress_dataset as current
-    with pytest.raises(ValueError, match='declared vote dataset'):
-        current(tmp_path / 'absent.parquet', tmp_path / 'absent-output', dataset='members',
+    with pytest.raises(ValueError, match='declared Congress dataset'):
+        current(tmp_path / 'absent.parquet', tmp_path / 'absent-output', dataset='not-a-dataset',
                 generation_id=GENERATION, bulk=True)
     assert not (tmp_path / 'absent-output').exists()
 

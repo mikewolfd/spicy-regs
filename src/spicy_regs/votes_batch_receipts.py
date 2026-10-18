@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 import pyarrow as pa
 import pyarrow.parquet as pq
 from spicy_regs import congress_bulk, etl_bulk
-from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy, refusal_identities
+from spicy_regs.congress_receipts import PROCESSOR, CongressInput, _digest, _rows, policy, refusal_identities, input_policy
 from spicy_regs.congress_subjects import map_record
 from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, _unpack,
     failure_receipt, observation_receipt, select_receipts, split_record, validate_receipt_bundle)
@@ -90,7 +90,7 @@ def write_congress_dataset(
         if prior is not None:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
             if validate:
-                _admit({dataset: prior.subjects}, [scoped], [selected], generation_id=prior.generation_id, bulk=bulk)
+                _admit({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id, bulk=bulk)
             prior_paths.append(scoped)
 
         def context(ordinal, diagnostics=None, subject=None, processing=None):
@@ -113,14 +113,32 @@ def write_congress_dataset(
         }
         first = observation_receipt(selected, context("metadata", processing=metadata), processing_fields=metadata)
         # One scan for a flat dataset; the row loop below is its reference.
+        routed = 0
         if in_bulk:
             assert subjects is not None
-            congress_bulk.write_bundle(
+            routed = congress_bulk.write_bundle(
                 source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
                 processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
                 row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
             )
+        elif congress_bulk.mapped_eligible(pq.read_schema(source), selected):
+            in_bulk = True
+            native_path = subjects or stage / ".unused-subjects.parquet"
+            routed = congress_bulk.write_mapped_bundle(
+                source, native_path, receipts, policy=selected, generation_id=generation_id,
+                processor=PROCESSOR, mapper=lambda raw: map_record(dataset, raw).subject,
+                row_attempt=lambda raw, ordinal: attempt(ordinal, raw), processing_field="source_fields",
+                entry_kind="row", attempt_prefix=f"{dataset}:{digest}:", witness=base_witness,
+                witnesses=witnesses, first_receipts=[first],
+            )
+            if subjects is None:
+                native_path.unlink()
+        if routed:
+            etl_bulk.log_row_fallback("congress-write", etl_bulk.NotBulkEligible("mapper or exact encoding requires row decision"),
+                                      dataset=dataset, rows=routed)
         if not in_bulk:
+            etl_bulk.log_row_fallback("congress-write", etl_bulk.NotBulkEligible("source value types have no proven SQL spelling"),
+                                      dataset=dataset, rows=pq.ParquetFile(source).metadata.num_rows)
             with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
                 sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
                 try:

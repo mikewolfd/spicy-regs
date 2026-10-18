@@ -21,6 +21,8 @@ module states in SQL: a column passed through as text, a digit string read as an
 
 from __future__ import annotations
 
+import json
+
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -198,6 +200,116 @@ def write_bundle(
             subject_path=subjects_path, receipt_path=receipts_path, label=dataset, first_receipts=first_receipts,
             row_attempt=lambda table, index, row: row_receipt(table["processing_json"][index].as_py(),
                                                          table["_ordinal"][index].as_py()),
+        )
+
+
+def mapped_eligible(source: pa.Schema, selected: DatasetPolicy) -> bool:
+    """The shared encoder must own both raw and mapped Arrow value types."""
+    try:
+        etl_bulk.exact_json_sql("raw", pa.struct(source))
+        if not selected.receipt_only:
+            etl_bulk.identity_sql(selected)
+        return bool(source.names)
+    except NotImplementedError:
+        return False
+
+
+def write_mapped_bundle(
+    source: Path,
+    subjects_path: Path,
+    receipts_path: Path,
+    *,
+    policy: DatasetPolicy,
+    generation_id: str,
+    processor: str,
+    mapper: Callable[[dict], dict | None],
+    row_attempt: Callable[[dict, int], tuple[dict | None, dict]],
+    processing_field: str,
+    attempt_prefix: str,
+    witness: Mapping[str, Any],
+    witnesses: Sequence[Mapping[str, Any]] = (),
+    locator_prefix: str = "",
+    entry_kind: str | None = None,
+    first_receipts: Sequence[Mapping[str, Any]] = (),
+    refusals_last: bool = False,
+) -> int:
+    """Keep the maintained mapper; encode and hash its bounded Arrow batches in SQL.
+
+    Mapping failures and values the encoder cannot prove return to the exact
+    row attempt. The source bytes, order, context and refusal order are the
+    same as that reference. This uses ``write_split``'s one ordered batch loop.
+    """
+    source = Path(source).resolve()
+    schema = pq.read_schema(source)
+    native = policy.subject_schema
+    raw_type = pa.struct(schema)
+    result_type = pa.struct([*native, pa.field("_reference", pa.bool_())])
+
+    def mapped(values):
+        rows = []
+        for raw in values.to_pylist():
+            try:
+                subject = mapper(raw)
+                reference = (subject is None and not policy.receipt_only) or (
+                    subject is not None and any(subject.get(key) is None for key in policy.identity_fields
+                                                if key not in policy.nullable_identity_fields))
+                rows.append((subject or dict.fromkeys(native.names)) | {"_reference": reference})
+            except (ValueError, TypeError, OverflowError, pa.ArrowException):
+                rows.append(dict.fromkeys(native.names) | {"_reference": True})
+        return pa.array(rows, type=result_type)
+
+    columns = ", ".join('_mapped."' + field.name + '" AS "' + field.name + '"' for field in native)
+    raw = etl_bulk.exact_json_sql("_source", raw_type)
+    # Key ordering is exact_json's ordering; these two wrappers are the only
+    # processing shapes this writer owns.
+    if entry_kind is None:
+        processing = _text('["dict",[[' + json.dumps(processing_field) + ',') + " || _raw || ']]]'"
+    else:
+        processing = _text('["dict",[["entry_kind",["str",' + json.dumps(entry_kind) + ']],["source_fields",') + " || _raw || ']]]'"
+    subject_reference = ("false" if policy.receipt_only else etl_bulk.needs_reference_sql(
+        etl_bulk.record_json_sql((field.name, field.type) for field in native)))
+    keyed = ("NULL AS record_id, NULL AS subject_version, NULL AS identity_json" if policy.receipt_only else
+             ", ".join(f"{value} AS {name}" for value, name in zip(etl_bulk.identity_sql(policy),
+                         ("record_id", "subject_version", "identity_json"), strict=True)))
+    # A native subject may have its own witnesses field; keep that distinct
+    # from the receipt's witnesses after computing the subject digest.
+    conflicts = set(native.names) & {"witnesses"}
+    renamed = ", ".join(f'"{name}" AS "_subject_{name}"' for name in sorted(conflicts))
+    keep = "* EXCLUDE (_raw" + "".join(', "' + name + '"' for name in conflicts) + ")"
+    own = _witnesses_sql(witness, witnesses).replace("CAST(_ordinal AS VARCHAR)",
+                                                    _text(locator_prefix) + " || CAST(_ordinal AS VARCHAR)")
+    context_reference = _context_reference(source, policy.dataset, policy, generation_id, processor,
+                                           [witness, *witnesses]) or any(
+        char in attempt_prefix + locator_prefix for char in "\x0b\x0e\x0f\x1a\x1b\x1c\x1d\x1e\x1f")
+    quoted = ['"' + name.replace('"', '""') + '"' for name in schema.names]
+    source_columns = ", ".join(f"{name} := {name}" for name in quoted)
+    query = f"""WITH input AS (
+        SELECT struct_pack({source_columns}) AS _source,
+               file_row_number AS _ordinal FROM {etl_bulk.SOURCE_BATCH}),
+    mapped AS MATERIALIZED (SELECT *, _map_record(_source) AS _mapped FROM input),
+    shaped AS (SELECT {columns + ',' if columns else ''} _ordinal, {raw} AS _raw,
+                       (_mapped._reference OR {str(context_reference).lower()} OR {etl_bulk.needs_reference_sql(raw)}) AS _reference FROM mapped),
+    keyed AS (SELECT * EXCLUDE (_reference), (_reference OR {subject_reference}) AS _reference,
+                     {keyed}, {processing} AS processing_json FROM shaped),
+    receipt AS (SELECT {renamed + ',' if renamed else ''} {keep}, {_text(policy.dataset)} AS dataset,
+                       {_text(policy.policy_version)} AS policy_version, {_text(generation_id)} AS generation_id,
+                       {_text(attempt_prefix)} || _ordinal AS attempt_id,
+                       {_text('observed' if policy.receipt_only else 'accepted')} AS outcome,
+                       {_text(processor)} AS processor, {own} AS witnesses, '["dict",[]]' AS diagnostic_json FROM keyed)
+    SELECT {etl_bulk.digest_sql(etl_bulk.receipt_json_sql())} AS receipt_id, * EXCLUDE (_reference),
+           (_reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _reference,
+           {str(not policy.receipt_only).lower()} AND NOT (_reference OR {etl_bulk.needs_reference_sql(etl_bulk.receipt_json_sql())}) AS _accepted
+    FROM receipt"""
+    with etl_bulk.bulk_connection() as (con, _):
+        def sql_type(dtype):
+            return con.from_arrow(pa.table({"value": pa.array([], type=dtype)})).types[0]
+        con.create_function("_map_record", mapped, [sql_type(raw_type)], sql_type(result_type), type="arrow")
+        return etl_bulk.write_split(
+            con, query, source=source, batch_rows=2000, expected_rows=_rows_in(source), subject_schema=native,
+            subject_path=subjects_path, receipt_path=receipts_path, label=policy.dataset, first_receipts=first_receipts,
+            row_attempt=lambda table, index, raw: row_attempt(raw, table["_ordinal"][index].as_py()),
+            refusals_last=refusals_last,
+            subject_columns=["_subject_" + name if name in conflicts else name for name in native.names],
         )
 
 

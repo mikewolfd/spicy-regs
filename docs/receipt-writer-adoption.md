@@ -1,8 +1,8 @@
 # Receipt history and key-index adoption
 
-Receipt helpers and qualification tools can be included without changing the
-history retained by maintained writers or requiring a new publication format.
-The current implementation preserves both boundaries.
+Receipt writers use the family history rules below. The carry changes preserve
+the receipt schema and canonical digests; original receipt generations remain
+visible within a newly admitted selection.
 
 ## History retained by maintained writers
 
@@ -13,17 +13,18 @@ generation and processing evidence. `resolve_receipt_witness` resolves earlier
 `receipt.values.*` and `receipt-processing:` references through that retained
 history. Repeated carries keep processing payloads flat and deduplicated.
 
-Court, legislative, government, FEC identity, regulatory and scorecard writers
+Court, government, FEC identity, regulatory and scorecard writers
 retain their maintained history paths. The bounded regulatory path uses
 `current_receipt_history.inherit_current_receipts` where its input shape
 allows it; that helper calls the maintained `inherit_receipt`. The congress row
-writer (`congress_receipts.write_congress_dataset`) and the batch vote
-writer (`votes_batch_receipts`) carry with `receipt_history.carry_receipt_history`
+writer (`congress_receipts.write_congress_dataset`), the batch Congress
+writer (`votes_batch_receipts`) and `legislative_receipts.write_legislative_outputs`
+carry with `receipt_history.carry_receipt_history`
 (owner decision 2026-10-17, bulk receipt writer plan): receipt size stays flat across nights, and
 `coverage_reader.current_receipts` accepts the carried receipts' earlier generations. Regulatory
 correction retains both the prior and fresh receipt inputs, in that order.
 
-The separately included `receipt_history.carry_receipt_history` has different
+The `receipt_history.carry_receipt_history` helper has different
 semantics: it reuses exact unchanged occurrences and gives changed accepted rows
 only a direct predecessor reference, without copying earlier witnesses or
 processing values. `write_dataset(prior_receipts=...)` exposes this helper to
@@ -31,6 +32,26 @@ explicit callers. Replacing another family's history path with it needs the owne
 decision for that family. The owner approved the rule for government, congress,
 legislative, regulatory and court receipts; the family changes land separately after
 reader and refusal-preservation checks.
+
+Legislative carry runs after combining every partition. It preserves unresolved
+refusals and resolves one only when a current accepted row supplies the same
+declared key or explicitly mapped raw key. The manifest still reports remaining
+refusals, so they cannot silently become a qualified prior. Changed processing
+creates a fresh receipt even when the native subject remains unchanged.
+
+Scheduled Congress and legislative writers leave admission to the finished
+generation. Standalone writers admit the completed bundle once. Prior restore
+admits the selected pair once, then decodes all-text retained source fields in
+SQL; conversion checks, exact schema/footer recovery and physical row order
+remain enforced. Unsupported source types use the logged row route.
+
+For fresh Congress and legislative rows, the Python mappers remain authoritative.
+The batch path applies them through an Arrow function and builds exact receipt
+text and digests in SQL. The maintained flat Congress SQL mappings keep their
+existing route. Control escapes, mapper refusals and unproven value spellings
+return to the reference attempt; DuckDB or Arrow failures abort without retrying
+the whole input by row. `tests/test_hybrid_receipts.py` compares subject and
+receipt values against the independent row writers.
 
 Boundary checks are in `tests/test_etl_receipts.py`,
 `tests/test_receipt_history.py`, `tests/test_regulatory_base_bulk.py`,

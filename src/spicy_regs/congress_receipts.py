@@ -162,8 +162,8 @@ def write_congress_dataset(
     publisher response.
     """
     if bulk:
-        if dataset not in {'member_votes', 'member_vote_terms', 'roll_call_votes'}:
-            raise ValueError('Batch vote writing requires a declared vote dataset')
+        if dataset not in INPUT_COLUMNS:
+            raise ValueError("Batch Congress writing requires a declared Congress dataset")
         from spicy_regs.votes_batch_receipts import write_congress_dataset as write_votes
         return write_votes(source, directory, dataset=dataset, generation_id=generation_id,
                            witnesses=witnesses, prior=prior, bulk=True, validate=validate)
