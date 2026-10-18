@@ -352,3 +352,125 @@ def test_the_rollup_declares_its_two_new_tables_as_an_explicit_migration():
     from spicy_regs.pipelines.rollups.lobbying_filings import LobbyingFilingsRollup
 
     assert set(LobbyingFilingsRollup.outputs) - set(LobbyingFilingsRollup.added_tables) == {"lobbying_filings.parquet"}
+
+
+def test_native_nightly_receipts_only_the_window_and_equals_the_full_row_merge(tmp_path, monkeypatch):
+    import copy
+    import shutil
+    import duckdb
+    from spicy_regs import government_bulk
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, ReceiptContext, decode_exact_json, failure_receipt, validate_receipt_bundle
+    from spicy_regs.transforms import government_receipts as gr
+    from spicy_regs.transforms.table_merge import merge_local_prior
+
+    _no_prior(monkeypatch)
+    first_dir, night_dir = tmp_path / "first", tmp_path / "night"
+    first_dir.mkdir()
+    night_dir.mkdir()
+    old_filings: list[dict] = []
+    for key in ("a", "b"):
+        filing = copy.deepcopy(_FILING_WITH_ACTIVITIES)
+        filing.update(filing_uuid=key, dt_posted="2026-10-01T10:00:00Z")
+        old_filings.append(filing)
+    current_filings = old_filings
+    _mock_http(monkeypatch, lambda request, number: _json_response(
+        {"count": len(current_filings), "next": None, "previous": None, "results": current_filings}))
+    first = bld.build_lobbying_filings(first_dir, receipt_generation_id="g0", since=date(2026, 10, 1), until=date(2026, 10, 2))
+    before = {path.stem: pq.read_table(path) for path in first}
+    # The actual cold output equals the maintained row writer using the same retained inputs and context.
+    for path in first:
+        retained = first_dir / ".government-inputs/g0" / path.name
+        gr._write_by_row(retained, tmp_path / "row-subject.parquet", tmp_path / "row-receipt.parquet", path.stem,
+                         generation_id="g0", source_uri=str(retained), digest=gr._digest(retained))
+        assert pq.read_table(path).equals(pq.read_table(tmp_path / "row-subject.parquet"))
+        actual = pq.read_table(first_dir / ".government-etl/g0" / path.stem / "etl_receipts.parquet")
+        assert actual.equals(pq.read_table(tmp_path / "row-receipt.parquet"))
+
+    prior_receipts = pq.read_table(first_dir / "etl_receipts.parquet").to_pylist()
+    context = ReceiptContext("g0", "qualified-refusal", "p", [{"source_id": "held", "sha256": "a" * 64}])
+    failures = [failure_receipt(gr.POLICIES["lobbying_filings"], context, outcome="refused",
+                               raw_fields={"raw_record": {"filing_uuid": key, "income": "invalid"}})
+                for key in ("b", "unanswered")]
+    prior_receipts.extend(failures)
+    prior_path = first_dir / "etl_receipts.parquet"
+    pq.write_table(pa.Table.from_pylist(prior_receipts, schema=RECEIPT_SCHEMA), prior_path)
+    metadata = json.loads((first_dir / gr.BUILD_METADATA).read_text())
+    metadata["receipt_sha256"] = gr._digest(prior_path)
+    (night_dir / gr.BUILD_METADATA).write_text(json.dumps(metadata))
+
+    def download(key, target):
+        shutil.copyfile(first_dir / key, target)
+        return True
+
+    monkeypatch.setattr(bld.r2, "download", download)
+    fresh_filings = [copy.deepcopy(old_filings[1]), copy.deepcopy(old_filings[0])]
+    fresh_filings[0]["lobbying_activities"][0]["description"] = "Updated description"
+    fresh_filings[1].update(filing_uuid="c", dt_posted="2026-10-02T11:00:00Z")
+    current_filings = fresh_filings
+    monkeypatch.setattr(government_bulk, "restore_legacy", lambda *a, **k: pytest.fail("native nightly restored its full prior"))
+    written = {}
+    original_write = government_bulk.write_dataset
+
+    def record_write(source, *args, **kwargs):
+        written[kwargs["dataset"]] = pq.ParquetFile(source).metadata.num_rows
+        return original_write(source, *args, **kwargs)
+
+    monkeypatch.setattr(government_bulk, "write_dataset", record_write)
+    second = bld.build_lobbying_filings(night_dir, receipt_generation_id="g1", since=date(2026, 10, 1), until=date(2026, 10, 3))
+    assert pq.read_table(second[0], columns=["filing_uuid"]).column(0).to_pylist() == ["c", "a", "b"]
+    assert written == {"lobbying_filings": 2, "lobbying_activities": 4, "lobbying_activity_lobbyists": 4}
+    orders = {"lobbying_filings": "dt_posted DESC, filing_uuid", "lobbying_activities": "filing_uuid, CAST(activity_index AS INTEGER)",
+              "lobbying_activity_lobbyists": "filing_uuid, CAST(activity_index AS INTEGER), CAST(lobbyist_index AS INTEGER)"}
+    for path in second:
+        dataset = path.stem
+        prior = first_dir / ".government-inputs/g0" / path.name
+        fetched = night_dir / ".government-inputs/g1" / path.name
+        oracle = tmp_path / "full-merge.parquet"
+        with duckdb.connect() as con:
+            merge_local_prior(con, columns=gr._legacy_schema(dataset).names, identity=gr.POLICIES[dataset].identity_fields,
+                              order_by=orders[dataset], prior_file=prior, new_file=fetched, out_file=oracle)
+        gr._write_by_row(oracle, tmp_path / "expected.parquet", tmp_path / "expected-r.parquet", dataset,
+                         generation_id="oracle", source_uri=str(oracle), digest=gr._digest(oracle))
+        assert pq.read_table(path).equals(pq.read_table(tmp_path / "expected.parquet"))
+        assert pq.read_table(first_dir / path.name).equals(before[dataset])
+    receipts = pq.read_table(night_dir / "etl_receipts.parquet").to_pylist()
+    old_by_id = {row["record_id"]: row for row in prior_receipts if row["outcome"] == "accepted"}
+    for row in receipts:
+        if row["outcome"] == "accepted" and row["record_id"] in old_by_id:
+            old = old_by_id[row["record_id"]]
+            if row["subject_version"] == old["subject_version"]:
+                assert row == old
+            else:
+                assert decode_exact_json(row["diagnostic_json"])["prior_receipt"]["receipt_id"] == old["receipt_id"]
+    assert [row for row in receipts if row["outcome"] == "refused"] == [failures[1]]
+    validate_receipt_bundle({path.stem: [path] for path in second}, [night_dir / "etl_receipts.parquet"],
+                            [gr.POLICIES[path.stem] for path in second])
+    counts = json.loads((night_dir / gr.BUILD_METADATA).read_text())["counts"]
+    assert counts["lobbying_filings"] == {"inputs": 2, "subjects": 3, "refused": 0}
+
+    # Reusing the build directory must select g1's published output, not the
+    # staged g0 files that remain while the native merge consumes them.
+    current_filings = []
+    second_subjects = [pq.read_table(path) for path in second]
+    third = bld.build_lobbying_filings(night_dir, receipt_generation_id="g2", since=date(2026, 10, 1), until=date(2026, 10, 3))
+    assert written == {"lobbying_filings": 0, "lobbying_activities": 0, "lobbying_activity_lobbyists": 0}
+    assert all(pq.read_table(path).equals(expected) for path, expected in zip(third, second_subjects, strict=True))
+    third_receipts = pq.read_table(night_dir / "etl_receipts.parquet").to_pylist()
+    assert [row for row in third_receipts if row["outcome"] == "accepted"] == [row for row in receipts if row["outcome"] == "accepted"]
+    assert [row for row in third_receipts if row["outcome"] == "refused"] == [failures[1]]
+    counts = json.loads((night_dir / gr.BUILD_METADATA).read_text())["counts"]
+    assert counts["lobbying_filings"] == {"inputs": 0, "subjects": 3, "refused": 0}
+    validate_receipt_bundle({path.stem: [path] for path in third}, [night_dir / "etl_receipts.parquet"],
+                            [gr.POLICIES[path.stem] for path in third])
+
+    # A failed raw-window build leaves the admitted staged prior available for
+    # retry even though the public paths now hold its unfinished source rows.
+    with monkeypatch.context() as interrupted:
+        def fail_before_migration(*args, **kwargs):
+            raise RuntimeError("interrupted before native migration")
+
+        interrupted.setattr(gr, "migrate_outputs", fail_before_migration)
+        with pytest.raises(RuntimeError, match="interrupted before native migration"):
+            bld.build_lobbying_filings(night_dir, receipt_generation_id="unfinished", since=date(2026, 10, 1), until=date(2026, 10, 3))
+    retried = bld.build_lobbying_filings(night_dir, receipt_generation_id="retried", since=date(2026, 10, 1), until=date(2026, 10, 3))
+    assert all(pq.read_table(path).equals(expected) for path, expected in zip(retried, second_subjects, strict=True))

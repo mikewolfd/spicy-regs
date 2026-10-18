@@ -588,3 +588,40 @@ def test_split_selected_publication_parent_preserves_descriptor_authority(tmp_pa
         binding = SelectedPriors(tmp_path / 'reader', index=captured).input_provenance('members')
     assert binding['publication'] == reads['members.parquet'] == expected
     assert 'tableDescriptorDigest' in expected and 'sha256' not in expected
+
+
+def test_historical_refusal_survives_a_nightly_then_success_resolves_it(tmp_path, monkeypatch):
+    from spicy_regs.legislative_receipts import write_legislative_outputs
+
+    class Budget(SubjectReceiptRollup):
+        name = "budget-refusal-test"
+        outputs = ("budget_volumes.parquet",)
+        def build(self, output_dir):
+            raise NotImplementedError
+
+    bad = row("budget_volumes", package_id="X", associated_bills_json="bad")
+    good = row("budget_volumes", package_id="Y")
+    source = retained(tmp_path / "initial-source", "budget_volumes", [bad, good])
+    write_legislative_outputs([source], tmp_path / "initial", generation_id="initial")
+    # Seed an admitted current selection whose source succeeded and whose
+    # receipt member still retains the prior unresolved refusal.
+    current = Budget()
+    selected_source = retained(tmp_path / "selected-source", "budget_volumes", [good])
+    write_legislative_outputs([selected_source], tmp_path / "selected", generation_id=current.receipt_generation_id,
+                              prior_receipts=[tmp_path / "initial/etl_receipts.parquet"])
+    select_bundle(monkeypatch, tmp_path / "selected", current)
+    for name, corrected in (("unchanged", False), ("corrected", True)):
+        output = tmp_path / name
+        output.mkdir()
+        def build(directory, *, download_prior):
+            previous = directory / "budget_volumes.parquet"
+            assert download_prior(previous.name, previous)
+            values = pq.read_table(previous).to_pylist()
+            if corrected:
+                values.append(bad | {"associated_bills_json": "[]"})
+            return retained(directory, "budget_volumes", values)
+        pipeline = Budget()
+        pipeline.build_receipts(output, build)
+        outcomes = pq.read_table(output / "etl_receipts.parquet")["outcome"].to_pylist()
+        assert ("refused" in outcomes) is not corrected
+        select_bundle(monkeypatch, output, pipeline)

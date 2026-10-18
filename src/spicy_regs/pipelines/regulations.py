@@ -423,8 +423,8 @@ class RegulationsPipeline(Pipeline):
     def _download_existing(self, output_dir: Path, record_types: list[RecordType]) -> None:
         """Fetch existing output from R2 so an incremental run appends to it.
 
-        Monolithic ``{type}.parquet`` files are pulled whole, with each record type's attribute table. Comments live
-        in the catalog, so only ``comment_attributes`` is fetched for them.
+        Monolithic ``{type}.parquet`` files are pulled whole. The attribute tables are not: the day's rows upsert
+        over the selected native table without restoring it (:func:`finish_attribute_dataset`).
         """
         from spicy_regs.pipelines.regulatory_publication import restore_dataset
 
@@ -432,31 +432,28 @@ class RegulationsPipeline(Pipeline):
         for rt in record_types:
             if rt.name != "comments":
                 restore_dataset(root, rt.name, output_dir / f"{rt.name}.parquet", inputs=self._selected_inputs)
-            table = ATTRIBUTE_TABLES.get(rt.name)
-            if table is not None:
-                restore_dataset(root, table, output_dir / f"{table}.parquet", inputs=self._selected_inputs)
 
     def _merge_attributes(self, staging_dir: Path, output_dir: Path, table: str) -> bool:
-        """Merge this run's attribute rows into the table's working copy, once the full sweep has seeded it.
+        """Dedupe this run's attribute rows into ``output_dir/<table>.parquet``, once the full sweep has seeded the table.
 
-        Before a working copy is seeded (``run-attributes-sweep`` for documents and dockets, the comment re-read's
+        Before the table is seeded (``run-attributes-sweep`` for documents and dockets, the comment re-read's
         ``fill-comment-fields attributes`` for comments), a daily run's rows would publish a table of only
-        that day's changes, so they are dropped with a warning and the sweep's pass covers them.
+        that day's changes, so they are dropped with a warning and the sweep's pass covers them. The file holds only
+        the day's rows; :func:`finish_attribute_dataset` upserts them over the selected native table.
         """
         parts = staging_dir / table
         if not any(parts.glob("*.parquet")):
             return False
-        prior = output_dir / f"{table}.parquet"
-        if not prior.exists():
+        if self._selected_inputs is None or self._selected_inputs.select(table) is None:
             seeder = (
                 "fill-comment-fields attributes" if table == ATTRIBUTE_TABLES["comments"] else "run-attributes-sweep"
             )
             logger.warning(
-                "{}: no seeded working copy yet; this run's rows are dropped until {} seeds it", table, seeder
+                "{}: no seeded native table yet; this run's rows are dropped until {} seeds it", table, seeder
             )
             return False
-        rows = merge_attribute_parts(table, parts, prior, prior)
-        logger.info("{}: {:,} rows after this run's merge", table, rows)
+        rows = merge_attribute_parts(table, parts, None, output_dir / f"{table}.parquet")
+        logger.info("{}: {:,} rows fetched this run", table, rows)
         return True
 
     def _merge(
@@ -503,13 +500,16 @@ class RegulationsPipeline(Pipeline):
             if (table := ATTRIBUTE_TABLES.get(name)) and self._merge_attributes(staging_dir, output_dir, table)
         ]
 
-        from spicy_regs.pipelines.regulatory_publication import finish_dataset
+        from spicy_regs.pipelines.regulatory_publication import finish_attribute_dataset, finish_dataset
 
         root = self.output_dir or Path.cwd() / "output"
-        for name in [*non_comment, *iceberg_names, *self._merged_attributes]:
+        for name in [*non_comment, *iceberg_names]:
             source = output_dir / f"{name}.parquet"
             if source.exists():
                 finish_dataset(root, name, source, publish=not self.skip_upload, inputs=self._selected_inputs)
+        for table in self._merged_attributes:
+            finish_attribute_dataset(root, table, output_dir / f"{table}.parquet",
+                                     publish=not self.skip_upload, inputs=self._selected_inputs)
 
         if "comments" in names and staged.get("comments", 0) > 0:
             # Finalization owns the one mirror/index build after the sweep.

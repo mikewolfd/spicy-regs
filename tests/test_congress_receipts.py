@@ -11,7 +11,7 @@ from spicy_regs.congress_receipts import (
     restore_processing_input,
     write_congress_dataset,
 )
-from spicy_regs.etl_receipts import validate_receipt_bundle
+from spicy_regs.etl_receipts import decode_exact_json, validate_receipt_bundle
 from spicy_regs.transforms.build_congress_index import INDEX_SPECS, build_index_table
 from tests.test_congress_index import FixtureReader
 
@@ -185,7 +185,7 @@ def test_missing_subject_key_is_a_retained_refusal(tmp_path):
     assert pq.read_table(receipts)["outcome"].to_pylist() == ["observed", "refused"]
 
 
-def test_next_generation_keeps_prior_witnesses_when_subject_changes(tmp_path):
+def test_next_generation_names_only_its_predecessor_when_subject_changes(tmp_path):
     first_raw = shaped(tmp_path / "first.parquet", [{"bioguide_id": "X", "name_first": "First"}])
     witness = {
         "source_id": "native-capture",
@@ -209,10 +209,10 @@ def test_next_generation_keeps_prior_witnesses_when_subject_changes(tmp_path):
     after = next(r for r in pq.read_table(next_receipts).to_pylist() if r["outcome"] == "accepted")
     assert after["record_id"] == before["record_id"]
     assert after["subject_version"] != before["subject_version"]
-    assert after["witnesses"][: len(before["witnesses"])] == before["witnesses"]
-    from spicy_regs.etl_receipts import resolve_receipt_witness
-
-    assert resolve_receipt_witness(after, after["witnesses"][len(before["witnesses"])])
+    # The carry rule: the changed row's witnesses are its own, and it points to its direct predecessor.
+    assert [w["source_id"] for w in after["witnesses"]] == ["shaped-observation:members"]
+    reference = decode_exact_json(after["diagnostic_json"])["prior_receipt"]
+    assert reference["receipt_id"] == before["receipt_id"] and reference["generation_id"] == "first"
     assert after["generation_id"] == "next"
 
 
@@ -426,7 +426,7 @@ def test_scheduled_rebuild_reads_the_prior_pair_and_a_changed_returned_value_is_
         assert {column: row[column] for column in reread} == reread
         # Only a subject column moves the row's version; a receipt-only field would leave it standing.
         assert new["record_id"] == old["record_id"] and new["subject_version"] != old["subject_version"]
-        assert new["witnesses"][: len(old["witnesses"])] == old["witnesses"]
+        assert decode_exact_json(new["diagnostic_json"])["prior_receipt"]["receipt_id"] == old["receipt_id"]
 
 
 def test_real_roster_producer_publishes_congress_basis_and_resumes_from_its_native_pair(tmp_path, monkeypatch):
@@ -464,3 +464,22 @@ def test_real_roster_producer_publishes_congress_basis_and_resumes_from_its_nati
     kept = seats(again["committee_assignments"], "senate")
     assert kept and kept == seats(published["committee_assignments"], "senate")
     assert seats(again["committee_assignments"], "house") == seats(published["committee_assignments"], "house")
+
+
+@pytest.mark.parametrize("dataset", RETURNED)
+def test_bulk_restore_uses_retained_schema_for_python_mapped_datasets(tmp_path, dataset, monkeypatch):
+    from spicy_regs import congress_bulk, etl_bulk
+
+    _, raw, _, _ = RETURNED[dataset]
+    source = shaped(tmp_path / "source.parquet", [raw])
+    pair = write_congress_dataset(source, tmp_path / "native", dataset=dataset, generation_id="g")
+    expected = restore_processing_input(*pair, tmp_path / "row.parquet", dataset=dataset, generation_id="g")
+    scans = []
+    restore = congress_bulk.restore_input
+    monkeypatch.setattr(congress_bulk, "restore_input", lambda *a, **kw: scans.append(kw["dataset"]) or restore(*a, **kw))
+    admissions = []
+    admit = etl_bulk.validate_bundle
+    monkeypatch.setattr(etl_bulk, "validate_bundle", lambda *a, **kw: admissions.append(1) or admit(*a, **kw))
+    actual = restore_processing_input(*pair, tmp_path / "bulk.parquet", dataset=dataset, generation_id="g", bulk=True)
+    assert pq.read_table(actual).equals(pq.read_table(expected), check_metadata=True)
+    assert scans == [dataset] and admissions == [1]

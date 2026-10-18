@@ -578,3 +578,43 @@ def test_member_and_cosponsor_family_growth_is_explicit():
     )
     for rollup in (MembersRollup, BillFamilyRollup):
         assert set(rollup.added_tables) <= set(rollup.outputs)
+
+
+def test_bulk_workflows_pass_the_required_mode_to_the_actual_process():
+    reusable = yaml.safe_load((WORKFLOWS / "_rollup.yml").read_text())
+    assert reusable[True]["workflow_call"]["inputs"]["require_bulk"]["default"] is False
+    step = next(step for step in reusable["jobs"]["rollup"]["steps"] if step.get("name") == "Run rollup")
+    assert step["env"]["SPICY_REGS_REQUIRE_BULK"] == "${{ inputs.require_bulk && 'true' || 'false' }}"
+    assert 'uv run --frozen "$COMMAND" "${ARGS[@]}"' in step["run"]
+    for filename in ["rollup-lobbying-filings.yml", "rollup-bill-family.yml", "rollup-roll-call-votes.yml",
+                     "rollup-member-vote-terms.yml", "rollup-court-citations.yml", "rollup-court-opinion-clusters.yml"]:
+        workflow = yaml.safe_load((WORKFLOWS / filename).read_text())
+        assert workflow["jobs"]["run"]["with"]["require_bulk"] is True
+    refresh = yaml.safe_load((WORKFLOWS / "refresh-congress-vote-terms.yml").read_text())
+    assert refresh["jobs"]["votes"]["with"]["require_bulk"] is True
+    assert refresh["jobs"]["terms"]["with"]["require_bulk"] is True
+    assert "require_bulk" not in refresh["jobs"]["members"]["with"]
+    regulatory = yaml.safe_load((WORKFLOWS / "_regulations-refresh.yml").read_text())
+    assert regulatory["jobs"]["base-families"]["with"]["require_bulk"] is True
+    assert "require_bulk" not in regulatory["jobs"]["derived"]["with"]
+    etl = yaml.safe_load((WORKFLOWS / "etl-new-pipeline.yml").read_text())
+    run = next(step for step in etl["jobs"]["etl-new"]["steps"] if step.get("name") == "Run new pipeline")
+    assert run["env"]["SPICY_REGS_REQUIRE_BULK"] == "true"
+    converter = yaml.safe_load((WORKFLOWS / "convert-native-family.yml").read_text())
+    assert converter["jobs"]["convert"]["env"]["SPICY_REGS_REQUIRE_BULK"] == "true"
+
+
+def test_votes_disk_probe_is_enabled_and_retained_before_audit_upload():
+    workflow = yaml.safe_load((WORKFLOWS / "refresh-congress-vote-terms.yml").read_text())
+    for job in ["votes", "terms"]:
+        assert workflow["jobs"][job]["with"]["free_disk"] is True
+    assert workflow["jobs"]["votes"]["with"]["timeout_minutes"] == 60
+    for filename in ["rollup-roll-call-votes.yml", "rollup-member-vote-terms.yml"]:
+        manual = yaml.safe_load((WORKFLOWS / filename).read_text())
+        assert manual["jobs"]["run"]["with"]["free_disk"] is True
+    steps = yaml.safe_load((WORKFLOWS / "_rollup.yml").read_text())["jobs"]["rollup"]["steps"]
+    report = next(i for i, step in enumerate(steps) if step.get("name") == "Report the lowest free disk seen")
+    audit = next(i for i, step in enumerate(steps) if step.get("name") == "Retain invocation and transferred-input audit")
+    assert report < audit and "always()" in steps[report]["if"]
+    assert "output/disk-watch.log" in steps[audit]["with"]["path"]
+    assert "lowest sampled free disk" in steps[report]["run"]

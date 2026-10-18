@@ -95,18 +95,18 @@ def test_merging_parts_over_a_prior_keeps_the_fresh_row_and_the_types(tmp_path):
     assert table.schema.field("receive_date").type == pa.timestamp("us", tz="UTC")
 
 
-def test_the_daily_etl_drops_attribute_rows_until_the_sweep_seeds_the_table(tmp_path):
+def test_the_daily_etl_drops_attribute_rows_until_the_sweep_seeds_the_table(tmp_path, monkeypatch):
     pipeline = RegulationsPipeline(output_dir=tmp_path)
     staging = tmp_path / "staging"
     _parts(staging, "docket_attributes", [{"data": {"id": "EPA-1", "attributes": {"keywords": ["a"]}}}])
     assert pipeline._merge_attributes(staging, tmp_path, "docket_attributes") is False
     assert not (tmp_path / "docket_attributes.parquet").exists()
 
-    _parts(tmp_path / "seed", "docket_attributes", [{"data": {"id": "EPA-0", "attributes": {}}}])
-    merge_attribute_parts("docket_attributes", tmp_path / "seed" / "docket_attributes", None,
-                          tmp_path / "docket_attributes.parquet")
+    from types import SimpleNamespace
+    monkeypatch.setattr(pipeline, "_selected_inputs", SimpleNamespace(select=lambda table: object()))
     assert pipeline._merge_attributes(staging, tmp_path, "docket_attributes") is True
-    assert pq.read_table(tmp_path / "docket_attributes.parquet").column("docket_id").to_pylist() == ["EPA-0", "EPA-1"]
+    # Only the day's rows are written; they upsert over the selected native table without restoring it.
+    assert pq.read_table(tmp_path / "docket_attributes.parquet").column("docket_id").to_pylist() == ["EPA-1"]
 
 
 class _Reader:

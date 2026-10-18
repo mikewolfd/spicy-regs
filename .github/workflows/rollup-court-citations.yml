@@ -22,6 +22,7 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-court-citations
+      require_bulk: true
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
       # Downloads three exports (about 0.9 GB at the bucket's ~1.75 MiB/s, nine
       # minutes) and decodes 102 million rows through the strict reader, about 17

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from bisect import bisect_right
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -17,19 +17,50 @@ class RefusalIdentity:
     Values must match exactly, including their lossless type tags. A changed key
     spelling or missing field cannot resolve a refusal. Null is a present value.
     ``refused_raw_field`` defaults to the accepted input's container name.
+    An explicit ``accepted_raw_field=None`` uses the accepted declared identity;
+    the caller must supply the refused raw container and identical key names.
+    ``refused_identity`` may derive those declared keys through the family's
+    maintained identity function. Only unmatched refused inputs are decoded;
+    missing or invalid keys stay unresolved, and retained receipts never change.
     """
 
     fields: tuple[str, ...]
-    accepted_raw_field: str
+    accepted_raw_field: str | None
     refused_raw_field: str | None = None
+    refused_identity: Callable[[Mapping], Mapping | None] | None = None
 
     def __post_init__(self):
         if (not self.fields or len(set(self.fields)) != len(self.fields)
                 or any(not isinstance(field, str) or not field for field in self.fields)
-                or not isinstance(self.accepted_raw_field, str) or not self.accepted_raw_field
+                or (self.accepted_raw_field is not None
+                    and (not isinstance(self.accepted_raw_field, str) or not self.accepted_raw_field))
+                or (self.accepted_raw_field is None and self.refused_raw_field is None)
                 or (self.refused_raw_field is not None
                     and (not isinstance(self.refused_raw_field, str) or not self.refused_raw_field))):
             raise ValueError("Refusal resolution needs explicit raw input and natural-key fields")
+
+
+def _derived_refusal_keys(identity: RefusalIdentity):
+    """Bounded Arrow UDF for a family's explicit refusal identity derivation."""
+    import pyarrow as pa
+    from spicy_regs.etl_receipts import decode_exact_json, exact_json
+
+    def derive(texts):
+        keys = []
+        for text in texts.to_pylist():
+            try:
+                processing = decode_exact_json(text)
+                raw = processing[identity.refused_raw_field or identity.accepted_raw_field]
+                assert identity.refused_identity is not None
+                values = identity.refused_identity(raw) if isinstance(raw, Mapping) else None
+                key = ("[" + ",".join(exact_json(values[field]) for field in identity.fields) + "]"
+                       if isinstance(values, Mapping) and all(field in values for field in identity.fields) else None)
+            except (ValueError, TypeError, KeyError):
+                key = None
+            keys.append(key)
+        return pa.array(keys, type=pa.string())
+
+    return derive
 
 
 def _raw_identity_sql(column: str, raw_field: str, fields: tuple[str, ...]) -> str:
@@ -52,7 +83,7 @@ def _raw_identity_sql(column: str, raw_field: str, fields: tuple[str, ...]) -> s
             f"THEN CAST(to_json(list_value({', '.join(values)})) AS VARCHAR) END")
 
 
-def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
+def _pending_refusals(con, identities: Mapping[str, RefusalIdentity], *, current_source: str = "current") -> None:
     """Keep unmatched prior refusals unless a current accepted input proves resolution.
 
     Matching operates only on narrow natural keys. No raw identity is guessed:
@@ -65,16 +96,44 @@ def _pending_refusals(con, identities: Mapping[str, RefusalIdentity]) -> None:
         return
     for name, condition in (("prior", "ordinal IN (SELECT ordinal FROM pending_refusals)"),
                             ("current", "outcome='accepted'")):
-        parts: list[str] = [f"SELECT ordinal,dataset,'declared' AS kind,identity_json AS value FROM {name} "
+        source = current_source if name == "current" else name
+        parts: list[str] = [f"SELECT ordinal,dataset,'declared' AS kind,identity_json AS value FROM {source} "
                            f"WHERE {condition} AND record_id IS NOT NULL AND identity_json IS NOT NULL"]
-        for dataset, identity in identities.items():
+        derived_functions = []
+        for index, (dataset, identity) in enumerate(identities.items()):
             raw_field = (identity.refused_raw_field or identity.accepted_raw_field
                          if name == "prior" else identity.accepted_raw_field)
-            key = _raw_identity_sql("processing_json", raw_field, identity.fields)
+            if name == "prior" and identity.refused_identity is not None:
+                function = f"derived_refusal_key_{index}"
+                con.create_function(function, _derived_refusal_keys(identity), ["VARCHAR"], "VARCHAR",
+                                    type="arrow", null_handling="special")
+                derived_functions.append(function)
+                # Apply DuckDB's same JSON spelling to the callback's exact tags
+                # and the accepted key; no retained receipt is rewritten.
+                key = f"CAST(to_json(CAST({function}(processing_json) AS JSON)) AS VARCHAR)"
+            elif raw_field is None:
+                # Declared identity_json is an exact list of [field, value]
+                # pairs. Repackage only its existing tagged values so the raw
+                # comparison preserves types and never normalizes a key.
+                entries = "json_extract(identity_json, '$[1]')::JSON[]"
+                values = [
+                    "json_extract(list_extract(list_filter(" + entries
+                    + ", entry -> json_extract_string(entry, '$[1][0][1]')='"
+                    + field.replace("'", "''") + "'), 1), '$[1][1]')"
+                    for field in identity.fields
+                ]
+                key = ("CASE WHEN " + " AND ".join(f"{value} IS NOT NULL" for value in values)
+                       + " THEN CAST(to_json(list_value(" + ", ".join(values) + ")) AS VARCHAR) END")
+            else:
+                key = _raw_identity_sql("processing_json", raw_field, identity.fields)
             dataset_sql = "'" + dataset.replace("'", "''") + "'"
-            parts.append(f"SELECT ordinal,dataset,'raw' AS kind,{key} AS value FROM {name} "
+            parts.append(f"SELECT ordinal,dataset,'raw' AS kind,{key} AS value FROM {source} "
                          f"WHERE {condition} AND dataset={dataset_sql}")
-        con.execute(f"CREATE TABLE {name}_resolution_keys AS " + " UNION ALL ".join(parts))
+        try:
+            con.execute(f"CREATE TABLE {name}_resolution_keys AS " + " UNION ALL ".join(parts))
+        finally:
+            for function in derived_functions:
+                con.remove_function(function)
     con.execute("""DELETE FROM pending_refusals WHERE ordinal IN (
         SELECT p.ordinal FROM prior_resolution_keys p JOIN current_resolution_keys c
         ON p.dataset=c.dataset AND p.kind=c.kind AND p.value=c.value)""")
@@ -117,14 +176,18 @@ def _take_prior_rows(priors, file_ends, group_ends, ordinals, schema):
 def carry_receipt_history(
     current_path: Path, prior_paths: Sequence[Path], destination: Path, *,
     refusal_identities: Mapping[str, RefusalIdentity] | None = None,
+    resolution_receipts: Path | None = None,
 ) -> Path:
     """Keep identical attempts exactly; reference only the direct accepted predecessor on change.
 
-    Inputs are fresh current receipts and an already validated selected prior bundle.
+    Inputs are candidate current receipts and an already validated selected prior bundle.
     Unmatched old accepted rows and observations disappear. Unresolved prior
     refusals follow current receipts unchanged, in prior occurrence order.
     A current accepted receipt resolves a refusal with the same declared identity,
     or the exact raw natural key explicitly supplied in ``refusal_identities``.
+    With ``resolution_receipts``, that current row's (dataset, record_id) must also
+    be accepted in this already-admitted fresh receipt file. Use it when current
+    includes unchanged held rows; those alone cannot prove a fresh success.
     Missing or changed key spellings remain unresolved. Duplicate nonaccepted
     occurrences match FIFO, so repeated refusals do not accumulate copies.
     Narrow matching keys spill to private disk. Full prior rows are gathered by
@@ -187,37 +250,53 @@ def carry_receipt_history(
         assert duplicate is not None
         if duplicate[0]:
             raise ValueError("Conflicting selected prior receipts")
+        # One narrow table per side, built straight from the view: every text identity is a 32-byte digest (hex ids
+        # and versions would be 71 characters each), and accepted-only columns are not stored twice. The workspace
+        # was ~543 B/row; it is private disk, so keep it small. Candidate keys are checked against the raw values below.
+        # Kept receipts are not decoded, so check the one embedded history that can be wrong: payloads that older
+        # inheritance retained by digest. Only such legacy receipts mention it; a carried receipt never does.
+        histories = con.execute(
+            "SELECT diagnostic_json FROM prior WHERE contains(diagnostic_json,'retained_processing')"
+        ).to_arrow_reader(batch_size=2000)
+        for batch in histories:
+            for text in batch.column(0).to_pylist():
+                retained = decode_exact_json(text).get("retained_processing", {})
+                if not isinstance(retained, dict) or any(_digest(value) != key for key, value in retained.items()):
+                    raise ValueError("Retained processing digest differs")
         for name in ("current", "prior"):
             con.execute(
-                f"CREATE TABLE {name}_keys AS SELECT ordinal,dataset,outcome,record_id,subject_version, "
-                "CASE WHEN outcome='accepted' THEN record_id ELSE '' END AS accepted_record_id, "
-                "CASE WHEN outcome='accepted' THEN subject_version ELSE '' END AS accepted_subject_version, "
-                f"{_processing_key('processing_json')} AS processing_key, "
-                f"CASE WHEN outcome='accepted' THEN unhex('') ELSE {_processing_key('diagnostic_json')} "
-                "END AS diagnostic_key "
-                f"FROM {name}"
-            )
-            con.execute(
                 f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
-                "processing_key, accepted_record_id, accepted_subject_version, "
-                "diagnostic_key ORDER BY ordinal) AS occurrence "
-                f"FROM {name}_keys"
+                "processing_key, record_key, version_key, diagnostic_key ORDER BY ordinal) AS occurrence FROM ("
+                "SELECT ordinal, dataset, outcome, "
+                f"{_processing_key('processing_json')} AS processing_key, "
+                "CASE WHEN outcome='accepted' THEN unhex(sha256(record_id)) ELSE ''::BLOB END AS record_key, "
+                "CASE WHEN outcome='accepted' THEN unhex(sha256(subject_version)) ELSE ''::BLOB END AS version_key, "
+                f"CASE WHEN outcome='accepted' THEN ''::BLOB ELSE {_processing_key('diagnostic_json')} END AS diagnostic_key "
+                f"FROM {name})"
             )
         # Outcome separates the branches, so ignored fields use fixed keys.
         # Ordinary equality preserves null refusal and admits a hash join
         # instead of an OR join that compares every current/prior pair.
+        # A changed accepted row finds its predecessor by identity alone; a non-accepted row's empty record_key matches nothing.
         con.execute("""CREATE TABLE matches AS SELECT c.ordinal AS current_ordinal,p.ordinal AS prior_ordinal,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.ordinal END AS predecessor_ordinal
             FROM current_ranked c LEFT JOIN prior_ranked p ON c.dataset=p.dataset AND c.outcome=p.outcome
             AND c.processing_key=p.processing_key AND c.occurrence=p.occurrence
-            AND c.accepted_record_id=p.accepted_record_id
-            AND c.accepted_subject_version=p.accepted_subject_version
-            AND c.diagnostic_key=p.diagnostic_key
-            LEFT JOIN prior_keys predecessor ON c.dataset=predecessor.dataset AND c.record_id=predecessor.record_id
+            AND c.record_key=p.record_key AND c.version_key=p.version_key AND c.diagnostic_key=p.diagnostic_key
+            LEFT JOIN prior_ranked predecessor ON c.dataset=predecessor.dataset AND c.record_key=predecessor.record_key
             AND predecessor.outcome='accepted'""")
-        for name in ("current_ranked", "prior_ranked", "current_keys", "prior_keys"):
+        for name in ("current_ranked", "prior_ranked"):
             con.execute(f"DROP TABLE {name}")
-        _pending_refusals(con, refusal_identities or {})
+        resolution_source = "current"
+        if resolution_receipts is not None:
+            # Read only fresh acceptance keys. A semijoin does not duplicate current rows or copy their payloads.
+            con.execute(
+                "CREATE VIEW resolving_current AS SELECT c.* FROM current c SEMI JOIN "
+                f"read_parquet({quoted(resolution_receipts)}, hive_partitioning=false) fresh "
+                "ON c.dataset=fresh.dataset AND c.record_id=fresh.record_id AND fresh.outcome='accepted'"
+            )
+            resolution_source = "resolving_current"
+        _pending_refusals(con, refusal_identities or {}, current_source=resolution_source)
         # Only ordinals are sorted. Joining/sorting literal JSON and full rows
         # can exhaust the connection's memory even with spilling enabled.
         reader = con.execute("SELECT * FROM matches ORDER BY current_ordinal").to_arrow_reader(batch_size=2000)

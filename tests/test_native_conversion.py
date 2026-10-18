@@ -71,7 +71,9 @@ def publish_old(store, monkeypatch, directory, family, tables):
     for name, rows in tables.items():
         files.append(directory / "old" / f"{name}.parquet")
         files[-1].parent.mkdir(parents=True, exist_ok=True)
-        pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([(column, pa.string()) for column in rows[0]])), files[-1])
+        table = rows if isinstance(rows, pa.Table) else pa.Table.from_pylist(
+            rows, schema=pa.schema([(column, pa.string()) for column in rows[0]]))
+        pq.write_table(table, files[-1])
     with monkeypatch.context() as patch:
         patch.setattr(etl_policy_registry, "require_registered_receipts", lambda *_: None)
         build_generation(directory / "old-generation" / family, family=family, files=files,
@@ -168,6 +170,41 @@ def test_without_publish_nothing_leaves_the_work_directory(tmp_path, monkeypatch
     refused_read(tmp_path, "cfr_sections")
 
 
+def test_comment_attributes_cli_converts_typed_rows_without_publication(tmp_path, monkeypatch, bucket):
+    from spicy_regs import regulations_bulk
+    from spicy_regs.schemas.regulations_subjects import SOURCE_COLUMNS
+    from spicy_regs.transforms.regulations_shape import TYPES
+
+    schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS["comment_attributes"]])
+    table = pa.Table.from_pylist([
+        {"comment_id": "C-1", "page_count": 3, "withdrawn": False, "city": "é😀"},
+        {"comment_id": "C-2", "page_count": 0, "withdrawn": True, "address1": "escape\x1b"},
+        {"comment_id": "C-3"},
+    ], schema=schema)
+    old = publish_old(bucket, monkeypatch, tmp_path, "comment-attributes", {"comment_attributes": table})
+    written = list(bucket.writes)
+    monkeypatch.setattr(conversion, "source_state", lambda remote: dict(STATE))
+    monkeypatch.setenv("SPICY_REGS_REQUIRE_BULK", "true")
+    routes = []
+    writer = regulations_bulk.write_held_dataset
+
+    def observed(*args, **kwargs):
+        routes.append(args[0])
+        return writer(*args, **kwargs)
+
+    monkeypatch.setattr(regulations_bulk, "write_held_dataset", observed)
+    work = tmp_path / "attributes"
+    assert conversion.main(["comment-attributes", "--allow", "comment-attributes", "--work", str(work),
+                            "--expect-main", MAIN, "--expect-spicy-docs", WHEEL]) == 0
+    receipt = json.loads((work / conversion.RECEIPT).read_text())
+    assert routes == ["comment_attributes"]
+    assert receipt["captured"]["entry"] == old
+    assert receipt["published"] is None and bucket.writes == written
+    assert receipt["tables"]["comment_attributes"] == {
+        "retained_rows": 3, "subject_rows": 3, "rows_only_in_restored": 0, "rows_only_in_retained": 0,
+        "columns_only_in_restored": [], "columns_only_in_retained": [], "type_changes": {}, "metadata_changes": []}
+
+
 def test_a_court_family_converts_through_the_court_writer(tmp_path, monkeypatch, bucket):
     from spicy_regs.court_receipts import prior_receipt_selection, restore_processing_input
 
@@ -218,12 +255,12 @@ def test_main_moving_during_the_conversion_refuses_the_publication(tmp_path, mon
 
 def test_only_a_named_old_shape_family_with_a_writer_converts(tmp_path, monkeypatch, bucket):
     publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
-    publish_old(bucket, monkeypatch, tmp_path, "comment-attributes", {"comment_attributes": [{"comment_id": "C-1"}]})
+    publish_old(bucket, monkeypatch, tmp_path, "unmapped-fixture", {"unmapped_fixture": [{"id": "C-1"}]})
     written = list(bucket.writes)
     for family, options, message in [
         ("cfr-sections", {"allowed": ["amendments", "treaties"]}, "not in this run's allow-list"),
         ("nominations", {}, "nominations is not a published family"),
-        ("comment-attributes", {}, "no subject/receipt rollup or court writer"),
+        ("unmapped-fixture", {}, "no subject/receipt rollup or court writer"),
     ]:
         with pytest.raises(conversion.ConversionRefused, match=message):
             convert(family, tmp_path / family, publish=True, **options)
@@ -525,7 +562,7 @@ def test_a_refused_pointer_write_reports_the_state_it_left(tmp_path, monkeypatch
     assert "REFUSED: cfr-sections: PublicationError: Refusing to shrink" in report and f"STATE: {conversion.NOTHING_PUBLISHED}" in report
 
 
-@pytest.mark.parametrize("call", [1, 3], ids=["writer-validation", "generation-admission"])
+@pytest.mark.parametrize("call", [1, 2], ids=["writer-validation", "generation-admission"])
 @pytest.mark.parametrize(
     "failure, code, report",
     [

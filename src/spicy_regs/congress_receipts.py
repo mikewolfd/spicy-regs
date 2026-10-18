@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from contextlib import ExitStack
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,16 +26,14 @@ from spicy_regs.etl_receipts import (
     RECEIPT_SCHEMA,
     DatasetPolicy,
     ReceiptContext,
-    ReceiptLineage,
     combine_receipts,
     failure_receipt,
     observation_receipt,
-    read_attempts,
-    read_with_receipts,
     select_receipts,
     split_record,
     validate_receipt_bundle,
 )
+from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
 from spicy_regs.transforms.parquet_rows import write_rows
 
 PROCESSOR = "congress-subjects/1"
@@ -60,6 +57,34 @@ def policy(dataset: str) -> DatasetPolicy:
         policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications", "member_vote_terms"} else "congress-subjects/1",
         receipt_only=dataset in RECEIPT_ONLY,
     )
+
+
+def refusal_identities(dataset: str) -> dict[str, RefusalIdentity]:
+    """Resolve a refused raw row only when every declared key is retained literally.
+
+    Derived native keys have no raw-field declaration here and remain unresolved.
+    Missing raw keys never substitute another column or an ordinal.
+    """
+    keys = policy(dataset).identity_fields
+    return {dataset: RefusalIdentity(keys, "source_fields")} if keys and set(keys) <= set(INPUT_COLUMNS[dataset]) else {}
+
+
+def has_unmatched_failures(receipts: Path, priors: Mapping[str, Sequence[Path]] | None = None) -> bool:
+    """A failed attempt is historical only when the selected prior retains its exact receipt id."""
+    from spicy_regs import etl_bulk
+
+    by_path: dict[Path, list[str]] = {}
+    for dataset, paths in (priors or {}).items():
+        for path in paths:
+            by_path.setdefault(path, []).append(dataset)
+    with etl_bulk.bulk_connection() as (con, _):
+        con.execute("CREATE TABLE historical_failures(receipt_id VARCHAR)")
+        for path, datasets in by_path.items():
+            con.execute("INSERT INTO historical_failures SELECT receipt_id FROM read_parquet(?) "
+                        "WHERE dataset=ANY(?) AND outcome IN ('refused','error')", [str(path), datasets])
+        return bool(con.execute("SELECT EXISTS(SELECT 1 FROM read_parquet(?) r WHERE outcome IN ('refused','error') "
+                                "AND NOT EXISTS(SELECT 1 FROM historical_failures p WHERE p.receipt_id=r.receipt_id))",
+                                [str(receipts)]).fetchone()[0])
 
 
 def input_policy(dataset: str, subjects: Path | tuple[Path, ...] | None) -> DatasetPolicy:
@@ -145,6 +170,8 @@ def write_congress_dataset(
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
     bulk: bool = False,
+    validate: bool = True,
+    on_fresh_failure: Callable[[], None] | None = None,
 ) -> tuple[Path | None, Path]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
@@ -152,13 +179,17 @@ def write_congress_dataset(
     conversion input; callers can additionally retain ordered native capture
     witnesses. The first witness never asserts that a shaped file is an original
     publisher response.
+
+    ``on_fresh_failure`` reports a fresh refused/error attempt before carry can
+    reuse its older receipt. The caller can retain the completed private bundle
+    while refusing its publication.
     """
     if bulk:
-        if dataset not in {'member_votes', 'member_vote_terms', 'roll_call_votes'}:
-            raise ValueError('Batch vote writing requires a declared vote dataset')
+        if dataset not in INPUT_COLUMNS:
+            raise ValueError("Batch Congress writing requires a declared Congress dataset")
         from spicy_regs.votes_batch_receipts import write_congress_dataset as write_votes
         return write_votes(source, directory, dataset=dataset, generation_id=generation_id,
-                           witnesses=witnesses, prior=prior, bulk=True)
+                           witnesses=witnesses, prior=prior, bulk=True, validate=validate, on_fresh_failure=on_fresh_failure)
 
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -167,7 +198,7 @@ def write_congress_dataset(
     selected = policy(dataset)
     digest = _digest(source)
     directory.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary, ExitStack() as stack:
+    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary:
         stage = Path(temporary) / "bundle"
         stage.mkdir()
         subjects = None if selected.receipt_only else stage / (dataset + ".parquet")
@@ -182,21 +213,18 @@ def write_congress_dataset(
         prior_paths = []
         if prior is not None:
             scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
-            validate_receipt_bundle({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id)
+            if validate:
+                validate_receipt_bundle({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id)
             prior_paths.append(scoped)
-        lineage = stack.enter_context(ReceiptLineage(prior_paths, dataset=dataset))
 
         def context(ordinal, diagnostics=None, subject=None, processing=None):
-            current = ReceiptContext(
+            return ReceiptContext(
                 generation_id,
                 f"{dataset}:{digest}:{ordinal}",
                 PROCESSOR,
                 [{**base_witness, "locator": str(ordinal)}, *witnesses],
                 diagnostics or {},
             )
-            if subject is not None:
-                return lineage.inherit(current, selected, subject)
-            return lineage.inherit_processing(current, processing) if processing is not None else current
 
         with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
             sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
@@ -255,9 +283,16 @@ def write_congress_dataset(
             finally:
                 if sw is not None:
                     sw.close()
-        validate_receipt_bundle(
-            {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
-        )
+        if on_fresh_failure is not None and has_unmatched_failures(receipts):
+            on_fresh_failure()
+        if prior_paths:
+            # The same carry rule as the batch writer: unchanged rows keep their prior receipt, changed ones name it.
+            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
+                                  refusal_identities=refusal_identities(dataset)).replace(receipts)
+        if validate:
+            validate_receipt_bundle(
+                {dataset: [] if subjects is None else [subjects]}, [receipts], [selected], generation_id=generation_id
+            )
         publish_directory_no_replace(stage, directory)
     return (None if subjects is None else directory / subjects.name, directory / receipts.name)
 
@@ -282,47 +317,19 @@ def retained_source_rows(attempts, *, schema=None):
 
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None, receipts: Path, destination: Path, *, dataset: str, generation_id: str,
-    bulk: bool = False,
+    bulk: bool = False, validate: bool = True, scoped: bool = False,
 ) -> Path:
-    """Restore retained original source fields and schema after exact receipt admission.
+    """Restore exact retained input after one complete subject/receipt admission.
 
-    Rejected conversion attempts remain available for retry. Technical tables
-    and processing events remain receipt-only in the public generation. Footer
-    metadata includes bill-family completion scopes and per-reader refusal state.
+    The decoding route depends on the retained source schema, independently of
+    which Congress datasets the SQL mapper can write. Callers that just admitted
+    this exact pair may pass ``validate=False``; ``scoped`` avoids filtering an
+    already selected receipt file again.
     """
-    if bulk:
-        if dataset not in {'member_votes', 'member_vote_terms', 'roll_call_votes'}:
-            raise ValueError('Batch vote restoration requires a declared vote dataset')
-        from spicy_regs.votes_batch_receipts import restore_processing_input as restore_votes
-        return restore_votes(subject, receipts, destination, dataset=dataset,
-                             generation_id=generation_id, bulk=True)
+    from spicy_regs.votes_batch_receipts import restore_processing_input as restore_selected
 
-    selected = input_policy(dataset, subject)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix=".congress-read-", dir=destination.parent) as temp:
-        scoped = select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
-        paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
-        validate_receipt_bundle({dataset: paths}, [scoped], [selected], generation_id=generation_id)
-        # Exercise the shared exact matching reader before reconstructing original source rows.
-        for _ in read_with_receipts(paths, [scoped], selected, generation_id=generation_id):
-            pass
-        metadata_rows = []
-        for receipt in read_attempts([scoped], selected, generation_id=generation_id):
-            data = receipt["processing_fields"]
-            if data.get("entry_kind") == "table_metadata":
-                metadata_rows.append(data)
-        if not metadata_rows or any(row != metadata_rows[0] for row in metadata_rows[1:]):
-            raise ValueError("Congress input requires consistent retained source footers")
-        retained = metadata_rows[0]
-
-        # Source shapers use strings. Preserve discovered source columns and
-        # absent columns by reading the exact retained input dictionaries.
-        def original_rows():
-            yield from retained_source_rows(
-                read_attempts([scoped], selected, generation_id=generation_id), schema=schema)
-
-        schema = pa.ipc.read_schema(pa.BufferReader(retained["source_schema"]))
-        return write_rows(original_rows(), destination, schema)
+    return restore_selected(subject, receipts, destination, dataset=dataset,
+                            generation_id=generation_id, bulk=bulk, validate=validate, scoped=scoped)
 
 
 @dataclass(frozen=True)
@@ -362,11 +369,13 @@ class CongressBuild:
     unclassified_outputs: tuple[Path, ...] = field(default=(), init=False)
     source_evidence: Any = field(default=None, init=False)
     completed: bool = field(default=False, init=False)
+    fresh_refusals: bool = field(default=False, init=False)
 
     def run(self, builder: Callable, output_dir: Path, **kwargs):
         import inspect
 
         self.completed = False
+        self.fresh_refusals = False
         if (
             not self.generation_id
             or self.generation_id in {".", ".."}
@@ -431,6 +440,7 @@ class CongressBuild:
                 generation_id=self.generation_id,
                 witnesses=self.witnesses,
                 prior=self.inputs.get(dataset),
+                on_fresh_failure=lambda: setattr(self, "fresh_refusals", True),
             )
             if subject is not None:
                 subjects.append(subject)
@@ -469,7 +479,7 @@ class CongressBuild:
             raise ValueError("Complete family awaits policies and receipts for sibling outputs")
         if not self.completed or self.receipt_path is None:
             raise ValueError("No completed Congress build to admit")
-        if any(r["outcome"] == "refused" for r in _rows(self.receipt_path)):
+        if self.fresh_refusals or has_unmatched_failures(self.receipt_path, {name: [held.receipts] for name, held in self.inputs.items()}):
             raise ValueError("Conversion refusals require review before complete generation admission")
         return build_generation(
             directory,

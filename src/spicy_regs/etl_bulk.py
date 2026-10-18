@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from contextvars import ContextVar
 from hashlib import sha256
 from itertools import batched
+from os import getenv
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
@@ -53,7 +54,11 @@ _UPPER_HEX_ESCAPE = r"(^|[^\\])(\\\\)*\\u00[01][A-F]"
 #: A JSON string as ``json.loads`` reads one: no raw control character, and only the escapes JSON defines.
 _STRING = r'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
 #: The encoded values with nothing inside them. An integer is held to 18 digits, below where ``int`` refuses a text.
-_SCALAR = r'\["null",null\]|\["bool",(?:true|false)\]|\["int",-?(?:0|[1-9][0-9]{0,17})\]|\["str",' + _STRING + r"\]"
+#: A UTC datetime ``datetime.fromisoformat`` certainly reads: years 1000-9999, days to the 28th, so no calendar date is invalid.
+_DATETIME = (r'\["datetime","[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|1[0-9]|2[0-8])'
+             r'T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{6})?\+00:00"\]')
+_SCALAR = (r'\["null",null\]|\["bool",(?:true|false)\]|\["int",-?(?:0|[1-9][0-9]{0,17})\]|\["str",' + _STRING + r"\]|"
+           + _DATETIME)
 #: A list or a mapping whose members have each already been replaced by the ``chr(1)`` that stands for one value.
 _NESTED = (
     r'\["list",\[(?:\x01(?:,\x01)*)?\]\]|\["dict",\[(?:\[' + _STRING + r",\x01\](?:,\[" + _STRING + r",\x01\])*)?\]\]"
@@ -128,9 +133,16 @@ def mapper_table(rows, schema: pa.Schema, what: str) -> pa.Table:
 
 
 def reference_fallback(error: NotBulkEligible, route: str = "admission") -> None:
-    """Refuse a reference route when the caller has ruled out its capacity (``bulk_limits(require_bulk=True)``)."""
+    """Refuse a mapped route's wholesale fallback when its caller or runner requires bulk work.
+
+    The environment applies in worker threads and subprocesses too. It does not
+    change resource limits, unmapped eligibility, or sparse row decisions inside a bulk route.
+    """
+    required = getenv("SPICY_REGS_REQUIRE_BULK", "false")
+    if required not in {"true", "false"}:
+        raise ValueError("SPICY_REGS_REQUIRE_BULK must be 'true' or 'false'; reference fallback disabled") from error
     limits = _limits.get()
-    if limits is not None and limits.require_bulk:
+    if required == "true" or (limits is not None and limits.require_bulk):
         raise ValueError(f"Required bulk {route} failed; reference fallback disabled: {error}") from error
 
 
@@ -313,9 +325,11 @@ def write_split(
     label: str,
     first_receipts: Sequence[Mapping] = (),
     last_receipts: Iterable[Mapping] = (),
+    last_refusals: Iterable[Mapping] = (),
     refusals_last: bool = False,
     segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
     isolate: str | None = None,
+    subject_columns: Sequence[str] | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
 
@@ -326,8 +340,11 @@ def write_split(
     first (the order relies on registering one table per query; the ordinal guard below stays). A row marked
     ``_reference`` is given to ``row_attempt(batch, index, source_row)``, the family's own row function, with the row as
     the source file holds it (never decoded from the query's encoded text, which spells a value SQL does not own as a
-    marker), and merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
-    writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
+    marker), and merged back in place; with ``refusals_last`` its failure receipt goes after normal accepted/observed
+    records, as the row writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
+    ``last_refusals`` follows the routed refusals, retaining the order of separately rejected updates.
+    ``subject_columns`` optionally names query aliases in subject-schema order when a native field name collides with
+    a receipt field; aliases are renamed before routed subjects are inserted.
     ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
     written as a receipt row group of its own, so a reader fetching a neighbour does not load it.
 
@@ -335,6 +352,9 @@ def write_split(
     :func:`bulk_failure`, never a row retry. Rows arriving out of order, or fewer than ``expected_rows``, raise
     ``RuntimeError``: a stream cut short leaves a bundle that is consistent with itself.
     """
+    if subject_columns is not None and len(subject_columns) != len(subject_schema):
+        raise ValueError("subject_columns must name one query column per subject field")
+    selected_subjects = subject_schema.names if subject_columns is None else list(subject_columns)
     seen, routed, piece_start = 0, 0, 0
     piece: pa.RecordBatch | None = None
     pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
@@ -359,14 +379,14 @@ def write_split(
             proven = [not flag for flag in flags]
             accepted = table["_accepted"].to_pylist() if "_accepted" in names else proven
             written = table.filter(pa.array(proven)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
-            kept = table.filter(pa.array(accepted)).select(subject_schema.names).cast(subject_schema)
+            kept = table.filter(pa.array(accepted)).select(selected_subjects).rename_columns(subject_schema.names).cast(subject_schema)
             decided_subjects, decided_receipts, refusals = {}, {}, []
             for index in (index for index, flag in enumerate(flags) if flag):
                 assert piece is not None
                 offset = table["_ordinal"][index].as_py() - piece_start
                 subject, receipt = row_attempt(table, index, piece.slice(offset, 1).to_pylist()[0])
                 decided_subjects[index] = subject
-                if refusals_last and receipt["outcome"] != "accepted":
+                if refusals_last and receipt["outcome"] not in {"accepted", "observed"}:
                     refusals.append(receipt)
                 else:
                     decided_receipts[index] = receipt
@@ -408,11 +428,20 @@ def write_split(
                         con.unregister(SOURCE_BATCH)
             for receipt_batch in batched(last_receipts, _GROUP):
                 emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
-            emit(RECEIPT_SCHEMA.empty_table(), final=True)
             refused.close()
             with pq.ParquetFile(scratch / "refused.parquet") as late:
-                for batch in late.iter_batches(batch_size=1):
-                    receipts.write_batch(batch)
+                if isolate is not None:
+                    # The deferred file does not retain route flags. Preserve the
+                    # isolation guarantee for every deferred failure on this route.
+                    emit(RECEIPT_SCHEMA.empty_table(), final=True)
+                    for batch in late.iter_batches(batch_size=1):
+                        receipts.write_batch(batch)
+                else:
+                    for batch in late.iter_batches(batch_size=_GROUP):
+                        emit(pa.Table.from_batches([batch]))
+            for receipt_batch in batched(last_refusals, _GROUP):
+                emit(pa.Table.from_pylist(list(receipt_batch), schema=RECEIPT_SCHEMA))
+            emit(RECEIPT_SCHEMA.empty_table(), final=True)
         except (duckdb.Error, pa.ArrowException) as error:
             raise bulk_failure(f"Bulk {label} write failed", error) from error
     if seen != expected_rows:
@@ -585,7 +614,7 @@ def reduced_sql(text: str) -> str:
 
     Every replacement stands for a text ``_unpack(json.loads(...))`` returns from without raising, so a text that
     reduces to one ``chr(1)`` is one such value. That holds only for a text with no ``chr(1)`` of its own, which the
-    caller checks. A float, decimal, date or bytes value is never replaced: its row goes to the reference.
+    caller checks. A float, decimal, date, bytes or other datetime value is never replaced: its row goes to the reference.
     """
     reduced = f"regexp_replace({text}, {_literal(_SCALAR)}, chr(1), 'g')"
     for _ in range(_DEPTH):

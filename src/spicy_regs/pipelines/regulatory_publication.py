@@ -7,6 +7,7 @@ import hashlib
 import os
 import shutil
 
+from loguru import logger
 import pyarrow.parquet as pq
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -29,7 +30,7 @@ def restore_dataset(root: Path, dataset: str, destination: Path, *, index=None, 
         if selected is None:
             return False
         materialize_internal(ReceiptInput(dataset, selected.subjects, selected.receipts, selected.generation_id),
-                             destination)
+                             destination, bulk=True)
         return True
 
 
@@ -98,14 +99,30 @@ def finish_dataset(root: Path, dataset: str, source: Path, *, publish: bool, inp
         selected_inputs = inputs or SelectedInputs(root, root / '.selected-write' / uuid4().hex, public_url='')
         prior = selected_inputs.select(dataset)
         if prior is not None:
-            from spicy_regs.transforms.regulations_receipts import read_internal
-            for _ in read_internal(ReceiptInput(dataset, prior.subjects, prior.receipts, prior.generation_id)):
-                pass
+            from spicy_regs.etl_receipts import select_receipts, selected_subject_policy, validate_receipt_bundle
+            from spicy_regs.transforms.regulations_receipts import policy
+            with TemporaryDirectory(prefix='.regulatory-prior-', dir=root) as temporary:
+                scoped = select_receipts(prior.receipts, Path(temporary) / 'receipts.parquet', dataset=dataset)
+                validate_receipt_bundle({dataset: prior.subjects}, [scoped],
+                    [selected_subject_policy(policy(dataset), prior.subjects)], generation_id=prior.generation_id)
         artifact = build_local_generation(
             {dataset: source}, directory, generation_id=uuid4().hex, family=family, publication_status="complete-family",
             prior_receipts={dataset: [prior.receipts]} if prior is not None else {}
         )
-    if not (pair / 'generation.json').exists():
+    from spicy_regs.transforms.regulations_receipts import CARRY_DATASETS
+    fresh_conversion = not (pair / 'generation.json').exists()
+    if fresh_conversion and dataset in CARRY_DATASETS:
+        # Carry preserves historical refusals. A refused current source row is instead proved by the missing
+        # corresponding subject: the regulatory writer makes exactly one accepted subject or refusal per input.
+        if pq.ParquetFile(source).metadata.num_rows != pq.ParquetFile(directory / (dataset + '.parquet')).metadata.num_rows:
+            raise ValueError(f'{dataset}: native conversion refused; checkpoint remains unadvanced')
+    return _seal(root, dataset, directory, artifact, publish=publish, inputs=inputs,
+                 check_refusals=fresh_conversion and dataset not in CARRY_DATASETS)
+
+
+def _seal(root, dataset, directory, artifact, *, publish, inputs, check_refusals):
+    """Publish (when asked) and remember a built generation of one dataset."""
+    if check_refusals:
         # A current source conversion must be complete. Historical attempts in
         # an already qualified catalog pair remain evidence, not a veto.
         for batch in pq.ParquetFile(directory / 'etl_receipts.parquet').iter_batches(columns=['outcome']):
@@ -116,6 +133,84 @@ def finish_dataset(root: Path, dataset: str, source: Path, *, publish: bool, inp
               inputs=inputs, published=published)
     shutil.copyfile(directory / (dataset + ".parquet"), root / (dataset + ".parquet"))
     return directory / (dataset + ".parquet")
+
+
+def finish_attribute_dataset(root: Path, dataset: str, fresh: Path, *, publish: bool, inputs):
+    """Upsert the day's attribute rows (``fresh``, in the contract's columns) over the selected native table.
+
+    Design B: the selected prior subject and receipt files are kept, receipts are written only for ``fresh``'s rows, and
+    :func:`native_merge` upserts them (an unchanged refetch keeps its prior receipt, a changed row references its
+    predecessor, a kept row keeps its receipt verbatim). Nothing is restored to rows. The one validation is the
+    generation's admission in ``build_generation``.
+    """
+    from spicy_regs.etl_receipts import select_receipts, validate_receipt_bundle
+    from spicy_regs.native_merge import native_merge
+    from spicy_regs.native_types import described_schema
+    from spicy_regs.transforms.regulations_receipts import ATTRIBUTE_DATASETS, policy, refusal_identity, write_held_dataset
+
+    if dataset not in ATTRIBUTE_DATASETS:
+        raise ValueError('Attribute upsert requires an attribute dataset')
+    if publish and (inputs is None or inputs.index is None):
+        raise ValueError('Publication requires the captured native input selection used by this build')
+    declared = policy(dataset)
+    prior = inputs.select(dataset)
+    if prior is None or len(prior.subjects) != 1:
+        raise ValueError(f'{dataset}: the selected native table is required to upsert the day\'s rows')
+    if not pq.read_schema(prior.subjects[0]).equals(declared.subject_schema):
+        raise ValueError(f'{dataset}: the selected native table has another schema than its policy; convert it first')
+    index = inputs.index if inputs.index is not None else publication.empty_index()
+    owner = publication.table_owner(index, dataset + ".parquet")
+    family = owner[0] if owner else dataset.replace("_", "-")
+    directory = root / "generations" / uuid4().hex
+    generation = uuid4().hex
+    root.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=root, prefix='.attribute-merge-') as temporary:
+        work = Path(temporary)
+        scoped = select_receipts(prior.receipts, work / 'prior-receipts.parquet', dataset=dataset)
+        validate_receipt_bundle({dataset: prior.subjects}, [scoped], [declared], generation_id=prior.generation_id)
+        metadata = _attribute_metadata(scoped)
+        source = fresh
+        if (pq.read_schema(fresh).metadata or {}) != metadata:
+            source = work / 'fresh.parquet'
+            with pq.ParquetFile(fresh) as held, pq.ParquetWriter(
+                    source, pq.read_schema(fresh).with_metadata(metadata), compression='zstd') as writer:
+                for batch in held.iter_batches(batch_size=10_000):
+                    writer.write_batch(batch.replace_schema_metadata(metadata))
+        fresh_pair = write_held_dataset(dataset, source, work / 'fresh', generation_id=generation, bulk=True, validate=False)
+        for batch in pq.ParquetFile(fresh_pair[1]).iter_batches(columns=['outcome']):
+            if any(value in {'refused', 'error'} for value in batch.column(0).to_pylist()):
+                raise ValueError(f'{dataset}: native conversion refused; checkpoint remains unadvanced')
+        merged = native_merge(declared, fresh=fresh_pair, prior=(prior.subjects[0], scoped),
+                              order_by=declared.identity_fields, subjects=work / f'{dataset}.parquet',
+                              receipts=work / 'etl_receipts.parquet', refusal_identity=refusal_identity(dataset))
+        logger.info('{}: {:,} rows kept, {:,} replaced, {:,} added', dataset, merged.kept, merged.replaced, merged.added)
+        artifact = build_generation(
+            directory, family=family, files=[merged.subjects], expected_keys=[dataset + ".parquet"],
+            schemas={dataset: described_schema(declared.subject_schema)}, publication_status="complete-family",
+            receipt_path=merged.receipts, receipt_policies=[declared], receipt_generation_id=generation)
+    return _seal(root, dataset, directory, artifact, publish=publish, inputs=inputs, check_refusals=False)
+
+
+def _attribute_metadata(receipts):
+    """Prove uniform input metadata without decoding every receipt; empty tables use their observation."""
+    import pyarrow as pa
+    from spicy_regs import etl_bulk
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    item = ("json_extract(list_extract(list_filter(json_extract(processing_json, '$[1]')::JSON[], "
+            "entry -> json_extract_string(entry, '$[0]') = 'input_metadata'), 1), '$[1]')")
+    kind = item.replace('processing_json', 'diagnostic_json').replace("'input_metadata'", "'kind'")
+    with etl_bulk.bulk_connection() as (con, _):
+        # Accepted receipts are the same per-row metadata the maintained restore checks. With no subjects,
+        # only the input-file observation can supply it. LIMIT bounds distinct metadata returned to Python.
+        query = (f"WITH r AS (SELECT * FROM read_parquet({etl_bulk._literal(str(receipts))})) "
+                 f"SELECT DISTINCT CAST({item} AS VARCHAR) FROM r WHERE outcome='accepted' OR "
+                 f"(outcome='observed' AND json_extract_string({kind}, '$[1]')='input_file_metadata' "
+                 "AND NOT EXISTS (SELECT 1 FROM r WHERE outcome='accepted')) LIMIT 2")
+        values = [decode_exact_json(text) if text is not None else {} for text, in con.execute(query).fetchall()]
+    if len(values) > 1:
+        raise ValueError('Input metadata differs across selected receipts')
+    return pa.schema([], metadata=values[0] if values else {}).metadata or {}
 
 
 def restore_checkpoint(root: Path, dataset: str, *, index=None, inputs=None) -> list[dict]:

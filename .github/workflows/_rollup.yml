@@ -183,6 +183,16 @@ on:
         required: false
         default: 30
         type: number
+      require_bulk:
+        description: 'Refuse wholesale row fallback for mapped bulk datasets; unmapped datasets and sparse row decisions remain supported'
+        required: false
+        default: false
+        type: boolean
+      free_disk:
+        description: 'Free ~25 GB of preinstalled toolchains first and log the lowest free disk seen (rollups that carry ~10M-row receipt tables)'
+        required: false
+        default: false
+        type: boolean
       producer_ref:
         description: 'Optional producer checkout ref; blank preserves the caller revision'
         required: false
@@ -199,6 +209,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.producer_ref }}
+
+      - name: Free runner disk and watch what is left
+        if: inputs.free_disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+          mkdir -p output
+          df -k --output=avail / | tail -1 > "$RUNNER_TEMP/disk-watch.log"
+          nohup sh -c 'while sleep 20; do df -k --output=avail / | tail -1; done' >> "$RUNNER_TEMP/disk-watch.log" 2>&1 &
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -273,6 +292,7 @@ jobs:
           # A hosted runner has tens of GB in total, so the workstation's 100 GiB
           # free-space floor would refuse any download; keep 4 GiB free instead.
           SPICY_REGS_DISK_FLOOR_GIB: '4'
+          SPICY_REGS_REQUIRE_BULK: ${{ inputs.require_bulk && 'true' || 'false' }}
           # Keep FEC evidence outside a hidden directory so successful and
           # interrupted traversals can be inspected after the runner exits.
           FEC_CAPTURE_DIR: output/fec-captures
@@ -349,6 +369,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+      - name: Report the lowest free disk seen
+        if: always() && inputs.free_disk
+        run: |
+          df -h /
+          mkdir -p output
+          df -k --output=avail / | tail -1 >> "$RUNNER_TEMP/disk-watch.log"
+          cp "$RUNNER_TEMP/disk-watch.log" output/disk-watch.log
+          awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ {if (!n++ || $1 < lowest) lowest=$1} END {if (n) printf "lowest sampled free disk during the run: %.1f GiB (%d samples)\n", lowest/1048576, n}' output/disk-watch.log
+
       - name: Retain invocation and transferred-input audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -356,6 +385,7 @@ jobs:
           name: rollup-audit-${{ inputs.command }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             output/invocation.json
+            output/disk-watch.log
             output/fec-inputs/
             output/source-evidence/
           if-no-files-found: ignore

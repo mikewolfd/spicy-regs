@@ -311,7 +311,6 @@ def ensure_native(con, record_type):
     Readers require the checked initialization receipt, including after interruption.
     """
     from . import iceberg
-    from spicy_regs.etl_receipts import ReceiptContext, observation_receipt
     if not supports(record_type):
         raise ValueError(f'Unsupported regulatory catalog dataset: {record_type.name}')
     dataset = record_type.name
@@ -329,16 +328,22 @@ def ensure_native(con, record_type):
             return
         if con.execute(f'SELECT count(*) FROM {target}').fetchone()[0]:
             raise ValueError('Uninitialized native catalog contains unselected rows')
-        generation = 'initialize-' + uuid4().hex
-        context = ReceiptContext(generation, 'initialize', 'regulatory-catalog-initialization-v1',
-            [{'source_id': dataset, 'source_uri': None, 'sha256': None,
-              'locator': 'empty native catalog initialization', 'body_version': generation}])
-        marker = observation_receipt(declared, context, processing_fields={
-            'input_metadata': {'catalog_initialized': True}})
-        marker_path = Path(temporary) / 'initialization.parquet'
-        write_rows([marker], marker_path, RECEIPT_SCHEMA)
+        marker_path = _initialization_marker(dataset, Path(temporary) / 'initialization.parquet')
         con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM read_parquet(?)', [str(marker_path)])
         require_initialized(con, record_type)
+
+
+def _initialization_marker(dataset, path):
+    """Write the one checked initialization receipt of an empty native dataset to ``path``."""
+    from spicy_regs.etl_receipts import ReceiptContext, observation_receipt
+    generation = 'initialize-' + uuid4().hex
+    context = ReceiptContext(generation, 'initialize', 'regulatory-catalog-initialization-v1',
+        [{'source_id': dataset, 'source_uri': None, 'sha256': None,
+          'locator': 'empty native catalog initialization', 'body_version': generation}])
+    marker = observation_receipt(policy(dataset), context, processing_fields={
+        'input_metadata': {'catalog_initialized': True}})
+    write_rows([marker], path, RECEIPT_SCHEMA)
+    return path
 
 
 def processing_table(con, record_type, *, where: str | None = None, in_transaction=False,
@@ -516,6 +521,207 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                 raise RuntimeError('Catalog replacement changed source values')
             for temporary_table in (prior, verified, prior_receipts, native, pending):
                 con.execute(f'DROP TABLE {temporary_table}')
+
+
+#: Columns regulations-native-v2 inserted into the v1 comments table (6th, 20th, 21st of 24).
+V2_COMMENT_COLUMNS = frozenset({'comment_reference_values_json', 'text_extraction_status', 'pdf_extraction_results_json'})
+
+
+#: A published receipt file may carry its own catalog's marker; the rebuild writes exactly one fresh marker instead.
+_NOT_MARKER = "processor <> 'regulatory-catalog-initialization-v1'"
+
+
+def rebuild_state(con, record_type):
+    """Classify the live comments catalog for a rebuild; refuse any state a rerun cannot safely continue.
+
+    ``v1`` (the 21-column table), ``absent`` (dropped, receipts gone), ``empty`` (v2 table, nothing in it) are
+    writable states; ``done`` is a finished v2 catalog. Rows or receipts without the marker are a partial copy.
+    """
+    dataset = record_type.name
+    target = qualified(record_type)
+    declared = described_schema(policy(dataset).subject_schema)
+    receipts = (con.execute(f'SELECT count(*) FROM {receipts_table()} WHERE dataset=?', [dataset]).fetchone()[0]
+                if _exists(con, receipts_table()) else 0)
+    if not _exists(con, target):
+        if receipts:
+            raise ValueError(f'{dataset} receipts exist without a catalog table; refusing a partial state')
+        return 'absent'
+    observed = [(r[0], r[1]) for r in con.execute(f'DESCRIBE {target}').fetchall()]
+    if observed == declared:
+        if not con.execute(f'SELECT count(*) FROM {target}').fetchone()[0] and not receipts:
+            return 'empty'
+        if initialized(con, dataset):
+            return 'done'
+        raise ValueError('Native catalog holds rows or receipts without an initialization marker (partial copy)')
+    if observed == [column for column in declared if column[0] not in V2_COMMENT_COLUMNS]:
+        return 'v1'
+    raise ValueError(f'Live {dataset} columns are neither the v1 nor the declared v2 shape: {observed}')
+
+
+def rebuild_native(con, record_type, pair, *, expected_snapshot, expected_prior, dry_run=False):
+    """Recreate the comments catalog in the declared (v2) shape from the published generation, in bulk.
+
+    ``pair`` is the verified published subject and receipt files; ``expected_prior`` is the published subject
+    Parquet the live v1 catalog must equal on the columns they share. Guards, in order: published pair shape;
+    live state; snapshot pin; per-key SHA-256 equality of the shared columns. Then transaction A drops the v1
+    table and its receipts (snapshot rechecked), B creates the v2 table, C inserts rows, their receipts verbatim
+    and one initialization marker. A rerun resumes from ``absent`` or ``empty``. ``dry_run`` does every read and
+    check and writes nothing. Returns the plan.
+    """
+    from . import iceberg
+    dataset = record_type.name
+    if dataset != 'comments':
+        raise ValueError('rebuild_native rebuilds only the comments catalog')
+    declared = policy(dataset)
+    columns = declared.subject_schema.names
+    key = '"' + record_type.dedup_key + '"'
+    if pair.dataset != dataset:
+        raise ValueError('Published pair belongs to another dataset')
+    (subjects,) = pair.subjects
+    if not Path(subjects).samefile(expected_prior):
+        raise ValueError('Expected prior must be the same published subject that will be copied')
+    # Published pair: exactly the declared columns, one accepted receipt per subject row.
+    if not pq.read_schema(subjects).equals(declared.subject_schema, check_metadata=False):
+        raise ValueError('Published subject schema differs from the declared policy')
+    if not pq.read_schema(pair.receipts).equals(RECEIPT_SCHEMA, check_metadata=False):
+        raise ValueError('Published receipt schema differs from the declared schema')
+    rows = pq.ParquetFile(subjects).metadata.num_rows
+    receipt_rows, accepted = con.execute(
+        f"SELECT count(*), count(*) FILTER (WHERE outcome='accepted') FROM read_parquet(?) WHERE dataset=? AND {_NOT_MARKER}",
+        [str(pair.receipts), dataset]).fetchone()
+    if accepted != rows:
+        raise ValueError(f'Published receipts hold {accepted} accepted {dataset} rows for {rows} subjects')
+    state = rebuild_state(con, record_type)
+    if state == 'done':
+        raise ValueError('Native catalog is already rebuilt; use the readback to verify it')
+    plan = {'state': state, 'target': qualified(record_type), 'receipts_table': receipts_table(), 'rows': rows,
+            'receipt_rows': receipt_rows, 'dry_run': dry_run}
+    if state == 'v1':
+        if expected_snapshot is None:
+            raise ValueError('A v1 rebuild requires the catalog snapshot captured at preparation')
+        namespace_name = iceberg._catalog_namespace(record_type)
+        if iceberg._read_pair_snapshot(con, record_type, namespace=namespace_name) != expected_snapshot:
+            raise RuntimeError('Catalog snapshot changed after preparation; rerun the operation')
+        shared = [c for c in columns if c not in V2_COMMENT_COLUMNS]
+        row = 'ROW(' + ', '.join('"' + c.replace('"', '""') + '"' for c in shared) + ')'
+        live_count, live_keys, pub_count, pub_keys, mismatched = con.execute(f'''
+            WITH l AS (SELECT {key} AS k, sha256(CAST({row} AS VARCHAR)) AS h FROM {plan['target']}),
+                 p AS (SELECT {key} AS k, sha256(CAST({row} AS VARCHAR)) AS h FROM read_parquet(?))
+            SELECT (SELECT count(*) FROM l), (SELECT count(DISTINCT k) FROM l),
+                   (SELECT count(*) FROM p), (SELECT count(DISTINCT k) FROM p),
+                   (SELECT count(*) FROM l FULL JOIN p ON l.k=p.k
+                    WHERE l.k IS NULL OR p.k IS NULL OR l.h IS DISTINCT FROM p.h)''',
+            [str(expected_prior)]).fetchone()
+        if not (live_count == live_keys == pub_count == pub_keys) or mismatched:
+            raise RuntimeError(f'Live catalog differs from the published subject: live {live_count} rows '
+                               f'({live_keys} keys), published {pub_count} ({pub_keys}), {mismatched} mismatched keys')
+        plan['live_rows'] = live_count
+    if dry_run:
+        return plan
+    from loguru import logger
+    logger.info('Rebuilding {}: {} rows, {} receipts (+1 marker); state {}', plan['target'], rows, accepted, state)
+    names = ', '.join(f'"{c}"' for c in columns)
+    receipt_names = ', '.join(f'"{c}"' for c in RECEIPT_SCHEMA.names)
+    if state == 'v1':
+        with _transaction(con):
+            if iceberg._read_pair_snapshot(con, record_type, namespace=namespace()) != expected_snapshot:
+                raise RuntimeError('Catalog snapshot changed after preparation; rerun the operation')
+            con.execute(f'DELETE FROM {receipts_table()} WHERE dataset=?', [dataset])
+            con.execute(f'DROP TABLE {plan["target"]}')
+    if state in ('v1', 'absent'):
+        con.execute(f'CREATE SCHEMA IF NOT EXISTS {iceberg._CATALOG_ALIAS}."{namespace()}"')
+        with _transaction(con):  # The engine drops manifests of a CREATE+data commit.
+            con.execute(f'CREATE TABLE IF NOT EXISTS {receipts_table()} ({_ddl(RECEIPT_SCHEMA)})')
+            con.execute(f'CREATE TABLE {plan["target"]} ({_ddl(declared.subject_schema)})')
+    with TemporaryDirectory(prefix='catalog-rebuild-') as temporary, _transaction(con):
+        if (con.execute(f'SELECT count(*) FROM {plan["target"]}').fetchone()[0]
+                or con.execute(f'SELECT count(*) FROM {receipts_table()} WHERE dataset=?', [dataset]).fetchone()[0]):
+            raise ValueError('Rebuild target is not empty; refusing to append to a partial copy')
+        marker = _initialization_marker(dataset, Path(temporary) / 'initialization.parquet')
+        inserted = con.execute(f'INSERT INTO {plan["target"]} ({names}) SELECT {names} FROM read_parquet(?)',
+                               [str(subjects)]).fetchone()[0]
+        carried = con.execute(f'INSERT INTO {receipts_table()} ({receipt_names}) SELECT {receipt_names} '
+                              f'FROM read_parquet(?) WHERE dataset=? AND {_NOT_MARKER}', [str(pair.receipts), dataset]).fetchone()[0]
+        if inserted != rows or carried != receipt_rows:
+            raise RuntimeError(f'Rebuild copied {inserted} rows and {carried} receipts, expected {rows} and {receipt_rows}')
+        con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM read_parquet(?)', [str(marker)])
+        require_initialized(con, record_type)
+    return plan
+
+
+def verify_rebuilt(con, record_type, pair, *, smoke=True):
+    """Check schemas/counts and a small deterministic sample against the verified published files.
+
+    Compare every field of the first/middle/last subjects and their accepted receipts, plus the first
+    nonaccepted receipt when present. This is sampled readback, not full-corpus validation. No full catalog
+    export or second full-corpus validation database is built. The smallest-docket processing smoke uses a
+    small validator and is capped at 100 rows within one catalog transaction.
+    """
+    dataset = record_type.name
+    declared = policy(dataset)
+    if dataset != 'comments' or pair.dataset != dataset:
+        raise ValueError('Rebuild readback requires the comments pair')
+    (subjects,) = pair.subjects
+    rows = pq.ParquetFile(subjects).metadata.num_rows
+    target = qualified(record_type)
+    with _transaction(con):
+        require_initialized(con, record_type)
+        if [(r[0], r[1]) for r in con.execute(f'DESCRIBE {receipts_table()}').fetchall()] != described_schema(RECEIPT_SCHEMA):
+            raise ValueError('Rebuilt receipt schema differs from the declared schema')
+        counted = con.execute(f'SELECT count(*) FROM {target}').fetchone()[0]
+        if counted != rows:
+            raise RuntimeError(f'Rebuilt catalog holds {counted} rows, expected {rows}')
+        receipt_rows, accepted, other_position = con.execute(
+            f"SELECT count(*), count(*) FILTER (WHERE outcome='accepted'), "
+            "min(file_row_number) FILTER (WHERE outcome<>'accepted') "
+            f"FROM read_parquet(?, file_row_number=true) WHERE dataset=? AND {_NOT_MARKER}",
+            [str(pair.receipts), dataset]).fetchone()
+        copied, copied_accepted = con.execute(
+            f"SELECT count(*), count(*) FILTER (WHERE outcome='accepted') FROM {receipts_table()} "
+            f"WHERE dataset=? AND {_NOT_MARKER}", [dataset]).fetchone()
+        if copied != receipt_rows or copied_accepted != accepted or accepted != rows:
+            raise RuntimeError(f'Rebuilt comments receipts hold {copied} rows ({copied_accepted} accepted), '
+                               f'expected {receipt_rows} ({rows} accepted), excluding the initialization marker')
+        positions = sorted({0, rows // 2, rows - 1}) if rows else []
+        sample = con.execute('SELECT * EXCLUDE (file_row_number) FROM read_parquet(?, file_row_number=true) '
+                             'WHERE file_row_number IN (SELECT unnest(?))', [str(subjects), positions]).to_arrow_table()
+        key = record_type.dedup_key
+        actual = con.execute(f'SELECT * FROM {target} WHERE "{key}" IN (SELECT unnest(?)) LIMIT ?',
+                             [sample[key].to_pylist(), len(positions) + 1]).to_arrow_table()
+        if not sample.sort_by(key).equals(actual.sort_by(key)):
+            raise RuntimeError('Sampled subjects differ from the published generation')
+        identities = [subject_identity(declared, row)[0] for row in sample.to_pylist()]
+        expected = con.execute('SELECT * EXCLUDE (file_row_number) FROM read_parquet(?, file_row_number=true) '
+                               f"WHERE dataset=? AND {_NOT_MARKER} AND ((outcome='accepted' "
+                               'AND record_id IN (SELECT unnest(?))) OR file_row_number=?) LIMIT ?',
+                               [str(pair.receipts), dataset, identities, other_position, len(positions) + 2]).to_arrow_table()
+        accepted_ids = [row['record_id'] for row in expected.to_pylist() if row['outcome'] == 'accepted']
+        if sorted(accepted_ids) != sorted(identities):
+            raise RuntimeError('Published sample lacks one accepted receipt per subject')
+        other_ids = [row['receipt_id'] for row in expected.to_pylist() if row['outcome'] != 'accepted']
+        actual = con.execute(f'SELECT * FROM {receipts_table()} WHERE dataset=? AND '
+                             "((outcome='accepted' AND record_id IN (SELECT unnest(?))) "
+                             'OR receipt_id IN (SELECT unnest(?))) LIMIT ?',
+                             [dataset, identities, other_ids, len(expected) + 1]).to_arrow_table()
+        if not expected.sort_by('receipt_id').equals(actual.sort_by('receipt_id')):
+            raise RuntimeError('Sampled receipts differ from the published generation, including provenance')
+    result = {'rows': counted, 'receipts': copied + 1, 'verification': 'sampled',
+              'sampled_subjects': len(sample), 'sampled_receipts': len(expected)}
+    if smoke and counted:
+        with _transaction(con):
+            docket, expected_rows = con.execute(f'SELECT docket_id, count(*) FROM {target} GROUP BY 1 ORDER BY 2, 1 LIMIT 1').fetchone()
+            if expected_rows > 100:
+                result['smoke_skipped'] = 'smallest docket exceeds 100 rows'
+            else:
+                predicate = 'docket_id IS NULL' if docket is None else f"docket_id = '{docket.replace(chr(39), chr(39) * 2)}'"
+                restored = processing_table(con, record_type, where=predicate, in_transaction=True)
+                try:
+                    if con.execute(f'SELECT count(*) FROM {restored}').fetchone()[0] != expected_rows:
+                        raise RuntimeError(f'Processing read of docket {docket} returned a different row count')
+                finally:
+                    con.execute(f'DROP TABLE {restored}')
+                result['smoke_docket'] = docket
+    return result
 
 
 def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):

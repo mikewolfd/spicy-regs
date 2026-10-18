@@ -209,9 +209,9 @@ def test_existing_native_attachment_policy_keeps_all_classified_source_attribute
 
 
 @pytest.mark.parametrize('bulk', [False, True])
-def test_api_witness_and_full_processing_survive_repeated_base_rewrites(tmp_path, bulk):
+def test_base_rewrite_references_original_evidence_without_copying_it(tmp_path, bulk):
     from hashlib import sha256
-    from spicy_regs.etl_receipts import ReceiptContext, resolve_receipt_witness
+    from spicy_regs.etl_receipts import ReceiptContext, decode_exact_json, resolve_receipt_witness
     from spicy_regs.transforms.regulations_receipts import write_records
 
     original = {'source_api': {'id': 'A', 'unmapped': 'keep original'}}
@@ -221,6 +221,8 @@ def test_api_witness_and_full_processing_survive_repeated_base_rewrites(tmp_path
     subject, receipts = write_records('dockets', [(original, ReceiptContext('api', 'initial', 'api', [witness]))],
                                       tmp_path / 'initial', project=lambda row: {'docket_id': row['source_api']['id']})
     original_receipt = receipts.read_bytes()
+    initial = next(row for row in pq.read_table(receipts).to_pylist() if row['outcome'] == 'accepted')
+    carried = None
     for ordinal in range(2):
         restored = materialize_internal(ReceiptInput('dockets', (subject,), receipts, 'api'),
                                         tmp_path / f'input-{ordinal}.parquet', bulk=bulk)
@@ -231,10 +233,16 @@ def test_api_witness_and_full_processing_survive_repeated_base_rewrites(tmp_path
         restored.unlink()
         subject, receipts = next_subject, next_receipts
         [accepted] = [row for row in pq.read_table(receipts).to_pylist() if row['outcome'] == 'accepted']
-        assert resolve_receipt_witness(accepted, witness) == exact_json(original).encode()
+        if carried is None:
+            assert decode_exact_json(accepted['diagnostic_json'])['prior_receipt']['receipt_id'] == initial['receipt_id']
+            carried = accepted
+        else:
+            assert accepted == carried
+        assert witness not in accepted['witnesses']
         for held in accepted['witnesses']:
             assert sha256(resolve_receipt_witness(accepted, held)).hexdigest() == held['sha256'].removeprefix('sha256:')
     assert (tmp_path / 'initial' / 'etl_receipts.parquet').read_bytes() == original_receipt
+    assert resolve_receipt_witness(initial, witness) == exact_json(original).encode()
 
 
 @pytest.mark.parametrize('bulk', [False, True])
@@ -254,10 +262,8 @@ def test_explicit_original_schema_preserves_absent_fields_and_refuses_null_subst
                              source_schema=pa.schema(list(schema) + [pa.field('publisher_status', pa.string())]))
 
 
-def test_multiple_prior_paths_keep_ordered_row_inheritance_before_any_batch_write(tmp_path, monkeypatch):
-    from spicy_regs import current_receipt_history
-    from spicy_regs.etl_receipts import decode_exact_json
-
+@pytest.mark.parametrize('bulk', [False, True])
+def test_multiple_selected_priors_for_one_identity_refuse_carry(tmp_path, bulk):
     source = tmp_path / 'source.parquet'
     priors = []
     for ordinal, title in enumerate(['first', 'second']):
@@ -265,20 +271,10 @@ def test_multiple_prior_paths_keep_ordered_row_inheritance_before_any_batch_writ
         priors.append(write_held_dataset('dockets', source, tmp_path / f'prior-{ordinal}',
                                          generation_id=f'prior-{ordinal}')[1])
     pq.write_table(pa.table({'docket_id': ['A'], 'title': ['current']}), source)
-    expected = write_held_dataset('dockets', source, tmp_path / 'row', generation_id='current',
-                                  prior_receipts=priors, bulk=False)
-
-    def no_single_prior_lookup(*args, **kwargs):
-        raise AssertionError('Multiple ordered priors must be classified before a batch write')
-
-    monkeypatch.setattr(current_receipt_history, 'inherit_current_receipts', no_single_prior_lookup)
-    actual = write_held_dataset('dockets', source, tmp_path / 'selected', generation_id='current',
-                                prior_receipts=priors, bulk=True)
-    for before, after in zip(expected, actual):
-        assert pq.read_table(before).equals(pq.read_table(after), check_metadata=True)
-    accepted = next(row for row in pq.read_table(actual[1]).to_pylist() if row['outcome'] == 'accepted')
-    history = decode_exact_json(accepted['diagnostic_json'])['prior_receipts']
-    assert [row['generation_id'] for row in history] == ['prior-0', 'prior-1']
+    with pytest.raises(ValueError, match='Conflicting selected prior receipts'):
+        write_held_dataset('dockets', source, tmp_path / 'selected', generation_id='current',
+                          prior_receipts=priors, bulk=bulk)
+    assert not (tmp_path / 'selected').exists()
 
 
 @pytest.mark.parametrize('tampered', [False, True])
@@ -294,19 +290,12 @@ def test_duplicate_prior_receipt_ids_require_exact_row_proof(tmp_path, tampered)
     rows.append(duplicate)
     pq.write_table(pa.Table.from_pylist(rows, schema=held.schema), receipts)
     pq.write_table(pa.table({'docket_id': ['A'], 'title': ['current']}), source)
-    if tampered:
-        for bulk in [False, True]:
-            destination = tmp_path / f'refused-{bulk}'
-            with pytest.raises(ValueError, match='Conflicting selected prior receipts'):
-                write_held_dataset('dockets', source, destination, generation_id='new',
-                                   prior_receipts=[receipts], bulk=bulk)
-            assert not destination.exists()
-    else:
-        expected = write_held_dataset('dockets', source, tmp_path / 'row', generation_id='new', prior_receipts=[receipts])
-        actual = write_held_dataset('dockets', source, tmp_path / 'selected', generation_id='new',
-                                    prior_receipts=[receipts], bulk=True)
-        for before, after in zip(expected, actual):
-            assert pq.read_table(before).equals(pq.read_table(after), check_metadata=True)
+    for bulk in [False, True]:
+        destination = tmp_path / f'refused-{bulk}'
+        with pytest.raises(ValueError, match='Conflicting selected prior receipts'):
+            write_held_dataset('dockets', source, destination, generation_id='new',
+                               prior_receipts=[receipts], bulk=bulk)
+        assert not destination.exists()
 
 
 def _no_row_path(monkeypatch):
@@ -338,7 +327,8 @@ def test_duckdb_failure_after_partial_write_fails_fast_without_row_fallback(tmp_
 
 
 @pytest.mark.parametrize('failure, invalid', FAILURES)
-def test_failure_inheriting_prior_receipts_fails_fast_without_row_fallback(tmp_path, monkeypatch, failure, invalid):
+def test_failure_carrying_prior_receipts_fails_fast_without_row_fallback(tmp_path, monkeypatch, failure, invalid):
+    from spicy_regs import receipt_history
     source = _dockets(tmp_path)
     _, prior = write_held_dataset('dockets', source, tmp_path / 'prior', generation_id='prior')
     staged = []
@@ -347,7 +337,7 @@ def test_failure_inheriting_prior_receipts_fails_fast_without_row_fallback(tmp_p
         staged.append(current.exists())
         raise failure
 
-    monkeypatch.setattr(current_receipt_history, 'inherit_current_receipts', inherit)
+    monkeypatch.setattr(receipt_history, 'carry_receipt_history', inherit)
     _no_row_path(monkeypatch)
     destination = tmp_path / 'native'
     with pytest.raises(etl_bulk.BulkValidationError) as caught:

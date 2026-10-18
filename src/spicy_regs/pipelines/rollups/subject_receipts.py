@@ -13,8 +13,6 @@ import shutil
 from pathlib import Path
 from typing import ClassVar
 
-import pyarrow.parquet as pq
-
 from spicy_regs.congress_subjects import INPUT_COLUMNS as CONGRESS
 from spicy_regs.congress_receipts import (
     ACQUISITION_POLICY,
@@ -23,6 +21,7 @@ from spicy_regs.congress_receipts import (
     policy as congress_policy,
     restore_processing_input,
     write_congress_dataset,
+    has_unmatched_failures,
 )
 from spicy_regs.etl_receipts import combine_receipts, read_with_receipts, select_receipts, validate_receipt_bundle, selected_subject_policy
 from spicy_regs.legislative_documents import field_registry
@@ -98,15 +97,15 @@ class SelectedPriors:
         selected_policy = selected_subject_policy(selected_policy, subjects)
         # The regulatory restore below admits the pair itself: complete admission in
         # regulations_bulk._materialize_selected, or the full read_with_receipts pass in _qualified_rows.
-        if dataset in CONGRESS or dataset in field_registry() or dataset in FEC:
+        if dataset in CONGRESS or dataset in FEC:
             validate_receipt_bundle({dataset: subjects}, [scoped], [selected_policy], generation_id=generation)
         self.selections[dataset] = (subjects, receipt_path, generation)
         output = directory / "processing" / (dataset + ".parquet")
         if dataset in CONGRESS:
             output.parent.mkdir(parents=True, exist_ok=True)
             restore_processing_input(
-                tuple(subjects), receipt_path, output, dataset=dataset, generation_id=generation,
-                bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
+                tuple(subjects), scoped, output, dataset=dataset, generation_id=generation,
+                bulk=True, validate=False, scoped=True,  # this exact pair was admitted just above
             )
         elif dataset in field_registry():
             files = select_receipts(receipt_path, directory / "file-receipts.parquet", dataset=FILE_STATES)
@@ -349,6 +348,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
         if observed != {key.removesuffix(".parquet") for key in self.source_outputs}:
             raise ValueError("Producer outputs differ from the complete classified family")
         receipts, subjects, legislative = [], [], []
+        fresh_failure_datasets = []
         for path in paths:
             dataset = path.name if path.is_dir() else path.stem
             if dataset in field_registry():
@@ -360,7 +360,8 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 held = None if selection is None else CongressInput(tuple(selection[0]), selection[1], selection[2])
                 subject, receipt = write_congress_dataset(
                     path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held,
-                    bulk=dataset in {"member_votes", "member_vote_terms", "roll_call_votes"},
+                    bulk=True, on_fresh_failure=lambda: fresh_failure_datasets.append(dataset),
+                    validate=False,  # the prior was admitted when selected; the new pair is admitted with its generation
                 )
             else:
                 subject, receipt = write_held_dataset(
@@ -379,8 +380,9 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 generation_id=self.receipt_generation_id,
                 prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
                 file_outcomes_table=FILE_TABLES.get(getattr(self, "publication_family", None) or self.name),
+                validate=False,  # the completed generation admits these exact bytes once
             )
-            if manifest["unowned_outputs"] or any(manifest["refused_rows"].values()):
+            if manifest["unowned_outputs"] or any(manifest["fresh_refused_rows"].values()):
                 raise ValueError("Legislative output conversion refused")
             receipts.append(bundle / "etl_receipts.parquet")
             for name, members in manifest["subjects"].items():
@@ -413,17 +415,19 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 shutil.copyfile(source, target)
                 subjects.append(target)
         combined = combine_receipts(receipts, candidate / "etl_receipts.parquet")
-        for batch in pq.ParquetFile(combined).iter_batches(columns=["outcome"]):
-            if any(value in {"refused", "error"} for value in batch.column(0).to_pylist()):
-                raise ValueError("Subject conversion refused; retained receipts require review")
+        if fresh_failure_datasets or has_unmatched_failures(combined, {name: [selection[1]] for name, selection in prior.selections.items()}):
+            raise ValueError("Subject conversion refused; retained receipts require review")
         by_dataset = {p.dataset: [] for p in self.receipt_policies}
         for path in subjects:
             by_dataset[path.name if path.is_dir() else path.stem] = (
                 sorted(path.rglob("*.parquet")) if path.is_dir() else [path]
             )
-        validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
-        # The entire candidate is immutable and validated before any visible
-        # output or selected pointer changes. Failed attempts stay private.
+        # ``_defer_native_selection`` is set only by ``_run_tables``, whose ``build_generation`` admits this same pair
+        # (every policy, every subject member) before anything is visible or selected. That admission is the one
+        # validation; outside a run, ``remember_selection`` below pins "admitted members", so validate here.
+        if not getattr(self, "_defer_native_selection", False):
+            validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
+        # Private files are final here; the copies below make them visible.
         visible = []
         for source in subjects:
             target = output_dir / source.name

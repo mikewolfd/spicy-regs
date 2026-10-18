@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip R2 upload (dry run of the whole chain on the dispatched ref)'
+        required: false
+        default: false
+        type: boolean
 concurrency:
   group: congress-vote-terms
   cancel-in-progress: false
@@ -13,16 +19,23 @@ jobs:
     secrets: inherit
     with:
       command: run-rollup-roll-call-votes
+      require_bulk: true
       timeout_minutes: 60
+      free_disk: true
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
   members:
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
       command: run-rollup-members
       timeout_minutes: 15
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
   terms:
     needs: [votes, members]
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
       command: run-rollup-member-vote-terms
+      require_bulk: true
+      free_disk: true
+      skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
