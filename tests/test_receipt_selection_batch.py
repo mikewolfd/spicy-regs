@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import etl_receipts
-from spicy_regs.etl_receipts import RECEIPT_SCHEMA, exact_json, select_receipts
+from spicy_regs.etl_receipts import RECEIPT_SCHEMA, exact_json, select_receipt_family, select_receipts
 from spicy_regs.parquet_rows import write_rows
 from .test_etl_bulk_validate import build
 
@@ -158,3 +158,51 @@ def test_callable_close_failure_preserves_reference_error_and_existing_destinati
     assert actual == expected
     assert expected_path.read_bytes() == actual_path.read_bytes() == b'previous complete selection'
     assert not any(path.is_dir() and path.name.startswith('tmp') for path in tmp_path.iterdir())
+
+
+def test_family_selection_preserves_all_outcomes_and_order_in_one_pass(tmp_path, monkeypatch):
+    bundle = build(tmp_path, rows=8)
+    rows = [row for group in bundle.receipts for row in group]
+    names = ('things', 'other', 'absent')
+    for index, row in enumerate(rows):
+        row['dataset'] = names[index % 2]
+        row['outcome'] = ('accepted', 'refused', 'observed', 'error')[index % 4]
+    source = tmp_path / 'family.parquet'
+    pq.write_table(pa.Table.from_pylist(rows, schema=RECEIPT_SCHEMA), source, row_group_size=3)
+    expected = {name: pq.read_table(reference(source, tmp_path / f'{name}.parquet', name)) for name in names}
+    scans = []
+    original = etl_receipts._parquet
+
+    @contextmanager
+    def counted(path):
+        scans.append(path)
+        with original(path) as parquet:
+            yield parquet
+
+    monkeypatch.setattr(etl_receipts, '_parquet', counted)
+    selected = select_receipt_family(source, tmp_path / 'selected', datasets=names)
+    assert scans == [source]
+    for name, path in selected.items():
+        assert pq.read_table(path).equals(expected[name], check_metadata=True)
+
+
+def test_family_selection_refuses_late_excluded_decode_error_without_outputs(tmp_path, monkeypatch):
+    bundle = build(tmp_path, rows=1)
+    batch = pa.Table.from_pylist(bundle.receipts[0], schema=RECEIPT_SCHEMA).to_batches()[0]
+
+    class Broken:
+        schema_arrow = RECEIPT_SCHEMA
+
+        def iter_batches(self, **kwargs):
+            yield batch
+            raise pa.ArrowInvalid('late excluded receipt failure')
+
+    @contextmanager
+    def broken(path):
+        yield Broken()
+
+    monkeypatch.setattr(etl_receipts, '_parquet', broken)
+    destination = tmp_path / 'selected'
+    with pytest.raises(pa.ArrowInvalid, match='late excluded'):
+        select_receipt_family(tmp_path / 'source', destination, datasets=('things', 'other'))
+    assert not destination.exists()

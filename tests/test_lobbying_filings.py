@@ -354,6 +354,156 @@ def test_the_rollup_declares_its_two_new_tables_as_an_explicit_migration():
     assert set(LobbyingFilingsRollup.outputs) - set(LobbyingFilingsRollup.added_tables) == {"lobbying_filings.parquet"}
 
 
+def _remote_native_family(tmp_path, monkeypatch):
+    import hashlib
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    from spicy_regs.sources import publication
+
+    first, night = tmp_path / 'first', tmp_path / 'night'
+    first.mkdir()
+    night.mkdir()
+    _no_prior(monkeypatch)
+    _mock_http(monkeypatch, lambda request, number: _json_response(
+        {'count': 1, 'next': None, 'results': [_FILING_WITH_ACTIVITIES]}))
+    subjects = bld.build_lobbying_filings(first, receipt_generation_id='g0',
+                                         since=date(2026, 9, 1), until=date(2026, 9, 2))
+    members = {path.name: path for path in (*subjects, first / 'etl_receipts.parquet')}
+    bodies = {name: path.read_bytes() for name, path in members.items()}
+    descriptors = {name: {'sha256': 'sha256:' + hashlib.sha256(bodies[name]).hexdigest(),
+                         'byteSize': len(bodies[name]), 'rows': pq.read_metadata(path).num_rows}
+                   for name, path in members.items()}
+    index = publication.empty_index()
+    index['families']['lobbying-filings'] = {
+        'prefix': 'generations/lobbying-filings/' + 'a' * 64,
+        'tables': {path.name: descriptors[path.name] for path in subjects},
+        'etlReceipts': {'key': 'etl_receipts.parquet', **descriptors['etl_receipts.parquet'],
+                        'generationId': 'g0', 'datasets': [path.stem for path in subjects]},
+    }
+    calls = []
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        name = url.rsplit('/', 1)[1]
+        calls.append(name)
+        yield SimpleNamespace(status_code=200, iter_bytes=lambda: iter([bodies[name]]))
+
+    monkeypatch.setenv('R2_PUBLIC_URL', 'https://fixture.invalid')
+    monkeypatch.setattr(publication, 'current_index', lambda _: index)
+    monkeypatch.setattr(publication.httpx, 'stream', stream)
+    monkeypatch.setattr(bld.r2, 'download', lambda *args: pytest.fail('Native subject downloaded outside shared selection'))
+    return subjects, night, index, calls
+
+
+def test_remote_native_family_transfers_and_selects_receipts_once(tmp_path, monkeypatch):
+    from spicy_regs import etl_receipts
+    from spicy_regs.transforms import government_receipts as gr
+
+    subjects, night, _, calls = _remote_native_family(tmp_path, monkeypatch)
+    scans, admitted = [], []
+    scan = etl_receipts._select_receipt_batches
+    validate = gr.validate_receipt_bundle
+
+    def counted(parquet, destinations):
+        scans.append(tuple(destinations))
+        return scan(parquet, destinations)
+
+    def admission(subjects, *args, **kwargs):
+        admitted.extend(subjects)
+        return validate(subjects, *args, **kwargs)
+
+    monkeypatch.setattr(etl_receipts, '_select_receipt_batches', counted)
+    monkeypatch.setattr(gr, 'validate_receipt_bundle', admission)
+    monkeypatch.setattr(gr, 'select_receipts', lambda *args, **kwargs: pytest.fail('Repeated family scan'))
+    result = bld.build_lobbying_filings(night, receipt_generation_id='g1',
+                                      since=date(2026, 9, 1), until=date(2026, 9, 2))
+    names = [path.stem for path in subjects]
+    assert calls.count('etl_receipts.parquet') == 1
+    assert sorted(calls) == sorted([path.name for path in subjects] + ['etl_receipts.parquet'])
+    assert scans == [tuple(names)]
+    assert admitted == names
+    assert all(pq.read_table(old).equals(pq.read_table(new)) for old, new in zip(subjects, result, strict=True))
+    validate({path.stem: [path] for path in result}, [night / 'etl_receipts.parquet'],
+             [gr.POLICIES[name] for name in names], generation_id='g1')
+
+
+@pytest.mark.parametrize('failure', ['wrong_pin', 'during_scan', 'after_admission'])
+def test_remote_native_family_refuses_wrong_pin_or_mutation(tmp_path, monkeypatch, failure):
+    from spicy_regs import etl_receipts
+    from spicy_regs.transforms import government_receipts as gr
+
+    _, night, index, _ = _remote_native_family(tmp_path, monkeypatch)
+
+    def mutate():
+        receipt, = night.glob('.selected-priors-*/.members/**/etl_receipts.parquet')
+        replacement = receipt.with_suffix('.replacement')
+        replacement.write_bytes(receipt.read_bytes())
+        replacement.replace(receipt)
+
+    if failure == 'wrong_pin':
+        index['families']['lobbying-filings']['etlReceipts']['sha256'] = 'sha256:' + '0' * 64
+    elif failure == 'during_scan':
+        scan = etl_receipts._select_receipt_batches
+
+        def changed(parquet, destinations):
+            scan(parquet, destinations)
+            mutate()
+
+        monkeypatch.setattr(etl_receipts, '_select_receipt_batches', changed)
+    else:
+        validate = gr.validate_receipt_bundle
+
+        def changed(*args, **kwargs):
+            validate(*args, **kwargs)
+            mutate()
+
+        monkeypatch.setattr(gr, 'validate_receipt_bundle', changed)
+    with pytest.raises((ValueError, RuntimeError), match='differs from its pin|changed during'):
+        bld.build_lobbying_filings(night, receipt_generation_id='g1',
+                                  since=date(2026, 9, 1), until=date(2026, 9, 2))
+    assert not (night / gr.BUILD_METADATA).exists()
+
+
+@pytest.mark.parametrize('member', ['family_receipts', 'scoped_receipts'])
+def test_remote_native_family_migration_mutation_cannot_complete_or_be_adopted(tmp_path, monkeypatch, member):
+    from spicy_regs.transforms import government_receipts as gr
+
+    subjects, night, index, calls = _remote_native_family(tmp_path, monkeypatch)
+    merge = gr.native_merge
+    producer_bytes = {}
+
+    def changed(policy, *args, **kwargs):
+        result = merge(policy, *args, **kwargs)
+        if policy.dataset == 'lobbying_activity_lobbyists':
+            producer_bytes.update({path.name: (night / path.name).read_bytes() for path in subjects})
+            if member == 'scoped_receipts':
+                receipt = kwargs['prior'][1]
+            else:
+                receipt, = night.glob('.selected-priors-*/.members/**/etl_receipts.parquet')
+            replacement = receipt.with_suffix('.replacement')
+            replacement.write_bytes(receipt.read_bytes())
+            replacement.replace(receipt)
+        return result
+
+    monkeypatch.setattr(gr, 'native_merge', changed)
+    with pytest.raises(ValueError, match='changed during'):
+        bld.build_lobbying_filings(night, receipt_generation_id='failed',
+                                  since=date(2026, 9, 1), until=date(2026, 9, 2))
+    assert producer_bytes
+    assert not (night / gr.BUILD_METADATA).exists()
+    assert not (night / 'etl_receipts.parquet').exists()
+    assert {name: (night / name).read_bytes() for name in producer_bytes} == producer_bytes
+
+    # The retry must select the publication again, not adopt the failed candidate.
+    monkeypatch.setattr(gr, 'native_merge', merge)
+    index['families']['lobbying-filings']['etlReceipts']['sha256'] = 'sha256:' + '0' * 64
+    with pytest.raises(RuntimeError, match='differs from its pin'):
+        bld.build_lobbying_filings(night, receipt_generation_id='retry',
+                                  since=date(2026, 9, 1), until=date(2026, 9, 2))
+    assert calls.count('etl_receipts.parquet') == 2
+    assert not (night / gr.BUILD_METADATA).exists()
+
+
 def test_native_nightly_receipts_only_the_window_and_equals_the_full_row_merge(tmp_path, monkeypatch):
     import copy
     import shutil

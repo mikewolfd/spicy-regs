@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
@@ -103,6 +103,33 @@ class SelectedInputs:
         digest = _member_pin(path, self.checked)
         signature, _ = self.checked[Path(path).absolute()]
         return {"sha256": digest, "byteSize": signature[2]}
+
+    def check(self):
+        """Refuse changes to any original or derived member used by this session."""
+        for path in self.checked:
+            _member_pin(path, self.checked)
+
+    def select_scoped(self, datasets):
+        """Select datasets together, splitting each shared receipt member only once."""
+        from spicy_regs.etl_receipts import select_receipt_family
+
+        selected = {dataset: self.select(dataset) for dataset in datasets}
+        groups = {}
+        for dataset, value in selected.items():
+            if value is not None:
+                groups.setdefault(value.receipts, []).append(dataset)
+        self.check()
+        for receipts, names in groups.items():
+            scoped = select_receipt_family(receipts, self.directory / ("scoped-" + uuid4().hex), datasets=names)
+            self.check()
+            for dataset, path in scoped.items():
+                self.member_pin(path)
+                # A sidecar describes the original member, not the selected rows.
+                value = selected[dataset]
+                assert value is not None
+                selected[dataset] = replace(value, receipts=path, key_index=None, key_index_descriptor=None)
+        self.check()
+        return selected
 
     def select(self, dataset):
         if dataset in self.cache:
