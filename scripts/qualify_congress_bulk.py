@@ -25,7 +25,8 @@ import pyarrow.parquet as pq
 
 from spicy_regs import congress_bulk, etl_bulk
 from spicy_regs.congress_receipts import PROCESSOR, _digest, policy
-from spicy_regs.votes_batch_receipts import inherit_current_receipts, congress_attempt, restore_processing_input, write_congress_dataset
+from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.votes_batch_receipts import congress_attempt, restore_processing_input, write_congress_dataset
 from spicy_regs.etl_receipts import ReceiptContext
 
 
@@ -141,9 +142,9 @@ def sample_writers(source: Path, output: Path, *, dataset: str, generation_id: s
     prior = CongressInput(row[0], row[1], generation_id)
     reference = current_row_writer(sample, output/'sample-row-prior', dataset=dataset,
                                    generation_id=generation_id+'-next', prior=prior, bulk=False)
-    inherited = write_congress_dataset(sample, output/'sample-bulk-prior', dataset=dataset,
-                                       generation_id=generation_id+'-next', prior=prior)
-    for expected, actual in zip(reference, inherited):
+    carried = write_congress_dataset(sample, output/'sample-bulk-prior', dataset=dataset,
+                                     generation_id=generation_id+'-next', prior=prior)
+    for expected, actual in zip(reference, carried):
         assert expected is not None and actual is not None
         compare_files(expected, actual)
     return {'sampleRows': count, 'bound': 20000, 'strata': ['Congress','chamber','accepted/rejected shape','reference route']}
@@ -204,8 +205,8 @@ def main():
         record.update(generation=prior_generation, receiptSha256=_digest(prior_receipts),
                       receiptBytes=prior_receipts.stat().st_size, subjectRows=compare_files(subjects, prior_subjects))
     with measured(log, 'unchanged-history-full') as record:
-        carried = inherit_current_receipts(receipts, [prior_receipts], args.output/'carried-receipts.parquet')
-        record.update(rows=compare_files(receipts, carried, processing_only=True), currentGeneration=args.generation,
+        carried = carry_receipt_history(receipts, [prior_receipts], args.output/'carried-receipts.parquet')
+        record.update(rows=compare_files(prior_receipts, carried), currentGeneration=args.generation,
                       selectedPriorGeneration=prior_generation, currentReceiptSha256=_digest(receipts),
                       selectedPriorReceiptSha256=_digest(prior_receipts), carriedReceiptSha256=_digest(carried),
                       historyQueryThreads=4, historyQueryMemory='1GB', historyQuerySpill='32GB')

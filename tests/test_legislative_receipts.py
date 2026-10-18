@@ -315,3 +315,161 @@ def test_actual_bill_producer_preserves_partitioned_sections_and_names_other_own
             prior_bundle=tmp_path / "bundle1",
             builder_kwargs=kwargs,
         )
+
+
+def test_bulk_restore_admits_once_and_matches_row_restore_for_multiple_datasets(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from spicy_regs import etl_bulk
+
+    sources = [
+        retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0", status="escape \x1b")]),
+        retained(tmp_path / "source", "bill_versions", [row("bill_versions", bill_id="119-hr-1", version_code="ih", source="govinfo")]),
+    ]
+    write_legislative_outputs(sources, tmp_path / "bundle", generation_id="g")
+    expected = restore_prior(tmp_path / "bundle", tmp_path / "row", bulk=False)
+    calls = []
+    original = etl_bulk._validated_bundle
+
+    @contextmanager
+    def admitted(*args, **kwargs):
+        calls.append(1)
+        with original(*args, **kwargs) as con:
+            yield con
+
+    monkeypatch.setattr(etl_bulk, "_validated_bundle", admitted)
+    actual = restore_prior(tmp_path / "bundle", tmp_path / "bulk")
+    assert calls == [1]
+    for dataset in actual:
+        assert pq.read_table(actual[dataset]).equals(pq.read_table(expected[dataset]), check_metadata=True)
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+def test_retained_source_still_must_reproduce_the_admitted_subject(tmp_path, bulk):
+    from spicy_regs.etl_receipts import _digest, decode_exact_json, exact_json
+
+    source = retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0", status="original")])
+    write_legislative_outputs([source], tmp_path / "bundle", generation_id="g")
+    path = tmp_path / "bundle/etl_receipts.parquet"
+    table = pq.read_table(path)
+    receipts = table.to_pylist()
+    receipt = next(receipt for receipt in receipts if receipt["outcome"] == "accepted")
+    processing = decode_exact_json(receipt["processing_json"])
+    processing[RAW]["status"] = "changed input, unchanged subject"
+    receipt["processing_json"] = exact_json(processing)
+    receipt["receipt_id"] = _digest({key:value for key, value in receipt.items() if key != "receipt_id"})
+    pq.write_table(pa.Table.from_pylist(receipts, schema=table.schema), path)
+    with pytest.raises(ValueError, match="disagrees with its native subject"):
+        restore_prior(tmp_path / "bundle", tmp_path / "prior", bulk=bulk)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_bulk_partition_restore_matches_row_paths_metadata_and_emptiness(tmp_path, empty):
+    source = tmp_path / "source/bill_sections"
+    source.mkdir(parents=True)
+    if not empty:
+        for index in range(2):
+            retained(source / f"congress={118 + index}", "bill_sections", [row("bill_sections",
+                bill_id=f"{118 + index}-hr-1", version_code="ih", source="govinfo", seq="0", text="a \x1b b")],
+                {b"partition-check": str(index).encode()})
+    write_legislative_outputs([source], tmp_path / "bundle", generation_id="g")
+    expected = restore_prior(tmp_path / "bundle", tmp_path / "row", bulk=False)["bill_sections"]
+    actual = restore_prior(tmp_path / "bundle", tmp_path / "bulk")["bill_sections"]
+    files = sorted(path.relative_to(expected) for path in expected.rglob("*.parquet"))
+    assert files == sorted(path.relative_to(actual) for path in actual.rglob("*.parquet"))
+    for member in files:
+        assert pq.ParquetFile(actual/member).read().equals(pq.ParquetFile(expected/member).read(), check_metadata=True)
+
+
+@pytest.mark.parametrize("validate", [True, False])
+def test_writer_admits_only_finished_bundle_when_requested(tmp_path, monkeypatch, validate):
+    from spicy_regs import etl_receipts, legislative_receipts
+
+    source = retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0")])
+    calls = []
+    original = etl_receipts.validate_receipt_bundle
+    def admit(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(etl_receipts, "validate_receipt_bundle", admit)
+    monkeypatch.setattr(legislative_receipts, "validate_receipt_bundle", admit)
+    write_legislative_outputs([source], tmp_path / "bundle", generation_id="g", validate=validate)
+    assert len(calls) == int(validate)
+
+
+def test_carry_resolves_refusals_across_partitions_and_preserves_unmatched(tmp_path):
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    first = tmp_path / "first-source" / "budget_volumes"
+    bad_x = row("budget_volumes", package_id="X", associated_bills_json="bad")
+    bad_y = row("budget_volumes", package_id="Y", associated_bills_json="bad")
+    unchanged = row("budget_volumes", package_id="Z")
+    retained(first / "a", "budget_volumes", [bad_x, unchanged])
+    retained(first / "b", "budget_volumes", [bad_y])
+    write_legislative_outputs([first], tmp_path / "one", generation_id="one")
+    old = pq.read_table(tmp_path / "one/etl_receipts.parquet").to_pylist()
+    before = [r for r in old if r["dataset"] == "budget_volumes"]
+    second = tmp_path / "second-source" / "budget_volumes"
+    retained(second / "a", "budget_volumes", [unchanged])
+    retained(second / "z", "budget_volumes", [bad_x | {"associated_bills_json": "[]"}])
+    manifest = write_legislative_outputs([second], tmp_path / "two", generation_id="two",
+                                          prior_receipts=[tmp_path / "one/etl_receipts.parquet"])
+    after = [r for r in pq.read_table(tmp_path / "two/etl_receipts.parquet").to_pylist()
+             if r["dataset"] == "budget_volumes"]
+    accepted_before = next(r for r in before if r["outcome"] == "accepted")
+    assert accepted_before in after
+    unresolved = next(r for r in before if decode_exact_json(r["processing_json"])[RAW]["package_id"] == "Y")
+    assert [r for r in after if r["outcome"] == "refused"] == [unresolved]
+    assert manifest["refused_rows"] == {"budget_volumes": 1}
+    assert manifest["fresh_refused_rows"] == {"budget_volumes": 0}
+    restored = restore_prior(tmp_path / "two", tmp_path / "restored")
+    assert sum(pq.read_metadata(p).num_rows for p in restored["budget_volumes"].rglob("*.parquet")) == 2
+    third = retained(tmp_path / "third-source", "budget_volumes", [unchanged, bad_x | {"associated_bills_json": "[]"},
+                                                                  bad_y | {"associated_bills_json": "[]"}])
+    resolved = write_legislative_outputs([third], tmp_path / "three", generation_id="three",
+                                         prior_receipts=[tmp_path / "two/etl_receipts.parquet"])
+    assert resolved["refused_rows"] == resolved["fresh_refused_rows"] == {"budget_volumes": 0}
+    restore_prior(tmp_path / "three", tmp_path / "restored-three")
+
+
+def test_processing_change_with_unchanged_subject_receives_fresh_evidence(tmp_path):
+    from spicy_regs.etl_receipts import decode_exact_json
+
+    initial = row("laws", congress="119", law_type="public", number="1", law_id="119-public-1",
+                  uslm_reader_version="reader-1")
+    source = retained(tmp_path / "source1", "laws", [initial])
+    write_legislative_outputs([source], tmp_path / "one", generation_id="one")
+    revised = retained(tmp_path / "source2", "laws", [initial | {"uslm_reader_version": "reader-2"}])
+    write_legislative_outputs([revised], tmp_path / "two", generation_id="two",
+                              prior_receipts=[tmp_path / "one/etl_receipts.parquet"])
+    first, second = [next(r for r in pq.read_table(tmp_path / name / "etl_receipts.parquet").to_pylist()
+                         if r["dataset"] == "laws" and r["outcome"] == "accepted") for name in ("one", "two")]
+    assert first["subject_version"] == second["subject_version"]
+    assert first["processing_json"] != second["processing_json"]
+    assert second["generation_id"] == "two"
+    assert decode_exact_json(second["diagnostic_json"])["prior_receipt"]["receipt_id"] == first["receipt_id"]
+
+
+@pytest.mark.parametrize("force_fallback", [False, True])
+def test_reference_restore_loads_and_admits_receipts_once(tmp_path, monkeypatch, force_fallback):
+    from contextlib import contextmanager
+    from spicy_regs import etl_bulk, etl_receipts
+
+    sources = [retained(tmp_path / "source", "table3_records", [row("table3_records", act_key="119-1", seq="0")]),
+               retained(tmp_path / "source", "laws", [row("laws", congress="119", law_type="public", number="1")])]
+    write_legislative_outputs(sources, tmp_path / "bundle", generation_id="g")
+    calls = []
+    original = etl_receipts._load_receipts
+    def load(*args, **kwargs):
+        calls.append(args)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(etl_receipts, "_load_receipts", load)
+    if force_fallback:
+        @contextmanager
+        def unproven(*args, **kwargs):
+            raise etl_bulk.NotBulkEligible("forced reference admission")
+            yield
+        monkeypatch.setattr(etl_bulk, "_validated_bundle", unproven)
+    restored = restore_prior(tmp_path / "bundle", tmp_path / "prior", bulk=force_fallback)
+    assert len(calls) == 1
+    for source in sources:
+        assert pq.read_table(source).equals(pq.read_table(restored[source.stem]), check_metadata=True)

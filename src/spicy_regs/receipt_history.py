@@ -245,35 +245,42 @@ def carry_receipt_history(
         assert duplicate is not None
         if duplicate[0]:
             raise ValueError("Conflicting selected prior receipts")
+        # One narrow table per side, built straight from the view: every text identity is a 32-byte digest (hex ids
+        # and versions would be 71 characters each), and accepted-only columns are not stored twice. The workspace
+        # was ~543 B/row; it is private disk, so keep it small. Candidate keys are checked against the raw values below.
+        # Kept receipts are not decoded, so check the one embedded history that can be wrong: payloads that older
+        # inheritance retained by digest. Only such legacy receipts mention it; a carried receipt never does.
+        histories = con.execute(
+            "SELECT diagnostic_json FROM prior WHERE contains(diagnostic_json,'retained_processing')"
+        ).to_arrow_reader(batch_size=2000)
+        for batch in histories:
+            for text in batch.column(0).to_pylist():
+                retained = decode_exact_json(text).get("retained_processing", {})
+                if not isinstance(retained, dict) or any(_digest(value) != key for key, value in retained.items()):
+                    raise ValueError("Retained processing digest differs")
         for name in ("current", "prior"):
             con.execute(
-                f"CREATE TABLE {name}_keys AS SELECT ordinal,dataset,outcome,record_id,subject_version, "
-                "CASE WHEN outcome='accepted' THEN record_id ELSE '' END AS accepted_record_id, "
-                "CASE WHEN outcome='accepted' THEN subject_version ELSE '' END AS accepted_subject_version, "
-                f"{_processing_key('processing_json')} AS processing_key, "
-                f"CASE WHEN outcome='accepted' THEN unhex('') ELSE {_processing_key('diagnostic_json')} "
-                "END AS diagnostic_key "
-                f"FROM {name}"
-            )
-            con.execute(
                 f"CREATE TABLE {name}_ranked AS SELECT *, row_number() OVER(PARTITION BY dataset,outcome,"
-                "processing_key, accepted_record_id, accepted_subject_version, "
-                "diagnostic_key ORDER BY ordinal) AS occurrence "
-                f"FROM {name}_keys"
+                "processing_key, record_key, version_key, diagnostic_key ORDER BY ordinal) AS occurrence FROM ("
+                "SELECT ordinal, dataset, outcome, "
+                f"{_processing_key('processing_json')} AS processing_key, "
+                "CASE WHEN outcome='accepted' THEN unhex(sha256(record_id)) ELSE ''::BLOB END AS record_key, "
+                "CASE WHEN outcome='accepted' THEN unhex(sha256(subject_version)) ELSE ''::BLOB END AS version_key, "
+                f"CASE WHEN outcome='accepted' THEN ''::BLOB ELSE {_processing_key('diagnostic_json')} END AS diagnostic_key "
+                f"FROM {name})"
             )
         # Outcome separates the branches, so ignored fields use fixed keys.
         # Ordinary equality preserves null refusal and admits a hash join
         # instead of an OR join that compares every current/prior pair.
+        # A changed accepted row finds its predecessor by identity alone; a non-accepted row's empty record_key matches nothing.
         con.execute("""CREATE TABLE matches AS SELECT c.ordinal AS current_ordinal,p.ordinal AS prior_ordinal,
             CASE WHEN p.ordinal IS NULL AND c.outcome='accepted' THEN predecessor.ordinal END AS predecessor_ordinal
             FROM current_ranked c LEFT JOIN prior_ranked p ON c.dataset=p.dataset AND c.outcome=p.outcome
             AND c.processing_key=p.processing_key AND c.occurrence=p.occurrence
-            AND c.accepted_record_id=p.accepted_record_id
-            AND c.accepted_subject_version=p.accepted_subject_version
-            AND c.diagnostic_key=p.diagnostic_key
-            LEFT JOIN prior_keys predecessor ON c.dataset=predecessor.dataset AND c.record_id=predecessor.record_id
+            AND c.record_key=p.record_key AND c.version_key=p.version_key AND c.diagnostic_key=p.diagnostic_key
+            LEFT JOIN prior_ranked predecessor ON c.dataset=predecessor.dataset AND c.record_key=predecessor.record_key
             AND predecessor.outcome='accepted'""")
-        for name in ("current_ranked", "prior_ranked", "current_keys", "prior_keys"):
+        for name in ("current_ranked", "prior_ranked"):
             con.execute(f"DROP TABLE {name}")
         _pending_refusals(con, refusal_identities or {})
         # Only ordinals are sorted. Joining/sorting literal JSON and full rows

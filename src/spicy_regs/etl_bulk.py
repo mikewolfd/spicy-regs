@@ -317,6 +317,7 @@ def write_split(
     refusals_last: bool = False,
     segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
     isolate: str | None = None,
+    subject_columns: Sequence[str] | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
 
@@ -327,9 +328,11 @@ def write_split(
     first (the order relies on registering one table per query; the ordinal guard below stays). A row marked
     ``_reference`` is given to ``row_attempt(batch, index, source_row)``, the family's own row function, with the row as
     the source file holds it (never decoded from the query's encoded text, which spells a value SQL does not own as a
-    marker), and merged back in place; with ``refusals_last`` its receipt, if not accepted, goes after every accepted one, as the row
-    writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow accepted rows.
+    marker), and merged back in place; with ``refusals_last`` its failure receipt goes after normal accepted/observed
+    records, as the row writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
     ``last_refusals`` follows the routed refusals, retaining the order of separately rejected updates.
+    ``subject_columns`` optionally names query aliases in subject-schema order when a native field name collides with
+    a receipt field; aliases are renamed before routed subjects are inserted.
     ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
     written as a receipt row group of its own, so a reader fetching a neighbour does not load it.
 
@@ -337,6 +340,9 @@ def write_split(
     :func:`bulk_failure`, never a row retry. Rows arriving out of order, or fewer than ``expected_rows``, raise
     ``RuntimeError``: a stream cut short leaves a bundle that is consistent with itself.
     """
+    if subject_columns is not None and len(subject_columns) != len(subject_schema):
+        raise ValueError("subject_columns must name one query column per subject field")
+    selected_subjects = subject_schema.names if subject_columns is None else list(subject_columns)
     seen, routed, piece_start = 0, 0, 0
     piece: pa.RecordBatch | None = None
     pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
@@ -361,14 +367,14 @@ def write_split(
             proven = [not flag for flag in flags]
             accepted = table["_accepted"].to_pylist() if "_accepted" in names else proven
             written = table.filter(pa.array(proven)).select(RECEIPT_SCHEMA.names).cast(RECEIPT_SCHEMA)
-            kept = table.filter(pa.array(accepted)).select(subject_schema.names).cast(subject_schema)
+            kept = table.filter(pa.array(accepted)).select(selected_subjects).rename_columns(subject_schema.names).cast(subject_schema)
             decided_subjects, decided_receipts, refusals = {}, {}, []
             for index in (index for index, flag in enumerate(flags) if flag):
                 assert piece is not None
                 offset = table["_ordinal"][index].as_py() - piece_start
                 subject, receipt = row_attempt(table, index, piece.slice(offset, 1).to_pylist()[0])
                 decided_subjects[index] = subject
-                if refusals_last and receipt["outcome"] != "accepted":
+                if refusals_last and receipt["outcome"] not in {"accepted", "observed"}:
                     refusals.append(receipt)
                 else:
                     decided_receipts[index] = receipt

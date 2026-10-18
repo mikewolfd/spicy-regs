@@ -183,6 +183,11 @@ on:
         required: false
         default: 30
         type: number
+      free_disk:
+        description: 'Free ~25 GB of preinstalled toolchains first and log the lowest free disk seen (rollups that carry ~10M-row receipt tables)'
+        required: false
+        default: false
+        type: boolean
       producer_ref:
         description: 'Optional producer checkout ref; blank preserves the caller revision'
         required: false
@@ -199,6 +204,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.producer_ref }}
+
+      - name: Free runner disk and watch what is left
+        if: inputs.free_disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+          mkdir -p output
+          nohup sh -c 'while sleep 20; do df -k --output=avail / | tail -1; done' > "$RUNNER_TEMP/disk-watch.log" 2>&1 &
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -360,6 +373,12 @@ jobs:
             output/source-evidence/
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Report the lowest free disk seen
+        if: always() && inputs.free_disk
+        run: |
+          df -h /
+          sort -n "$RUNNER_TEMP/disk-watch.log" | head -1 | awk '{printf "lowest free disk during the run: %.1f GiB\n", $1/1048576}'
 
       - name: Retain build-only outputs and failures
         if: failure() || (success() && inputs.skip_upload)
