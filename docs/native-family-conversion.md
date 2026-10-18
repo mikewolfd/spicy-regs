@@ -266,7 +266,7 @@ same reviewed bytes. The normal court-citations refresh also needs the native
 UV=/opt/homebrew/bin/uv
 MAIN=$(git rev-parse HEAD)
 WHEEL=$($UV run --frozen python -c "from importlib.metadata import version; print(version('spicy-docs'))")
-COURT_WORK=~/Work/corpora/native-conversion-<date>/court-citations
+COURT_WORK="$HOME/Work/spicy-stack-review-work/native-conversion-$(date +%Y%m%d-%H%M%S)/court-citations"
 SPICY_REGS_REQUIRE_BULK=true R2_PUBLIC_URL=https://data.spicygov.ai \
   $UV run --frozen python scripts/convert_family_to_native.py court-citations \
   --allow court-citations --work "$COURT_WORK" --expect-main "$MAIN" \
