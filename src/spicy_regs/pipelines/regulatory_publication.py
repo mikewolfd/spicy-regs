@@ -29,7 +29,7 @@ def restore_dataset(root: Path, dataset: str, destination: Path, *, index=None, 
         if selected is None:
             return False
         materialize_internal(ReceiptInput(dataset, selected.subjects, selected.receipts, selected.generation_id),
-                             destination)
+                             destination, bulk=True)
         return True
 
 

@@ -50,7 +50,7 @@ def test_complete_nullable_identity_preserves_source_positions_order_and_origina
     assert restored.equals(pq.read_table(reference), check_metadata=True)
     assert restored.equals(pq.read_table(source), check_metadata=True)
     assert restored['docket_source_ordinal'].to_pylist() == [0, 1, None, None, 0]
-    assert regulations_bulk.DATASETS == frozenset({'dockets', 'documents'})
+    assert regulations_bulk.DATASETS == frozenset({'dockets', 'documents', *regulations_bulk.ATTRIBUTES})
     assert not regulations_bulk.eligible('fr_docket_links', schema)
 
 

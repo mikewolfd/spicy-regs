@@ -53,7 +53,11 @@ _UPPER_HEX_ESCAPE = r"(^|[^\\])(\\\\)*\\u00[01][A-F]"
 #: A JSON string as ``json.loads`` reads one: no raw control character, and only the escapes JSON defines.
 _STRING = r'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
 #: The encoded values with nothing inside them. An integer is held to 18 digits, below where ``int`` refuses a text.
-_SCALAR = r'\["null",null\]|\["bool",(?:true|false)\]|\["int",-?(?:0|[1-9][0-9]{0,17})\]|\["str",' + _STRING + r"\]"
+#: A UTC datetime ``datetime.fromisoformat`` certainly reads: years 1000-9999, days to the 28th, so no calendar date is invalid.
+_DATETIME = (r'\["datetime","[1-9][0-9]{3}-(?:0[1-9]|1[0-2])-(?:0[1-9]|1[0-9]|2[0-8])'
+             r'T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]{6})?\+00:00"\]')
+_SCALAR = (r'\["null",null\]|\["bool",(?:true|false)\]|\["int",-?(?:0|[1-9][0-9]{0,17})\]|\["str",' + _STRING + r"\]|"
+           + _DATETIME)
 #: A list or a mapping whose members have each already been replaced by the ``chr(1)`` that stands for one value.
 _NESTED = (
     r'\["list",\[(?:\x01(?:,\x01)*)?\]\]|\["dict",\[(?:\[' + _STRING + r",\x01\](?:,\[" + _STRING + r",\x01\])*)?\]\]"
@@ -585,7 +589,7 @@ def reduced_sql(text: str) -> str:
 
     Every replacement stands for a text ``_unpack(json.loads(...))`` returns from without raising, so a text that
     reduces to one ``chr(1)`` is one such value. That holds only for a text with no ``chr(1)`` of its own, which the
-    caller checks. A float, decimal, date or bytes value is never replaced: its row goes to the reference.
+    caller checks. A float, decimal, date, bytes or other datetime value is never replaced: its row goes to the reference.
     """
     reduced = f"regexp_replace({text}, {_literal(_SCALAR)}, chr(1), 'g')"
     for _ in range(_DEPTH):

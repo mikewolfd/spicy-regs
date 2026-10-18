@@ -45,7 +45,10 @@ from spicy_regs.transforms.regulations_shape import (
 # Datasets whose retained processing input restores through the private batch reader.
 RESTORE_DATASETS = frozenset({"dockets", "documents", "federal_register", "fr_docket_links"})
 #: Datasets whose restore keeps the captured source schema: the batch-restored ones and the typed attribute tables.
-SOURCE_SCHEMA_DATASETS = RESTORE_DATASETS | {"docket_attributes", "document_attributes"}
+ATTRIBUTE_DATASETS = frozenset({"comment_attributes", "docket_attributes", "document_attributes"})
+SOURCE_SCHEMA_DATASETS = RESTORE_DATASETS | ATTRIBUTE_DATASETS
+#: Datasets the private batch reader restores: the retained-input ones and the typed attribute tables.
+BATCH_RESTORE_DATASETS = RESTORE_DATASETS | ATTRIBUTE_DATASETS
 
 NULLABLE_IDENTITIES = {
     "agency_lifecycle_stats": ("agency_code",),
@@ -213,7 +216,7 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     """
     from spicy_regs.transforms.parquet_rows import write_rows
     processing_schema(selected.dataset, source_schema=source_schema)
-    if bulk and selected.dataset in RESTORE_DATASETS:
+    if bulk and selected.dataset in BATCH_RESTORE_DATASETS:
         from spicy_regs import etl_bulk, regulations_bulk
         if all(pq.read_schema(path).equals(subject_schema(selected.dataset)) for path in selected.subjects):
             try:
@@ -316,6 +319,7 @@ def write_records(
     project: Callable[[Mapping], Mapping] | None = None,
     observation_context: ReceiptContext | None = None,
     prior_receipts: Sequence[Path] = (),
+    validate: bool = True,
 ) -> tuple[Path, Path]:
     """Write one dataset and preserve malformed-input attempts without subjects.
 
@@ -365,7 +369,7 @@ def write_records(
                 yield from batch.to_pylist()
 
         try:
-            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures())
+            subject, receipts = write_dataset(mapped(), destination, declared, failures=failures(), validate=validate)
         finally:
             writer.close()
         assert subject is not None
@@ -383,6 +387,7 @@ def write_held_dataset(
     include_source_witness: bool = True,
     prior_receipts: Sequence[Path] = (),
     bulk: bool = False,
+    validate: bool = True,
 ) -> tuple[Path, Path]:
     """Convert retained rows with witnesses to their exact receipt-held input.
 
@@ -390,14 +395,16 @@ def write_held_dataset(
     goes into each receipt. Neither source bytes nor their metadata are deleted.
     Dockets and documents can batch declared text inputs; ``bulk=False`` uses
     the reference writer. Unsupported batch values retain its exact decisions.
+    ``validate=False`` leaves the one validation to the caller's generation admission.
     A DuckDB or Arrow failure in the batch writer is raised, never retried by row.
     """
-    if bulk and dataset in {'dockets', 'documents'}:
-        from spicy_regs import etl_bulk, regulations_bulk
+    from spicy_regs import etl_bulk, regulations_bulk
+    if bulk and dataset in regulations_bulk.DATASETS:
         try:
             return regulations_bulk.write_held_dataset(
                 dataset, source, destination, generation_id=generation_id, processor=processor,
                 witnesses=witnesses, include_source_witness=include_source_witness, prior_receipts=prior_receipts,
+                validate=validate,
             )
         except etl_bulk.NotBulkEligible as error:
             etl_bulk.log_row_fallback("regulatory write", error, dataset=dataset)
@@ -443,7 +450,7 @@ def write_held_dataset(
         {"kind": "input_file_metadata", "rows": parquet.metadata.num_rows},
     )
     return write_records(dataset, records(), destination, input_metadata=metadata, observation_context=observed,
-                         prior_receipts=prior_receipts)
+                         prior_receipts=prior_receipts, validate=validate)
 
 
 def build_local_generation(
@@ -480,6 +487,7 @@ def build_local_generation(
                 witnesses=witnesses,
                 include_source_witness=include_source_witness,
                 prior_receipts=(prior_receipts or {}).get(name, ()),
+                validate=False,  # build_generation below admits the pair
             )
             subjects.append(subject)
             receipts.append(receipt)
