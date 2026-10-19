@@ -39,6 +39,7 @@ Parquet URLs are not rewritten by this path.
 """
 
 import hashlib
+import shutil
 from abc import abstractmethod
 from collections.abc import Mapping
 from contextlib import nullcontext
@@ -246,7 +247,19 @@ class RollupPipeline(Pipeline):
                         carried_forward[key] = prior["artifactDigest"]
         generations = output_dir / "generations"
         generations.mkdir(exist_ok=True)
-        with TemporaryDirectory(prefix=".generation-", dir=output_dir) as staging:
+        generation_kwargs = self.generation_kwargs(out_paths)
+        owned_staging = None
+        if generation_kwargs.get("owned_output_root") is not None or generation_kwargs.get("adopt_owned_receipt"):
+            from spicy_regs.selected_generations import unique_build_directory
+
+            # Adopted files have no remaining build copy. Keep their staging on any failure.
+            owned_staging = unique_build_directory(output_dir)
+        staging_context = (
+            nullcontext(owned_staging)
+            if owned_staging is not None
+            else TemporaryDirectory(prefix=".generation-", dir=output_dir)
+        )
+        with staging_context as staging:
             directory = Path(staging) / "artifact"
             artifact = build_generation(
                 directory,
@@ -262,7 +275,7 @@ class RollupPipeline(Pipeline):
                 partitioned=partitioned,
                 read_operation=read_operation,
                 canonical_root=generations if read_operation is not None else None,
-                **self.generation_kwargs(out_paths),
+                **generation_kwargs,
                 **(
                     {
                         "receipt_path": build_dir / "etl_receipts.parquet",
@@ -313,6 +326,8 @@ class RollupPipeline(Pipeline):
         from spicy_regs.selected_generations import remember_generation
 
         remember_generation(output_dir, destination, artifact)
+        if owned_staging is not None:
+            shutil.rmtree(owned_staging)
         logger.info("Done!")
 
     def _own(self, key: str, family: str | None) -> bool:

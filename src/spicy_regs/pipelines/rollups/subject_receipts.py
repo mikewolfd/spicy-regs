@@ -448,7 +448,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
         if not getattr(self, "_defer_native_selection", False):
             validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
         prior.selected.check()
-        # Private files are final here; the copies below make them visible.
+        # Private files are final here; the outputs below are ready for admission or local selection.
         visible = []
         for source in subjects:
             target = output_dir / source.name
@@ -461,8 +461,11 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             else:
                 shutil.copyfile(source, target)
             visible.append(target)
-        shutil.copyfile(combined, output_dir / "etl_receipts.parquet")
-        if not getattr(self, "_defer_native_selection", False):
+        if getattr(self, "_defer_native_selection", False):
+            combined.replace(output_dir / "etl_receipts.parquet")
+        else:
+            # Standalone selections retain the immutable private member across later builds.
+            shutil.copyfile(combined, output_dir / "etl_receipts.parquet")
             remember_selection(
                 self.output_dir or output_dir,
                 [

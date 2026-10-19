@@ -131,7 +131,8 @@ def test_missing_receipts_refuse_before_processing_read(tmp_path, monkeypatch):
         SelectedPriors(tmp_path / "bad").get("members")
 
 
-def test_bad_native_value_keeps_refusal_and_cannot_admit_complete_family(tmp_path, monkeypatch):
+@pytest.mark.parametrize("deferred", [False, True])
+def test_bad_native_value_keeps_refusal_and_cannot_admit_complete_family(tmp_path, monkeypatch, deferred):
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
 
     class Members(SubjectReceiptRollup):
@@ -144,8 +145,10 @@ def test_bad_native_value_keeps_refusal_and_cannot_admit_complete_family(tmp_pat
     def bad(directory, *, download_prior):
         return shaped(directory / "members.parquet", [{"bioguide_id": "X", "fec_ids_json": "bad"}])
 
+    pipeline = Members()
+    pipeline._defer_native_selection = deferred
     with pytest.raises(ValueError, match="conversion refused"):
-        Members().build_receipts(tmp_path, bad)
+        pipeline.build_receipts(tmp_path, bad)
     assert not (tmp_path / "etl_receipts.parquet").exists()
     [receipt] = (tmp_path / ".builds").glob("*/candidate/etl_receipts.parquet")
     assert "refused" in pq.read_table(receipt)["outcome"].to_pylist()
@@ -285,13 +288,114 @@ def test_actual_bill_family_resumes_both_owners_without_rereading_bodies(tmp_pat
 
 
 def test_local_mixed_rollup_can_build_twice_in_one_output_directory(tmp_path, monkeypatch):
+    from spicy_regs.selected_generations import SelectedInputs
+
     monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
     pipeline = MixedRollup()
     first = pipeline.build_receipts(tmp_path, mixed_builder)
     before = {path.name: pq.read_table(path).to_pylist() for path in first}
+    selected = SelectedInputs(tmp_path, tmp_path / "reader", public_url="")
+    receipt = selected.select("members").receipts
+    receipt_bytes = receipt.read_bytes()
+    assert receipt.parent.name == "candidate"
+    assert receipt.stat().st_ino != (tmp_path / "etl_receipts.parquet").stat().st_ino
     second = pipeline.build_receipts(tmp_path, mixed_builder)
     assert {path.name: pq.read_table(path).to_pylist() for path in second} == before
+    selected.check()
+    assert receipt.read_bytes() == receipt_bytes
     assert len(list((tmp_path / ".builds").iterdir())) == 2
+
+
+@pytest.mark.parametrize(
+    ("adoption", "failure"),
+    [("both", None), ("receipt", "admission"), ("outputs", "preparation"), ("copy", "admission")],
+)
+def test_deferred_receipt_transfer_retains_owned_files_until_success(tmp_path, monkeypatch, adoption, failure):
+    from spicy_regs import generations
+    from spicy_regs.pipelines.rollups import subject_receipts
+    from spicy_regs.selected_generations import SelectedInputs
+
+    monkeypatch.delenv("R2_PUBLIC_URL", raising=False)
+    monkeypatch.setattr(publication, "publish_generation", lambda **_: pytest.fail("Unexpected publication"))
+    combined = {}
+    real_combine = subject_receipts.combine_receipts
+
+    def capture_combined(*args, **kwargs):
+        path = real_combine(*args, **kwargs)
+        combined.update(path=path, inode=path.stat().st_ino, content=path.read_bytes())
+        return path
+
+    monkeypatch.setattr(subject_receipts, "combine_receipts", capture_combined)
+
+    class Members(SubjectReceiptRollup):
+        name = "owned-members-test"
+        output = "members.parquet"
+        options_calls = 0
+
+        def build(self, output_dir):
+            def producer(work):
+                return shaped(work / "members.parquet", [{"bioguide_id": "X", "fec_ids_json": '["A"]'}])
+
+            return self.build_receipts(output_dir, producer)
+
+        def generation_kwargs(self, paths):
+            self.options_calls += 1
+            return {
+                **({"owned_output_root": tmp_path} if adoption in {"both", "outputs"} else {}),
+                **({"adopt_owned_receipt": True} if adoption in {"both", "receipt"} else {}),
+            }
+
+    moved_subject = {}
+    if failure == "preparation":
+
+        def fail_footer(path):
+            moved_subject.update(path=path, inode=path.stat().st_ino, content=path.read_bytes())
+            raise ValueError("injected preparation failure")
+
+        monkeypatch.setattr(generations, "_table_footer_info", fail_footer)
+    elif failure == "admission":
+        real_admit = generations.admit_generation_for_publication
+
+        def fail_admission(directory):
+            real_admit(directory)
+            raise ValueError("injected admission failure")
+
+        monkeypatch.setattr(generations, "admit_generation_for_publication", fail_admission)
+
+    pipeline = Members(output_dir=tmp_path)
+    if failure is None:
+        pipeline.run()
+        [directory] = (tmp_path / "generations").iterdir()
+        receipt = directory / "etl_receipts.parquet"
+        selected = SelectedInputs(tmp_path, tmp_path / "reader", public_url="").select("members")
+        assert selected.receipts == receipt
+        assert not list((tmp_path / ".builds").glob("*/artifact"))
+        assert len(list((tmp_path / ".builds").iterdir())) == 1
+    else:
+        with pytest.raises(ValueError, match=f"injected {failure} failure"):
+            pipeline.run()
+        assert not list((tmp_path / "generations").iterdir())
+        assert not (tmp_path / ".native-state/selection.json").exists()
+        if adoption == "copy":
+            assert not list((tmp_path / ".builds").glob("*/artifact"))
+            assert len(list((tmp_path / ".builds").iterdir())) == 1
+            receipt = tmp_path / "etl_receipts.parquet"
+        else:
+            [directory] = (tmp_path / ".builds").glob("*/artifact")
+            assert len(list((tmp_path / ".builds").iterdir())) == 2
+            receipt = (
+                directory / "etl_receipts.parquet" if failure == "admission" else tmp_path / "etl_receipts.parquet"
+            )
+            if failure == "preparation":
+                assert moved_subject["path"].is_relative_to(directory)
+                assert moved_subject["path"].read_bytes() == moved_subject["content"]
+                assert moved_subject["path"].stat().st_ino == moved_subject["inode"]
+                assert not (tmp_path / "members.parquet").exists()
+    assert pipeline.options_calls == 1
+    assert not combined["path"].exists()
+    assert receipt.read_bytes() == combined["content"]
+    assert receipt.stat().st_ino == combined["inode"]
+    assert not list(tmp_path.glob(".generation-*"))
 
 
 def test_selected_legacy_generation_refuses_without_conversion(tmp_path, monkeypatch):
