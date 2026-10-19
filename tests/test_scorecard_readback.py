@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pyarrow as pa
@@ -276,13 +277,16 @@ def test_complete_preparation_uses_late_publisher_reference_and_real_generation_
     assert generation.pin.as_dict() == report["generation"]
 
 
-def carried_public_readback(tmp_path, monkeypatch, corruption=None):
+def carried_public_readback(tmp_path, monkeypatch, corruption=None, *, no_ratings=False):
 
     from spicy_regs.scorecards.operations import readback as readback
     previous = tables(edition("2024"))
     first = tmp_path / "prior"
     write_family(first, previous, generation_id="original-source-generation")
-    current = combine(previous, tables(edition("2025")))
+    incoming = tables(edition("2025"))
+    if no_ratings:
+        incoming["scorecard_member_ratings"] = []
+    current = combine(previous, incoming)
     candidate = tmp_path / "candidate"
     files = write_family(
         candidate, current, generation_id="current-container-generation", prior_receipts=first / "etl_receipts.parquet"
@@ -331,7 +335,7 @@ def carried_public_readback(tmp_path, monkeypatch, corruption=None):
 def test_public_readback_compares_carried_origin_distribution_to_exact_candidate(tmp_path, monkeypatch, corruption):
     readback, args, prepared, authenticated = carried_public_readback(tmp_path, monkeypatch, corruption)
     if corruption:
-        with pytest.raises(ValueError, match="origins or outcome counts"):
+        with pytest.raises(ValueError, match="origins or outcome counts|differs from its immutable pin"):
             readback.public_files(args, prepared, authenticated)
     else:
         connection, _ = readback.public_files(args, prepared, authenticated)
@@ -342,19 +346,35 @@ def test_public_readback_compares_carried_origin_distribution_to_exact_candidate
             assert origins == [("current-container-generation",), ("original-source-generation",)]
         finally:
             connection.close()
+        assert {member["origin"] for member in json.loads((args.output / "public-files.json").read_bytes())["members"]} == {"downloaded"}
 
 
-@pytest.mark.parametrize("corruption", [None, "origin", "count", "missing-pin", "stale-pin", "field-state", "native-value"])
-def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_pins(tmp_path, monkeypatch, corruption):
+@pytest.mark.parametrize("mode,corruption", [
+    ("full", fault) for fault in (None, "origin", "count", "missing-pin", "stale-pin", "field-state", "native-value")
+] + [("source-adoption", fault) for fault in (None, "native-value", "missing-scope", "stale-pin", "native-scorecard", "no-ratings", "no-source-columns")])
+def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_pins(tmp_path, monkeypatch, mode, corruption):
     import asyncio
     from contextlib import asynccontextmanager
     import duckdb
 
-    readback, args, prepared, authenticated = carried_public_readback(tmp_path, monkeypatch)
+    readback, args, prepared, authenticated = carried_public_readback(tmp_path, monkeypatch, no_ratings=corruption == "no-ratings")
+    args.mode = mode
+    args.accepted_scopes = ["lcv:2025"] + (["absent:scope"] if corruption == "missing-scope" else [])
     connection, family = readback.public_files(args, prepared, authenticated)
     server = duckdb.connect()
     for key in family["tables"]:
         server.read_parquet(str(args.output / "members" / key)).create_view(key.removesuffix(".parquet"))
+    if corruption == "no-source-columns":
+        removed = {"capture_id", "source_url", "source_path"}
+        family = deepcopy(family)
+        family["tables"]["scorecard_member_ratings.parquet"]["columns"] = [
+            column for column in family["tables"]["scorecard_member_ratings.parquet"]["columns"]
+            if column[0] not in removed
+        ]
+        columns = ",".join(column[0] for column in family["tables"]["scorecard_member_ratings.parquet"]["columns"])
+        for database in (connection, server):
+            database.read_parquet(str(args.output / "members/scorecard_member_ratings.parquet")).create_view("_ratings")
+            database.execute("CREATE OR REPLACE VIEW scorecard_member_ratings AS SELECT " + columns + " FROM _ratings")
     receipts = pq.read_table(args.output / "members/etl_receipts.parquet")
     rows = receipts.to_pylist()
     rows.append(dict(rows[0], dataset="members", generation_id="unrelated-family-generation"))
@@ -386,6 +406,10 @@ def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_
             pass
 
         async def call_tool(self, tool, arguments):
+            if mode == "source-adoption":
+                assert tool != "read_receipt_fields"
+                assert arguments.get("table") != "etl_receipts"
+                assert "FROM etl_receipts" not in arguments.get("sql", "")
             if tool == "list_sources":
                 body = dict(tables=[dict(table=key.removesuffix(".parquet")) for key in family["tables"]])
             elif tool == "describe_table":
@@ -417,10 +441,17 @@ def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_
                 records = [readback._jsonify(dict(zip(columns, row, strict=True))) for row in cursor.fetchall()]
                 if corruption == "native-value" and "WHERE scorecard_id=" in arguments["sql"]:
                     records[0]["value_text"] = "changed source rating"
+                if mode == "source-adoption" and "WHERE c.scorecard_id IN" in arguments["sql"]:
+                    if corruption == "native-value":
+                        records[0]["published_value"] = "changed source rating"
+                if corruption == "native-scorecard" and "SELECT * FROM scorecards WHERE" in arguments["sql"]:
+                    records[0]["title"] = "changed native scorecard"
                 pins = {
                     key.removesuffix(".parquet"): dict(artifact_digest=family["artifactDigest"])
                     for key in family["tables"]
                 }
+                if mode == "source-adoption" and corruption == "stale-pin":
+                    pins["scorecards"]["artifact_digest"] = "sha256:" + "f" * 64
                 if "FROM etl_receipts" in arguments["sql"]:
                     assert sum(row["rows"] for row in records) == family["etlReceipts"]["rows"]
                     assert {row["generation_id"] for row in records} == {
@@ -446,12 +477,59 @@ def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_
     monkeypatch.setattr(readback, "streamable_http_client", stream)
     monkeypatch.setattr(readback, "ClientSession", Session)
     try:
-        if corruption:
-            with pytest.raises(ValueError, match="selected scorecards family|outcomes differ|source fields or read states|Hosted rows differ"):
+        if corruption and corruption not in {"no-ratings", "no-source-columns"}:
+            with pytest.raises(ValueError, match="selected scorecards family|outcomes differ|source fields or read states|Hosted rows differ|every accepted scorecard|different source generation"):
                 asyncio.run(readback.hosted(args, connection, family))
         else:
             calls = asyncio.run(readback.hosted(args, connection, family))
-            assert calls[-1]["label"] == "source_receipt_counts"
+            if mode == "full":
+                assert calls[-1]["label"] == "source_receipt_counts"
+            else:
+                assert calls[-1]["label"] == "accepted_scope_native_values"
+                native = json.loads((args.output / "accepted_scorecards.json").read_bytes())["structuredContent"]
+                assert [row["scorecard_id"] for row in native["rows"]] == ["lcv:2025"]
+                sample = json.loads((args.output / "accepted_scope_native_values.json").read_bytes())["structuredContent"]
+                assert [row["scorecard_id"] for row in sample["rows"]] == ([] if corruption == "no-ratings" else ["lcv:2025"])
+                if corruption == "no-source-columns":
+                    assert not {"capture_id", "source_url", "source_path"} & set(sample["columns"])
+                else:
+                    assert {"capture_id", "source_url", "source_path"} <= set(sample["columns"])
     finally:
         server.close()
         connection.close()
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_public_readback_reuses_exact_local_members_and_refuses_changed_bytes(tmp_path, monkeypatch, changed):
+    readback, args, prepared, authenticated = carried_public_readback(tmp_path, monkeypatch)
+    retained = Path(prepared["generation_directory"])
+    args.local_inputs = [retained]
+    if changed:
+        path = retained / "scorecards.parquet"
+        path.write_bytes(path.read_bytes() + b"changed")
+    requested = []
+
+    def unavailable(url, member, target, **kwargs):
+        requested.append(member.key)
+        return False
+
+    monkeypatch.setattr(pub, "fetch_member", unavailable)
+    if changed:
+        with pytest.raises(ValueError, match="unavailable or differs from its immutable pin"):
+            readback.public_files(args, prepared, authenticated)
+        assert requested == ["scorecards.parquet"]
+    else:
+        connection, family = readback.public_files(args, prepared, authenticated)
+        connection.close()
+        assert not requested
+        assert all((args.output / "members" / key).is_symlink() for key in family["tables"])
+        assert {member["origin"] for member in json.loads((args.output / "public-files.json").read_bytes())["members"]} == {"retained_verified"}
+
+
+@pytest.mark.parametrize("scopes", [None, [], ["lcv:2025", "lcv:2025"],
+                                   pytest.param([f"scope:{index}" for index in range(501)], id="too-many")])
+def test_source_adoption_requires_explicit_accepted_scopes(scopes):
+    from spicy_regs.scorecards.operations.readback import adoption_scopes
+
+    with pytest.raises(ValueError, match="exact distinct accepted scopes"):
+        adoption_scopes({"accepted_scopes": scopes})

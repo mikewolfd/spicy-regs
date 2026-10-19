@@ -62,6 +62,14 @@ def publication_proof(readback_root):
     index, index_pin = document(readback_root / "public-index.json")
     family = index["families"]["scorecards"]
     generation = family["artifactDigest"]
+    mode = summary.get("mode")
+    receipt_serving = summary.get("receipt_serving")
+    if (mode, receipt_serving) not in ((None, None), ("full", "passed"), ("source-adoption", "not_checked")):
+        raise ValueError("Readback mode and receipt-serving status differ")
+    accepted_scopes = []
+    if mode == "source-adoption":
+        from spicy_regs.scorecards.operations.readback import adoption_scopes
+        accepted_scopes = adoption_scopes(summary)
     if (
         summary.get("status") != "passed"
         or files.get("status") != "passed"
@@ -146,6 +154,7 @@ def publication_proof(readback_root):
         or set(scopes) != set(counts["scorecards"])
         or any(set(rows) - set(scopes) for name, rows in counts.items() if name != "scorecard_publishers")
         or {scope["publisher_id"] for scope in scopes.values()} != set(counts["scorecard_publishers"])
+        or not set(accepted_scopes) <= set(scopes)
     ):
         raise ValueError("Complete snapshots and hosted source populations differ")
     return dict(
@@ -155,6 +164,9 @@ def publication_proof(readback_root):
         source_generation=generation,
         public_member_pins_verified=True,
         hosted_scope_counts_verified=True,
+        readback_mode=mode,
+        receipt_serving=receipt_serving,
+        accepted_scopes=accepted_scopes,
         scopes=dict(sorted(scopes.items())),
         public_members=files["members"],
         hosted_calls=summary["calls"],

@@ -164,6 +164,18 @@ uv run --frozen python scripts/record_scorecard_publication.py \
   --readback "$SCORECARD_PUBLIC_READBACK"
 ```
 
+For source adoption while hosted receipt serving is assessed separately, pass
+`--mode source-adoption` to the readback command. This explicit mode requires the
+preparation's accepted scopes, checks every native table's scope counts, compares
+each accepted scorecard's native row and an attributed rating where ratings exist,
+and records `receipt_serving: not_checked` in its summary and publication proof.
+The default `full` mode retains the hosted receipt checks. With either mode,
+`--local-inputs PATH` reuses exact pinned members through the maintained staging
+helper and records each member as `retained_verified` or `downloaded`; the fresh
+public pointer, byte hashes, footers and local receipt origins are still checked.
+Local reuse does not probe current payload download availability; retain earlier
+download evidence separately and choose a fresh readback output directory.
+
 The recorder checks every public member's bytes and footer against the accepted
 generation, reconciles each hosted table population, and reads complete snapshot
 observations through the shared ETL receipt reader. A scope advances only when
