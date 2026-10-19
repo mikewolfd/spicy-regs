@@ -1,6 +1,7 @@
 """Pinned main reads preserve resolver values; receipt-dependent aliases refuse."""
 from copy import deepcopy
 import json
+import shutil
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -9,6 +10,7 @@ import pytest
 from spicy_regs.congress_receipts import CongressInput, policy, write_congress_dataset
 from spicy_regs.generations import build_generation
 from spicy_regs.scorecards.analysis_inputs import read_published_native_resolver_rows
+from spicy_regs.scorecards.inputs import stage_member
 from spicy_regs.scorecards.resolution import OFFICIAL_COLUMNS
 from spicy_regs.sources import publication
 from tests.generation_fakes import Store
@@ -52,6 +54,48 @@ def test_changed_pin_and_incomplete_population_refuse(tmp_path):
         read_published_native_resolver_rows(bad, 'congress_bills', [subject])
     with pytest.raises(ValueError, match='every selected member'):
         read_published_native_resolver_rows(index, 'congress_bills', [])
+
+
+def staged_selection(tmp_path):
+    index, subject, _ = native_selection(tmp_path, 'congress_bills', [{'bill_id': '118-hr-1'}])
+    staged = tmp_path / 'inputs/congress_bills.parquet'
+
+    def unavailable(*_):
+        pytest.fail('Retained exact input must not fetch')
+
+    stage_member(publication.single_member(index, 'congress_bills.parquet'), staged,
+                 local_inputs=[subject.parent], fetch=unavailable)
+    assert staged.is_symlink()
+    return index, subject, staged
+
+
+def test_verified_local_staging_reads_retained_target(tmp_path):
+    index, subject, staged = staged_selection(tmp_path)
+    assert read_published_native_resolver_rows(index, 'congress_bills', [staged]) == (
+        read_published_native_resolver_rows(index, 'congress_bills', [subject]))
+
+
+@pytest.mark.parametrize('change', ['retarget_staging', 'replace_retained_target'])
+def test_local_staging_or_target_change_refuses(tmp_path, monkeypatch, change):
+    from spicy_regs.scorecards import analysis_inputs
+
+    index, subject, staged = staged_selection(tmp_path)
+    replacement = tmp_path / 'replacement.parquet'
+    shutil.copyfile(subject, replacement)
+    original_digest = analysis_inputs.file_digest
+
+    def digest_then_change(stream, algorithm):
+        digest = original_digest(stream, algorithm)
+        if change == 'retarget_staging':
+            staged.unlink()
+            staged.symlink_to(replacement)
+        else:
+            replacement.replace(subject)
+        return digest
+
+    monkeypatch.setattr(analysis_inputs, 'file_digest', digest_then_change)
+    with pytest.raises(ValueError, match='changed during its read'):
+        read_published_native_resolver_rows(index, 'congress_bills', [staged])
 
 
 def test_alias_omission_and_explicit_null_stay_receipt_checked(tmp_path):
