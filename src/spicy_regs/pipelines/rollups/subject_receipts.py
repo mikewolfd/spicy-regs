@@ -1,7 +1,7 @@
 """Scheduled subject writers with exact, selected-generation processing priors.
 
 Only private working files restore processing fields. The returned outputs are
-native subjects and one generation-bound receipt member; no public mirrors.
+native subjects and generation-bound receipt members; no public mirrors.
 """
 
 from __future__ import annotations
@@ -339,12 +339,27 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
         elif visible:
             cls.output = visible[0]
 
+    # Explicit local opt-in; deployment compatibility must precede adoption.
+    split_vote_receipts: ClassVar[bool] = False
+
+    def receipt_generation_kwargs(self, build_dir):
+        result = super().receipt_generation_kwargs(build_dir)
+        if self.split_vote_receipts:
+            result.pop("receipt_path")
+            result["receipt_paths"] = self._receipt_output_members
+        return result
+
     def generation_schemas(self):
         return {p.dataset: described_schema(p.subject_schema) for p in self.receipt_policies if not p.receipt_only}
 
     def build_receipts(self, output_dir, builder, **kwargs):
         from spicy_regs.selected_generations import remember_selection, SelectedDataset
 
+        if self.split_vote_receipts and (
+            "member_votes.parquet" not in self.source_outputs
+            or not set(self.source_outputs) <= {"roll_call_votes.parquet", "member_votes.parquet"}
+        ):
+            raise ValueError("Split vote receipts are only supported for the votes source family")
         private, prior = self._receipt_work(output_dir)
         work = private / "source-output"
         work.mkdir()
@@ -383,17 +398,28 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 prior.selected.check()
                 held = None if selection is None else CongressInput(
                     tuple(selection[0]), prior.scoped_receipts[dataset], selection[2])
-                subject, receipt = write_congress_dataset(
+                writer = write_congress_dataset
+                extra = {}
+                if self.split_vote_receipts and dataset == "member_votes":
+                    from spicy_regs.votes_batch_receipts import write_congress_dataset as writer
+                    extra["split_receipts"] = True
+                subject, receipt = writer(
                     path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held,
                     prior_scoped=held is not None,
                     bulk=True, on_fresh_failure=lambda: fresh_failure_datasets.append(dataset),
                     validate=False,  # the prior was admitted when selected; the new pair is admitted with its generation
+                    **extra,
                 )
             else:
                 subject, receipt = write_held_dataset(
                     dataset, path, destination, generation_id=self.receipt_generation_id
                 )
-            receipts.append(receipt)
+            if self.split_vote_receipts:
+                if isinstance(receipt, Path):
+                    receipt = receipt.replace(destination / (dataset + "_receipts.parquet"))
+                receipts.extend(receipt_paths(receipt))
+            else:
+                receipts.append(receipt)
             if subject is not None:
                 target = candidate / subject.name
                 shutil.copyfile(subject, target)
@@ -440,7 +466,9 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 target = candidate / source.name
                 shutil.copyfile(source, target)
                 subjects.append(target)
-        combined = combine_receipts(receipts, candidate / "etl_receipts.parquet")
+        if self.split_vote_receipts and len({path.name for path in receipts}) != len(receipts):
+            raise ValueError("Vote receipt member filenames must be distinct")
+        combined = tuple(receipts) if self.split_vote_receipts else combine_receipts(receipts, candidate / "etl_receipts.parquet")
         if fresh_failure_datasets or has_unmatched_failures(combined, {name: receipt_paths(selection[1]) for name, selection in prior.selections.items()}):
             raise ValueError("Subject conversion refused; retained receipts require review")
         by_dataset = {p.dataset: [] for p in self.receipt_policies}
@@ -452,7 +480,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
         # (every policy, every subject member) before anything is visible or selected. That admission is the one
         # validation; outside a run, ``remember_selection`` below pins "admitted members", so validate here.
         if not getattr(self, "_defer_native_selection", False):
-            validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
+            validate_receipt_bundle(by_dataset, receipt_paths(combined), self.receipt_policies, generation_id=self.receipt_generation_id)
         prior.selected.check()
         # Private files are final here; the outputs below are ready for admission or local selection.
         visible = []
@@ -467,11 +495,16 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             else:
                 shutil.copyfile(source, target)
             visible.append(target)
-        if getattr(self, "_defer_native_selection", False):
+        if self.split_vote_receipts:
+            # The private members are immutable, retained on later admission failure,
+            # and already ready for generation copying or standalone selection.
+            self._receipt_output_members = combined
+        elif getattr(self, "_defer_native_selection", False):
             combined.replace(output_dir / "etl_receipts.parquet")
         else:
-            # Standalone selections retain the immutable private member across later builds.
             shutil.copyfile(combined, output_dir / "etl_receipts.parquet")
+        if not getattr(self, "_defer_native_selection", False):
+            # Standalone selections retain immutable private members across later builds.
             remember_selection(
                 self.output_dir or output_dir,
                 [

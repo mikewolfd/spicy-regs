@@ -168,6 +168,13 @@ class RollupPipeline(Pipeline):
         """Additional shared generation admission arguments supplied by an adopter."""
         return {}
 
+    def receipt_generation_kwargs(self, build_dir):
+        """The exact receipt output selected by this family for full admission."""
+        return ({"receipt_path": build_dir / "etl_receipts.parquet",
+                 "receipt_policies": self.receipt_policies,
+                 "receipt_generation_id": self.receipt_generation_id}
+                if self.receipt_policies else {})
+
     def _run_tables(self, output_dir: Path) -> None:
         from rulespec_artifacts import publish_directory_no_replace
         from spicy_regs.generations import build_generation, output_keys, verify_generation
@@ -276,15 +283,7 @@ class RollupPipeline(Pipeline):
                 read_operation=read_operation,
                 canonical_root=generations if read_operation is not None else None,
                 **generation_kwargs,
-                **(
-                    {
-                        "receipt_path": build_dir / "etl_receipts.parquet",
-                        "receipt_policies": self.receipt_policies,
-                        "receipt_generation_id": self.receipt_generation_id,
-                    }
-                    if self.receipt_policies
-                    else {}
-                ),
+                **self.receipt_generation_kwargs(build_dir),
             )
             destination = generations / artifact.pin.artifact_digest.removeprefix("sha256:")
             if destination.exists():

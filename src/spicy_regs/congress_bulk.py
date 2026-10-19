@@ -161,6 +161,7 @@ def write_bundle(
     first_receipts: Sequence[Mapping[str, Any]],
     row_receipt: Callable[[str, int], tuple[dict | None, dict]],
     witnesses: Sequence[Mapping[str, Any]] = (),
+    receipt_writer=None,
 ) -> int:
     """Write ``dataset``'s subject table and receipts to the two paths; return how many rows went to the row code.
 
@@ -198,6 +199,7 @@ def write_bundle(
         return etl_bulk.write_split(
             con, query, source=source, batch_rows=_BATCH, expected_rows=_rows_in(source), subject_schema=subject,
             subject_path=subjects_path, receipt_path=receipts_path, label=dataset, first_receipts=first_receipts,
+            receipt_writer=receipt_writer,
             row_attempt=lambda table, index, row: row_receipt(table["processing_json"][index].as_py(),
                                                          table["_ordinal"][index].as_py()),
         )
@@ -232,6 +234,7 @@ def write_mapped_bundle(
     entry_kind: str | None = None,
     first_receipts: Sequence[Mapping[str, Any]] = (),
     refusals_last: bool = False,
+    receipt_writer=None,
 ) -> int:
     """Keep the maintained mapper; encode and hash its bounded Arrow batches in SQL.
 
@@ -308,7 +311,7 @@ def write_mapped_bundle(
             con, query, source=source, batch_rows=2000, expected_rows=_rows_in(source), subject_schema=native,
             subject_path=subjects_path, receipt_path=receipts_path, label=policy.dataset, first_receipts=first_receipts,
             row_attempt=lambda table, index, raw: row_attempt(raw, table["_ordinal"][index].as_py()),
-            refusals_last=refusals_last,
+            refusals_last=refusals_last, receipt_writer=receipt_writer,
             subject_columns=["_subject_" + name if name in conflicts else name for name in native.names],
         )
 

@@ -1,9 +1,11 @@
 """Opt-in vote batching with the current Congress policy and exact row decisions."""
 from __future__ import annotations
 import json
+import shutil
+from contextlib import ExitStack, nullcontext
 from dataclasses import replace
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkdtemp
 from typing import Any
 from collections.abc import Callable, Mapping, Sequence
 import pyarrow as pa
@@ -15,6 +17,8 @@ from spicy_regs.etl_receipts import (RECEIPT_SCHEMA, ReceiptContext, _unpack,
     failure_receipt, observation_receipt, select_receipts, split_record, validate_receipt_bundle)
 from spicy_regs.transforms.parquet_rows import write_rows
 from spicy_regs.receipt_history import carry_receipt_history
+from spicy_regs.receipt_members import receipt_paths
+from spicy_regs.vote_receipt_members import VoteReceiptMembers
 
 def _admit(subjects, receipts, policies, *, generation_id, bulk=True):
     """Bulk proof where it decides; a row fallback is logged (and refused where bulk is required)."""
@@ -47,7 +51,8 @@ def write_congress_dataset(
     bulk: bool = True,
     validate: bool = True,
     on_fresh_failure: Callable[[], None] | None = None,
-) -> tuple[Path | None, Path]:
+    split_receipts: bool = False,
+) -> tuple[Path | None, Path | tuple[Path, ...]]:
     """Retain one complete shaped output, including rejected rows and its exact footer.
 
     The source file remains in place. Its digest and row ordinal identify the
@@ -67,11 +72,16 @@ def write_congress_dataset(
 
     ``validate=False`` leaves admission to the caller: the prior pair was admitted when it was selected and
     the new pair is admitted once with its generation. Standalone callers keep the default.
+    ``split_receipts`` opts member_votes into ordered Congress members. It is
+    disabled by default until deployed readers support split receipts. Failed
+    split attempts retain their private stage; no combined output is emitted.
     ``prior_scoped`` reuses the owner's pinned dataset selection without filtering
     and writing another prior receipt file; admission behavior is unchanged.
     """
     from rulespec_artifacts import publish_directory_no_replace
 
+    if split_receipts and (dataset != "member_votes" or not bulk):
+        raise ValueError("Split vote receipts require the member_votes bulk writer")
     if not bulk:
         from spicy_regs.congress_receipts import write_congress_dataset as row_writer
         return row_writer(source, directory, dataset=dataset, generation_id=generation_id,
@@ -82,7 +92,9 @@ def write_congress_dataset(
     selected = policy(dataset)
     digest = _digest(source)
     directory.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(prefix=".congress-", dir=directory.parent) as temporary:
+    staging = (nullcontext(mkdtemp(prefix=".congress-", dir=directory.parent)) if split_receipts
+               else TemporaryDirectory(prefix=".congress-", dir=directory.parent))
+    with staging as temporary, ExitStack() as writers:
         stage = Path(temporary) / "bundle"
         stage.mkdir()
         subjects = None if selected.receipt_only else stage / (dataset + ".parquet")
@@ -100,8 +112,10 @@ def write_congress_dataset(
             scoped = prior.receipts if prior_scoped else select_receipts(
                 prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
             if validate:
-                _admit({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id, bulk=bulk)
-            prior_paths.append(scoped)
+                _admit({dataset: prior.subjects}, receipt_paths(scoped), [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id, bulk=bulk)
+            prior_paths.extend(receipt_paths(scoped))
+        direct = (writers.enter_context(VoteReceiptMembers(stage / "etl_receipts"))
+                  if split_receipts and not prior_paths else None)
 
         def context(ordinal, diagnostics=None, subject=None, processing=None):
             current = ReceiptContext(
@@ -129,6 +143,7 @@ def write_congress_dataset(
             routed = congress_bulk.write_bundle(
                 source, subjects, receipts, dataset=dataset, policy=selected, generation_id=generation_id,
                 processor=PROCESSOR, digest=digest, first_receipts=[first], witnesses=witnesses,
+                receipt_writer=direct,
                 row_receipt=lambda text, ordinal: attempt(ordinal, _unpack(json.loads(text))["source_fields"]),
             )
         elif congress_bulk.mapped_eligible(pq.read_schema(source), selected):
@@ -139,7 +154,7 @@ def write_congress_dataset(
                 processor=PROCESSOR, mapper=lambda raw: map_record(dataset, raw).subject,
                 row_attempt=lambda raw, ordinal: attempt(ordinal, raw), processing_field="source_fields",
                 entry_kind="row", attempt_prefix=f"{dataset}:{digest}:", witness=base_witness,
-                witnesses=witnesses, first_receipts=[first],
+                witnesses=witnesses, first_receipts=[first], receipt_writer=direct,
             )
             if subjects is None:
                 native_path.unlink()
@@ -149,7 +164,8 @@ def write_congress_dataset(
         if not in_bulk:
             etl_bulk.log_row_fallback("congress-write", etl_bulk.NotBulkEligible("source value types have no proven SQL spelling"),
                                       dataset=dataset, rows=pq.ParquetFile(source).metadata.num_rows)
-            with pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd") as rw:
+            with (nullcontext(direct) if direct is not None
+                  else pq.ParquetWriter(receipts, RECEIPT_SCHEMA, compression="zstd")) as rw:
                 sw = None if subjects is None else pq.ParquetWriter(subjects, selected.subject_schema, compression="zstd")
                 try:
                     receipt_batch, subject_batch = [first], []
@@ -173,16 +189,29 @@ def write_congress_dataset(
                 finally:
                     if sw is not None:
                         sw.close()
-        if on_fresh_failure is not None and has_unmatched_failures(receipts):
+        writers.close()
+        members = tuple(direct.paths) if direct is not None else (receipts,)
+        if on_fresh_failure is not None and has_unmatched_failures(members):
             on_fresh_failure()
         if prior_paths:
-            carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
-                                  refusal_identities=refusal_identities(dataset)).replace(receipts)
+            if split_receipts:
+                with VoteReceiptMembers(stage / "etl_receipts") as carried:
+                    carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
+                                          refusal_identities=refusal_identities(dataset), receipt_writer=carried)
+                members = tuple(carried.paths)
+                receipts.unlink()  # The fresh private monolith has been carried into final members.
+            else:
+                carry_receipt_history(receipts, prior_paths, stage / "carried-receipts.parquet",
+                                      refusal_identities=refusal_identities(dataset)).replace(receipts)
         if validate:
-            _admit({dataset: [] if subjects is None else [subjects]}, [receipts], [selected],
+            _admit({dataset: [] if subjects is None else [subjects]}, members, [selected],
                    generation_id=generation_id, bulk=bulk)
+        final_members = tuple(directory / path.relative_to(stage) for path in members)
         publish_directory_no_replace(stage, directory)
-    return (None if subjects is None else directory / subjects.name, directory / receipts.name)
+    if split_receipts:
+        shutil.rmtree(temporary)  # Success only; unsupported layouts keep their exact private attempt.
+    return (None if subjects is None else directory / subjects.name,
+            final_members if split_receipts else final_members[0])
 
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None,

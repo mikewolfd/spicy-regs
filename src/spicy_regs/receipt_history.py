@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from collections.abc import Callable, Mapping, Sequence
 from bisect import bisect_right
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from dataclasses import dataclass
 
 
@@ -177,6 +177,7 @@ def carry_receipt_history(
     current_path: Path, prior_paths: Sequence[Path], destination: Path, *,
     refusal_identities: Mapping[str, RefusalIdentity] | None = None,
     resolution_receipts: Path | None = None,
+    receipt_writer=None,
 ) -> Path:
     """Keep identical attempts exactly; reference only the direct accepted predecessor on change.
 
@@ -190,6 +191,9 @@ def carry_receipt_history(
     includes unchanged held rows; those alone cannot prove a fresh success.
     Missing or changed key spellings remain unresolved. Duplicate nonaccepted
     occurrences match FIFO, so repeated refusals do not accumulate copies.
+    ``receipt_writer`` optionally borrows an ordered family emitter; current
+    batches use ``write_table`` and the unresolved tail uses ``write_refusals``.
+    Its owner closes it; no combined destination is written in that case.
     Narrow matching keys spill to private disk. Full prior rows are gathered by
     Parquet ordinal in output batches; Python only decodes changed predecessors.
     """
@@ -303,7 +307,8 @@ def carry_receipt_history(
         target = Path(temporary) / "receipts.parquet"
         with (
             pq.ParquetFile(current_path) as current,
-            pq.ParquetWriter(target, RECEIPT_SCHEMA, compression="zstd") as writer,
+            (nullcontext(receipt_writer) if receipt_writer is not None
+             else pq.ParquetWriter(target, RECEIPT_SCHEMA, compression="zstd")) as writer,
         ):
             expected_count = current.metadata.num_rows
             written = 0
@@ -409,6 +414,10 @@ def carry_receipt_history(
                     priors, file_ends, group_ends, batch.column(0).to_pylist(), RECEIPT_SCHEMA)
                 if positions != list(range(batch.num_rows)):
                     raise ValueError("Receipt history lost an unresolved refusal")
-                writer.write_table(retained)
-        target.replace(destination)
+                if receipt_writer is None:
+                    writer.write_table(retained)
+                else:
+                    writer.write_refusals(retained)
+        if receipt_writer is None:
+            target.replace(destination)
     return destination

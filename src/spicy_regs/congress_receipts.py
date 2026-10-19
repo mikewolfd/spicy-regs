@@ -69,9 +69,10 @@ def refusal_identities(dataset: str) -> dict[str, RefusalIdentity]:
     return {dataset: RefusalIdentity(keys, "source_fields")} if keys and set(keys) <= set(INPUT_COLUMNS[dataset]) else {}
 
 
-def has_unmatched_failures(receipts: Path, priors: Mapping[str, Sequence[Path]] | None = None) -> bool:
+def has_unmatched_failures(receipts: Path | tuple[Path, ...], priors: Mapping[str, Sequence[Path]] | None = None) -> bool:
     """A failed attempt is historical only when the selected prior retains its exact receipt id."""
     from spicy_regs import etl_bulk
+    from spicy_regs.receipt_members import receipt_paths
 
     by_path: dict[Path, list[str]] = {}
     for dataset, paths in (priors or {}).items():
@@ -84,7 +85,7 @@ def has_unmatched_failures(receipts: Path, priors: Mapping[str, Sequence[Path]] 
                         "WHERE dataset=ANY(?) AND outcome IN ('refused','error')", [str(path), datasets])
         return bool(con.execute("SELECT EXISTS(SELECT 1 FROM read_parquet(?) r WHERE outcome IN ('refused','error') "
                                 "AND NOT EXISTS(SELECT 1 FROM historical_failures p WHERE p.receipt_id=r.receipt_id))",
-                                [str(receipts)]).fetchone()[0])
+                                [[str(path) for path in receipt_paths(receipts)]]).fetchone()[0])
 
 
 def input_policy(dataset: str, subjects: Path | tuple[Path, ...] | None) -> DatasetPolicy:
