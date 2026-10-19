@@ -218,8 +218,30 @@ def test_complete_publication_proof_reconciles_source_files_snapshots_and_hosted
     assert proof["status"] == "passed"
     assert proof["public_member_pins_verified"] is True
     assert proof["hosted_scope_counts_verified"] is True
+    assert proof["readback_mode"] is None
+    assert proof["receipt_serving"] is None
     assert proof["scopes"] == {"lcv:2025": dict(publisher_id="lcv", parser_version="test-v1",
                                                counts={name: len(values) for name, values in rows.items()})}
+
+
+@pytest.mark.parametrize("mode,receipt_serving", [
+    ("source-adoption", "not_checked"), ("source-adoption", "passed"), ("full", "passed"),
+    ("full", None), (None, "passed"),
+])
+def test_readback_proof_keeps_receipt_serving_status_explicit(tmp_path, mode, receipt_serving):
+    root, _ = complete_public_readback(tmp_path)
+    path = root / "summary.json"
+    summary = json.loads(path.read_bytes())
+    summary.update(mode=mode, receipt_serving=receipt_serving, accepted_scopes=["lcv:2025"])
+    path.write_text(json.dumps(summary))
+    if (mode, receipt_serving) not in (("full", "passed"), ("source-adoption", "not_checked")):
+        with pytest.raises(ValueError, match="mode and receipt-serving status differ"):
+            record.publication_proof(root)
+    else:
+        proof = record.publication_proof(root)
+        assert proof["readback_mode"] == mode
+        assert proof["receipt_serving"] == receipt_serving
+        assert proof["accepted_scopes"] == (["lcv:2025"] if mode == "source-adoption" else [])
 
 
 @pytest.mark.parametrize("fault", ["member-bytes", "footer-count", "snapshot-incomplete", "snapshot-refused",

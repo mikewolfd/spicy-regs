@@ -20,7 +20,7 @@ and each phase's `--help` for its arguments. These commands also run as
 | `prepare-analysis` | Build exact links from pinned published scorecard and congressional tables. Conversion of earlier official layouts requires its explicit option. It acquires no congressional source data. |
 | `publish` | Reverify a prepared source or analysis candidate and use the existing family publication code. Analysis refuses changed parents. |
 | `publish --observe-only` | Recover an uncertain write by observing that the exact candidate is current. It uploads nothing and changes no pointer. Use a fresh output directory, then run readback. |
-| `readback` | Download public members independently, verify pins and scope counts, then compare hosted attribution, native values, receipt fields and source receipt origins. |
+| `readback` | Verify public member pins and scope counts, then compare hosted native values; default `full` also checks receipt serving, while explicit `--mode source-adoption` checks accepted native scopes and records receipt serving as unchecked. |
 | `record-publication` | Advance only matching qualified editions after passed public-file and hosted readback. |
 
 The earlier scripts remain thin compatibility entry points. Research directories
@@ -45,8 +45,10 @@ admits both current native snapshots and supported historical receipt-only ones.
 `prepare` and `prepare-analysis` accept repeated `--local-inputs` roots. They
 search only exact member locators, verify size and SHA-256, and link matching
 bytes into owned staging. Wrong cache generations are skipped. A corrupt staged
-input refuses. Consumers still admit the subject and receipt together. Public
-readback deliberately uses the public route to establish availability.
+input refuses. Consumers still admit the subject and receipt together. Readback
+also accepts `--local-inputs`: it checks the fresh public pointer and exact retained
+bytes, recording reuse separately from downloads; only a fresh payload download
+establishes current payload availability.
 
 ## Refresh and resolve
 

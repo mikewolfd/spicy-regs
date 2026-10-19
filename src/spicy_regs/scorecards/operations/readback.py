@@ -23,21 +23,32 @@ import pyarrow.parquet as pq
 from spicy_regs.scorecards.operations.results import query_rows, write
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.scorecards.etl import SOURCE_NAMES
+from spicy_regs.scorecards.inputs import stage_member
 from spicy_regs.sources import publication
 from spicy_regs import receipt_lookup
 from spicy_regs.mcp_server import _jsonify
 
 
-ATTRIBUTION = """SELECT p.publisher_id,p.name AS publisher,c.scorecard_id,
+_ATTRIBUTION_FIELDS = """p.publisher_id,p.name AS publisher,c.scorecard_id,
 c.title AS scorecard,m.member_name,metric.name AS metric,r.value_text AS published_value,
-CAST(r.value_number AS VARCHAR) AS numeric_value,p.scorecard_index_url AS publisher_url
-FROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id)
+CAST(r.value_number AS VARCHAR) AS numeric_value,p.scorecard_index_url AS publisher_url"""
+_ATTRIBUTION_FROM = """FROM scorecard_member_ratings r JOIN scorecards c USING(scorecard_id)
 JOIN scorecard_publishers p USING(publisher_id)
 JOIN scorecard_members m ON m.scorecard_id=r.scorecard_id
  AND m.publisher_member_key=r.publisher_member_key
-JOIN scorecard_metrics metric ON metric.scorecard_id=r.scorecard_id AND metric.metric_id=r.metric_id
+JOIN scorecard_metrics metric ON metric.scorecard_id=r.scorecard_id AND metric.metric_id=r.metric_id"""
+ATTRIBUTION = f"""SELECT {_ATTRIBUTION_FIELDS}
+{_ATTRIBUTION_FROM}
 QUALIFY row_number() OVER(PARTITION BY p.publisher_id ORDER BY c.scorecard_id,
  r.publisher_member_key,r.metric_id)=1 ORDER BY p.publisher_id"""
+
+
+def adoption_scopes(prepared):
+    scopes = prepared.get("accepted_scopes")
+    if (not isinstance(scopes, list) or not scopes or len(scopes) > 500
+            or any(not isinstance(scope, str) or not scope for scope in scopes) or len(set(scopes)) != len(scopes)):
+        raise ValueError("Source-adoption readback requires exact distinct accepted scopes (at most 500)")
+    return sorted(scopes)
 
 
 def local_rows(connection, sql):
@@ -73,12 +84,13 @@ def public_files(args, prepared, authenticated):
 
     def download(entry):
         member, path = entry
-        if member.sha256 is None or not publication.fetch_member(args.public_url, member, path, timeout=120):
-            raise ValueError("Qualified public member is unavailable or unpinned")
+        stage_member(member, path, local_inputs=getattr(args, "local_inputs", ()),
+                     fetch=lambda selected, target: publication.fetch_member(args.public_url, selected, target, timeout=120))
         rows = pq.ParquetFile(path).metadata.num_rows
         if rows != member.rows:
             raise ValueError("Public Parquet footer count differs from its pin")
-        return dict(key=member.key, sha256=member.sha256, bytes=member.byte_size, rows=rows)
+        return dict(key=member.key, sha256=member.sha256, bytes=member.byte_size, rows=rows,
+                    origin="retained_verified" if path.is_symlink() else "downloaded")
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         members = list(executor.map(download, downloads))
@@ -164,6 +176,30 @@ async def hosted(args, connection, family):
                 key = "publisher_id" if name == "scorecard_publishers" else "scorecard_id"
                 sql = f'SELECT "{key}",count(*) AS rows FROM "{name}" GROUP BY "{key}" ORDER BY "{key}"'
                 await call("query_sql", {"sql": sql, "max_rows": 500}, name + "_scope_counts")
+            if getattr(args, "mode", "full") == "source-adoption":
+                scopes = adoption_scopes({"accepted_scopes": args.accepted_scopes})
+                selected = ",".join("'" + scope.replace("'", "''") + "'" for scope in scopes)
+                native = await call("query_sql", {
+                    "sql": f"SELECT * FROM scorecards WHERE scorecard_id IN ({selected}) ORDER BY scorecard_id",
+                    "max_rows": 500,
+                }, "accepted_scorecards")
+                if [row["scorecard_id"] for row in query_rows(native)] != scopes:
+                    raise ValueError("Native rows do not cover every accepted scorecard")
+                rating_scopes = local_rows(connection,
+                    f"SELECT DISTINCT scorecard_id FROM scorecard_member_ratings WHERE scorecard_id IN ({selected}) "
+                    "ORDER BY scorecard_id")
+                native_columns = {name for name, _ in family["tables"]["scorecard_member_ratings.parquet"]["columns"]}
+                source_fields = "".join(",r." + field for field in ("capture_id", "source_url", "source_path")
+                                        if field in native_columns)
+                sql = f"""SELECT {_ATTRIBUTION_FIELDS}{source_fields}
+{_ATTRIBUTION_FROM}
+WHERE c.scorecard_id IN ({selected})
+QUALIFY row_number() OVER(PARTITION BY c.scorecard_id ORDER BY r.publisher_member_key,r.metric_id)=1
+ORDER BY c.scorecard_id"""
+                sampled = await call("query_sql", {"sql": sql, "max_rows": 500}, "accepted_scope_native_values")
+                if [row["scorecard_id"] for row in query_rows(sampled)] != [row["scorecard_id"] for row in rating_scopes]:
+                    raise ValueError("Native attributed samples do not cover accepted scorecards with ratings")
+                return calls
             await call("query_sql", {"sql": ATTRIBUTION, "max_rows": 500}, "attributed_ratings")
             # An exact-key sample checks native values and source fields using
             # the serving layer's maintained receipt lookup, including read states.
@@ -247,12 +283,17 @@ def main(argv=None):
     parser.add_argument("--public-url", default="https://data.spicygov.ai")
     parser.add_argument("--mcp-url", default="https://mcp.spicygov.ai/mcp")
     parser.add_argument("--memory-limit", default="1GB")
+    parser.add_argument("--mode", choices=("full", "source-adoption"), default="full",
+                        help="Source adoption checks accepted native scopes without hosted receipt-serving diagnostics")
+    parser.add_argument("--local-inputs", type=Path, action="append", default=[],
+                        help="Reuse exact pinned members from these retained directories before downloading")
     args = parser.parse_args(argv)
     if args.output.exists():
         raise ValueError("Retain prior observations; choose a fresh readback directory")
     args.output.mkdir(parents=True)
     preparation_bytes = args.preparation.read_bytes()
     prepared = json.loads(preparation_bytes)
+    args.accepted_scopes = adoption_scopes(prepared) if args.mode == "source-adoption" else []
     authenticated = json.loads(args.publication_receipt.read_bytes())
     if (
         authenticated["status"] != "published_authenticated_readback"
@@ -275,6 +316,9 @@ def main(argv=None):
                 publication_receipt_sha256=sha256(args.publication_receipt.read_bytes()).hexdigest(),
                 counts=prepared["counts"],
                 calls=calls,
+                mode=args.mode,
+                receipt_serving="passed" if args.mode == "full" else "not_checked",
+                accepted_scopes=args.accepted_scopes,
             ),
         )
         print(json.dumps(dict(status="passed", generation=prepared["generation"])))
