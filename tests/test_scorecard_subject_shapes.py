@@ -8,6 +8,7 @@ import pytest
 import duckdb
 from spicy_docs.schemas.scorecard_tables import SCORECARD_TABLES
 from spicy_regs.scorecards.resolution import LINK_COLUMNS
+from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS
 from spicy_regs.scorecards.subject_shapes import (
     SOURCE_COLUMNS,
     DOMAIN_COLUMNS,
@@ -28,8 +29,10 @@ def row(name, **values):
 def test_every_provider_and_resolver_field_is_explicitly_classified():
     actual = {name: set(c.columns) for name, c in SCORECARD_TABLES.items()}
     actual.update({name: set(columns) for name, columns in LINK_COLUMNS.items()})
+    actual[COMPARISON_TABLE] = set(COMPARISON_COLUMNS)
     assert actual == {name: set(columns) for name, columns in SOURCE_COLUMNS.items()}
     assert DOMAIN_COLUMNS["scorecard_snapshots"] == SOURCE_COLUMNS["scorecard_snapshots"]
+    assert DOMAIN_COLUMNS[COMPARISON_TABLE] == COMPARISON_COLUMNS
 
 
 @pytest.mark.parametrize("value", [None, "[]", '["alias","alias","last"]'])
@@ -171,5 +174,9 @@ def test_shared_source_declarations_preserve_prior_columns_order_and_keys():
     from pathlib import Path
     from spicy_regs.scorecards.subject_shapes import SOURCE_COLUMNS, IDENTITIES
     baseline = json.loads((Path(__file__).parent / "fixtures/scorecard_source_shapes_before_refactor.json").read_text())
-    assert {k: list(v) for k, v in SOURCE_COLUMNS.items()} == baseline["SOURCE_COLUMNS"]
-    assert {k: list(v) for k, v in IDENTITIES.items()} == baseline["IDENTITIES"]
+    assert set(SOURCE_COLUMNS) == set(baseline["SOURCE_COLUMNS"]) | {COMPARISON_TABLE}
+    assert set(IDENTITIES) == set(baseline["IDENTITIES"]) | {COMPARISON_TABLE}
+    assert {k: list(SOURCE_COLUMNS[k]) for k in baseline["SOURCE_COLUMNS"]} == baseline["SOURCE_COLUMNS"]
+    assert {k: list(IDENTITIES[k]) for k in baseline["IDENTITIES"]} == baseline["IDENTITIES"]
+    assert SOURCE_COLUMNS[COMPARISON_TABLE] == COMPARISON_COLUMNS
+    assert IDENTITIES[COMPARISON_TABLE] == COMPARISON_KEYS
