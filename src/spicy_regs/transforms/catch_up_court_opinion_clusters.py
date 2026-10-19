@@ -142,7 +142,8 @@ def catch_up_court_opinion_clusters(
         through=search_through,
         max_requests=search_budget.max_requests,
         max_wait_seconds=str(search_budget.max_wait_seconds),
-        coverage="Preserved parent plus completed bounded additive search; bulk coverage inherited.",
+        coverage=("Preserved parent plus bounded all-status indexed search; unindexed clusters may be absent. "
+                  "Bulk coverage inherited; maximum ID is not citation membership proof."),
     )
     staged = output_dir / (".clusters-delta-" + uuid4().hex + ".parquet")
     writer = CourtListenerTableWriter(staged, schema=_SCHEMA, batch_size=BATCH_ROWS)

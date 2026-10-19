@@ -5,10 +5,13 @@ opinions hang off — and its ``docket_id`` is what connects opinion text to the
 APA litigation in ``court_dockets`` and, through the docket's party names, to
 the agencies in ``agency_stats``.
 
-**Bulk-first, because bulk is the only road.** The v4 ``/clusters/`` endpoint
-answers ``401`` without a token, so the quarterly CSV dump is the only keyless
-source; an incremental ``/search/?type=o`` catch-up (keyless, cursor-paginated)
-tops the table up with every cluster whose id is above the export's highest.
+Bulk supplies the complete export; authenticated ``/search/?type=o`` adds
+indexed clusters of every publisher-defined status above the export's highest
+id. Search can omit unindexed RECAP clusters, and historical corrections arrive
+with later bulk exports. Search exhaustion and a maximum-ID check do not prove
+complete citation membership. Direct authenticated ``/clusters/`` is a valid
+alternative, but has a different count representation and requires a docket
+lookup for the court; it is not this reader's source shape.
 The publisher numbers clusters in creation order and cuts each export table at
 a different hour of the export day (2026-06-30: clusters by 08:16 UTC, opinions
 09:56, citations 19:14), so the sibling tables name clusters created after this
@@ -400,7 +403,7 @@ def build_court_opinion_clusters(
 
         bulk_rows = writer.written + len(writer.rows)
 
-        # 5. Search catch-up for every cluster created after the export was cut.
+        # 5. All-status search catch-up for indexed clusters above the export.
         # The range is disjoint from the export's ids, so no bulk row is replaced
         # by the narrower search row and the first build below stays duplicate-free.
         search_rows = 0

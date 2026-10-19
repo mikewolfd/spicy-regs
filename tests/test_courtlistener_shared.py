@@ -336,7 +336,9 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
                 closed.append(True)
 
     monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
-    next_url = f"{source.API_BASE}/search/?cursor=catchup-second"
+    from spicy_docs.sources.courtlistener.search import OPINION_STATUSES, search_url
+
+    next_url = search_url(kind="o", q="cluster_id:[2 TO 3]", opinion_statuses=OPINION_STATUSES) + "&cursor=catchup-second"
 
     def respond(request):
         requests.append(request)
@@ -359,7 +361,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
     monkeypatch.setattr(
         module,
         "CourtListenerOpinionSearchReader",
-        lambda **kwargs: source.CourtListenerOpinionSearchReader(transport=transport, **kwargs),
+        lambda **kwargs: source.CourtListenerOpinionSearchReader(transport=transport, api_token="fixture-token", **kwargs),
     )
     message = "declared count changed" if failure == "count" else "incomplete: deferred"
     evidence = CaptureEvidence(tmp_path, 'court-opinion-clusters')
@@ -372,7 +374,7 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
 
     assert len(requests) == (1 if failure == "budget" else 2)
     assert requests[0].url.params["type"] == "o"
-    # Every cluster created after the export's highest id, whatever its filing date.
+    # Indexed clusters above the export's highest id, whatever their filing date.
     assert requests[0].url.params["q"] == "cluster_id:[2 TO 3]" and "filed_after" not in requests[0].url.params
     if failure != "budget":
         assert str(requests[1].url) == next_url

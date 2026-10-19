@@ -171,11 +171,12 @@ class Transport(httpx.MockTransport):
 @pytest.fixture(autouse=True)
 def bounded_requests(monkeypatch):
     """Cap the reader's per-page retry budget so a transport failure surfaces immediately; run unpaced."""
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
     monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
     monkeypatch.setattr(source, "MIN_REQUEST_INTERVAL_SECONDS", 0.0)
 
 
-NEXT = f"{source.API_BASE}/search/?cursor=second"
+NEXT = f"{source.API_BASE}/search/?type=r&order_by=dateFiled+asc&nature_of_suit=899&cursor=second"
 
 
 def test_pagination_follows_cursor_next():
@@ -238,7 +239,10 @@ def test_opinion_catchup_stops_at_selected_export_ceiling():
 def test_caller_traversal_budget_stops_before_next_page():
     from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
 
-    transport = Transport(_page([11], NEXT, total=2, kind="o"))
+    from spicy_docs.sources.courtlistener.search import OPINION_STATUSES, search_url
+
+    next_url = search_url(kind="o", q="cluster_id:[11 TO 13]", opinion_statuses=OPINION_STATUSES) + "&cursor=second"
+    transport = Transport(_page([11], next_url, total=2, kind="o"))
     reader = CourtListenerOpinionSearchReader(
         above=10, through=13, transport=transport,
         traversal_budget=CourtListenerTraversalBudget(max_requests=1, max_wait_seconds=0),
@@ -466,3 +470,51 @@ def test_refused_refresh_keeps_prior_and_records_rejected_update(tmp_path, monke
     rows[:] = [{"docket_id": 1, "caseName": "Held", "party": ["Agency"]}]
     fourth = build_courtlistener(tmp_path, max_records=10)
     assert not [r for r in pq.read_table(local_receipt_selection(fourth)[0]).to_pylist() if r['outcome'] == 'refused']
+
+
+@pytest.mark.parametrize("reader", [CourtListenerReader, CourtListenerOpinionSearchReader])
+def test_operational_api_requires_token_before_dispatch(monkeypatch, reader):
+    monkeypatch.delenv("COURTLISTENER_API_TOKEN", raising=False)
+    transport = Transport()
+    with pytest.raises(ValueError, match="requires an API token"):
+        list(reader(transport=transport).iter_records())
+    assert transport.calls == []
+
+
+def test_all_status_catchup_retains_exact_selection_without_token_leak(tmp_path):
+    from spicy_regs.source_evidence import CaptureEvidence
+
+    records = [
+        {"cluster_id": identity, "status": status}
+        for identity, status in [(11, "Published"), (12, "Unpublished"), (13, "Unknown")]
+    ]
+    transport = Transport({"count": 3, "next": None, "results": records})
+    evidence = CaptureEvidence(tmp_path, "court-opinion-clusters")
+    assert (
+        list(
+            CourtListenerOpinionSearchReader(
+                above=10, through=13, transport=transport, evidence=evidence
+            ).iter_records()
+        )
+        == records
+    )
+    request = transport.calls[0]
+    statuses = ("Published", "Unpublished", "Errata", "Separate", "In-chambers", "Relating-to", "Unknown")
+    assert {k: v for k, v in request.url.params.items() if k.startswith("stat_")} == {
+        "stat_" + s: "on" for s in statuses
+    }
+    assert request.headers["authorization"] == "Token fixture-token"
+    journal = (evidence.artifact_dir / "journal.jsonl").read_text()
+    assert "fixture-token" not in journal
+    selected = next(e for e in map(json.loads, journal.splitlines()) if e["event"] == "selection")
+    assert selected["url"] == str(request.url)
+
+
+def test_both_api_job_commands_receive_token_configuration():
+    from pathlib import Path
+
+    workflow = (Path(__file__).parents[1] / ".github/workflows/_rollup.yml").read_text()
+    setting = next(line for line in workflow.splitlines() if line.strip().startswith("COURTLISTENER_API_TOKEN:"))
+    assert "inputs.command == 'run-rollup-courtlistener'" in setting
+    assert "inputs.command == 'run-rollup-court-opinion-clusters'" in setting
+    assert "secrets.COURTLISTENER_API_TOKEN" in setting

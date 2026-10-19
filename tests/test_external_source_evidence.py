@@ -219,7 +219,7 @@ def test_native_shape_refusal_retains_evidence_before_parse(tmp_path, kind):
     elif kind == 'gao':
         source = GaoReportsReader(transport=transport, evidence=evidence)
     else:
-        source = CourtListenerReader(transport=transport, evidence=evidence)
+        source = CourtListenerReader(api_token="fixture-token", transport=transport, evidence=evidence)
     with pytest.raises(ValueError) as raised:
         list(source.iter_records())
     if kind == 'gao':

@@ -4,9 +4,9 @@ The provider owns requests, exact response parsing and cursor validation. Failed
 or incomplete walks raise before consumers replace their prior tables. Docket
 searches select APA/review-of-agency cases (nature of suit 899) or named docket
 ids; opinion searches provide cluster metadata for catch-up, not full opinion
-bodies, selected by filing date or by cluster id. An optional
-COURTLISTENER_API_TOKEN travels only in a request header. Every request is paced
-to the published per-minute limit.
+bodies, selected by filing date or by cluster id. COURTLISTENER_API_TOKEN is
+required for live API dispatch and travels only in a request header. Verified
+offline replay needs no token. Every live request retains the pacing limit.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ class CourtListenerReader(Reader):
         try:
             from spicy_docs.reading.paged_json import PagedJsonBudget
             from spicy_docs.sources.courtlistener.search import (
-                CourtListenerSearchReader, CourtListenerTraversalBudget, is_exact_count, search_url,
+                OPINION_STATUSES, CourtListenerSearchReader, CourtListenerTraversalBudget, is_exact_count, search_url,
             )
         except ModuleNotFoundError as error:
             if error.name == "spicy_docs":
@@ -127,6 +127,7 @@ class CourtListenerReader(Reader):
             court=self.court,
             nature_of_suit=self.nature_of_suit if self.kind == "r" else None,
             q=self.query,
+            opinion_statuses=OPINION_STATUSES if self.kind == "o" else None,
         )
         budget = PagedJsonBudget(
             max_requests=_MAX_REQUESTS_PER_PAGE,
@@ -190,10 +191,11 @@ class CourtListenerReader(Reader):
 class CourtListenerOpinionSearchReader(CourtListenerReader):
     """Select opinion cluster metadata; full text remains a bulk-source task.
 
-    ``above`` selects every cluster whose id is greater, whatever its filing date:
-    the publisher numbers clusters in creation order, so it names exactly the
-    decisions created after an export that ended at that id. ``through`` limits
-    that catch-up to the highest cluster needed by a selected sibling export.
+    ``above`` selects indexed clusters of every publisher-defined status whose
+    id is greater, whatever their filing date. ``through`` bounds the selection
+    by a sibling export's ceiling. Search can omit unindexed RECAP clusters;
+    exhaustion is not complete publisher coverage or citation membership proof.
+    Historical corrections arrive with the next bulk export.
     """
 
     kind: Literal["r", "o"] = "o"
