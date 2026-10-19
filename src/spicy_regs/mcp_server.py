@@ -2562,8 +2562,8 @@ def _tools() -> list[Tool]:
         # What read_receipt_fields takes for this table, so a reader need not provoke a refusal to learn it. The
         # names are the same value in both replies; the meanings are a key only the detailed one carries.
         local = _connection_local_selection(cursor) if DATA_DIR is not None else None
-        receipts = receipt_lookup.describe(table, entry, available=receipt_lookup.selected_member(
-            _connection_index(cursor), local, R2_BASE_URL, table, _connection_rulemaking(cursor)) is not None)
+        receipts = receipt_lookup.describe(table, entry, available=bool(receipt_lookup.selected_members(
+            _connection_index(cursor), local, R2_BASE_URL, table, _connection_rulemaking(cursor))))
         if receipts is not None and not detail:
             omitted.append(RECEIPT_FIELD_MEANINGS)
         # Full release evidence sits once: in publication for an available view, else in relationship.

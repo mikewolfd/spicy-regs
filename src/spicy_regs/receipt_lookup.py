@@ -122,48 +122,48 @@ class Member(NamedTuple):
     manifest_key: str | None = None
 
 
-def _split_selection(index, local, table):
-    from spicy_regs.sources.publication import table_owner
-    native = (local or {}).get("native", {}).get(table)
-    if native is not None:
-        return isinstance(native["receipts"], (list, tuple))
-    owner = table_owner(index, f"{table}.parquet")
-    return owner is not None and "members" in owner[1].get("etlReceipts", {})
+def selected_members(index: Mapping, local: Mapping | None, base_url: str, table: str,
+                     snapshot: Mapping | None = None) -> tuple[Member, ...]:
+    """Every receipt member paired with the selected subjects, in declared order.
 
-
-def selected_member(index: Mapping, local: Mapping | None, base_url: str, table: str,
-                    snapshot: Mapping | None = None) -> Member | None:
-    """The receipt member paired with the subjects this connection selects.
-
-    A native build root names its member itself; a download holds only its selected families' members; a remote
-    connection reads the member under the family's generation prefix. ``None`` where the table's family has no
-    receipts in this connection, or a download selected a sibling table of the family and not this one.
+    Native roots name their admitted files; downloads must hold the complete
+    selected membership. An empty tuple means lookup is unavailable. Split
+    support is qualified for unindexed votes; other split families stay unavailable.
     """
+    from spicy_regs.receipt_members import receipt_declarations, receipt_paths
     from spicy_regs.sources.publication import rulemaking_receipt, table_owner
 
-    if _split_selection(index, local, table):
-        return None  # Discovery must not advertise a per-key reader that cannot inspect the complete membership.
     native = (local or {}).get("native", {}).get(table)
     if native is not None:
-        return Member(native["receipts"], None, None, native["generation_id"], None)
+        split = isinstance(native["receipts"], (list, tuple))
+        if split and (native.get("key_index") is not None or native.get("key_index_descriptor") is not None):
+            raise ValueError("Split receipt indexing is unsupported")
+        if split and table not in {"roll_call_votes", "member_votes"}:
+            return ()
+        paths = receipt_paths(native["receipts"])
+        if not paths or len(set(paths)) != len(paths):
+            raise ValueError("Selected receipt membership must be nonempty and distinct")
+        return tuple(Member(path, None, None, native["generation_id"], None) for path in paths)
     owner = table_owner(index, f"{table}.parquet")
     if owner is None and local is None and snapshot is not None and f"{table}.parquet" in snapshot["tables"]:
         receipt = rulemaking_receipt(snapshot)
         if receipt is not None and table in receipt["datasets"]:
-            return Member(f"{base_url.rstrip('/')}/{receipt['remote_key']}", "sha256:" + receipt["sha256"],
-                          None, receipt["generationId"], None, snapshot["snapshot_id"], snapshot["manifest_key"])
+            return (Member(f"{base_url.rstrip('/')}/{receipt['remote_key']}", "sha256:" + receipt["sha256"],
+                           None, receipt["generationId"], None, snapshot["snapshot_id"], snapshot["manifest_key"]),)
     if owner is None or table not in owner[1].get("etlReceipts", {}).get("datasets", ()):
-        return None
+        return ()
     family, entry = owner
     receipt = entry["etlReceipts"]
-    path = f"{entry['prefix']}/{receipt['key']}"
-    if local is None:
-        location = f"{base_url}/{path}"
-    elif path in local.get("receipt_members", {}) and table in local.get("selected_tables", ()):
-        location = local["receipt_members"][path]
-    else:
-        return None
-    return Member(location, receipt["sha256"], family, receipt["generationId"], entry["artifactDigest"])
+    declarations = receipt_declarations(receipt, pinned=True)
+    if "members" in receipt and table not in {"roll_call_votes", "member_votes"}:
+        return ()
+    paths = tuple(f"{entry['prefix']}/{member['key']}" for member in declarations)
+    if local is not None and (table not in local.get("selected_tables", ())
+                             or any(path not in local.get("receipt_members", {}) for path in paths)):
+        return ()
+    return tuple(Member(f"{base_url.rstrip('/')}/{path}" if local is None else local["receipt_members"][path],
+                        member["sha256"], family, receipt["generationId"], entry["artifactDigest"])
+                 for member, path in zip(declarations, paths, strict=True))
 
 
 def tables_with_receipts(index: Mapping, local: Mapping | None, base_url: str,
@@ -171,7 +171,7 @@ def tables_with_receipts(index: Mapping, local: Mapping | None, base_url: str,
     """Every table this connection can answer for: an installed row identity and a selected receipt member."""
     return sorted(table for table in descriptors()
                   if carried_fields(table) is not None
-                  and selected_member(index, local, base_url, table, snapshot) is not None)
+                  and selected_members(index, local, base_url, table, snapshot))
 
 
 def _selected_index(index: Mapping, local: Mapping | None, base_url: str, table: str,
@@ -543,10 +543,8 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
     ValueError whose text says what is valid.
     """
     where = carried_fields(table)
-    if where is not None and _split_selection(index, local, table):
-        raise ValueError("Per-key lookup of split receipts is unsupported; no receipt member was read")
-    member = selected_member(index, local, base_url, table, snapshot) if where is not None else None
-    if where is None or member is None:
+    members = selected_members(index, local, base_url, table, snapshot) if where is not None else ()
+    if where is None or not members:
         served = tables_with_receipts(index, local, base_url, snapshot)
         reason = (f"{table!r} is not a table with a row identity" if where is None
                   else f"{table} has no receipts in this connection (nothing here publishes them yet)")
@@ -563,18 +561,29 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
 
     policy = policies()[table]
     typed = _typed_keys(policy, keys)
-    groups = _footer(cursor, member)
-    candidates = [i for i, group in enumerate(groups) if _within(group.datasets, table)]
-    receipts = sum(groups[i].rows for i in candidates)
-    selected_index = _selected_index(index, local, base_url, table, member, sum(group.rows for group in groups))
-    # Decided from the footer alone, before any row is read: the member this refuses is the largest there is.
+    scans = []
+    for member in members:
+        groups = _footer(cursor, member)
+        candidates = [i for i, group in enumerate(groups) if _within(group.datasets, table)]
+        scans.append((member, groups, candidates))
+    receipts = sum(groups[i].rows for _, groups, candidates in scans for i in candidates)
+    member, groups, _ = scans[0]
+    selected_index = (_selected_index(index, local, base_url, table, member, sum(group.rows for group in groups))
+                      if len(members) == 1 else None)
+    # One aggregate budget, decided from all footers before any receipt row is read.
     if selected_index is None and receipts > SCAN_ROW_BOUND:
         raise ValueError(
             f"{TOOL} is not available for {table}: a lookup reads the record id of every receipt of the table, "
             f"and it has {receipts:,}, over the {SCAN_ROW_BOUND:,}-receipt bound. describe_table's notes say "
             "which of its receipt values a row's own columns give.")
     if selected_index is None:
-        stated = _stated_identities(cursor, member, groups, candidates, table)
+        stated = {}
+        for current, groups, candidates in scans:
+            identities = _stated_identities(cursor, current, groups, candidates, table)
+            # Check each member before merging versions: the same version in a
+            # later member must not hide an incompatible identity in an earlier one.
+            _refuse_other_identity(policy, identities)
+            stated.update(identities)
     else:
         from spicy_regs.receipt_key_index import identity_samples
 
@@ -591,11 +600,14 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
                                    descriptor["sha256"], descriptor["byteSize"]),
                          member.sha256 is not None and location.startswith(("https://", "http://")),
                          indexed_identities)
-    _refuse_other_identity(policy, stated)
+        _refuse_other_identity(policy, stated)
     record_ids = [subject_identity(policy, key)[0] for key in typed]
     unique_ids = list(dict.fromkeys(record_ids))
     if selected_index is None:
-        found = _accepted(cursor, member, groups, candidates, table, unique_ids)
+        found = {}
+        for current, groups, candidates in scans:
+            for record_id, values in _accepted(cursor, current, groups, candidates, table, unique_ids).items():
+                found.setdefault(record_id, []).extend(values)
     else:
         from spicy_regs.receipt_key_index import lookup_receipts
 
@@ -636,6 +648,8 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
         "receipts": {
             "family": member.family, "generation_id": member.generation_id,
             "artifact_digest": member.artifact_digest,
+            **({"members": [{"location": selected.location, "sha256": selected.sha256} for selected in members]}
+               if len(members) > 1 else {}),
             **({"snapshot_id": member.snapshot_id, "manifest_key": member.manifest_key,
                 "member_sha256": member.sha256} if member.snapshot_id is not None else {}),
             "policy_version": next(iter(stated)) if len(stated) == 1 else sorted(stated) or None,

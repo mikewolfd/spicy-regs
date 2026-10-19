@@ -65,9 +65,9 @@ def carried(table: str) -> dict[str, str | None]:
 
 
 def member(con, table: str) -> lookup.Member:
-    selected = lookup.selected_member(server._connection_index(con.cursor()), None, server.R2_BASE_URL, table)
-    assert selected is not None
-    return selected
+    selected = lookup.selected_members(server._connection_index(con.cursor()), None, server.R2_BASE_URL, table)
+    assert len(selected) == 1
+    return selected[0]
 
 
 def without(table: pa.Table, record_ids: set[str], *, keep: bool = False) -> pa.Table:
@@ -823,25 +823,25 @@ def test_the_member_read_is_the_table_family_member_in_each_kind_of_connection(t
                                                pq.read_table(receipts))})
     entry = index["families"]["fcc-filings"]
     path = f"{entry['prefix']}/etl_receipts.parquet"
-    remote = lookup.selected_member(index, None, "https://data.example", "fcc_filings")
-    assert remote == lookup.Member(f"https://data.example/{path}", entry["etlReceipts"]["sha256"], "fcc-filings",
-                                   GENERATION, entry["artifactDigest"])
-    assert lookup.selected_member(index, None, "https://data.example", "fcc_proceedings") is None
+    remote = lookup.selected_members(index, None, "https://data.example", "fcc_filings")
+    assert remote == (lookup.Member(f"https://data.example/{path}", entry["etlReceipts"]["sha256"], "fcc-filings",
+                                    GENERATION, entry["artifactDigest"]),)
+    assert lookup.selected_members(index, None, "https://data.example", "fcc_proceedings") == ()
     # A family that publishes the table without receipts for it has none to read: not yet native, or a member
     # that lists other datasets only.
     legacy = {key: value for key, value in entry.items() if key != "etlReceipts"}
-    assert lookup.selected_member(index_of({"fcc-filings": legacy}), None, "https://data.example", "fcc_filings") is None
+    assert lookup.selected_members(index_of({"fcc-filings": legacy}), None, "https://data.example", "fcc_filings") == ()
     others = {**entry, "etlReceipts": {**entry["etlReceipts"], "datasets": ["fcc_proceedings"]}}
-    assert lookup.selected_member(index_of({"fcc-filings": others}), None, "https://data.example", "fcc_filings") is None
+    assert lookup.selected_members(index_of({"fcc-filings": others}), None, "https://data.example", "fcc_filings") == ()
     download = {"receipt_members": {path: "/local/receipts.parquet"}, "selected_tables": ["fcc_filings"], "native": {}}
-    held = lookup.selected_member(index, download, "", "fcc_filings")
-    assert held is not None and held.location == "/local/receipts.parquet"
+    held = lookup.selected_members(index, download, "", "fcc_filings")
+    assert len(held) == 1 and held[0].location == "/local/receipts.parquet"
     # A download that selected neither the table nor its family's member has nothing to read.
-    assert lookup.selected_member(index, {**download, "selected_tables": []}, "", "fcc_filings") is None
-    assert lookup.selected_member(index, {"receipt_members": {}, "selected_tables": ["fcc_filings"]}, "", "fcc_filings") is None
+    assert lookup.selected_members(index, {**download, "selected_tables": []}, "", "fcc_filings") == ()
+    assert lookup.selected_members(index, {"receipt_members": {}, "selected_tables": ["fcc_filings"]}, "", "fcc_filings") == ()
     native = {"native": {"fcc_filings": {"receipts": "/build/etl_receipts.parquet", "generation_id": "build-1"}}}
-    assert lookup.selected_member(index_of({}), native, "", "fcc_filings") == lookup.Member(
-        "/build/etl_receipts.parquet", None, None, "build-1", None)
+    assert lookup.selected_members(index_of({}), native, "", "fcc_filings") == (lookup.Member(
+        "/build/etl_receipts.parquet", None, None, "build-1", None),)
     assert lookup.tables_with_receipts(index, None, "https://data.example") == ["fcc_filings"]
 
 
@@ -1080,15 +1080,15 @@ def test_snapshot_selection_follows_subject_precedence_and_never_supplies_local_
 
     con, snapshot, _ = snapshot_serving(tmp_path, monkeypatch)
     index = pub.empty_index()
-    assert lookup.selected_member(index, {}, "unused", "proceedings", snapshot) is None
-    assert lookup.selected_member(index, None, "unused", "rule_targets", snapshot) is None
+    assert lookup.selected_members(index, {}, "unused", "proceedings", snapshot) == ()
+    assert lookup.selected_members(index, None, "unused", "rule_targets", snapshot) == ()
     # A legacy snapshot with no declared receipt remains honestly unavailable.
     legacy = json.loads(json.dumps(snapshot))
     legacy["manifest"].pop("etlReceipts")
-    assert lookup.selected_member(index, None, "unused", "proceedings", legacy) is None
+    assert lookup.selected_members(index, None, "unused", "proceedings", legacy) == ()
     # A family entry owns the subject even if it has no receipts; a snapshot must not fill that gap.
     index["families"]["new-owner"] = {"tables": {"proceedings.parquet": {}}, "prefix": "new-owner"}
-    assert lookup.selected_member(index, None, "unused", "proceedings", snapshot) is None
+    assert lookup.selected_members(index, None, "unused", "proceedings", snapshot) == ()
     con.close()
 
 

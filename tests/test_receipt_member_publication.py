@@ -312,7 +312,7 @@ def test_priors_bind_every_original_member_without_replacing_provenance(tmp_path
 
 
 @pytest.mark.parametrize("local", [False, True])
-def test_mcp_and_processing_adapter_read_all_members_lookup_refuses(tmp_path, votes, monkeypatch, local):
+def test_mcp_and_processing_adapter_read_all_members_lookup_succeeds(tmp_path, votes, monkeypatch, local):
     from spicy_regs import mcp_server, receipt_lookup
     from spicy_regs.fec_receipt_adapter import ReceiptAdapter
     from tests.test_generation_mcp import connection_fixture
@@ -364,20 +364,47 @@ def test_mcp_and_processing_adapter_read_all_members_lookup_refuses(tmp_path, vo
             read_with_receipts([votes["subject"]], [votes["receipts"]], policy(DATASET), generation_id="new")
         )
         assert list(adapter.selected_rows(DATASET)) == expected
-        assert receipt_lookup.selected_member(lookup_index, selected, "", DATASET) is None
-        assert DATASET not in receipt_lookup.tables_with_receipts(lookup_index, selected, "")
-        with pytest.raises(ValueError, match="split receipts is unsupported"):
-            receipt_lookup.read_fields(
-                con,
-                table=DATASET,
-                keys=[],
-                fields=[],
-                index=lookup_index,
-                local=selected,
-                base_url="",
-                entry={},
-                plain=lambda value: value,
-            )
+        base_url = mcp_server.R2_BASE_URL
+        assert len(receipt_lookup.selected_members(lookup_index, selected, base_url, DATASET)) == 3
+        assert DATASET in receipt_lookup.tables_with_receipts(lookup_index, selected, base_url)
+        lookup_cursor = con
+        if not local:
+
+            class LookupCursor:
+                def execute(self, sql, parameters=None):
+                    # The connection fixture rewrites URL literals; lookup also
+                    # binds member URLs as parameters. Refuse unknown targets.
+                    import re
+
+                    def resolved(value):
+                        if isinstance(value, str) and value.startswith(("https://", "http://")):
+                            key = value.removeprefix(base_url + "/")
+                            if key not in locations:
+                                raise AssertionError("Unrecognized fake-remote target: " + value)
+                            return str(locations[key])
+                        return value
+
+                    for url in re.findall(r"https?://[^'\s]+", sql):
+                        sql = sql.replace(url, resolved(url))
+                    params = [resolved(value) for value in parameters] if parameters is not None else None
+                    return con.inner.execute(sql, params) if params is not None else con.inner.execute(sql)
+
+            lookup_cursor = LookupCursor()
+            with pytest.raises(AssertionError, match="Unrecognized fake-remote target"):
+                lookup_cursor.execute("SELECT ?", ["https://unmapped.invalid/member.parquet"])
+        reply = receipt_lookup.read_fields(
+            lookup_cursor,
+            table=DATASET,
+            keys=[{"vote_id": "119-house-1-101", "member_key": "name:M2"}],
+            fields=["position"],
+            index=lookup_index,
+            local=selected,
+            base_url=base_url,
+            entry={},
+            plain=lambda value: value,
+        )
+        assert reply["keys"][0]["fields"]["position"] == {"state": "stated", "value": "Nay"}
+        assert reply["receipts"]["generation_id"] == "new"
     finally:
         con.close()
 

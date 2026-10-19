@@ -63,11 +63,16 @@ This is an explicit local vote-family boundary, not automatic partitioning or a
 live rollout. Split receipt indexing and owned receipt adoption refuse. Remote
 staging can verify and publish metadata built by `build_generation`; its own
 metadata builder still requires a monolith. MCP serves native tables, generic
-receipt SQL and processing replay, but marks per-key `read_receipt_fields`
-unavailable for split receipts and refuses a direct request. Scorecard analysis
+receipt SQL and processing replay. Per-key `read_receipt_fields` supports
+unindexed split votes under one aggregate receipt scan budget, checking every
+member's policy identity and preserving ambiguity across members. Discovery
+checks representation support without reading footers; a lookup still refuses
+above the existing `SCAN_ROW_BOUND`, so splitting does not make an oversized
+unindexed vote table queryable. Other split families remain unavailable; split
+indexing remains unsupported. Scorecard analysis
 accepts split vote receipts only on its projected native route, which reads
 verified subject columns; source-scorecard and nonprojected receipt restoration
-still require a monolith. Per-key lookup, an operational partitioning writer and
-live acceptance remain migration gates before selecting split votes in production.
+still require a monolith. An operational partitioning writer and live acceptance
+remain migration gates before selecting split votes in production.
 Focused coverage is in
-`tests/test_receipt_member_publication.py`.
+`tests/test_receipt_member_publication.py` and `tests/test_split_receipt_lookup.py`.
