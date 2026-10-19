@@ -793,6 +793,29 @@ _discovery_only = ContextVar("spicy_schema_discovery", default=False)
 _requested_relations: ContextVar[set[str] | None] = ContextVar("spicy_requested_relations", default=None)
 
 
+def _remote_query_scope(con, available_names):
+    """Resolve requested remote SQL inputs from declarations before opening source files."""
+    requested = _requested_relations.get()
+    # No named relations can mean SHOW/catalog introspection. Preserve its
+    # complete catalog rather than infer dependencies from arbitrary SQL.
+    if DATA_DIR is not None or _discovery_only.get() or not requested:
+        return None
+    from spicy_regs.relationship_views import describe_relationship_views
+
+    relationships = describe_relationship_views(con, available_names)
+    dependencies = {
+        name: entry["metadata"].get("declared_dependencies", entry["dependencies"])
+        for name, entry in relationships.items()
+    }
+    dependencies.update({spec.view.name: spec.view.required for spec in _selected_fec_views(con)})
+    selected = set(requested)
+    while True:
+        added = {parent for name in selected for parent in dependencies.get(name, ())} - selected
+        if not added:
+            return selected
+        selected.update(added)
+
+
 @_diagnostic_phase('connection_build')
 def _build_connection(publication: _Publication | None = None) -> duckdb.DuckDBPyConnection:
     """Discard cancelled/failed admissions; never cache a partially built connection."""
@@ -888,9 +911,16 @@ def _build_connection_inputs(con, publication):
     ]
     snapshot_names = [key.removesuffix(".parquet") for key in (rulemaking or {"tables": {}})["tables"]]
     selected_names = list(local.files) if local is not None else []
+    source_names = list(dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)))
+    query_scope = _remote_query_scope(con, source_names)
+    if query_scope is not None:
+        con.execute("CREATE TABLE _spicy_query_scope (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_query_scope VALUES (?)", [json.dumps({"relations": sorted(query_scope)})])
     exports: list[str] = []
     remote_sources: list[_RemoteSourceView] = []
-    for name in dict.fromkeys((*TABLES, *managed_names, *snapshot_names, *selected_names)):
+    for name in source_names:
+        if query_scope is not None and name not in query_scope:
+            continue
         checkpoint()
         published = table_descriptor(publication_index, f"{name}.parquet")
         paths = [member.path for member in table_members(publication_index, f"{name}.parquet")]
@@ -965,7 +995,10 @@ def _build_connection_inputs(con, publication):
     # generation's evidence.
     from spicy_regs.sources.publication import receipt_members
 
-    receipts = receipt_members(publication_index)
+    # A requested shared log still means every captured family. Otherwise,
+    # selected receipt-dependent adapters admit their own exact members; a
+    # source-only query need not open unrelated receipt files or key indexes.
+    receipts = receipt_members(publication_index) if query_scope is None or "etl_receipts" in query_scope else ()
     local_receipts = local.receipts if local is not None else None
     urls = (list(map(str, local_receipts.values())) if local_receipts is not None
             else [f"{R2_BASE_URL}/{member.path}" for member in receipts])
@@ -994,11 +1027,13 @@ def _build_connection_inputs(con, publication):
             con.close()
             raise RuntimeError("Published ETL receipt member unavailable") from exc
     from spicy_regs.receipt_key_index import check_reader
+
+    selected_receipt_paths = set(local_receipts) if local_receipts is not None else {m.path for m in receipts}
     for entry in publication_index["families"].values():
         specification = entry.get("etlReceipts", {})
         key = specification.get("keyIndex")
         receipt_path = f"{entry['prefix']}/{specification.get('key', '')}"
-        if key is None or (local_receipts is not None and receipt_path not in local_receipts):
+        if key is None or receipt_path not in selected_receipt_paths:
             continue
         member_path = f"{entry['prefix']}/{key['key']}"
         location = str(local.receipt_indexes[member_path]) if local is not None else f"{R2_BASE_URL}/{member_path}"
@@ -1607,18 +1642,22 @@ def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckD
         publication = _pinned_publication(cursor)
         local = _connection_local_selection(cursor)
         release = _pinned_record(cursor, '_spicy_fec_release')
+        scope = _pinned_record(cursor, "_spicy_query_scope")
     pending = {name for name, entry in registry.items() if entry['status'] == 'deferred'}
     requested = _requested_relations.get()
-    if not (pending if requested is None else pending & requested):
+    missing_sources = scope is not None and (not requested or not requested <= set(scope["relations"]))
+    if not missing_sources and not (pending if requested is None else pending & requested):
         return current
     if DATA_DIR is not None and local is None:
         raise RuntimeError('Local relationship expansion requires a pinned selection; refresh the connection.')
     installed = {name for name, entry in registry.items() if entry['status'] in ('available', 'unsupported')}
+    if scope is not None:
+        installed.update(scope["relations"])
     if local is not None:
         from spicy_regs.local_data import assert_local_members_unchanged
 
         assert_local_members_unchanged(local['signatures'])
-    token = _requested_relations.set(None if requested is None else installed | requested)
+    token = _requested_relations.set(None if not requested else installed | requested)
     try:
         replacement = _build_connection(publication)
         try:
