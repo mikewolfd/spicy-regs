@@ -9,7 +9,7 @@ import httpx
 import pyarrow.parquet as pq
 import pytest
 from rulespec_artifacts import LocalMemberSource, canonical_json_bytes, iter_member_descriptors
-from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget, search_url
+from spicy_docs.sources.courtlistener.search import OPINION_STATUSES, CourtListenerTraversalBudget, search_url
 
 from spicy_regs.court_receipts import build_court_generation, local_receipt_selection, write_court_rows
 from spicy_regs.generations import verify_generation
@@ -96,7 +96,7 @@ def transport(monkeypatch, *pages):
         delta,
         "CourtListenerOpinionSearchReader",
         lambda **kwargs: courtlistener.CourtListenerOpinionSearchReader(
-            transport=httpx.MockTransport(handle), **kwargs
+            transport=httpx.MockTransport(handle), api_token="fixture-token", **kwargs
         ),
     )
     return calls
@@ -145,7 +145,7 @@ def test_disjoint_append_preserves_prior_values_receipts_and_ordinary_admission(
 def test_incomplete_search_refuses_before_conversion_or_prior_copy(selected, monkeypatch, failure):
     work, kwargs = selected
     kwargs["search_budget"] = CourtListenerTraversalBudget(1, 0)
-    next_url = search_url(kind="o", q="cluster_id:[3 TO 6]") + "&cursor=next"  # a continuation keeps its selection
+    next_url = search_url(kind="o", q="cluster_id:[3 TO 6]", opinion_statuses=OPINION_STATUSES) + "&cursor=next"  # a continuation keeps its selection
     calls = transport(
         monkeypatch,
         429 if failure == "http" else page([7]) if failure == "range" else page([4], total=2, next_url=next_url),
