@@ -929,7 +929,7 @@ def _check_receipts(
 
 def _check_subjects(
     con: duckdb.DuckDBPyConnection, subjects: Mapping[str, Sequence[ParquetInput]], policies: Mapping[str, DatasetPolicy], temp: Path,
-    *, bounded_insert: bool = False,
+    *, bounded_insert: bool = False, sort_matches: bool = True,
 ) -> None:
     """``_joined_subjects`` over whole columns: raise what it would at the first subject, or schema, it refuses."""
     con.execute(
@@ -972,21 +972,23 @@ def _check_subjects(
                 break
         if stopped is not None:
             break
-    _check_subject_matches(con, stopped=stopped, before=before)
+    _check_subject_matches(con, stopped=stopped, before=before, sort_matches=sort_matches)
 
 
-def _check_subject_matches(con, *, stopped=None, before=None):
-    """Finish the wide join once, then check and replay its narrow ordinal map."""
+def _check_subject_matches(con, *, stopped=None, before=None, sort_matches=True):
+    """Validate the join, sorting its ordinal map only for later replay."""
     joined = (
         "FROM (SELECT * FROM subjects WHERE NOT unproven AND n < coalesce(?, n + 1)) AS s"
         " LEFT JOIN (SELECT * FROM receipts WHERE outcome = 'accepted') AS r ON s.dataset = r.dataset"
         " AND s.record_id = r.record_id AND s.version = r.subject_version AND s.identity = r.identity_json"
     )
-    con.execute(f"CREATE TABLE matched_subject_receipts AS SELECT s.n, s.dataset, r.n AS receipt {joined}", [before])
-    # Sorting after the join releases its wide key state. Ordered row groups let
-    # replay select a source batch without rescanning the complete map each time.
-    con.execute("CREATE TABLE subject_receipts AS SELECT * FROM matched_subject_receipts ORDER BY n")
-    con.execute("DROP TABLE matched_subject_receipts")
+    target = "matched_subject_receipts" if sort_matches else "subject_receipts"
+    con.execute(f"CREATE TABLE {target} AS SELECT s.n, s.dataset, r.n AS receipt {joined}", [before])
+    if sort_matches:
+        # Sorting after the join releases its wide key state. Ordered row groups let
+        # replay select a source batch without rescanning the complete map each time.
+        con.execute("CREATE TABLE subject_receipts AS SELECT * FROM matched_subject_receipts ORDER BY n")
+        con.execute("DROP TABLE matched_subject_receipts")
     [(total, matched, used)] = con.execute(
         "SELECT count(*), count(receipt), count(DISTINCT receipt) FROM subject_receipts"
     ).fetchall()
@@ -1106,13 +1108,14 @@ def validate_bundle(
     With multiple policies this can report a different first fault than dataset-grouped row selection; acceptance
     and refusal are unchanged. Single-policy diagnostics retain row-reader ordering.
     """
-    with _validated_bundle(subjects, receipt_paths, policies, generation_id=generation_id, scoped=scoped):
+    with _validated_bundle(subjects, receipt_paths, policies, generation_id=generation_id, scoped=scoped,
+                           sort_matches=False):
         pass
 
 
 @contextmanager
 def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scoped=False, retain_processing=False,
-                      threads=4, memory_limit="4GB", bounded_insert=False, retained_scan=None):
+                      threads=4, memory_limit="4GB", bounded_insert=False, retained_scan=None, sort_matches=True):
     """Keep the maintained admission tables alive for replay only after complete admission."""
     # Explicit conversion limits bound encoding work as well as DuckDB storage.
     # Reuse the same byte-sized inserts for writer validation and later replay.
@@ -1132,7 +1135,7 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
             if retained_scan is None:
                 _check_receipts(con, Path(temp), receipt_paths, registered, generation_id, scoped,
                                 retain_processing=retain_processing, bounded_insert=bounded_insert)
-                _check_subjects(con, subjects, registered, temp, bounded_insert=bounded_insert)
+                _check_subjects(con, subjects, registered, temp, bounded_insert=bounded_insert, sort_matches=sort_matches)
             else:
                 if len(registered) != 1 or scoped or retain_processing or not bounded_insert:
                     raise ValueError("Retained scans require one ordinal-processing selection")

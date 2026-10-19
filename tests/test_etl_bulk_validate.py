@@ -2,6 +2,7 @@
 
 import copy
 import random
+from contextlib import contextmanager
 from decimal import Decimal
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -205,6 +206,62 @@ def test_both_accept_what_the_row_writer_wrote(tmp_path, monkeypatch) -> None:
     assert things and others and len(things) < len(bundle.subjects["things"][0])
     bundle.generation_id = None
     assert agree(bundle, tmp_path / "unselected") is None
+
+
+@pytest.mark.parametrize("replay", [False, True], ids=["admission", "replay"])
+def test_only_replay_materializes_a_sorted_join_map(tmp_path, monkeypatch, replay):
+    from spicy_regs.etl_receipts import read_with_receipts
+
+    bundle = build(tmp_path)
+    policy = bundle.policies[0]
+    name = policy.dataset
+    bundle = Bundle(
+        [policy], {name: bundle.subjects[name]}, [[row for row in bundle.receipts[0] if row["dataset"] == name]]
+    )
+    random.Random(12).shuffle(bundle.receipts[0])
+    rows = bundle.subjects[name][0]
+    bundle.subjects[name] = [rows[:2], [], rows[2:]]
+    subjects, receipts, policies = bundle.write(tmp_path / "split")
+    expected = list(read_with_receipts(subjects[name], receipts, policy, generation_id="g1", bulk=False))
+    statements = []
+    original = etl_bulk.bulk_connection
+
+    class ObservedConnection:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        def execute(self, sql, *args, **kwargs):
+            if sql.startswith(("CREATE TABLE subject_receipts ", "CREATE TABLE matched_subject_receipts ")):
+                statements.append(sql)
+            return self.connection.execute(sql, *args, **kwargs)
+
+    @contextmanager
+    def observed_connection(*args, **kwargs):
+        with original(*args, **kwargs) as (connection, root):
+            yield ObservedConnection(connection), root
+
+    monkeypatch.setattr(etl_bulk, "bulk_connection", observed_connection)
+    if replay:
+        assert list(read_with_receipts(subjects[name], receipts, policy, generation_id="g1")) == expected
+        assert len(statements) == 2
+        assert statements[0].startswith("CREATE TABLE matched_subject_receipts AS SELECT s.n")
+        assert statements[1] == "CREATE TABLE subject_receipts AS SELECT * FROM matched_subject_receipts ORDER BY n"
+    else:
+        etl_bulk.validate_bundle(subjects, receipts, policies, generation_id="g1")
+        assert len(statements) == 1
+        assert statements[0].startswith("CREATE TABLE subject_receipts AS SELECT s.n")
+        assert "ORDER BY" not in statements[0]
+
+
+def test_unsorted_map_keeps_earlier_join_failure_before_later_subject_error(tmp_path):
+    bundle = build(tmp_path)
+    REFUSALS["subject_value_changed"][1](bundle, "things")
+    REFUSALS["subject_identity_null"][1](bundle, "others")
+    random.Random(12).shuffle(bundle.receipts[0])
+    assert agree(bundle, tmp_path)[1] == "Missing, ambiguous or reused subject receipt: things"
 
 
 def test_both_accept_an_empty_generation_and_several_files(tmp_path) -> None:
