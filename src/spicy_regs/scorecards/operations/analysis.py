@@ -11,7 +11,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from spicy_regs.scorecards.inputs import stage_member
-from spicy_regs.scorecards.etl import LINK_NAMES, generation_options
+from spicy_regs.scorecards.etl import ANALYSIS_NAMES, generation_options
 from spicy_regs.generations import build_generation
 from spicy_regs.source_evidence import CaptureEvidence, verify_evidence
 from spicy_regs.scorecards.analysis_inputs import convert_published_official_input, PROJECTED_NATIVE_OFFICIAL_TABLES
@@ -106,6 +106,7 @@ def main(argv=None):
         args.output,
         input_pins=pins,
         input_paths=paths,
+        comparison_index=snapshot,
         source_receipt_path=source_receipt,
         source_generation_id=source_generation,
         official_receipts=official_receipts,
@@ -121,7 +122,7 @@ def main(argv=None):
         family="scorecard-analysis",
         files=files,
         expected_keys=OUTPUTS,
-        **generation_options(args.output, LINK_NAMES),
+        **generation_options(args.output, ANALYSIS_NAMES),
         read_snapshot=snapshot,
         parents=parents,
         inputs=evidence.inputs(),

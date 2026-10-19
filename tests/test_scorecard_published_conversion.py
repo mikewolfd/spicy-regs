@@ -15,7 +15,7 @@ from spicy_regs.generations import verify_generation
 from spicy_regs.scorecards.analysis_inputs import convert_published_official_input
 from spicy_regs.scorecards.resolution import OFFICIAL_COLUMNS
 from spicy_regs.sources import publication
-from spicy_regs.transforms.build_scorecard_analysis import analysis_input_entries
+from spicy_regs.transforms.build_scorecard_analysis import COMPARISON_INPUTS, analysis_input_entries
 from tests.generation_fakes import Store
 from tests.test_scorecard_analysis import _inputs
 from tests.test_scorecard_analysis_preflight import fixture_owner
@@ -143,7 +143,11 @@ def test_conversion_requires_all_selected_parts_and_uses_native_receipts_without
 
 def legacy_analysis_inputs(tmp_path):
     store, index = _inputs(tmp_path)
-    index["families"].pop("test-inputs")
+    # The added vote-position input stays native; only the existing resolver
+    # inputs exercise the explicit historical shaped-conversion route.
+    owner = index["families"]["test-inputs"]
+    owner["tables"] = {"member_votes.parquet": owner["tables"]["member_votes.parquet"]}
+    owner["etlReceipts"]["datasets"] = ["member_votes"]
     directory = tmp_path / "shaped"
     directory.mkdir()
     files = []
@@ -165,7 +169,7 @@ def test_conversion_is_explicit_and_never_substitutes_for_missing_source_or_bad_
     with pytest.raises(publication.PublicationError, match="requires native receipts for: members"):
         analysis_input_entries(index)
     assert set(analysis_input_entries(index, convert_published_official_inputs=True)) == {
-        "scorecards", "scorecard_members", "scorecard_items", *OFFICIAL_COLUMNS,
+        "scorecards", "scorecard_members", "scorecard_items", *OFFICIAL_COLUMNS, *COMPARISON_INPUTS,
     }
     official = fixture_owner(index, "members.parquet")
     official["etlReceipts"] = {}
@@ -241,6 +245,8 @@ def test_complete_analysis_preparation_converts_published_inputs_and_keeps_origi
     assert pq.read_table(output / "scorecard_member_links.parquet").to_pylist()[0]["bioguide_id"] == "X000001"
     assert pq.read_table(output / "scorecard_item_links.parquet").to_pylist()[0]["bill_id"] == "119-hr-1"
     assert report["source_network_requests"] == 0
+    assert report["qualification"]["counts"]["scorecard_action_comparisons"] == 0
+    assert report["qualification"]["comparison"]["scopes"] == []
     for proof in report["published_official_conversions"]:
         assert proof["original_rows_sha256"] == proof["restored_rows_sha256"]
         assert proof["original_table_pin"] == publication.table_pin(index, proof["dataset"] + ".parquet")

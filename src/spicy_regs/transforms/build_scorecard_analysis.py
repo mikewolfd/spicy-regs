@@ -11,11 +11,13 @@ from tempfile import TemporaryDirectory
 import pyarrow.parquet as pq
 
 from spicy_regs.scorecards.etl import read_family, read_source_inputs, write_family
+from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS, RULE_VERSION as COMPARISON_RULE_VERSION, build_comparisons
 
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
-INPUTS = tuple(f"{name}.parquet" for name in (*SOURCE_TABLES, *OFFICIAL_TABLES))
-OUTPUTS = ("scorecard_member_links.parquet", "scorecard_item_links.parquet")
+COMPARISON_INPUTS = ("scorecard_member_item_results", "scorecard_metric_items", "member_votes")
+INPUTS = tuple(f"{name}.parquet" for name in (*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS))
+OUTPUTS = ("scorecard_member_links.parquet", "scorecard_item_links.parquet", COMPARISON_TABLE + ".parquet")
 
 
 def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inputs: bool = False) -> dict[str, Mapping]:
@@ -32,9 +34,9 @@ def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inpu
     from spicy_regs.sources import publication
 
     entries = {name: selected_table_entry(snapshot, name + ".parquet")
-               for name in (*SOURCE_TABLES, *OFFICIAL_TABLES)}
+               for name in (*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS)}
     source = entries["scorecards"]
-    if any(entries[name]["artifactDigest"] != source["artifactDigest"] for name in SOURCE_TABLES):
+    if any(entries[name]["artifactDigest"] != source["artifactDigest"] for name in (*SOURCE_TABLES, *COMPARISON_INPUTS[:2])):
         raise publication.PublicationError("Scorecard analysis source inputs must share one generation")
     missing = [name for name, owner in entries.items()
                if name not in owner.get("etlReceipts", {}).get("datasets", ())
@@ -81,13 +83,14 @@ def build_scorecard_analysis(
     *,
     input_pins: Mapping[str, dict],
     input_paths: Mapping[str, Sequence[Path]],
+    comparison_index: Mapping,
     member_overrides: Sequence[dict] = (),
     source_receipt_path: Path | None = None,
     source_generation_id: str | None = None,
     official_receipts: Mapping[str, tuple[Path, str]] | None = None,
     receipt_generation_id: str | None = None,
     projected_official_index: Mapping | None = None,
-) -> tuple[Path, Path]:
+) -> tuple[Path, ...]:
     """Resolve already verified inputs; the rollup owns download and generation pins.
 
     Logical table names key both mappings. A published table may have multiple
@@ -102,7 +105,7 @@ def build_scorecard_analysis(
         resolve_scorecard_links,
     )
 
-    expected = set((*SOURCE_TABLES, *OFFICIAL_TABLES))
+    expected = set((*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS))
     if set(input_pins) != expected or set(input_paths) != expected:
         raise ValueError("Scorecard analysis requires every source and official input pin")
     if source_receipt_path is None or not source_generation_id:
@@ -136,9 +139,16 @@ def build_scorecard_analysis(
             path = selected.materialize(name, Path(temporary) / (name + ".parquet"))
             official[name] = _read([path], OFFICIAL_COLUMNS[name])
     results = resolve_scorecard_links(source, official, input_pins, member_overrides=member_overrides)
+    from spicy_regs.sources import publication
+    if any(input_pins[name] != publication.table_pin(comparison_index, name + ".parquet")
+           for name in COMPARISON_INPUTS):
+        raise ValueError("Action-comparison inputs differ from their selected publication pins")
+    results[COMPARISON_TABLE] = build_comparisons(
+        comparison_index, input_paths, source, results, official["members"], input_pins)
     definitions = (
         ("scorecard_member_links", MEMBER_LINK_COLUMNS, ("scorecard_id", "publisher_member_key")),
         ("scorecard_item_links", ITEM_LINK_COLUMNS, ("scorecard_id", "item_id", "reference_id")),
+        (COMPARISON_TABLE, COMPARISON_COLUMNS, COMPARISON_KEYS),
     )
     if set(results) != {name for name, _, _ in definitions}:
         raise ValueError("Resolver output differs from the complete analysis family")
@@ -153,13 +163,21 @@ def build_scorecard_analysis(
         "counts": {name: len(rows) for name, rows in results.items()},
         "resolution_statuses": {
             name: dict(sorted(Counter(row["resolution_status"] for row in rows).items()))
-            for name, rows in results.items()
+            for name, rows in results.items() if name != COMPARISON_TABLE
         },
-        "scope": "Exact identity links for the stated inputs; published publisher ratings remain unchanged.",
+        "scope": "Exact identity links and LCV 2025 floor-vote comparisons; published publisher ratings remain unchanged.",
+        "comparison": {
+            "rule_version": COMPARISON_RULE_VERSION,
+            "scopes": sorted(r["scorecard_id"] for r in source["scorecards"]
+                             if r.get("publisher_id") == "lcv" and r.get("year_text") == "2025"),
+            "statuses": dict(sorted(Counter(r["comparison_status"] for r in results[COMPARISON_TABLE]).items())),
+            "deferred": ["historical_sponsorship", "score_reproduction", "other_publishers_and_editions"],
+            "input_representations": {name: "complete_pinned_native_main_fields" for name in COMPARISON_INPUTS},
+        },
         "official_input_representations": {
             name: "complete_pinned_native_main_fields" if name in projected else "receipt_checked_original_source_fields"
             for name in OFFICIAL_TABLES
         },
     }
     (output_dir / "scorecard-analysis-qualification.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    return paths[0], paths[1]
+    return paths

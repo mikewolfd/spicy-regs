@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from spicy_regs.scorecards.inputs import stage_member
 from spicy_regs.scorecards.analysis_inputs import PROJECTED_NATIVE_OFFICIAL_TABLES
-from spicy_regs.scorecards.etl import LINK_NAMES, POLICIES, verified_receipt_download
+from spicy_regs.scorecards.etl import ANALYSIS_NAMES, POLICIES, verified_receipt_download
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
 from spicy_regs.sources import publication
 from spicy_regs.transforms.build_scorecard_analysis import (
@@ -23,7 +23,7 @@ class ScorecardAnalysisRollup(RollupPipeline):
     name: ClassVar[str] = "scorecard-analysis"
     inputs: ClassVar[tuple[str, ...]] = INPUTS
     outputs: ClassVar[tuple[str, ...]] = OUTPUTS
-    receipt_policies: ClassVar[tuple] = tuple(POLICIES[name] for name in LINK_NAMES)
+    receipt_policies: ClassVar[tuple] = tuple(POLICIES[name] for name in ANALYSIS_NAMES)
 
     def _prime(self, output_dir: Path, snapshot: Mapping | None = None) -> dict[str, dict]:
         """Verify every member, including partitioned bill tables, under one index."""
@@ -76,13 +76,14 @@ class ScorecardAnalysisRollup(RollupPipeline):
         self._scorecard_input_paths = paths
         return parents
 
-    def build(self, output_dir: Path) -> tuple[Path, Path]:
+    def build(self, output_dir: Path) -> tuple[Path, ...]:
         if not hasattr(self, "_scorecard_input_pins"):
             raise publication.PublicationError("Prime verified scorecard analysis inputs before building")
         return build_scorecard_analysis(
             output_dir,
             input_pins=self._scorecard_input_pins,
             input_paths=self._scorecard_input_paths,
+            comparison_index=self._scorecard_projected_official_index,
             source_receipt_path=self._scorecard_source_receipt,
             source_generation_id=self._scorecard_source_generation,
             official_receipts=self._official_receipts,

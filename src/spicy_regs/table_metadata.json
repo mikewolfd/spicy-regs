@@ -19439,6 +19439,140 @@
       "reference_id"
     ]
   },
+  "scorecard_action_comparisons": {
+    "table": "scorecard_action_comparisons",
+    "label": "Scorecard action comparisons",
+    "summary": "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.",
+    "coverage": "LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption.",
+    "kind": null,
+    "measured_on": "2026-10-19",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "scorecard_id",
+        "column_type": "VARCHAR",
+        "description": "Publisher edition identifier."
+      },
+      {
+        "column_name": "result_id",
+        "column_type": "VARCHAR",
+        "description": "Original result identifier within the item and publisher member."
+      },
+      {
+        "column_name": "source_snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Accepted source snapshot; require equality in source joins."
+      },
+      {
+        "column_name": "item_id",
+        "column_type": "VARCHAR",
+        "description": "Original publisher item identifier."
+      },
+      {
+        "column_name": "publisher_member_key",
+        "column_type": "VARCHAR",
+        "description": "Original publisher member key."
+      },
+      {
+        "column_name": "metric_id",
+        "column_type": "VARCHAR",
+        "description": "Original measurement context, when supplied."
+      },
+      {
+        "column_name": "reference_id",
+        "column_type": "VARCHAR",
+        "description": "Unique exact item-reference occurrence used, or NULL."
+      },
+      {
+        "column_name": "vote_id",
+        "column_type": "VARCHAR",
+        "description": "Exact pinned official roll-call identifier, or NULL."
+      },
+      {
+        "column_name": "bioguide_id",
+        "column_type": "VARCHAR",
+        "description": "Exact resolved congressional member identity, or NULL."
+      },
+      {
+        "column_name": "official_member_key",
+        "column_type": "VARCHAR",
+        "description": "Native official vote member key; it may use an LIS identifier."
+      },
+      {
+        "column_name": "publisher_target_text",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher preferred position; only qualified spellings are interpreted."
+      },
+      {
+        "column_name": "publisher_action_text",
+        "column_type": "VARCHAR",
+        "description": "Unchanged publisher-reported action literal, distinct from official position."
+      },
+      {
+        "column_name": "publisher_credit_text",
+        "column_type": "VARCHAR",
+        "description": "Unchanged publisher credit literal, including excused; not an official vote."
+      },
+      {
+        "column_name": "publisher_eligibility_text",
+        "column_type": "VARCHAR",
+        "description": "Unchanged publisher eligibility literal."
+      },
+      {
+        "column_name": "official_position_text",
+        "column_type": "VARCHAR",
+        "description": "Literal official vote position from the pinned native member-vote row."
+      },
+      {
+        "column_name": "official_position_normalized",
+        "column_type": "VARCHAR",
+        "description": "Official source reader's normalized position."
+      },
+      {
+        "column_name": "comparison_status",
+        "column_type": "VARCHAR",
+        "description": "same, different, not_voting, present, unresolved or not_applicable. Missing votes are unresolved."
+      },
+      {
+        "column_name": "reason",
+        "column_type": "VARCHAR",
+        "description": "Specific evidence condition supporting the comparison or its unresolved disposition."
+      },
+      {
+        "column_name": "rule_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the narrow publisher-specific comparison method."
+      },
+      {
+        "column_name": "input_pins_json",
+        "column_type": "VARCHAR",
+        "description": "Immutable source and congressional input generation and member pins."
+      },
+      {
+        "column_name": "capture_id",
+        "column_type": "VARCHAR",
+        "description": "Original publisher result capture identity."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original publisher result URL."
+      },
+      {
+        "column_name": "source_path",
+        "column_type": "VARCHAR",
+        "description": "Original publisher result locator."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "scorecard_id",
+      "item_id",
+      "publisher_member_key",
+      "result_id"
+    ]
+  },
   "usaspending_recipients": {
     "table": "usaspending_recipients",
     "label": "Federal award recipients",
@@ -31944,6 +32078,20 @@
         ],
         "processing_fields": [
           "raw_record"
+        ]
+      },
+      {
+        "dataset": "scorecard_action_comparisons",
+        "receipt_only": false,
+        "policy_version": "scorecards-etl-v2",
+        "identity_columns": [
+          "scorecard_id",
+          "item_id",
+          "publisher_member_key",
+          "result_id"
+        ],
+        "processing_fields": [
+          "raw_source"
         ]
       },
       {

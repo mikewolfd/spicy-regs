@@ -18,7 +18,7 @@ from tests.generation_fakes import Store
 
 def native_selection(tmp_path, name, records):
     raw = tmp_path / 'source.parquet'
-    columns = tuple(dict.fromkeys((*OFFICIAL_COLUMNS[name], *(records[0] if records else ()))))
+    columns = tuple(dict.fromkeys((*OFFICIAL_COLUMNS.get(name, ()), *(records[0] if records else ()))))
     pq.write_table(pa.Table.from_pylist(records, schema=pa.schema([(c, pa.string()) for c in columns])), raw)
     subject, receipts = write_congress_dataset(raw, tmp_path / 'native', dataset=name, generation_id='test-native')
     assert subject is not None

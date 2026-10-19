@@ -301,6 +301,54 @@ Keep the publisher's metric name and literal value together. A grade, a points
 total and a percentage are different measurements even when they rate the same
 member. Official-action comparisons belong in the separate analysis family.
 
+## LCV 2025 roll-call comparisons
+
+The analysis builder also emits `scorecard_action_comparisons` for LCV's 2025
+edition. It retains the literal item target, publisher action and publisher
+credit separately from the official member vote. The versioned method accepts
+LCV's explicit `Yes` and `No` targets, requires one resolved member and one
+resolved item-reference occurrence in the selected source snapshot, and checks
+the metric-specific target when the result names a metric. A nomination vote
+does not need a bill identifier. Senate LIS member keys do not substitute for
+an exact Bioguide identity or an unambiguous pinned LIS crosswalk.
+
+`same` and `different` compare only official `yea`/`nay` positions with the stated
+target. Explicit official `not_voting` and `present` retain their own statuses.
+Missing votes, unsupported targets/positions, repeated references, conflicting
+metric targets and unresolved identities remain `unresolved`. Actions outside
+the floor-vote method are `not_applicable`. Publisher credit such as `excused`
+does not establish an official excusal. Changed source snapshots refuse or
+remain unresolved rather than inheriting an older link.
+
+The additional source results, metric participations and official member votes
+are immutable analysis parents. Native columns are read in Arrow batches;
+only the selected LCV edition and relevant roll calls become Python rows. Their
+complete byte pins, schemas and populations are checked without restoring the
+large receipt collections. An input without LCV 2025 produces an explicitly
+empty comparison table and no claimed scope. The preparation qualification
+records covered scopes, method version and outcome counts. Source ratings and
+credit remain unchanged. Historical sponsorship and score reproduction remain
+deferred; code qualification is separate from publication and hosted adoption.
+
+```sql
+SELECT s.title, m.member_name, i.title AS item,
+       a.publisher_target_text, a.publisher_credit_text,
+       a.official_position_text, a.comparison_status, a.reason
+FROM scorecard_action_comparisons a
+JOIN scorecards s ON s.scorecard_id=a.scorecard_id AND s.snapshot_id=a.source_snapshot_id
+JOIN scorecard_members m ON m.scorecard_id=a.scorecard_id
+ AND m.publisher_member_key=a.publisher_member_key AND m.snapshot_id=a.source_snapshot_id
+JOIN scorecard_items i ON i.scorecard_id=a.scorecard_id
+ AND i.item_id=a.item_id AND i.snapshot_id=a.source_snapshot_id
+WHERE a.scorecard_id='lcv:2025'
+LIMIT 20;
+```
+
+For a manual analysis refresh, let active source scorecard, bill, amendment,
+member and vote writers finish before building against their captured inputs.
+Unrelated family jobs and downstream term-link jobs need not block preparation.
+Ordinary publication still refuses if a managed parent changes during the run.
+
 Choose the initial adapters after the matrix has enough complete row fixtures.
 A useful provisional coverage set is LCV, AFL-CIO, Heritage Action, Chamber,
 Humane World Action Fund and NEA: this spans archives, workbook export,

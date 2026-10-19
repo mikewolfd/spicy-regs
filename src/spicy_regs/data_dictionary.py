@@ -576,6 +576,7 @@ TABLES: tuple[str, ...] = (
     "member_vote_terms",
     "scorecard_member_links",
     "scorecard_item_links",
+    "scorecard_action_comparisons",
     "usaspending_recipients",
     "fcc_proceedings",
     "fcc_filings",
@@ -652,6 +653,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "member_vote_terms",
         "scorecard_member_links",
         "scorecard_item_links",
+        "scorecard_action_comparisons",
         *RULEMAKING_TABLES,
         *CONTRACT_TABLES,
     }
@@ -863,6 +865,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_court_bulk_tables import CITATION_MAP, CITATIONS, OPINIONS, PARENTHETICALS
     from spicy_regs.transforms.build_court_pdf_extractions import COLUMNS as COURT_PDF_COLUMNS
     from spicy_regs.scorecards.resolution import LINK_COLUMNS as SCORECARD_LINK_COLUMNS
+    from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS
     from spicy_regs.transforms.build_member_vote_terms import COLUMNS as MEMBER_VOTE_TERM_COLUMNS
     from spicy_regs.transforms.build_sam_entities import COLUMNS as SAM_COLUMNS
     from spicy_regs.transforms.build_lobbying_filings import (
@@ -894,6 +897,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
 
     builder_columns = {
         **SCORECARD_LINK_COLUMNS,
+        COMPARISON_TABLE: COMPARISON_COLUMNS,
         "fec_source_catalog": FEC_CATALOG_COLUMNS,
         "fec_source_records": RECORD_COLUMNS,
         "fec_relationships": FEC_RELATIONSHIP_COLUMNS,

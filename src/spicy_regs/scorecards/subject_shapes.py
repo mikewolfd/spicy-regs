@@ -9,13 +9,16 @@ import pyarrow as pa
 from spicy_docs.schemas.scorecard_tables import SCORECARD_TABLES
 
 from spicy_regs.scorecards.resolution import LINK_COLUMNS, LINK_KEYS
+from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS, STATUSES
 
 POLICY_VERSION = "scorecards-etl-v2"
 RATING_POLICY_VERSION = "scorecards-etl-ratings-v4"
 SOURCE_COLUMNS = {name: contract.columns for name, contract in SCORECARD_TABLES.items()}
 SOURCE_COLUMNS.update(LINK_COLUMNS)
+SOURCE_COLUMNS[COMPARISON_TABLE] = COMPARISON_COLUMNS
 IDENTITIES = {name: contract.identity for name, contract in SCORECARD_TABLES.items()}
 IDENTITIES.update(LINK_KEYS)
+IDENTITIES[COMPARISON_TABLE] = COMPARISON_KEYS
 
 
 def source_row_index(name, rows):
@@ -31,7 +34,8 @@ def source_row_index(name, rows):
     return result
 
 
-DOMAIN_COLUMNS = {
+DOMAIN_COLUMNS: dict[str, tuple[str, ...]] = {
+    COMPARISON_TABLE: COMPARISON_COLUMNS,
     "scorecard_item_links": (
         "scorecard_id",
         "item_id",
@@ -333,6 +337,8 @@ def map_source_row(name: str, row: Mapping) -> dict:
         targets = ("bioguide_id",) if name == "scorecard_member_links" else ("vote_id", "bill_id", "amendment_id")
         if status != "resolved" and any(row.get(key) is not None for key in targets):
             raise ValueError("Unresolved scorecard association contains a resolved target")
+    if name == COMPARISON_TABLE and row.get("comparison_status") not in STATUSES:
+        raise ValueError("Unknown scorecard comparison status")
     mapped = dict(row)
     originals = {}
     for column in DOMAIN_COLUMNS[name]:
