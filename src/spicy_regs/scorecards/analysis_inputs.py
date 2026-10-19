@@ -25,7 +25,7 @@ def read_published_native_resolver_rows(snapshot, name, paths):
     claim to revalidate source receipts or reconstruct the original source row.
     """
     from spicy_regs.congress_receipts import policy
-    from spicy_regs.local_data import file_signature
+    from spicy_regs.local_data import file_signature, file_state_from_stat
     if name not in PROJECTED_NATIVE_OFFICIAL_TABLES:
         raise ValueError("Resolver main-field reads are not qualified for: " + name)
     owner = publication.table_owner(snapshot, name + ".parquet")
@@ -36,17 +36,22 @@ def read_published_native_resolver_rows(snapshot, name, paths):
         raise ValueError("Resolver main-field reads require every selected member")
     rows = []
     for path, member in zip(paths, members, strict=True):
-        before = file_signature(path)
-        with path.open("rb") as stream:
+        # Explicit local-input staging links to retained bytes. Bind both the
+        # staged locator and its regular target while reading the target.
+        staged_before = file_state_from_stat(path.lstat())
+        retained = path.resolve(strict=True)
+        before = file_signature(retained)
+        with retained.open("rb") as stream:
             digest = "sha256:" + file_digest(stream, "sha256").hexdigest()
-        if digest != member.sha256 or path.stat().st_size != member.byte_size:
+        if digest != member.sha256 or retained.stat().st_size != member.byte_size:
             raise ValueError("Resolver main input differs from its selected immutable pin")
-        with pq.ParquetFile(path) as source:
+        with pq.ParquetFile(retained) as source:
             if not source.schema_arrow.equals(policy(name).subject_schema, check_metadata=False):
                 raise ValueError("Resolver main input differs from its exact native schema")
             for batch in source.iter_batches(batch_size=2000, columns=list(OFFICIAL_COLUMNS[name])):
                 rows.extend(batch.to_pylist())
-        if file_signature(path) != before:
+        if (file_state_from_stat(path.lstat()) != staged_before
+                or path.resolve(strict=True) != retained or file_signature(retained) != before):
             raise ValueError("Resolver main input changed during its read")
     if len(rows) != owner[1]["tables"][name + ".parquet"]["rows"]:
         raise ValueError("Resolver main input differs from the complete selected population")
