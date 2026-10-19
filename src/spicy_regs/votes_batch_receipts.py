@@ -43,6 +43,7 @@ def write_congress_dataset(
     generation_id: str,
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
+    prior_scoped: bool = False,
     bulk: bool = True,
     validate: bool = True,
     on_fresh_failure: Callable[[], None] | None = None,
@@ -66,13 +67,16 @@ def write_congress_dataset(
 
     ``validate=False`` leaves admission to the caller: the prior pair was admitted when it was selected and
     the new pair is admitted once with its generation. Standalone callers keep the default.
+    ``prior_scoped`` reuses the owner's pinned dataset selection without filtering
+    and writing another prior receipt file; admission behavior is unchanged.
     """
     from rulespec_artifacts import publish_directory_no_replace
 
     if not bulk:
         from spicy_regs.congress_receipts import write_congress_dataset as row_writer
         return row_writer(source, directory, dataset=dataset, generation_id=generation_id,
-                          witnesses=witnesses, prior=prior, bulk=False, validate=validate, on_fresh_failure=on_fresh_failure)
+                          witnesses=witnesses, prior=prior, prior_scoped=prior_scoped,
+                          bulk=False, validate=validate, on_fresh_failure=on_fresh_failure)
     if directory.exists():
         raise FileExistsError(directory)
     selected = policy(dataset)
@@ -93,7 +97,8 @@ def write_congress_dataset(
         in_bulk = bulk and subjects is not None and congress_bulk.eligible(dataset, pq.read_schema(source))
         prior_paths = []
         if prior is not None:
-            scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
+            scoped = prior.receipts if prior_scoped else select_receipts(
+                prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
             if validate:
                 _admit({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id, bulk=bulk)
             prior_paths.append(scoped)

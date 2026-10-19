@@ -63,9 +63,12 @@ def dataset_policy(name):
 
 
 class SelectedPriors:
-    """Capture one publication index and fetch only its pinned subject/receipt pairs."""
+    """Capture one publication index and fetch only its pinned subject/receipt pairs.
 
-    def __init__(self, directory, *, index=None, public_url=None, root=None):
+    Retain scoped custody only for output datasets the caller will reuse for carry.
+    """
+
+    def __init__(self, directory, *, index=None, public_url=None, root=None, reuse_scoped_datasets=()):
         from spicy_regs.selected_generations import SelectedInputs
 
         self.directory = Path(directory)
@@ -75,12 +78,16 @@ class SelectedPriors:
         )
         self.restored = {}
         self.selections = {}
+        self.reuse_scoped_datasets = frozenset(reuse_scoped_datasets)
+        self.scoped_receipts = {}
         self.processing_members = {}
 
     def get(self, dataset):
         if dataset in self.restored:
             if self.restored[dataset] is not None:
                 self.selected.select(dataset)
+                if dataset in self.scoped_receipts:
+                    self.selected.member_pin(self.scoped_receipts[dataset])
                 self._check_processing(dataset)
             return self.restored[dataset]
         selected_policy = dataset_policy(dataset)
@@ -94,6 +101,9 @@ class SelectedPriors:
         directory = self.directory / dataset
         directory.mkdir()
         scoped = select_receipts(receipt_path, directory / "scoped.parquet", dataset=dataset)
+        if dataset in self.reuse_scoped_datasets:
+            # Bind the derived bytes before admission; the writer reuses this exact selection.
+            self.selected.member_pin(scoped)
         selected_policy = selected_subject_policy(selected_policy, subjects)
         # The regulatory restore below admits the pair itself: complete admission in
         # regulations_bulk._materialize_selected, or the full read_with_receipts pass in _qualified_rows.
@@ -165,6 +175,9 @@ class SelectedPriors:
         members = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)
         self.processing_members[dataset] = members
         self._check_processing(dataset)
+        if dataset in self.reuse_scoped_datasets:
+            self.selected.member_pin(scoped)
+            self.scoped_receipts[dataset] = scoped
         return output
 
     def _check_processing(self, dataset):
@@ -247,6 +260,10 @@ class NativeReceiptLifecycle(RollupPipeline):
             private / "selected-priors",
             root=self.output_dir or output_dir,
             index=snapshot if os.getenv("R2_PUBLIC_URL") else None,
+            reuse_scoped_datasets=(
+                key.removesuffix(".parquet") for key in getattr(self, "source_outputs", ())
+                if key.removesuffix(".parquet") in CONGRESS
+            ),
         )
         return private, prior
 
@@ -357,9 +374,12 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
             destination = private / "datasets" / dataset
             if dataset in CONGRESS:
                 selection = prior.selections.get(dataset)
-                held = None if selection is None else CongressInput(tuple(selection[0]), selection[1], selection[2])
+                prior.selected.check()
+                held = None if selection is None else CongressInput(
+                    tuple(selection[0]), prior.scoped_receipts[dataset], selection[2])
                 subject, receipt = write_congress_dataset(
                     path, destination, dataset=dataset, generation_id=self.receipt_generation_id, prior=held,
+                    prior_scoped=held is not None,
                     bulk=True, on_fresh_failure=lambda: fresh_failure_datasets.append(dataset),
                     validate=False,  # the prior was admitted when selected; the new pair is admitted with its generation
                 )
@@ -427,6 +447,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
         # validation; outside a run, ``remember_selection`` below pins "admitted members", so validate here.
         if not getattr(self, "_defer_native_selection", False):
             validate_receipt_bundle(by_dataset, [combined], self.receipt_policies, generation_id=self.receipt_generation_id)
+        prior.selected.check()
         # Private files are final here; the copies below make them visible.
         visible = []
         for source in subjects:

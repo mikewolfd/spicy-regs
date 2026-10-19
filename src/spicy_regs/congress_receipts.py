@@ -169,6 +169,7 @@ def write_congress_dataset(
     generation_id: str,
     witnesses: Sequence[Mapping[str, Any]] = (),
     prior: CongressInput | None = None,
+    prior_scoped: bool = False,
     bulk: bool = False,
     validate: bool = True,
     on_fresh_failure: Callable[[], None] | None = None,
@@ -183,13 +184,17 @@ def write_congress_dataset(
     ``on_fresh_failure`` reports a fresh refused/error attempt before carry can
     reuse its older receipt. The caller can retain the completed private bundle
     while refusing its publication.
+
+    ``prior_scoped`` reuses a caller-owned receipt file selected for this exact
+    dataset. It does not skip admission; the owner must keep those bytes pinned.
     """
     if bulk:
         if dataset not in INPUT_COLUMNS:
             raise ValueError("Batch Congress writing requires a declared Congress dataset")
         from spicy_regs.votes_batch_receipts import write_congress_dataset as write_votes
         return write_votes(source, directory, dataset=dataset, generation_id=generation_id,
-                           witnesses=witnesses, prior=prior, bulk=True, validate=validate, on_fresh_failure=on_fresh_failure)
+                           witnesses=witnesses, prior=prior, prior_scoped=prior_scoped,
+                           bulk=True, validate=validate, on_fresh_failure=on_fresh_failure)
 
     from rulespec_artifacts import publish_directory_no_replace
 
@@ -212,7 +217,8 @@ def write_congress_dataset(
         footer = dict(pq.read_schema(source).metadata or {})
         prior_paths = []
         if prior is not None:
-            scoped = select_receipts(prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
+            scoped = prior.receipts if prior_scoped else select_receipts(
+                prior.receipts, Path(temporary) / "prior.parquet", dataset=dataset)
             if validate:
                 validate_receipt_bundle({dataset: prior.subjects}, [scoped], [input_policy(dataset, prior.subjects)], generation_id=prior.generation_id)
             prior_paths.append(scoped)
