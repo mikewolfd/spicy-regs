@@ -15,6 +15,8 @@ concurrency:
   queue: max
 jobs:
   votes:
+    # Votes pin the members crosswalk; finish its writer before capturing inputs.
+    needs: [members]
     uses: ./.github/workflows/_rollup.yml
     secrets: inherit
     with:
