@@ -37,24 +37,39 @@ there first.
 
 ## Deploy
 
-The fork pins `174055408ff1560e60601c4d12c561c4` in `wrangler.template.jsonc`. Complete
-[the fork setup](../fork-setup.md) and export `SPICYREGS_DOMAIN=spicygov.ai` before deploying.
-The npm commands render the ignored `wrangler.jsonc` from the template. Its route,
-data URL and runtime domain use that setting; unset uses `spicy-regs.dev`.
-Existing explicit data URL overrides still take precedence. See [domain setup](../public-domain.md).
-The Worker returns 503 while that URL is empty. Use the named account login so
-authentication in unrelated projects stays separate.
+For the established production service, use the explicit production command.
+It sets account `174055408ff1560e60601c4d12c561c4`, `mcp.spicygov.ai`,
+`https://data.spicygov.ai` and guide `https://spicygov.ai/mcp/` without requiring
+shell exports. Supply the qualified image digest and its published matching
+FEC receipt on every release; both must use `sha256:<64 lowercase hex digits>`.
+The renderer checks the target and refuses conflicting ambient settings before
+writing configuration or starting Wrangler. It replaces the template's old pins
+with these explicit inputs. This local check establishes configuration consistency;
+the image association and receipt qualification remain release prerequisites.
 
 ```bash
 cd deploy/cloudflare
-export SPICYREGS_DOMAIN=spicygov.ai # Mike's fork; omit for upstream defaults
-export MCP_GUIDE_URL=https://spicygov.ai/mcp/ # Optional separate browser guide
-npm ci
-npm test              # bounded native-connection recovery checks
-npm run check          # Worker dry run and typecheck
-npx wrangler whoami    # verify the active named login and selected account
-npm run deploy         # deploys the configured image and Worker pins
+npm run deploy:production -- \
+  --image-digest "$QUALIFIED_IMAGE_DIGEST" \
+  --release-sha256 "$PUBLISHED_FEC_RECEIPT_SHA256" \
+  --profile spicy-regs-civictechdc
 ```
+
+Use the existing installed Wrangler and named account login. The command renders
+and deploys the same checked config without running generic configuration again.
+To render without uploading, invoke `python3 ../../scripts/render_cloudflare_config.py
+--production --image-digest "$QUALIFIED_IMAGE_DIGEST" --release-sha256
+"$PUBLISHED_FEC_RECEIPT_SHA256"`; then run the installed Wrangler's `deploy
+--dry-run --profile spicy-regs-civictechdc` if that release needs a Worker check.
+
+Generic forks keep `npm run configure`, `npm run check` and `npm run deploy`.
+Complete [fork setup](../fork-setup.md), install the locked npm dependencies,
+and set the fork's account and release pins in `wrangler.template.jsonc`.
+`SPICYREGS_DOMAIN` defaults to `spicy-regs.dev`; explicit data URL overrides retain
+precedence, and `MCP_GUIDE_URL` remains optional. See [domain setup](../public-domain.md).
+These generic commands render the ignored `wrangler.jsonc` and may overwrite a
+previous production rendering. `deploy:configured` is the shared internal command;
+use `deploy:production` or `deploy` to render the intended target first.
 
 `wrangler` prints a `*.workers.dev` URL; smoke-test the MCP handshake against `/mcp`.
 
@@ -103,7 +118,8 @@ and [Docker registry publication](https://docs.docker.com/reference/cli/docker/i
 Registry publication does not deploy the Worker or qualify a serving release.
 Use the successful association's immutable `registry_image` and `consumer` to
 construct the matching release receipt. Publish and verify that receipt before
-updating all three configuration values: `containers[].image`,
+passing its digest and the image digest to `deploy:production`. For generic forks,
+update all three template values: `containers[].image`,
 `SPICY_REGS_CONSUMER_IMAGE_DIGEST` and `SPICY_REGS_FEC_RELEASE_SHA256`. Verify
 the actual provider image selection and bounded live MCP release checks after
 deployment. Prepared datasets still need their reader checks.
@@ -165,7 +181,8 @@ absolute HTTPS guide URL. Leave it unset to keep the upstream container landing
 page. `/mcp` and `/mcp/*` still go to the MCP server without a redirect, including
 POST requests. The guide remains accessible while data is unavailable.
 
-Mike's fork uses `https://spicygov.ai/mcp/`, maintained in
-[mikewolfd/spicygov](https://github.com/mikewolfd/spicygov). Export the value above
-for every manual deployment; GitHub repository variables are not automatically
-inherited by local Wrangler commands. Deploy the guide before enabling the redirect.
+The production command sets `https://spicygov.ai/mcp/`, maintained in
+[mikewolfd/spicygov](https://github.com/mikewolfd/spicygov). Generic forks must
+export their guide URL when desired; GitHub repository variables are not
+automatically inherited by local Wrangler commands. Deploy the guide before
+enabling the redirect.

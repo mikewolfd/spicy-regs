@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import runpy
+import shutil
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -17,6 +18,167 @@ from spicy_regs import data_dictionary, mcp_server
 from spicy_regs.public_url import comments_source, resolve_domain, resolve_r2_base_url, service_url
 
 ROOT = Path(__file__).resolve().parents[1]
+IMAGE_DIGEST = "sha256:" + "a" * 64
+RELEASE_SHA256 = "sha256:" + "b" * 64
+
+
+@pytest.fixture
+def production_repo(tmp_path, monkeypatch):
+    for relative in (
+        "scripts/render_cloudflare_config.py",
+        "src/spicy_regs/public_url.py",
+        "deploy/cloudflare/wrangler.template.jsonc",
+        "deploy/cloudflare/package.json",
+    ):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, target)
+    monkeypatch.setattr(render_cloudflare_config, "ROOT", tmp_path)
+    monkeypatch.delenv("MCP_GUIDE_URL", raising=False)
+    return tmp_path
+
+
+def test_production_uses_explicit_release_and_fixed_public_settings(production_repo):
+    config = json.loads(
+        render_cloudflare_config.render_config(
+            production=True,
+            image_digest=IMAGE_DIGEST,
+            release_sha256=RELEASE_SHA256,
+        )
+    )
+    assert config["account_id"] == "174055408ff1560e60601c4d12c561c4"
+    assert config["routes"] == [{"pattern": "mcp.spicygov.ai", "custom_domain": True}]
+    assert config["vars"]["SPICYREGS_DOMAIN"] == "spicygov.ai"
+    assert config["vars"]["SPICY_REGS_R2_URL"] == "https://data.spicygov.ai"
+    assert config["vars"]["MCP_GUIDE_URL"] == "https://spicygov.ai/mcp/"
+    assert config["vars"]["SPICY_REGS_CONSUMER_IMAGE_DIGEST"] == IMAGE_DIGEST
+    assert config["vars"]["SPICY_REGS_FEC_RELEASE_SHA256"] == RELEASE_SHA256
+    assert config["containers"][0]["image"] == (
+        "registry.cloudflare.com/174055408ff1560e60601c4d12c561c4/spicy-regs-reader@" + IMAGE_DIGEST
+    )
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "SPICYREGS_DOMAIN",
+        "R2_PUBLIC_URL",
+        "SPICY_REGS_R2_URL",
+        "MCP_GUIDE_URL",
+        "CLOUDFLARE_ACCOUNT_ID",
+    ],
+)
+def test_production_refuses_conflicting_environment(production_repo, monkeypatch, name):
+    monkeypatch.setenv(name, "other-target")
+    with pytest.raises(ValueError, match="conflicts with the production target"):
+        render_cloudflare_config.render_config(
+            production=True,
+            image_digest=IMAGE_DIGEST,
+            release_sha256=RELEASE_SHA256,
+        )
+
+
+@pytest.mark.parametrize(
+    ("image", "receipt"),
+    [
+        (None, RELEASE_SHA256),
+        (IMAGE_DIGEST, None),
+        ("latest", RELEASE_SHA256),
+        (IMAGE_DIGEST, "sha256:123"),
+    ],
+)
+def test_production_requires_both_exact_pins(production_repo, image, receipt):
+    with pytest.raises(ValueError, match="production requires"):
+        render_cloudflare_config.render_config(production=True, image_digest=image, release_sha256=receipt)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ("174055408ff1560e60601c4d12c561c4", "another-account"),
+        ("mcp.{{ SPICYREGS_DOMAIN }}", "wrong.example"),
+        ("spicy-regs-reader@", "another-reader@"),
+    ],
+)
+def test_production_refuses_template_target_drift(production_repo, before, after):
+    template = production_repo / "deploy/cloudflare/wrangler.template.jsonc"
+    template.write_text(template.read_text().replace(before, after))
+    with pytest.raises(ValueError, match="configuration conflicts"):
+        render_cloudflare_config.render_config(
+            production=True,
+            image_digest=IMAGE_DIGEST,
+            release_sha256=RELEASE_SHA256,
+        )
+
+
+@pytest.mark.parametrize("conflicting", [False, True])
+def test_production_npm_entry_deploys_checked_config_without_generic_rerender(production_repo, conflicting):
+    npm = shutil.which("npm")
+    if npm is None:
+        pytest.skip("npm is required for the local command wiring check")
+    commands = production_repo / "bin"
+    commands.mkdir()
+    wrangler = commands / "wrangler"
+    wrangler.write_text(
+        f"#!{sys.executable}\n"
+        + """import json, os, pathlib, sys
+pathlib.Path(os.environ["CALL_LOG"]).write_text(json.dumps({
+    "argv": sys.argv[1:], "config": json.loads(pathlib.Path("wrangler.jsonc").read_text()),
+}))
+"""
+    )
+    wrangler.chmod(0o755)
+    git = commands / "git"
+    git.write_text('#!/bin/sh\nif [ "$1" = rev-parse ]; then echo abc1234; fi\n')
+    git.chmod(0o755)
+    log = production_repo / "upload.json"
+    target = production_repo / "deploy/cloudflare/wrangler.jsonc"
+    target.write_text("prior configuration\n")
+    env = dict(os.environ, CALL_LOG=str(log), PATH=str(commands) + os.pathsep + os.environ["PATH"])
+    if conflicting:
+        env["SPICYREGS_DOMAIN"] = "wrong.example"
+    result = subprocess.run(
+        [
+            npm,
+            "run",
+            "deploy:production",
+            "--",
+            "--image-digest",
+            IMAGE_DIGEST,
+            "--release-sha256",
+            RELEASE_SHA256,
+            "--profile",
+            "test-production",
+        ],
+        cwd=target.parent,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if conflicting:
+        assert result.returncode != 0
+        assert "conflicts with the production target" in result.stderr
+        assert not log.exists()
+        assert target.read_text() == "prior configuration\n"
+    else:
+        assert result.returncode == 0, result.stderr
+        call = json.loads(log.read_text())
+        assert call["argv"] == [
+            "deploy",
+            "--tag",
+            "abc1234",
+            "--message",
+            "spicy-regs abc1234",
+            "--profile",
+            "test-production",
+        ]
+        assert call["config"]["routes"] == [{"pattern": "mcp.spicygov.ai", "custom_domain": True}]
+        assert call["config"]["vars"]["SPICY_REGS_R2_URL"] == "https://data.spicygov.ai"
+        assert call["config"]["vars"]["MCP_GUIDE_URL"] == "https://spicygov.ai/mcp/"
+        assert call["config"]["containers"][0]["image"].endswith("@" + IMAGE_DIGEST)
+        assert call["config"]["vars"]["SPICY_REGS_CONSUMER_IMAGE_DIGEST"] == IMAGE_DIGEST
+        assert call["config"]["vars"]["SPICY_REGS_FEC_RELEASE_SHA256"] == RELEASE_SHA256
 
 
 @pytest.mark.parametrize("domain", [None, "", "spicygov.ai", "  SpicyGov.AI  "])
