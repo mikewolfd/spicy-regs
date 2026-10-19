@@ -9421,7 +9421,7 @@ tables:
     label: "Scorecard action comparisons"
     measured_on: "2026-10-19"
     identity_columns: ["scorecard_id", "item_id", "publisher_member_key", "result_id"]
-    coverage: "LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption."
+    coverage: "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption."
     summary: "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot."
     columns:
       scorecard_id: "Publisher edition identifier."

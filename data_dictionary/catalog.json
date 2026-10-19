@@ -7460,8 +7460,8 @@
       "table": "scorecard_action_comparisons",
       "label": "Scorecard action comparisons",
       "summary": "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.",
-      "coverage": "LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption.",
-      "kind": null,
+      "coverage": "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption.",
+      "kind": "derived",
       "measured_on": "2026-10-19",
       "data_quality": null,
       "columns": [

@@ -6,7 +6,7 @@
 
 One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.
 
-**Coverage.** LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption. *(measured 2026-10-19)*
+**Coverage.** Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption. *(measured 2026-10-19)*
 
 - **Parquet file:** `scorecard_action_comparisons.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
