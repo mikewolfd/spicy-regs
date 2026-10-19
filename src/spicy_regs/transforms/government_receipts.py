@@ -483,7 +483,7 @@ def migrate_outputs(
         shutil.copyfile(subject, staged)
         staged.replace(original)
     receipt_path = directory / RECEIPT_KEY
-    shutil.copyfile(combined, receipt_path)
+    combined.replace(receipt_path)
     metadata = {
         "generation_id": generation_id,
         "receipt_path": str(receipt_path.resolve()),

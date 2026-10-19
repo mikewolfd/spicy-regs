@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import duckdb
 import pyarrow as pa
@@ -153,6 +154,38 @@ def test_complete_generation_requires_paired_receipts_and_verifies(tmp_path):
         **generation_receipt_args((path,)),
     )
     verify_generation(tmp_path / "generation", expected_pin=result.pin)
+
+
+def test_generation_admission_failure_keeps_build_receipt_for_recovery(tmp_path, monkeypatch):
+    from spicy_regs import generations
+
+    dataset = "crs_reports"
+    path = literal(tmp_path / "build", dataset, [{"report_id": "R", "status": "Active", "version": "3"}])
+    original = path.read_bytes()
+    meta = migrate_outputs((path,), generation_id="recovery")
+    receipt = Path(meta["receipt_path"])
+    receipt_bytes = receipt.read_bytes()
+    assert not (path.parent / ".government-etl/recovery/etl_receipts.parquet").exists()
+
+    def fail_admission(directory):
+        assert (directory / "etl_receipts.parquet").read_bytes() == receipt_bytes
+        raise ValueError("injected late admission failure")
+
+    monkeypatch.setattr(generations, "admit_generation_for_publication", fail_admission)
+    with pytest.raises(ValueError, match="late admission failure"), TemporaryDirectory(dir=tmp_path) as staging:
+        build_generation(
+            Path(staging) / "generation",
+            family="crs-reports",
+            files=[path],
+            expected_keys=[path.name],
+            schemas={dataset: described_schema(SUBJECT_SCHEMAS[dataset])},
+            **generation_receipt_args((path,)),
+        )
+    assert not Path(staging).exists()
+    assert receipt.read_bytes() == receipt_bytes
+    assert (path.parent / ".government-inputs/recovery" / path.name).read_bytes() == original
+    assert (path.parent / ".government-etl/recovery" / dataset / "etl_receipts.parquet").is_file()
+    assert pq.read_table(internal_prior(dataset, path)).num_rows == 1
 
 
 def test_native_lobbying_relationship_preserves_positions_without_cross_product():
