@@ -231,17 +231,34 @@ class CaptureEvidence:
 
         Anything that is not a ``CapturedBodyResponse`` raises
         ``SourceEvidenceError``; a credential-bearing or 401/403 response raises
-        ``CredentialRefusedError`` and stores nothing.
+        ``CredentialRefusedError`` and journals only a refusal reason and status.
         """
         if not isinstance(capture, CapturedBodyResponse):
             raise SourceEvidenceError("Source result has no owner capture")
-        if capture.status_code in (401, 403) or (
+        access_refused = capture.status_code in (401, 403)
+        if access_refused or (
             self.credential
             and any(self.credential.encode() in body for body in (capture.body, capture.request_body or b""))
         ):
             # Never store a credential-refused original, including one returned
             # by an injected adapter that bypassed the owner's transport.
-            raise CredentialRefusedError("Source response refused; credential-bearing bytes were not retained")
+            self.event(
+                "refusal",
+                stage=stage,
+                error_type="CredentialRefusedError",
+                reason_code="access_refused" if access_refused else "credential_echo",
+                status_code=capture.status_code,
+                body_retained=False,
+                credential_refused=True,
+                message=None,
+                response=None,
+            )
+            message = (
+                f"Source access refused (HTTP {capture.status_code}); response bytes were not retained"
+                if access_refused
+                else "Source response refused; credential-bearing bytes were not retained"
+            )
+            raise CredentialRefusedError(message)
         return self._record_capture(
             self._body(capture.body),
             stage=stage,

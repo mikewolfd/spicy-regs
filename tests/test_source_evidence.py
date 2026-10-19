@@ -15,7 +15,7 @@ from rulespec_artifacts import ArtifactInput, ArtifactVerificationError, admit_a
 from spicy_docs.reading.refusals import RefusedResponse, attach_refused_response
 from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
 from spicy_docs.sources.legislators import LegislatorsBudget, LegislatorsSourceError
-from spicy_docs.transport.captured import CapturedBodyResponse
+from spicy_docs.transport.captured import CapturedBodyResponse, attached_capture
 from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.generations import build_generation, verify_generation
@@ -115,6 +115,11 @@ def test_credential_refused_bytes_never_enter_store_or_journal(tmp_path, kind):
     else:
         with pytest.raises(CredentialRefusedError) as raised:
             evidence.capture(response, stage="capture")
+        refusal = journal(evidence)[-1]
+        assert refusal["reason_code"] == ("access_refused" if kind in ("401", "403") else "credential_echo")
+        assert refusal["status_code"] == response.status_code
+        assert refusal["body_retained"] is False and refusal["response"] is None
+        assert attached_capture(raised.value) is None
         evidence.refusal(raised.value, stage="capture")
     evidence.finish(CredentialRefusedError(KEY))
     assert bodies(evidence) == []
@@ -122,6 +127,58 @@ def test_credential_refused_bytes_never_enter_store_or_journal(tmp_path, kind):
         if path.is_file():
             assert KEY.encode() not in path.read_bytes()
             assert b"secret refusal" not in path.read_bytes()
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_access_refusal_keeps_exact_status_and_source_binding_without_credentials(tmp_path, status):
+    evidence = CaptureEvidence(tmp_path, "scorecards")
+    source = evidence.for_source("lcv", "hash_only", parser_version="test/1", policy_decision_id="test-policy")
+    response = replace(
+        capture(b"private-response-marker", request_body=b"private-request-marker"),
+        status_code=status,
+        requested_url="https://source.test/private-url-marker",
+        resolved_url="https://source.test/private-url-marker",
+    )
+    with pytest.raises(CredentialRefusedError, match=f"Source access refused \\(HTTP {status}\\)") as raised:
+        source.capture(response, stage="listing")
+    assert attached_capture(raised.value) is None
+    refusal = journal(evidence)[-1]
+    assert refusal == {
+        "event": "refusal",
+        "recorded_at": refusal["recorded_at"],
+        "stage": "listing",
+        "error_type": "CredentialRefusedError",
+        "reason_code": "access_refused",
+        "status_code": status,
+        "body_retained": False,
+        "credential_refused": True,
+        "message": None,
+        "response": None,
+        "publisher_id": "lcv",
+        "evidence_policy": "hash_only",
+        "parser_version": "test/1",
+        "policy_decision_id": "test-policy",
+    }
+    evidence.finish(raised.value)
+    assert admit_artifact(LocalMemberSource(evidence.artifact_dir)).root["spec"]["outcome"] == "failed"
+    assert refusal in journal(evidence)
+    assert bodies(evidence) == []
+    for path in evidence.directory.rglob("*"):
+        if path.is_file():
+            assert b"private-" not in path.read_bytes()
+
+
+def test_public_token_like_body_is_not_a_credential_echo(tmp_path):
+    evidence = CaptureEvidence(tmp_path, "scorecards")
+    evidence.credential = KEY
+    source = evidence.for_source("lcv", "hash_only", parser_version="test/1", policy_decision_id="test-policy")
+    raw = capture(b'<script>window.publicConfig = {"api_key": "public-bootstrap-value"};</script>')
+    receipt = source.capture(raw, stage="listing")
+    assert receipt["sha256"] == raw.sha256
+    assert receipt["body_retained"] is False and bodies(evidence) == []
+    assert not any(row["event"] == "refusal" for row in journal(evidence))
+    artifact = evidence.seal(outcome="build-complete")
+    assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin).pin == artifact.pin
 
 
 def test_owner_refusal_bytes_and_scrubbed_context_are_retained(tmp_path):
