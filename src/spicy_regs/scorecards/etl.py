@@ -164,8 +164,9 @@ def write_family(
     generation_id: str | None = None,
     attempt_failures=(),
     prior_receipts: Path | None = None,
+    verify_source: bool = False,
 ) -> tuple[Path, ...]:
-    """Write subjects and every source/resolution attempt, then verify persisted joins."""
+    """Validate the private family before replacing outputs, optionally checking exact source rows in that pass."""
     names = tuple(tables)
     generation_id = generation_id or "scorecard-build:" + uuid4().hex
     stage = directory / (".scorecard-etl-" + uuid4().hex)
@@ -217,12 +218,16 @@ def write_family(
         # The caller admitted the complete prior family. Keep unchanged receipts
         # exactly; changed accepted rows name only their direct predecessor.
         shared = carry_receipt_history(shared, [prior_receipts], shared)
-    validate_receipt_bundle(
-        {n: [] if POLICIES[n].receipt_only else [stage / n / (n + ".parquet")] for n in names},
-        [shared],
-        [POLICIES[n] for n in names],
+    arguments = dict(
+        subjects={n: [] if POLICIES[n].receipt_only else [stage / n / (n + ".parquet")] for n in names},
+        receipt_paths=[shared],
+        policies=[POLICIES[n] for n in names],
         generation_id=generation_id,
     )
+    if verify_source and not errors:
+        _verify_family_readback(tables, {**arguments, "processing_outcomes": _processing_outcomes(names)})
+    else:
+        validate_receipt_bundle(**arguments)
     if errors:
         raise ValueError(f"Scorecard conversion refused; retained attempt receipts in {stage}: {errors}")
     paths = []
@@ -236,6 +241,10 @@ def write_family(
     )
     rmtree(stage)
     return tuple(paths)
+
+
+def _processing_outcomes(names):
+    return {name: frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"}) for name in names}
 
 
 def _family_read_arguments(
@@ -262,9 +271,7 @@ def _family_read_arguments(
         receipt_paths=[receipt_path],
         policies=[selected[n] for n in names],
         generation_id=generation_id,
-        processing_outcomes={
-            name: frozenset({"observed", "refused"} if name in LINK_NAMES else {"observed"}) for name in names
-        },
+        processing_outcomes=_processing_outcomes(names),
     )
 
 
@@ -301,6 +308,13 @@ def verify_family_readback(
     reordered native rows remain valid. Counts escape only after every receipt,
     join and literal source value has passed.
     """
+    return _verify_family_readback(expected, _family_read_arguments(
+        directory, tuple(expected), receipt_path=receipt_path, generation_id=generation_id, policies=policies,
+    ))
+
+
+def _verify_family_readback(expected, arguments):
+    """Use the same complete visitor for private staged subjects and published-layout readback."""
     remaining = {}
 
     def visit(name, native):
@@ -314,12 +328,7 @@ def verify_family_readback(
         if not remaining[name]:
             remaining[name].clear()  # Free the exhausted index's bucket storage; keep its visited marker.
 
-    counts = visit_receipt_bundle(
-        **_family_read_arguments(
-            directory, tuple(expected), receipt_path=receipt_path, generation_id=generation_id, policies=policies,
-        ),
-        visit=visit,
-    )
+    counts = visit_receipt_bundle(**arguments, visit=visit)
     if counts != {name: len(rows) for name, rows in expected.items()} or any(remaining.values()):
         raise ValueError("Persisted scorecard source family is incomplete")
     return counts

@@ -17,24 +17,34 @@ from tests.generation_fakes import Store
 from tests.test_scorecard_refresh import edition, tables, provider, evidence, run, combine
 
 
-def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tmp_path, monkeypatch):
+@pytest.mark.parametrize("verify_source", [False, True])
+def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tmp_path, monkeypatch, verify_source):
     from spicy_regs import etl_receipts
     from spicy_regs.scorecards import etl
 
     before = tables(edition("2025"))
     directory = tmp_path / "candidate"
     validations = []
+    visits = []
     validate = etl.validate_receipt_bundle
+    visit = etl.visit_receipt_bundle
 
     def validate_family(subjects, *args, **kwargs):
         validations.append(set(subjects))
         return validate(subjects, *args, **kwargs)
 
+    def visit_family(**kwargs):
+        assert not list(directory.glob("*.parquet"))
+        visits.append(set(kwargs["subjects"]))
+        return visit(**kwargs)
+
     with monkeypatch.context() as patch:
         patch.setattr(etl_receipts, "validate_receipt_bundle", lambda *a, **kw: pytest.fail("Repeated component check"))
         patch.setattr(etl, "validate_receipt_bundle", validate_family)
-        files = write_family(directory, before)
-    assert validations == [set(before)]
+        patch.setattr(etl, "visit_receipt_bundle", visit_family)
+        files = write_family(directory, before, verify_source=verify_source)
+    assert validations == ([] if verify_source else [set(before)])
+    assert visits == ([set(before)] if verify_source else [])
     assert read_family(directory, SOURCE_NAMES) == before
     assert not list(directory.glob(".scorecard-etl-*"))
     assert (directory / "scorecard_snapshots.parquet").exists()
@@ -54,7 +64,11 @@ def test_native_generation_keeps_exact_provider_rows_and_only_domain_subjects(tm
     assert admitted.root["spec"]["etlReceipts"]["rows"] == sum(map(len, before.values()))
 
 
-def test_corrupt_private_component_refuses_before_replacing_complete_family(tmp_path, monkeypatch):
+@pytest.mark.parametrize("verify_source", [False, True])
+@pytest.mark.parametrize("corruption", ["subject", "receipt"])
+def test_corrupt_private_component_refuses_before_replacing_complete_family(
+    tmp_path, monkeypatch, verify_source, corruption
+):
     from spicy_regs.scorecards import etl
 
     directory = tmp_path / "candidate"
@@ -65,19 +79,64 @@ def test_corrupt_private_component_refuses_before_replacing_complete_family(tmp_
     def corrupt_component(*args, **kwargs):
         assert kwargs["validate"] is False
         subject, receipt = write(*args, **kwargs)
-        if subject is not None and subject.name == "scorecards.parquet":
-            table = pq.read_table(subject)
+        if subject is not None and subject.name == "scorecard_member_item_results.parquet":
+            path = subject if corruption == "subject" else receipt
+            table = pq.read_table(path)
             rows = table.to_pylist()
-            rows[0]["title"] = "Changed after receipt creation"
-            pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), subject)
+            rows[-1]["result_text" if corruption == "subject" else "processor"] = "Changed after receipt creation"
+            pq.write_table(pa.Table.from_pylist(rows, schema=table.schema), path)
         return subject, receipt
 
     monkeypatch.setattr(etl, "write_dataset", corrupt_component)
-    with pytest.raises(ValueError, match="Missing, ambiguous or reused subject receipt: scorecards"):
-        write_family(directory, tables(edition("2026")))
+    message = "Missing, ambiguous or reused subject receipt" if corruption == "subject" else "Receipt digest"
+    with pytest.raises(ValueError, match=message):
+        write_family(directory, tables(edition("2026")), verify_source=verify_source)
     assert {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()} == previous
     retained = list(directory.glob(".scorecard-etl-*/etl_receipts.parquet"))
     assert len(retained) == 1
+
+
+def test_source_equality_failure_preserves_outputs_and_private_attempt(tmp_path, monkeypatch):
+    from spicy_regs.scorecards import etl
+
+    directory = tmp_path / "candidate"
+    write_family(directory, tables(edition("2025")))
+    previous = {path.name: path.read_bytes() for path in directory.iterdir()}
+    original = etl.map_source_row
+
+    def change_literal(name, row):
+        mapped = original(name, row)
+        if name == "scorecard_member_item_results" and row["publisher_member_key"] == "1":
+            # Valid subject/receipt pair, but its final cell differs from the requested source.
+            mapped["result_text"] = "Changed literal"
+        return mapped
+
+    monkeypatch.setattr(etl, "map_source_row", change_literal)
+    with pytest.raises(ValueError, match="Persisted scorecard source row differs: scorecard_member_item_results"):
+        write_family(directory, tables(edition("2026")), verify_source=True)
+    assert {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()} == previous
+    assert len(list(directory.glob(".scorecard-etl-*/etl_receipts.parquet"))) == 1
+
+
+def test_source_refresh_uses_one_complete_private_validation_and_readback(tmp_path, monkeypatch):
+    from spicy_regs.scorecards import etl
+
+    selected = edition("2025")
+    visits = []
+    visit = etl.visit_receipt_bundle
+
+    def private_visit(**kwargs):
+        receipts = kwargs["receipt_paths"]
+        assert len(receipts) == 1 and receipts[0].parent.name.startswith(".scorecard-etl-")
+        assert not list((tmp_path / "build").glob("*.parquet"))
+        visits.append(set(kwargs["subjects"]))
+        return visit(**kwargs)
+
+    monkeypatch.setattr(etl, "visit_receipt_bundle", private_visit)
+    monkeypatch.setattr(etl, "validate_receipt_bundle", lambda *a, **kw: pytest.fail("Repeated private validation"))
+    run(tmp_path, provider([selected], {selected.scorecard_id: tables}), evidence(tmp_path), download_prior=lambda *a: False)
+    assert visits == [set(SOURCE_NAMES)]
+    assert not list((tmp_path / "build").glob(".scorecard-etl-*"))
 
 
 def test_exact_readback_visits_shuffled_rows_and_observed_snapshots_without_materializing(tmp_path, monkeypatch):
@@ -213,11 +272,12 @@ def test_native_prior_reconstructs_validation_and_preserves_unselected_scope(tmp
             ]
 
 
-def test_conversion_failure_retains_raw_input_without_subject_generation(tmp_path):
+@pytest.mark.parametrize("verify_source", [False, True])
+def test_conversion_failure_retains_raw_input_without_subject_generation(tmp_path, verify_source):
     raw = tables(edition("2025"))
     raw["scorecard_member_ratings"][0]["value_number"] = "NaN"
     with pytest.raises(ValueError, match="conversion refused"):
-        write_family(tmp_path / "candidate", raw)
+        write_family(tmp_path / "candidate", raw, verify_source=verify_source)
     assert not list((tmp_path / "candidate").glob("*.parquet"))
     receipts = list((tmp_path / "candidate").glob(".scorecard-etl-*/etl_receipts.parquet"))
     assert len(receipts) == 1
