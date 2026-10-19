@@ -324,10 +324,10 @@ The additional source results, metric participations and official member votes
 are immutable analysis parents. Native columns are read in Arrow batches;
 only the selected LCV edition and relevant roll calls become Python rows. Their
 complete byte pins, schemas and populations are checked without restoring the
-large receipt collections. An input without LCV 2025 produces an explicitly
-empty comparison table and no claimed scope. The preparation qualification
+large receipt collections. An input without a qualified comparison scope produces
+an explicitly empty comparison table and no claimed scope. The preparation qualification
 records covered scopes, method version and outcome counts. Source ratings and
-credit remain unchanged. Historical sponsorship and score reproduction remain
+credit remain unchanged. Other sponsorship items and score reproduction remain
 deferred; code qualification is separate from publication and hosted adoption.
 
 ```sql
@@ -343,6 +343,31 @@ JOIN scorecard_items i ON i.scorecard_id=a.scorecard_id
 WHERE a.scorecard_id='lcv:2025'
 LIMIT 20;
 ```
+
+## Selected Common Cause historical sponsorship comparison
+
+`common-cause-2022-house-disclose-cutoff-v1` covers only
+`common_cause:2022-archived`, `House:column:15`, bill `117-hr-1334`.
+The retained House methodology explicitly says cosponsors came from Congress.gov
+as of September 6, 2022. The builder reads that literal and statement from the
+pinned methodology, checks its source snapshot, and refuses a missing or changed
+cutoff. The qualification receipt retains the methodology, cutoff and exact item.
+Both the direct and header reference must resolve to the same bill without a
+roll call or amendment. Every occurrence remains in `scorecard_item_links`;
+`item:direct` is the comparison's primary reference.
+
+`same` means the dated official cosponsorship was active at the cutoff, matching
+`BILLS TO COSPONSOR`; `different` means it started after or was withdrawn before
+the cutoff. Publisher `✔`/`✖` credit stays literal and is not the comparison target.
+A sponsorship or withdrawal on the cutoff date is unresolved because the source
+gives no time of day. Missing rows, ambiguous identities and invalid or inverted
+dates are unresolved. The method does not infer absence from a missing row.
+`official_position_text` stays NULL; `official_position_normalized` records the
+derived cutoff state. `official_member_key` contains the pinned bill ID and
+`cosponsor_index`, allowing the exact dates to be read from `bill_cosponsors`.
+The input pins identify both that table and `scorecard_methodologies`; the rule
+version identifies this method. Other historical items, including multi-bill
+alternatives, remain outside the qualified scope.
 
 For a manual analysis refresh, let active source scorecard, bill, amendment,
 member and vote writers finish before building against their captured inputs.

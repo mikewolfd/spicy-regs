@@ -19443,7 +19443,7 @@
     "table": "scorecard_action_comparisons",
     "label": "Scorecard action comparisons",
     "summary": "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.",
-    "coverage": "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption.",
+    "coverage": "Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. The selected Common Cause 2022 House DISCLOSE item compares dated cosponsorship with its explicit source cutoff. Other items and score reproduction are deferred. Implementation does not establish hosted adoption.",
     "kind": "derived",
     "measured_on": "2026-10-19",
     "data_quality": null,
@@ -19481,7 +19481,7 @@
       {
         "column_name": "reference_id",
         "column_type": "VARCHAR",
-        "description": "Unique exact item-reference occurrence used, or NULL."
+        "description": "Primary exact item-reference occurrence used, or NULL. The sponsorship method also requires every retained occurrence to resolve to the same bill."
       },
       {
         "column_name": "vote_id",
@@ -19496,7 +19496,7 @@
       {
         "column_name": "official_member_key",
         "column_type": "VARCHAR",
-        "description": "Native official vote member key; it may use an LIS identifier."
+        "description": "Native official vote member key, or bill_id/cosponsor_index identity for historical sponsorship."
       },
       {
         "column_name": "publisher_target_text",
@@ -19521,17 +19521,17 @@
       {
         "column_name": "official_position_text",
         "column_type": "VARCHAR",
-        "description": "Literal official vote position from the pinned native member-vote row."
+        "description": "Literal official vote position from the pinned native member-vote row; NULL for dated sponsorship."
       },
       {
         "column_name": "official_position_normalized",
         "column_type": "VARCHAR",
-        "description": "Official source reader's normalized position."
+        "description": "Official normalized vote position, or method-derived cosponsor_at_cutoff/not_cosponsor_at_cutoff."
       },
       {
         "column_name": "comparison_status",
         "column_type": "VARCHAR",
-        "description": "same, different, not_voting, present, unresolved or not_applicable. Missing votes are unresolved."
+        "description": "same, different, not_voting, present, unresolved or not_applicable. Missing official records and same-day sponsorship cutoff ambiguity are unresolved."
       },
       {
         "column_name": "reason",

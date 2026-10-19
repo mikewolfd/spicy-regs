@@ -403,6 +403,8 @@ def test_scorecard_commands_are_registered_and_inputs_remain_explicit():
         "scorecard_items.parquet",
         "scorecard_member_item_results.parquet",
         "scorecard_metric_items.parquet",
+        "scorecard_methodologies.parquet",
+        "bill_cosponsors.parquet",
         "members.parquet",
         "member_terms.parquet",
         "member_votes.parquet",
