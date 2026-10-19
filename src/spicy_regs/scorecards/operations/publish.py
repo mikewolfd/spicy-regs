@@ -17,9 +17,9 @@ from pathlib import Path
 import subprocess
 
 from dotenv import load_dotenv
-from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
+from rulespec_artifacts import ArtifactPin, LocalMemberSource, iter_member_descriptors
 
-from spicy_regs.generations import implementation_id, verify_generation
+from spicy_regs.generations import admit_generation_for_publication, implementation_id, verify_generation
 from spicy_regs.sources import publication, r2
 
 
@@ -58,7 +58,13 @@ def main(argv=None):
     if prepared.get("status") != "prepared_not_published":
         raise ValueError("Publication requires a completed scorecard preparation")
     directory = Path(prepared["generation_directory"])
-    artifact = verify_generation(directory)
+    if args.observe_only:
+        artifact = verify_generation(directory)
+    else:
+        artifact = admit_generation_for_publication(
+            directory,
+            expected_pin=ArtifactPin(prepared["generation"]["logicalId"], prepared["generation"]["artifactDigest"]),
+        )
     if artifact.pin.as_dict() != prepared["generation"]:
         raise ValueError("Prepared generation differs from its qualification pin")
     family = artifact.root["spec"]["family"]
