@@ -11,10 +11,10 @@ no recorded reference establishes it. It also reads the published ``members``
 crosswalk best-effort after the ``member_votes`` merge, to fill each Senate
 row's ``bioguide_id`` through its LIS id and, with ``member_terms`` and
 ``member_party_affiliations``, each House ``name:`` row's through its printed
-label; ``run-rollup-members`` writes those tables in this same refresh
-workflow, so the fill sees the previous run's crosswalk, a day's lag at most
-(not declared ``soft_inputs`` only because the declaration test requires the
-writer's cron to fire earlier). Both publishers
+label; ``run-rollup-members`` finishes those tables before votes start in the same
+refresh workflow, so the captured crosswalk cannot race its own writer. These
+reads are not declared ``soft_inputs`` because the declaration test models
+separate writer crons rather than dependencies within one workflow. Both publishers
 are keyless, so the run needs no credential. The cron runs an hour after the
 family's to reuse any available links.
 

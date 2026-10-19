@@ -604,6 +604,17 @@ def test_bulk_workflows_pass_the_required_mode_to_the_actual_process():
     assert converter["jobs"]["convert"]["env"]["SPICY_REGS_REQUIRE_BULK"] == "true"
 
 
+def test_votes_refresh_waits_for_its_member_crosswalk_writer():
+    jobs = yaml.safe_load((WORKFLOWS / "refresh-congress-vote-terms.yml").read_text())["jobs"]
+
+    def predecessors(name):
+        needs = jobs[name].get("needs", [])
+        return {parent for dependency in needs for parent in ({dependency} | predecessors(dependency))}
+
+    assert "members" in predecessors("votes")
+    assert {"members", "votes"} <= predecessors("terms")
+
+
 def test_votes_disk_probe_is_enabled_and_retained_before_audit_upload():
     workflow = yaml.safe_load((WORKFLOWS / "refresh-congress-vote-terms.yml").read_text())
     for job in ["votes", "terms"]:
