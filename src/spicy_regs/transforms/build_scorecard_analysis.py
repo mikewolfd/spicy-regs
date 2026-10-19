@@ -11,11 +11,12 @@ from tempfile import TemporaryDirectory
 import pyarrow.parquet as pq
 
 from spicy_regs.scorecards.etl import read_family, read_source_inputs, write_family
-from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS, RULE_VERSION as COMPARISON_RULE_VERSION, build_comparisons
+from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, COLUMNS as COMPARISON_COLUMNS, KEYS as COMPARISON_KEYS, build_comparisons
 
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
-COMPARISON_INPUTS = ("scorecard_member_item_results", "scorecard_metric_items", "member_votes")
+COMPARISON_SOURCE_INPUTS = ("scorecard_member_item_results", "scorecard_metric_items", "scorecard_methodologies")
+COMPARISON_INPUTS = (*COMPARISON_SOURCE_INPUTS, "member_votes", "bill_cosponsors")
 INPUTS = tuple(f"{name}.parquet" for name in (*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS))
 OUTPUTS = ("scorecard_member_links.parquet", "scorecard_item_links.parquet", COMPARISON_TABLE + ".parquet")
 
@@ -36,7 +37,7 @@ def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inpu
     entries = {name: selected_table_entry(snapshot, name + ".parquet")
                for name in (*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS)}
     source = entries["scorecards"]
-    if any(entries[name]["artifactDigest"] != source["artifactDigest"] for name in (*SOURCE_TABLES, *COMPARISON_INPUTS[:2])):
+    if any(entries[name]["artifactDigest"] != source["artifactDigest"] for name in (*SOURCE_TABLES, *COMPARISON_SOURCE_INPUTS)):
         raise publication.PublicationError("Scorecard analysis source inputs must share one generation")
     missing = [name for name, owner in entries.items()
                if name not in owner.get("etlReceipts", {}).get("datasets", ())
@@ -143,7 +144,7 @@ def build_scorecard_analysis(
     if any(input_pins[name] != publication.table_pin(comparison_index, name + ".parquet")
            for name in COMPARISON_INPUTS):
         raise ValueError("Action-comparison inputs differ from their selected publication pins")
-    results[COMPARISON_TABLE] = build_comparisons(
+    results[COMPARISON_TABLE], sponsorship = build_comparisons(
         comparison_index, input_paths, source, results, official["members"], input_pins)
     definitions = (
         ("scorecard_member_links", MEMBER_LINK_COLUMNS, ("scorecard_id", "publisher_member_key")),
@@ -165,13 +166,13 @@ def build_scorecard_analysis(
             name: dict(sorted(Counter(row["resolution_status"] for row in rows).items()))
             for name, rows in results.items() if name != COMPARISON_TABLE
         },
-        "scope": "Exact identity links and LCV 2025 floor-vote comparisons; published publisher ratings remain unchanged.",
+        "scope": "Exact identity links, LCV 2025 floor votes and the selected Common Cause 2022 House DISCLOSE sponsorship; publisher ratings remain unchanged.",
         "comparison": {
-            "rule_version": COMPARISON_RULE_VERSION,
-            "scopes": sorted(r["scorecard_id"] for r in source["scorecards"]
-                             if r.get("publisher_id") == "lcv" and r.get("year_text") == "2025"),
+            "rule_versions": sorted({r["rule_version"] for r in results[COMPARISON_TABLE]}),
+            "scopes": sorted({r["scorecard_id"] for r in results[COMPARISON_TABLE]}),
+            "historical_sponsorship": sponsorship,
             "statuses": dict(sorted(Counter(r["comparison_status"] for r in results[COMPARISON_TABLE]).items())),
-            "deferred": ["historical_sponsorship", "score_reproduction", "other_publishers_and_editions"],
+            "deferred": ["other_historical_sponsorship_items", "score_reproduction", "other_publishers_and_editions"],
             "input_representations": {name: "complete_pinned_native_main_fields" for name in COMPARISON_INPUTS},
         },
         "official_input_representations": {

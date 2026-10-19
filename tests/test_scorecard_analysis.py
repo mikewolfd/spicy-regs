@@ -69,6 +69,8 @@ def _inputs(tmp_path, *, row_overrides=None):
         ],
         "scorecard_member_item_results": [],
         "scorecard_metric_items": [],
+        "scorecard_methodologies": [],
+        "bill_cosponsors": [],
         "member_votes": [],
         "amendments": [],
         "roll_call_votes": [],
@@ -80,7 +82,7 @@ def _inputs(tmp_path, *, row_overrides=None):
     from spicy_regs.scorecards.subject_shapes import SOURCE_COLUMNS
     import shutil
 
-    scorecard_names = ('scorecards', 'scorecard_members', 'scorecard_items', 'scorecard_member_item_results', 'scorecard_metric_items')
+    scorecard_names = ('scorecards', 'scorecard_members', 'scorecard_items', 'scorecard_member_item_results', 'scorecard_metric_items', 'scorecard_methodologies')
     scorecard_tables = {name: [{column: row.get(column) for column in SOURCE_COLUMNS[name]}
                               for row in rows[name]] for name in scorecard_names}
     scorecard_build = source / 'scorecards-native'
@@ -93,13 +95,17 @@ def _inputs(tmp_path, *, row_overrides=None):
     index = pub.publish_generation(scorecard_generation, client=store, bucket='test', prior_index=pub.empty_index())
 
     files, receipts = [], []
-    official_names = (*OFFICIAL_COLUMNS, "member_votes")
+    official_names = (*OFFICIAL_COLUMNS, "member_votes", "bill_cosponsors")
     for name in official_names:
         partitions = [('118', [{'bill_id': '118-hr-1', 'congress': '118'}]),
                       ('119', [{'bill_id': '119-hr-1', 'congress': '119'}])] if name == 'congress_bills' else [(None, rows[name])]
+        if name == 'congress_bills' and name in rows:
+            partitions = [('117', rows[name])]
         for partition, records in partitions:
             raw = source / (name + ('-' + partition if partition else '') + '.parquet')
-            schema = pa.schema([(c, pa.string()) for c in dict.fromkeys((*OFFICIAL_COLUMNS.get(name, ("vote_id", "member_key", "position", "position_normalized")), *(records[0] if records else ())))])
+            extra_columns = {"member_votes": ("vote_id", "member_key", "position", "position_normalized"),
+                             "bill_cosponsors": ("bill_id", "cosponsor_index", "bioguide_id", "sponsorship_date", "sponsorship_withdrawn_date")}
+            schema = pa.schema([(c, pa.string()) for c in dict.fromkeys((*OFFICIAL_COLUMNS.get(name, extra_columns.get(name, ())), *(records[0] if records else ())))])
             pq.write_table(pa.Table.from_pylist(records, schema=schema), raw)
             subject, receipt = write_congress_dataset(raw, source / (raw.stem + '-native'),
                 dataset=name, generation_id='official-v1')

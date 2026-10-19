@@ -6,7 +6,7 @@
 
 One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.
 
-**Coverage.** Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption. *(measured 2026-10-19)*
+**Coverage.** Derived. LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. The selected Common Cause 2022 House DISCLOSE item compares dated cosponsorship with its explicit source cutoff. Other items and score reproduction are deferred. Implementation does not establish hosted adoption. *(measured 2026-10-19)*
 
 - **Parquet file:** `scorecard_action_comparisons.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -21,17 +21,17 @@ One descriptive comparison per publisher member-item result. Publisher credit an
 | `item_id` | `VARCHAR` | Original publisher item identifier. |
 | `publisher_member_key` | `VARCHAR` | Original publisher member key. |
 | `metric_id` | `VARCHAR` | Original measurement context, when supplied. |
-| `reference_id` | `VARCHAR` | Unique exact item-reference occurrence used, or NULL. |
+| `reference_id` | `VARCHAR` | Primary exact item-reference occurrence used, or NULL. The sponsorship method also requires every retained occurrence to resolve to the same bill. |
 | `vote_id` | `VARCHAR` | Exact pinned official roll-call identifier, or NULL. |
 | `bioguide_id` | `VARCHAR` | Exact resolved congressional member identity, or NULL. |
-| `official_member_key` | `VARCHAR` | Native official vote member key; it may use an LIS identifier. |
+| `official_member_key` | `VARCHAR` | Native official vote member key, or bill_id/cosponsor_index identity for historical sponsorship. |
 | `publisher_target_text` | `VARCHAR` | Literal publisher preferred position; only qualified spellings are interpreted. |
 | `publisher_action_text` | `VARCHAR` | Unchanged publisher-reported action literal, distinct from official position. |
 | `publisher_credit_text` | `VARCHAR` | Unchanged publisher credit literal, including excused; not an official vote. |
 | `publisher_eligibility_text` | `VARCHAR` | Unchanged publisher eligibility literal. |
-| `official_position_text` | `VARCHAR` | Literal official vote position from the pinned native member-vote row. |
-| `official_position_normalized` | `VARCHAR` | Official source reader's normalized position. |
-| `comparison_status` | `VARCHAR` | same, different, not_voting, present, unresolved or not_applicable. Missing votes are unresolved. |
+| `official_position_text` | `VARCHAR` | Literal official vote position from the pinned native member-vote row; NULL for dated sponsorship. |
+| `official_position_normalized` | `VARCHAR` | Official normalized vote position, or method-derived cosponsor_at_cutoff/not_cosponsor_at_cutoff. |
+| `comparison_status` | `VARCHAR` | same, different, not_voting, present, unresolved or not_applicable. Missing official records and same-day sponsorship cutoff ambiguity are unresolved. |
 | `reason` | `VARCHAR` | Specific evidence condition supporting the comparison or its unresolved disposition. |
 | `rule_version` | `VARCHAR` | Version of the narrow publisher-specific comparison method. |
 | `input_pins_json` | `VARCHAR` | Immutable source and congressional input generation and member pins. |

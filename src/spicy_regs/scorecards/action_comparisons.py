@@ -1,13 +1,19 @@
-"""LCV 2025 explicit targets versus pinned official floor-vote positions."""
+"""Narrow publisher targets versus pinned official actions; credit stays literal."""
 
 from collections import defaultdict
+from datetime import date, datetime
 from hashlib import file_digest
+import json
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 RULE_VERSION = "lcv-2025-roll-call-comparison-v1"
+SPONSORSHIP_RULE_VERSION = "common-cause-2022-house-disclose-cutoff-v1"
+SPONSORSHIP_SCOPE = "common_cause:2022-archived"
+SPONSORSHIP_ITEM = "House:column:15"
+SPONSORSHIP_BILL = "117-hr-1334"
 TABLE = "scorecard_action_comparisons"
 COLUMNS = (
     "scorecard_id", "result_id", "source_snapshot_id", "item_id", "publisher_member_key", "metric_id",
@@ -23,6 +29,9 @@ RESULT_COLUMNS = (
 )
 METRIC_COLUMNS = ("scorecard_id", "snapshot_id", "metric_id", "item_id", "participation_id", "publisher_position_text")
 VOTE_COLUMNS = ("vote_id", "member_key", "bioguide_id", "lis_id", "position", "position_normalized")
+METHODOLOGY_COLUMNS = ("scorecard_id", "snapshot_id", "methodology_id", "chamber_text", "methodology_text",
+                       "capture_id", "source_url", "source_path")
+COSPONSOR_COLUMNS = ("bill_id", "cosponsor_index", "bioguide_id", "sponsorship_date", "sponsorship_withdrawn_date")
 STATUSES = frozenset({"same", "different", "not_voting", "present", "unresolved", "not_applicable"})
 
 
@@ -37,7 +46,8 @@ def selected_native_rows(snapshot, name, paths, columns, filter_column, values):
     from spicy_regs.scorecards.etl import POLICIES
     from spicy_regs.sources import publication
 
-    if name not in {"scorecard_member_item_results", "scorecard_metric_items", "member_votes"}:
+    if name not in {"scorecard_member_item_results", "scorecard_metric_items", "member_votes",
+                    "scorecard_methodologies", "bill_cosponsors"}:
         raise ValueError("Unsupported action-comparison native input")
     owner = publication.table_owner(snapshot, name + ".parquet")
     if owner is None or name not in owner[1].get("etlReceipts", {}).get("datasets", ()):
@@ -176,14 +186,148 @@ def compare_lcv_2025(source, links, results, votes, official_members, input_pins
     return output
 
 
+def sponsorship_method(source, methodologies):
+    """Bind this one qualified item to the retained publisher's explicit cutoff."""
+    editions = [r for r in source["scorecards"] if r["scorecard_id"] == SPONSORSHIP_SCOPE]
+    if not editions:
+        return None
+    if len(editions) != 1 or any(editions[0].get(k) != v for k, v in
+                                {"publisher_id": "common_cause", "year_text": "2022", "congress_text": "117"}.items()):
+        raise ValueError("Historical sponsorship edition differs from the qualified scope")
+    edition = editions[0]
+    items = [r for r in source["scorecard_items"]
+             if r["scorecard_id"] == SPONSORSHIP_SCOPE and r["item_id"] == SPONSORSHIP_ITEM]
+    expected = {"item_kind_text": "BILLS TO COSPONSOR", "publisher_position_text": "BILLS TO COSPONSOR",
+                "congress_text": "117", "chamber_text": "House", "bill_citation_text": "HR 1334",
+                "title": "HR 1334, DISCLOSE Act", "snapshot_id": edition.get("snapshot_id")}
+    if len(items) != 1 or not edition.get("snapshot_id") or any(items[0].get(k) != v for k, v in expected.items()):
+        raise ValueError("Historical sponsorship item differs from the qualified scope")
+    selected = [r for r in methodologies if r["scorecard_id"] == SPONSORSHIP_SCOPE
+                and r["methodology_id"] == "House:methodology"]
+    if (len(selected) != 1 or selected[0].get("snapshot_id") != edition["snapshot_id"]
+            or selected[0].get("chamber_text") != "House"
+            or not all(selected[0].get(k) for k in ("capture_id", "source_url", "source_path"))):
+        raise ValueError("Historical sponsorship requires its pinned House methodology")
+    methodology = selected[0]
+    try:
+        text = json.loads(methodology["methodology_text"])
+        literal = text["source_cutoff_date_text"]
+        statement = " ".join(text["source_methodology_text"].split())
+        cutoff = datetime.strptime(literal, "%B %d, %Y").date()
+    except (TypeError, KeyError, ValueError, AttributeError) as exc:
+        raise ValueError("Historical sponsorship requires its explicit source cutoff") from exc
+    if (literal != "September 6, 2022" or
+            "All cosponsors listed in this Democracy Scorecard were taken from the Congress.gov website as of "
+            + literal + "." not in statement):
+        raise ValueError("Historical sponsorship source cutoff changed or is unsupported")
+    return {"rule_version": SPONSORSHIP_RULE_VERSION, "scorecard_id": SPONSORSHIP_SCOPE,
+            "item_id": SPONSORSHIP_ITEM, "bill_id": SPONSORSHIP_BILL,
+            "cutoff_date": cutoff.isoformat(), "source_cutoff_date_text": literal,
+            "methodology": {k: methodology[k] for k in METHODOLOGY_COLUMNS},
+            "reference_ids": ["item:direct", "reference:header-citation-0"]}
+
+
+def compare_historical_sponsorship(source, links, results, cosponsors, input_pins, method):
+    """One selected bill; dates on the cutoff day and missing rows stay unresolved.
+
+    The existing pins identify the exact methodology and official date rows.
+    All reference occurrences remain in item links; item:direct is the primary
+    comparison reference only after every occurrence resolves to the same bill.
+    """
+    from spicy_regs.scorecards.resolution import _pins
+
+    if method is None:
+        if results:
+            raise ValueError("Historical sponsorship results lack a qualified method")
+        return []
+    pins = _pins(input_pins)
+    cutoff = date.fromisoformat(method["cutoff_date"])
+    item = next(r for r in source["scorecard_items"]
+                if r["scorecard_id"] == SPONSORSHIP_SCOPE and r["item_id"] == SPONSORSHIP_ITEM)
+    references = [r for r in links["scorecard_item_links"]
+                  if r["scorecard_id"] == SPONSORSHIP_SCOPE and r["item_id"] == SPONSORSHIP_ITEM]
+    members, official = defaultdict(list), defaultdict(list)
+    for row in links["scorecard_member_links"]:
+        if row["scorecard_id"] == SPONSORSHIP_SCOPE:
+            members[row["publisher_member_key"]].append(row)
+    for row in cosponsors:
+        if row["bill_id"] != SPONSORSHIP_BILL:
+            raise ValueError("Historical sponsorship includes an unselected official bill")
+        official[row["bioguide_id"]].append(row)
+    output, seen = [], set()
+    for result in results:
+        identity = tuple(result[k] for k in KEYS)
+        if (result["scorecard_id"] != SPONSORSHIP_SCOPE or result["item_id"] != SPONSORSHIP_ITEM
+                or not all(identity) or identity in seen or result["snapshot_id"] != item["snapshot_id"]):
+            raise ValueError("Historical sponsorship result differs from the selected source identity")
+        seen.add(identity)
+        row = dict.fromkeys(COLUMNS)
+        row.update({k: result[k] for k in ("scorecard_id", "result_id", "item_id", "publisher_member_key", "metric_id",
+                                         "capture_id", "source_url", "source_path")})
+        row.update(source_snapshot_id=result["snapshot_id"], publisher_target_text=item["publisher_position_text"],
+                   publisher_action_text=result["action_text"], publisher_credit_text=result["result_text"],
+                   publisher_eligibility_text=result["eligibility_text"], rule_version=SPONSORSHIP_RULE_VERSION,
+                   input_pins_json=pins, comparison_status="unresolved")
+        output.append(row)
+        if (sorted(r["reference_id"] for r in references) != method["reference_ids"]
+                or any(r.get("resolution_status") != "resolved" or r.get("bill_id") != SPONSORSHIP_BILL
+                       or r.get("vote_id") or r.get("amendment_id")
+                       or r.get("source_snapshot_id") != result["snapshot_id"] for r in references)):
+            row["reason"] = "missing_or_conflicting_exact_bill_references"
+            continue
+        row["reference_id"] = "item:direct"
+        candidates = members[result["publisher_member_key"]]
+        if (len(candidates) != 1 or candidates[0].get("resolution_status") != "resolved"
+                or not candidates[0].get("bioguide_id")
+                or candidates[0].get("source_snapshot_id") != result["snapshot_id"]):
+            row["reason"] = "missing_or_ambiguous_exact_member"
+            continue
+        row["bioguide_id"] = candidates[0]["bioguide_id"]
+        records = official[row["bioguide_id"]]
+        if len(records) != 1:
+            row["reason"] = "missing_or_ambiguous_official_cosponsorship"
+            continue
+        record = records[0]
+        row["official_member_key"] = f"{SPONSORSHIP_BILL}/cosponsor_index:{record['cosponsor_index']}"
+        try:
+            start = date.fromisoformat(record["sponsorship_date"])
+            end_text = record["sponsorship_withdrawn_date"]
+            end = date.fromisoformat(end_text) if end_text is not None else None
+            if (start.isoformat() != record["sponsorship_date"] or
+                    (end is not None and (end.isoformat() != end_text or end < start))):
+                raise ValueError("Invalid official date interval")
+        except (TypeError, ValueError):
+            row["reason"] = "missing_or_invalid_official_sponsorship_dates"
+            continue
+        if start == cutoff or end == cutoff:
+            row["reason"] = "same_day_cutoff_time_unknown"
+            continue
+        active = start < cutoff and (end is None or end > cutoff)
+        row.update(official_position_normalized="cosponsor_at_cutoff" if active else "not_cosponsor_at_cutoff",
+                   comparison_status="same" if active else "different",
+                   reason="dated_official_cosponsorship_at_source_cutoff")
+    return output
+
+
 def build_comparisons(snapshot, paths, source, links, official_members, input_pins):
     scopes = {r["scorecard_id"] for r in source["scorecards"]
               if r.get("publisher_id") == "lcv" and r.get("year_text") == "2025"}
+    selected_scopes = scopes | {r["scorecard_id"] for r in source["scorecards"] if r["scorecard_id"] == SPONSORSHIP_SCOPE}
     results = selected_native_rows(snapshot, "scorecard_member_item_results", paths["scorecard_member_item_results"],
-                                   RESULT_COLUMNS, "scorecard_id", scopes)
+                                   RESULT_COLUMNS, "scorecard_id", selected_scopes)
     vote_ids = {r["vote_id"] for r in links["scorecard_item_links"]
                 if r["scorecard_id"] in scopes and r.get("resolution_status") == "resolved" and r.get("vote_id")}
     votes = selected_native_rows(snapshot, "member_votes", paths["member_votes"], VOTE_COLUMNS, "vote_id", vote_ids)
     metrics = selected_native_rows(snapshot, "scorecard_metric_items", paths["scorecard_metric_items"],
                                   METRIC_COLUMNS, "scorecard_id", scopes)
-    return compare_lcv_2025(source, links, results, votes, official_members, input_pins, metrics)
+    methodologies = selected_native_rows(snapshot, "scorecard_methodologies", paths["scorecard_methodologies"],
+                                         METHODOLOGY_COLUMNS, "scorecard_id", {SPONSORSHIP_SCOPE} & selected_scopes)
+    method = sponsorship_method(source, methodologies)
+    cosponsors = selected_native_rows(snapshot, "bill_cosponsors", paths["bill_cosponsors"],
+                                     COSPONSOR_COLUMNS, "bill_id", {SPONSORSHIP_BILL} if method else set())
+    rows = compare_lcv_2025(source, links, [r for r in results if r["scorecard_id"] in scopes],
+                            votes, official_members, input_pins, metrics)
+    rows.extend(compare_historical_sponsorship(source, links,
+                [r for r in results if r["scorecard_id"] == SPONSORSHIP_SCOPE and r["item_id"] == SPONSORSHIP_ITEM],
+                cosponsors, input_pins, method))
+    return rows, method
