@@ -44,8 +44,9 @@ from spicy_regs.scorecards.subject_shapes import (
     subject_schema,
 )
 
-SOURCE_NAMES = tuple(name for name in SOURCE_COLUMNS if name not in {"scorecard_member_links", "scorecard_item_links"})
 LINK_NAMES = ("scorecard_member_links", "scorecard_item_links")
+ANALYSIS_NAMES = (*LINK_NAMES, "scorecard_action_comparisons")
+SOURCE_NAMES = tuple(name for name in SOURCE_COLUMNS if name not in ANALYSIS_NAMES)
 
 
 def policy(name):

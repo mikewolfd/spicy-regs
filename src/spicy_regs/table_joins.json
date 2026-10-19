@@ -21884,6 +21884,53 @@
       "ruleVersion": "source-navigation/1"
     },
     {
+      "id": "scorecard_action_comparisons_recorded_source",
+      "source": "scorecard_action_comparisons",
+      "fields": [],
+      "targets": [
+        {
+          "table": "@url",
+          "columns": [
+            "url"
+          ],
+          "keys": [
+            {
+              "parts": [
+                {
+                  "path": [
+                    "source_url"
+                  ],
+                  "from": "row"
+                }
+              ],
+              "separator": "",
+              "pattern": "https://[^\\s]+"
+            }
+          ],
+          "guards": [
+            {
+              "path": [
+                "capture_id"
+              ],
+              "from": "row"
+            },
+            {
+              "path": [
+                "source_path"
+              ],
+              "from": "row"
+            }
+          ]
+        }
+      ],
+      "mode": "row",
+      "candidates": false,
+      "meaning": "The publisher URL associated with the recorded capture ID and source path. Capture IDs are opaque; this URL does not imply a public capture or extracted document target.",
+      "receiptFields": [],
+      "elementPath": [],
+      "ruleVersion": "source-navigation/1"
+    },
+    {
       "id": "scorecard_item_links_recorded_source",
       "source": "scorecard_item_links",
       "fields": [],

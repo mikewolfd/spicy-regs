@@ -2831,6 +2831,20 @@
         ]
       },
       {
+        "dataset": "scorecard_action_comparisons",
+        "receipt_only": false,
+        "policy_version": "scorecards-etl-v2",
+        "identity_columns": [
+          "scorecard_id",
+          "item_id",
+          "publisher_member_key",
+          "result_id"
+        ],
+        "processing_fields": [
+          "raw_source"
+        ]
+      },
+      {
         "dataset": "scorecard_item_links",
         "receipt_only": false,
         "policy_version": "scorecards-etl-v2",
@@ -7440,6 +7454,40 @@
         "reason",
         "source_context_json",
         "input_pins_json"
+      ]
+    },
+    {
+      "table": "scorecard_action_comparisons",
+      "label": "Scorecard action comparisons",
+      "summary": "One descriptive comparison per publisher member-item result. Publisher credit and official position remain separate; missing or ambiguous evidence stays unresolved. Join source facts on their recorded snapshot.",
+      "coverage": "LCV 2025 explicit floor-vote targets compared with exact pinned official member votes. Other editions, historical sponsorship and score reproduction are deferred. Implementation does not establish hosted adoption.",
+      "kind": null,
+      "measured_on": "2026-10-19",
+      "data_quality": null,
+      "columns": [
+        "scorecard_id",
+        "result_id",
+        "source_snapshot_id",
+        "item_id",
+        "publisher_member_key",
+        "metric_id",
+        "reference_id",
+        "vote_id",
+        "bioguide_id",
+        "official_member_key",
+        "publisher_target_text",
+        "publisher_action_text",
+        "publisher_credit_text",
+        "publisher_eligibility_text",
+        "official_position_text",
+        "official_position_normalized",
+        "comparison_status",
+        "reason",
+        "rule_version",
+        "input_pins_json",
+        "capture_id",
+        "source_url",
+        "source_path"
       ]
     },
     {

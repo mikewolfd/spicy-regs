@@ -8,7 +8,7 @@ import pytest
 from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
 from spicy_regs.sources import publication
 from spicy_regs.transforms.build_scorecard_analysis import (
-    SOURCE_TABLES, OFFICIAL_TABLES, analysis_input_entries,
+    SOURCE_TABLES, OFFICIAL_TABLES, COMPARISON_INPUTS, analysis_input_entries,
 )
 from tests.test_scorecard_analysis import _inputs, _serve
 
@@ -21,7 +21,7 @@ def fixture_owner(index, key):
     return owner
 
 
-@pytest.mark.parametrize("name", (*SOURCE_TABLES, *OFFICIAL_TABLES))
+@pytest.mark.parametrize("name", (*SOURCE_TABLES, *OFFICIAL_TABLES, *COMPARISON_INPUTS))
 def test_missing_native_input_refuses_before_any_subject_or_receipt_download(tmp_path, monkeypatch, name):
     store, index = _inputs(tmp_path)
     owner = fixture_owner(index, name + ".parquet")

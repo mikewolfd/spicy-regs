@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.scorecards.etl import LINK_NAMES, generation_options, read_family
+from spicy_regs.scorecards.etl import ANALYSIS_NAMES, generation_options, read_family
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.pipelines.rollups.scorecard_analysis import ScorecardAnalysisRollup
 from spicy_regs.scorecards.resolution import OFFICIAL_COLUMNS
@@ -67,6 +67,9 @@ def _inputs(tmp_path, *, row_overrides=None):
                 "term_district": "1",
             }
         ],
+        "scorecard_member_item_results": [],
+        "scorecard_metric_items": [],
+        "member_votes": [],
         "amendments": [],
         "roll_call_votes": [],
     }
@@ -77,7 +80,7 @@ def _inputs(tmp_path, *, row_overrides=None):
     from spicy_regs.scorecards.subject_shapes import SOURCE_COLUMNS
     import shutil
 
-    scorecard_names = ('scorecards', 'scorecard_members', 'scorecard_items')
+    scorecard_names = ('scorecards', 'scorecard_members', 'scorecard_items', 'scorecard_member_item_results', 'scorecard_metric_items')
     scorecard_tables = {name: [{column: row.get(column) for column in SOURCE_COLUMNS[name]}
                               for row in rows[name]] for name in scorecard_names}
     scorecard_build = source / 'scorecards-native'
@@ -90,13 +93,13 @@ def _inputs(tmp_path, *, row_overrides=None):
     index = pub.publish_generation(scorecard_generation, client=store, bucket='test', prior_index=pub.empty_index())
 
     files, receipts = [], []
-    official_names = tuple(OFFICIAL_COLUMNS)
+    official_names = (*OFFICIAL_COLUMNS, "member_votes")
     for name in official_names:
         partitions = [('118', [{'bill_id': '118-hr-1', 'congress': '118'}]),
                       ('119', [{'bill_id': '119-hr-1', 'congress': '119'}])] if name == 'congress_bills' else [(None, rows[name])]
         for partition, records in partitions:
             raw = source / (name + ('-' + partition if partition else '') + '.parquet')
-            schema = pa.schema([(c, pa.string()) for c in dict.fromkeys((*OFFICIAL_COLUMNS[name], *(records[0] if records else ())))])
+            schema = pa.schema([(c, pa.string()) for c in dict.fromkeys((*OFFICIAL_COLUMNS.get(name, ("vote_id", "member_key", "position", "position_normalized")), *(records[0] if records else ())))])
             pq.write_table(pa.Table.from_pylist(records, schema=schema), raw)
             subject, receipt = write_congress_dataset(raw, source / (raw.stem + '-native'),
                 dataset=name, generation_id='official-v1')
@@ -147,7 +150,9 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
 
     assert "tableDescriptorDigest" in parents["congress_bills.parquet"]
     assert "sha256" not in parents["congress_bills.parquet"]
-    members, items = rollup.build(output)
+    members, items, comparisons = rollup.build(output)
+    assert pq.read_table(comparisons).num_rows == 0
+    assert json.loads((output / "scorecard-analysis-qualification.json").read_text())["comparison"]["scopes"] == []
     member = pq.read_table(members).to_pylist()[0]
     item = pq.read_table(items).to_pylist()[0]
     assert member["publisher_member_key"] == "p1"
@@ -155,17 +160,17 @@ def test_analysis_pins_every_partition_and_keeps_publisher_identities(tmp_path, 
     assert item["bill_id"] == "119-hr-1"
     assert item["vote_id"] is None
     assert json.loads(item["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
-    item_receipt = read_family(output, LINK_NAMES)["scorecard_item_links"][0]
+    item_receipt = read_family(output, ANALYSIS_NAMES)["scorecard_item_links"][0]
     assert json.loads(item_receipt["input_pins_json"])["congress_bills"] == parents["congress_bills.parquet"]
     sealed = tmp_path / "analysis-generation"
     build_generation(
         sealed,
         family="scorecard-analysis",
-        files=[members, items],
+        files=[members, items, comparisons],
         expected_keys=rollup.outputs,
         parents=parents,
         read_snapshot=index,
-        **generation_options(output, LINK_NAMES),
+        **generation_options(output, ANALYSIS_NAMES),
     )
     verify_generation(sealed)
     # A warm read validates bytes and needs no network.
@@ -181,12 +186,46 @@ def test_analysis_keeps_member_context_receipt_checked(tmp_path, monkeypatch):
     rollup = ScorecardAnalysisRollup(output_dir=output)
     rollup._prime(output, index)
     assert set(rollup._official_receipts) == {"members", "member_terms"}
-    members, _ = rollup.build(output)
+    members, _, _ = rollup.build(output)
     assert pq.read_table(members).to_pylist()[0]["bioguide_id"] == "X000001"
     receipts, _ = rollup._official_receipts["member_terms"]
     receipts.write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="receipt changed"):
         rollup._prime(output, index)
+
+
+def test_lcv_comparison_flows_through_pinned_analysis_family(tmp_path, monkeypatch):
+    context = dict(scorecard_id="lcv:2025", snapshot_id="s1", capture_id="c1",
+                   source_url="https://publisher.example/2025", source_path="CSV/row[1]")
+    store, index = _inputs(tmp_path, row_overrides={
+        "scorecards": [context | dict(publisher_id="lcv", year_text="2025")],
+        "scorecard_members": [context | dict(publisher_member_key="p1", member_name="Alex Example",
+            identifiers_json='[{"scheme":"bioguide","value":"X000001"}]', chamber_text="House")],
+        "scorecard_items": [context | dict(item_id="i1", item_kind_text="Scorecard Vote", item_date_text="2025",
+            congress_text="119", chamber_text="House", session_text="1", roll_number_text="24", publisher_position_text="No")],
+        "scorecard_member_item_results": [context | dict(item_id="i1", publisher_member_key="p1",
+            result_id="reported", metric_id="annual", participation_id="scorecard", result_text="excused")],
+        "scorecard_metric_items": [context | dict(item_id="i1", metric_id="annual", participation_id="scorecard",
+                                                  publisher_position_text="No")],
+        "roll_call_votes": [dict(vote_id="119-house-1-24", vote_date="29-Jan-2025")],
+        "member_votes": [dict(vote_id="119-house-1-24", member_key="X000001", bioguide_id="X000001",
+                              position="Not Voting", position_normalized="not_voting")],
+    })
+    _serve(monkeypatch, store)
+    output = tmp_path / "analysis"
+    output.mkdir()
+    rollup = ScorecardAnalysisRollup(output_dir=output)
+    parents = rollup._prime(output, index)
+    files = rollup.build(output)
+    [row] = pq.read_table(files[2]).to_pylist()
+    assert row["comparison_status"] == "not_voting"
+    assert row["publisher_credit_text"] == "excused"
+    assert row["official_position_text"] == "Not Voting"
+    assert json.loads(row["input_pins_json"])["member_votes"] == parents["member_votes.parquet"]
+    sealed = tmp_path / "generation"
+    build_generation(sealed, family="scorecard-analysis", files=files, expected_keys=rollup.outputs,
+                     parents=parents, read_snapshot=index, **generation_options(output, ANALYSIS_NAMES))
+    assert "scorecard_action_comparisons.parquet" in verify_generation(sealed).root["spec"]["tables"]
 
 
 def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, monkeypatch):
@@ -253,13 +292,13 @@ def test_analysis_preserves_unresolved_people_and_independent_actions(tmp_path, 
     rollup = ScorecardAnalysisRollup(output_dir=output)
     rollup._prime(output, index)
     acquired = list(calls)
-    members, links = rollup.build(output)
+    members, links, _ = rollup.build(output)
     # Analysis uses only the selected inputs; it does not acquire official data again.
     assert calls == acquired
     assert pq.read_table(members).num_rows == 1
     [main_person] = pq.read_table(members).to_pylist()
     assert main_person["resolution_status"] == "unresolved" and main_person["bioguide_id"] is None
-    reconstructed = read_family(output, LINK_NAMES)
+    reconstructed = read_family(output, ANALYSIS_NAMES)
     person = reconstructed["scorecard_member_links"][0]
     assert person["bioguide_id"] is None
     assert person["resolution_status"] == "unresolved"
