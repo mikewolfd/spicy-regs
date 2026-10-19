@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from dataclasses import replace
 
+import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -184,3 +185,54 @@ def test_failed_admission_cleanup_closes_platform_index_even_if_reader_cleanup_r
     assert len(captured) == 1
     with pytest.raises(RuntimeError, match='closed'):
         len(captured[0].local_member_states)
+
+
+@pytest.mark.parametrize('damage', [None, 'root', 'manifest', 'subject', 'receipt', 'missing', 'oversize', 'binding'])
+def test_public_bytes_match_live_candidate_without_copy_or_second_admission(tmp_path, monkeypatch, damage):
+    from rulespec_artifacts import iter_member_descriptors
+    from spicy_regs.sources import publication
+
+    directory, _, _ = build(tmp_path)
+    with ConversionReadOperation() as operation:
+        artifact, reader, source = operation.admit_generation(directory)
+        entry = publication.generation_entry(artifact, list(iter_member_descriptors(artifact, source)))
+        index = {'families': {'members': entry}}
+        prefix = 'https://test.invalid/' + entry['prefix'] + '/'
+        objects = {prefix + key: (directory / key).read_bytes() for key in source.keys()}
+        if damage == 'binding':
+            entry['tables']['members.parquet']['rows'] += 1
+        elif damage:
+            key = {'root': 'artifact.json', 'manifest': artifact.root['memberManifests'][0]['objectKey'],
+                   'subject': 'members.parquet', 'receipt': 'etl_receipts.parquet',
+                   'missing': 'etl_receipts.parquet', 'oversize': 'members.parquet'}[damage]
+            if damage == 'missing':
+                del objects[prefix + key]
+            elif damage == 'oversize':
+                objects[prefix + key] += b'additional bytes'
+            else:
+                raw = objects[prefix + key]
+                objects[prefix + key] = bytes([raw[0] ^ 1]) + raw[1:]
+        monkeypatch.setattr(publication, '_bounded_get', lambda url, **kwargs: objects.get(url))
+        streamed = []
+
+        @contextmanager
+        def stream(method, url, **kwargs):
+            assert kwargs['headers']['Accept-Encoding'] == 'identity'
+            assert not reader.active  # Release validation scratch before network readback.
+            streamed.append(url)
+            raw = objects.get(url)
+            yield httpx.Response(404 if raw is None else 200, content=raw or b'', request=httpx.Request(method, url))
+
+        monkeypatch.setattr(httpx, 'stream', stream)
+        operation.release_generation(directory)
+        before = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob('*'))
+        if damage:
+            with pytest.raises(ValueError, match='Public generation'):
+                operation.verify_public_generation('https://test.invalid', index, 'members', directory)
+        else:
+            checked = operation.verify_public_generation('https://test.invalid', index, 'members', directory)
+            assert checked == {'artifactDigest': artifact.pin.artifact_digest, 'members': 2,
+                               'bytes': sum(len(objects[prefix + key]) for key in ('members.parquet', 'etl_receipts.parquet')),
+                               'root_and_manifests': 'exact', 'retained_payload_copies': 0}
+            assert set(streamed) == {prefix + 'members.parquet', prefix + 'etl_receipts.parquet'}
+        assert sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob('*')) == before

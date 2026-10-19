@@ -687,7 +687,8 @@ class ConversionReadOperation:
     """Keep actual admitted generation state until this explicit operation closes.
 
     Build, full original comparisons and same-process publication share this
-    lifetime. A restart or anonymous remote source creates a new operation.
+    lifetime. Public readback proves byte equality with that admitted candidate;
+    a restart requires a new operation and full qualification.
     """
     def __init__(self):
         self._stack = ExitStack()
@@ -811,37 +812,44 @@ class ConversionReadOperation:
         self.verified_source(directory)
         self._reader_stacks[directory].close()
 
-    def admit_public_generation(self, base, index, family, directory):
-        """Fetch each actual credentialless remote member once, then independently admit those bytes."""
-        from rulespec_artifacts import ArtifactPin, parse_admitted_json, sha256_digest, validate_object_key
+    def verify_public_generation(self, base, index, family, directory):
+        """Stream all anonymous bytes against this operation's admitted candidate, without another copy or admission."""
+        import hashlib
+        import httpx
+        from rulespec_artifacts import iter_member_descriptors
+        from spicy_regs.runtime_bounds import remaining_timeout
         from spicy_regs.sources import publication
 
-        if not self.active:
-            raise ValueError("Conversion read operation is closed")
-        directory = Path(directory)
-        directory.mkdir(parents=True, exist_ok=False)
+        artifact, source = self.verified_source(directory)
+        members = list(iter_member_descriptors(artifact, source))
         entry = index['families'][family]
-        raw, root = publication.load_family_root(base, entry)
-        (directory / 'artifact.json').write_bytes(raw)
-        keys = set()
-        for manifest in root['memberManifests']:
-            key = validate_object_key(manifest['objectKey'], path='manifest.objectKey')
+        if (family != artifact.root['spec']['family']
+                or publication._generation_entry(entry) != publication.generation_entry(artifact, members)):
+            raise ValueError("Public generation differs from the admitted conversion candidate")
+        prefix = f"{base.rstrip('/')}/{entry['prefix']}"
+        for key in ['artifact.json', *(item['objectKey'] for item in artifact.root['memberManifests'])]:
             raw = publication._bounded_get(f"{base.rstrip('/')}/{entry['prefix']}/{key}",
                                           allow_missing=False, limit=publication.EVIDENCE_CONTROL_LIMIT)
-            if raw is None or sha256_digest(raw) != manifest['sha256']:
-                raise ValueError("Public generation manifest differs from its pin")
-            target = directory / key
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
-            for member in parse_admitted_json(raw)['members']:
-                member_key = validate_object_key(member['objectKey'], path='member.objectKey')
-                if member_key in keys:
-                    raise ValueError("Public generation repeats a member")
-                keys.add(member_key)
-                target = directory / member_key
-                target.parent.mkdir(parents=True, exist_ok=True)
-                descriptor = publication.Member(entry['prefix'] + '/' + member_key, member['sha256'],
-                                                member['byteSize'], member.get('recordCount'))
-                if not publication.fetch_member(base, descriptor, target):
-                    raise ValueError("Public generation member is absent")
-        return self.admit_generation(directory, expected_pin=ArtifactPin(entry['logicalId'], entry['artifactDigest']))
+            with source.open(key) as local:
+                if raw is None or raw != local.read(publication.EVIDENCE_CONTROL_LIMIT + 1):
+                    raise ValueError("Public generation root or manifest differs from its qualified bytes")
+        total = 0
+        for member in members:
+            digest, size = hashlib.sha256(), 0
+            with httpx.stream('GET', f'{prefix}/{member.object_key}', follow_redirects=True,
+                              headers={'User-Agent': 'spicy-regs', 'Accept-Encoding': 'identity'},
+                              timeout=remaining_timeout(60)) as response:
+                if response.status_code != 200:
+                    raise ValueError(f"Public generation member is inaccessible: HTTP {response.status_code}")
+                for chunk in response.iter_bytes(chunk_size=1024**2):
+                    checkpoint()
+                    size += len(chunk)
+                    if size > member.byte_size:
+                        raise ValueError("Public generation member exceeds its qualified size")
+                    digest.update(chunk)
+            if size != member.byte_size or 'sha256:' + digest.hexdigest() != member.sha256:
+                raise ValueError("Public generation member differs from its qualified bytes")
+            total += size
+        self.verified_source(directory)
+        return {'artifactDigest': artifact.pin.artifact_digest, 'members': len(members), 'bytes': total,
+                'root_and_manifests': 'exact', 'retained_payload_copies': 0}

@@ -50,8 +50,8 @@ for a cheaper writer. Evidence for everything below:
 7. With `--publish`: checks main and the wheel again, saves
    `conversion.json`, then publishes through the standard conditional
    pointer write and reads the result back without credentials: the entry
-   carries `etlReceipts`, row counts match, and the read that refused before
-   now passes.
+   carries `etlReceipts`, every public member matches the qualified candidate,
+   and the maintained local reader passes its bounded consumer check.
 
 A successful conversion passes an in-memory restoration proof to publication.
 It names the admitted candidate, the complete captured family entry, and every
@@ -70,9 +70,16 @@ It admits the subject and receipt members once, holds their checked processing
 rows, and compares them directly with each retained original. Qualification
 does not write disposable restored Parquet files. The operation checks that
 members remain unchanged before reuse and rejects readers after it closes.
-Publication in the same process reuses the admitted bytes; anonymous readback
-downloads and independently admits the published generation. Download hashing
-and local artifact verification remain separate checks.
+Publication in the same process reuses the admitted bytes. Before public
+readback, the maintained local reader samples at most one row per dataset, then
+releases its validation database. Anonymous readback compares the root and
+manifests exactly and streams every member against the qualified size and
+SHA-256, without retaining another payload copy or repeating semantic admission
+and original comparison. The complete public family entry must still match
+after this check. Exact byte equality carries the current invocation's full
+qualification to the public artifact; the local reader sample does not establish
+hosted query or receipt-serving behavior. Independent downstream checks remain
+required where a consumer requires them.
 
 If a writer completed its immutable generation but stopped before saving
 `conversion.json`, `--resume-generation` can qualify that generation without
@@ -572,7 +579,10 @@ defaults and command arguments stay the same.
 - The command's last line is "published and read back", and
   `conversion.json` shows `rows_only_in_restored` and `rows_only_in_retained`
   both 0 for every table, no `type_changes` or `metadata_changes`, and
-  `read_back.anonymous_read_rows` equal to the retained counts.
+  `read_back.qualified_original_rows` equal to the retained counts.
+- `read_back.public_bytes` identifies the same candidate and records complete
+  member byte verification. `read_back.consumer_sample` records the actual
+  bounded local sample and reader route; it is not a full anonymous row replay.
 - `conversion.json` records the bucket and endpoint host under `target`, and
   under `lineage` the inputs the converted generation names.
 - `publication.v2.json` carries `etlReceipts` for the family.

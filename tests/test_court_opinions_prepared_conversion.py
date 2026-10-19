@@ -83,8 +83,8 @@ def test_original_court_opinions_prepare_and_publish_same_exact_native_artifact(
     published = conversion.publish_prepared(work / conversion.RECEIPT, allowed=['court-opinions'],
         expected_main=MAIN, expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
     assert published['generation'] == prepared['generation']
-    assert published['read_back']['anonymous_read_rows'] == {'court_opinions': 2}
-    assert len(route[1]) >= 3  # Preparation, fresh publication proof, and actual anonymous bytes.
+    assert published['read_back']['qualified_original_rows'] == {'court_opinions': 2}
+    assert len(route[1]) == 2  # Preparation and fresh current-invocation publication qualification.
     assert_restored(route, compared, opinions(), work)
     assert sealed == {p.relative_to(generation): p.read_bytes() for p in generation.rglob('*') if p.is_file()}
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
@@ -184,8 +184,8 @@ def test_complete_conversion_replaces_size_heuristic_with_exact_restoration(
     subject = pq.read_table(Path(receipt['generation']['directory']) / 'court_opinions.parquet')
     assert 'local_path' not in subject.column_names
     assert subject['download_url'].to_pylist() == [row['download_url'] for row in rows]
-    assert receipt['read_back']['anonymous_read_rows'] == {'court_opinions': len(rows)}
-    assert len(route[1]) >= 2  # Local proof and actual anonymous read-back both restore exact originals.
+    assert receipt['read_back']['qualified_original_rows'] == {'court_opinions': len(rows)}
+    assert len(route[1]) == 1 + int(prepared_publication)  # No duplicate anonymous semantic replay.
     assert_restored(route, compared, rows, work)
 
 

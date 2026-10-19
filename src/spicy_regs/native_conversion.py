@@ -29,6 +29,7 @@ import time
 import tomllib
 import zipfile
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import closing
 from dataclasses import dataclass
 from importlib.metadata import distribution, version
 from pathlib import Path
@@ -256,12 +257,12 @@ def _prepared_implementation(source: Mapping, publisher: Mapping, expected_produ
 
 @dataclass(frozen=True)
 class _Built:
-    """One admitted generation and complete local and anonymous original comparisons."""
+    """One admitted generation, full local comparison and byte-exact public readback."""
 
     generation: Path
     policies: Mapping[str, str]
     compare_original: Callable[[str, Path], dict]
-    read_published: Callable[[str, Mapping], int]
+    read_published: Callable[[Mapping], dict]
     evidence: tuple[Path, ...] = ()
     added_tables: frozenset[str] = frozenset()
     receipt_only_tables: frozenset[str] = frozenset()
@@ -435,7 +436,6 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str, wor
     spec = artifact.root["spec"]
     receipt_only = frozenset(name + ".parquet" for name, policy in reader.policies.items() if policy.receipt_only)
     added = frozenset(spec["tables"]) - set(retained)
-    public_reader = None
     pinned_originals = _original_states(retained) if original_pins is None else original_pins
 
     def check_originals(key=None):
@@ -457,21 +457,31 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str, wor
         check_originals(dataset + ".parquet")
         return checked
 
-    def read_published(dataset: str, index: Mapping) -> int:
-        nonlocal public_reader
-        if public_reader is None:
-            # Local proof is finished before admitting actual anonymous bytes.
-            read_operation.release_generation(generation)
-            remote, public_reader, _ = read_operation.admit_public_generation(
-                base, index, spec["family"], work / "read-back" / uuid4().hex)
-            if remote.pin != artifact.pin:
-                raise ConversionRefused("Anonymous generation differs from the admitted local generation")
-        check_originals(dataset + ".parquet")
-        check = compare_admitted(public_reader, dataset, retained[dataset + ".parquet"])
-        check_originals(dataset + ".parquet")
-        if _has_differences(check):
-            raise ConversionRefused(f"{dataset}: anonymous original comparison differs: {check}")
-        return _table_rows(retained[dataset + ".parquet"])
+    def read_published(index: Mapping) -> dict:
+        from spicy_regs import etl_bulk
+
+        check_originals()
+        sampled, routes = {}, {}
+        # Use the maintained reader's bounded batch route, then close its
+        # admitted database before the network pass. Byte identity below ties
+        # this local sample and the earlier full qualification to public bytes.
+        with etl_bulk.bulk_limits(threads=1, memory_limit="256MB"):
+            for dataset, policy in reader.policies.items():
+                routes[dataset] = 'processing' if policy.receipt_only else 'read_subjects'
+                rows = reader.processing(dataset) if policy.receipt_only else reader.read_subjects(dataset)
+                with closing(rows):
+                    sampled[dataset] = int(next(rows, None) is not None)
+        check_originals()
+        read_operation.release_generation(generation)
+        verified = read_operation.verify_public_generation(base, index, spec["family"], generation)
+        check_originals()
+        return {
+            "public_bytes": verified,
+            "qualified_original_rows": {name.removesuffix('.parquet'): _table_rows(path)
+                                        for name, path in retained.items()},
+            "consumer_sample": {"location": "qualified-local-candidate", "row_limit_per_dataset": 1,
+                                "rows": sampled, "routes": routes},
+        }
 
     return _Built(generation, {name: policy.policy_version for name, policy in reader.policies.items()},
                   compare_original, read_published, evidence, added, receipt_only,
@@ -1311,7 +1321,7 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
     exact_prior = exact_prior or conversion_proof is not None
     family, base, target = (receipt[name] for name in ("family", "public_url", "target"))
     started = publisher_source if publisher_source is not None else receipt["source"]
-    old, tables = receipt["captured"]["entry"], receipt["tables"]
+    old = receipt["captured"]["entry"]
     artifact = json.loads((built.generation / "artifact.json").read_bytes())
 
     def save() -> dict:
@@ -1390,7 +1400,11 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         purge_urls([f"{base}/{publication.INDEX_V2_KEY}"])
         read_index = publication.current_index(base)
         entry = read_index["families"].get(family) or {}
-        read = {dataset: built.read_published(dataset, read_index) for dataset in tables}
+        read = built.read_published(read_index)
+        # Bypass any captured read snapshot: the actual public pointer must
+        # still select the complete entry whose bytes were just verified.
+        if publication.load_index(base)["families"].get(family) != entry:
+            raise ConversionRefused("Public family pointer moved during conversion readback")
     except Exception as failure:
         raise ConversionRefused(f"{family} could not be read back ({type(failure).__name__}: {failure})",
                                 state=published) from failure
@@ -1398,7 +1412,7 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         "artifactDigest": entry.get("artifactDigest"),
         "etl_receipts_rows": entry.get("etlReceipts", {}).get("rows"),
         "table_rows": {key: table["rows"] for key, table in entry.get("tables", {}).items()},
-        "anonymous_read_rows": read,
+        **read,
     }
     save()
     # Source rows were compared with the captured publication before admission.
@@ -1408,7 +1422,8 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
     wrong = sorted(set(entry.get("tables", {})) ^ set(expected_tables))
     wrong += [key for key, table in entry.get("tables", {}).items()
               if key in expected_tables and table["rows"] != expected_tables[key]["rows"]]
-    wrong += [name for name, rows in read.items() if rows != old["tables"][name + ".parquet"]["rows"]]
+    wrong += [name for name, rows in read["qualified_original_rows"].items()
+              if rows != old["tables"][name + ".parquet"]["rows"]]
     if entry.get("artifactDigest") != artifact["artifactDigest"] or "etlReceipts" not in entry or wrong:
         raise ConversionRefused(f"{family} does not read back as converted ({wrong or entry.get('artifactDigest')})",
                                 state=published)

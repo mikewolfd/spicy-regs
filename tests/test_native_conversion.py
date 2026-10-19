@@ -1,8 +1,10 @@
 """The one-time family conversion: what it proves before it publishes, what it refuses, and how it rolls back."""
 
 import json
+from contextlib import contextmanager
 
 import duckdb
+import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -59,6 +61,13 @@ def bucket(monkeypatch):
     monkeypatch.setattr(r2, "public_object_version", lambda url: (
         {"etag": store._etag(stored(url)), "bytes": len(store.objects[stored(url)])} if stored(url) in store.objects else None))
     monkeypatch.setattr(publication, "_bounded_get", lambda url, **_: store.objects.get(stored(url)))
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        raw = store.objects.get(stored(url))
+        yield httpx.Response(404 if raw is None else 200, content=raw or b'', request=httpx.Request(method, url))
+
+    monkeypatch.setattr(httpx, "stream", stream)
     return store
 
 
@@ -98,12 +107,29 @@ def refused_read(tmp_path, dataset):
 
 
 def test_a_rollup_family_converts_publishes_and_reads_back(tmp_path, monkeypatch, bucket):
+    from spicy_regs import conversion_reads
     from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     refused_read(tmp_path, "cfr_sections")
 
+    admissions, comparisons = [], []
+    admit, compare = conversion_reads._open_family_reader, conversion_reads._FamilyReader.compare_original
+
+    def admitted(*args, **kwargs):
+        admissions.append(True)
+        return admit(*args, **kwargs)
+
+    def compared(*args, **kwargs):
+        comparisons.append(True)
+        return compare(*args, **kwargs)
+
+    monkeypatch.setattr(conversion_reads, '_open_family_reader', admitted)
+    monkeypatch.setattr(conversion_reads._FamilyReader, 'compare_original', compared)
+
     receipt = convert("cfr-sections", tmp_path / "work", publish=True)
+    assert admissions == comparisons == [True]
+    assert not (tmp_path / 'work/read-back').exists()
 
     entry = publication.current_index(BASE)["families"]["cfr-sections"]
     assert entry == receipt["published"]["entry"] and entry["etlReceipts"]["datasets"] == ["cfr_sections"]
@@ -113,7 +139,9 @@ def test_a_rollup_family_converts_publishes_and_reads_back(tmp_path, monkeypatch
     assert receipt["tables"]["cfr_sections"] == {
         "retained_rows": 2, "subject_rows": 2, "rows_only_in_restored": 0, "rows_only_in_retained": 0,
         "columns_only_in_restored": [], "columns_only_in_retained": [], "type_changes": {}, "metadata_changes": []}
-    assert receipt["read_back"]["anonymous_read_rows"] == {"cfr_sections": 2}
+    assert receipt["read_back"]["qualified_original_rows"] == {"cfr_sections": 2}
+    assert receipt['read_back']['consumer_sample']['rows'] == {'cfr_sections': 1}
+    assert receipt['read_back']['public_bytes']['retained_payload_copies'] == 0
     assert json.loads((tmp_path / "work" / conversion.RECEIPT).read_text()) == receipt
     # The read every scheduled run makes now restores exactly the rows the builder last wrote.
     restored = pq.read_table(SelectedPriors(tmp_path / "after", public_url=BASE).get("cfr_sections")).to_pylist()
@@ -150,7 +178,7 @@ def test_bill_subjects_converts_so_its_scheduled_rollup_can_read_its_prior(tmp_p
     entry = stored(bucket, "bill-subjects")
     assert entry == receipt["published"]["entry"] and "etlReceipts" not in old
     assert "bill_subjects" in entry["etlReceipts"]["datasets"] and entry["tables"]["bill_subjects.parquet"]["rows"] == 2
-    assert receipt["read_back"]["anonymous_read_rows"]["bill_subjects"] == 2 and receipt["lineage"]["handed_on_events"] == 0
+    assert receipt["read_back"]["qualified_original_rows"]["bill_subjects"] == 2 and receipt["lineage"]["handed_on_events"] == 0
     new_pin = published_evidence_pin(bucket, "bill-subjects")
     assert evidence_root(bucket, new_pin)["spec"]["evidence_version"] == EVIDENCE_VERSION
     assert publication.load_evidence_journal(BASE, new_pin)
@@ -214,7 +242,7 @@ def test_a_court_family_converts_through_the_court_writer(tmp_path, monkeypatch,
 
     entry = publication.current_index(BASE)["families"]["courtlistener"]
     assert entry["etlReceipts"]["datasets"] == ["court_dockets"] and receipt["policy_versions"] == {"court_dockets": "courts/1"}
-    assert receipt["read_back"]["anonymous_read_rows"] == {"court_dockets": 1}
+    assert receipt["read_back"]["qualified_original_rows"] == {"court_dockets": 1}
     (member,) = publication.table_members(publication.current_index(BASE), "court_dockets.parquet")
     subject = tmp_path / "published" / "court_dockets.parquet"
     subject.parent.mkdir()
@@ -422,7 +450,7 @@ def test_a_pointer_write_whose_response_was_lost_is_found_and_finished(tmp_path,
     assert lost and stored(bucket) == receipt["published"]["entry"] != old
     assert receipt["publish_attempt"]["outcome"] == "moved to this conversion's generation"
     assert "Family changed since the build read its inputs" in receipt["publish_attempt"]["error"]
-    assert receipt["read_back"]["anonymous_read_rows"] == {"cfr_sections": 2}
+    assert receipt["read_back"]["qualified_original_rows"] == {"cfr_sections": 2}
     assert "published and read back" in capsys.readouterr().out
 
 
@@ -681,7 +709,7 @@ def test_declared_native_court_conversion_keeps_original_processing_types(tmp_pa
     assert check["type_changes"] == {} and check["rows_only_in_retained"] == 0
     subject = pq.read_table(receipt["generation"]["directory"] + "/court_docket_groups.parquet")
     assert subject["group_size"].type == pa.int64() and subject["group_size"].to_pylist() == [3]
-    assert receipt["read_back"]["anonymous_read_rows"] == {"court_docket_groups": 1}
+    assert receipt["read_back"]["qualified_original_rows"] == {"court_docket_groups": 1}
 
 
 def test_file_metadata_a_later_run_reads_must_survive(tmp_path, monkeypatch, bucket):
@@ -1096,7 +1124,7 @@ def test_split_legislative_members_convert_and_restore_without_collapsing_partit
     assert table["partitionColumns"] == ["congress"]
     assert [(m["key"], m["rows"]) for m in table["members"]] == [
         (m["key"], m["rows"]) for m in old["tables"]["bill_sections.parquet"]["members"]]
-    assert receipt["read_back"]["anonymous_read_rows"] == {"bill_sections": 3}
+    assert receipt["read_back"]["qualified_original_rows"] == {"bill_sections": 3}
     restored = SelectedPriors(tmp_path / "after", public_url=BASE).get("bill_sections")
     assert restored.is_dir()
     assert {p.relative_to(restored).as_posix() for p in restored.rglob("*.parquet")} == set(expected)
@@ -1189,7 +1217,7 @@ def test_split_public_readback_checks_empty_member_and_reports_published_state(t
     from spicy_regs.conversion_reads import ConversionReadOperation
 
     old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
-    real = ConversionReadOperation.admit_public_generation
+    real = ConversionReadOperation.verify_public_generation
 
     def missing(operation, base, index, family, directory):
         entry = index["families"][family]
@@ -1197,13 +1225,36 @@ def test_split_public_readback_checks_empty_member_and_reports_published_state(t
         del bucket.objects[f"{entry['prefix']}/{empty['key']}"]
         return real(operation, base, index, family, directory)
 
-    monkeypatch.setattr(ConversionReadOperation, "admit_public_generation", missing)
+    monkeypatch.setattr(ConversionReadOperation, "verify_public_generation", missing)
     with pytest.raises(conversion.ConversionRefused) as refusal:
         convert("bill-family", tmp_path / "work", publish=True)
     assert "IS published" in refusal.value.state
     assert publication.current_index(BASE)["families"]["bill-family"] != old
     conversion.rollback(tmp_path / "work" / conversion.RECEIPT, expect_bucket=BUCKET)
     assert publication.current_index(BASE)["families"]["bill-family"] == old
+
+
+def test_public_pointer_moving_during_byte_readback_is_not_success(tmp_path, monkeypatch, bucket):
+    from spicy_regs.conversion_reads import ConversionReadOperation
+
+    old = publish_old(bucket, monkeypatch, tmp_path, 'cfr-sections', {'cfr_sections': CFR})
+    verify = ConversionReadOperation.verify_public_generation
+
+    def moved(*args, **kwargs):
+        checked = verify(*args, **kwargs)
+        current = publication.current_index(BASE)
+        current['families']['cfr-sections'] = old
+        bucket.objects[publication.INDEX_V2_KEY] = canonical_json_bytes(current)
+        return checked
+
+    monkeypatch.setattr(ConversionReadOperation, 'verify_public_generation', moved)
+    with pytest.raises(conversion.ConversionRefused, match='pointer moved') as refusal:
+        convert('cfr-sections', tmp_path / 'work', publish=True)
+    assert 'IS published' in refusal.value.state
+    saved = json.loads((tmp_path / 'work' / conversion.RECEIPT).read_text())
+    assert saved['published']['entry']['artifactDigest'] != old['artifactDigest']
+    assert 'read_back' not in saved
+    assert publication.current_index(BASE)['families']['cfr-sections'] == old
 
 
 @pytest.mark.parametrize("damage", ["rows", "columns", "unavailable"])
@@ -1314,7 +1365,7 @@ def test_checkpoint_source_rows_convert_and_restore_in_their_declared_main_shape
 
 
 def test_conversion_compares_all_datasets_with_one_reader_per_actual_generation(tmp_path, monkeypatch, bucket):
-    """Every dataset uses the admitted stream; anonymous bytes get a fresh admission after releasing the local one."""
+    """One full local qualification covers every dataset; exact anonymous bytes need no second admission."""
     from contextlib import contextmanager
 
     from spicy_regs import conversion_reads
@@ -1341,7 +1392,7 @@ def test_conversion_compares_all_datasets_with_one_reader_per_actual_generation(
 
     @contextmanager
     def recorded_reader(*args, **kwargs):
-        assert not active, "Release the local reader before admitting the anonymous generation"
+        assert not active, "Only one admitted family reader is needed"
         with open_reader(*args, **kwargs) as reader:
             admissions.append(reader)
             active.append(reader)
@@ -1364,11 +1415,13 @@ def test_conversion_compares_all_datasets_with_one_reader_per_actual_generation(
     monkeypatch.setattr(conversion, "_table_differences", materialized)
     receipt = convert("bill-family", tmp_path / "work", publish=True)
 
-    assert len(admissions) == 2, "One receipt admission locally and one for actual anonymous bytes"
+    assert len(admissions) == 1, "One receipt admission; no duplicate anonymous semantic pass"
     assert [sorted(dataset for reader, dataset in comparisons if reader is admitted) for admitted in admissions] == [
-        sorted(originals), sorted(originals)]
+        sorted(originals)]
     assert not active
-    assert receipt["read_back"]["anonymous_read_rows"] == {name: len(rows) for name, rows in originals.items()}
+    assert receipt["read_back"]["qualified_original_rows"] == {name: len(rows) for name, rows in originals.items()}
+    assert receipt['read_back']['consumer_sample']['rows'] == {
+        **{name: 1 for name in originals}, 'congress_acquisition': 1, 'nominations_detail_reads': 0}
 
 
 @pytest.mark.parametrize("interruption", ["absent", "unsealed"])
