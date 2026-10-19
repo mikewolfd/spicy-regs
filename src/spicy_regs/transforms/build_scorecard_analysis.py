@@ -32,6 +32,7 @@ def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inpu
     always required. No legacy or prior receipts stand in for missing receipts.
     """
     from spicy_regs.scorecards.etl import selected_table_entry
+    from spicy_regs.scorecards.analysis_inputs import projected_native_official_inputs
     from spicy_regs.sources import publication
 
     entries = {name: selected_table_entry(snapshot, name + ".parquet")
@@ -44,11 +45,15 @@ def analysis_input_entries(snapshot: Mapping, *, convert_published_official_inpu
                and not (convert_published_official_inputs and name in OFFICIAL_TABLES and "etlReceipts" not in owner)]
     if missing:
         raise publication.PublicationError("Scorecard analysis requires native receipts for: " + ", ".join(missing))
+    projected = projected_native_official_inputs(entries)
     for name, owner in entries.items():
         if convert_published_official_inputs and name in OFFICIAL_TABLES and "etlReceipts" not in owner:
             continue
         generation = owner["etlReceipts"].get("generationId")
-        if not isinstance(generation, str) or not generation or len(publication.receipt_members(snapshot, dataset=name)) != 1:
+        members = publication.receipt_members(snapshot, dataset=name)
+        projected_vote = projected and name in {"roll_call_votes", "member_votes"}
+        if (not isinstance(generation, str) or not generation or not members
+                or (not projected_vote and (len(members) != 1 or "members" in owner["etlReceipts"]))):
             raise publication.PublicationError("Scorecard analysis requires one selected native receipt generation: " + name)
     return entries
 

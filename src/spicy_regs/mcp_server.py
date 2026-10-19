@@ -8,6 +8,8 @@ reading either the public R2 bucket or an explicitly configured local directory
 
 from __future__ import annotations
 
+from spicy_regs.receipt_members import receipt_declarations, receipt_keys, receipt_paths
+
 from spicy_regs.subject_catalog import subject_tables
 
 import base64
@@ -865,7 +867,8 @@ def _build_connection_inputs(con, publication):
                         "receipt_members": {name: str(path) for name, path in local.receipts.items()},
                         "receipt_indexes": {name: str(path) for name, path in local.receipt_indexes.items()},
                         "native": {name: {"subjects": [str(p) for p in value.subjects],
-                                           "receipts": str(value.receipts), "generation_id": value.generation_id,
+                                           "receipts": ([str(p) for p in value.receipts] if isinstance(value.receipts, tuple)
+                                                        else str(value.receipts)), "generation_id": value.generation_id,
                                            "key_index": str(value.key_index) if value.key_index else None,
                                            "key_index_descriptor": value.key_index_descriptor}
                                    for name, value in local.native.items()},
@@ -971,10 +974,10 @@ def _build_connection_inputs(con, publication):
             if local is not None and local.native:
                 groups = {}
                 for name, value in local.native.items():
-                    groups.setdefault(str(value.receipts), []).append(name)
-                scans = [f"SELECT * FROM {parquet_scan([path])} WHERE dataset IN (" +
+                    groups.setdefault(tuple(map(str, receipt_paths(value.receipts))), []).append(name)
+                scans = [f"SELECT * FROM {parquet_scan(paths)} WHERE dataset IN (" +
                          ",".join("'" + name.replace("'", "''") + "'" for name in names) + ")"
-                         for path, names in groups.items()]
+                         for paths, names in groups.items()]
                 con.execute('CREATE VIEW etl_receipts AS ' + ' UNION ALL '.join(scans))
             else:
                 with _diagnostic_phase('receipt_registration'):
@@ -984,7 +987,7 @@ def _build_connection_inputs(con, publication):
             # Only the members this view reads: an unselected family's receipts do not gate a local download.
             selected = set(local_receipts) if local_receipts is not None else {member.path for member in receipts}
             if any(entry["etlReceipts"]["columns"] != actual for entry in publication_index["families"].values()
-                   if "etlReceipts" in entry and f"{entry['prefix']}/{entry['etlReceipts']['key']}" in selected):
+                   if any(f"{entry['prefix']}/{key}" in selected for key in receipt_keys(entry.get("etlReceipts"), pinned=True))):
                 raise RuntimeError("Published ETL receipt schema differs from the admitted generation")
             allowed_paths.extend(urls)
         except (duckdb.Error, RuntimeError) as exc:
@@ -1136,8 +1139,8 @@ def _install_relationship_views(con: duckdb.DuckDBPyConnection) -> None:
     local_selection = _connection_local_selection(con)
     processing = {name for family in index["families"].values()
                   if local_selection is None or
-                  f"{family['prefix'].rstrip('/')}/{family.get('etlReceipts', {}).get('key')}"
-                  in local_selection.get("receipt_members", {})
+                  any(f"{family['prefix']}/{key}" in local_selection.get("receipt_members", {})
+                      for key in receipt_keys(family.get("etlReceipts"), pinned=True))
                   for name in family.get("etlReceipts", {}).get("datasets", ())
                   if declared.get(name, {}).get("receipt_only")}
     native = local_selection.get("native", {}) if local_selection else {}
@@ -1290,12 +1293,14 @@ def _receipt_families(index: dict, local: dict | None) -> dict[str, dict]:
         family: {
             "artifact_digest": entry["artifactDigest"],
             "generation_id": receipt["generationId"],
-            "sha256": receipt["sha256"],
+            **({"members": list(receipt_declarations(receipt, pinned=True))} if "members" in receipt
+               else {"sha256": receipt["sha256"]}),
             "rows": receipt["rows"],
             "datasets": receipt["datasets"],
         }
         for family, entry in index["families"].items()
-        if (receipt := entry.get("etlReceipts")) and (selected is None or f"{entry['prefix']}/{receipt['key']}" in selected)
+        if (receipt := entry.get("etlReceipts")) and (selected is None or
+            any(f"{entry['prefix']}/{key}" in selected for key in receipt_keys(receipt, pinned=True)))
     }
 
 

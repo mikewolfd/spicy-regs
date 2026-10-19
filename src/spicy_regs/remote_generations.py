@@ -32,10 +32,12 @@ if TYPE_CHECKING:
 def _member_map(staging_prefix, members):
     if not staging_prefix or staging_prefix != staging_prefix.strip("/"):
         raise ValueError("A remote generation needs an explicit staging prefix")
+    from spicy_regs.receipt_members import is_receipt_member_key
     result = {}
     for member in members:
-        key = Path(member.key).name
+        key = member.key.removeprefix(staging_prefix + "/")
         if (member.key != staging_prefix + "/" + key or not key.endswith(".parquet")
+                or (Path(key).name != key and not is_receipt_member_key(key))
                 or key in result or not member.etag):
             raise ValueError("Staged table names or source pins are invalid")
         result[key] = member
@@ -191,12 +193,11 @@ def _verify_remote(source, *, expected_pin=None, bounded_receipts=False, outcome
                     outcomes.update(counts)
         artifact = _verify_generation_source(source, source.table_info, expected_pin=expected_pin,
                                              admit_receipts=admit_receipts)
-    expected = set(artifact.root["spec"]["tables"])
-    if "etlReceipts" in artifact.root["spec"]:
-        expected.add("etl_receipts.parquet")
+    descriptors = tuple(iter_member_descriptors(artifact, source))
+    expected = {descriptor.object_key for descriptor in descriptors}
     if expected != set(source.members):
         raise ValueError("Staged receipts differ from the declared generation")
-    for descriptor in iter_member_descriptors(artifact, source):
+    for descriptor in descriptors:
         staged = source.members[descriptor.object_key]
         if (descriptor.sha256 != staged.sha256 or descriptor.byte_size != staged.byte_size
                 or descriptor.record_count != staged.rows):
@@ -226,6 +227,9 @@ def prepare_remote_generation(
                                      staging_prefix=staging_prefix, members=members)
     if len(set(expected_keys)) != len(expected_keys) or set(expected_keys) != set(source.members):
         raise ValueError("Staged outputs differ from the declared complete family")
+    from spicy_regs.receipt_members import is_receipt_member_key
+    if any(is_receipt_member_key(key) for key in source.members):
+        raise ValueError("Build ordered receipt metadata with build_generation before remote staging")
     tables = {}
     descriptors = []
     for key, member in sorted(source.members.items()):

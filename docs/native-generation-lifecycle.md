@@ -41,3 +41,33 @@ not synthesized by reversing native values into old source spellings.
 Boundary checks live in `tests/test_subject_receipt_rollups.py`,
 `tests/test_congress_receipts.py`, `tests/test_legislative_rollups.py`,
 `tests/test_fec_identity_receipts.py` and `tests/test_etl_receipts.py`.
+
+## Ordered receipt members
+
+`build_generation(receipt_paths=...)` accepts an explicit ordered, complete
+selection of retained receipt files. It records stable filenames under
+`etl_receipts/` in `etlReceipts.version = 2`; the artifact pins every member and
+the publication index includes each member's SHA-256, byte size and row count.
+The declaration's generation identifies the selected publication. Unchanged
+carried receipts retain their original occurrence generation and full evidence.
+Admission still checks every receipt and its exact native subject match.
+
+Publication copies an unchanged member from the prior generation only when its
+key, digest and byte size match. Changed members upload normally. Remote byte
+readback still checks **all** selected members, including copied history.
+`SelectedInputs`, local native selection and Congress source replay preserve
+member order. No temporary combined receipt is needed for scoped replay.
+Monolith declarations and their existing key indexes remain supported.
+
+This is an explicit local vote-family boundary, not automatic partitioning or a
+live rollout. Split receipt indexing and owned receipt adoption refuse. Remote
+staging can verify and publish metadata built by `build_generation`; its own
+metadata builder still requires a monolith. MCP serves native tables, generic
+receipt SQL and processing replay, but marks per-key `read_receipt_fields`
+unavailable for split receipts and refuses a direct request. Scorecard analysis
+accepts split vote receipts only on its projected native route, which reads
+verified subject columns; source-scorecard and nonprojected receipt restoration
+still require a monolith. Per-key lookup, an operational partitioning writer and
+live acceptance remain migration gates before selecting split votes in production.
+Focused coverage is in
+`tests/test_receipt_member_publication.py`.

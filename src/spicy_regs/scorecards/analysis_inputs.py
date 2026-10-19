@@ -16,6 +16,11 @@ from spicy_regs.sources import publication
 PROJECTED_NATIVE_OFFICIAL_TABLES = frozenset({"congress_bills", "amendments", "roll_call_votes"})
 
 
+def projected_native_official_inputs(entries: Mapping) -> bool:
+    """The preparation route reads these native subject columns without receipt restoration."""
+    return all("etlReceipts" in entries[name] for name in PROJECTED_NATIVE_OFFICIAL_TABLES)
+
+
 def read_published_native_resolver_rows(snapshot, name, paths):
     """Read complete pinned main fields when the resolver needs no processing fields.
 

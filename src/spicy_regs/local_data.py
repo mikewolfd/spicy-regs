@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from spicy_regs.runtime_bounds import checkpoint, stream_sha256
+from spicy_regs.receipt_members import receipt_paths
 from spicy_regs.sources.publication import empty_index, parse_index, table_descriptor, table_members, receipt_members, receipt_key_members, table_owner
 
 _NAME = re.compile(r"[a-z][a-z0-9_-]*\Z")
@@ -38,7 +39,7 @@ class LocalSelection:
     @property
     def receipts(self) -> dict[str, Path]:
         if self.native:
-            return {str(value.receipts): value.receipts for value in self.native.values()}
+            return {str(path): path for value in self.native.values() for path in receipt_paths(value.receipts)}
         return {member.path: self.directory / receipt_local_key(member)
                 for member in selected_receipt_members(self.publication, self.files)}
 
@@ -182,27 +183,26 @@ def _native_selection(root: Path, *, admit_rows=True) -> LocalSelection:
             selected = inputs.select(name)
             validate_publisher_generation(selected.generation_id)
             native[name] = selected
-            paths = (*selected.subjects, selected.receipts, *((selected.key_index,) if selected.key_index else ()))
+            paths = (*selected.subjects, *receipt_paths(selected.receipts), *((selected.key_index,) if selected.key_index else ()))
             for path in paths:
                 signatures[str(path)] = file_signature(path)
             checkpoint()
             policy = selected_subject_policy(policies[name], selected.subjects)
             if not selected.subjects:
                 from spicy_regs.etl_receipts import receipt_policies
-                import pyarrow.parquet as pq
                 historical = {p.policy_version: p for p in receipt_policies(policy) if p.receipt_only}
                 if historical and not policy.receipt_only:
                     # Classify historical receipt-only data without replaying
                     # payloads during discovery. Reuse one narrow projection for
                     # all datasets sharing the same selected receipt file.
-                    receipt_path = str(selected.receipts)
+                    receipt_path = receipt_paths(selected.receipts)
                     if receipt_path not in receipt_versions:
                         versions_by_dataset = {}
-                        with pq.ParquetFile(selected.receipts) as parquet:
-                            for batch in parquet.iter_batches(columns=["dataset", "policy_version"]):
-                                checkpoint()
-                                for dataset, version in zip(batch.column(0).to_pylist(), batch.column(1).to_pylist(), strict=True):
-                                    versions_by_dataset.setdefault(dataset, set()).add(version)
+                        from spicy_regs.etl_receipts import receipt_batches
+                        for batch in receipt_batches(selected.receipts, columns=["dataset", "policy_version"]):
+                            checkpoint()
+                            for dataset, version in zip(batch.column(0).to_pylist(), batch.column(1).to_pylist(), strict=True):
+                                versions_by_dataset.setdefault(dataset, set()).add(version)
                         receipt_versions[receipt_path] = versions_by_dataset
                     versions = receipt_versions[receipt_path].get(name, set())
                     if len(versions) != 1:

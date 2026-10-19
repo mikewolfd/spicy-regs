@@ -225,11 +225,14 @@ def generation_entry(artifact, members) -> dict:
     """
     from spicy_regs.subject_catalog import shared_receipt_logs
 
+    from spicy_regs.receipt_members import receipt_keys
+
     spec = artifact.root["spec"]
     members = list(members)
+    receipt_member_keys = receipt_keys(spec.get("etlReceipts"))
     try:
         tables = (table_entries(spec["tables"],
-                                [m for m in members if m.object_key not in {"etl_receipts.parquet", "etl_receipts.keys.parquet"}])
+                                [m for m in members if m.object_key not in {*receipt_member_keys, "etl_receipts.keys.parquet"}])
                   if spec["tables"] else {})
     except ValueError as exc:
         raise PublicationError(str(exc)) from exc
@@ -241,10 +244,13 @@ def generation_entry(artifact, members) -> dict:
     }
     if "etlReceipts" in spec:
         declared = spec["etlReceipts"]
-        receipt = next(m for m in members if m.object_key == "etl_receipts.parquet")
+        by_key = {m.object_key: m for m in members}
+        receipts = [{"key": key, "sha256": by_key[key].sha256, "byteSize": by_key[key].byte_size,
+                     "rows": by_key[key].record_count} for key in receipt_member_keys]
         entry["etlReceipts"] = {
-            "key": receipt.object_key, "sha256": receipt.sha256, "byteSize": receipt.byte_size,
-            "rows": receipt.record_count, "columns": declared["columns"], "generationId": declared["generationId"],
+            **({"version": 2, "members": receipts, "rows": declared["rows"]}
+               if "members" in declared else receipts[0]),
+            "columns": declared["columns"], "generationId": declared["generationId"],
             "datasets": [p["dataset"] for p in declared["policies"] if p["dataset"] not in shared_receipt_logs()],
             **({"keyIndex": declared["keyIndex"]} if "keyIndex" in declared else {}),
         }
@@ -290,9 +296,13 @@ def parse_index(raw: bytes) -> dict:
                 raise ValueError("empty family")
             if "etlReceipts" in entry:
                 receipt = entry["etlReceipts"]
-                if (not {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets"} <= set(receipt) <= {"key", "sha256", "byteSize", "rows", "columns", "generationId", "datasets", "keyIndex"}
-                        or receipt["key"] != "etl_receipts.parquet"
-                        or not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)
+                from spicy_regs.receipt_members import receipt_declarations
+                receipt_declarations(receipt, pinned=True)
+                fields = {"rows", "columns", "generationId", "datasets"}
+                fields |= {"version", "members"} if "members" in receipt else {"key", "sha256", "byteSize"}
+                if (not fields <= set(receipt) <= fields | {"keyIndex"}
+                        or ("members" in receipt and value["version"] != 2)
+                        or ("members" not in receipt and (not _DIGEST.fullmatch(receipt["sha256"]) or not _counts(receipt)))
                         or not isinstance(receipt["generationId"], str) or not receipt["generationId"]
                         or not isinstance(receipt["columns"], list) or not receipt["columns"]
                         or any(not isinstance(c, list) or len(c) != 2
@@ -1192,6 +1202,9 @@ def _stage_verified_generation(
     }
     prior_prefix = old_family.get("prefix") if old_family is not None else None
     reused = 0
+    from spicy_regs.receipt_members import receipt_declarations
+    prior_members.update({m["key"]: (m["sha256"], m["byteSize"])
+                          for m in receipt_declarations((old_family or {}).get("etlReceipts"), pinned=True)})
     current = {member.object_key: (member.sha256, member.byte_size) for member in members}
     for key in sorted(source.keys()):
         if prior_prefix is not None and key in current and prior_members.get(key) == current[key]:
@@ -1506,9 +1519,10 @@ def receipt_members(index: Mapping, *, dataset: str | None = None) -> tuple[Memb
             entries = [entry for entry in entries if dataset in entry.get("etlReceipts", {}).get("datasets", [])]
             if len(entries) != 1:
                 raise PublicationError(f"Dataset has no unambiguous generation-bound receipts: {dataset}")
+    from spicy_regs.receipt_members import receipt_declarations
     return tuple(Member(f"{entry['prefix']}/{receipt['key']}", receipt["sha256"],
                         receipt["byteSize"], receipt["rows"])
-                 for entry in entries if (receipt := entry.get("etlReceipts")))
+                 for entry in entries for receipt in receipt_declarations(entry.get("etlReceipts"), pinned=True))
 
 
 def receipt_key_members(index: Mapping, *, dataset: str | None = None) -> tuple[Member, ...]:
@@ -1516,4 +1530,4 @@ def receipt_key_members(index: Mapping, *, dataset: str | None = None) -> tuple[
     selected = {member.path for member in receipt_members(index, dataset=dataset)}
     return tuple(Member(f"{entry['prefix']}/{key['key']}", key['sha256'], key['byteSize'], key['rows'])
                  for entry in index['families'].values() if (receipt := entry.get('etlReceipts'))
-                 and f"{entry['prefix']}/{receipt['key']}" in selected and (key := receipt.get('keyIndex')))
+                 and (key := receipt.get("keyIndex")) and f"{entry['prefix']}/{receipt['key']}" in selected)

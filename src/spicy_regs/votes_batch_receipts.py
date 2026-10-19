@@ -186,7 +186,7 @@ def write_congress_dataset(
 
 def restore_processing_input(
     subject: Path | tuple[Path, ...] | None,
-    receipts: Path,
+    receipts: Path | tuple[Path, ...],
     destination: Path,
     *,
     dataset: str,
@@ -202,6 +202,8 @@ def restore_processing_input(
     ``validate=False`` is for a caller that already admitted this exact pair.
     """
     from spicy_regs.congress_receipts import input_policy, retained_source_rows
+    from spicy_regs.receipt_members import receipt_paths
+    from spicy_regs.etl_receipts import receipt_batches
 
     selected = input_policy(dataset, subject)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -209,7 +211,7 @@ def restore_processing_input(
         chosen = receipts if scoped else select_receipts(receipts, Path(temp) / "receipts.parquet", dataset=dataset)
         paths = () if subject is None else ((subject,) if isinstance(subject, Path) else tuple(subject))
         if validate:
-            _admit({dataset: paths}, [chosen], [selected], generation_id=generation_id, bulk=bulk)
+            _admit({dataset: paths}, receipt_paths(chosen), [selected], generation_id=generation_id, bulk=bulk)
         footers = (_unpack(json.loads(text)) for text in congress_bulk.footer_candidates(chosen, dataset=dataset))
         metadata = [data for data in footers if data.get("entry_kind") == "table_metadata"]
         if not metadata or any(row != metadata[0] for row in metadata[1:]):
@@ -235,10 +237,9 @@ def restore_processing_input(
         def admitted_attempts():
             # Admission above (or the selecting caller) checked every receipt.
             # Replaying those same private bytes does not need another index.
-            with pq.ParquetFile(chosen) as source:
-                for batch in source.iter_batches(batch_size=2000):
-                    for row in batch.to_pylist():
-                        yield {"processing_fields": _unpack(json.loads(row["processing_json"])),
-                               "diagnostics": _unpack(json.loads(row["diagnostic_json"]))}
+            for batch in receipt_batches(chosen, batch_size=2000):
+                for row in batch.to_pylist():
+                    yield {"processing_fields": _unpack(json.loads(row["processing_json"])),
+                           "diagnostics": _unpack(json.loads(row["diagnostic_json"]))}
 
         return write_rows(retained_source_rows(admitted_attempts(), schema=schema), destination, schema)

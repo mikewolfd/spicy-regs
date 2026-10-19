@@ -122,6 +122,15 @@ class Member(NamedTuple):
     manifest_key: str | None = None
 
 
+def _split_selection(index, local, table):
+    from spicy_regs.sources.publication import table_owner
+    native = (local or {}).get("native", {}).get(table)
+    if native is not None:
+        return isinstance(native["receipts"], (list, tuple))
+    owner = table_owner(index, f"{table}.parquet")
+    return owner is not None and "members" in owner[1].get("etlReceipts", {})
+
+
 def selected_member(index: Mapping, local: Mapping | None, base_url: str, table: str,
                     snapshot: Mapping | None = None) -> Member | None:
     """The receipt member paired with the subjects this connection selects.
@@ -132,6 +141,8 @@ def selected_member(index: Mapping, local: Mapping | None, base_url: str, table:
     """
     from spicy_regs.sources.publication import rulemaking_receipt, table_owner
 
+    if _split_selection(index, local, table):
+        return None  # Discovery must not advertise a per-key reader that cannot inspect the complete membership.
     native = (local or {}).get("native", {}).get(table)
     if native is not None:
         return Member(native["receipts"], None, None, native["generation_id"], None)
@@ -532,6 +543,8 @@ def read_fields(cursor: Any, *, table: str, keys: Sequence[Any], fields: Sequenc
     ValueError whose text says what is valid.
     """
     where = carried_fields(table)
+    if where is not None and _split_selection(index, local, table):
+        raise ValueError("Per-key lookup of split receipts is unsupported; no receipt member was read")
     member = selected_member(index, local, base_url, table, snapshot) if where is not None else None
     if where is None or member is None:
         served = tables_with_receipts(index, local, base_url, snapshot)

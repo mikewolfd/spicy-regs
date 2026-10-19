@@ -836,12 +836,23 @@ def _read_with_receipts_rows(subject_paths, receipt_paths, policy, *, generation
             yield subject | processing
 
 
-def _select_receipt_batches(parquet, destinations: Mapping[str, Path]) -> None:
+def receipt_batches(paths, **kwargs):
+    """Stream ordered receipt members without a combined temporary member."""
+    from spicy_regs.receipt_members import receipt_paths
+
+    for path in receipt_paths(paths):
+        with _parquet(path) as parquet:
+            if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
+                raise ValueError("Receipt family member is not the shared receipt schema")
+            yield from parquet.iter_batches(**kwargs)
+
+
+def _select_receipt_batches(batches, destinations: Mapping[str, Path]) -> None:
     """Decode every source cell once and preserve each dataset's complete ordered outcomes."""
     with ExitStack() as stack:
         writers = {dataset: stack.enter_context(pq.ParquetWriter(path, RECEIPT_SCHEMA, compression="zstd"))
                    for dataset, path in destinations.items()}
-        for batch in parquet.iter_batches(batch_size=2000):
+        for batch in batches:
             checkpoint()
             batch.validate(full=True)
             for dataset, writer in writers.items():
@@ -859,10 +870,7 @@ def select_receipt_family(path: ParquetInput, directory: Path, *, datasets: Sequ
         staging = Path(scratch) / "selected"
         staging.mkdir()
         destinations = {dataset: staging / f"dataset-{index}.parquet" for index, dataset in enumerate(datasets)}
-        with _parquet(path) as parquet:
-            if not parquet.schema_arrow.equals(RECEIPT_SCHEMA):
-                raise ValueError("Receipt family member is not the shared receipt schema")
-            _select_receipt_batches(parquet, destinations)
+        _select_receipt_batches(receipt_batches(path, batch_size=2000), destinations)
         from rulespec_artifacts import publish_directory_no_replace
 
         publish_directory_no_replace(staging, directory)
@@ -882,16 +890,14 @@ def select_receipts(path: ParquetInput, destination: Path, *, dataset: str) -> P
         try:
             with TemporaryDirectory(dir=destination.parent) as scratch:
                 temporary = Path(scratch) / "rows.parquet"
-                with _parquet(path) as parquet:
-                    shared = parquet.schema_arrow.equals(RECEIPT_SCHEMA)
-                    if shared:
-                        _select_receipt_batches(parquet, {dataset: temporary})
-                if shared:
-                    temporary.replace(destination)
-                    return destination
+                _select_receipt_batches(receipt_batches(path, batch_size=2000), {dataset: temporary})
+                temporary.replace(destination)
+                return destination
         except (ValueError, TypeError, pa.ArrowException):
             pass
-    return write_rows((row for row in _rows(path) if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)
+    from spicy_regs.receipt_members import receipt_paths
+    return write_rows((row for member in receipt_paths(path) for row in _rows(member)
+                       if row["dataset"] == dataset), destination, RECEIPT_SCHEMA)
 
 
 def comments_receipt_diagnostics(receipt: Mapping) -> dict:

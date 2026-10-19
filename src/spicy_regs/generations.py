@@ -213,8 +213,11 @@ def _verify_admitted_generation(artifact, source, table_info, admit_receipts):
         raise ValueError("A split table is carried forward member by member at publication, not declared whole")
     members = list(iter_member_descriptors(artifact, source))
     receipt_spec = spec.get("etlReceipts")
-    receipt_members = [member for member in members if member.object_key == "etl_receipts.parquet"]
-    if bool(receipt_spec) != bool(receipt_members) or len(receipt_members) > 1:
+    from spicy_regs.receipt_members import receipt_declarations
+    declarations = receipt_declarations(receipt_spec)
+    declared_receipts = tuple(item["key"] for item in declarations)
+    receipt_members = [member for member in members if member.object_key in declared_receipts]
+    if {member.object_key for member in receipt_members} != set(declared_receipts):
         raise ValueError("Generation receipt membership differs from its declaration")
     from spicy_regs.receipt_key_index import KEY as RECEIPT_INDEX_KEY, validate_descriptor, verify_key_index
     index_members = [member for member in members if member.object_key == RECEIPT_INDEX_KEY]
@@ -236,14 +239,15 @@ def _verify_admitted_generation(artifact, source, table_info, admit_receipts):
         verify_key_index(lambda: source.open("etl_receipts.parquet"), lambda: source.open(RECEIPT_INDEX_KEY),
                          index_spec, receipt_pin)
     table_members_only = [member for member in members
-                          if member.object_key not in {"etl_receipts.parquet", RECEIPT_INDEX_KEY}]
+                          if member.object_key not in {*declared_receipts, RECEIPT_INDEX_KEY}]
     if tables or table_members_only:
         table_entries(tables, table_members_only)
     elif not receipt_spec:
         raise ValueError("Generation has neither subjects nor receipts")
     if receipt_spec:
-        if receipt_members[0].record_count != receipt_spec['rows']:
-            raise ValueError('Generation receipt member count differs from receipt declaration')
+        actual_counts = {member.object_key: member.record_count for member in receipt_members}
+        if any(actual_counts[item["key"]] != item["rows"] for item in declarations):
+            raise ValueError("Generation receipt member count differs from receipt declaration")
         _verify_receipts(source, tables, table_members_only, receipt_spec, table_info, admit_receipts)
     for member in table_members_only:
         key = member.object_key
@@ -328,6 +332,7 @@ def build_generation(
     parents: Mapping[str, Mapping] | None = None,
     partitioned: Mapping[str, Sequence[str]] | None = None,
     receipt_path: Path | None = None,
+    receipt_paths: Sequence[Path] | None = None,
     receipt_policies: Sequence | None = None,
     receipt_generation_id: str | None = None,
     receipt_index: tuple[Path, Mapping] | None = None,
@@ -366,6 +371,11 @@ def build_generation(
     failed build retains moved files in this directory and remaining files at
     their prior owned paths; no retained source may be passed as owned output.
 
+    ``receipt_paths`` declares ordered immutable receipt members instead of a
+    monolith. Admission validates their complete union directly. Member names
+    become stable keys under ``etl_receipts/``; indexing and owned receipt
+    adoption are unsupported for this explicit split route.
+
     ``receipt_index`` explicitly adopts an already built key sidecar and its
     descriptor. Normal builds create no index. Full generation admission checks
     its exact receipt binding and every position before this artifact can publish.
@@ -379,11 +389,16 @@ def build_generation(
         raise ValueError("A generation's own prior is its prior-generation input, not a parent")
     expected, partitioned = set(expected_keys), dict(partitioned or {})
     names = output_keys(files, partitioned)
+    if receipt_paths is not None:
+        if receipt_path is not None or not receipt_paths:
+            raise ValueError("Choose one monolith or a nonempty ordered receipt membership")
+        if receipt_index is not None or adopt_owned_receipt:
+            raise ValueError("Split receipt indexing and owned receipt adoption are unsupported")
     if adopt_owned_receipt and receipt_path is None:
         raise ValueError("Owned receipt adoption requires a receipt file")
     if receipt_index is not None and receipt_path is None:
         raise ValueError("Receipt index adoption requires a receipt file")
-    if (not expected and receipt_path is None) or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
+    if (not expected and receipt_path is None and receipt_paths is None) or len(expected) != len(expected_keys) or len(set(names)) != len(names) or set(names) != expected:
         raise ValueError("Build outputs differ from the declared complete family")
     if any(Path(key).name != key or not key.endswith(".parquet") for key in expected):
         raise ValueError("Output keys must be plain Parquet filenames")
@@ -439,6 +454,28 @@ def build_generation(
             shutil.copyfile(index_path, directory / RECEIPT_INDEX_KEY)
             receipt_spec["keyIndex"] = dict(index_descriptor)
             rows[RECEIPT_INDEX_KEY] = table_info(directory / RECEIPT_INDEX_KEY)["rows"]
+    elif receipt_paths is not None:
+        from spicy_regs.receipt_members import DIRECTORY, KEY, receipt_declarations
+        if not receipt_policies or not receipt_generation_id or KEY in tables:
+            raise ValueError("Receipt admission needs policies and a generation identity")
+        declarations, columns = [], None
+        for path in receipt_paths:
+            if path.is_symlink() or not path.is_file():
+                raise ValueError("Receipt membership requires regular retained files")
+            key = f"{DIRECTORY}/{path.name}"
+            shape = table_info(path)
+            if columns is not None and columns != shape["columns"]:
+                raise ValueError("Receipt members have different columns")
+            columns = shape["columns"]
+            declarations.append({"key": key, "rows": shape["rows"]})
+        receipt_spec = {"version": 2, "members": declarations, "generationId": receipt_generation_id,
+                        "policies": [policy.descriptor() for policy in receipt_policies],
+                        "columns": columns, "rows": sum(value["rows"] for value in declarations)}
+        receipt_declarations(receipt_spec)
+        (directory / DIRECTORY).mkdir()
+        for path, declared in zip(receipt_paths, declarations):
+            shutil.copyfile(path, directory / declared["key"])
+            rows[declared["key"]] = declared["rows"]
     elif receipt_policies is not None or receipt_generation_id is not None:
         raise ValueError("Receipt admission cannot omit the shared receipt member")
     from spicy_regs.etl_policy_registry import require_registered_receipts
@@ -594,15 +631,19 @@ def _write_generation_metadata(
 
 def _verify_receipts(source, tables, members, receipt_spec, table_info, admit_receipts):
     """Recheck all row joins through the same local or pinned remote byte source."""
-    from spicy_regs.etl_receipts import DatasetPolicy, RECEIPT_KEY
+    from spicy_regs.etl_receipts import DatasetPolicy
+    from spicy_regs.receipt_members import receipt_declarations
     from spicy_regs.sources.publication import member_table
 
-    if (not {"key", "generationId", "policies", "columns", "rows"} <= set(receipt_spec) <= {"key", "generationId", "policies", "columns", "rows", "keyIndex"}
-            or receipt_spec["key"] != RECEIPT_KEY or not isinstance(receipt_spec["generationId"], str)
-            or not receipt_spec["generationId"]):
+    declarations = receipt_declarations(receipt_spec)
+    fields = {"generationId", "policies", "columns", "rows"}
+    fields |= {"version", "members"} if "members" in receipt_spec else {"key"}
+    if (not fields <= set(receipt_spec) <= fields | {"keyIndex"}
+            or not isinstance(receipt_spec["generationId"], str) or not receipt_spec["generationId"]):
         raise ValueError("Invalid generation receipt declaration")
-    if table_info(RECEIPT_KEY) != {key: receipt_spec[key] for key in ("columns", "rows")}:
-        raise ValueError("Receipt member differs from its declared shape/count")
+    for member in declarations:
+        if table_info(member["key"]) != {"columns": receipt_spec["columns"], "rows": member["rows"]}:
+            raise ValueError("Receipt member differs from its declared shape/count")
     policies = [DatasetPolicy.from_descriptor(value) for value in receipt_spec["policies"]]
     if {p.dataset + ".parquet" for p in policies if not p.receipt_only} != set(tables):
         raise ValueError("Receipt policies must classify every subject output in a generation")
@@ -610,5 +651,5 @@ def _verify_receipts(source, tables, members, receipt_spec, table_info, admit_re
     for member in members:
         subjects[member_table(member.object_key).removesuffix(".parquet")].append(
             lambda key=member.object_key: source.open(key))
-    admit_receipts(subjects, [lambda: source.open(RECEIPT_KEY)], policies,
+    admit_receipts(subjects, [lambda key=m["key"]: source.open(key) for m in declarations], policies,
                    generation_id=receipt_spec["generationId"])

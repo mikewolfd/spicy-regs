@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from spicy_regs.sources import publication
 from spicy_regs.runtime_bounds import stream_sha256
+from spicy_regs.receipt_members import receipt_keys, receipt_paths
 
 
 def _pin(path):
@@ -39,7 +40,7 @@ def _member_pin(path, checked):
 class SelectedDataset:
     dataset: str
     subjects: tuple[Path, ...]
-    receipts: Path
+    receipts: Path | tuple[Path, ...]
     generation_id: str
     key_index: Path | None = None
     key_index_descriptor: dict | None = None
@@ -69,7 +70,8 @@ def _remember_selection(root, selections, checked):
         values[selected.dataset] = {
             "generation_id": selected.generation_id,
             "subjects": [member(p) for p in selected.subjects],
-            "receipts": member(selected.receipts),
+            "receipts": ([member(p) for p in selected.receipts] if isinstance(selected.receipts, tuple)
+                         else member(selected.receipts)),
             **({"key_index": member(selected.key_index), "key_index_descriptor": selected.key_index_descriptor}
                if selected.key_index is not None else {}),
         }
@@ -134,7 +136,7 @@ class SelectedInputs:
     def select(self, dataset):
         if dataset in self.cache:
             selected = self.cache[dataset]
-            for path in (*selected.subjects, selected.receipts,
+            for path in (*selected.subjects, *receipt_paths(selected.receipts),
                          *((selected.key_index,) if selected.key_index is not None else ())):
                 _member_pin(path, self.checked)
             return self.cache[dataset]
@@ -152,7 +154,8 @@ class SelectedInputs:
             result = SelectedDataset(
                 dataset,
                 tuple(checked(p) for p in value["subjects"]),
-                checked(value["receipts"]),
+                (tuple(checked(p) for p in value["receipts"]) if isinstance(value["receipts"], list)
+                 else checked(value["receipts"])),
                 value["generation_id"],
                 checked(value["key_index"]) if "key_index" in value else None,
                 value.get("key_index_descriptor"),
@@ -217,15 +220,20 @@ class SelectedInputs:
                 tuple(fetch(m) for m in publication.table_members(self.index, dataset + ".parquet")) if owner else ()
             )
             receipts = publication.receipt_members(self.index, dataset=dataset)
-            if len(receipts) != 1:
-                raise ValueError(f"{dataset}: ambiguous selected receipt member")
+            if not receipts:
+                raise ValueError(f"{dataset}: missing selected receipt members")
             specification = owners[0]["etlReceipts"]
             indexes = publication.receipt_key_members(self.index, dataset=dataset)
-            result = SelectedDataset(dataset, subjects, fetch(receipts[0]), specification["generationId"],
+            paths = tuple(fetch(member) for member in receipts)
+            result = SelectedDataset(dataset, subjects, paths if "members" in specification else paths[0], specification["generationId"],
                                      fetch(indexes[0]) if indexes else None, specification.get("keyIndex"))
+        if isinstance(result.receipts, tuple) and (not result.receipts or len(set(result.receipts)) != len(result.receipts)):
+            raise ValueError("Selected receipt membership must be nonempty and distinct")
         if (result.key_index is None) != (result.key_index_descriptor is None):
             raise ValueError("Selected receipt key index declaration is incomplete")
         if result.key_index is not None:
+            if isinstance(result.receipts, tuple):
+                raise ValueError("Split receipt indexing is unsupported")
             import duckdb
             import pyarrow.parquet as pq
             assert result.key_index_descriptor is not None
@@ -247,6 +255,8 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
     specification = artifact.root["spec"].get("etlReceipts")
     if specification is None:
         return
+    keys = receipt_keys(specification)
+    receipts = tuple(directory / key for key in keys)
     members = list(iter_member_descriptors(artifact, LocalMemberSource(directory)))
     selected = []
     checked = {}
@@ -267,10 +277,10 @@ def remember_generation(root: Path, directory: Path, artifact) -> None:
             key = member.object_key
             if key is None:
                 raise ValueError("Native generation member has no object key")
-            if key not in {specification["key"], specification.get("keyIndex", {}).get("key")} and member_table(key) == dataset + ".parquet":
+            if key not in {*keys, specification.get("keyIndex", {}).get("key")} and member_table(key) == dataset + ".parquet":
                 subjects.append(directory / key)
         selected.append(
-            SelectedDataset(dataset, tuple(subjects), directory / specification["key"], specification["generationId"],
+            SelectedDataset(dataset, tuple(subjects), receipts if "members" in specification else receipts[0], specification["generationId"],
                             directory / specification["keyIndex"]["key"] if "keyIndex" in specification else None,
                             specification.get("keyIndex"))
         )

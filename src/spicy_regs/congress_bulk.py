@@ -324,11 +324,13 @@ def footer_candidates(receipts: Path, *, dataset: str) -> list[str]:
 
     A superset: the text is matched at any depth, so the caller decodes each and keeps the ones that are.
     """
+    from spicy_regs.receipt_members import receipt_paths
     with etl_bulk.bulk_connection() as (con, _):
-        return [text for (text,) in con.execute(
-            f"SELECT processing_json FROM read_parquet({_text(receipts)}, file_row_number = true) "
+        return [text for member in receipt_paths(receipts) for (text,) in con.execute(
+            f"SELECT processing_json FROM read_parquet({_text(member)}, file_row_number = true) "
             f"WHERE dataset = {_text(dataset)} AND contains(processing_json, {_text(_FOOTER_ENTRY)}) ORDER BY file_row_number"
         ).fetchall()]
+
 
 
 def _source_fields_values_sql(schema: pa.Schema) -> str:
@@ -387,15 +389,17 @@ def restore_input(
            CASE WHEN _reference THEN processing_json END AS _processing,
            CASE WHEN _reference THEN diagnostic_json END AS _diagnostic
     FROM extracted ORDER BY _position"""
-    expected, seen, last, left = _rows_in(receipts, dataset), 0, -1, 0
+    from spicy_regs.receipt_members import receipt_paths
+    from spicy_regs.etl_receipts import receipt_batches
+    expected, seen, last, left = sum(_rows_in(path, dataset) for path in receipt_paths(receipts)), 0, -1, 0
     # As ``write_rows`` does: the destination appears only once every row is written.
     with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(dir=destination.parent) as scratch:
         temporary = Path(scratch) / "rows.parquet"
         # Sort only the current source batch. Sorting the full decoded file holds every wide value before the
         # first result, and a parallel Parquet scan without ORDER BY can reorder healthy receipts.
-        with pq.ParquetFile(receipts) as source, pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
+        with pq.ParquetWriter(temporary, schema, compression="zstd") as writer:
             position = 0
-            for source_batch in source.iter_batches(batch_size=min(_BATCH, 2000),
+            for source_batch in receipt_batches(receipts, batch_size=min(_BATCH, 2000),
                                                    columns=["dataset", "processing_json", "diagnostic_json"]):
                 etl_bulk.checkpoint()
                 source_batch.validate(full=True)

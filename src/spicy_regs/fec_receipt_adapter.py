@@ -12,6 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from spicy_regs.runtime_bounds import checkpoint
+from spicy_regs.receipt_members import is_receipt_member_key, receipt_paths
 
 
 def processing_declarations():
@@ -72,7 +73,7 @@ class ReceiptAdapter:
             fetch_member(self.base_url, member, destination)
         else:
             import shutil
-            if member.key in {"etl_receipts.parquet", "etl_receipts.keys.parquet"} and self.local_receipts is not None:
+            if (member.key in {"etl_receipts.parquet", "etl_receipts.keys.parquet"} or is_receipt_member_key(member.key)) and self.local_receipts is not None:
                 if member.path not in self.local_receipts:
                     raise ValueError("Receipt not part of selected local download")
                 source = Path(self.local_receipts[member.path])
@@ -106,12 +107,14 @@ class ReceiptAdapter:
         with TemporaryDirectory(prefix="selected-processing-receipts-") as directory:
             directory = Path(directory)
             if native is not None:
-                shared = Path(native["receipts"])
+                shared = tuple(map(Path, receipt_paths(native["receipts"])))
                 subjects = [Path(path) for path in native["subjects"]]
                 generation = native["generation_id"]
             else:
-                shared = directory / "shared.parquet"
-                self._fetch(receipt_members(self.index, dataset=table)[0], shared)
+                shared = tuple(directory / f"shared-{ordinal}.parquet"
+                               for ordinal, _ in enumerate(receipt_members(self.index, dataset=table)))
+                for member, path in zip(receipt_members(self.index, dataset=table), shared, strict=True):
+                    self._fetch(member, path)
                 subjects = []
                 if not policy.receipt_only and table_owner(self.index, table + ".parquet") is not None:
                     for ordinal, member in enumerate(table_members(self.index, table + ".parquet")):
@@ -121,6 +124,8 @@ class ReceiptAdapter:
                 generation = owner[1]["etlReceipts"]["generationId"]
             specification = native.get("key_index_descriptor") if native is not None else owner[1]["etlReceipts"].get("keyIndex")
             if specification is not None:
+                if len(shared) != 1:
+                    raise ValueError("Split receipt indexing is unsupported")
                 from .receipt_key_index import check_reader
                 from .sources.publication import file_identity
                 import pyarrow.parquet as pq
@@ -134,10 +139,10 @@ class ReceiptAdapter:
                     if len(indexes) != 1:
                         raise ValueError("Selected receipt key index is ambiguous")
                     self._fetch(indexes[0], key_path)
-                identity = file_identity(shared)
+                identity = file_identity(shared[0])
                 check_reader(self.connection, str(key_path), specification,
                              {"sha256": identity["sha256"], "byteSize": identity["bytes"],
-                              "rows": pq.ParquetFile(shared).metadata.num_rows})
+                              "rows": pq.ParquetFile(shared[0]).metadata.num_rows})
             receipt = select_receipts(shared, directory / "receipt.parquet", dataset=table)
             if not subjects and not policy.receipt_only:
                 historical = [p for p in receipt_policies(policy) if p.receipt_only]

@@ -34,6 +34,7 @@ from spicy_regs.legislative_receipts import (
     restore_prior,
 )
 from spicy_regs.native_types import described_schema
+from spicy_regs.receipt_members import receipt_paths
 from spicy_regs.navigation_read_outcomes import (
     POLICIES as NAVIGATION_OUTCOME_POLICIES, READ_TABLES, FILE_TABLES, family_tables, write_recorded_outcomes,
 )
@@ -214,7 +215,8 @@ class SelectedPriors:
                                     for path in self.processing_members[dataset]]}
                       if source.is_dir() else pin(source))
         binding = {"dataset": dataset, "generationId": generation,
-                   "subjects": [pin(path) for path in subjects], "receipts": pin(receipts),
+                   "subjects": [pin(path) for path in subjects],
+                   "receipts": [pin(path) for path in receipts] if isinstance(receipts, tuple) else pin(receipts),
                    "processing": processing}
         index = self.selected.index
         key = dataset + ".parquet"
@@ -228,7 +230,9 @@ class SelectedPriors:
         else:
             for ordinal, subject in enumerate(binding["subjects"]):
                 r2.note_pinned_read(f"{dataset}/subjects/{ordinal}.parquet", subject)
-        r2.note_pinned_read(f"{dataset}/etl_receipts.parquet", binding["receipts"])
+        for ordinal, path in enumerate(receipt_paths(receipts)):
+            key = f"etl_receipts/{ordinal}.parquet" if isinstance(receipts, tuple) else "etl_receipts.parquet"
+            r2.note_pinned_read(f"{dataset}/{key}", pin(path))
         return binding
 
     def download_members(self, key, target):
@@ -296,7 +300,9 @@ class NativeReceiptLifecycle(RollupPipeline):
             else:
                 for ordinal, path in enumerate(selection.subjects):
                     parents[f"{dataset}/subjects/{ordinal}.parquet"] = prior.selected.member_pin(path)
-            parents[f"{dataset}/etl_receipts.parquet"] = prior.selected.member_pin(selection.receipts)
+            for ordinal, path in enumerate(receipt_paths(selection.receipts)):
+                receipt_key = f"etl_receipts/{ordinal}.parquet" if isinstance(selection.receipts, tuple) else "etl_receipts.parquet"
+                parents[f"{dataset}/{receipt_key}"] = prior.selected.member_pin(path)
         self._primed_receipt_work = output_dir, private, prior
         return parents
 
@@ -398,7 +404,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 legislative,
                 bundle,
                 generation_id=self.receipt_generation_id,
-                prior_receipts=list(dict.fromkeys(v[1] for v in prior.selections.values())),
+                prior_receipts=list(dict.fromkeys(path for v in prior.selections.values() for path in receipt_paths(v[1]))),
                 file_outcomes_table=FILE_TABLES.get(getattr(self, "publication_family", None) or self.name),
                 validate=False,  # the completed generation admits these exact bytes once
             )
@@ -435,7 +441,7 @@ class SubjectReceiptRollup(NativeReceiptLifecycle):
                 shutil.copyfile(source, target)
                 subjects.append(target)
         combined = combine_receipts(receipts, candidate / "etl_receipts.parquet")
-        if fresh_failure_datasets or has_unmatched_failures(combined, {name: [selection[1]] for name, selection in prior.selections.items()}):
+        if fresh_failure_datasets or has_unmatched_failures(combined, {name: receipt_paths(selection[1]) for name, selection in prior.selections.items()}):
             raise ValueError("Subject conversion refused; retained receipts require review")
         by_dataset = {p.dataset: [] for p in self.receipt_policies}
         for path in subjects:
