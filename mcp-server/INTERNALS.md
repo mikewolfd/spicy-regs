@@ -152,7 +152,13 @@ into the next one.
   row pins and shared receipt fields. Their output schema is not invented. Release
   compatibility describes matching declarations, not completed row validation.
   `query_sql` builds its own connection and runs all exact admission guards
-  before making those views queryable. Native local discovery still checks
+  before making those views queryable. Remote SQL with named relations binds
+  only their declared source dependencies; receipt-dependent adapters still
+  validate their exact selected receipts. An explicit `etl_receipts` query
+  retains every captured family's receipts. Later queries for unbound sources
+  or relationships rebuild against the same publication pins, preserving the
+  previous connection if the replacement fails. Queries without named relations
+  retain the complete catalog for introspection. Native local discovery still checks
   held-byte pins and policy schemas, and reports pending receipt joins.
 - **Legacy comments files stay mutable.** Their views read the object current at
   each statement (the HEAD revalidates DuckDB's file cache), but the bound

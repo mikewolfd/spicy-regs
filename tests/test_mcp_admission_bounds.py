@@ -463,3 +463,198 @@ def test_local_native_receipt_lookup_keeps_full_row_admission(tmp_path, monkeypa
     assert server._cached_connection is not None and server._cached_discovery_connection is None
     local = server._connection_local_selection(server._cached_connection)
     assert local is not None and local['receipt_rows_admitted'] is True
+
+
+def _remote_fixture(tmp_path, monkeypatch, index):
+    """Run real remote connection construction against only tiny local fixture URLs."""
+    monkeypatch.setattr(server, "DATA_DIR", None)
+    monkeypatch.setattr(server, "R2_BASE_URL", str(tmp_path))
+    monkeypatch.setattr(server, "TABLES", ())
+    monkeypatch.setattr(server, "load_public_http", lambda *args: None)
+    monkeypatch.setattr(server, "INTERACTIVE_HTTP_RETRIES", {})
+    monkeypatch.setattr(server, "_read_publication", lambda: server._Publication(index, None, None))
+    admitted = []
+    original = server._admit_remote_source_view
+
+    def admit(cursor, source):
+        admitted.append(source.name)
+        return original(cursor, source)
+
+    monkeypatch.setattr(server, "_admit_remote_source_view", admit)
+    return admitted
+
+
+@pytest.fixture
+def scoped_remote(tmp_path, monkeypatch):
+    import duckdb
+    from spicy_regs.sources.publication import file_identity
+
+    queries = {
+        "lobbying_activities": "SELECT 'filing-1'::VARCHAR filing_uuid, 0::BIGINT activity_index, "
+        "[{'id': 'agency-1', 'name': 'Native agency'}] government_entities",
+        "other_rows": "SELECT 7::INTEGER id",
+        "broken_rows": "SELECT 8::INTEGER id",
+    }
+    tables = {}
+    with duckdb.connect() as con:
+        for name, query in queries.items():
+            path = tmp_path / (name + ".parquet")
+            con.execute(f"COPY ({query}) TO ? (FORMAT PARQUET)", [str(path)])
+            columns = [list(row[:2]) for row in con.execute("DESCRIBE " + query).fetchall()]
+            identity = file_identity(path)
+            tables[path.name] = {
+                "sha256": identity["sha256"],
+                "byteSize": identity["bytes"],
+                "rows": 1,
+                "columns": columns,
+            }
+    tables["broken_rows.parquet"]["columns"] = [["wrong", "VARCHAR"]]
+    index = {
+        "families": {
+            "fixture": {
+                "artifactDigest": "sha256:" + "a" * 64,
+                "prefix": "",
+                "tables": tables,
+                "etlReceipts": {
+                    "key": "unrequested-missing.parquet",
+                    "datasets": [],
+                    "generationId": "fixture",
+                    "rows": 1,
+                    "byteSize": 1,
+                    "sha256": "sha256:" + "b" * 64,
+                    "keyIndex": {"key": "unrequested-missing.keys.parquet"},
+                },
+            }
+        }
+    }
+    monkeypatch.setattr(server, "FEC_QUALIFIED_VIEWS", ())
+    admitted = _remote_fixture(tmp_path, monkeypatch, index)
+    return server.build_server(), index, admitted
+
+
+def test_remote_query_registers_only_lobbying_dependency_and_keeps_security(scoped_remote, tmp_path):
+    mcp, index, admitted = scoped_remote
+    name = "lobbying_contacted_entities_occurrences"
+    result = _tool_data(mcp, "query_sql", {"sql": f"SELECT target_key FROM {name} LIMIT 1"})
+    assert _records(result) == [{"target_key": "agency-1"}]
+    assert admitted == ["lobbying_activities"]
+    assert result["publication"][name]["rule_version"] == "lda-native-entities/1"
+    assert (
+        result["publication"][name]["input_publications"]["lobbying_activities"]["artifact_digest"]
+        == index["families"]["fixture"]["artifactDigest"]
+    )
+    con = server._cached_connection
+    assert con is not None
+    assert server._connection_index(con) == index
+    assert "etl_receipts" not in server._available_tables(con)
+    assert con.execute("SELECT current_setting('enable_external_access')").fetchone() == (False,)
+    with pytest.raises(Exception, match="disabled|permission|not allowed"):
+        _tool_data(
+            mcp,
+            "query_sql",
+            {"sql": f"SELECT * FROM lobbying_activities CROSS JOIN read_parquet('{tmp_path / 'other_rows.parquet'}')"},
+        )
+    assert admitted == ["lobbying_activities"]
+
+
+def test_remote_base_expansion_keeps_pins_and_failed_replacement(scoped_remote, monkeypatch):
+    mcp, index, admitted = scoped_remote
+    _tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities LIMIT 1"})
+    original = server._cached_connection
+    monkeypatch.setattr(server, "_read_publication", lambda: pytest.fail("Expansion must reuse captured pins"))
+    with pytest.raises(Exception, match="Published schema differs"):
+        _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM broken_rows"})
+    assert server._cached_connection is original
+    assert original.execute("SELECT filing_uuid FROM lobbying_activities").fetchone() == ("filing-1",)
+    assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT id FROM other_rows"})) == [{"id": 7}]
+    expanded = server._cached_connection
+    assert expanded is not original and server._connection_index(expanded) == index
+    before = list(admitted)
+    _tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities"})
+    assert server._cached_connection is expanded and admitted == before
+
+
+def test_cancelled_remote_base_expansion_keeps_prior_connection(scoped_remote, monkeypatch):
+    mcp, _, _ = scoped_remote
+    _tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities"})
+    original = server._cached_connection
+    admit = server._admit_remote_source_view
+    stopped = Event()
+
+    def blocked(cursor, source):
+        if source.name == "other_rows":
+            current_bound().cancel()
+            try:
+                checkpoint()
+            finally:
+                stopped.set()
+        return admit(cursor, source)
+
+    monkeypatch.setattr(server, "_admit_remote_source_view", blocked)
+    with pytest.raises(Exception, match="including input admission"):
+        _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM other_rows"})
+    assert stopped.wait(1)
+    assert server._cached_connection is original
+    assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities"})) == [
+        {"filing_uuid": "filing-1"}
+    ]
+
+
+def test_remote_scoped_fec_query_still_restores_exact_receipt_inputs(tmp_path, monkeypatch):
+    from spicy_regs.fec_receipt_adapter import ReceiptAdapter
+    from spicy_regs.sources import publication
+    from tests.test_mcp_fec_release import configure
+
+    specs, index, *_ = configure(tmp_path, monkeypatch)
+    bucket = tmp_path / "bucket"
+    for entry in index["families"].values():
+        for key in entry["tables"]:
+            for member in publication.table_members(index, key):
+                target = bucket / member.path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                publication.fetch_member("fixture", member, target)
+    admitted = _remote_fixture(bucket, monkeypatch, index)
+    restored = []
+    original = ReceiptAdapter.restore_originals
+
+    def restoring(self, table, *args, **kwargs):
+        restored.append(table)
+        return original(self, table, *args, **kwargs)
+
+    monkeypatch.setattr(ReceiptAdapter, "restore_originals", restoring)
+    result = _tool_data(server.build_server(), "query_sql", {"sql": f"SELECT * FROM {specs[0].view.name}"})
+    assert _records(result) == [{"id": 1}]
+    assert set(admitted) == {"fec_receipts", "fec_filings"}
+    assert set(restored) == {"fec_receipts", "fec_filings"}
+    assert result["publication"][specs[0].view.name]["release_compatibility"]["status"] == "compatible"
+
+
+def test_explicit_remote_receipts_keep_all_families_and_catalog_queries_expand(scoped_remote, tmp_path):
+    import duckdb
+    from spicy_regs.sources.publication import file_identity
+
+    mcp, index, admitted = scoped_remote
+    index["families"]["fixture"]["tables"].pop("broken_rows.parquet")
+    index["families"]["second"] = {"artifactDigest": "sha256:" + "c" * 64, "prefix": "", "tables": {}}
+    with duckdb.connect() as con:
+        for family, entry in index["families"].items():
+            path = tmp_path / (family + "-receipts.parquet")
+            con.execute(f"COPY (SELECT '{family}'::VARCHAR dataset) TO ? (FORMAT PARQUET)", [str(path)])
+            identity = file_identity(path)
+            entry["etlReceipts"] = {
+                "key": path.name,
+                "sha256": identity["sha256"],
+                "byteSize": identity["bytes"],
+                "rows": 1,
+                "columns": [["dataset", "VARCHAR"]],
+                "generationId": family,
+                "datasets": [family],
+            }
+    _tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities"})
+    result = _tool_data(mcp, "query_sql", {"sql": "SELECT dataset FROM etl_receipts ORDER BY dataset"})
+    assert _records(result) == [{"dataset": "fixture"}, {"dataset": "second"}]
+    assert set(result["publication"]["etl_receipts"]["families"]) == {"fixture", "second"}
+    assert "other_rows" not in admitted
+    result = _tool_data(mcp, "query_sql", {"sql": "SHOW TABLES"})
+    assert "other_rows" in {row["name"] for row in _records(result)}
+    assert server._pinned_record(server._cached_connection, "_spicy_query_scope") is None
