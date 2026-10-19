@@ -179,7 +179,8 @@ def check_preserved(prior, current, *, scorecard_ids, publisher_ids):
                     continue
                 key = tuple(row[field] for field in IDENTITIES[name])
                 expected = old.pop(key, None)
-                if expected is None or canonical([expected]) != canonical([row]):
+                # The merge retains unchanged row objects; compare distinct copies by their exact values.
+                if expected is None or (expected is not row and canonical([expected]) != canonical([row])):
                     raise ValueError("Changed, additional or duplicated row")
             if old:
                 raise ValueError("Missing row")

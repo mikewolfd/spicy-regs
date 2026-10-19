@@ -185,6 +185,34 @@ def test_named_inputs_cannot_replace_private_retention_callback(tmp_path):
         )
 
 
+@pytest.mark.parametrize("change", [None, "duplicate", "prior-duplicate", "missing", "missing-key"])
+def test_shared_preserved_rows_skip_serialization_but_keep_identity_and_scope_checks(monkeypatch, change):
+    kept = dict(scorecard_id="hrc:118", metric_id="annual", publisher_member_key="member", value_text="N/A")
+    selected = dict(kept, scorecard_id="lcv:2025")
+    publishers = [dict(publisher_id="hrc", capture_id="kept"), dict(publisher_id="lcv", capture_id="old")]
+    prior = {"scorecard_publishers": publishers, "scorecard_member_ratings": [kept, selected]}
+    current = {
+        "scorecard_publishers": [publishers[0], dict(publishers[1], capture_id="new")],
+        "scorecard_member_ratings": [kept, dict(selected, value_text="new selected value")],
+    }
+    if change == "duplicate":
+        current["scorecard_member_ratings"].append(kept)
+    elif change == "prior-duplicate":
+        prior["scorecard_member_ratings"].append(kept)
+    elif change == "missing":
+        current["scorecard_member_ratings"].remove(kept)
+    elif change == "missing-key":
+        current["scorecard_member_ratings"][0] = {key: value for key, value in kept.items() if key != "metric_id"}
+    monkeypatch.setattr(retained, "canonical", lambda *args, **kwargs: pytest.fail("Serialized the same row object"))
+    if change:
+        with pytest.raises(ScorecardReplayError, match="Unselected"):
+            retained.check_preserved(prior, current, scorecard_ids={"lcv:2025"}, publisher_ids={"lcv"})
+    else:
+        assert retained.check_preserved(prior, current, scorecard_ids={"lcv:2025"}, publisher_ids={"lcv"}) == {
+            "scorecard_publishers": 1, "scorecard_member_ratings": 1,
+        }
+
+
 def test_unselected_rows_require_full_evidence_identity_preservation():
     prior = {
         "scorecard_publishers": [{"publisher_id": "hrc", "capture_id": "old"}],
