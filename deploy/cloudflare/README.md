@@ -301,3 +301,44 @@ and current-parent/family compare-and-swap checks. The helper adds only the
 explicit protected-family checks; unrelated historical coverage acceptance is
 not a prerequisite for a new family's publication. Existing task evidence stays
 retained; new deliveries change input data rather than script source.
+
+## Private package and local reader checks
+
+After committing the reviewed code and any necessary dependency-wheel adoption,
+`local_package.py` builds the Regs wheel once, checks its package members against
+that source, installs the frozen dependencies and wheel into a fresh private
+runtime, and runs an installed consumer check. It uses offline `uv` commands and
+records the lock, wheel, command times, logical output bytes and unchanged build
+runtime file signatures. Logical file bytes are not a measured free-space gain.
+
+```sh
+python deploy/cloudflare/local_package.py --inputs /release/package-inputs.json --output /release/package
+```
+
+The input contains `source: {commit, tree}`, the existing build interpreter's
+absolute `python` path, and `check: {path, sha256}` for the reader expectations.
+The source must be clean and the output directory must be new. A failed output
+retains its logs for diagnosis; inspect the failed step before another build.
+Existing source fixtures and unchanged dependency wheels are reused.
+
+`qualify_reader.py` takes `--expected <JSON path> --sha256 <exact file hash>`.
+Its expectations contain:
+
+- `generation: {directory, logicalId, artifactDigest}` for an existing generation.
+- `queries: [{sql, columns, rows}]` with complete expected rows.
+- `consumer` and `mcp_source_sha256` matching the installed serving code.
+- Optional `inputs: [{path, sha256}]` for small retained fixture/control files.
+- For an installed pipeline check, `pipeline: {module, argv}` invokes its normal
+  CLI in process before querying the resulting generation. The generation
+  directory must not already exist. Its generated
+  `logicalId`/`artifactDigest` and consumer pins may be omitted because the
+  package operation has already checked the wheel against the reviewed source.
+
+Use `require_docs_absent: true` for the serving image. Run that image with the
+existing read-only mounts, `--network none`, CPU/memory bounds and exact image
+digest. The check also refuses Python socket attempts and verifies all loaded
+Regs/Docs module origins belong to the installed runtime; the socket audit alone
+does not isolate native-library networking. Image qualification reads the
+already-built generation, while the private package check reuses a small retained
+CLI fixture. Change paths and expected values in JSON rather than copying either
+check script.
