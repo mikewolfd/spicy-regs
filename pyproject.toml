@@ -60,6 +60,7 @@ docs = [
 ]
 
 [project.scripts]
+build-fec-financial-profiles = "spicy_regs.pipelines.fec_financial_profiles:main"
 spicy-regs-run = "spicy_regs.operational_runner:main"
 spicy-regs-scorecards = "spicy_regs.scorecards.operations.cli:main"
 build-historical-regulations = "spicy_regs.transforms.historical_regulations:main"

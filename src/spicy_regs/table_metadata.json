@@ -20136,6 +20136,233 @@
     "grain": "One dated Federal Register document in the admitted source release; EO number is a lookup value, not the sole source identity. History is the publisher's literal notes, not an inferred legal status.",
     "identity_columns": []
   },
+  "fec_financial_profiles": {
+    "table": "fec_financial_profiles",
+    "label": "Reported candidate and committee financial profiles",
+    "category": "query_data",
+    "summary": "Exact source-reported money for an explicitly selected candidate and committee CSV snapshot, with visible missing dates and unresolved conflicts.",
+    "coverage": "Not a range. Designed for complete explicitly selected candidate and committee summary CSV populations in one election cycle. Actual population and publication are established by the selected generation and its retained source evidence. The date records this design statement, not a source measurement.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "profile_id",
+        "column_type": "VARCHAR",
+        "description": "Stable profile identity from selection policy, explicit scope, entity kind, native entity ID and election cycle."
+      },
+      {
+        "column_name": "scope_id",
+        "column_type": "VARCHAR",
+        "description": "Explicit retained snapshot selection identity. This is not an automatically refreshed latest record."
+      },
+      {
+        "column_name": "entity_kind",
+        "column_type": "VARCHAR",
+        "description": "Candidate or committee; candidate-wide and committee amounts must not be added together."
+      },
+      {
+        "column_name": "entity_id",
+        "column_type": "VARCHAR",
+        "description": "Literal FEC candidate or committee identifier from the selected source."
+      },
+      {
+        "column_name": "entity_name",
+        "column_type": "VARCHAR",
+        "description": "Publisher entity name when every witness agrees; null for conflicting names."
+      },
+      {
+        "column_name": "selection_status",
+        "column_type": "VARCHAR",
+        "description": "Selected for one unique or equivalent reported snapshot, or ambiguous when witnesses conflict."
+      },
+      {
+        "column_name": "selection_reason",
+        "column_type": "VARCHAR",
+        "description": "Unique_reported_snapshot, equivalent_witnesses or conflicting_reported_snapshots; never a timestamp tie-break."
+      },
+      {
+        "column_name": "coverage_status",
+        "column_type": "VARCHAR",
+        "description": "Reported when dates are exact and consistent with the capture and cycle; unqualified for date limitations; ambiguous for conflicting snapshots."
+      },
+      {
+        "column_name": "coverage_reasons_json",
+        "column_type": "VARCHAR",
+        "description": "JSON array of explicit date or conflict reasons. No latest or current financial total claim follows from an empty array."
+      },
+      {
+        "column_name": "period_start_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source coverage start date, including empty or null; all competing values remain in witnesses_json."
+      },
+      {
+        "column_name": "period_start_status",
+        "column_type": "VARCHAR",
+        "description": "Maintained source date status, including exact, source_empty, source_null, invalid_date or unsupported_spelling; ambiguous when no snapshot is selected."
+      },
+      {
+        "column_name": "period_end_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal source coverage end date, including empty or null; all competing values remain in witnesses_json."
+      },
+      {
+        "column_name": "period_end_status",
+        "column_type": "VARCHAR",
+        "description": "Maintained source date status, or ambiguous when no snapshot is selected."
+      },
+      {
+        "column_name": "amount_basis",
+        "column_type": "VARCHAR",
+        "description": "Source_reported. Amount eligibility uses the maintained reported_summary_measure rule; no transaction-derived totals or cross-period sums."
+      },
+      {
+        "column_name": "captured_at",
+        "column_type": "VARCHAR",
+        "description": "Aware timestamp of the explicitly selected original source capture. Values are only as fresh as this retained snapshot; no live freshness guarantee."
+      },
+      {
+        "column_name": "source_collection_id",
+        "column_type": "VARCHAR",
+        "description": "Exact selected candidate or committee summary CSV collection identity."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original retained CSV capture, distinct from the derived parent table."
+      },
+      {
+        "column_name": "source_table_generation",
+        "column_type": "VARCHAR",
+        "description": "Exact managed fec-query generation containing the input summary table; recorded as a generation parent."
+      },
+      {
+        "column_name": "witnesses_json",
+        "column_type": "VARCHAR",
+        "description": "All complete selected summary observations for this entity, including original raw measures, native locators, linked candidates, dates and mapping identities. Decimals serialize as exact text."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL recorded for the selected CSV capture; not a newly acquired source."
+      },
+      {
+        "column_name": "publisher_profile_url",
+        "column_type": "VARCHAR",
+        "description": "FEC entity-and-cycle page for navigation; its current contents may differ from this dated retained snapshot."
+      },
+      {
+        "column_name": "selection_policy",
+        "column_type": "VARCHAR",
+        "description": "Versioned named profile selection rule; observation-level financial qualification remains unchanged."
+      },
+      {
+        "column_name": "receipts",
+        "column_type": "VARCHAR",
+        "description": "Receipts in USD as exact decimal text when eligible. Preserve precision in JavaScript; null never means zero. Reported cumulative coverage amount; not additive across overlapping periods."
+      },
+      {
+        "column_name": "receipts_status",
+        "column_type": "VARCHAR",
+        "description": "Exact, source_null, source_empty, not_supplied, refused or ambiguous. Only exact carries a chosen amount; period qualification is separate."
+      },
+      {
+        "column_name": "receipts_raw",
+        "column_type": "VARCHAR",
+        "description": "Original native amount spelling for the selected snapshot; all conflicting spellings remain in witnesses_json."
+      },
+      {
+        "column_name": "receipts_native_field",
+        "column_type": "VARCHAR",
+        "description": "Original FEC field name behind this friendly measure label."
+      },
+      {
+        "column_name": "disbursements",
+        "column_type": "VARCHAR",
+        "description": "Disbursements in USD as exact decimal text when eligible. Preserve precision in JavaScript; null never means zero. Reported cumulative coverage amount; not additive across overlapping periods."
+      },
+      {
+        "column_name": "disbursements_status",
+        "column_type": "VARCHAR",
+        "description": "Exact, source_null, source_empty, not_supplied, refused or ambiguous. Only exact carries a chosen amount; period qualification is separate."
+      },
+      {
+        "column_name": "disbursements_raw",
+        "column_type": "VARCHAR",
+        "description": "Original native amount spelling for the selected snapshot; all conflicting spellings remain in witnesses_json."
+      },
+      {
+        "column_name": "disbursements_native_field",
+        "column_type": "VARCHAR",
+        "description": "Original FEC field name behind this friendly measure label."
+      },
+      {
+        "column_name": "cash_on_hand",
+        "column_type": "VARCHAR",
+        "description": "Cash on hand in USD as exact decimal text when eligible. Preserve precision in JavaScript; null never means zero. Reported balance at coverage end; not additive across periods."
+      },
+      {
+        "column_name": "cash_on_hand_status",
+        "column_type": "VARCHAR",
+        "description": "Exact, source_null, source_empty, not_supplied, refused or ambiguous. Only exact carries a chosen amount; period qualification is separate."
+      },
+      {
+        "column_name": "cash_on_hand_raw",
+        "column_type": "VARCHAR",
+        "description": "Original native amount spelling for the selected snapshot; all conflicting spellings remain in witnesses_json."
+      },
+      {
+        "column_name": "cash_on_hand_native_field",
+        "column_type": "VARCHAR",
+        "description": "Original FEC field name behind this friendly measure label."
+      },
+      {
+        "column_name": "debts_owed",
+        "column_type": "VARCHAR",
+        "description": "Debts owed in USD as exact decimal text when eligible. Preserve precision in JavaScript; null never means zero. Reported balance at coverage end; not additive across periods."
+      },
+      {
+        "column_name": "debts_owed_status",
+        "column_type": "VARCHAR",
+        "description": "Exact, source_null, source_empty, not_supplied, refused or ambiguous. Only exact carries a chosen amount; period qualification is separate."
+      },
+      {
+        "column_name": "debts_owed_raw",
+        "column_type": "VARCHAR",
+        "description": "Original native amount spelling for the selected snapshot; all conflicting spellings remain in witnesses_json."
+      },
+      {
+        "column_name": "debts_owed_native_field",
+        "column_type": "VARCHAR",
+        "description": "Original FEC field name behind this friendly measure label."
+      },
+      {
+        "column_name": "source_cycle",
+        "column_type": "INTEGER",
+        "description": "Explicit even election cycle of the two selected CSV collections; source coverage dates remain independent."
+      },
+      {
+        "column_name": "witness_count",
+        "column_type": "INTEGER",
+        "description": "Number of distinct physical summary witnesses retained for this entity; equivalent witnesses are never added."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "DATE",
+        "description": "Exact reported coverage start when one snapshot is selected; null for missing, refused or conflicting dates."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "DATE",
+        "description": "Exact reported coverage end when one snapshot is selected. Cash and debt refer to this reported end; unresolved dates remain explicitly unqualified."
+      }
+    ],
+    "subject": "campaign_finance",
+    "grain": "One native entity, kind, cycle and explicit snapshot scope. Equivalent witnesses select once; conflicting facts remain visible without choosing a winner.",
+    "identity_columns": [
+      "profile_id"
+    ]
+  },
   "treasury_debt_observations": {
     "table": "treasury_debt_observations",
     "label": "Treasury daily debt balances",
