@@ -43,7 +43,7 @@ from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS as REGULATION
 from spicy_regs.transforms.fec_identity_receipts import dataset_policy as fec_policy
 from spicy_regs.transforms.fec_identity_context_fields import REGISTRY as FEC
 from spicy_regs.transforms.regulations_receipts import (
-    RESTORE_DATASETS,
+    BATCH_RESTORE_DATASETS,
     ReceiptInput,
     materialize_internal,
     policy as regulations_policy,
@@ -170,7 +170,7 @@ class SelectedPriors:
             output.parent.mkdir(parents=True, exist_ok=True)
             materialize_internal(
                 ReceiptInput(dataset, tuple(subjects), scoped, generation), output,
-                bulk=dataset in RESTORE_DATASETS, scoped=True,
+                bulk=dataset in BATCH_RESTORE_DATASETS, scoped=True,
             )
         self.restored[dataset] = output
         members = tuple(sorted(output.rglob("*.parquet"))) if output.is_dir() else (output,)

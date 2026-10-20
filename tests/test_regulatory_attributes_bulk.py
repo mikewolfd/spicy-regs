@@ -1,13 +1,16 @@
 """The attribute tables' typed bulk writer and restore equal the row writer and row reader."""
 import datetime as dt
 import json
+from unittest.mock import patch
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs import etl_bulk, etl_receipts, regulations_bulk
+from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors
 from spicy_regs.schemas.regulations_subjects import SOURCE_COLUMNS
+from spicy_regs.selected_generations import SelectedDataset, remember_selection
 from spicy_regs.transforms import regulations_receipts
 from spicy_regs.transforms.regulations_receipts import ReceiptInput, materialize_internal, policy, write_held_dataset
 from spicy_regs.transforms.regulations_shape import TYPES
@@ -59,7 +62,7 @@ def _same(left, right):
 ])
 def test_typed_bulk_pair_and_restore_equal_the_row_writer_and_reader(tmp_path, monkeypatch, dataset, rows):
     source = tmp_path / "source.parquet"
-    table = _table(dataset, rows)
+    table = _table(dataset, rows).replace_schema_metadata({"placement": "kept"})
     pq.write_table(table, source, row_group_size=3)
     reference = write_held_dataset(dataset, source, tmp_path / "row", bulk=False, generation_id="g")
     monkeypatch.setattr(regulations_bulk, "_BATCH", 4)
@@ -78,7 +81,7 @@ def test_typed_bulk_pair_and_restore_equal_the_row_writer_and_reader(tmp_path, m
 
     selected = ReceiptInput(dataset, (actual[0],), actual[1], "g")
     monkeypatch.undo()
-    row_restore = materialize_internal(selected, tmp_path / "row-restore.parquet", bulk=False, source_schema=table.schema)
+    row_restore = materialize_internal(selected, tmp_path / "row-restore.parquet", bulk=False)
     monkeypatch.setattr(regulations_bulk, "_BATCH", 4)
     restored = []
     restore = regulations_bulk.materialize_internal
@@ -86,6 +89,72 @@ def test_typed_bulk_pair_and_restore_equal_the_row_writer_and_reader(tmp_path, m
     bulk_restore = materialize_internal(selected, tmp_path / "bulk-restore.parquet", bulk=True, source_schema=table.schema)
     assert restored == [1]
     assert pq.read_table(row_restore).equals(pq.read_table(bulk_restore), check_metadata=True)
+
+    # The actual coverage/rollup owner supplies no source_schema. It must use the
+    # same admitted batch route without repeating reference row reconstruction.
+    root = tmp_path / "selection"
+    remember_selection(root, [SelectedDataset(dataset, (actual[0],), actual[1], "g")])
+    prior = SelectedPriors(tmp_path / "private", root=root, public_url="")
+    before = [path.read_bytes() for path in actual]
+    with patch.object(regulations_bulk, "materialize_internal", wraps=restore) as batch, \
+         patch.object(regulations_receipts, "read_with_receipts",
+                      wraps=regulations_receipts.read_with_receipts) as replay, \
+         patch.object(regulations_bulk, "validate_receipt_bundle",
+                      wraps=regulations_bulk.validate_receipt_bundle) as admission:
+        owned = prior.get(dataset)
+        assert pq.read_table(owned).equals(pq.read_table(row_restore), check_metadata=True)
+        assert prior.get(dataset) == owned
+    assert {"batch": batch.call_count, "row_replay": replay.call_count, "admission": admission.call_count} == {
+        "batch": 1, "row_replay": 0, "admission": 1}
+    assert batch.call_args.kwargs == {"source_schema": None, "scoped": True}
+    assert prior.selections[dataset] == ([actual[0]], actual[1], "g")
+    assert [path.read_bytes() for path in actual] == before
+
+
+@pytest.mark.parametrize("case", ["changed-subject", "reordered", "required-bulk", "empty"])
+def test_selected_prior_attribute_refusal_and_supported_fallback(tmp_path, monkeypatch, case):
+    dataset = "document_attributes"
+    source = tmp_path / "source.parquet"
+    rows = [] if case == "empty" else [
+        {"document_id": "z", "page_count": 1, "authors": ["one", None]},
+        {"document_id": "a", "page_count": 2, "author_date": dt.datetime(2020, 1, 1, tzinfo=UTC)},
+    ]
+    table = _table(dataset, rows).replace_schema_metadata({"placement": "kept"})
+    pq.write_table(table, source)
+    subject, receipts = write_held_dataset(dataset, source, tmp_path / "native", generation_id="g")
+    if case != "empty":
+        native = pq.read_table(subject)
+        if case == "changed-subject":
+            forged = native.to_pylist()
+            forged[-1]["page_count"] = 99
+            native = pa.Table.from_pylist(forged, schema=native.schema)
+        else:
+            native = native.take([1, 0])
+        subject = tmp_path / "changed.parquet"
+        pq.write_table(native, subject)
+    selected = ReceiptInput(dataset, (subject,), receipts, "g")
+    if case in {"reordered", "empty"}:
+        reference = materialize_internal(selected, tmp_path / "reference.parquet")
+    root = tmp_path / "selection"
+    remember_selection(root, [SelectedDataset(dataset, (subject,), receipts, "g")])
+    prior = SelectedPriors(tmp_path / "private", root=root, public_url="")
+    monkeypatch.setenv("SPICY_REGS_REQUIRE_BULK", "true" if case == "required-bulk" else "false")
+    with patch.object(regulations_bulk, "materialize_internal",
+                      wraps=regulations_bulk.materialize_internal) as batch, \
+         patch.object(regulations_receipts, "read_with_receipts",
+                      wraps=regulations_receipts.read_with_receipts) as replay, \
+         patch.object(etl_bulk, "log_row_fallback", wraps=etl_bulk.log_row_fallback) as fallback:
+        if case in {"changed-subject", "required-bulk"}:
+            with pytest.raises(ValueError):
+                prior.get(dataset)
+            assert not (prior.directory / dataset / "processing" / (dataset + ".parquet")).exists()
+            assert not list((prior.directory / dataset / "processing").glob("*/rows.parquet"))
+        else:
+            output = prior.get(dataset)
+            assert pq.read_table(output).equals(pq.read_table(reference), check_metadata=True)
+    assert batch.call_count == 1
+    assert replay.call_count == (1 if case in {"reordered", "empty"} else 0)
+    assert fallback.call_count == (0 if case == "changed-subject" else 1)
 
 
 def test_a_restore_whose_receipt_names_another_subject_is_refused_not_misread(tmp_path):
