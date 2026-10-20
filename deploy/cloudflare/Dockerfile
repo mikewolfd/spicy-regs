@@ -66,5 +66,7 @@ RUN python -c "import spicy_regs.mcp_server, spicy_regs.sources.publication, spi
 # endpoint at /mcp; --factory because build_app is a callable returning the app.
 ENV PORT=8080
 EXPOSE 8080
-# Forward rollout stop signals to the server instead of leaving a shell as PID 1.
-CMD ["sh", "-c", "exec uvicorn spicy_regs.mcp_server:build_app --factory --host 0.0.0.0 --port ${PORT}"]
+# Shared with the Worker entrypoint override, including when an old image starts
+# during rollout. The guard execs the server, preserving PID 1 stop signals.
+COPY deploy/cloudflare/start_reader.py /app/lock/start_reader.py
+CMD ["python", "/app/lock/start_reader.py"]

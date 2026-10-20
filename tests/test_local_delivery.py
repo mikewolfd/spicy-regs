@@ -75,7 +75,11 @@ def release(tmp_path, monkeypatch):
         "evidence": {},
         "consumer": {**consumer, "image_digest": None},
     }
-    receipt = {"consumer": consumer, "views": {"fec_view": {}}}
+    receipt = {
+        "consumer": consumer,
+        "output_membership": {"fec_table": {"family": "fec-query"}},
+        "views": {"fec_view": {"dependencies": {}, "evidence_generations": {}}},
+    }
     receipt_pin = pin(tmp_path / "receipt.json", receipt)
     association = {
         "status": "pass",
@@ -530,9 +534,12 @@ def test_publication_delegates_full_owner_and_preserves_prior(release, tmp_path,
     prior = delivery.read(config["publication"]["prior"])
     current = deepcopy(prior)
     calls = []
+    readiness = []
+    install_readiness_client(monkeypatch, config, readiness)
     client = object()
 
     def publish(directory, **kwargs):
+        assert readiness == ["initialize", "list_sources", "cleanup"]
         calls.append((directory, kwargs))
         assert kwargs == {"client": client, "bucket": "spicy-regs", "prior_index": prior, "evidence_directories": ()}
         if fail:
@@ -568,6 +575,87 @@ def test_publication_delegates_full_owner_and_preserves_prior(release, tmp_path,
         assert delivery.execute("publish-data", config, output, resume=True) == value
     assert len(calls) == 1
     assert all(b"fake-secret" not in p.read_bytes() for p in output.iterdir())
+
+
+def install_readiness_client(monkeypatch, config, calls, failure=None):
+    receipt = delivery.read(config["serving"]["receipt"])
+
+    class ReadyClient:
+        def __init__(self, *args):
+            self.session, self.records = "session", []
+
+        def initialize(self):
+            calls.append("initialize")
+
+        def tool(self, name, args):
+            calls.append(name)
+            assert name == "list_sources" and args == {}
+            if failure == "timeout":
+                raise TimeoutError("readiness deadline")
+            selected = {
+                "consumer": deepcopy(receipt["consumer"]),
+                "receipt_sha256": "sha256:" + config["serving"]["receipt"]["sha256"],
+                "status_counts": {"compatible": len(receipt["views"])},
+            }
+            if failure == "code":
+                selected["consumer"]["code_sha256"] = "old-code"
+            elif failure == "receipt":
+                selected["receipt_sha256"] = "old-receipt"
+            elif failure == "disabled":
+                selected["status_counts"] = {"disabled": 1}
+            elif failure == "unknown":
+                selected = {}
+            return {"fec_release": selected}
+
+        def exchange(self, *, cleanup):
+            assert cleanup
+            calls.append("cleanup")
+            if failure == "cleanup":
+                raise OSError("session cleanup failed")
+            return {"terminated": True}
+
+    monkeypatch.setattr(delivery, "Client", ReadyClient)
+
+
+@pytest.mark.parametrize("failure", ["code", "receipt", "disabled", "unknown", "timeout", "cleanup"])
+def test_readiness_failure_retains_diagnosis_before_credentials_or_publication(
+    release, tmp_path, monkeypatch, failure
+):
+    import dotenv
+
+    config, *_ = release
+    calls = []
+    install_readiness_client(monkeypatch, config, calls, failure)
+    monkeypatch.setattr(delivery, "publication_owner", lambda: SimpleNamespace(parse_index=json.loads))
+    monkeypatch.setattr(dotenv, "dotenv_values", lambda *a, **k: pytest.fail("Credentials read before readiness"))
+    output = tmp_path / "refused"
+    with pytest.raises((ValueError, TimeoutError, OSError)):
+        delivery.execute("publish-data", config, output)
+    assert calls == ["initialize", "list_sources", "cleanup"]
+    assert json.loads((output / "terminal.json").read_text())["status"] == "fail"
+    diagnostic = json.loads((output / "http-records.json").read_text())
+    if failure == "code":
+        assert diagnostic["sources_ready"]["consumer"]["code_sha256"] == "old-code"
+    assert not (output / "publication-before.json").exists()
+    assert not (output / "selected-family.json").exists()
+    assert delivery.read(config["publication"]["prior"]) == {"families": {"protected": {"artifactDigest": "old"}}}
+
+
+@pytest.mark.parametrize("reference", ["output", "dependency", "evidence"])
+def test_independent_publication_refuses_joint_fec_promotion_before_network(release, tmp_path, monkeypatch, reference):
+    config, *_ = release
+    receipt = delivery.read(config["serving"]["receipt"])
+    if reference == "output":
+        receipt["output_membership"]["fec_table"]["family"] = "sample"
+    elif reference == "dependency":
+        receipt["views"]["fec_view"]["dependencies"]["table"] = {"family": "sample"}
+    else:
+        receipt["views"]["fec_view"]["evidence_generations"]["sample"] = "generation"
+    config["serving"]["receipt"] = pin(Path(config["serving"]["receipt"]["path"]), receipt)
+    monkeypatch.setattr(delivery, "Client", lambda *a: pytest.fail("Unsupported promotion reached client"))
+    monkeypatch.setattr(delivery, "publication_owner", lambda: SimpleNamespace())
+    with pytest.raises(ValueError, match="Joint FEC"):
+        delivery.publish_data(config, tmp_path, {}, observe=False)
 
 
 @pytest.mark.parametrize("selected", [True, False])

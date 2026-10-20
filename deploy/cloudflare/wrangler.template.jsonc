@@ -8,6 +8,7 @@
   "name": "spicy-regs-mcp",
   "account_id": "174055408ff1560e60601c4d12c561c4",
   "main": "worker/index.ts",
+  "rules": [{ "type": "Text", "globs": ["**/start_reader.py"], "fallthrough": true }],
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
   // Render with npm run configure; SPICYREGS_DOMAIN selects the custom domain.

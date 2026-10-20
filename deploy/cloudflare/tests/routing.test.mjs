@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import "./python-text.mjs";
 const forwarded = [];
 mock.module("@cloudflare/containers", {
   namedExports: { Container: class {}, getContainer: () => ({ fetch(request) {

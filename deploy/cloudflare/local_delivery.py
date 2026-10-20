@@ -1,6 +1,7 @@
 """Direct local delivery operations with pinned inputs and explicit read-only recovery."""
 
 import argparse
+from contextlib import contextmanager
 from datetime import UTC, datetime
 import hashlib
 import json
@@ -208,6 +209,21 @@ def publish_data(config, output, prior, *, observe=False):
     generation = section["generation"]
     family = generation["family"]
     publication = publication_owner()
+    if not observe:
+        receipt = read(config["serving"]["receipt"])
+        referenced = {value["family"] for value in receipt["output_membership"].values()}
+        for view in receipt["views"].values():
+            referenced.update(value["family"] for value in view["dependencies"].values())
+            referenced.update(view["evidence_generations"])
+        require(
+            family not in referenced,
+            "Joint FEC input/receipt promotion requires the FEC release owner, not independent publish-data",
+        )
+        # Provider configuration cannot prove which image has actually started.
+        # Refuse before reading credentials or writing any publication objects.
+        readiness = {}
+        with mcp_session(output, readiness) as client:
+            check_consumer(client, config, receipt, readiness, "sources_ready")
     before = public_index(prior, section["protected_families"])
     save(output / "publication-before.json", before)
     if observe:
@@ -262,23 +278,40 @@ def subset(actual, expected):
     )
 
 
+@contextmanager
+def mcp_session(output, result):
+    """One bounded session, with failure evidence and cleanup shared by both checks."""
+    client = Client("https://mcp.spicygov.ai/mcp", output, LIMITS)
+    try:
+        client.initialize()
+        yield client
+    finally:
+        try:
+            if client.session:
+                result["cleanup"] = client.exchange(cleanup=True)
+        finally:
+            save(output / "http-records.json", {**result, "http_records": client.records})
+
+
+def check_consumer(client, config, receipt, result, phase):
+    selected = client.tool("list_sources", {}).get("fec_release", {})
+    result[phase] = selected  # Retain the actual mismatch before refusing.
+    require(
+        selected.get("receipt_sha256")
+        == "sha256:" + config["serving"]["receipt"]["sha256"].removeprefix("sha256:")
+        and selected.get("consumer") == receipt["consumer"]
+        and selected.get("status_counts") == {"compatible": len(receipt["views"])},
+        "Running consumer/receipt/compatibility differs",
+    )
+
+
 def readback(config, output, receipt, prior):
     section = config["readback"]
-    client = Client("https://mcp.spicygov.ai/mcp", output, LIMITS)
     result = {}
-    try:
-        save(output / "publication-before.json", public_index(prior, section["protected_families"]))
-        client.initialize()
+    save(output / "publication-before.json", public_index(prior, section["protected_families"]))
+    with mcp_session(output, result) as client:
         for phase in ("before", "after"):
-            selected = client.tool("list_sources", {}).get("fec_release", {})
-            require(
-                selected.get("receipt_sha256")
-                == "sha256:" + config["serving"]["receipt"]["sha256"].removeprefix("sha256:")
-                and selected.get("consumer") == receipt["consumer"]
-                and selected.get("status_counts") == {"compatible": len(receipt["views"])},
-                "Running consumer/receipt/compatibility differs",
-            )
-            result["sources_" + phase] = selected
+            check_consumer(client, config, receipt, result, "sources_" + phase)
             if phase == "after":
                 break
             for query in section["queries"]:
@@ -300,13 +333,7 @@ def readback(config, output, receipt, prior):
                     "Query publication binding differs",
                 )
         save(output / "publication-after.json", public_index(prior, section["protected_families"]))
-        return result
-    finally:
-        try:
-            if client.session:
-                result["cleanup"] = client.exchange(cleanup=True)
-        finally:
-            save(output / "http-records.json", {**result, "http_records": client.records})
+    return result
 
 
 def execute(action, config, output, *, resume=False, from_output=None):
