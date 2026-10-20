@@ -68,6 +68,50 @@ def test_financial_profile_source_identity_and_current_schema():
     assert table["modelGenerated"] is False
 
 
+def test_treasury_grants_and_executive_order_sources_preserve_selected_tables():
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.explorer_metadata import read_json
+    from spicy_regs.transforms.build_executive_orders import SCHEMA as eo_schema
+    from spicy_regs.transforms.build_grants_opportunities import SCHEMA as grants_schema
+    from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as treasury_schemas
+
+    scopes = [
+        ("treasury-fiscal", treasury_schemas, "treasury-fiscal", "https://fiscaldata.treasury.gov/"),
+        ("grants-opportunities", {"grants_opportunity_observations": grants_schema},
+         "grants", "https://www.grants.gov/"),
+        ("executive-orders", {"executive_order_observations": eo_schema},
+         "register", "https://www.federalregister.gov/"),
+    ]
+    selected = {"format": "spicy-regs-publication", "version": 2, "families": {}}
+    for number, (family, schemas, _, _) in enumerate(scopes, 1):
+        selected["families"][family] = {
+            "artifactDigest": "sha256:" + str(number) * 64,
+            "tables": {name + ".parquet": {
+                "columns": [list(pair) for pair in described_schema(schema)],
+                "rows": 1, "byteSize": 100,
+            } for name, schema in schemas.items()},
+        }
+    registry = read_json("explorer_sources.json")
+    previous_registry = deepcopy(registry)
+    for family, _, _, _ in scopes:
+        previous_registry["families"].pop(family, None)
+    previous = build_bundle(selected, registry=previous_registry)
+    current = build_bundle(selected)
+    assert current["publication"] == previous["publication"]
+    for family, schemas, source, url in scopes:
+        assert current["publication"]["families"][family] == selected["families"][family]["artifactDigest"]
+        for name in schemas:
+            table = current["tables"][name]
+            assert table["metadataStatus"] == table["sourceStatus"] == "documented"
+            assert [(entry["id"], entry["url"]) for entry in table["sources"]] == [(source, url)]
+            assert table["family"] == family
+            assert table["publicationSchema"] == selected["families"][family]["tables"][name + ".parquet"]["columns"]
+            assert {key: value for key, value in table.items() if key not in {"sources", "sourceStatus"}} == {
+                key: value for key, value in previous["tables"][name].items()
+                if key not in {"sources", "sourceStatus"}
+            }
+
+
 @pytest.fixture
 def measurement_refresh(tmp_path, monkeypatch):
     """Run the publisher with real construction/verifiers and tiny measured main files."""

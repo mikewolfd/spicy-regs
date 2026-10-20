@@ -156,6 +156,20 @@
       "kind": "government",
       "note": ""
     },
+    "treasury-fiscal": {
+      "id": "treasury-fiscal",
+      "name": "U.S. Treasury Fiscal Data",
+      "url": "https://fiscaldata.treasury.gov/",
+      "kind": "government",
+      "note": "Selected Debt to the Penny and Monthly Treasury Statement observations retain their request, report and source evidence."
+    },
+    "grants": {
+      "id": "grants",
+      "name": "Grants.gov",
+      "url": "https://www.grants.gov/",
+      "kind": "government",
+      "note": "Selected daily XML snapshots retain synopsis and forecast records; snapshot membership does not establish current opportunity status."
+    },
     "agenda": {
       "id": "agenda",
       "name": "RegInfo.gov Unified Agenda",
@@ -402,6 +416,21 @@
     "federal-register": {
       "sources": [
         "register"
+      ]
+    },
+    "executive-orders": {
+      "sources": [
+        "register"
+      ]
+    },
+    "treasury-fiscal": {
+      "sources": [
+        "treasury-fiscal"
+      ]
+    },
+    "grants-opportunities": {
+      "sources": [
+        "grants"
       ]
     },
     "unified-agenda": {
