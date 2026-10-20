@@ -168,7 +168,7 @@
       "name": "Centers for Medicare & Medicaid Services",
       "url": "https://data.cms.gov/",
       "kind": "government",
-      "note": "Selected drug-spending releases retain their exact catalog, dictionary and original rows. Part D spending includes plan and beneficiary payments before rebates; manufacturer and Overall rows are alternative aggregation levels."
+      "note": "Selected drug-spending releases retain their exact catalog, dictionary and original rows. Program-specific reimbursement definitions are documented by each table; manufacturer and Overall rows are alternative aggregation levels."
     },
     "grants": {
       "id": "grants",
@@ -441,6 +441,11 @@
       ]
     },
     "cms-part-d": {
+      "sources": [
+        "cms"
+      ]
+    },
+    "cms-medicaid": {
       "sources": [
         "cms"
       ]

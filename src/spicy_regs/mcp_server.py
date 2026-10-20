@@ -90,6 +90,7 @@ TABLES = (
     "sam_entities",
     "census_acs_county_observations",
     "cms_part_d_drug_spending",
+    "cms_medicaid_drug_spending",
     "grants_opportunity_observations",
     "executive_order_observations",
     "fec_financial_profiles",
@@ -911,6 +912,7 @@ def _build_connection_inputs(con, publication):
     managed_only = {
         "census_acs_county_observations",
         "cms_part_d_drug_spending",
+        "cms_medicaid_drug_spending",
         "treasury_debt_observations", "treasury_statement_periods",
         "grants_opportunity_observations",
         "executive_order_observations",

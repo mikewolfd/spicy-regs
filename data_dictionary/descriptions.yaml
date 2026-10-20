@@ -10559,6 +10559,54 @@ tables:
         occurrence ordinal.
       raw_row_json: Complete literal source row, including all supplied years, unknown fields and missing/blank cells.
         Retained once per source row rather than repeated for each historical year.
+  cms_medicaid_drug_spending:
+    label: Medicaid drug spending
+    subject: spending
+    identity_columns: [observation_id]
+    summary: Source-reported drug and manufacturer spending for one explicitly selected benefit year, with separate
+      Overall rows and literal source evidence.
+    coverage: Not measured by this schema. The date records this design statement, not a source measurement.
+      The mapper requires one complete admitted Medicaid release and selects its
+      benefit year. Original rows retain other supplied years. This does not establish current prices, net spending,
+      all Medicaid services or beneficiaries or all historical releases. CMS excludes drugs with fewer than 11 claims in the latest year and redacts earlier-year
+      cells below that threshold. A missing drug is not evidence of zero spending. Actual qualification is recorded
+      by the selected generation and retained source evidence.
+    measured_on: '2026-10-20'
+    grain: One selected source release, benefit year, brand name, generic name and manufacturer. Overall and named
+      manufacturers are alternative aggregation levels and must not be added together.
+    columns:
+      observation_id: Digest of the admitted source release, source occurrence and selected benefit year.
+      program: Literal Medicaid program label; this population and its measures are distinct from Part D.
+      benefit_year: Explicit selected benefit year; separate from catalog modification and capture dates.
+      brand_name: Literal Brnd_Name. A star marks multiple administration routes and a caret marks an outlier
+        requiring caution with unit spending. Neither marker is interpreted as suppression.
+      generic_name: Literal Gnrc_Name, naming the chemical ingredient.
+      manufacturer_name: Literal Mftr_Name. Overall identifies the source's all-manufacturer row for this drug.
+      aggregation_level: all_manufacturers for the literal Overall row, otherwise manufacturer. Filter one level
+        before comparing or adding spending; do not combine both levels.
+      manufacturer_count_raw: Literal Tot_Mftr; retained separately from the observations' aggregation level.
+      total_spending_usd: Source reimbursement in USD by Medicaid and non-Medicaid entities, including federal
+        and state reimbursement and dispensing fees, without state rebate deductions. Exact DECIMAL(38,12), never rounded.
+      dosage_units: Source dosage units in the lowest dispensable amount; units differ by drug and can be tablets,
+        grams or milliliters. Exact DECIMAL(38,12); do not treat unlike drugs' units as equivalent.
+      claims: Source count of prescription fills, including originals and refills, retained as an exact decimal.
+      weighted_spending_per_unit_usd: Source claims-weighted average spending per dosage unit in USD. Not recomputed
+        as total spending divided by total dosage units.
+      spending_per_claim_usd: Source average spending per prescription fill in USD.
+      outlier_flag_raw: Literal annual Outlier_Flag. The source value 1 warns of outlier influence on average unit
+        spending; rows remain present. Missing or unknown values stay literal.
+      value_statuses_json: Per-measure value, null, blank, non_numeric or unrepresentable. Null never means zero.
+        Unknown markers are retained without inferring suppression. Unrepresentable means exact DECIMAL(38,12)
+        would lose precision or exceed its range.
+      source_record_id: Source occurrence identity within the admitted CMS release; not a universal drug identifier.
+      source_release_logical_id: Logical identity of the admitted SpicyDocs release.
+      source_release_digest: Exact source release digest, distinguishing revisions of the same benefit year.
+      source_selection_json: Exact series, release, versioned distribution, dictionary/catalog digests and population
+        selected by the source reader.
+      source_locator_json: Request URL, original response digest, capture time, page-local JSON pointer and original
+        occurrence ordinal.
+      raw_row_json: Complete literal source row, including all supplied years, unknown fields and missing/blank cells.
+        Retained once per source row rather than repeated for each historical year.
   grants_opportunity_observations:
     label: Grants.gov opportunity and forecast observations
     subject: spending
