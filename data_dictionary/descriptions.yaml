@@ -10459,3 +10459,56 @@ tables:
       metadata_sources_json: Per-variable metadata URL, response digest, observation time and JSON pointer.
       geography_authority: RefSpec authority resource defining the county GEOID structure; not a county entity roster.
       geography_source_sha256: Digest of the original Census guidance span retained by RefSpec.
+  treasury_debt_observations:
+    label: Treasury daily debt balances
+    subject: spending
+    summary: Treasury Debt to the Penny stock balances for explicitly selected dates, retaining exact dollars and source release identity.
+    coverage: 'Sampled: explicitly selected Debt to the Penny observation dates for United States federal debt. A balance is a stock, not borrowing during the day or a budget deficit. Missing requested dates refuse rather than substituting the latest observation.'
+    measured_on: '2026-10-20'
+    grain: One captured daily observation per source release; refreshed releases remain distinguishable.
+    columns:
+      record_date: Treasury-stated observation date.
+      total_debt_usd: Exact total public debt outstanding in US dollars; null markers remain explicit in amount_statuses_json.
+      public_debt_usd: Exact debt held by the public in US dollars.
+      intragovernmental_debt_usd: Exact intragovernmental holdings in US dollars.
+      amount_statuses_json: Per-amount value, publisher_null for literal null text, json_null, or blank status.
+      source_record_id: Native row identity within the admitted SpicyDocs release.
+      source_release_logical_id: Logical identity of the admitted source release.
+      source_release_digest: Exact source release digest; distinguishes revised captures of the same date.
+      source_page_sha256: Digest of the original API page containing this observation.
+      source_locator_json: Exact request URL, observation time, response digest, byte size and JSON row pointer.
+      source_selection_json: Explicit dataset, record date and page size of the source selection.
+      field_metadata_json: Original publisher field labels, types and display formats.
+      raw_row_json: Complete original string/null mapping before typed derivation.
+  treasury_statement_periods:
+    label: Treasury monthly and fiscal-year budget actuals
+    subject: spending
+    summary: Monthly Treasury Statement Table 1 receipts, outlays and deficit, with separate report and economic periods and preserved revisions.
+    coverage: 'Sampled: complete declared Table 1 report issues. Supported shape requires current fiscal-year months from October through the report month, complete prior fiscal years, and a separate fiscal-year-to-date row per parent. Other layouts refuse. Table 2 remains source evidence; forecasts and other statement tables are not typed here.'
+    measured_on: '2026-10-20'
+    grain: One report issue, source release and economic monthly or fiscal-year-to-date period.
+    columns:
+      report_date: Source record_date identifies the report issue, not necessarily the economic month.
+      economic_fiscal_year: Fiscal year from the row's explicit FY parent, never the report's record_fiscal_year alone.
+      period_kind: Month or fiscal_year_to_date; aggregate monthly rows separately from totals.
+      period_start: Inclusive economic period start; fiscal years start October 1 of the preceding calendar year.
+      period_end: Inclusive economic period end under the supported Table 1 layout.
+      budget_receipts_usd: Exact reported budget receipts in US dollars using the statement's modified-cash methodology.
+      budget_outlays_usd: Exact reported budget outlays in US dollars using the statement's modified-cash methodology.
+      budget_deficit_usd: Exact outlays minus receipts in US dollars; positive is a deficit and negative is a surplus.
+      amount_statuses_json: Per-amount value, publisher_null for literal null text, json_null, or blank status.
+      classification_id: Literal native Table 1 classification identity.
+      parent_id_literal: Literal parent classification identity.
+      classification_desc: Original monthly or Year-to-Date label.
+      sequence_number_cd_literal: Exact sequence code, including distinct text such as 1.10.
+      parent_context_json: Complete original FY header record, with its source identity, selection, metadata and locator.
+      qualification_report_sha256: Digest of the explicitly supplied report used to qualify this issue; verifies the selected bytes, not a new automatic PDF reconciliation.
+      qualification_report_url: Publisher URL of that report control.
+      source_record_id: Native row identity within the admitted source release.
+      source_release_logical_id: Logical identity of the admitted source release.
+      source_release_digest: Exact release digest; preserves same-issue refreshes and later-issue revisions separately.
+      source_page_sha256: Digest of the original API page containing this observation.
+      source_locator_json: Exact request URL, observation time, response digest, byte size and JSON row pointer.
+      source_selection_json: Explicit dataset, report date and page size of the source selection.
+      field_metadata_json: Original publisher labels, types and display formats; CURRENCY alone does not establish a scale for untyped forecasts.
+      raw_row_json: Complete native row including original gross-named fields, hierarchy and report fiscal context.
