@@ -91,6 +91,93 @@ def test_exact_historical_context_uses_terms_not_latest_summary():
     assert json.loads(resolved["term_candidates_json"])["A000001"][0]["term_district"] == "7"
 
 
+def test_agc_house_district_correction_uses_accepted_term_and_preserves_raw(tmp_path):
+    from spicy_regs.scorecards.etl import LINK_NAMES, read_family, write_family
+
+    raw = member(chamber_text="House", period_text="119th Congress",
+                 identifiers_json='[{"scheme":"agc","value":"B001323"}]',
+                 notes_text='{"native_district_text":"AK - Senate"}')
+    raw.update(member_name="Nicholas Begich", state="AK", district="Senate")
+    before = deepcopy(raw)
+    data = official([person("B001323", "Nicholas", "Begich")],
+                    [term("B001323", state="AK", district="0", start="2025-01-03", end="2027-01-03")])
+    results = resolve_scorecard_links(sources([raw]), data, pins())
+    found = results["scorecard_member_links"][0]
+    assert (found["bioguide_id"], found["normalized_district"], found["district_status"]) == (
+        "B001323", "0", "corrected_from_term")
+    assert (found["normalized_state"], found["state_status"], found["correction_evidence_json"]) == (
+        "AK", "confirmed", None)
+    assert found["resolution_rule"] == "unique_normalized_name_historical_term"
+    context, candidates, input_pins = found["source_context_json"], found["term_candidates_json"], found["input_pins_json"]
+    assert context is not None and candidates is not None and input_pins is not None
+    assert json.loads(context) == before == raw
+    assert json.loads(candidates)["B001323"][0]["term_index"] == "0"
+    assert json.loads(input_pins) == pins()
+    write_family(tmp_path, results, generation_id="corrected-geography")
+    assert read_family(tmp_path, LINK_NAMES, generation_id="corrected-geography") == results
+    import duckdb
+    with duckdb.connect() as connection:
+        assert connection.execute(
+            "SELECT normalized_district, district_status, source_context_json::JSON->>'district' "
+            "FROM read_parquet(?)", [str(tmp_path / "scorecard_member_links.parquet")]
+        ).fetchall() == [("0", "corrected_from_term", "Senate")]
+
+
+@pytest.mark.parametrize(
+    "chamber,raw_district,kind,term_district,expected,status",
+    [
+        ("House", "7", "rep", "7", "7", "confirmed"),
+        ("House", "At-Large", "rep", "0", "0", "confirmed"),
+        ("House", None, "rep", "7", "7", "supplied_from_term"),
+        ("House", "Senate", "rep", None, None, "unqualified_term_district"),
+        ("Senate", "Senate", "sen", None, None, "not_applicable"),
+    ],
+)
+def test_normalized_district_retains_senate_and_unaffected_boundaries(
+    chamber, raw_district, kind, term_district, expected, status
+):
+    raw = member(chamber_text=chamber)
+    raw["district"] = raw_district
+    found = link(raw, official(terms=[term(kind=kind, district=term_district)]))
+    assert (found["normalized_district"], found["district_status"]) == (expected, status)
+
+
+def test_normalized_district_does_not_choose_between_historical_districts():
+    raw = member(chamber_text="House")
+    raw["district"] = "Senate"
+    found = link(raw, official(terms=[term(district="7"), term(index="1", district="8")]))
+    assert found["resolution_status"] == "resolved"
+    assert found["normalized_district"] is None
+    assert found["district_status"] == "ambiguous_term_district"
+    assert len(json.loads(found["term_candidates_json"])["A000001"]) == 2
+
+
+@pytest.mark.parametrize("conflict", ["state", "chamber_text", "period_text", "district"])
+def test_normalized_district_never_repairs_conflicting_identity_context(conflict):
+    raw = member(chamber_text="House", identifiers_json='[{"scheme":"bioguide","value":"A000001"}]')
+    raw[conflict] = {"state": "NH", "chamber_text": "Senate", "period_text": "116th Congress", "district": "8"}[conflict]
+    found = link(raw)
+    assert found["resolution_status"] == "conflict"
+    assert (found["normalized_district"], found["district_status"]) == (None, "conflict_identity")
+    assert (found["normalized_state"], found["state_status"]) == (None, "conflict_identity")
+
+
+def test_normalized_district_requires_qualified_period_and_unique_identity():
+    raw = member(chamber_text="House", period_text="Lifetime",
+                 identifiers_json='[{"scheme":"bioguide","value":"A000001"}]')
+    found = link(raw)
+    assert found["resolution_status"] == "resolved"
+    assert (found["normalized_district"], found["district_status"]) == (None, "unqualified_term_context")
+    raw.pop("identifiers_json")
+    raw.pop("period_text")
+    raw["district"] = "Senate"
+    found = link(raw, official([person(), person("B000001")], [term(), term("B000001")]))
+    assert (found["normalized_district"], found["district_status"]) == (None, "ambiguous_identity")
+    raw["member_name"] = "No Matching Name"
+    found = link(raw)
+    assert (found["normalized_district"], found["district_status"]) == (None, "unresolved_identity")
+
+
 @pytest.mark.parametrize(
     "chamber,district,canonical_district,kind",
     [
@@ -860,7 +947,7 @@ def test_explicit_edition_congress_qualifies_only_the_unstated_measure_context(f
     assert row[target] == identifier and row["congress"] == "118"
     assert row["vote_id"] is row["session"] is row["roll_number"] is None
     assert row["resolution_rule"].endswith("_edition_congress")
-    assert row["rule_version"] == "scorecard-resolution-v1.6"
+    assert row["rule_version"] == "scorecard-resolution-v1.7"
     assert "explicit_edition_congress_for_measure" in row["reason"]
     context = json.loads(row["source_context_json"])
     assert context["item"].get("congress_text") is None
@@ -984,7 +1071,7 @@ def test_partial_exact_bill_retains_candidates_without_operational_targets(tmp_p
     assert isinstance(candidates_json, str)
     assert json.loads(candidates_json) == [{"bill_id": "118-hr-1"}]
     assert row["candidate_count"] == "1"
-    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.6"
+    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.7"
     write_family(tmp_path, results, generation_id="partial-link-test")
     assert read_family(tmp_path, LINK_NAMES, generation_id="partial-link-test") == results
 

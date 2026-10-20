@@ -14,6 +14,32 @@ EARLIER_COLUMNS = {
 
 def earlier_policies(policy):
     from spicy_regs.etl_receipts import DatasetPolicy
+    if policy.dataset == "scorecard_member_links" and policy.policy_version in {
+        "scorecards-etl-member-links-v3", "scorecards-etl-v2",
+    }:
+        previous = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs.scorecards").joinpath(
+            "member_link_policy_history.json").read_text()))
+        context_history = json.loads(files("spicy_regs").joinpath("source_context_policy_history.json").read_text())
+        original = DatasetPolicy.from_descriptor(context_history[policy.dataset])
+        if policy.policy_version == "scorecards-etl-v2":
+            if policy.descriptor() != previous.descriptor():
+                raise ValueError("Historical member link policy differs from the exact declared policy")
+            return (original,)
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/scorecard_member_links.json").read_text()))
+        without_geography = policy.subject_schema
+        for field in ("normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json"):
+            without_geography = without_geography.remove(without_geography.get_field_index(field))
+        if (policy.descriptor() != expected.descriptor()
+                or previous.dataset != policy.dataset or original.dataset != policy.dataset
+                or previous.policy_version != "scorecards-etl-v2"
+                or previous.identity_fields != policy.identity_fields
+                or previous.receipt_fields != policy.receipt_fields
+                or previous.nullable_identity_fields != policy.nullable_identity_fields
+                or previous.receipt_only != policy.receipt_only
+                or not previous.subject_schema.equals(without_geography, check_metadata=True)):
+            raise ValueError("Member geography policy changes the prior link fields or identity")
+        return (previous, original)
     if policy.dataset == "gao_reports" and policy.policy_version == "government-sources/4":
         expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
             "etl_policies/gao_reports.json").read_text()))

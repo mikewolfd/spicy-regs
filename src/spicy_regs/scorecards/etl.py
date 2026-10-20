@@ -37,6 +37,7 @@ from spicy_regs.scorecards.subject_shapes import (
     INTEGER_FIELDS,
     POLICY_VERSION,
     RATING_POLICY_VERSION,
+    MEMBER_LINK_POLICY_VERSION,
     SOURCE_COLUMNS,
     map_source_row,
     restore_source_row,
@@ -59,7 +60,10 @@ def policy(name):
         schema,
         IDENTITIES[name] if schema.names else (),
         fields + ("raw_source",),
-        policy_version=RATING_POLICY_VERSION if name == "scorecard_member_ratings" else POLICY_VERSION,
+        policy_version={
+            "scorecard_member_ratings": RATING_POLICY_VERSION,
+            "scorecard_member_links": MEMBER_LINK_POLICY_VERSION,
+        }.get(name, POLICY_VERSION),
         receipt_only=not schema.names,
     )
 
