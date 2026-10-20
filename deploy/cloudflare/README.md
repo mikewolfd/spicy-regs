@@ -208,9 +208,10 @@ enabling the redirect.
 
 ## Explicit local delivery operations
 
-Use `local_delivery.py` for a necessary local release after its image and data
-have been qualified. It replaces task-specific Python copies of the push,
-publication and bounded readback callers. It does not build, bind FEC metadata,
+Use `local_delivery.py` to capture the current publication index before preparing
+a necessary local release, then deliver its qualified image and data. It replaces
+task-specific Python copies of the capture, push, publication and bounded readback
+callers. It does not build, bind FEC metadata,
 select a provider image, deploy, or sequence those steps. Keep using the existing
 accepted-input binder and `deploy:production` with the named
 `spicy-regs-civictechdc` profile. Account, bucket, registry and public endpoints
@@ -221,6 +222,28 @@ runtime. Supply one reviewed JSON input. All file references below are absolute;
 `pin` means `{"path": "/absolute/control.json", "sha256": "<exact hex SHA256>"}`.
 Credential values never belong in this input; `env_file` names the existing
 private R2 credential file.
+
+The initial read-only capture needs only `source`, before image or serving
+controls exist:
+
+```json
+{"source": {"commit": "<exact commit>", "tree": "<exact tree>"}}
+```
+
+```sh
+python deploy/cloudflare/local_delivery.py capture-publication --inputs /release/capture-inputs.json --output /release/prior
+```
+
+This uses the maintained publication HTTP reader, its 1 MiB index limit and a
+60-second cooperative request bound. It retains the exact response in
+`publication.raw.json`, validates the index, and saves the parsed
+`publication.json`. Use the successful terminal's `result.prior` directly as
+the later publication/readback `prior` pin. HTTP, size or parsing failures retain
+a failed terminal; malformed response bytes remain available for diagnosis.
+`--resume` returns only the verified historical capture. Use a new output
+directory when a fresh current index is needed.
+
+Complete later release inputs as their evidence becomes available:
 
 ```json
 {

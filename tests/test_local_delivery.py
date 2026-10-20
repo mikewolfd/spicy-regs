@@ -7,6 +7,7 @@ import socket
 import sys
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 HELPERS = Path(__file__).resolve().parents[1] / "deploy/cloudflare"
@@ -25,6 +26,71 @@ def pin(path, value):
 def offline(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", lambda *a, **k: pytest.fail("Network forbidden"))
     monkeypatch.setattr(delivery, "source", lambda value: None)
+
+
+@pytest.mark.parametrize("outcome", ["valid", "http_failure", "oversize", "invalid_index"])
+def test_capture_publication_uses_bounded_reader_before_image_inputs(tmp_path, monkeypatch, capsys, outcome):
+    from contextlib import closing, contextmanager
+    from spicy_regs.sources import publication
+    from spicy_regs.runtime_bounds import current_bound
+
+    raw = b'{ "version": 2, "families": {}, "format": "spicy-regs-publication" }\n'
+    if outcome == "oversize":
+        raw = b" " * (publication.INDEX_LIMIT + 1)
+    elif outcome == "invalid_index":
+        raw = b'{"families": {}}'
+    calls = []
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        calls.append(url)
+        assert method == "GET"
+        assert url == delivery.PUBLIC + "/" + publication.INDEX_V2_KEY
+        assert kwargs["headers"] == {"User-Agent": "spicy-regs", "Cache-Control": "no-cache"}
+        assert 0 < kwargs["timeout"] <= 60
+        assert current_bound() is not None
+        with closing(httpx.Response(
+            403 if outcome == "http_failure" else 200,
+            content=raw,
+            request=httpx.Request(method, url),
+        )) as response:
+            yield response
+
+    monkeypatch.setattr(publication.httpx, "stream", stream)
+    monkeypatch.setattr(delivery, "image_inputs", lambda *a: pytest.fail("Capture needs no image"))
+    monkeypatch.setattr(delivery, "serving_inputs", lambda *a: pytest.fail("Capture needs no serving receipt"))
+    config = {"source": {"commit": "commit", "tree": "tree"}}
+    output = tmp_path / "capture"
+    if outcome == "valid":
+        inputs = pin(tmp_path / "inputs.json", config)
+        delivery.main(["capture-publication", "--inputs", inputs["path"], "--output", str(output)])
+        result = json.loads(capsys.readouterr().out)
+        assert result["status"] == "pass"
+        assert (output / "publication.raw.json").read_bytes() == raw
+        assert result["result"]["prior"] == {
+            "path": str(output / "publication.raw.json"),
+            "sha256": delivery.hashlib.sha256(raw).hexdigest(),
+        }
+        assert result["result"]["byte_size"] == len(raw)
+        assert result["result"]["publication_write_requested"] is False
+        assert json.loads((output / "publication.json").read_bytes()) == publication.parse_index(raw)
+        assert delivery.execute("capture-publication", config, output, resume=True) == result
+        assert len(calls) == 1
+        (output / "publication.raw.json").write_bytes(raw + b"\n")
+        with pytest.raises(ValueError, match="Retained operation evidence changed"):
+            delivery.execute("capture-publication", config, output, resume=True)
+    else:
+        with pytest.raises(httpx.HTTPStatusError if outcome == "http_failure" else publication.PublicationError):
+            delivery.execute("capture-publication", config, output)
+        terminal = json.loads((output / "terminal.json").read_bytes())
+        assert terminal["status"] == "fail"
+        assert not (output / "publication.json").exists()
+        if outcome == "invalid_index":
+            assert (output / "publication.raw.json").read_bytes() == raw
+        else:
+            assert not (output / "publication.raw.json").exists()
+    assert len(calls) == 1
+    assert current_bound() is None
 
 
 @pytest.fixture

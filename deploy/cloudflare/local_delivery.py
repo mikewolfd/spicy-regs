@@ -16,6 +16,7 @@ from _image_delivery import ACCOUNT, REGISTRY
 ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = "https://data.spicygov.ai"
 SECTIONS = {
+    "capture-publication": None,
     "push-image": "image",
     "verify-image": "image",
     "publish-data": "publication",
@@ -204,6 +205,28 @@ def public_index(prior, families):
     return value
 
 
+def capture_publication(output):
+    from spicy_regs.runtime_bounds import RequestBound
+
+    publication = publication_owner()
+    url = f"{PUBLIC}/{publication.INDEX_V2_KEY}"
+    with RequestBound(60, "Publication capture timeout").scope():
+        raw = publication._bounded_get(
+            url, allow_missing=False, headers={"Cache-Control": "no-cache"}, limit=publication.INDEX_LIMIT
+        )
+    path = output / "publication.raw.json"
+    with path.open("xb") as stream:
+        stream.write(raw)
+    # Keep the original response even if its contents fail index validation.
+    save(output / "publication.json", publication.parse_index(raw))
+    return {
+        "url": url,
+        "prior": {"path": str(path.resolve()), "sha256": sha(path)},
+        "byte_size": len(raw),
+        "publication_write_requested": False,
+    }
+
+
 def publish_data(config, output, prior, *, observe=False):
     section = config["publication"]
     generation = section["generation"]
@@ -339,8 +362,11 @@ def readback(config, output, receipt, prior):
 def execute(action, config, output, *, resume=False, from_output=None):
     source_pin = config["source"]
     source(source_pin)
-    selected = {"source": source_pin, SECTIONS[action]: config[SECTIONS[action]]}
-    if SECTIONS[action] != "image":
+    section = SECTIONS[action]
+    selected = {"source": source_pin}
+    if section is not None:
+        selected[section] = config[section]
+    if section in ("publication", "readback"):
         selected["serving"] = config["serving"]
     # Later receipt/provider population is deliberately absent from image input identity.
     inputs_sha = canonical(selected)
@@ -348,7 +374,9 @@ def execute(action, config, output, *, resume=False, from_output=None):
         name: sha(Path(__file__).with_name(name))
         for name in ("local_delivery.py", "_image_delivery.py", "_mcp_readback.py")
     }
-    if action in ("push-image", "verify-image"):
+    if action == "capture-publication":
+        prepared = None
+    elif action in ("push-image", "verify-image"):
         prepared = image_inputs(config, source_pin)
     else:
         receipt = serving_inputs(config, source_pin)
@@ -393,7 +421,9 @@ def execute(action, config, output, *, resume=False, from_output=None):
     )
     terminal = {"status": "fail", "operation": action, "inputs_sha256": inputs_sha, "implementation": implementation}
     try:
-        if action in ("push-image", "verify-image"):
+        if action == "capture-publication":
+            result = capture_publication(output)
+        elif action in ("push-image", "verify-image"):
             from _image_delivery import image_operation
 
             result = image_operation(config["image"], source_pin, output, *prepared, push=action == "push-image")
