@@ -5,6 +5,16 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.66.6`: reviewed OFAC source commit
+  `7cefbe921d52ceee97ed6be875b6de3cad5f612e`; SHA-256
+  `af418de49de0bd7e00678905ba388961ab8be2b30dbad6769821e38b3e2d61eb`.
+  Adds literal enhanced SDN and consolidated snapshots through the existing
+  bounded acquisition, XML and source-release owners. Both selected original
+  exports passed source admission and replay. See the
+  [package receipt](spicy_docs-0.66.6.json) for exact source and dependency pins.
+  Prior wheels and receipts remain unchanged. Installed domain qualification
+  and public delivery have separate receipts; no package-registry upload.
+
 - `spicy_docs-0.66.4`: reviewed CMS source commit
   `76ae3736afc9e9c5be400281969bf21c4add2380`; SHA-256
   `1abb1869cc4596741fa3a3799e1def4ed607788430687b0317fc324a90c27edb`.

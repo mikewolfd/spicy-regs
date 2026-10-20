@@ -302,6 +302,13 @@
       "url": "https://www.govinfo.gov/app/collection/FR",
       "kind": "government",
       "note": "Selected historical issue metadata and retained renditions; issue metadata is distinct from document/granule text."
+    },
+    "ofac": {
+      "id": "ofac",
+      "name": "Treasury Office of Foreign Assets Control",
+      "url": "https://sanctionslist.ofac.treas.gov/",
+      "kind": "government",
+      "note": "Selected enhanced SDN and consolidated exports; literal list observations, not name matching or a legal determination."
     }
   },
   "families": {
@@ -707,6 +714,11 @@
     "table3-history": {
       "sources": [
         "uscode"
+      ]
+    },
+    "ofac-sanctions": {
+      "sources": [
+        "ofac"
       ]
     }
   },

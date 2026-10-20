@@ -20390,6 +20390,184 @@
     "grain": "One source release, notice kind and native opportunity ID; publisher versions and older selected snapshots remain distinct.",
     "identity_columns": []
   },
+  "ofac_entity_observations": {
+    "table": "ofac_entity_observations",
+    "label": "OFAC sanctions entity observations",
+    "summary": "Literal OFAC enhanced-export observations with selected-list context and retained source history.",
+    "coverage": "Not a range. Every entity in each explicitly admitted selected export is retained. Selected SDN and consolidated exports need not share an update time. Prior selected snapshots remain on refresh; absence does not establish delisting, and no history before these captures is inferred. Qualification and public selection are recorded by the generation evidence.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Admitted source-release digest. Captures remain separate even when original content is unchanged."
+      },
+      {
+        "column_name": "selected_list",
+        "column_type": "VARCHAR",
+        "description": "Explicitly selected sdn or consolidated export; separate from the memberships stated by an entity."
+      },
+      {
+        "column_name": "entity_id",
+        "column_type": "VARCHAR",
+        "description": "Literal OFAC entity id attribute. Unique within a selected snapshot, not a real-world or cross-list identity."
+      },
+      {
+        "column_name": "identity_id",
+        "column_type": "VARCHAR",
+        "description": "Literal generalInfo identityId. Distinct from entity_id and preserved as text."
+      },
+      {
+        "column_name": "entity_type_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal entityType label, including unknown future values."
+      },
+      {
+        "column_name": "entity_type_ref_id",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher reference ID attached to entityType; no cross-source code mapping."
+      },
+      {
+        "column_name": "primary_names_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered formattedFullName strings for names and translations explicitly marked primary. Empty array means none supplied under those flags."
+      },
+      {
+        "column_name": "names_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered complete names sections with aliases, quality flags, translations, scripts and name parts."
+      },
+      {
+        "column_name": "list_memberships_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered literal sanctionsLists sections with membership IDs, reference IDs and dates."
+      },
+      {
+        "column_name": "programs_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered literal sanctionsPrograms sections; repeated programs and native IDs remain separate."
+      },
+      {
+        "column_name": "sanction_types_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered sanctionsTypes sections such as Block or Reject; no legal effect is inferred."
+      },
+      {
+        "column_name": "legal_authorities_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered legalAuthorities sections with source text and native references."
+      },
+      {
+        "column_name": "addresses_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered address sections including translations and parts. Sparse addresses remain sparse; no country is invented."
+      },
+      {
+        "column_name": "identifiers_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered identityDocuments sections with literal document numbers, issuing countries, types and validity flags. Leading zeros remain."
+      },
+      {
+        "column_name": "relationships_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered typed relationship sections including literal related entity IDs and labels. No ownership or cross-list identity inference."
+      },
+      {
+        "column_name": "features_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered features sections with source precision and ranges. A year-only birthdate is not converted to a day."
+      },
+      {
+        "column_name": "entity_content_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the canonical literal entity tree excluding positional paths. Text, whitespace, order and attributes remain significant."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Original positional observation identity in the admitted source release, distinct from native entity and identity IDs."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original request URL, compressed and decoded member digests, capture time, member name and positional XML path."
+      },
+      {
+        "column_name": "raw_entity_json",
+        "column_type": "VARCHAR",
+        "description": "Complete ordered entity tree, including unknown fields, expanded XML names, attributes, namespace declarations and literal text."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One selected source release and native entity ID.",
+    "identity_columns": [
+      "snapshot_id",
+      "entity_id"
+    ]
+  },
+  "ofac_snapshots": {
+    "table": "ofac_snapshots",
+    "label": "OFAC sanctions snapshots",
+    "summary": "Publication metadata and reference dictionaries retained once per selected OFAC snapshot.",
+    "coverage": "Not a range. Every entity in each explicitly admitted selected export is retained. Selected SDN and consolidated exports need not share an update time. Prior selected snapshots remain on refresh; absence does not establish delisting, and no history before these captures is inferred. Qualification and public selection are recorded by the generation evidence.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Admitted source-release digest. Captures remain separate even when original content is unchanged."
+      },
+      {
+        "column_name": "selected_list",
+        "column_type": "VARCHAR",
+        "description": "Explicitly selected sdn or consolidated export; separate from the memberships stated by an entity."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Capture timestamp with explicit timezone, separate from publisher update time."
+      },
+      {
+        "column_name": "data_as_of_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher dataAsOf. A missing timezone is not invented; different lists can report different update dates."
+      },
+      {
+        "column_name": "entity_count",
+        "column_type": "BIGINT",
+        "description": "Number of distinct entity observations in this completely accepted selected snapshot."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted source release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release digest, also used as snapshot_id."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Selected export, original response digest and byte size, capture time and XML member name."
+      },
+      {
+        "column_name": "raw_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered root, container, reference dictionaries, publication metadata and unknown nonentity observations, retained once per snapshot."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One admitted source release for one explicitly selected list.",
+    "identity_columns": [
+      "snapshot_id"
+    ]
+  },
   "executive_order_observations": {
     "table": "executive_order_observations",
     "label": "Executive order text and publisher history",

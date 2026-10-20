@@ -1,0 +1,39 @@
+{
+  "filename": "spicy_docs-0.66.6-py3-none-any.whl",
+  "version": "0.66.6",
+  "sha256": "af418de49de0bd7e00678905ba388961ab8be2b30dbad6769821e38b3e2d61eb",
+  "byte_size": 2691049,
+  "source_commit": "7cefbe921d52ceee97ed6be875b6de3cad5f612e",
+  "source_tree": "f6fe481307a2e2cea7139e35f91f748d603623ce",
+  "scope": "Literal enhanced OFAC snapshots using the maintained XML, source publication and replay owners.",
+  "source_freeze_sha256": "e648281e5c1b390a964f2f5787b838b3d98beffc6a66d963bfc5d5a8f5334418",
+  "source_review_sha256": "e5a237b25147c0e5e4c8e501efd28d0ae3aabba7130e0a26f5e3e260567da656",
+  "source_release_proofs": {
+    "sdn": "4789d68b347c9ba77ae249a1a01a60c4e3f3864ac042debc5bb80f5884d32c4e",
+    "consolidated": "31a3290753470a5ff346c9ad4b958a8a21ea04d311f8b6ea220f10d4070876b4"
+  },
+  "predecessor": {
+    "filename": "spicy_docs-0.66.5-py3-none-any.whl",
+    "sha256": "e0f980e570fd8653ec33b30912614c9017fdded039dc6483a6981222eac17b3e",
+    "retained_receipt": "vendor/spicy_docs-0.66.5.json"
+  },
+  "frozen_vendor_check": {
+    "other_dependency_changes": false,
+    "wheel_requires_dist_unchanged": true,
+    "runtime_added": [
+      "spicy_docs/sources/ofac.py",
+      "spicy_docs/sources/ofac_profile.py"
+    ],
+    "runtime_changed": [
+      "spicy_docs/reading/xml.py",
+      "spicy_docs/source_native/profiles.py"
+    ],
+    "runtime_removed": [],
+    "lock_sha256": "91cd2a0c6dc12dd66453ce2f3d329c55efe0e7ab4a2586a55b7826d9a1c49962",
+    "shared_runtime_changed": false
+  },
+  "limits": [
+    "Private vendored package; no package-registry publication.",
+    "Installed import and domain checks have separate task receipts."
+  ]
+}

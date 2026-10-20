@@ -7702,6 +7702,57 @@
       ]
     },
     {
+      "table": "ofac_entity_observations",
+      "label": "OFAC sanctions entity observations",
+      "summary": "Literal OFAC enhanced-export observations with selected-list context and retained source history.",
+      "coverage": "Not a range. Every entity in each explicitly admitted selected export is retained. Selected SDN and consolidated exports need not share an update time. Prior selected snapshots remain on refresh; absence does not establish delisting, and no history before these captures is inferred. Qualification and public selection are recorded by the generation evidence.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-20",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "selected_list",
+        "entity_id",
+        "identity_id",
+        "entity_type_raw",
+        "entity_type_ref_id",
+        "primary_names_json",
+        "names_json",
+        "list_memberships_json",
+        "programs_json",
+        "sanction_types_json",
+        "legal_authorities_json",
+        "addresses_json",
+        "identifiers_json",
+        "relationships_json",
+        "features_json",
+        "entity_content_sha256",
+        "source_record_id",
+        "source_locator_json",
+        "raw_entity_json"
+      ]
+    },
+    {
+      "table": "ofac_snapshots",
+      "label": "OFAC sanctions snapshots",
+      "summary": "Publication metadata and reference dictionaries retained once per selected OFAC snapshot.",
+      "coverage": "Not a range. Every entity in each explicitly admitted selected export is retained. Selected SDN and consolidated exports need not share an update time. Prior selected snapshots remain on refresh; absence does not establish delisting, and no history before these captures is inferred. Qualification and public selection are recorded by the generation evidence.",
+      "kind": "not_a_range",
+      "measured_on": "2026-10-20",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "selected_list",
+        "observed_at",
+        "data_as_of_raw",
+        "entity_count",
+        "source_release_logical_id",
+        "source_release_digest",
+        "source_selection_json",
+        "raw_metadata_json"
+      ]
+    },
+    {
       "table": "executive_order_observations",
       "label": "Executive order text and publisher history",
       "summary": "Every numbered executive order in an explicitly selected complete Federal Register publication year, with searchable retained text, publisher attribution and literal history notes.",
