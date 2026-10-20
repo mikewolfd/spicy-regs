@@ -517,7 +517,7 @@ def test_scorecard_reader_uses_immutable_member_path_and_checks_digest(monkeypat
     from spicy_regs.sources.publication import Member
     script = publisher_script()
     rows = [{"publisher_id": "new", "name": "New Publisher", "scorecard_index_url": url,
-             "homepage_url": "https://example.org/"}]
+             "homepage_url": "https://example.org/", "source_url": "https://example.org/original"}]
     buffer = io.BytesIO()
     pq.write_table(pa.Table.from_pylist(rows), buffer)
     raw = buffer.getvalue()
@@ -538,6 +538,38 @@ def test_scorecard_reader_uses_immutable_member_path_and_checks_digest(monkeypat
     monkeypatch.setattr(script, "get_public", lambda *_: b"wrong bytes")
     with pytest.raises(ValueError, match="differ"):
         script.scorecard_sources(data, "https://data.example.org")
+
+
+@pytest.mark.parametrize("preferred, source, accepted", [
+    (None, "https://example.org/original", True),
+    (None, None, False),
+    (None, "javascript:alert(1)", False),
+    ("javascript:alert(1)", "https://example.org/original", False),
+])
+def test_scorecard_attribution_uses_source_only_when_preferred_links_absent(
+    monkeypatch, preferred, source, accepted,
+):
+    import hashlib
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from spicy_regs.sources.publication import Member
+    script = publisher_script()
+    buffer = io.BytesIO()
+    pq.write_table(pa.Table.from_pylist([{
+        "publisher_id": "original-only", "name": "Original Publisher",
+        "scorecard_index_url": preferred, "homepage_url": None, "source_url": source,
+    }]), buffer)
+    raw = buffer.getvalue()
+    member = Member("generations/scorecards/" + "a" * 64 + "/scorecard_publishers.parquet",
+                    "sha256:" + hashlib.sha256(raw).hexdigest(), len(raw), 1)
+    monkeypatch.setattr(script, "table_members", lambda *_: [member])
+    monkeypatch.setattr(script, "get_public", lambda *_: raw)
+    data = {"families": {"scorecards": {"tables": {"scorecard_publishers.parquet": {}}}}}
+    if accepted:
+        assert script.scorecard_sources(data, "https://data.example.org")[0]["url"] == source
+    else:
+        with pytest.raises(ValueError, match="valid public URL"):
+            script.scorecard_sources(data, "https://data.example.org")
 
 
 def test_historical_http_links_are_only_allowed_for_attribution():
