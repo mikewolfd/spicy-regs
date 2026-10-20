@@ -582,6 +582,8 @@ TABLES: tuple[str, ...] = (
     "cms_medicaid_drug_spending",
     "cms_part_b_drug_spending",
     "grants_opportunity_observations",
+    "ofac_entity_observations",
+    "ofac_snapshots",
     "executive_order_observations",
     "fec_financial_profiles",
     "treasury_debt_observations",
@@ -654,6 +656,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "cms_medicaid_drug_spending",
         "cms_part_b_drug_spending",
         "grants_opportunity_observations",
+        "ofac_entity_observations",
+        "ofac_snapshots",
         "executive_order_observations",
         "fec_financial_profiles",
         "treasury_debt_observations",
@@ -870,6 +874,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_cms_part_b import SCHEMA as CMS_PART_B_SCHEMA
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
+    from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_fec_financial_profiles import SCHEMA as FEC_PROFILE_SCHEMA
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
@@ -963,6 +968,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "cms_part_b_drug_spending": CMS_PART_B_SCHEMA,
         **TREASURY_SCHEMAS,
         "grants_opportunity_observations": GRANTS_SCHEMA,
+        **OFAC_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         "fec_financial_profiles": FEC_PROFILE_SCHEMA,
         "fec_collections": COLLECTION_SCHEMA,

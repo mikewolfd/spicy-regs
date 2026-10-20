@@ -10820,3 +10820,75 @@ tables:
       debts_owed_raw: Original native amount spelling for the selected snapshot; all conflicting spellings remain
         in witnesses_json.
       debts_owed_native_field: Original FEC field name behind this friendly measure label.
+  ofac_entity_observations:
+    label: OFAC sanctions entity observations
+    subject: reference
+    identity_columns:
+    - snapshot_id
+    - entity_id
+    summary: Literal OFAC enhanced-export observations with selected-list context and retained source history.
+    coverage: Not a range. Every entity in each explicitly admitted selected export is retained. Selected SDN
+      and consolidated exports need not share an update time. Prior selected snapshots remain on refresh; absence
+      does not establish delisting, and no history before these captures is inferred. Qualification and public
+      selection are recorded by the generation evidence.
+    measured_on: '2026-10-20'
+    grain: One selected source release and native entity ID.
+    columns:
+      snapshot_id: Admitted source-release digest. Captures remain separate even when original content is unchanged.
+      selected_list: Explicitly selected sdn or consolidated export; separate from the memberships stated by
+        an entity.
+      entity_id: Literal OFAC entity id attribute. Unique within a selected snapshot, not a real-world or cross-list
+        identity.
+      identity_id: Literal generalInfo identityId. Distinct from entity_id and preserved as text.
+      entity_type_raw: Literal entityType label, including unknown future values.
+      entity_type_ref_id: Literal publisher reference ID attached to entityType; no cross-source code mapping.
+      primary_names_json: Ordered formattedFullName strings for names and translations explicitly marked primary.
+        Empty array means none supplied under those flags.
+      names_json: Ordered complete names sections with aliases, quality flags, translations, scripts and name
+        parts.
+      list_memberships_json: Ordered literal sanctionsLists sections with membership IDs, reference IDs and dates.
+      programs_json: Ordered literal sanctionsPrograms sections; repeated programs and native IDs remain separate.
+      sanction_types_json: Ordered sanctionsTypes sections such as Block or Reject; no legal effect is inferred.
+      legal_authorities_json: Ordered legalAuthorities sections with source text and native references.
+      addresses_json: Ordered address sections including translations and parts. Sparse addresses remain sparse;
+        no country is invented.
+      identifiers_json: Ordered identityDocuments sections with literal document numbers, issuing countries,
+        types and validity flags. Leading zeros remain.
+      relationships_json: Ordered typed relationship sections including literal related entity IDs and labels.
+        No ownership or cross-list identity inference.
+      features_json: Ordered features sections with source precision and ranges. A year-only birthdate is not
+        converted to a day.
+      entity_content_sha256: SHA-256 of the canonical literal entity tree excluding positional paths. Text, whitespace,
+        order and attributes remain significant.
+      source_record_id: Original positional observation identity in the admitted source release, distinct from
+        native entity and identity IDs.
+      source_locator_json: Original request URL, compressed and decoded member digests, capture time, member
+        name and positional XML path.
+      raw_entity_json: Complete ordered entity tree, including unknown fields, expanded XML names, attributes,
+        namespace declarations and literal text.
+  ofac_snapshots:
+    label: OFAC sanctions snapshots
+    subject: reference
+    identity_columns:
+    - snapshot_id
+    summary: Publication metadata and reference dictionaries retained once per selected OFAC snapshot.
+    coverage: Not a range. Every entity in each explicitly admitted selected export is retained. Selected SDN
+      and consolidated exports need not share an update time. Prior selected snapshots remain on refresh; absence
+      does not establish delisting, and no history before these captures is inferred. Qualification and public
+      selection are recorded by the generation evidence.
+    measured_on: '2026-10-20'
+    grain: One admitted source release for one explicitly selected list.
+    columns:
+      snapshot_id: Admitted source-release digest. Captures remain separate even when original content is unchanged.
+      selected_list: Explicitly selected sdn or consolidated export; separate from the memberships stated by
+        an entity.
+      observed_at: Capture timestamp with explicit timezone, separate from publisher update time.
+      data_as_of_raw: Literal publisher dataAsOf. A missing timezone is not invented; different lists can report
+        different update dates.
+      entity_count: Number of distinct entity observations in this completely accepted selected snapshot.
+      source_release_logical_id: Logical identity of the admitted source release.
+      source_release_digest: Exact admitted source-release digest, also used as snapshot_id.
+      source_selection_json: Selected export, original response digest and byte size, capture time and XML member
+        name.
+      raw_metadata_json: Ordered root, container, reference dictionaries, publication metadata and unknown nonentity
+        observations, retained once per snapshot.
