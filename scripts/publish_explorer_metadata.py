@@ -70,11 +70,14 @@ def scorecard_sources(index: dict, base_url: str) -> list[dict]:
             raise ValueError("Published scorecard publisher bytes differ from the publication size")
         if member.sha256 and member.sha256 != "sha256:" + hashlib.sha256(raw).hexdigest():
             raise ValueError("Published scorecard publisher bytes differ from the publication digest")
-        table = pq.read_table(io.BytesIO(raw), columns=["publisher_id", "name", "scorecard_index_url", "homepage_url"])
+        table = pq.read_table(io.BytesIO(raw), columns=[
+            "publisher_id", "name", "scorecard_index_url", "homepage_url", "source_url",
+        ])
         if table.num_rows > 10_000:
             raise ValueError("Unexpectedly large scorecard publisher table")
         for row in table.to_pylist():
-            url = row.get("scorecard_index_url") or row.get("homepage_url")
+            # Attribution can link to the original observation when no landing page was stated.
+            url = row.get("scorecard_index_url") or row.get("homepage_url") or row.get("source_url")
             if not row.get("publisher_id") or not row.get("name") or not url or not public_url(url, allow_http=True):
                 raise ValueError("Scorecard publisher lacks a name, identifier or valid public URL")
             entry = {"id": "scorecard-" + row["publisher_id"], "name": row["name"], "url": url,
