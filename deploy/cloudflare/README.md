@@ -267,6 +267,16 @@ python deploy/cloudflare/local_delivery.py publish-data --inputs /release/inputs
 python deploy/cloudflare/local_delivery.py readback --inputs /release/inputs.json --output /release/readback
 ```
 
+For the existing FEC binder, assemble one build-evidence directory with the
+build's `source-commit.txt`, `source-tree.txt`, `expected-source-commit.txt`,
+`installed-consumer.json`, `image-inspect.json` and `build-inputs.sha256`, plus
+the operation's `registry-manifest.json`, `pushed-image-inspect.json` and
+`registry-association.json`. Local hardlinks preserve those exact files without
+changing their originals. The operation retains the raw verified manifest,
+checks a real local image inspection for the exact registry digest, and includes
+the already checked `uv.lock` digest. It does not pull an image to manufacture
+that association; missing local evidence refuses.
+
 Use one fresh directory per operation. `--resume` validates the selected input
 fields and all retained successful evidence, then returns the recorded result
 without HTTP requests, Docker commands or publication writes. It does not assert

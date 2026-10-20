@@ -39,12 +39,26 @@ def release(tmp_path, monkeypatch):
     package.write_text('{"version":"4.136.1"}')
     build = tmp_path / "build-inputs.sha256"
     build.write_text(delivery.sha(tmp_path / "uv.lock") + " uv.lock\n")
-    manifest = json.dumps({"config": {"digest": "sha256:config"}, "layers": [{"digest": "layer"}]}).encode()
+    config_digest = "sha256:" + "c" * 64
+    media_type = "application/vnd.oci.image.manifest.v1+json"
+    manifest = json.dumps(
+        {
+            "schemaVersion": 2,
+            "mediaType": media_type,
+            "config": {"digest": config_digest},
+            "layers": [{"digest": "layer"}],
+        }
+    ).encode()
     digest = "sha256:" + image.hashlib.sha256(manifest).hexdigest()
     consumer = {"code_sha256": "sha256:code", "image_digest": digest, "package_versions": {"spicy-regs": "0.1.6"}}
     original = {
-        "Id": "sha256:local",
-        "Descriptor": {"digest": digest, "size": len(manifest), "annotations": {"config.digest": "sha256:config"}},
+        "Id": digest,
+        "Descriptor": {
+            "digest": digest,
+            "size": len(manifest),
+            "mediaType": media_type,
+            "annotations": {"config.digest": config_digest},
+        },
         "RootFS": {"Layers": ["diff1"]},
         "Architecture": "amd64",
         "Os": "linux",
@@ -57,7 +71,7 @@ def release(tmp_path, monkeypatch):
         "source_tree": "tree",
         "image_id": original["Id"],
         "local_manifest_digest": digest,
-        "config_digest": "sha256:config",
+        "config_digest": config_digest,
         "evidence": {},
         "consumer": {**consumer, "image_digest": None},
     }
@@ -313,7 +327,8 @@ def test_missing_protected_family_refuses():
         delivery.protected({"families": {}}, {"families": {"treasury": {"digest": "a"}}}, ["treasury"])
 
 
-def test_image_push_exact_registry_association_and_no_credential_output(release, tmp_path, monkeypatch):
+@pytest.mark.parametrize("post_push", ["same", "missing-digest", "changed-config"])
+def test_image_push_exact_registry_association_and_no_credential_output(release, tmp_path, monkeypatch, post_push):
     config, qualified, original, manifest = release
     calls = []
     auth_paths = []
@@ -337,6 +352,7 @@ def test_image_push_exact_registry_association_and_no_credential_output(release,
             assert args[-4:] == ["--profile", image.PROFILE, "--path-to-docker", "/fake/docker"]
             return b"pushed"
         elif "--raw" in args:
+            (output / name).write_bytes(manifest)
             return manifest
         elif "--format" in args:
             value = {
@@ -346,21 +362,42 @@ def test_image_push_exact_registry_association_and_no_credential_output(release,
                 "config": original["Config"],
                 "created": original["Created"],
             }
+        elif name == "pushed-image-inspect.json":
+            inspected = {**original, "RepoDigests": [image.REGISTRY + "@" + qualified["local_manifest_digest"]]}
+            if post_push == "missing-digest":
+                inspected["RepoDigests"] = []
+            elif post_push == "changed-config":
+                inspected["Config"] = {"Env": ["changed"]}
+            value = [inspected]
         else:
             value = [original]
-        return json.dumps(value).encode()
+        raw = json.dumps(value).encode()
+        (output / name).write_bytes(raw)
+        return raw
 
     monkeypatch.setattr(image, "command", run)
     monkeypatch.setenv("CF_API_TOKEN", "never retain")
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "never retain")
     output = tmp_path / "image"
     output.mkdir()
-    value = image.image_operation(config["image"], config["source"], output, qualified, original, push=True)
-    assert value["consumer"]["image_digest"] == qualified["local_manifest_digest"]
+    if post_push == "same":
+        value = image.image_operation(config["image"], config["source"], output, qualified, original, push=True)
+        assert value["consumer"]["image_digest"] == qualified["local_manifest_digest"]
+        assert value["uv_lock_sha256"] == delivery.sha(tmp_path / "uv.lock")
+        assert (output / "registry-manifest.json").read_bytes() == manifest
+        assert not (output / "registry-manifest-raw.json").exists()
+        assert json.loads((output / "pushed-image-inspect.json").read_bytes())[0]["RepoDigests"] == [
+            value["registry_image"]
+        ]
+        assert "never retain" not in (output / "registry-association.json").read_text()
+    else:
+        with pytest.raises(ValueError, match="exact pushed registry digest|Post-push qualified image changed"):
+            image.image_operation(config["image"], config["source"], output, qualified, original, push=True)
+        assert not (output / "registry-association.json").exists()
     assert sum("push" in args for args in calls) == 1
+    assert sum(args[1:3] == ["image", "inspect"] for args in calls) == 2
     assert len(auth_paths) == 1 and not auth_paths[0].exists()
     assert not list(output.glob("docker-auth-*"))
-    assert "never retain" not in (output / "registry-association.json").read_text()
 
 
 # The moved client must preserve bounded HTTP behavior without contacting a server.
@@ -437,6 +474,8 @@ def test_readonly_registry_auth_uses_pull_only_and_keeps_secrets_private(release
                 "config": original["Config"],
                 "created": original["Created"],
             }
+        elif name == "pushed-image-inspect.json":
+            value = [{**original, "RepoDigests": [image.REGISTRY + "@" + qualified["local_manifest_digest"]]}]
         else:
             value = [original]
         return json.dumps(value).encode()

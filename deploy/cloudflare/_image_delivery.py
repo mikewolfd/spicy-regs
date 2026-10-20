@@ -38,6 +38,12 @@ def docker_auth(env):
 
 
 def image_operation(section, source, output, qualified, original, *, push):
+    locks = [
+        parts[0]
+        for line in Path(section["build_inputs"]["path"]).read_text().splitlines()
+        if len(parts := line.split()) == 2 and parts[1] == "uv.lock"
+    ]
+    require(len(locks) == 1, "Build inputs must bind exactly one uv.lock")
     docker = section["docker"]
     cli = [section["node"], "node_modules/wrangler/bin/wrangler.js"]
     env = {k: v for k, v in os.environ.items() if not k.startswith(("CF_", "CLOUDFLARE_", "DOCKER_"))}
@@ -96,7 +102,7 @@ def image_operation(section, source, output, qualified, original, *, push):
             section,
             env,
             output,
-            "registry-manifest-raw.json",
+            "registry-manifest.json",
         )
         require(
             "sha256:" + hashlib.sha256(raw).hexdigest() == digest and len(raw) == original["Descriptor"]["size"],
@@ -125,6 +131,15 @@ def image_operation(section, source, output, qualified, original, *, push):
             and remote["created"] == original["Created"],
             "Remote platform/config/ordered layers differ",
         )
+    pushed = json.loads(command([docker, "image", "inspect", tag], section, env, output, "pushed-image-inspect.json"))[
+        0
+    ]
+    for field in ("Id", "Architecture", "Os", "RootFS", "Config", "Descriptor"):
+        require(pushed[field] == original[field], f"Post-push qualified image changed: {field}")
+    require(
+        [ref for ref in pushed["RepoDigests"] if ref.startswith(REGISTRY + "@")] == [image],
+        "Local image lacks the exact pushed registry digest",
+    )
     association = {
         "status": "pass",
         "source_commit": source["commit"],
@@ -132,6 +147,7 @@ def image_operation(section, source, output, qualified, original, *, push):
         "registry_image": image,
         "registry_manifest_digest": digest,
         "config_digest": manifest["config"]["digest"],
+        "uv_lock_sha256": locks[0],
         "consumer": {**qualified["consumer"], "image_digest": digest},
         "qualification_sha256": section["qualification"]["sha256"],
         "push_requested": push,
