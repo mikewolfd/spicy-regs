@@ -186,3 +186,108 @@ The production command sets `https://spicygov.ai/mcp/`, maintained in
 export their guide URL when desired; GitHub repository variables are not
 automatically inherited by local Wrangler commands. Deploy the guide before
 enabling the redirect.
+
+## Explicit local delivery operations
+
+Use `local_delivery.py` for a necessary local release after its image and data
+have been qualified. It replaces task-specific Python copies of the push,
+publication and bounded readback callers. It does not build, bind FEC metadata,
+select a provider image, deploy, or sequence those steps. Keep using the existing
+accepted-input binder and `deploy:production` with the named
+`spicy-regs-civictechdc` profile. Account, bucket, registry and public endpoints
+remain the established production targets.
+
+Run from the exact clean source checkout with its existing locked Python
+runtime. Supply one reviewed JSON input. All file references below are absolute;
+`pin` means `{"path": "/absolute/control.json", "sha256": "<exact hex SHA256>"}`.
+Credential values never belong in this input; `env_file` names the existing
+private R2 credential file.
+
+```json
+{
+  "source": {"commit": "<exact commit>", "tree": "<exact tree>"},
+  "image": {
+    "qualification": {"path": "/release/image/qualification.json", "sha256": "<hash>"},
+    "inspection": {"path": "/release/image/image-inspect.json", "sha256": "<hash>"},
+    "build_inputs": {"path": "/release/image/build-inputs.sha256", "sha256": "<hash>"},
+    "tools": "/checkout/deploy/cloudflare",
+    "node": "/installed/bin/node", "docker": "/installed/bin/docker",
+    "docker_host": "unix:///absolute/colima/docker.sock"
+  },
+  "serving": {
+    "association": {"path": "/release/push/registry-association.json", "sha256": "<hash>"},
+    "receipt": {"path": "/release/binding/consumer-receipt.json", "sha256": "<hash>"},
+    "provider_selection": {"path": "/release/deployment/provider-selection.json", "sha256": "<hash>"},
+    "rollback": {"path": "/release/rollback/rollback.json", "sha256": "<hash>"}
+  },
+  "publication": {
+    "prior": {"path": "/release/rollback/publication.json", "sha256": "<hash>"},
+    "protected_families": ["treasury-fiscal"],
+    "env_file": "/existing/private/.env",
+    "generation": {
+      "directory": "/qualified/generation", "logical_id": "<exact logicalId>",
+      "artifact_digest": "sha256:<exact digest>", "family": "<target family>",
+      "tables": ["example"], "evidence_directories": ["/qualified/source-evidence/artifact"]
+    }
+  },
+  "readback": {
+    "prior": {"path": "/release/rollback/publication.json", "sha256": "<hash>"},
+    "protected_families": ["treasury-fiscal"],
+    "queries": [{
+      "sql": "SELECT id FROM example ORDER BY id LIMIT 1", "columns": ["id"], "rows": [["literal"]],
+      "publication": {"example": {
+        "status": "managed_generation", "family": "<target family>", "artifact_digest": "sha256:<digest>"
+      }}
+    }]
+  }
+}
+```
+
+The `image` controls use the existing image qualification/inspection/build-list
+formats. `serving` consumes the independently captured, accepted provider
+selection: `status: pass`, actual `worker_version` and `container_version`,
+`registry_image` and `receipt_sha256`. A configured image is not proof of actual
+provider selection. The rollback control retains the compatible prior consumer,
+image, receipt and Worker selection. Publication and readback share this check;
+image push does not require the later `serving` fields.
+
+Queries retain exact expected columns and rows, with one to eight queries and at
+most 100 returned rows each. Each table must name its managed family/digest or
+its FEC `release_compatibility` status, receipt hash, `sql_sha256`,
+`evidence_generations`, `population` and `as_of` from the selected receipt. Include
+the relevant existing FEC query when qualifying a new serving release. The server
+continues to own SQL access restrictions. The client preserves the accepted
+1 MiB response, 16 MiB retained output, 60-second request and 240-second total
+bounds, including session cleanup; it does not restart expired sessions.
+
+```sh
+python deploy/cloudflare/local_delivery.py push-image --inputs /release/inputs.json --output /release/push
+# Separately bind, deploy and accept actual provider selection using their existing owners.
+python deploy/cloudflare/local_delivery.py publish-data --inputs /release/inputs.json --output /release/publication
+python deploy/cloudflare/local_delivery.py readback --inputs /release/inputs.json --output /release/readback
+```
+
+Use one fresh directory per operation. `--resume` validates the selected input
+fields and all retained successful evidence, then returns the recorded result
+without HTTP requests, Docker commands or publication writes. It does not assert
+that an old result remains the live selection. Adding the later serving receipt
+cannot invalidate a successful image push. Changed evidence or unsuccessful
+results refuse resume. Do not evade that refusal with a new write directory.
+
+An interrupted push or publication can have succeeded remotely. Retain its
+original directory and use an explicit read-only operation in a fresh directory:
+
+```sh
+python deploy/cloudflare/local_delivery.py verify-image --inputs /release/inputs.json --from-output /release/push --output /release/image-observation
+python deploy/cloudflare/local_delivery.py observe-publication --inputs /release/inputs.json --from-output /release/publication --output /release/publication-observation
+```
+
+Observation binds the original intent and never retries its write. Image recovery
+uses Wrangler's short-lived pull credentials only in memory and a private Docker
+config, which is removed on exit. If observation cannot establish the exact
+candidate, stop for review; no automatic retry is supported. Publication still
+uses full generation/evidence admission, verified immutable uploads and readback,
+and current-parent/family compare-and-swap checks. The helper adds only the
+explicit protected-family checks; unrelated historical coverage acceptance is
+not a prerequisite for a new family's publication. Existing task evidence stays
+retained; new deliveries change input data rather than script source.
