@@ -330,7 +330,8 @@ def build_court_opinion_clusters(
     if have_prior:
         receipt_path, generation_id = prior_receipt_selection(prior_file, dataset='court_opinion_clusters')
         if receipt_path is not None:
-            input_witnesses.append(file_witness(receipt_path))
+            from spicy_regs.receipt_members import receipt_paths
+            input_witnesses.extend(file_witness(member) for member in receipt_paths(receipt_path))
         prior_file = restore_processing_input(prior_file, output_dir / f'.clusters-prior-{uuid4().hex}.parquet',
             dataset='court_opinion_clusters', schema=_SCHEMA, receipt_path=receipt_path,
             generation_id=generation_id)

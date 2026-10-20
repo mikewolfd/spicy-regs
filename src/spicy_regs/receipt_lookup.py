@@ -122,13 +122,16 @@ class Member(NamedTuple):
     manifest_key: str | None = None
 
 
+SUPPORTED_SPLIT_DATASETS = frozenset({"roll_call_votes", "member_votes", "court_opinion_clusters"})
+
+
 def selected_members(index: Mapping, local: Mapping | None, base_url: str, table: str,
                      snapshot: Mapping | None = None) -> tuple[Member, ...]:
     """Every receipt member paired with the selected subjects, in declared order.
 
     Native roots name their admitted files; downloads must hold the complete
     selected membership. An empty tuple means lookup is unavailable. Split
-    support is qualified for unindexed votes; other split families stay unavailable.
+    support is qualified for unindexed votes and court clusters; other split families stay unavailable.
     """
     from spicy_regs.receipt_members import receipt_declarations, receipt_paths
     from spicy_regs.sources.publication import rulemaking_receipt, table_owner
@@ -138,7 +141,7 @@ def selected_members(index: Mapping, local: Mapping | None, base_url: str, table
         split = isinstance(native["receipts"], (list, tuple))
         if split and (native.get("key_index") is not None or native.get("key_index_descriptor") is not None):
             raise ValueError("Split receipt indexing is unsupported")
-        if split and table not in {"roll_call_votes", "member_votes"}:
+        if split and table not in SUPPORTED_SPLIT_DATASETS:
             return ()
         paths = receipt_paths(native["receipts"])
         if not paths or len(set(paths)) != len(paths):
@@ -155,7 +158,7 @@ def selected_members(index: Mapping, local: Mapping | None, base_url: str, table
     family, entry = owner
     receipt = entry["etlReceipts"]
     declarations = receipt_declarations(receipt, pinned=True)
-    if "members" in receipt and table not in {"roll_call_votes", "member_votes"}:
+    if "members" in receipt and table not in SUPPORTED_SPLIT_DATASETS:
         return ()
     paths = tuple(f"{entry['prefix']}/{member['key']}" for member in declarations)
     if local is not None and (table not in local.get("selected_tables", ())

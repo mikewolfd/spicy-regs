@@ -55,3 +55,22 @@ cost time and disk. This change saves repeated successful HTTP acquisitions and
 removes task-specific continuation wrappers; it does not eliminate those costs.
 Search completion proves the selected indexed, all-status walk, not exhaustive
 bulk coverage, historical corrections, or citation endpoint membership.
+
+## Optional receipt members
+
+`--split-receipts` keeps the prior receipt files and one new delta file as an
+ordered selection. It is off by default. Enable it for publication only after
+the selected reader supports split court clusters; a split-votes deployment
+alone does not establish court compatibility. No other court family opts in.
+The next catch-up and the ordinary full refresh can read the complete selection.
+Receipt lookup keeps its aggregate scan bound and does not gain an index.
+
+The first monolith-to-split transition changes receipt keys and uploads the
+history. Later unchanged members retain their keys and byte pins, allowing the
+normal publisher to copy them within the store instead of uploading them again.
+Full native-subject rewriting, admission and remote byte readback still run.
+The self-contained private bundle copies each receipt member, and generation
+assembly copies it again: unlike monolith adoption, this route may use more
+local copy space. It avoids receipt recombination and repeated uploads, not
+all local copies or historical reads. Keep the normal disk reserve and record
+local copies, uploads and readback separately on the next required run.

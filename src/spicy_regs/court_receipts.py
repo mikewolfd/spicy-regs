@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 
 from spicy_regs import court_bulk, etl_bulk
 from spicy_regs.receipt_history import RefusalIdentity, carry_receipt_history
+from spicy_regs.receipt_members import receipt_keys, receipt_paths
 from spicy_regs.court_subjects import (
     IDENTITIES, RECEIPT_FIELDS, SUBJECT_SCHEMAS, normalize_court_row, opinion_body_id,
 )
@@ -121,7 +122,7 @@ def write_court_rows(
     dataset: str, rows: Iterable[Mapping], output_dir: Path, *, witnesses: Sequence[Mapping],
     generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
     diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
-    attempt_prefix: str = "row", prior_receipts: Path | None = None,
+    attempt_prefix: str = "row", prior_receipts: Path | tuple[Path, ...] | None = None,
     resolution_receipts: Path | None = None,
 ) -> Path:
     """Expose a validated pair; optional fresh admission proves refusal resolution.
@@ -180,7 +181,7 @@ def write_court_bulk(
     dataset: str, source: Path, output_dir: Path, *, witnesses: Sequence[Mapping],
     generation_id: str | None = None, processor: str = 'spicy_regs/courts/1',
     diagnostics: Mapping | None = None, refused_receipts: Path | None = None,
-    attempt_prefix: str = "row", prior_receipts: Path | None = None,
+    attempt_prefix: str = "row", prior_receipts: Path | tuple[Path, ...] | None = None,
 ) -> Path:
     """``write_court_rows`` over a staged Parquet source, a column at a time (``court_bulk``).
 
@@ -295,17 +296,17 @@ def _pdf_refusal_identity(raw: Mapping) -> dict | None:
     return {'opinion_body_id': identity}
 
 
-def _carry(dataset: str, current: Path, prior: Path, *, resolution_receipts: Path | None = None) -> None:
+def _carry(dataset: str, current: Path, prior: Path | tuple[Path, ...], *, resolution_receipts: Path | None = None) -> None:
     # Match literal court keys to accepted declared identities. PDF body keys
     # alone use the maintained derivation from the exact opinion id and digest.
-    carry_receipt_history(current, [prior], current, resolution_receipts=resolution_receipts, refusal_identities={
+    carry_receipt_history(current, receipt_paths(prior), current, resolution_receipts=resolution_receipts, refusal_identities={
         dataset: RefusalIdentity(IDENTITIES[dataset], None, "raw_source_record",
                                 _pdf_refusal_identity if dataset == 'court_opinion_pdf_extractions' else None)})
 
 
 def finish_court_output(dataset: str, staged: Path, output_dir: Path, *, witnesses=None,
                         generation_id: str | None = None, diagnostics: Mapping | None = None,
-                        refused_receipts: Path | None = None, prior_receipts: Path | None = None,
+                        refused_receipts: Path | None = None, prior_receipts: Path | tuple[Path, ...] | None = None,
                         attempt_prefix: str = 'row') -> Path:
     """Split a completed private mapper output; keep its bytes as retained evidence.
 
@@ -341,14 +342,23 @@ def admit_court_updates(dataset: str, source: Path, directory: Path, *, schema: 
     return accepted, receipts
 
 
-def local_receipt_selection(path: Path) -> tuple[Path, str]:
+def local_receipt_selection(path: Path) -> tuple[Path | tuple[Path, ...], str]:
     bundle = path.resolve().parent
     descriptor = bundle / 'court-build.json'
     family = bundle / 'court-family.json'
-    if family.exists() and (bundle / 'etl_receipts.parquet').is_file():
+    if family.exists():
         values = json.loads(family.read_text())
         if path.resolve().stem not in values['datasets']:
             raise ValueError('Court receipt family names another dataset')
+        if "etlReceipts" in values:
+            if values["datasets"] != ["court_opinion_clusters"] or (bundle / "etl_receipts.parquet").exists():
+                raise ValueError("Split court receipts require only the cluster family")
+            members = tuple(bundle / key for key in receipt_keys(values["etlReceipts"]))
+            if not members or any(member.is_symlink() or not member.is_file() for member in members):
+                raise ValueError("Court receipt family requires every declared regular member")
+            return members, values["generation_id"]
+        if not (bundle / "etl_receipts.parquet").is_file():
+            raise ValueError('Court receipt family has no selected receipts')
         return bundle / 'etl_receipts.parquet', values['generation_id']
     if not descriptor.exists() or not (bundle / 'etl_receipts.parquet').is_file():
         raise ValueError(f'Court subject has no selected receipt bundle: {path}')
@@ -358,7 +368,7 @@ def local_receipt_selection(path: Path) -> tuple[Path, str]:
     return bundle / 'etl_receipts.parquet', values['generation_id']
 
 
-def read_court_rows(path: Path, *, dataset: str, receipt_path: Path | None = None,
+def read_court_rows(path: Path, *, dataset: str, receipt_path: Path | tuple[Path, ...] | None = None,
                     generation_id: str | None = None) -> Iterable[dict]:
     """Internal processing read; a migrated row never falls back to missing evidence."""
     from spicy_regs.etl_receipts import selected_subject_policy
@@ -401,7 +411,7 @@ def processing_rows(rows, *, dataset: str, schema: pa.Schema):
 
 
 def restore_processing_input(path: Path, destination: Path, *, dataset: str, schema: pa.Schema,
-                             receipt_path: Path | None = None, generation_id: str | None = None) -> Path:
+                             receipt_path: Path | tuple[Path, ...] | None = None, generation_id: str | None = None) -> Path:
     """Reconstruct the mapper's private merge columns, preserving exact raw literals."""
     from spicy_regs.transforms.parquet_rows import write_rows
     from spicy_regs.conversion_reads import _open_family_reader
@@ -417,14 +427,14 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
         # Capture the immutable local bundle selected by the public link once.
         path = path.resolve(strict=True)
         policy = selected_subject_policy(POLICIES[dataset], [path])
-        paths = (path, receipt_path)
+        paths = (path, *receipt_paths(receipt_path))
         before = [file_signature(member) for member in paths]
 
         def guard():
             if [file_signature(member) for member in paths] != before:
                 raise ValueError('Selected court input changed during restoration')
 
-        with _open_family_reader({dataset: [path]}, [receipt_path], [policy], generation_id=generation_id,
+        with _open_family_reader({dataset: [path]}, receipt_paths(receipt_path), [policy], generation_id=generation_id,
                                  guard=guard, scoped=True) as reader:
             try:
                 return court_restore.materialize(reader, dataset, schema, destination)
@@ -444,7 +454,7 @@ def restore_processing_input(path: Path, destination: Path, *, dataset: str, sch
         read_court_rows(path, dataset=dataset, receipt_path=receipt_path, generation_id=generation_id),
         dataset=dataset, schema=schema), destination, schema)
 
-def prior_receipt_selection(path: Path, *, dataset: str) -> tuple[Path | None, str | None]:
+def prior_receipt_selection(path: Path, *, dataset: str) -> tuple[Path | tuple[Path, ...] | None, str | None]:
     """Select receipts from a local bundle or the same pinned publication as the prior."""
     if path.is_symlink() or (path.parent / 'court-build.json').exists() or (path.parent / 'court-family.json').exists():
         return local_receipt_selection(path)
@@ -456,11 +466,16 @@ def prior_receipt_selection(path: Path, *, dataset: str) -> tuple[Path | None, s
     owner = publication.table_owner(index, dataset + '.parquet')
     if owner is None or 'etlReceipts' not in owner[1]:
         return None, None
-    member, = publication.receipt_members(index, dataset=dataset)
-    destination = path.parent / ('.' + dataset + '.selected-receipts-' + uuid4().hex + '.parquet')
-    if not publication.fetch_member(base, member, destination, dataset + ' receipts'):
-        raise ValueError('Selected court receipts are missing')
-    return destination, owner[1]['etlReceipts']['generationId']
+    specification = owner[1]["etlReceipts"]
+    if "members" in specification and dataset != "court_opinion_clusters":
+        raise ValueError("Split court receipts require only the cluster family")
+    destinations = []
+    for member in publication.receipt_members(index, dataset=dataset):
+        destination = path.parent / ("." + dataset + ".selected-receipts-" + uuid4().hex + ".parquet")
+        if not publication.fetch_member(base, member, destination, dataset + " receipts"):
+            raise ValueError("Selected court receipts are missing")
+        destinations.append(destination)
+    return (tuple(destinations) if 'members' in specification else destinations[0]), specification['generationId']
 
 
 def generation_options(paths: Sequence[Path]) -> dict:
@@ -476,8 +491,15 @@ def generation_options(paths: Sequence[Path]) -> dict:
         if resolved != expected or len(set(resolved)) != len(resolved):
             raise ValueError('Court outputs differ from the complete receipt family')
         receipt, generation = local_receipt_selection(resolved[0])
-        return {'receipt_path': receipt, 'receipt_policies': [POLICIES[path.stem] for path in resolved],
-                'receipt_generation_id': generation, 'adopt_owned_receipt': True}
+        return {
+            **(
+                {"receipt_paths": receipt}
+                if isinstance(receipt, tuple)
+                else {"receipt_path": receipt, "adopt_owned_receipt": True}
+            ),
+            "receipt_policies": [POLICIES[path.stem] for path in resolved],
+            "receipt_generation_id": generation,
+        }
     selections = [local_receipt_selection(path) for path in paths]
     ids = {generation for _, generation in selections}
     if len(ids) != 1:

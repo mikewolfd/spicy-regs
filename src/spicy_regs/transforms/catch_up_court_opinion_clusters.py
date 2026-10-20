@@ -8,6 +8,7 @@ the parent is a complete bulk export or refresh existing cluster values.
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -21,6 +22,7 @@ from rulespec_artifacts import publish_directory_no_replace
 from spicy_regs.court_receipts import finish_court_output, local_receipt_selection
 from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 from spicy_regs.etl_receipts import combine_receipts
+from spicy_regs.receipt_members import receipt_declarations
 from spicy_regs.selected_generations import SelectedInputs
 from spicy_regs.sources import publication
 from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader
@@ -75,6 +77,7 @@ def catch_up_court_opinion_clusters(
     search_budget: CourtListenerTraversalBudget,
     evidence: CaptureEvidence,
     retained_search_directory: Path | None = None,
+    split_receipts: bool = False,
 ) -> Path:
     """Fetch before prior admission/restoration; return a private complete candidate.
 
@@ -104,12 +107,13 @@ def catch_up_court_opinion_clusters(
     if entry.get("etlReceipts", {}).get("datasets") != [DATASET]:
         raise ValueError("Court catch-up requires the selected single-dataset receipt family")
     (subject_member,) = publication.table_members(snapshot, OUTPUT)
-    (receipt_member,) = publication.receipt_members(snapshot, dataset=DATASET)
+    receipt_members = publication.receipt_members(snapshot, dataset=DATASET)
+    declarations = receipt_declarations(entry["etlReceipts"], pinned=True)
     prior = prior_directory / OUTPUT
-    receipts = prior_directory / entry["etlReceipts"]["key"]
+    receipts = tuple(prior_directory / member["key"] for member in declarations)
     output_dir.mkdir(parents=True, exist_ok=True)
     selected = SelectedInputs(output_dir, output_dir / ".catchup-pins", public_url="")
-    for path, member in ((prior, subject_member), (receipts, receipt_member)):
+    for path, member in ((prior, subject_member), *zip(receipts, receipt_members, strict=True)):
         if selected.member_pin(path) != {"sha256": member.sha256, "byteSize": member.byte_size}:
             raise ValueError("Court catch-up prior bytes differ from the captured publication")
     for path, digest in ((source_edition_evidence, source_edition_sha256), (courts_local_file, courts_sha256)):
@@ -157,6 +161,7 @@ def catch_up_court_opinion_clusters(
         through=search_through,
         max_requests=search_budget.max_requests,
         max_wait_seconds=str(search_budget.max_wait_seconds),
+        split_receipts=split_receipts,
         coverage=("Preserved parent plus bounded all-status indexed search; unindexed clusters may be absent. "
                   "Bulk coverage inherited; maximum ID is not citation membership proof."),
     )
@@ -194,10 +199,27 @@ def catch_up_court_opinion_clusters(
         complete = Path(temporary) / "bundle"
         complete.mkdir()
         _append_native(prior, delta, complete / OUTPUT, guard=selected.check)
-        combine_receipts([receipts, delta_receipts], complete / "etl_receipts.parquet")
+        family = {"generation_id": generation_id, "datasets": [DATASET]}
+        if split_receipts:
+            # Byte copies keep this private bundle self-contained. Generation assembly
+            # still copies these members; this saves recombination and later uploads,
+            # not all local copies or the publisher's complete remote byte readback.
+            (complete / "etl_receipts").mkdir()
+            members = []
+            sources = (*receipts, delta_receipts)
+            keys = [f"etl_receipts/{path.name}" for path in receipts]
+            keys.append(f"etl_receipts/delta_{generation_id}.parquet")
+            if len(set(keys)) != len(keys):
+                raise ValueError("Court receipt member keys must be distinct")
+            for source, key in zip(sources, keys, strict=True):
+                selected.check()
+                shutil.copyfile(source, complete / key)
+                members.append({"key": key, "rows": pq.read_metadata(source).num_rows})
+            family["etlReceipts"] = {"version": 2, "members": members, "rows": sum(m["rows"] for m in members)}
+            receipt_declarations(family["etlReceipts"])
+        else:
+            combine_receipts([*receipts, delta_receipts], complete / "etl_receipts.parquet")
         selected.check()
-        (complete / "court-family.json").write_text(
-            json.dumps({"generation_id": generation_id, "datasets": [DATASET]}) + "\n"
-        )
+        (complete / "court-family.json").write_text(json.dumps(family) + "\n")
         publish_directory_no_replace(complete, bundle)
     return bundle / OUTPUT

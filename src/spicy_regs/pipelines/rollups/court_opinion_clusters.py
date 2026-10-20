@@ -51,6 +51,7 @@ def catch_up(
     max_requests: int = 50,
     max_wait_seconds: float = 600,
     skip_upload: bool = True,
+    split_receipts: bool = False,
 ) -> None:
     """Resume a bounded same-edition Search addition; see docs/court-search-recovery.md.
 
@@ -73,6 +74,7 @@ def catch_up(
                 source_edition_sha256=source_edition_sha256, courts_local_file=courts_local_file,
                 courts_sha256=courts_sha256, search_through=search_through, search_budget=allocation,
                 retained_search_directory=retained_search_directory, evidence=self.source_evidence,
+                split_receipts=split_receipts,
             )
 
     SelectedCatchup(output_dir=output_dir, skip_upload=skip_upload).run()
