@@ -89,6 +89,7 @@ TABLES = (
     "agency_lifecycle_stats",
     "sam_entities",
     "census_acs_county_observations",
+    "grants_opportunity_observations",
     "treasury_debt_observations",
     "treasury_statement_periods",
     "lobbying_filings",
@@ -907,6 +908,7 @@ def _build_connection_inputs(con, publication):
     managed_only = {
         "census_acs_county_observations",
         "treasury_debt_observations", "treasury_statement_periods",
+        "grants_opportunity_observations",
         "administration_policy_bill_links", "administration_policy_statements",
         "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
         "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
