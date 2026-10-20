@@ -10477,3 +10477,75 @@ tables:
       source_selection_json: Explicit dataset, report date and page size of the source selection.
       field_metadata_json: Original publisher labels, types and display formats; CURRENCY alone does not establish a scale for untyped forecasts.
       raw_row_json: Complete native row including original gross-named fields, hierarchy and report fiscal context.
+
+  grants_opportunity_observations:
+    label: Grants.gov opportunity and forecast observations
+    subject: spending
+    summary: One observation per source notice in a declared Grants.gov daily XML snapshot, with literal eligibility,
+      deadlines, amounts and source revisions.
+    coverage: Not a range. Designed to retain every admitted record in each explicitly selected daily snapshot.
+      Full real-export qualification and public delivery are pending. The date records this design statement,
+      not a source measurement. Snapshot membership does not establish active/open status, withdrawal, deletion
+      or historical completeness.
+    measured_on: '2026-10-20'
+    grain: One source release, notice kind and native opportunity ID; publisher versions and older selected snapshots
+      remain distinct.
+    columns:
+      snapshot_date: Date in the selected export name/scope, separate from capture time and notice dates.
+      notice_type: Explicit synopsis or forecast XML record kind; neither proves current open, posted, closed or withdrawn
+        status.
+      opportunity_id: Literal Grants.gov OpportunityID, including leading zeros.
+      version: Literal publisher Version such as Synopsis 2 or Forecast 1; absent and empty stay distinct.
+      opportunity_number: Publisher opportunity number; separate from OpportunityID.
+      title: Publisher title with decoded XML text preserved; no second HTML decoding.
+      agency_code: Literal publisher agency code; no inferred cross-agency join.
+      agency_name: Literal publisher agency name.
+      opportunity_category: Literal publisher opportunity category code.
+      eligibility_text: Full AdditionalInformationOnEligibility text; retained even when an eligibility code says
+        unrestricted.
+      description: Complete decoded XML Description text, including embedded markup.
+      close_date_explanation: Literal synopsis deadline explanation, including non-date conditions.
+      estimated_synopsis_close_date_explanation: Literal forecast deadline explanation; not an actual synopsis deadline.
+      cost_sharing_or_matching_requirement: Literal publisher cost-sharing or matching field.
+      eligibility_codes_json: Ordered JSON array of every EligibleApplicants occurrence; unknown codes remain.
+      funding_category_codes_json: Ordered JSON array of every CategoryOfFundingActivity occurrence.
+      funding_instruments_json: Ordered JSON array of every FundingInstrumentType occurrence; no inferred code labels.
+      assistance_listing_numbers_json: Ordered JSON array of every literal CFDANumbers occurrence (Assistance Listing
+        references); never numeric.
+      eligibility_labels_json: Position-aligned labels from the pinned RefSpec code list; null means the raw code
+        is absent from that retained vocabulary.
+      funding_category_labels_json: Position-aligned pinned RefSpec category labels; unknown raw codes keep a null
+        label.
+      post_date: Parsed PostDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain;
+        no lifecycle status is inferred.
+      close_date: Parsed CloseDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain;
+        no lifecycle status is inferred.
+      last_updated_date: Parsed LastUpdatedDate when it is a valid MMDDYYYY date; null otherwise. Literal text and
+        status remain; no lifecycle status is inferred.
+      archive_date: Parsed ArchiveDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain;
+        no lifecycle status is inferred.
+      estimated_synopsis_post_date: Parsed EstimatedSynopsisPostDate when it is a valid MMDDYYYY date; null otherwise.
+        Literal text and status remain; no lifecycle status is inferred.
+      estimated_synopsis_close_date: Parsed EstimatedSynopsisCloseDate when it is a valid MMDDYYYY date; null otherwise.
+        Literal text and status remain; no lifecycle status is inferred.
+      estimated_award_date: Parsed EstimatedAwardDate when it is a valid MMDDYYYY date; null otherwise. Literal text
+        and status remain; no lifecycle status is inferred.
+      estimated_project_start_date: Parsed EstimatedProjectStartDate when it is a valid MMDDYYYY date; null otherwise.
+        Literal text and status remain; no lifecycle status is inferred.
+      award_ceiling: Exact AwardCeiling decimal when representable as DECIMAL(38,2); no rounding or assumed unit.
+        Original text and missing/unknown status remain.
+      award_floor: Exact AwardFloor decimal when representable as DECIMAL(38,2); no rounding or assumed unit. Original
+        text and missing/unknown status remain.
+      estimated_total_program_funding: Exact EstimatedTotalProgramFunding decimal when representable as DECIMAL(38,2);
+        no rounding or assumed unit. Original text and missing/unknown status remain.
+      amount_unit: 'Null: the selected XML controls do not establish a currency/unit for every amount.'
+      value_statuses_json: 'Per-date/amount status: value, missing, blank, unparsed, publisher_none, or unrepresentable.
+        Read raw_fields_json for exact text.'
+      source_record_id: Native kind and opportunity identity in the admitted SpicyDocs source release.
+      source_release_logical_id: Logical identity of the admitted SpicyDocs release.
+      source_release_digest: Exact source release digest; distinguishes successive snapshots and same-date revisions.
+      source_ordinal: Zero-based record position in the original XML; source reader order may differ.
+      source_locator_json: Original archive URL/digest, capture time, member name/digest and XML record path.
+      raw_fields_json: Every direct XML field occurrence in original order with expanded tag, exact decoded text,
+        attributes and source XPath; unknown fields remain.
+      vocabulary_source_sha256: Digest of the official Grants.gov code page parsed by the pinned RefSpec implementation.

@@ -19619,6 +19619,220 @@
       "recipient_id"
     ]
   },
+  "grants_opportunity_observations": {
+    "table": "grants_opportunity_observations",
+    "label": "Grants.gov opportunity and forecast observations",
+    "summary": "One observation per source notice in a declared Grants.gov daily XML snapshot, with literal eligibility, deadlines, amounts and source revisions.",
+    "coverage": "Not a range. Designed to retain every admitted record in each explicitly selected daily snapshot. Full real-export qualification and public delivery are pending. The date records this design statement, not a source measurement. Snapshot membership does not establish active/open status, withdrawal, deletion or historical completeness.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_date",
+        "column_type": "DATE",
+        "description": "Date in the selected export name/scope, separate from capture time and notice dates."
+      },
+      {
+        "column_name": "notice_type",
+        "column_type": "VARCHAR",
+        "description": "Explicit synopsis or forecast XML record kind; neither proves current open, posted, closed or withdrawn status."
+      },
+      {
+        "column_name": "opportunity_id",
+        "column_type": "VARCHAR",
+        "description": "Literal Grants.gov OpportunityID, including leading zeros."
+      },
+      {
+        "column_name": "version",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher Version such as Synopsis 2 or Forecast 1; absent and empty stay distinct."
+      },
+      {
+        "column_name": "opportunity_number",
+        "column_type": "VARCHAR",
+        "description": "Publisher opportunity number; separate from OpportunityID."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Publisher title with decoded XML text preserved; no second HTML decoding."
+      },
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher agency code; no inferred cross-agency join."
+      },
+      {
+        "column_name": "agency_name",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher agency name."
+      },
+      {
+        "column_name": "opportunity_category",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher opportunity category code."
+      },
+      {
+        "column_name": "eligibility_text",
+        "column_type": "VARCHAR",
+        "description": "Full AdditionalInformationOnEligibility text; retained even when an eligibility code says unrestricted."
+      },
+      {
+        "column_name": "description",
+        "column_type": "VARCHAR",
+        "description": "Complete decoded XML Description text, including embedded markup."
+      },
+      {
+        "column_name": "close_date_explanation",
+        "column_type": "VARCHAR",
+        "description": "Literal synopsis deadline explanation, including non-date conditions."
+      },
+      {
+        "column_name": "estimated_synopsis_close_date_explanation",
+        "column_type": "VARCHAR",
+        "description": "Literal forecast deadline explanation; not an actual synopsis deadline."
+      },
+      {
+        "column_name": "cost_sharing_or_matching_requirement",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher cost-sharing or matching field."
+      },
+      {
+        "column_name": "eligibility_codes_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered JSON array of every EligibleApplicants occurrence; unknown codes remain."
+      },
+      {
+        "column_name": "funding_category_codes_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered JSON array of every CategoryOfFundingActivity occurrence."
+      },
+      {
+        "column_name": "funding_instruments_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered JSON array of every FundingInstrumentType occurrence; no inferred code labels."
+      },
+      {
+        "column_name": "assistance_listing_numbers_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered JSON array of every literal CFDANumbers occurrence (Assistance Listing references); never numeric."
+      },
+      {
+        "column_name": "eligibility_labels_json",
+        "column_type": "VARCHAR",
+        "description": "Position-aligned labels from the pinned RefSpec code list; null means the raw code is absent from that retained vocabulary."
+      },
+      {
+        "column_name": "funding_category_labels_json",
+        "column_type": "VARCHAR",
+        "description": "Position-aligned pinned RefSpec category labels; unknown raw codes keep a null label."
+      },
+      {
+        "column_name": "post_date",
+        "column_type": "DATE",
+        "description": "Parsed PostDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "close_date",
+        "column_type": "DATE",
+        "description": "Parsed CloseDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "last_updated_date",
+        "column_type": "DATE",
+        "description": "Parsed LastUpdatedDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "archive_date",
+        "column_type": "DATE",
+        "description": "Parsed ArchiveDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "estimated_synopsis_post_date",
+        "column_type": "DATE",
+        "description": "Parsed EstimatedSynopsisPostDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "estimated_synopsis_close_date",
+        "column_type": "DATE",
+        "description": "Parsed EstimatedSynopsisCloseDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "estimated_award_date",
+        "column_type": "DATE",
+        "description": "Parsed EstimatedAwardDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "estimated_project_start_date",
+        "column_type": "DATE",
+        "description": "Parsed EstimatedProjectStartDate when it is a valid MMDDYYYY date; null otherwise. Literal text and status remain; no lifecycle status is inferred."
+      },
+      {
+        "column_name": "award_ceiling",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact AwardCeiling decimal when representable as DECIMAL(38,2); no rounding or assumed unit. Original text and missing/unknown status remain."
+      },
+      {
+        "column_name": "award_floor",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact AwardFloor decimal when representable as DECIMAL(38,2); no rounding or assumed unit. Original text and missing/unknown status remain."
+      },
+      {
+        "column_name": "estimated_total_program_funding",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact EstimatedTotalProgramFunding decimal when representable as DECIMAL(38,2); no rounding or assumed unit. Original text and missing/unknown status remain."
+      },
+      {
+        "column_name": "amount_unit",
+        "column_type": "VARCHAR",
+        "description": "Null: the selected XML controls do not establish a currency/unit for every amount."
+      },
+      {
+        "column_name": "value_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-date/amount status: value, missing, blank, unparsed, publisher_none, or unrepresentable. Read raw_fields_json for exact text."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Native kind and opportunity identity in the admitted SpicyDocs source release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact source release digest; distinguishes successive snapshots and same-date revisions."
+      },
+      {
+        "column_name": "source_ordinal",
+        "column_type": "BIGINT",
+        "description": "Zero-based record position in the original XML; source reader order may differ."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original archive URL/digest, capture time, member name/digest and XML record path."
+      },
+      {
+        "column_name": "raw_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Every direct XML field occurrence in original order with expanded tag, exact decoded text, attributes and source XPath; unknown fields remain."
+      },
+      {
+        "column_name": "vocabulary_source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the official Grants.gov code page parsed by the pinned RefSpec implementation."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One source release, notice kind and native opportunity ID; publisher versions and older selected snapshots remain distinct.",
+    "identity_columns": []
+  },
   "treasury_debt_observations": {
     "table": "treasury_debt_observations",
     "label": "Treasury daily debt balances",

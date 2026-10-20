@@ -50,6 +50,7 @@ nav:
   - Changelog: changelog.md
   - Querying with Python: querying-python.md
   - Treasury fiscal comparisons: treasury-fiscal.md
+  - Grants opportunities: grants-opportunities.md
   - FEC:
       - FEC tables and child rows: fec-query-views.md
       - Integration: fec-integration.md
@@ -63,6 +64,7 @@ nav:
       - Coverage census: research/fec-coverage-2026-09-21.md
   - Tables:
       - ETL receipts: tables/etl_receipts.md
+      - grants_opportunity_observations: tables/grants_opportunity_observations.md
       - treasury_debt_observations: tables/treasury_debt_observations.md
       - treasury_statement_periods: tables/treasury_statement_periods.md
       - law_sections: tables/law_sections.md
