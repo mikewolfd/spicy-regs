@@ -80,7 +80,9 @@ def materialize(reader, dataset: str, schema: pa.Schema, destination: Path) -> P
     with reader._stream(), TemporaryDirectory(prefix='.court-restore-', dir=destination.parent) as temporary:
         staged = Path(temporary) / 'processing.parquet'
         with pq.ParquetFile(reader.subjects[dataset][0]) as source, pq.ParquetWriter(staged, schema, compression='zstd') as writer:
-            for batch in source.iter_batches(batch_size=10_000):
+            # Cooperative checks bracket each batch. The measured map route can
+            # decode/write 100k rows between checks; this is not a time guarantee.
+            for batch in source.iter_batches(batch_size=court_bulk.restore_batch_rows(dataset)):
                 checkpoint()
                 table = pa.Table.from_batches([batch])
                 table.validate(full=True)

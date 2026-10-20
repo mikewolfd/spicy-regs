@@ -1,5 +1,6 @@
 """Bulk court restore exercises the maintained mapper on exceptional rows only."""
 import random
+from contextlib import contextmanager
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -53,6 +54,57 @@ def test_restore_replays_only_exceptional_rows_and_admits_once(tmp_path, monkeyp
     assert pq.read_table(restored).equals(pq.read_table(source))
     assert seen == ['27']
     assert admissions == [1]
+
+
+@pytest.mark.parametrize(('dataset', 'queries'), [
+    ('court_citation_map', 1), ('court_opinion_clusters', 2),
+    ('court_citations', 2), ('court_parentheticals', 2), ('court_opinions', 2),
+])
+def test_restore_uses_dataset_batch_bound_without_changing_rows(tmp_path, monkeypatch, dataset, queries):
+    from spicy_regs import etl_bulk
+
+    ids = [str(i + 1) for i in range(10_001)]
+    repeated = ['2'] * len(ids)
+    values = {
+        'court_citation_map': {'citing_opinion_id': ids, 'cited_opinion_id': repeated,
+                               'depth': ['007'] * len(ids)},
+        'court_opinion_clusters': {'cluster_id': ids, 'cl_docket_id': repeated,
+                                  'case_name': ['A v. B'] * len(ids)},
+        'court_citations': {'citation_id': ids, 'cluster_id': repeated},
+        'court_parentheticals': {'parenthetical_id': ids, 'described_opinion_id': repeated,
+                                'describing_opinion_id': repeated, 'text': ['Exact source text'] * len(ids)},
+        'court_opinions': {'opinion_id': ids, 'cluster_id': repeated, 'local_path': ['opinions/a.pdf'] * len(ids)},
+    }[dataset]
+    expected = pa.table(values)
+    source = _write(tmp_path / 'source.parquet', expected)
+    native = court_receipts.write_court_bulk(
+        dataset, source, tmp_path / 'native', witnesses=WITNESSES, generation_id='selected')
+    validate = etl_bulk._validated_bundle
+    calls = []
+
+    class Connection:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        def execute(self, query, *args, **kwargs):
+            if 'FROM court_restore_source' in query:
+                calls.append(args[0])
+            return self.connection.execute(query, *args, **kwargs)
+
+    @contextmanager
+    def admitted(*args, **kwargs):
+        with validate(*args, **kwargs) as connection:
+            yield Connection(connection)
+
+    monkeypatch.setattr(etl_bulk, '_validated_bundle', admitted)
+    output = restore_processing_input(
+        native, tmp_path / 'restored.parquet', dataset=dataset, schema=expected.schema)
+    assert pq.read_table(output).equals(expected, check_metadata=True)
+    assert len(calls) == queries
+    assert calls[0][0] == 0 and calls[-1][1] == len(ids)
 
 
 def test_restore_refuses_corrupt_selected_receipts_without_replacing_output(tmp_path):

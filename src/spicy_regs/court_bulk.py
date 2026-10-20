@@ -34,6 +34,12 @@ DATASETS = frozenset({
 _BATCH = {"court_opinion_clusters": 10_000}
 _DEFAULT_BATCH = 100_000
 
+
+def restore_batch_rows(dataset: str) -> int:
+    """Reuse the measured map writer bound; other restores retain their smaller bound."""
+    return _BATCH.get(dataset, _DEFAULT_BATCH) if dataset == "court_citation_map" else 10_000
+
+
 _INTEGER = "'-?[0-9]+'"
 #: A decimal, optionally with an exponent: what ``float()`` reads that DuckDB reads the same way.
 _DECIMAL = "'(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]{1,3})?'"
