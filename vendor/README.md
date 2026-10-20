@@ -5,17 +5,15 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.66.3`: reviewed local SpicyDocs candidate `130128d1657da1ef27db1c757e3aeead754377fd`;
-  SHA-256 `6665d5927962ffd16cbb5f18876e17f9efcfc9f8a5f144faf31df7909ed81dd8`.
-  This cumulative source adds the bounded Grants.gov XML snapshot profile to
-  the retained Treasury and ACS readers. Its exact wheel passed the ordinary
-  frozen offline installation and a tiny installed source, CLI and local SQL
-  check. Full-export qualification and public delivery are separate outcomes.
+- `spicy_docs-0.66.3`: reviewed local SpicyDocs candidate `13653d20a08b72dc1030de96c4d7b12cea827152`;
+  SHA-256 `24442f52c3b78420efb743f8fa22ff6fdfdcb2c15f4ed6416ea46d1eaac1e29d`.
+  Adds scoped executive-order metadata and retained body acquisition to the
+  existing readers. The exact wheel passed frozen offline installation and
+  a retained fixture through the installed CLI and local SQL reader.
+  Real-year qualification and public delivery remain separate.
   See [package receipt](spicy_docs-0.66.3.json).
-  The package version stays unchanged; commit and digest identify this private
-  adoption. The preceding Treasury candidate from `dafccf738` has SHA-256
-  `56e562953350a14cfcf550472b9acd3a2e23805d42f31e74651eeefb8d249dfb`; its wheel and receipt remain available at this repository's
-  commit `99cdb9947a6f510a9452ee1940b13701a2632366` under the same `vendor/` paths.
+  This private candidate keeps the package version; commit and digest identify
+  it. Its predecessor remains under the same vendor paths at `b3c02b7a0167f36634e271fbe646cedcc6acdd2d`.
 
 - `spicy_docs-0.66.2`: built from spicy-docs fork main at `bc371f52`; SHA-256
   `74094743267172439795e0ac53c5ee5a7798dabaeac794aac6f4699127884416`. It makes the
