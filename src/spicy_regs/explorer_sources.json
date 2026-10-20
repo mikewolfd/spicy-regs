@@ -450,6 +450,16 @@
       "transformation": "Maps retained FEC observations into typed query tables; record evidence preserves the collection and original source location.",
       "evidence": "src/spicy_regs/transforms/build_fec_observations.py"
     },
+    "fec-financial-profiles": {
+      "sources": [
+        "fec"
+      ],
+      "inputs": [
+        "fec_reported_financial_summaries"
+      ],
+      "transformation": "Selects exact source-reported amounts from explicitly pinned candidate and committee summary CSV snapshots. Equivalent witnesses select once; conflicting snapshots and unresolved coverage remain visible. No amounts are added across entities or periods.",
+      "evidence": "src/spicy_regs/transforms/build_fec_financial_profiles.py"
+    },
     "fec-source-catalog": {
       "sources": [
         "fec"
