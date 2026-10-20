@@ -19619,6 +19619,219 @@
       "recipient_id"
     ]
   },
+  "treasury_debt_observations": {
+    "table": "treasury_debt_observations",
+    "label": "Treasury daily debt balances",
+    "summary": "Treasury Debt to the Penny stock balances for explicitly selected dates, retaining exact dollars and source release identity.",
+    "coverage": "Sampled: explicitly selected Debt to the Penny observation dates for United States federal debt. A balance is a stock, not borrowing during the day or a budget deficit. Missing requested dates refuse rather than substituting the latest observation.",
+    "kind": "sampled",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "record_date",
+        "column_type": "DATE",
+        "description": "Treasury-stated observation date."
+      },
+      {
+        "column_name": "total_debt_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact total public debt outstanding in US dollars; null markers remain explicit in amount_statuses_json."
+      },
+      {
+        "column_name": "public_debt_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact debt held by the public in US dollars."
+      },
+      {
+        "column_name": "intragovernmental_debt_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact intragovernmental holdings in US dollars."
+      },
+      {
+        "column_name": "amount_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-amount value, publisher_null for literal null text, json_null, or blank status."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Native row identity within the admitted SpicyDocs release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted source release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact source release digest; distinguishes revised captures of the same date."
+      },
+      {
+        "column_name": "source_page_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the original API page containing this observation."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Exact request URL, observation time, response digest, byte size and JSON row pointer."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Explicit dataset, record date and page size of the source selection."
+      },
+      {
+        "column_name": "field_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Original publisher field labels, types and display formats."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original string/null mapping before typed derivation."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One captured daily observation per source release; refreshed releases remain distinguishable.",
+    "identity_columns": []
+  },
+  "treasury_statement_periods": {
+    "table": "treasury_statement_periods",
+    "label": "Treasury monthly and fiscal-year budget actuals",
+    "summary": "Monthly Treasury Statement Table 1 receipts, outlays and deficit, with separate report and economic periods and preserved revisions.",
+    "coverage": "Sampled: complete declared Table 1 report issues. Supported shape requires current fiscal-year months from October through the report month, complete prior fiscal years, and a separate fiscal-year-to-date row per parent. Other layouts refuse. Table 2 remains source evidence; forecasts and other statement tables are not typed here.",
+    "kind": "sampled",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "report_date",
+        "column_type": "DATE",
+        "description": "Source record_date identifies the report issue, not necessarily the economic month."
+      },
+      {
+        "column_name": "economic_fiscal_year",
+        "column_type": "INTEGER",
+        "description": "Fiscal year from the row's explicit FY parent, never the report's record_fiscal_year alone."
+      },
+      {
+        "column_name": "period_kind",
+        "column_type": "VARCHAR",
+        "description": "Month or fiscal_year_to_date; aggregate monthly rows separately from totals."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "DATE",
+        "description": "Inclusive economic period start; fiscal years start October 1 of the preceding calendar year."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "DATE",
+        "description": "Inclusive economic period end under the supported Table 1 layout."
+      },
+      {
+        "column_name": "budget_receipts_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact reported budget receipts in US dollars using the statement's modified-cash methodology."
+      },
+      {
+        "column_name": "budget_outlays_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact reported budget outlays in US dollars using the statement's modified-cash methodology."
+      },
+      {
+        "column_name": "budget_deficit_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact outlays minus receipts in US dollars; positive is a deficit and negative is a surplus."
+      },
+      {
+        "column_name": "amount_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-amount value, publisher_null for literal null text, json_null, or blank status."
+      },
+      {
+        "column_name": "classification_id",
+        "column_type": "VARCHAR",
+        "description": "Literal native Table 1 classification identity."
+      },
+      {
+        "column_name": "parent_id_literal",
+        "column_type": "VARCHAR",
+        "description": "Literal parent classification identity."
+      },
+      {
+        "column_name": "classification_desc",
+        "column_type": "VARCHAR",
+        "description": "Original monthly or Year-to-Date label."
+      },
+      {
+        "column_name": "sequence_number_cd_literal",
+        "column_type": "VARCHAR",
+        "description": "Exact sequence code, including distinct text such as 1.10."
+      },
+      {
+        "column_name": "parent_context_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original FY header record, with its source identity, selection, metadata and locator."
+      },
+      {
+        "column_name": "qualification_report_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the explicitly supplied report used to qualify this issue; verifies the selected bytes, not a new automatic PDF reconciliation."
+      },
+      {
+        "column_name": "qualification_report_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher URL of that report control."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Native row identity within the admitted source release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted source release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact release digest; preserves same-issue refreshes and later-issue revisions separately."
+      },
+      {
+        "column_name": "source_page_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the original API page containing this observation."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Exact request URL, observation time, response digest, byte size and JSON row pointer."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Explicit dataset, report date and page size of the source selection."
+      },
+      {
+        "column_name": "field_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Original publisher labels, types and display formats; CURRENCY alone does not establish a scale for untyped forecasts."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native row including original gross-named fields, hierarchy and report fiscal context."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One report issue, source release and economic monthly or fiscal-year-to-date period.",
+    "identity_columns": []
+  },
   "fcc_proceedings": {
     "table": "fcc_proceedings",
     "label": "FCC proceedings",

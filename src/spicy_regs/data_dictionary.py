@@ -578,6 +578,8 @@ TABLES: tuple[str, ...] = (
     "scorecard_item_links",
     "scorecard_action_comparisons",
     "usaspending_recipients",
+    "treasury_debt_observations",
+    "treasury_statement_periods",
     "fcc_proceedings",
     "fcc_filings",
     # The hosted tables, minus congress_bills — it predates them and keeps its
@@ -642,6 +644,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "court_parentheticals",
         "court_opinions",
         "usaspending_recipients",
+        "treasury_debt_observations",
+        "treasury_statement_periods",
         "fcc_proceedings",
         "fcc_filings",
         "bill_family_archives",
@@ -849,6 +853,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from_contracts = contract_schemas()
     from_fec = fec_typed_schemas()
     from spicy_regs.contract_types import described_schema
+    from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
     from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
     from spicy_regs.transforms.build_lifecycles import EVENT_SCHEMA, LIFECYCLE_SCHEMA
@@ -935,6 +940,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     }
     # Writers that type their columns natively (DATE, INTEGER, BOOLEAN), spelled as DuckDB describes the file.
     builder_schemas = {
+        **TREASURY_SCHEMAS,
         "fec_collections": COLLECTION_SCHEMA,
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,

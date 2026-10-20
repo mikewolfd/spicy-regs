@@ -86,6 +86,8 @@ TABLES = (
     "lifecycle_events",
     "agency_lifecycle_stats",
     "sam_entities",
+    "treasury_debt_observations",
+    "treasury_statement_periods",
     "lobbying_filings",
     "lobbying_activities",
     "lobbying_activity_lobbyists",
@@ -876,6 +878,7 @@ def _build_connection_inputs(con, publication):
     # These newly declared subjects enter serving only through a managed
     # generation or explicit local/rulemaking selection, never a bare legacy key.
     managed_only = {
+        "treasury_debt_observations", "treasury_statement_periods",
         "administration_policy_bill_links", "administration_policy_statements",
         "ecfr_snapshot_sections", "ecfr_snapshots", "federal_register_issues",
         "table3_historical_records", "uscode_edition_structure", "uscode_editions", "uscode_edition_sections",
