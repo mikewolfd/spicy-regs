@@ -10549,3 +10549,45 @@ tables:
       raw_fields_json: Every direct XML field occurrence in original order with expanded tag, exact decoded text,
         attributes and source XPath; unknown fields remain.
       vocabulary_source_sha256: Digest of the official Grants.gov code page parsed by the pinned RefSpec implementation.
+
+  executive_order_observations:
+    label: Executive order text and publisher history
+    subject: reference
+    summary: Every numbered executive order in an explicitly selected complete Federal Register publication year,
+      with searchable retained text, publisher attribution and literal history notes.
+    coverage: Not a range. Designed for complete explicitly selected publication years with every admitted order
+      represented, including explicit body acquisition failures. Full-year source and body qualification and public
+      delivery are pending. The date records this design statement, not a source measurement.
+    measured_on: '2026-10-20'
+    grain: One dated Federal Register document in the admitted source release; EO number is a lookup value,
+      not the sole source identity. History is the publisher's literal notes, not an inferred legal status.
+    columns:
+      publication_year: Calendar year of Federal Register publication, not the signing year.
+      executive_order_number: Exact publisher EO number used for lookup.
+      document_number: Exact Federal Register document number; pair with publication_date for source identity.
+      publication_date: Federal Register publication date; determines membership in the selected year.
+      signing_date: Publisher signing date, which may precede the publication year.
+      title: Literal publisher document title.
+      president_identifier: Publisher president identifier; attribution from metadata, not independent signer verification.
+      president_name: Publisher president name; attribution from metadata, not independent signer verification.
+      president_json: Complete literal publisher president object; null when missing or null in source.
+      disposition_notes: Literal publisher disposition notes, including original punctuation and line endings.
+      executive_order_notes: Literal publisher executive-order notes. No amendment, repeal or current-effect rule is inferred.
+      metadata_field_states_json: Missing, null, empty or stated status for president and both history fields.
+      body_status: Acquired or source_failed outcome of the explicit retained attempt; source_failed does not mean no body exists.
+      body_text: Searchable text from the maintained SpicyDocs body_text derivation; null for failed acquisition.
+      body_sha256: Exact original selected rendition bytes SHA-256.
+      text_sha256: SHA-256 of UTF-8 derived text; distinct from the original rendition digest.
+      body_format: Selected XML, HTML or publisher text rendition, as validated by the maintained source owner.
+      body_url: Original successful resolved rendition URL, not a newly checked availability claim.
+      body_observed_at: Time the successful original response was captured; reuse preserves this time.
+      text_derivation: Maintained extraction method used for the selected rendition.
+      text_derivation_version: Maintained SpicyDocs body-text derivation version.
+      text_cleanup_json: Exact maintained text cleanup counts and rule evidence.
+      body_result_json: Per-record attempt, source release, request limits, response pins and explicit failure evidence.
+      offered_renditions_json: Literal publisher rendition URLs where present; offered does not establish availability or success.
+      source_record_id: Dated Federal Register source identity, checked against the admitted metadata evidence ledger.
+      source_release_logical_id: Logical identity of the admitted metadata release.
+      source_release_digest: Exact admitted metadata release digest.
+      metadata_locator_json: Original API response digest and row locator from the admitted source evidence ledger.
+      raw_metadata_json: Complete admitted native metadata; preserves missing, null and empty values even where nullable SQL columns collapse them.

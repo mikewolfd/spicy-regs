@@ -579,6 +579,7 @@ TABLES: tuple[str, ...] = (
     "scorecard_action_comparisons",
     "usaspending_recipients",
     "grants_opportunity_observations",
+    "executive_order_observations",
     "treasury_debt_observations",
     "treasury_statement_periods",
     "fcc_proceedings",
@@ -646,6 +647,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "court_opinions",
         "usaspending_recipients",
         "grants_opportunity_observations",
+        "executive_order_observations",
         "treasury_debt_observations",
         "treasury_statement_periods",
         "fcc_proceedings",
@@ -857,6 +859,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.contract_types import described_schema
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
+    from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
     from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
     from spicy_regs.transforms.build_lifecycles import EVENT_SCHEMA, LIFECYCLE_SCHEMA
@@ -945,6 +948,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     builder_schemas = {
         **TREASURY_SCHEMAS,
         "grants_opportunity_observations": GRANTS_SCHEMA,
+        "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         "fec_collections": COLLECTION_SCHEMA,
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,

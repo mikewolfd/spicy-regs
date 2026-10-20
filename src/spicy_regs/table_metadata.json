@@ -19833,6 +19833,165 @@
     "grain": "One source release, notice kind and native opportunity ID; publisher versions and older selected snapshots remain distinct.",
     "identity_columns": []
   },
+  "executive_order_observations": {
+    "table": "executive_order_observations",
+    "label": "Executive order text and publisher history",
+    "summary": "Every numbered executive order in an explicitly selected complete Federal Register publication year, with searchable retained text, publisher attribution and literal history notes.",
+    "coverage": "Not a range. Designed for complete explicitly selected publication years with every admitted order represented, including explicit body acquisition failures. Full-year source and body qualification and public delivery are pending. The date records this design statement, not a source measurement.",
+    "kind": "not_a_range",
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "publication_year",
+        "column_type": "INTEGER",
+        "description": "Calendar year of Federal Register publication, not the signing year."
+      },
+      {
+        "column_name": "executive_order_number",
+        "column_type": "VARCHAR",
+        "description": "Exact publisher EO number used for lookup."
+      },
+      {
+        "column_name": "document_number",
+        "column_type": "VARCHAR",
+        "description": "Exact Federal Register document number; pair with publication_date for source identity."
+      },
+      {
+        "column_name": "publication_date",
+        "column_type": "DATE",
+        "description": "Federal Register publication date; determines membership in the selected year."
+      },
+      {
+        "column_name": "signing_date",
+        "column_type": "DATE",
+        "description": "Publisher signing date, which may precede the publication year."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher document title."
+      },
+      {
+        "column_name": "president_identifier",
+        "column_type": "VARCHAR",
+        "description": "Publisher president identifier; attribution from metadata, not independent signer verification."
+      },
+      {
+        "column_name": "president_name",
+        "column_type": "VARCHAR",
+        "description": "Publisher president name; attribution from metadata, not independent signer verification."
+      },
+      {
+        "column_name": "president_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal publisher president object; null when missing or null in source."
+      },
+      {
+        "column_name": "disposition_notes",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher disposition notes, including original punctuation and line endings."
+      },
+      {
+        "column_name": "executive_order_notes",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher executive-order notes. No amendment, repeal or current-effect rule is inferred."
+      },
+      {
+        "column_name": "metadata_field_states_json",
+        "column_type": "VARCHAR",
+        "description": "Missing, null, empty or stated status for president and both history fields."
+      },
+      {
+        "column_name": "body_status",
+        "column_type": "VARCHAR",
+        "description": "Acquired or source_failed outcome of the explicit retained attempt; source_failed does not mean no body exists."
+      },
+      {
+        "column_name": "body_text",
+        "column_type": "VARCHAR",
+        "description": "Searchable text from the maintained SpicyDocs body_text derivation; null for failed acquisition."
+      },
+      {
+        "column_name": "body_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact original selected rendition bytes SHA-256."
+      },
+      {
+        "column_name": "text_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of UTF-8 derived text; distinct from the original rendition digest."
+      },
+      {
+        "column_name": "body_format",
+        "column_type": "VARCHAR",
+        "description": "Selected XML, HTML or publisher text rendition, as validated by the maintained source owner."
+      },
+      {
+        "column_name": "body_url",
+        "column_type": "VARCHAR",
+        "description": "Original successful resolved rendition URL, not a newly checked availability claim."
+      },
+      {
+        "column_name": "body_observed_at",
+        "column_type": "VARCHAR",
+        "description": "Time the successful original response was captured; reuse preserves this time."
+      },
+      {
+        "column_name": "text_derivation",
+        "column_type": "VARCHAR",
+        "description": "Maintained extraction method used for the selected rendition."
+      },
+      {
+        "column_name": "text_derivation_version",
+        "column_type": "VARCHAR",
+        "description": "Maintained SpicyDocs body-text derivation version."
+      },
+      {
+        "column_name": "text_cleanup_json",
+        "column_type": "VARCHAR",
+        "description": "Exact maintained text cleanup counts and rule evidence."
+      },
+      {
+        "column_name": "body_result_json",
+        "column_type": "VARCHAR",
+        "description": "Per-record attempt, source release, request limits, response pins and explicit failure evidence."
+      },
+      {
+        "column_name": "offered_renditions_json",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher rendition URLs where present; offered does not establish availability or success."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Dated Federal Register source identity, checked against the admitted metadata evidence ledger."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted metadata release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted metadata release digest."
+      },
+      {
+        "column_name": "metadata_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original API response digest and row locator from the admitted source evidence ledger."
+      },
+      {
+        "column_name": "raw_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Complete admitted native metadata; preserves missing, null and empty values even where nullable SQL columns collapse them."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One dated Federal Register document in the admitted source release; EO number is a lookup value, not the sole source identity. History is the publisher's literal notes, not an inferred legal status.",
+    "identity_columns": []
+  },
   "treasury_debt_observations": {
     "table": "treasury_debt_observations",
     "label": "Treasury daily debt balances",
