@@ -588,6 +588,7 @@ TABLES: tuple[str, ...] = (
     "fec_financial_profiles",
     "treasury_debt_observations",
     "treasury_statement_periods",
+    "census_acs_county_observations",
     "fcc_proceedings",
     "fcc_filings",
     # The hosted tables, minus congress_bills — it predates them and keeps its
@@ -662,6 +663,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fec_financial_profiles",
         "treasury_debt_observations",
         "treasury_statement_periods",
+        "census_acs_county_observations",
         "fcc_proceedings",
         "fcc_filings",
         "bill_family_archives",
@@ -877,6 +879,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_fec_financial_profiles import SCHEMA as FEC_PROFILE_SCHEMA
+    from spicy_regs.transforms.build_census_acs import SCHEMA as CENSUS_ACS_SCHEMA
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
     from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
     from spicy_regs.transforms.build_lifecycles import EVENT_SCHEMA, LIFECYCLE_SCHEMA
@@ -971,6 +974,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **OFAC_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         "fec_financial_profiles": FEC_PROFILE_SCHEMA,
+        "census_acs_county_observations": CENSUS_ACS_SCHEMA,
         "fec_collections": COLLECTION_SCHEMA,
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,

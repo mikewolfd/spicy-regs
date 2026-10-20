@@ -10899,3 +10899,38 @@ tables:
         name.
       raw_metadata_json: Ordered root, container, reference dictionaries, publication metadata and unknown nonentity
         observations, retained once per snapshot.
+
+  census_acs_county_observations:
+    label: ACS county population and household income
+    subject: reference
+    summary: One row per selected county and measure in an American Community Survey five-year vintage, with estimates, margins of error and exact source cells.
+    coverage: 'Sampled by design only; source coverage has not been measured. Planned scope is one explicit vintage, state and complete declared county set, with population and median household income. The date records this design statement, not a source measurement. Comparisons describe estimates, not statistically significant differences or individual households.'
+    measured_on: '2026-10-20'
+    grain: One selected vintage, county and measure.
+    columns:
+      dataset: Census API dataset path, currently acs/acs5.
+      vintage: Final year of the selected ACS five-year period; not acquisition time.
+      geography: Selected geography level, county.
+      state_code: Literal two-digit Census state code, including leading zeros.
+      county_code: Literal three-digit Census county code, including leading zeros.
+      county_geoid: State plus county code using the pinned RefSpec Census county composition.
+      name: Publisher-stated county name.
+      source_geo_id: Exact publisher GEO_ID, including the summary-level prefix.
+      measure: Population or median household income; each estimate keeps its own margin of error.
+      unit: Persons for population, or US dollars adjusted to the selected vintage for median household income.
+      estimate: Exact decimal estimate; null for a missing or sentinel value. Read estimate_status and the original cell.
+      margin_of_error: Exact decimal margin of error at the ACS 90% confidence level, in the estimate's units; null for missing or sentinel values. Read margin_status and the original cell.
+      estimate_status: Numeric, annotated, lower_bound or upper_bound for an open-ended median, null, blank, or the retained Census sentinel meaning.
+      margin_status: Numeric, annotated, null, blank, or the retained Census sentinel meaning; controlled estimates remain explicit rather than becoming a reported zero.
+      estimate_raw: Exact estimate cell before numeric interpretation; null and empty string stay distinct.
+      margin_raw: Exact margin-of-error cell before numeric interpretation; null and empty string stay distinct.
+      estimate_annotation: Exact estimate annotation, including suppression codes and bound suffixes.
+      margin_annotation: Exact margin-of-error annotation.
+      source_record_id: County record identity in the retained SpicyDocs source release.
+      source_release_logical_id: Logical identity of the admitted SpicyDocs source release.
+      source_release_digest: Exact artifact digest of that source release.
+      variable_metadata_json: Full source variable metadata for this measure's estimate, margin and annotations.
+      value_sources_json: Per-variable request URL, response digest, observation time and row/column locator.
+      metadata_sources_json: Per-variable metadata URL, response digest, observation time and JSON pointer.
+      geography_authority: RefSpec authority resource defining the county GEOID structure; not a county entity roster.
+      geography_source_sha256: Digest of the original Census guidance span retained by RefSpec.

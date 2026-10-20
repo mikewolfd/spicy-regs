@@ -68,14 +68,17 @@ def test_financial_profile_source_identity_and_current_schema():
     assert table["modelGenerated"] is False
 
 
-def test_treasury_grants_and_executive_order_sources_preserve_selected_tables():
+def test_selected_government_sources_preserve_selected_tables():
     from spicy_regs.contract_types import described_schema
     from spicy_regs.explorer_metadata import read_json
+    from spicy_regs.transforms.build_census_acs import SCHEMA as acs_schema
     from spicy_regs.transforms.build_executive_orders import SCHEMA as eo_schema
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as grants_schema
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as treasury_schemas
 
     scopes = [
+        ("census-acs", {"census_acs_county_observations": acs_schema},
+         "census-acs", "https://www.census.gov/programs-surveys/acs"),
         ("treasury-fiscal", treasury_schemas, "treasury-fiscal", "https://fiscaldata.treasury.gov/"),
         ("grants-opportunities", {"grants_opportunity_observations": grants_schema},
          "grants", "https://www.grants.gov/"),

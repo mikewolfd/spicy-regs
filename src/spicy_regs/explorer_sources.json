@@ -156,6 +156,13 @@
       "kind": "government",
       "note": ""
     },
+    "census-acs": {
+      "id": "census-acs",
+      "name": "U.S. Census Bureau American Community Survey",
+      "url": "https://www.census.gov/programs-surveys/acs",
+      "kind": "government",
+      "note": "Selected county estimates and margins of error retain their source cells, vintage and variable metadata."
+    },
     "treasury-fiscal": {
       "id": "treasury-fiscal",
       "name": "U.S. Treasury Fiscal Data",
@@ -435,6 +442,11 @@
     "executive-orders": {
       "sources": [
         "register"
+      ]
+    },
+    "census-acs": {
+      "sources": [
+        "census-acs"
       ]
     },
     "treasury-fiscal": {

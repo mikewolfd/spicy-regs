@@ -1,0 +1,15 @@
+{
+  "authority_resource_id": "census-geo-identifier-authority-2026-08-03",
+  "source_url": "https://www.census.gov/programs-surveys/geography/guidance/geo-identifiers.html",
+  "source_sha256": "sha256:5886829a89ffe3381333572948a4ed6db3ee1ae0d53b6462d491186596d1aedb",
+  "source_byte_length": 4432,
+  "refspec_revision": "f8857c8669a412bd6c254aa0b3a23cf05a52e04d",
+  "row": {
+    "area_type": "County",
+    "structure": "STATE+COUNTY",
+    "number_of_digits": "2+3=5",
+    "example_area": "Harris County, TX",
+    "example_geoid": "48201",
+    "source_ordinal": 1
+  }
+}

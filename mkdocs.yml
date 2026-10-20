@@ -52,6 +52,7 @@ nav:
   - Treasury fiscal comparisons: treasury-fiscal.md
   - Grants opportunities: grants-opportunities.md
   - CMS Medicaid spending: cms-medicaid.md
+  - ACS county comparisons: census-acs.md
   - FEC:
       - FEC tables and child rows: fec-query-views.md
       - Integration: fec-integration.md
@@ -70,6 +71,7 @@ nav:
       - grants_opportunity_observations: tables/grants_opportunity_observations.md
       - treasury_debt_observations: tables/treasury_debt_observations.md
       - treasury_statement_periods: tables/treasury_statement_periods.md
+      - census_acs_county_observations: tables/census_acs_county_observations.md
       - law_sections: tables/law_sections.md
       - dockets: tables/dockets.md
       - documents: tables/documents.md
