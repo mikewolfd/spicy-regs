@@ -39,6 +39,30 @@ def test_the_constraints_are_the_locked_versions_of_the_validation_packages():
     assert (pins["pydantic"], pins["pydantic-core"], pins["mcp"], pins["duckdb"]) == ("2.12.5", "2.41.5", "2.2.0", "1.5.5")
 
 
+def test_constraints_ignore_vendored_wheel_hashes_but_track_runtime_versions(tmp_path):
+    lock = tmp_path / "uv.lock"
+    source = """
+[[package]]
+name = "duckdb"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "spicy-docs"
+version = "0.66.3"
+source = { path = "vendor/spicy_docs-0.66.3-py3-none-any.whl" }
+wheels = [{ filename = "spicy_docs-0.66.3-py3-none-any.whl", hash = "sha256:OLD_HASH" }]
+"""
+    module = _lock_pins()
+    lock.write_text(source.replace("OLD_HASH", "a" * 64))
+    before = module.constraints(lock)
+    assert before == "duckdb==1.5.5\n"
+    lock.write_text(source.replace("OLD_HASH", "b" * 64))
+    assert module.constraints(lock) == before
+    lock.write_text(source.replace("OLD_HASH", "b" * 64).replace('version = "1.5.5"', 'version = "1.5.6"'))
+    assert module.constraints(lock) == "duckdb==1.5.6\n"
+
+
 def test_an_environment_installed_from_the_lock_passes_the_check():
     """This test environment is uv's frozen install of the same lock, so the image's check must accept it."""
     module = _lock_pins()

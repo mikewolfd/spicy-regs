@@ -6,6 +6,13 @@
 # the other ETL deps (boto3, polars), so we install the package with --no-deps
 # and add just those, keeping the image small and cold starts fast. This is why
 # the container can be the single source of truth once Vercel is retired.
+# Derive the existing pip constraints without carrying the full lock into the
+# dependency layer. A vendored source-reader wheel change leaves these bytes
+# unchanged; registry version changes still invalidate dependency installation.
+FROM python:3.12-slim AS constraints
+COPY uv.lock deploy/cloudflare/lock_pins.py /lock/
+RUN python /lock/lock_pins.py constraints /lock/uv.lock > /lock/constraints.txt
+
 FROM python:3.12-slim
 
 # duckdb needs no system libs; keep the image minimal. Unbuffered stdout so the
@@ -37,9 +44,9 @@ WORKDIR /app
 # running those calls with only this image's packages); about 117 MB installed
 # beside the 93 MB the others take. The lock and the check stay in the image,
 # so the binding step can rerun the check inside the pushed image.
+COPY --from=constraints /lock/constraints.txt /app/lock/constraints.txt
+RUN pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow && pip check
 COPY uv.lock deploy/cloudflare/lock_pins.py deploy/cloudflare/runtime_readers.py /app/lock/
-RUN python /app/lock/lock_pins.py constraints /app/lock/uv.lock > /app/lock/constraints.txt \
-    && pip install -c /app/lock/constraints.txt mcp duckdb uvicorn loguru httpx pytz pyarrow && pip check
 
 # Install the package code without its declared (ETL) dependencies. mcp_server
 # imports only the local _icon module plus mcp/duckdb, so this is sufficient and
