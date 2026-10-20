@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import time
 import zipfile
@@ -21,9 +20,15 @@ def package(config, output):
     python = Path(config["python"]).absolute()
     if not python.is_file():
         raise ValueError("Build interpreter is unavailable")
-    uv = shutil.which("uv")
-    if uv is None:
-        raise ValueError("uv is unavailable")
+    uv = Path(config["uv"])
+    if not uv.is_absolute() or not uv.is_file() or not os.access(uv, os.X_OK):
+        raise ValueError("uv must name an absolute executable file")
+    uv = uv.resolve()
+    version = subprocess.run(
+        [str(uv), "--version"], check=True, capture_output=True, text=True, timeout=10
+    ).stdout.strip()
+    if not version.startswith("uv "):
+        raise ValueError("Selected executable did not identify itself as uv")
     watched = [
         python.resolve(), python.parent.parent / "pyvenv.cfg",
         *python.parent.parent.glob("lib/python*/site-packages"),
@@ -66,7 +71,10 @@ def package(config, output):
 
     save(output / "inputs.json", config)
     save(output / "runtime-before.json", before)
-    terminal = {"status": "fail", "started_at": datetime.now(UTC).isoformat(), "source": config["source"]}
+    terminal = {
+        "status": "fail", "started_at": datetime.now(UTC).isoformat(), "source": config["source"],
+        "uv": {"executable": str(uv), "version": version},
+    }
     try:
         run([uv, "build", "--wheel", "--offline", "--python", python, "--out-dir", output / "wheels", ROOT], "build")
         wheel, = (output / "wheels").glob("spicy_regs-*.whl")

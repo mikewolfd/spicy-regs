@@ -55,7 +55,7 @@ def test_pipeline_check_refuses_existing_generation(tmp_path, helpers):
         reader.read_expected(path, hashlib.sha256(path.read_bytes()).hexdigest())
 
 
-def test_package_retains_all_successful_commands(tmp_path, helpers, monkeypatch):
+def test_explicit_uv_overrides_old_path_and_retains_commands(tmp_path, helpers, monkeypatch):
     package, _ = helpers
     root = tmp_path / "source"
     module = root / "src/spicy_regs/__init__.py"
@@ -73,9 +73,22 @@ def test_package_retains_all_successful_commands(tmp_path, helpers, monkeypatch)
     output = tmp_path / "package"
     monkeypatch.setattr(package, "ROOT", root)
     monkeypatch.setattr(package, "source", lambda _value: None)
-    monkeypatch.setattr(package.shutil, "which", lambda _name: "/fixture/uv")
+    old_bin = tmp_path / "old-bin"
+    old_bin.mkdir()
+    old_uv = old_bin / "uv"
+    old_uv.write_text("#!/bin/sh\nprintf 'uv 0.6.10\\n'\n")
+    old_uv.chmod(0o700)
+    monkeypatch.setenv("PATH", str(old_bin))
+    uv = tmp_path / "selected-uv"
+    uv.write_text("#!/bin/sh\nprintf 'uv 0.11.21\\n'\n")
+    uv.chmod(0o700)
+    selected_uv = tmp_path / "uv-link"
+    selected_uv.symlink_to(uv)
+    run = subprocess.run
 
     def successful_command(argv, **kwargs):
+        if argv[1] == "--version":
+            return run(argv, **kwargs)
         if argv[1] == "build":
             wheels = output / "wheels"
             wheels.mkdir()
@@ -90,9 +103,43 @@ def test_package_retains_all_successful_commands(tmp_path, helpers, monkeypatch)
     result = package.package({
         "source": {"commit": "fixture", "tree": "fixture"},
         "python": str(interpreter),
+        "uv": str(selected_uv),
         "check": {"path": str(expected), "sha256": hashlib.sha256(expected.read_bytes()).hexdigest()},
     }, output)
     assert result["status"] == "pass"
-    assert len(json.loads((output / "commands.json").read_bytes())) == 4
-    assert json.loads((output / "terminal.json").read_bytes())["status"] == "pass"
+    commands = json.loads((output / "commands.json").read_bytes())
+    assert len(commands) == 4
+    assert all(command["command"][0] == str(uv) for command in commands[:3])
+    assert "--offline" in commands[0]["command"]
+    assert {"--frozen", "--offline", "--no-install-project"} <= set(commands[1]["command"])
+    assert {"--offline", "--no-deps"} <= set(commands[2]["command"])
+    terminal = json.loads((output / "terminal.json").read_bytes())
+    assert terminal["status"] == "pass"
+    assert terminal["uv"] == {"executable": str(uv), "version": "uv 0.11.21"}
     assert (output / "installed-check.stderr.log").read_text() == "Pipeline diagnostic\n"
+
+
+@pytest.mark.parametrize("kind", ["relative", "missing", "not_executable"])
+def test_invalid_explicit_uv_refuses_before_build(tmp_path, helpers, monkeypatch, kind):
+    package, _ = helpers
+    monkeypatch.setattr(package, "source", lambda _value: None)
+    monkeypatch.setattr(package, "read_expected", lambda *_args: None)
+    interpreter = tmp_path / "python"
+    interpreter.touch()
+    uv = tmp_path / "uv"
+    if kind == "not_executable":
+        uv.touch(mode=0o600)
+    output = tmp_path / "package"
+
+    def unexpected_command(*_args, **_kwargs):
+        pytest.fail("Invalid executable must refuse before any command")
+
+    monkeypatch.setattr(package.subprocess, "run", unexpected_command)
+    with pytest.raises(ValueError, match="absolute executable file"):
+        package.package({
+            "source": {},
+            "python": str(interpreter),
+            "uv": "uv" if kind == "relative" else str(uv),
+            "check": {"path": str(tmp_path / "expected"), "sha256": "unused"},
+        }, output)
+    assert not output.exists()

@@ -316,7 +316,11 @@ python deploy/cloudflare/local_package.py --inputs /release/package-inputs.json 
 ```
 
 The input contains `source: {commit, tree}`, the existing build interpreter's
-absolute `python` path, and `check: {path, sha256}` for the reader expectations.
+absolute `python` path, an explicit absolute `uv` executable path (for example
+`/opt/homebrew/bin/uv`), and `check: {path, sha256}` for the reader expectations.
+The helper resolves that executable and checks `uv --version` before building,
+then records both in the terminal receipt. It does not select `uv` from `PATH`;
+different installed versions can use different offline cache layouts.
 The source must be clean and the output directory must be new. A failed output
 retains its logs for diagnosis; inspect the failed step before another build.
 Existing source fixtures and unchanged dependency wheels are reused.
