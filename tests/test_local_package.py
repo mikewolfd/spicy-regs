@@ -83,6 +83,7 @@ def test_package_retains_all_successful_commands(tmp_path, helpers, monkeypatch)
                 archive.write(module, "spicy_regs/__init__.py")
         elif argv[1] == "-I":
             kwargs["stdout"].write(b'{"status":"pass","consumer":{"fixture":true}}')
+            kwargs["stderr"].write(b"Pipeline diagnostic\n")
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr(package.subprocess, "run", successful_command)
@@ -94,3 +95,4 @@ def test_package_retains_all_successful_commands(tmp_path, helpers, monkeypatch)
     assert result["status"] == "pass"
     assert len(json.loads((output / "commands.json").read_bytes())) == 4
     assert json.loads((output / "terminal.json").read_bytes())["status"] == "pass"
+    assert (output / "installed-check.stderr.log").read_text() == "Pipeline diagnostic\n"

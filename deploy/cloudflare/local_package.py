@@ -53,16 +53,16 @@ def package(config, output):
     def run(argv, name, cwd=ROOT):
         command = list(map(str, argv))
         begin = time.monotonic()
-        with (output / f"{name}.log").open("xb") as log:
+        with (output / f"{name}.log").open("xb") as log, (output / f"{name}.stderr.log").open("xb") as errors:
             result = subprocess.run(
-                command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=180
+                command, cwd=cwd, env=env, stdout=log, stderr=errors, timeout=180
             )
         commands.append({
             "command": command, "cwd": str(cwd), "seconds": time.monotonic() - begin,
             "exit_code": result.returncode,
         })
         if result.returncode:
-            raise RuntimeError(f"{name} failed; see its retained log")
+            raise RuntimeError(f"{name} failed; see its retained logs")
 
     save(output / "inputs.json", config)
     save(output / "runtime-before.json", before)
