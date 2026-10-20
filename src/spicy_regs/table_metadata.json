@@ -19745,6 +19745,127 @@
       "observation_id"
     ]
   },
+  "cms_medicaid_drug_spending": {
+    "table": "cms_medicaid_drug_spending",
+    "label": "Medicaid drug spending",
+    "summary": "Source-reported drug and manufacturer spending for one explicitly selected benefit year, with separate Overall rows and literal source evidence.",
+    "coverage": "Not measured by this schema. The date records this design statement, not a source measurement. The mapper requires one complete admitted Medicaid release and selects its benefit year. Original rows retain other supplied years. This does not establish current prices, net spending, all Medicaid services or beneficiaries or all historical releases. CMS excludes drugs with fewer than 11 claims in the latest year and redacts earlier-year cells below that threshold. A missing drug is not evidence of zero spending. Actual qualification is recorded by the selected generation and retained source evidence.",
+    "kind": null,
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Digest of the admitted source release, source occurrence and selected benefit year."
+      },
+      {
+        "column_name": "program",
+        "column_type": "VARCHAR",
+        "description": "Literal Medicaid program label; this population and its measures are distinct from Part D."
+      },
+      {
+        "column_name": "benefit_year",
+        "column_type": "INTEGER",
+        "description": "Explicit selected benefit year; separate from catalog modification and capture dates."
+      },
+      {
+        "column_name": "brand_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Brnd_Name. A star marks multiple administration routes and a caret marks an outlier requiring caution with unit spending. Neither marker is interpreted as suppression."
+      },
+      {
+        "column_name": "generic_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Gnrc_Name, naming the chemical ingredient."
+      },
+      {
+        "column_name": "manufacturer_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Mftr_Name. Overall identifies the source's all-manufacturer row for this drug."
+      },
+      {
+        "column_name": "aggregation_level",
+        "column_type": "VARCHAR",
+        "description": "all_manufacturers for the literal Overall row, otherwise manufacturer. Filter one level before comparing or adding spending; do not combine both levels."
+      },
+      {
+        "column_name": "manufacturer_count_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Tot_Mftr; retained separately from the observations' aggregation level."
+      },
+      {
+        "column_name": "total_spending_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source reimbursement in USD by Medicaid and non-Medicaid entities, including federal and state reimbursement and dispensing fees, without state rebate deductions. Exact DECIMAL(38,12), never rounded."
+      },
+      {
+        "column_name": "dosage_units",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source dosage units in the lowest dispensable amount; units differ by drug and can be tablets, grams or milliliters. Exact DECIMAL(38,12); do not treat unlike drugs' units as equivalent."
+      },
+      {
+        "column_name": "claims",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source count of prescription fills, including originals and refills, retained as an exact decimal."
+      },
+      {
+        "column_name": "weighted_spending_per_unit_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source claims-weighted average spending per dosage unit in USD. Not recomputed as total spending divided by total dosage units."
+      },
+      {
+        "column_name": "spending_per_claim_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source average spending per prescription fill in USD."
+      },
+      {
+        "column_name": "outlier_flag_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal annual Outlier_Flag. The source value 1 warns of outlier influence on average unit spending; rows remain present. Missing or unknown values stay literal."
+      },
+      {
+        "column_name": "value_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-measure value, null, blank, non_numeric or unrepresentable. Null never means zero. Unknown markers are retained without inferring suppression. Unrepresentable means exact DECIMAL(38,12) would lose precision or exceed its range."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Source occurrence identity within the admitted CMS release; not a universal drug identifier."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact source release digest, distinguishing revisions of the same benefit year."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Exact series, release, versioned distribution, dictionary/catalog digests and population selected by the source reader."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Request URL, original response digest, capture time, page-local JSON pointer and original occurrence ordinal."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal source row, including all supplied years, unknown fields and missing/blank cells. Retained once per source row rather than repeated for each historical year."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One selected source release, benefit year, brand name, generic name and manufacturer. Overall and named manufacturers are alternative aggregation levels and must not be added together.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
   "grants_opportunity_observations": {
     "table": "grants_opportunity_observations",
     "label": "Grants.gov opportunity and forecast observations",
