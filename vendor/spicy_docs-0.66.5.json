@@ -1,0 +1,33 @@
+{
+  "filename": "spicy_docs-0.66.5-py3-none-any.whl",
+  "version": "0.66.5",
+  "sha256": "e0f980e570fd8653ec33b30912614c9017fdded039dc6483a6981222eac17b3e",
+  "byte_size": 2683950,
+  "source_commit": "5d2e570ad60dbaa88deb74500d68c93111ccf83e",
+  "source_tree": "ccd78c65b19b875f9fb40afbb47b8b1b2f88a961",
+  "scope": "Literal versioned CMS Part B HCPCS source records through the existing bounded CMS release owner.",
+  "source_review_sha256": "4b2ab967c636a741d0b63253df938b4edf439ec51d3ef9293c9454d0a4db9102",
+  "source_release_proof_sha256": "2eee09e334550975d23dd00f01971a1516d3da0b0af0bc2a5786b757f337ac90",
+  "build_proof_sha256": "98d21f0a97109cc32304470fa707960a315226d608ca0b9a78ea7ff61fe20c96",
+  "predecessor": {
+    "filename": "spicy_docs-0.66.4-py3-none-any.whl",
+    "sha256": "1abb1869cc4596741fa3a3799e1def4ed607788430687b0317fc324a90c27edb",
+    "retained_receipt": "vendor/spicy_docs-0.66.4.json"
+  },
+  "frozen_vendor_check": {
+    "other_dependency_changes": false,
+    "wheel_requires_dist_unchanged": true,
+    "runtime_added": [],
+    "runtime_changed": [
+      "spicy_docs/sources/cms.py",
+      "spicy_docs/sources/cms_profile.py"
+    ],
+    "runtime_removed": [],
+    "lock_sha256": "6979396b99b5b99cf4a5b742570fe9133a154938fd060bdecc9fc4b3b8c80394",
+    "shared_runtime_changed": false
+  },
+  "limits": [
+    "Private vendored package; no package-registry publication.",
+    "Installed source import is checked in a fresh task-owned target; full receiving package/image qualification is separate."
+  ]
+}

@@ -14,7 +14,7 @@ from spicy_regs.source_evidence import CaptureEvidence
 from spicy_regs.transforms.cms_drug_spending import IDENTITY_FIELDS
 
 
-def build(reader, output_dir: Path, *, year: int, label, family, measures, schema, build_table):
+def build(reader, output_dir: Path, *, year: int, label, family, measures, schema, build_table, dictionary_fields=None):
     """Retain originals once and use the ordinary generation path; acquire nothing."""
     output_dir = Path(output_dir)
     if (output_dir / "generation").exists():
@@ -38,8 +38,16 @@ def build(reader, output_dir: Path, *, year: int, label, family, measures, schem
                 if ref != selection["dictionary_sha256"] or capture["request_url"] != selection["dictionary_url"]:
                     raise ValueError(f"CMS {label} dictionary differs from its selected source")
                 fields = {field["name"] for field in json.loads(body)["data"]["fields"]}
-                required = {*IDENTITY_FIELDS, "Tot_Mftr", f"Outlier_Flag_{year}"}
-                required.update(f"{prefix}_{year}" for prefix in measures.values())
+                required = (
+                    set(dictionary_fields)
+                    if dictionary_fields is not None
+                    else {
+                        *IDENTITY_FIELDS,
+                        "Tot_Mftr",
+                        f"Outlier_Flag_{year}",
+                        *(f"{prefix}_{year}" for prefix in measures.values()),
+                    }
+                )
                 if not required <= fields:
                     raise ValueError(f"CMS {label} dictionary lacks a selected-year field")
                 dictionary_seen = True

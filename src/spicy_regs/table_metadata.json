@@ -20035,6 +20035,147 @@
       "observation_id"
     ]
   },
+  "cms_part_b_drug_spending": {
+    "table": "cms_part_b_drug_spending",
+    "label": "Medicare Part B drug spending",
+    "summary": "Source-reported fee-for-service drug spending and utilization at HCPCS billing-code grain, for one explicitly selected benefit year.",
+    "coverage": "Not measured by this schema. The mapper requires one complete admitted Part B release and selects its benefit year; original rows retain other supplied years. Excludes Medicare Advantage and other claims excluded by the CMS methodology. Drugs with fewer than 11 claims in the latest year are excluded; earlier-year information below that threshold is redacted. An absent drug is not zero spending. Actual qualification is recorded by the selected generation and retained source evidence.",
+    "kind": null,
+    "measured_on": "2026-10-20",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Digest of the admitted source release, source occurrence and selected benefit year."
+      },
+      {
+        "column_name": "program",
+        "column_type": "VARCHAR",
+        "description": "Literal Medicare Part B label; not interchangeable with Part D or Medicaid populations."
+      },
+      {
+        "column_name": "benefit_year",
+        "column_type": "INTEGER",
+        "description": "Explicit selected benefit year, separate from release modification and capture dates."
+      },
+      {
+        "column_name": "hcpcs_code",
+        "column_type": "VARCHAR",
+        "description": "Literal HCPCS_Cd billing code, not a manufacturer or universal drug identity."
+      },
+      {
+        "column_name": "hcpcs_description",
+        "column_type": "VARCHAR",
+        "description": "Literal HCPCS_Desc including the billing-unit description where supplied."
+      },
+      {
+        "column_name": "brand_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Brnd_Name. A star indicates multiple names and two stars indicate unavailable names replaced by the HCPCS short description; neither marker is removed."
+      },
+      {
+        "column_name": "generic_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Gnrc_Name, with the same source name markers retained."
+      },
+      {
+        "column_name": "manufacturer_information_status",
+        "column_type": "VARCHAR",
+        "description": "not_provided_in_main_table. The release resources link supplies a separate many-to-many manufacturer workbook; no manufacturer-specific spending is inferred."
+      },
+      {
+        "column_name": "total_spending_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source total in USD including Medicare payment, deductible and coinsurance. Exact DECIMAL(38,12), never rounded."
+      },
+      {
+        "column_name": "dosage_units",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source dosage units equal HCPCS billing units for this code. Different codes can describe different quantities or strengths; units must not be treated as interchangeable."
+      },
+      {
+        "column_name": "claims",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source number of Part B claims for this HCPCS and year, retained as an exact decimal."
+      },
+      {
+        "column_name": "beneficiaries",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source number of Part B fee-for-service beneficiaries using this HCPCS drug. Not additive unique beneficiaries across drugs."
+      },
+      {
+        "column_name": "spending_per_dosage_unit_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source spending divided by HCPCS dosage units, preserved rather than recomputed."
+      },
+      {
+        "column_name": "spending_per_claim_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source spending divided by claims, preserved rather than recomputed."
+      },
+      {
+        "column_name": "spending_per_beneficiary_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source spending divided by unique beneficiaries using this drug, preserved rather than recomputed."
+      },
+      {
+        "column_name": "average_sales_price_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Source average quarterly ASP-file payment amount for the selected latest year, including the statutory six percent or other applicable add-on; not a current market price."
+      },
+      {
+        "column_name": "outlier_flag_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal annual Outlier_Flag. A source value of 1 warns of outlier influence on unit averages; it does not remove the row."
+      },
+      {
+        "column_name": "value_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-measure value, null, blank, non_numeric or unrepresentable. Null never means zero. Unknown markers retain their raw spelling without inferring why a particular value is missing."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Original occurrence identity within the admitted CMS release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact source release digest, distinguishing revisions of the same benefit year."
+      },
+      {
+        "column_name": "source_resources_url",
+        "column_type": "VARCHAR",
+        "description": "Resources metadata endpoint for the exact selected version, including the separately published manufacturer and drug-use workbook."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Exact series, release, versioned distribution, dictionary/catalog digests and population."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original request URL, response digest, capture time, page-local JSON pointer and ordinal."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal source row including all supplied years, trend fields, unknown fields and missing cells. Kept once, without multiplying historical rows or manufacturer associations."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One selected source release, benefit year and HCPCS code. Manufacturer associations are separate and must not multiply or allocate this spending.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
   "grants_opportunity_observations": {
     "table": "grants_opportunity_observations",
     "label": "Grants.gov opportunity and forecast observations",

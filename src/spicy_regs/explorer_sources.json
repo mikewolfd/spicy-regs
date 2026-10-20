@@ -445,6 +445,11 @@
         "cms"
       ]
     },
+    "cms-part-b": {
+      "sources": [
+        "cms"
+      ]
+    },
     "cms-medicaid": {
       "sources": [
         "cms"
