@@ -578,6 +578,7 @@ TABLES: tuple[str, ...] = (
     "scorecard_item_links",
     "scorecard_action_comparisons",
     "usaspending_recipients",
+    "cms_part_d_drug_spending",
     "grants_opportunity_observations",
     "executive_order_observations",
     "fec_financial_profiles",
@@ -647,6 +648,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "court_parentheticals",
         "court_opinions",
         "usaspending_recipients",
+        "cms_part_d_drug_spending",
         "grants_opportunity_observations",
         "executive_order_observations",
         "fec_financial_profiles",
@@ -859,6 +861,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from_contracts = contract_schemas()
     from_fec = fec_typed_schemas()
     from spicy_regs.contract_types import described_schema
+    from spicy_regs.transforms.build_cms_part_d import SCHEMA as CMS_PART_D_SCHEMA
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
@@ -949,6 +952,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     }
     # Writers that type their columns natively (DATE, INTEGER, BOOLEAN), spelled as DuckDB describes the file.
     builder_schemas = {
+        "cms_part_d_drug_spending": CMS_PART_D_SCHEMA,
         **TREASURY_SCHEMAS,
         "grants_opportunity_observations": GRANTS_SCHEMA,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,

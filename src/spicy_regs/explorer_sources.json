@@ -163,6 +163,13 @@
       "kind": "government",
       "note": "Selected Debt to the Penny and Monthly Treasury Statement observations retain their request, report and source evidence."
     },
+    "cms": {
+      "id": "cms",
+      "name": "Centers for Medicare & Medicaid Services",
+      "url": "https://data.cms.gov/",
+      "kind": "government",
+      "note": "Selected drug-spending releases retain their exact catalog, dictionary and original rows. Part D spending includes plan and beneficiary payments before rebates; manufacturer and Overall rows are alternative aggregation levels."
+    },
     "grants": {
       "id": "grants",
       "name": "Grants.gov",
@@ -431,6 +438,11 @@
     "grants-opportunities": {
       "sources": [
         "grants"
+      ]
+    },
+    "cms-part-d": {
+      "sources": [
+        "cms"
       ]
     },
     "unified-agenda": {
