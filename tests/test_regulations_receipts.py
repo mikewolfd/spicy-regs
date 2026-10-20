@@ -666,6 +666,110 @@ def test_successful_empty_output_keeps_metadata_as_observed_receipt(tmp_path):
     assert pq.read_schema(internal).metadata == pq.read_schema(source).metadata
 
 
+@pytest.mark.parametrize("scoped", [False, True])
+@pytest.mark.parametrize("empty", [False, True])
+def test_private_materialization_reconstructs_once_with_exact_types_order_and_metadata(tmp_path, scoped, empty):
+    from unittest.mock import patch
+    from spicy_regs.transforms import regulations_receipts as owner
+
+    schema = owner.processing_schema("comment_periods", metadata={b"fixture": b"exact\xff"})
+    rows = []
+    if not empty:
+        for key in ("second", "first"):
+            row = {**dict.fromkeys(schema.names), "comment_period_id": key, "rins_json": '["001","001"]'}
+            for field in schema:
+                if pa.types.is_date32(field.type):
+                    row[field.name] = date(2026, 1, 2) if key == "second" else None
+                elif pa.types.is_boolean(field.type):
+                    row[field.name] = False if key == "second" else None
+            rows.append(row)
+    source = tmp_path / "source.parquet"
+    pq.write_table(pa.Table.from_pylist(rows, schema=schema), source)
+    subject, receipts = owner.write_held_dataset("comment_periods", source, tmp_path / "native", generation_id="g1")
+    if scoped:
+        receipts = owner.select_receipts(receipts, tmp_path / "scoped.parquet", dataset="comment_periods")
+    selected = ReceiptInput("comment_periods", (subject,), receipts, "g1")
+    receipt_bytes = receipts.read_bytes()
+    with patch.object(owner, "read_with_receipts", wraps=owner.read_with_receipts) as reads, \
+         patch.object(owner, "_processor_input", wraps=owner._processor_input) as replay, \
+         patch.object(owner, "select_receipts", wraps=owner.select_receipts) as selections:
+        output = owner.materialize_internal(selected, tmp_path / "restored.parquet", scoped=scoped)
+    assert reads.call_count == 1
+    assert replay.call_count == len(rows)
+    assert selections.call_count == (0 if scoped else 1)
+    assert pq.read_table(output).equals(pq.read_table(source), check_metadata=True)
+    assert receipts.read_bytes() == receipt_bytes
+
+
+@pytest.mark.parametrize("fault", ["replay", "metadata", "receipt", "metadata-then-replay"])
+def test_private_materialization_late_failure_preserves_destination_and_closes_read(tmp_path, monkeypatch, fault):
+    from tempfile import TemporaryDirectory
+    from spicy_regs.etl_receipts import _digest, decode_exact_json, exact_json
+    from spicy_regs.transforms import parquet_rows, regulations_receipts as owner
+
+    selected = write(tmp_path, "comment_periods", [
+        {"comment_period_id": "first"}, {"comment_period_id": "second"}, {"comment_period_id": "last"}])
+    receipts = pq.read_table(selected.receipts).to_pylist()
+    changes = [(2, fault)]
+    if fault == "metadata-then-replay":
+        changes = [(1, "metadata"), (2, "replay")]
+    for index, change in changes:
+        receipt = receipts[index]
+        if change == "receipt":
+            receipt["receipt_id"] = "sha256:" + "0" * 64
+            continue
+        held = decode_exact_json(receipt["processing_json"])
+        if change == "replay":
+            held["raw_conversion_inputs"]["comment_period_id"] = "changed"
+        else:
+            held["input_metadata"] = {"changed": b"yes"}
+        receipt["processing_json"] = exact_json(held)
+        receipt["receipt_id"] = _digest({k: v for k, v in receipt.items() if k != "receipt_id"})
+    pq.write_table(pa.Table.from_pylist(receipts, schema=RECEIPT_SCHEMA), selected.receipts)
+    destination = tmp_path / "prior.parquet"
+    destination.write_bytes(b"preserve prior")
+    before = set(tmp_path.iterdir())
+    completed, staged, temporary = [], [], []
+    original_read, original_write = owner.read_with_receipts, parquet_rows.write_rows
+
+    def tracked_read(*args, **kwargs):
+        try:
+            yield from original_read(*args, **kwargs)
+        finally:
+            completed.append(True)
+
+    def owned_temporary(*args, **kwargs):
+        value = TemporaryDirectory(*args, **kwargs)
+        temporary.append(Path(value.name))
+        return value
+
+    def small_write(records, target, schema):
+        def tracked():
+            for row in records:
+                assert target.read_bytes() == b"preserve prior"
+                staged.append(row)
+                yield row
+        return original_write(tracked(), target, schema, batch_size=1)
+
+    monkeypatch.setattr(owner, "read_with_receipts", tracked_read)
+    monkeypatch.setattr(owner, "TemporaryDirectory", owned_temporary)
+    monkeypatch.setattr(parquet_rows, "write_rows", small_write)
+    message = ("Input metadata differs" if fault in ("metadata", "metadata-then-replay")
+               else "retained processor input differs" if fault == "replay" else None)
+    with pytest.raises(ValueError, match=message):
+        owner.materialize_internal(selected, destination)
+    assert len(staged) == (0 if fault == "receipt" else 1 if fault == "metadata-then-replay" else 2)
+    assert destination.read_bytes() == b"preserve prior"
+    assert set(tmp_path.iterdir()) == before
+    assert completed == [True]
+    assert temporary and all(not path.exists() for path in temporary)
+    if fault == "metadata-then-replay":
+        # Streaming callers still see the later replay refusal before their first
+        # row; only the private materializer's cross-phase error priority changes.
+        with pytest.raises(ValueError, match="retained processor input differs"):
+            next(iter(read_internal(selected)))
+
+
 def test_retry_checkpoint_receipts_preserve_empty_retirement_and_wrong_generation(tmp_path):
     from spicy_regs.transforms.regulations_checkpoints import write_checkpoint, read_checkpoint
     from spicy_regs.pipelines.regulations_state import UnresolvedKeys

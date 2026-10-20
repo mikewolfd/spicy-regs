@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
-from contextlib import ExitStack
+from contextlib import ExitStack, closing, contextmanager
 from hashlib import file_digest, sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -110,6 +110,17 @@ class ReceiptInput:
             raise ValueError("Dataset subjects and selected generation are required")
 
 
+@contextmanager
+def _selected_receipts(selected: ReceiptInput, *, scoped: bool = False):
+    """Keep the selected policy and dataset receipts alive for their complete read."""
+    from spicy_regs.etl_receipts import selected_subject_policy
+    admitted = selected_subject_policy(policy(selected.dataset), selected.subjects)
+    with TemporaryDirectory(prefix="regulations-receipt-read-") as temporary:
+        receipts = selected.receipts if scoped else select_receipts(
+            selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
+        yield admitted, receipts
+
+
 def _qualified_rows(selected: ReceiptInput, *, scoped: bool = False) -> Iterable[dict]:
     """Validate the whole selected dataset before reconstructing processing input.
 
@@ -117,11 +128,7 @@ def _qualified_rows(selected: ReceiptInput, *, scoped: bool = False) -> Iterable
     refuses; no public projection can substitute for missing retry evidence.
     ``scoped`` says ``selected.receipts`` is already this dataset's ``select_receipts`` output.
     """
-    from spicy_regs.etl_receipts import selected_subject_policy
-    admitted = selected_subject_policy(policy(selected.dataset), selected.subjects)
-    with TemporaryDirectory(prefix="regulations-receipt-read-") as temporary:
-        receipts = selected.receipts if scoped else select_receipts(
-            selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
+    with _selected_receipts(selected, scoped=scoped) as (admitted, receipts):
         # Complete input consistency validation precedes any processor yield.
         # This stays bounded and catches a bad later row before an external fetch.
         for row in read_with_receipts(
@@ -237,6 +244,11 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
     proof before exposing the file;
     ``bulk=False`` retains the complete row reader as the reference authority.
     A DuckDB or Arrow failure in the batch proof is raised, never retried by row.
+    The private row writer consumes one admitted replay before replacing its
+    destination. Unlike streaming ``read_internal``, it needs no pre-yield
+    processor pass: any late refusal discards its provisional output. When an
+    input has several independent faults, it reports the first encountered
+    replay, metadata or field-presence failure rather than preflighting replay.
     """
     from spicy_regs.transforms.parquet_rows import write_rows
     processing_schema(selected.dataset, source_schema=source_schema)
@@ -256,13 +268,12 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
                                     rows=sum(pq.ParquetFile(path).metadata.num_rows for path in selected.subjects),
                                     reason="no bulk mapping")
 
-    rows = iter(_qualified_rows(selected, scoped=scoped))
-    first = next(rows, None)
-    metadata = first.get("input_metadata", {}) if first is not None else {}
-    if first is None:
-        with TemporaryDirectory(prefix="regulations-empty-metadata-") as temporary:
-            receipts = selected.receipts if scoped else select_receipts(
-                selected.receipts, Path(temporary) / "receipts.parquet", dataset=selected.dataset)
+    with _selected_receipts(selected, scoped=scoped) as (admitted, receipts), closing(
+        read_with_receipts(selected.subjects, [receipts], admitted, generation_id=selected.generation_id)
+    ) as rows:
+        first = next(rows, None)
+        metadata = first.get("input_metadata", {}) if first is not None else {}
+        if first is None:
             observations = list(
                 read_attempts(
                     [receipts],
@@ -279,23 +290,23 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
             if held and any(value != held[0] for value in held):
                 raise ValueError("Empty input metadata differs across selected receipts")
             metadata = held[0] if held else {}
-    schema = processing_schema(selected.dataset, source_schema=source_schema, metadata=metadata)
+        schema = processing_schema(selected.dataset, source_schema=source_schema, metadata=metadata)
 
-    def original(row):
-        raw = _processor_input(selected.dataset, row)
-        if source_schema is not None and set(raw) != set(source_schema.names):
-            raise ValueError("Exact regulatory source field presence differs from retained input")
-        return raw
+        def original(row):
+            raw = _processor_input(selected.dataset, row)
+            if source_schema is not None and set(raw) != set(source_schema.names):
+                raise ValueError("Exact regulatory source field presence differs from retained input")
+            return raw
 
-    def restored():
-        if first is not None:
-            yield original(first)
-        for row in rows:
-            if row.get("input_metadata", {}) != metadata:
-                raise ValueError("Input metadata differs across selected receipts")
-            yield original(row)
+        def restored():
+            if first is not None:
+                yield original(first)
+            for row in rows:
+                if row.get("input_metadata", {}) != metadata:
+                    raise ValueError("Input metadata differs across selected receipts")
+                yield original(row)
 
-    return write_rows(restored(), destination, schema)
+        return write_rows(restored(), destination, schema)
 
 
 def _shape_regulations_attempt(dataset: str, row: Mapping, context: ReceiptContext, *,
