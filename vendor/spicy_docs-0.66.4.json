@@ -1,0 +1,35 @@
+{
+  "filename": "spicy_docs-0.66.4-py3-none-any.whl",
+  "version": "0.66.4",
+  "sha256": "1abb1869cc4596741fa3a3799e1def4ed607788430687b0317fc324a90c27edb",
+  "byte_size": 2683889,
+  "source_commit": "76ae3736afc9e9c5be400281969bf21c4add2380",
+  "source_tree": "9b8d8b0aa9a929afbf1d7361460b83e738f08d23",
+  "scope": "Versioned CMS annual drug-spending discovery, exact original metadata and literal page release/replay.",
+  "source_review_sha256": "94801638fc5dccf50a0b5d23b666a00186fa76c0b322152152f758bcf28b86f8",
+  "source_release_proof_sha256": "fa2d3b19d8b6c78f170c8f35e8c05894b2702ad9b3e6f4dc07679242e4062774",
+  "build_proof_sha256": "9d06ca5dab86614ce79991e1d3188b787f99e1853d9469d289efde7482ce250e",
+  "predecessor": {
+    "filename": "spicy_docs-0.66.3-py3-none-any.whl",
+    "sha256": "24442f52c3b78420efb743f8fa22ff6fdfdcb2c15f4ed6416ea46d1eaac1e29d",
+    "retained_receipt": "vendor/spicy_docs-0.66.3.json"
+  },
+  "frozen_vendor_check": {
+    "other_dependency_changes": false,
+    "wheel_requires_dist_unchanged": true,
+    "runtime_added": [
+      "spicy_docs/sources/cms.py",
+      "spicy_docs/sources/cms_profile.py"
+    ],
+    "runtime_changed": [
+      "spicy_docs/source_native/profiles.py"
+    ],
+    "runtime_removed": [],
+    "lock_sha256": "74e2c49d32b3005dddeb92aa5f29f120d3de9095cc9bd7f5ec2474ac988b9d00",
+    "shared_runtime_changed": false
+  },
+  "limits": [
+    "Private vendored package; no package-registry publication.",
+    "Receiver installed-package check and public delivery remain separate; no installation performed in this adoption step."
+  ]
+}

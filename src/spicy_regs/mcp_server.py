@@ -89,6 +89,7 @@ TABLES = (
     "agency_lifecycle_stats",
     "sam_entities",
     "census_acs_county_observations",
+    "cms_part_d_drug_spending",
     "grants_opportunity_observations",
     "executive_order_observations",
     "fec_financial_profiles",
@@ -909,6 +910,7 @@ def _build_connection_inputs(con, publication):
     # generation or explicit local/rulemaking selection, never a bare legacy key.
     managed_only = {
         "census_acs_county_observations",
+        "cms_part_d_drug_spending",
         "treasury_debt_observations", "treasury_statement_periods",
         "grants_opportunity_observations",
         "executive_order_observations",

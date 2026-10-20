@@ -5,6 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.66.4`: reviewed CMS source commit
+  `76ae3736afc9e9c5be400281969bf21c4add2380`; SHA-256
+  `1abb1869cc4596741fa3a3799e1def4ed607788430687b0317fc324a90c27edb`.
+  Adds versioned CMS drug-spending discovery, literal API pages and retained
+  source release replay. The complete selected Part D source release passed
+  admission and replay; the receiving installed-package check and public
+  delivery remain separate. The wheel was built offline once and its CMS
+  modules match the reviewed source. See [package receipt](spicy_docs-0.66.4.json).
+  The prior 0.66.3 wheel and receipt remain available unchanged. This is a
+  private vendored package, not a package-registry release.
+
 - `spicy_docs-0.66.3`: reviewed local SpicyDocs candidate `13653d20a08b72dc1030de96c4d7b12cea827152`;
   SHA-256 `24442f52c3b78420efb743f8fa22ff6fdfdcb2c15f4ed6416ea46d1eaac1e29d`.
   Adds scoped executive-order metadata and retained body acquisition to the
