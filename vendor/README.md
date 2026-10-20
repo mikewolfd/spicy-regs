@@ -5,17 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- `spicy_docs-0.66.3`: reviewed local SpicyDocs candidate `dafccf738dfbb39f17541a7461fbcf3ac8330770`;
-  SHA-256 `56e562953350a14cfcf550472b9acd3a2e23805d42f31e74651eeefb8d249dfb`.
-  This cumulative source includes the Treasury FiscalData and ACS profiles.
-  The exact wheel passed installed source admission, domain generation and local
-  SQL over the retained Treasury pilot. ACS live qualification remains pending.
-  It retains the version number; the commit and digest identify this adoption,
-  not a new registry release. See [package receipt](spicy_docs-0.66.3.json).
-  The preceding `0.66.3` wheel from `0950db0a` has SHA-256
-  `6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96`;
-  recover its wheel and receipt from this repository's commit `690b765a` at the
-  same `vendor/` paths. Public data selection and deployment remain separate.
+- `spicy_docs-0.66.3`: reviewed local SpicyDocs candidate `130128d1657da1ef27db1c757e3aeead754377fd`;
+  SHA-256 `6665d5927962ffd16cbb5f18876e17f9efcfc9f8a5f144faf31df7909ed81dd8`.
+  This cumulative source adds the bounded Grants.gov XML snapshot profile to
+  the retained Treasury and ACS readers. Its exact wheel passed the ordinary
+  frozen offline installation and a tiny installed source, CLI and local SQL
+  check. Full-export qualification and public delivery are separate outcomes.
+  See [package receipt](spicy_docs-0.66.3.json).
+  The package version stays unchanged; commit and digest identify this private
+  adoption. The preceding Treasury candidate from `dafccf738` has SHA-256
+  `56e562953350a14cfcf550472b9acd3a2e23805d42f31e74651eeefb8d249dfb`; its wheel and receipt remain available at this repository's
+  commit `99cdb9947a6f510a9452ee1940b13701a2632366` under the same `vendor/` paths.
 
 - `spicy_docs-0.66.2`: built from spicy-docs fork main at `bc371f52`; SHA-256
   `74094743267172439795e0ac53c5ee5a7798dabaeac794aac6f4699127884416`. It makes the

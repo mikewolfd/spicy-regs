@@ -1,45 +1,77 @@
 {
   "filename": "spicy_docs-0.66.3-py3-none-any.whl",
   "version": "0.66.3",
-  "sha256": "56e562953350a14cfcf550472b9acd3a2e23805d42f31e74651eeefb8d249dfb",
-  "byte_size": 2665751,
-  "source_commit": "dafccf738dfbb39f17541a7461fbcf3ac8330770",
-  "source_tree": "e989ee2ea85a1ea0eab68d0d1bdbaaf062b9919e",
-  "source_state": "Reviewed local cumulative SpicyDocs candidate, including Treasury FiscalData and ACS source profiles",
-  "build": "Reused the exact reviewed offline uv build wheel; no rebuild during vendor adoption",
-  "scope": "Adopts the reviewed cumulative source reader through the existing source-readers dependency. Treasury debt and September 2026 MTS retained releases passed source admission, domain generation and installed local SQL; Census live qualification remains pending.",
+  "sha256": "6665d5927962ffd16cbb5f18876e17f9efcfc9f8a5f144faf31df7909ed81dd8",
+  "byte_size": 2671886,
+  "source_commit": "130128d1657da1ef27db1c757e3aeead754377fd",
+  "source_tree": "74ca37ed7f3be06faedbf28335c7ce4a25b53593",
+  "source_state": "Reviewed cumulative local source including the Grants.gov snapshot profile",
+  "build": "One offline uv build from clean committed source; exact wheel reused for vendor adoption",
+  "scope": "Bounded Grants.gov XML snapshot streaming and source-workflow publication/replay. Existing cumulative Treasury and ACS support retained.",
   "package_check": {
-    "source_commit": "dafccf738dfbb39f17541a7461fbcf3ac8330770",
-    "consumer_commit": "690b765aa07482d1ab3deee0ad29dedf93b8f7f9",
-    "completion_sha256": "30f93cc93ee1b6d06f7d34859db64694541bdeb524b985ecf67b2866a587afbf",
-    "status": "private-installed-candidate-wheel-check-passed"
+    "source_commit": "130128d1657da1ef27db1c757e3aeead754377fd",
+    "consumer_commit": "99cdb9947a6f510a9452ee1940b13701a2632366",
+    "result_sha256": "6cb20d7020937f1e2d03a0cff57514448b18b9af11e1f23432c28c1e76e2b41e",
+    "status": "passed-installed-tiny-source-cli-sql"
   },
   "predecessor": {
     "filename": "spicy_docs-0.66.3-py3-none-any.whl",
     "version": "0.66.3",
-    "sha256": "6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96",
-    "byte_size": 2628622,
-    "source_commit": "0950db0a35742d07b075476b47f946d9931dba68",
-    "source_state": "Reviewed source commit for mikewolfd/spicy-docs PR14",
-    "build": "uv build --wheel --offline; one build from clean committed source",
-    "scope": "Optional CourtListener whole-search request/wait allocation and 429 Retry-After handling; incomplete traversal diagnostics preserve captured pages.",
-    "other_consumers": "Consumers without the optional allocation retain existing transport retry behavior.",
-    "retained_in_git_commit": "690b765aa07482d1ab3deee0ad29dedf93b8f7f9",
+    "sha256": "56e562953350a14cfcf550472b9acd3a2e23805d42f31e74651eeefb8d249dfb",
+    "byte_size": 2665751,
+    "source_commit": "dafccf738dfbb39f17541a7461fbcf3ac8330770",
+    "source_tree": "e989ee2ea85a1ea0eab68d0d1bdbaaf062b9919e",
+    "source_state": "Reviewed local cumulative SpicyDocs candidate, including Treasury FiscalData and ACS source profiles",
+    "build": "Reused the exact reviewed offline uv build wheel; no rebuild during vendor adoption",
+    "scope": "Adopts the reviewed cumulative source reader through the existing source-readers dependency. Treasury debt and September 2026 MTS retained releases passed source admission, domain generation and installed local SQL; Census live qualification remains pending.",
+    "package_check": {
+      "source_commit": "dafccf738dfbb39f17541a7461fbcf3ac8330770",
+      "consumer_commit": "690b765aa07482d1ab3deee0ad29dedf93b8f7f9",
+      "completion_sha256": "30f93cc93ee1b6d06f7d34859db64694541bdeb524b985ecf67b2866a587afbf",
+      "status": "private-installed-candidate-wheel-check-passed"
+    },
+    "predecessor": {
+      "filename": "spicy_docs-0.66.3-py3-none-any.whl",
+      "version": "0.66.3",
+      "sha256": "6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96",
+      "byte_size": 2628622,
+      "source_commit": "0950db0a35742d07b075476b47f946d9931dba68",
+      "source_state": "Reviewed source commit for mikewolfd/spicy-docs PR14",
+      "build": "uv build --wheel --offline; one build from clean committed source",
+      "scope": "Optional CourtListener whole-search request/wait allocation and 429 Retry-After handling; incomplete traversal diagnostics preserve captured pages.",
+      "other_consumers": "Consumers without the optional allocation retain existing transport retry behavior.",
+      "retained_in_git_commit": "690b765aa07482d1ab3deee0ad29dedf93b8f7f9",
+      "retained_wheel_path": "vendor/spicy_docs-0.66.3-py3-none-any.whl",
+      "retained_receipt_path": "vendor/spicy_docs-0.66.3.json"
+    },
+    "version_note": "Both artifacts use 0.66.3. Source commit and wheel SHA-256 distinguish this local adoption from its predecessor; no registry release or dependency version upgrade is claimed.",
+    "limits": [
+      "No public registry upload, data publication, deployment or active runtime adoption.",
+      "Installed qualification covers the declared retained Treasury selection, not all sources in the cumulative wheel."
+    ],
+    "frozen_vendor_check": {
+      "command": "uv sync --frozen --offline --no-dev --no-install-project",
+      "dependency_versions_changed": false,
+      "wheel_metadata_unchanged_from_predecessor": true,
+      "receiver": "Existing reviewed Regs wheel installed without dependencies in the same isolated environment; actual local MCP SQL read the already qualified Treasury generation.",
+      "receiver_result_sha256": "4eeccf3bab64ffb7d6f9ac783c2baf4a61d2a8fd15dbde36e42efae0e74581fd",
+      "lock_sha256": "152fe6b8188ff567c3509064d8783652c1076f6c64817b39147b2ccacad944c6",
+      "shared_runtime_changed": false
+    },
+    "retained_in_git_commit": "99cdb9947a6f510a9452ee1940b13701a2632366",
     "retained_wheel_path": "vendor/spicy_docs-0.66.3-py3-none-any.whl",
     "retained_receipt_path": "vendor/spicy_docs-0.66.3.json"
   },
-  "version_note": "Both artifacts use 0.66.3. Source commit and wheel SHA-256 distinguish this local adoption from its predecessor; no registry release or dependency version upgrade is claimed.",
-  "limits": [
-    "No public registry upload, data publication, deployment or active runtime adoption.",
-    "Installed qualification covers the declared retained Treasury selection, not all sources in the cumulative wheel."
-  ],
+  "version_note": "Private same-version candidate: source commit and wheel SHA-256 distinguish it from prior 0.66.3 artifacts. No registry release is claimed.",
   "frozen_vendor_check": {
     "command": "uv sync --frozen --offline --no-dev --no-install-project",
     "dependency_versions_changed": false,
     "wheel_metadata_unchanged_from_predecessor": true,
-    "receiver": "Existing reviewed Regs wheel installed without dependencies in the same isolated environment; actual local MCP SQL read the already qualified Treasury generation.",
-    "receiver_result_sha256": "4eeccf3bab64ffb7d6f9ac783c2baf4a61d2a8fd15dbde36e42efae0e74581fd",
-    "lock_sha256": "152fe6b8188ff567c3509064d8783652c1076f6c64817b39147b2ccacad944c6",
+    "lock_sha256": "e98d02aa0cc99ebb4845a8f9d30dcae61880526aa70abde8a4d0c73b797ee5d1",
     "shared_runtime_changed": false
-  }
+  },
+  "limits": [
+    "Installed proof uses the retained two-record fixture; full actual-export qualification is separate.",
+    "No public registry upload, data selection, image build or deployment."
+  ]
 }
