@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { readFileSync } from "node:fs";
+import "./python-text.mjs";
+
+const startup = readFileSync(new URL("../start_reader.py", import.meta.url), "utf8");
 
 class ContainerBoundary {
   constructor(ctx, env) {
@@ -10,15 +14,24 @@ class ContainerBoundary {
     this.ctx.forwarded.push(request);
     return this.ctx.response;
   }
+  async startAndWaitForPorts(options) {
+    this.ctx.starts.push(options);
+    if (this.ctx.startError) throw this.ctx.startError;
+    this.ctx.container.running = true;
+  }
 }
 mock.module("@cloudflare/containers", {
   namedExports: { Container: ContainerBoundary, getContainer: () => {} },
 });
 const { McpContainer } = await import("../worker/index.ts");
 
-function scenario({ status = 500, running = true, probeError } = {}) {
+test("SDK entrypoint embeds the same launch owner used by the image", () => {
+  assert.deepEqual(new McpContainer({}, {}).entrypoint, ["python", "-c", startup]);
+});
+
+function scenario({ status = 500, running = true, probeError, startError } = {}) {
   const ctx = {
-    forwarded: [], probes: [], resets: [],
+    forwarded: [], probes: [], resets: [], starts: [], startError,
     response: new Response("Application response must remain unread", { status }),
     container: {
       running,
@@ -71,8 +84,8 @@ for (const probeError of [new Error("Network connection lost"), new DOMException
   });
 }
 
-for (const options of [{ status: 200 }, { running: false }, { status: 503 }]) {
-  test(`healthy responses and known stopped instances skip recovery: ${JSON.stringify(options)}`, async () => {
+for (const options of [{ status: 200 }, { status: 503 }]) {
+  test(`non-500 responses skip port recovery: ${JSON.stringify(options)}`, async () => {
     const { ctx, request, instance } = scenario(options);
     assert.equal(await instance.fetch(request), ctx.response);
     assert.equal(ctx.probes.length, 0);
@@ -80,3 +93,28 @@ for (const options of [{ status: 200 }, { running: false }, { status: 503 }]) {
     assert.equal(ctx.response.bodyUsed, false);
   });
 }
+
+test("refused startup returns 503 without forwarding or replaying the POST", async () => {
+  const { ctx, request, instance } = scenario({
+    running: false, startError: new Error("private startup diagnostic"),
+  });
+  const response = await instance.fetch(request);
+  assert.equal(response.status, 503);
+  assert.equal(await response.text(), "Reader release is not ready.");
+  assert.deepEqual(ctx.forwarded, []);
+  assert.equal(request.bodyUsed, false);
+  assert.equal(ctx.starts.length, 1);
+  assert.equal(ctx.starts[0].cancellationOptions.instanceGetTimeoutMS, 60_000);
+  assert.equal(ctx.starts[0].cancellationOptions.portReadyTimeoutMS, 60_000);
+  assert.equal(ctx.starts[0].cancellationOptions.abort, request.signal);
+});
+
+test("successful replacement starts once then forwards the untouched request", async () => {
+  const { ctx, request, instance } = scenario({ running: false, status: 200 });
+  assert.equal(await instance.fetch(request), ctx.response);
+  assert.equal(ctx.starts.length, 1);
+  assert.deepEqual(ctx.forwarded, [request]);
+  assert.equal(request.bodyUsed, false);
+  assert.equal(await instance.fetch(request), ctx.response);
+  assert.equal(ctx.starts.length, 1);
+});
