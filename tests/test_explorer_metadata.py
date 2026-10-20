@@ -47,6 +47,27 @@ def args():
             "generated_at": "2026-10-03T00:00:00Z"}
 
 
+def test_financial_profile_source_identity_and_current_schema():
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.transforms.build_fec_financial_profiles import OUTPUT, SCHEMA, TABLE
+
+    columns = [list(pair) for pair in described_schema(SCHEMA)]
+    digest = "sha256:" + "a" * 64
+    selected = {"format": "spicy-regs-publication", "version": 2, "families": {
+        "fec-financial-profiles": {"artifactDigest": digest,
+                                   "tables": {OUTPUT: {"columns": columns, "rows": 1, "byteSize": 100}}}}}
+    bundle = build_bundle(selected, generated_at="2026-10-20T00:00:00Z")
+    table = bundle["tables"][TABLE]
+    assert table["metadataStatus"] == table["sourceStatus"] == "documented"
+    assert table["sources"][0]["id"] == "fec"
+    assert table["inputs"] == ["fec_reported_financial_summaries"]
+    assert table["recordIdentity"] == {
+        "columns": ["profile_id"], "basis": "declared_main_key", "uniqueness": "unknown"}
+    assert table["family"] == "fec-financial-profiles" and table["publicationSchema"] == columns
+    assert bundle["publication"]["families"][table["family"]] == digest
+    assert table["modelGenerated"] is False
+
+
 @pytest.fixture
 def measurement_refresh(tmp_path, monkeypatch):
     """Run the publisher with real construction/verifiers and tiny measured main files."""
