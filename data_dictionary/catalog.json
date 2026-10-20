@@ -2891,7 +2891,7 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-v2",
+        "policy_version": "scorecards-etl-member-links-v3",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
@@ -7397,7 +7397,7 @@
     {
       "table": "scorecard_member_links",
       "label": "Scorecard member links",
-      "summary": "One resolution disposition per publisher member.",
+      "summary": "One resolution disposition per publisher member. Normalized geography uses accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher geography remains in source_context_json and scorecard_members.",
       "coverage": "Derived exact identity links over pinned scorecard and congressional tables. Historical context constrains member matches; unresolved and ambiguous identities remain visible. No fuzzy matching or score conversion is applied.",
       "kind": "derived",
       "measured_on": "2026-10-03",
@@ -7410,6 +7410,11 @@
         "capture_id",
         "source_url",
         "source_path",
+        "normalized_state",
+        "state_status",
+        "normalized_district",
+        "district_status",
+        "correction_evidence_json",
         "term_candidates_json",
         "override_version",
         "resolution_status",

@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.6"
+RULE_VERSION = "scorecard-resolution-v1.7"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -68,6 +68,11 @@ MEMBER_LINK_COLUMNS = (
     "scorecard_id",
     "publisher_member_key",
     "bioguide_id",
+    "normalized_state",
+    "state_status",
+    "normalized_district",
+    "district_status",
+    "correction_evidence_json",
     "term_candidates_json",
     "override_version",
 ) + COMMON_COLUMNS
@@ -560,6 +565,7 @@ class _Members:
         ]
         return {
             "bioguide_id": chosen,
+            **_resolved_geography(source, context, status, term_matches.get(chosen, [])),
             "resolution_status": status,
             "resolution_rule": method,
             "candidate_count": str(len(candidates)),
@@ -568,6 +574,31 @@ class _Members:
             "override_version": override["version"] if override and method == "versioned_override" else None,
             "reason": ";".join(reasons) or method,
         }
+
+
+def _resolved_geography(source: Row, context: Mapping, status: str, terms: Sequence[Row]) -> dict:
+    """Expose accepted historical geography without changing identity matching or raw facts."""
+    result = dict(normalized_state=None, state_status=status + "_identity",
+                  normalized_district=None, district_status=status + "_identity")
+    if status != "resolved":
+        return result
+    if not context["windows"] or not context["state"] or not context["chamber"] or not terms:
+        return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
+    # Every accepted term already agrees with this state's historical context.
+    result.update(normalized_state=context["state"], state_status="confirmed")
+    if context["chamber"] == "senate":
+        return result | {"district_status": "not_applicable"}
+    districts = {_district(term.get("term_district")) for term in terms}
+    if None in districts:
+        return result | {"district_status": "unqualified_term_district"}
+    if len(districts) != 1:
+        return result | {"district_status": "ambiguous_term_district"}
+    district = next(iter(districts))
+    if _district(source.get("district")) == district:
+        district_status = "confirmed"
+    else:
+        district_status = "corrected_from_term" if source.get("district") else "supplied_from_term"
+    return result | dict(normalized_district=district, district_status=district_status)
 
 
 def _citation(text: str | None, amendment: bool = False) -> tuple[str | None, str, str] | None:
@@ -967,15 +998,26 @@ def resolve_scorecard_links(
         )
         return row, edition
 
+    from spicy_regs.scorecards.member_corrections import reviewed_member_context
+
     for key, source in sorted(
         _index(
             source_tables["scorecard_members"], ("scorecard_id", "publisher_member_key"), "scorecard_members"
         ).items()
     ):
         row, edition = base(source, "scorecard_member_links")
+        context_source, correction = reviewed_member_context(source, edition)
         row.update(
-            publisher_member_key=source["publisher_member_key"], **members.resolve(source, edition, overrides.get(key))
+            publisher_member_key=source["publisher_member_key"],
+            **members.resolve(context_source, edition, overrides.get(key)),
+            correction_evidence_json=_json(correction) if correction is not None else None,
         )
+        if (
+            correction is not None
+            and correction.get("status") == "applied"
+            and row["normalized_state"] is not None
+        ):
+            row["state_status"] = "corrected_from_reviewed_evidence"
         output["scorecard_member_links"].append(row)
     for _, source in sorted(
         _index(source_tables["scorecard_items"], ("scorecard_id", "item_id"), "scorecard_items").items()

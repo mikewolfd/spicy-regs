@@ -9396,12 +9396,17 @@ tables:
       Historical context constrains member matches; unresolved and ambiguous
       identities remain visible. No fuzzy matching or score conversion is applied.
     measured_on: "2026-10-03"
-    summary: "One resolution disposition per publisher member."
+    summary: "One resolution disposition per publisher member. Normalized geography uses accepted, period-qualified congressional terms after identity resolution. Exact reviewed source corrections retain their evidence; original publisher geography remains in source_context_json and scorecard_members."
     columns:
       scorecard_id: "Stable publisher edition identifier; join within the recorded source snapshot."
       publisher_member_key: "Unchanged publisher member key within the edition."
       bioguide_id: "Exact resolved congressional member identifier; NULL when unresolved or ambiguous."
-      term_candidates_json: "JSON array recording the historical terms considered for the member match."
+      normalized_state: "State from accepted historical terms matching the source chamber and period, after any exact reviewed correction. NULL without a unique qualified identity; original text remains in source_context_json."
+      state_status: "confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity or unqualified_term_context. Correction does not waive historical member matching."
+      normalized_district: "District from agreeing accepted House terms for the source state, chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term districts. Use district_status; raw publisher text is retained in source_context_json."
+      district_status: "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_district or ambiguous_term_district. term_candidates_json and input_pins_json retain the supporting term identities and evidence."
+      correction_evidence_json: "Exact reviewed source-error correction, evidence, and disposition: applied or not_applied_source_changed. Changed source records keep ordinary identity matching without the stale correction; NULL means no reviewed correction was considered. The original publisher row remains in source_context_json. A correction alone does not establish a resolved identity."
+      term_candidates_json: "JSON object keyed by congressional member identifier, recording the historical terms considered for the match and normalized district."
       override_version: "Version of an explicit member override, when used."
       source_snapshot_id: "Source snapshot used for resolution; require equality when joining to refreshed source facts."
       resolution_status: "Resolution outcome, including resolved, unresolved, ambiguous or conflicting source identifiers."

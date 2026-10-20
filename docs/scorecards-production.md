@@ -72,6 +72,31 @@ terms and versioned overrides. Legislative matching keeps bill, amendment,
 committee and floor-vote relationships distinct. Candidate order stays stable;
 a set now avoids repeated scans when collecting duplicate vote candidates.
 
+Use `scorecard_member_links.normalized_district` for qualified House geography:
+`0` means at-large. It is populated only after a unique member match, with exact
+state, chamber and period context, when all accepted historical terms agree.
+`district_status` distinguishes confirmation, correction, missing context and
+ambiguity; Senate districts are not applicable. The publisher's `district`
+remains unchanged in `scorecard_members` and `source_context_json`. Supporting
+terms and their immutable input identities remain in `term_candidates_json` and
+`input_pins_json`. A conflicting identity is never repaired by guessing a district.
+Join on the edition, publisher member key and selected source snapshot.
+
+This change needs only the normal `prepare-analysis`, `publish` and `readback`
+path with the current pinned inputs, followed by normal reader and explorer
+metadata adoption. It requires no source-scorecard acquisition or replacement.
+Existing analysis generations remain readable with their exact earlier schema;
+reading them does not invent normalized geography.
+
+`normalized_state` follows the same accepted historical context. A reviewed,
+exactly identified source error may correct the matching input before resolution;
+`state_status` and `correction_evidence_json` expose that decision. The original
+row remains unchanged. Corrected input must still pass the ordinary identity,
+state, chamber and period checks; a correction never guarantees a match.
+If the reviewed row or edition changes, the stale correction is not applied.
+The evidence records that disposition and normal matching continues for the
+changed record and the rest of the family.
+
 ## Reuse and resource limits
 
 Source column definitions and identities come directly from SpicyDocs and the
