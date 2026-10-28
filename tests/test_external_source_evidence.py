@@ -33,7 +33,8 @@ def captures(evidence):
 
 
 def payload(evidence, capture):
-    return (evidence.artifact_dir / 'blobs/sha256' / capture['sha256'][7:]).read_bytes()
+    with evidence.store.open(capture['sha256']) as stream:
+        return stream.read()
 
 
 def stages(evidence):

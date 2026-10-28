@@ -1,0 +1,198 @@
+"""Refresh reviewed catalog metadata over unchanged raw holdings into a candidate."""
+
+from __future__ import annotations
+
+import errno
+import json
+import os
+import sqlite3
+import tempfile
+from contextlib import closing
+from datetime import UTC, datetime
+from pathlib import Path
+
+from .importer import Importer, encoded
+from .publication import _clone_index, import_publications
+from .raw_archive import classify_retained_objects, holdings, retained_classification_candidates
+from .raw_classification import classification_inputs
+from .scope import install_scope
+from .selection import check_identities, identity, index_inventory, metadata, plain, raw_selection, require
+from .storage import Inputs, connect, schema, stable
+
+
+def configured_metadata(db, configuration, inputs, base_generation):
+    """Apply the importer's configured IDs while retaining superseded row values."""
+    normalized = sqlite3.connect(":memory:")
+    try:
+        schema(normalized)
+        Importer(normalized, inputs, configuration)
+        changed = {}
+        explicit_collections = {entry["id"] for entry in configuration.get("collections", [])}
+        for table in ("collections", "routes", "evidence"):
+            rows = list(normalized.execute(f"SELECT * FROM {table} ORDER BY id"))
+            columns = [item[1] for item in normalized.execute(f"PRAGMA table_info({table})")]
+            updates = ",".join(f"{column}=excluded.{column}" for column in columns[1:])
+            changed[table] = 0
+            for row in rows:
+                previous = db.execute(f"SELECT * FROM main.{table} WHERE id=?", (row[0],)).fetchone()
+                if table == "collections" and previous is not None:
+                    if row[0] not in explicit_collections:
+                        continue
+                    row = (row[0], row[1], encoded({**json.loads(previous[2]), **json.loads(row[2])}))
+                if previous is not None and tuple(previous) == row:
+                    continue
+                if previous is not None:
+                    # Rows from acquisitions and discovery remain unchanged.
+                    # An explicitly configured ID may supersede metadata, while
+                    # its previous value remains inspectable as history.
+                    prior = {"table": table, "row": list(previous), "baseGeneration": base_generation}
+                    history_id = "configured-metadata-history:" + stable(prior)
+                    cid = previous[0] if table == "collections" else previous[1]
+                    db.execute("INSERT OR IGNORE INTO main.evidence VALUES(?,?,?,?)", (
+                        history_id, cid, "configured_metadata_history", encoded(prior),
+                    ))
+                placeholders = ",".join("?" for _ in row)
+                db.execute(f"INSERT INTO main.{table} VALUES({placeholders}) ON CONFLICT(id) DO UPDATE SET {updates}", row)
+                changed[table] += 1
+        return changed
+    finally:
+        normalized.close()
+
+
+def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
+                     publication_reconciliation: Path | None = None, expected_generation: str) -> dict:
+    """Clone a pinned raw catalog, refresh metadata, and leave selection separate.
+
+    Base input pins retain their original meaning. Phase inputs identify the code,
+    registry and optional publication evidence read by this bounded update. This
+    operation does not replay acquisition manifests or write the raw archive.
+    """
+    index, output = plain(index), plain(output)
+    require(index != output, "Metadata refresh requires a separate candidate")
+    source_identity = identity(index)
+    source_metadata = metadata(index)
+    require(source_metadata["generation"] == expected_generation, "Selected base catalog generation changed")
+    source = connect(index, readonly=True, scope="all")
+    candidate = report_candidate = db = None
+    installed = []
+    try:
+        source.execute("BEGIN")
+        roots = {Path(row[0]).parent for row in source.execute("SELECT path FROM inputs WHERE path LIKE '%/snapshot.json'")
+                 if (Path(row[0]).parent / "objects/sha256").is_dir()}
+        require(len(roots) == 1, "Metadata refresh requires one pinned central raw archive")
+        raw_root = plain(roots.pop())
+        require(not output.is_relative_to(raw_root), "The rebuildable catalog must live outside the raw archive")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        report_path = output.with_suffix(output.suffix + ".reconciliation.json")
+        require(not output.exists() and not report_path.exists(), "Metadata refresh requires new candidate outputs")
+        raw = raw_selection(raw_root)
+        indexed_raw, snapshot_bytes = index_inventory(source, raw_root)
+        require(indexed_raw == raw and snapshot_bytes == (raw_root / "snapshot.json").stat().st_size,
+                "Raw inventory changed; rebuild holdings before refreshing metadata")
+        require(not source_metadata.get("publication_reconciliation") or publication_reconciliation is not None,
+                "Publication-aware metadata refresh requires --publication-reconciliation")
+        inputs = Inputs(raw_root)
+        for code in (*Path(__file__).parent.glob("*.py"), *classification_inputs()):
+            inputs.pin(code)
+        config = plain(config or Path(__file__).parent / "config/registry.v1.json")
+        require(not config.is_relative_to(raw_root), "Catalog configuration must stay outside the raw archive")
+        configuration = inputs.json(config)
+        require(isinstance(configuration, dict), "Catalog configuration must be an object")
+        descriptor, temporary = tempfile.mkstemp(prefix=output.name + ".", suffix=".tmp", dir=output.parent)
+        os.close(descriptor)
+        candidate = Path(temporary)
+        method = _clone_index(index, candidate, source)
+        db = connect(candidate)
+        changed = configured_metadata(db, configuration, inputs, expected_generation)
+        classification = classify_retained_objects(db, raw_root, retained_classification_candidates(db))
+        publication = None
+        if publication_reconciliation is not None:
+            publication = import_publications(db, inputs, publication_reconciliation)
+        policy = configuration.get("catalog_scope", source_metadata.get("source_scope"))
+        if policy is not None:
+            install_scope(db, policy)
+        measured_holdings = holdings(db)
+        measured_holdings["inventory_scope"] = "all-custody; includes supporting evidence, excludes receipt-only"
+        measured_counts = {
+            "files": db.execute("SELECT count(*) FROM main.files").fetchone()[0],
+            "collections": db.execute("SELECT count(*) FROM main.collections").fetchone()[0],
+        }
+        db.commit()
+        active_holdings = None
+        if policy is not None:
+            with closing(connect(candidate, readonly=True, scope="active")) as scoped:
+                active_holdings = holdings(scoped)
+            active_holdings["inventory_scope"] = "active; applies reviewed source scope and usable-status filters"
+        quick_check_tables = ("collections", "routes", "metadata", "tables", "lineage")
+        foreign_key_tables = ("routes", "tables", "lineage")
+        check_identities({index: source_identity}, "Base catalog changed during metadata refresh")
+        require(raw_selection(raw_root) == raw, "Raw inventory changed during metadata refresh")
+        generation = "sha256:" + stable("source-catalog-metadata-refresh", 1, expected_generation, inputs.pins,
+                                        changed, classification, publication)
+        report = {"format": "spicy-source-metadata-refresh", "version": 1, "status": "validated",
+                  "baseGeneration": expected_generation, "generation": generation, "copyMethod": method,
+                  "phaseInputs": inputs.pins, "configuredMetadata": changed,
+                  "retainedClassification": classification, "rawInventory": raw,
+                  "raw_archive": measured_holdings, **measured_counts,
+                  "validation": {"sqliteQuickCheckTables": list(quick_check_tables),
+                                 "foreignKeyCheckTables": list(foreign_key_tables),
+                                 "configuredReferencesEnforced": True, "fullInheritedIndexScan": False},
+                  "scope": "Metadata refresh over unchanged raw holdings; no acquisition, full raw audit or deployment."}
+        if active_holdings is not None:
+            report["active_holdings"] = active_holdings
+        if publication is not None:
+            report["publication"] = publication
+            db.execute("INSERT OR REPLACE INTO metadata VALUES('publication_reconciliation',?)", (encoded({
+                "format": "spicy-publication-reconciliation-result", "version": 1, "generation": generation,
+                "phaseInputs": inputs.pins, **publication,
+            }),))
+        for key, value in (("generation", generation), ("generatedAt", datetime.now(UTC).isoformat()),
+                           ("reconciliation", report)):
+            db.execute("INSERT OR REPLACE INTO metadata VALUES(?,?)", (key, encoded(value)))
+        db.commit()
+        for table in quick_check_tables:
+            require([row[0] for row in db.execute(f"PRAGMA quick_check('{table}')")] == ["ok"],
+                    f"Metadata refresh SQLite check failed: {table}")
+        for table in foreign_key_tables:
+            require(not db.execute(f"PRAGMA foreign_key_check('{table}')").fetchall(),
+                    f"Metadata refresh references failed validation: {table}")
+        db.close()
+        db = None
+        descriptor, temporary_report = tempfile.mkstemp(prefix=report_path.name + ".", suffix=".tmp", dir=output.parent)
+        report_candidate = Path(temporary_report)
+        with os.fdopen(descriptor, "w") as stream:
+            stream.write(json.dumps(report, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        with candidate.open("rb") as stream:
+            os.fsync(stream.fileno())
+        inputs.check()
+        check_identities({index: source_identity}, "Base catalog changed during metadata refresh")
+        require(raw_selection(raw_root) == raw, "Raw inventory changed during metadata refresh")
+        # Exclusive links publish only new candidate paths. A concurrent output
+        # creator is never overwritten; selected files remain untouched.
+        for temporary_path, destination in ((candidate, output), (report_candidate, report_path)):
+            os.link(temporary_path, destination)
+            installed.append(destination)
+        directory = os.open(output.parent, os.O_RDONLY)
+        try:
+            try:
+                os.fsync(directory)
+            except OSError as error:
+                if error.errno not in {errno.EINVAL, errno.ENOTSUP}:
+                    raise
+        finally:
+            os.close(directory)
+        return report
+    except BaseException:
+        for path in installed:
+            path.unlink()
+        raise
+    finally:
+        if db is not None:
+            db.close()
+        source.close()
+        if candidate is not None:
+            candidate.unlink(missing_ok=True)
+        if report_candidate is not None:
+            report_candidate.unlink(missing_ok=True)

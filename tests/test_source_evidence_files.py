@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from spicy_docs.transport.credentials import CredentialRefusedError
 
-from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, _CHUNK, verify_evidence
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource, SourceEvidenceError, _CHUNK, verify_evidence
 
 
 def events(evidence):
@@ -65,7 +65,7 @@ def test_retained_file_uses_bounded_reads_and_preserves_bytes_and_receipt(tmp_pa
     assert event["evidence_policy"] == "full" and event["body_retained"] is True
     assert event["response_complete"] is True and len(event["capture_id"]) == 32
     assert event["blob_member"] == "blobs/sha256/" + expected["sha256"].removeprefix("sha256:")
-    assert (evidence.store.root / "sha256" / expected["sha256"].removeprefix("sha256:")).read_bytes() == raw
+    assert (evidence.local_store.root / "sha256" / expected["sha256"].removeprefix("sha256:")).read_bytes() == raw
     artifact = evidence.seal(outcome="build-complete")
     assert verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin).pin == artifact.pin
 
@@ -76,7 +76,7 @@ def test_changed_local_file_cannot_be_journaled_or_seal_complete(tmp_path, monke
     raw = b"original\n" * 100
     path.write_bytes(raw)
     evidence = CaptureEvidence(tmp_path, "test")
-    put = evidence.store.put_blob
+    put = evidence.local_store.put_blob
 
     def changing(*args):
         if mutation == "grow":
@@ -93,7 +93,7 @@ def test_changed_local_file_cannot_be_journaled_or_seal_complete(tmp_path, monke
             replacement.replace(path)
         return put(*args)
 
-    monkeypatch.setattr(evidence.store, "put_blob", changing)
+    monkeypatch.setattr(evidence.local_store, "put_blob", changing)
     with pytest.raises(SourceEvidenceError):
         evidence.retain_file(path, stage="local")
     assert not any(row["event"] == "retained-file" for row in events(evidence))
@@ -109,7 +109,7 @@ def test_local_retention_refuses_credential_across_chunk_boundary(tmp_path):
     evidence.credential = key
     with pytest.raises(CredentialRefusedError):
         evidence.retain_file(path, stage="local")
-    assert list((evidence.store.root / "sha256").iterdir()) == []
+    assert list((evidence.local_store.root / "sha256").iterdir()) == []
     assert not any(row["event"] == "retained-file" for row in events(evidence))
 
 
@@ -131,7 +131,7 @@ def test_mutation_during_first_pass_refuses_before_store_write(tmp_path, monkeyp
     monkeypatch.setattr(os, "fstat", changing)
     with pytest.raises(SourceEvidenceError, match="changed"):
         evidence.retain_file(path, stage="local")
-    assert list((evidence.store.root / "sha256").iterdir()) == []
+    assert list((evidence.local_store.root / "sha256").iterdir()) == []
     assert not any(row["event"] == "retained-file" for row in events(evidence))
 
 
@@ -170,7 +170,8 @@ def test_retained_bytes_use_admitted_local_receipts_and_respect_policy(tmp_path,
     verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
     public_bytes = [p.read_bytes() for p in evidence.directory.rglob("*") if p.is_file()]
     if policy == "full":
-        assert (evidence.store.root / "sha256" / digest).read_bytes() == body
+        with EvidenceMemberSource(evidence.artifact_dir).open(row["blob_member"]) as stream:
+            assert stream.read() == body
         assert row["source_locator"] == body.decode()
     else:
         assert "source_locator" not in row and "role" not in row
@@ -190,7 +191,7 @@ def test_retained_bytes_refuse_credentials_before_store_or_receipt(tmp_path, pol
     with pytest.raises(CredentialRefusedError):
         source.retain_bytes(b"prefix-retained-secret-suffix", stage="local")
     assert not any(row["event"] == "retained-file" for row in events(evidence))
-    assert list((evidence.store.root / "sha256").iterdir()) == []
+    assert list((evidence.local_store.root / "sha256").iterdir()) == []
 
 
 def test_failed_retained_byte_write_cannot_seal_complete(tmp_path, monkeypatch):
@@ -199,7 +200,7 @@ def test_failed_retained_byte_write_cannot_seal_complete(tmp_path, monkeypatch):
     def fail(*_):
         raise OSError("storage unavailable")
 
-    monkeypatch.setattr(evidence.store, "put_blob", fail)
+    monkeypatch.setattr(evidence.local_store, "put_blob", fail)
     with pytest.raises(SourceEvidenceError, match="Cannot retain"):
         evidence.retain_bytes(b"private input", stage="local")
     assert not any(row["event"] == "retained-file" for row in events(evidence))

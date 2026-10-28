@@ -6,10 +6,10 @@ import tempfile
 import pytest
 from rulespec_artifacts import ArtifactVerificationError
 
-from spicy_regs.source_evidence import CaptureEvidence
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource
 from spicy_regs.sources import publication as pub
 from tests.generation_fakes import Store
-from tests.test_source_evidence import candidate, capture
+from tests.test_source_evidence import candidate, capture, read_evidence_member
 
 BODY = b"retained source bytes" * 64
 
@@ -28,8 +28,8 @@ def publish(store, directory, evidence, prior=None):
 
 
 def blob_keys(evidence):
-    return sorted("source-evidence/blobs/sha256/" + path.name
-                  for path in (evidence.artifact_dir / "blobs" / "sha256").iterdir())
+    return sorted("source-evidence/" + key for key in EvidenceMemberSource(evidence.artifact_dir).keys()
+                  if key.startswith("blobs/sha256/"))
 
 
 def test_new_blob_is_uploaded_once_and_read_back_once(tmp_path):
@@ -166,13 +166,27 @@ def test_untrusted_blobs_stream_into_admission_without_local_scratch(tmp_path, m
     store = Streaming()
     if already_present:
         for key in blob_keys(evidence):
-            store.objects[key] = (evidence.artifact_dir / key.removeprefix("source-evidence/")).read_bytes()
+            store.objects[key] = read_evidence_member(evidence, key.removeprefix("source-evidence/"))
             store.etags[key] = '"different-etag-requires-readback"'
 
-    def no_scratch(*args, **kwargs):
-        raise AssertionError("Publication must not create a verification scratch directory")
+    from contextlib import contextmanager
+    from pathlib import Path
 
-    monkeypatch.setattr(tempfile, "TemporaryDirectory", no_scratch)
+    metadata_directory = tempfile.TemporaryDirectory
+
+    @contextmanager
+    def metadata_only_scratch(*args, **kwargs):
+        # Input-proof controls are staged separately; original-body verification
+        # must still stream and must not create a payload scratch directory.
+        assert not args and kwargs == {"prefix": "generation-input-proof-"}
+        with metadata_directory(**kwargs) as directory:
+            yield directory
+            for path in Path(directory).rglob("*"):
+                if path.is_file():
+                    assert path.suffix in {".json", ".jsonl"}
+                    assert BODY not in path.read_bytes()
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", metadata_only_scratch)
     publish(store, directory, evidence)
     assert peak == 1 and active == 0 and all(body.closed for body in bodies)
     assert all(store.reads[key] == 1 for key in blob_keys(evidence))
