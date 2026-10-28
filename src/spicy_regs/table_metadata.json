@@ -19251,22 +19251,22 @@
       {
         "column_name": "normalized_state",
         "column_type": "VARCHAR",
-        "description": "State from accepted historical terms matching the source chamber and period, after any exact reviewed correction. NULL without a unique qualified identity; original text remains in source_context_json."
+        "description": "State agreed by the resolved member's relevant terms in the source chamber and period, after any exact reviewed correction. NULL for missing or conflicting state context; original text remains in source_context_json."
       },
       {
         "column_name": "state_status",
         "column_type": "VARCHAR",
-        "description": "confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity or unqualified_term_context. Correction does not waive historical member matching."
+        "description": "confirmed or corrected_from_reviewed_evidence for an accepted state; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state or ambiguous_term_state. Missing term dates or unknown chamber prevent confirmation when the term may overlap the period. Correction does not waive historical member matching."
       },
       {
         "column_name": "normalized_district",
         "column_type": "VARCHAR",
-        "description": "District from agreeing accepted House terms for the source state, chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term districts. Use district_status; raw publisher text is retained in source_context_json."
+        "description": "District agreed by the resolved member's relevant House terms in the source chamber and period; 0 means at-large. NULL for Senate, unresolved identity, missing context or conflicting term geography. Raw publisher text remains in source_context_json."
       },
       {
         "column_name": "district_status",
         "column_type": "VARCHAR",
-        "description": "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_district or ambiguous_term_district. term_candidates_json and input_pins_json retain the supporting term identities and evidence."
+        "description": "confirmed, corrected_from_term or supplied_from_term for a qualified district; not_applicable for Senate; otherwise unresolved_identity, ambiguous_identity, conflict_identity, unqualified_term_context, unqualified_term_state, ambiguous_term_state, unqualified_term_district or ambiguous_term_district. input_pins_json identifies the term input."
       },
       {
         "column_name": "correction_evidence_json",
@@ -19276,7 +19276,7 @@
       {
         "column_name": "term_candidates_json",
         "column_type": "VARCHAR",
-        "description": "JSON object keyed by congressional member identifier, recording the historical terms considered for the match and normalized district."
+        "description": "JSON object keyed by congressional member identifier, recording the historical terms used for identity matching. Geography also checks other relevant terms in the pinned term input."
       },
       {
         "column_name": "override_version",

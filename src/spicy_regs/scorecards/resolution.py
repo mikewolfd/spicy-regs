@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.7"
+RULE_VERSION = "scorecard-resolution-v1.9"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -424,6 +424,28 @@ class _Members:
             matches.append(term)
         return sorted(matches, key=lambda row: (row.get("term_start") or "", row["term_index"]))
 
+    def uncertain_geography_terms(self, bioguide: str, context: dict, inclusive: bool) -> bool:
+        """Identify terms that may overlap but cannot be assigned to the chamber and period."""
+        for term in self.terms[bioguide]:
+            chamber = _chamber(term.get("term_type"))
+            if chamber and chamber != context["chamber"]:
+                continue
+            start_text, end_text = term.get("term_start"), term.get("term_end")
+            if chamber and start_text and end_text:
+                continue  # The normal term lookup checks these bounds.
+            try:
+                start = date.fromisoformat(start_text) if start_text else None
+                end = date.fromisoformat(end_text) if end_text else None
+            except (TypeError, ValueError):
+                return True
+            for left, right in context["windows"]:
+                ends_after_left = end is None or end > left or (
+                    inclusive and right - left == timedelta(days=1) and end == left
+                )
+                if (start is None or start < right) and ends_after_left:
+                    return True
+        return False
+
     def resolve(self, source: Row, edition: Row, override: Row | None) -> dict:
         context = _context(source, edition)
         reasons = list(context["notes"])
@@ -563,9 +585,22 @@ class _Members:
             }
             for key in sorted(matches)
         ]
+        geography_terms = []
+        uncertain_geography = False
+        if status == "resolved" and chosen is not None:  # every resolution names its member
+            # Identity matching may filter by publisher geography. Once the
+            # person is known, inspect all terms in the chamber and period so
+            # those filters cannot hide a geographic change.
+            geography_context = {**context, "state": None, "district": None}
+            inclusive = "unique_inclusive_term_end_fallback" in reasons
+            geography_terms = self.terms_for(chosen, geography_context, inclusive=inclusive)
+            if context["windows"] and context["chamber"]:
+                uncertain_geography = self.uncertain_geography_terms(chosen, context, inclusive)
+                if uncertain_geography:
+                    reasons.append("unqualified_geography_term")
         return {
             "bioguide_id": chosen,
-            **_resolved_geography(source, context, status, term_matches.get(chosen, [])),
+            **_resolved_geography(source, context, status, geography_terms, uncertain_geography),
             "resolution_status": status,
             "resolution_rule": method,
             "candidate_count": str(len(candidates)),
@@ -576,15 +611,23 @@ class _Members:
         }
 
 
-def _resolved_geography(source: Row, context: Mapping, status: str, terms: Sequence[Row]) -> dict:
+def _resolved_geography(
+    source: Row, context: Mapping, status: str, terms: Sequence[Row], uncertain: bool = False
+) -> dict:
     """Expose accepted historical geography without changing identity matching or raw facts."""
     result = dict(normalized_state=None, state_status=status + "_identity",
                   normalized_district=None, district_status=status + "_identity")
     if status != "resolved":
         return result
-    if not context["windows"] or not context["state"] or not context["chamber"] or not terms:
+    if uncertain or not context["windows"] or not context["state"] or not context["chamber"] or not terms:
         return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
-    # Every accepted term already agrees with this state's historical context.
+    states = {term.get("term_state") for term in terms}
+    if None in states or "" in states:
+        return result | dict(state_status="unqualified_term_state", district_status="unqualified_term_state")
+    if len(states) != 1:
+        return result | dict(state_status="ambiguous_term_state", district_status="ambiguous_term_state")
+    if states != {context["state"]}:
+        return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
     result.update(normalized_state=context["state"], state_status="confirmed")
     if context["chamber"] == "senate":
         return result | {"district_status": "not_applicable"}

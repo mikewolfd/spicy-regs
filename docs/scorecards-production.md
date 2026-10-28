@@ -74,12 +74,18 @@ a set now avoids repeated scans when collecting duplicate vote candidates.
 
 Use `scorecard_member_links.normalized_district` for qualified House geography:
 `0` means at-large. It is populated only after a unique member match, with exact
-state, chamber and period context, when all accepted historical terms agree.
+state, chamber and period context, when all relevant terms for that member and
+chamber agree on geography during the stated period. This checks terms that
+identity matching filtered out as well; it does not assert continuous service.
+A term with missing dates or an unknown chamber prevents confirmation when it
+may overlap the period; known bounds can establish that it is outside the period.
+The reason includes `unqualified_geography_term` when this occurs.
 `district_status` distinguishes confirmation, correction, missing context and
 ambiguity; Senate districts are not applicable. The publisher's `district`
 remains unchanged in `scorecard_members` and `source_context_json`. Supporting
-terms and their immutable input identities remain in `term_candidates_json` and
-`input_pins_json`. A conflicting identity is never repaired by guessing a district.
+identity-matching terms remain in `term_candidates_json`; `input_pins_json`
+identifies the term input used for the wider geography check. A conflicting
+identity is never repaired by guessing a district.
 Join on the edition, publisher member key and selected source snapshot.
 
 This change needs only the normal `prepare-analysis`, `publish` and `readback`
