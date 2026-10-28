@@ -5,6 +5,25 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- `spicy_docs-0.65.0+centralraw.523052e8a6fe`: local central raw archive
+  integration over the retained `0.65.0` wheel. It changes only
+  `storage/raw_archive.py`, `reading/refusals.py`, and `sources/fec/client.py`;
+  every other packaged source file matches the base. FEC originals and failed
+  acquisition receipts use the shared archive, including source-validation
+  refusals. The [build receipt](spicy_docs-0.65.0+centralraw.523052e8a6fe-py3-none-any.json)
+  pins the base, each changed module, and wheel SHA-256
+  `2049deea32da3460cbaf3eac78594dbcf9d092daa6bc2c24d22b762c834f74d4`.
+  Verify reproducibility with `uv run --frozen python scripts/package_central_raw_reader.py --check`;
+  it reads the three modules from sibling `spicy-docs` (override with `--provider`).
+  After reviewing changed source modules, `--write` explicitly updates the wheel,
+  receipt and project/lock pins. Checking never writes these files; unchanged
+  inputs reproduce identical bytes.
+  Run `uv lock --check --offline`, install the wheel into the test runtime with
+  `uv pip install --no-deps --offline --python <test-python> <wheel>`, then run
+  the affected consumer tests. Keep the base wheel; remove an obsolete local
+  overlay only after its replacement passes. This is a local adoption, with no
+  package-registry release or deployment claimed.
+
 - `spicy_docs-0.61.0`: tagged source `v0.61.0` at merge commit
   `76ec8628f608b1ed2080b8ef2a4a8c920af72c4f`. Its full tree equals the final
   CI-passed candidate `ceb3b7644f3d9af8ebf2d3f4c457873b15bb3e0f`.
