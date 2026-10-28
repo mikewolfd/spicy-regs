@@ -69504,6 +69504,47 @@
           "verification": "Complete original SHA-256 and byte count; gzip decoding and complete JSON body inspection"
         }
       }
+    },
+    "sha256:55f7d9e99b8e2d4e0e193b2f0275501e6d9c1ebd29cadbea6a0da48a8587e3e0": {
+      "bytes": 146,
+      "result": {
+        "outcome": "ok",
+        "classification": "source-error",
+        "content_kind": "publisher-error-page",
+        "role": "failed-response",
+        "scope": {
+          "basis": "Exact retained original contains only an nginx HTML 404 Not Found response. The pinned Title 1 MODS request receipt records HTTP 404; these bytes are retained failure evidence, not usable MODS metadata.",
+          "limits": [
+            "Content classification applies to this exact hash only; dataset identity and transport status remain alias-specific.",
+            "No completeness, successful MODS acquisition, or 2025 edition identity is inferred."
+          ],
+          "reviewed_at": "2026-10-28",
+          "verification": "Complete stored and decoded SHA-256 and byte count; original HTML and pinned request receipt read."
+        },
+        "evidence": [
+          {
+            "rule": "local-byte-content-review",
+            "locator": "/html/head/title and /html/body/center/h1",
+            "title": "404 Not Found",
+            "h1": [
+              "404 Not Found"
+            ],
+            "raw_sha256": "sha256:55f7d9e99b8e2d4e0e193b2f0275501e6d9c1ebd29cadbea6a0da48a8587e3e0",
+            "raw_bytes": 146
+          },
+          {
+            "rule": "pinned-request-receipt",
+            "source_url": "https://www.govinfo.gov/content/pkg/CFR-2025-title1-vol1/mods.xml",
+            "receipt": {
+              "bytes": 488,
+              "path": "/Users/mikewolfd/Work/corpora/supply-2026-09-02/receipts/cfr-parser-probe-2026-09-12/annual-title1-2025-mods.json",
+              "sha256": "sha256:37c451637629dddec4976602d3a64c2b9758ffc85061afdb68b25e92c3fb3163"
+            },
+            "http_status": 404,
+            "scope": "This CFR request only; no transport status assigned to other same-hash aliases."
+          }
+        ]
+      }
     }
   },
   "version": 1

@@ -24035,7 +24035,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "status": "reviewed",
-      "note": "The named CFR-2025-title1-vol1 annual XML/MODS originals remain held. CFR-2025-title14-vol4 has 1,926 declared granule IDs but no full annual XML volume located within the reviewed local scope. Official directory metadata and HTTP HEAD confirm both publisher XML routes are available as of October 27, 2026; no body version or digest was acquired. Other annual years/titles/volumes remain an unselected scope choice. eCFR is separate.",
+      "note": "Two retained XML responses requested as CFR-2025-title1-vol1 print a January 1, 2023 revision date; the requested 2025 edition remains unconfirmed. The retained 146-byte MODS response is an HTML 404 error, not usable MODS metadata. CFR-2025-title14-vol4 has 1,926 declared granule IDs but no full annual XML volume located within the reviewed local scope. Official directory metadata and HTTP HEAD confirm both publisher XML routes are available as of October 27, 2026; no body version or digest was acquired. Other annual years/titles/volumes remain an unselected scope choice. eCFR is separate.",
       "scope": "Original-source availability for the exact selected table version; historical build consumption is separate.",
       "source_collections": [
         {
@@ -146260,7 +146260,7 @@
       "recorded_at": "2026-10-27T18:15:03.021893+00:00",
       "basis_catalog_generation": "sha256:158935b9d8365f1b0b401066e1ccc7e32dec76bd4dca3267f150053a3018f3e3",
       "scope": "Identified source routes, selection rules, periods and scoped original-file inventories. Historical processing is a separate question.",
-      "note": "The named CFR-2025-title1-vol1 annual XML/MODS originals remain held. CFR-2025-title14-vol4 has 1,926 declared granule IDs but no full annual XML volume located within the reviewed local scope. Official directory metadata and HTTP HEAD confirm both publisher XML routes are available as of October 27, 2026; no body version or digest was acquired. Other annual years/titles/volumes remain an unselected scope choice. eCFR is separate.",
+      "note": "Two retained XML responses requested as CFR-2025-title1-vol1 print a January 1, 2023 revision date; the requested 2025 edition remains unconfirmed. The retained 146-byte MODS response is an HTML 404 error, not usable MODS metadata. CFR-2025-title14-vol4 has 1,926 declared granule IDs but no full annual XML volume located within the reviewed local scope. Official directory metadata and HTTP HEAD confirm both publisher XML routes are available as of October 27, 2026; no body version or digest was acquired. Other annual years/titles/volumes remain an unselected scope choice. eCFR is separate.",
       "source_routes": [
         {
           "source_id": "cfr-sections:govinfo-lists",
@@ -146505,7 +146505,8 @@
             "Archive metadata and current stored-size/residency checks establish retained originals under existing acceptance; original response bodies were not all rehashed.",
             "R2 remote listing and downloads were not performed; accepted local originals supply these comparisons.",
             "Annual CFR is distinct from eCFR; no eCFR title snapshot participates in this scope.",
-            "Alternate annual XML routes remain distinct representations with distinct byte digests."
+            "Alternate annual XML routes remain distinct representations with distinct byte digests.",
+            "October 28 exact-byte recheck: both retained XML responses print a January 1, 2023 revision date. The third retained response is HTTP 404 HTML, not MODS metadata. Raw response retention does not establish successful 2025 edition acquisition."
           ],
           "comparison": {
             "path": "private-evidence-locator:sha256:0c41705fd83c8b9bef4d9aaee0665991f9dae65ad03c2d66e9f8d0819ae9d8e3",
