@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .storage import Inputs, array_items, connect, schema, stable, stored_path
+from . import identity_index
 
 
 def encoded(value: object) -> str:
@@ -718,6 +719,7 @@ def build(
         if actual != importer.expected_files:
             raise RuntimeError("File identity reconciliation failed")
         inputs.check()
+        identity_index.prepare(db)
         for row in db.execute("SELECT * FROM files"):
             facts = json.loads(row["data"])
             reference = row["local_path"]
@@ -731,6 +733,8 @@ def build(
                     raise RuntimeError(f"Retained object presence changed during build: {row['id']}")
             elif current and row["status"] == "missing-bytes":
                 raise RuntimeError(f"Missing object appeared during build: {row['id']}")
+            identity_index.add(db, row["id"], row["data"])
+        identity_index.finish(db)
         logical = hashlib.sha256()
         for table in ["collections", "routes", "objects", "files", "evidence", "tables", "lineage"]:
             for row in db.execute(f"SELECT * FROM {table} ORDER BY 1"):

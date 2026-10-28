@@ -9,6 +9,7 @@ from spicy_regs.source_catalog.raw_archive import merge_content
 from spicy_regs.source_catalog.raw_content import extract_metadata
 from spicy_regs.source_catalog.raw_mapping import SourceMapper
 from spicy_regs.source_catalog.storage import connect, schema
+from spicy_regs.source_catalog import identity_index
 
 
 def fact(target, value, locator, *, origin="content", namespace=None, **extra):
@@ -30,8 +31,8 @@ def record(identity, version, path):
     ]
 
 
-@pytest.fixture
-def query(tmp_path, monkeypatch, capsys):
+@pytest.fixture(params=["legacy", "indexed"])
+def query(tmp_path, monkeypatch, capsys, request):
     def run(mappings, *filters):
         index = tmp_path / "index.sqlite"
         index.unlink(missing_ok=True)
@@ -43,6 +44,11 @@ def query(tmp_path, monkeypatch, capsys):
                     "INSERT INTO files VALUES (?, 'test', NULL, ?, 'held', NULL, NULL, NULL, ?)",
                     (name, name, json.dumps({"mapping": mapping})),
                 )
+            if request.param == "indexed":
+                identity_index.prepare(db)
+                for row in db.execute("SELECT id,data FROM files"):
+                    identity_index.add(db, row["id"], row["data"])
+                identity_index.finish(db)
         monkeypatch.setattr("sys.argv", ["catalog", "query", "--index", str(index), *filters])
         main()
         return [row["id"] for row in json.loads(capsys.readouterr().out)]
@@ -174,3 +180,54 @@ def test_paired_filter_runs_before_limit_and_offset(query):
     same_record = {"evidence": record("A", "v1", "/results/0")}
     mappings = {"0-false": false_match, "1-true": same_record, "2-true": same_record}
     assert query(mappings, "--native-id", "A", "--source-version", "v1", "--limit", "1", "--offset", "1") == ["2-true"]
+
+
+def test_repeated_assertions_and_distinct_observations_survive(query):
+    evidence = record("A", "v1", "/results/0") * 2
+    mapping = {"evidence": evidence, "field_conflicts": {"native_id": ["A", "B"]}}
+    assert query({"first": mapping, "second": mapping}, "--native-id", "A") == ["first", "second"]
+
+
+def test_lookup_preserves_json_value_types_and_single_filter_semantics(query):
+    mappings = {
+        "number": {"native_id": 1},
+        "boolean": {"native_id": True},
+        "text": {"native_id": "1"},
+        # Individual legacy filters search all content assertions; a pair still
+        # requires qualified evidence, including the valid flag.
+        "unqualified": {"evidence": [fact("native_id", "A", "/id", valid=False)]},
+    }
+    assert query(mappings, "--native-id", "1") == ["text"]
+    assert query(mappings, "--native-id", "A") == ["unqualified"]
+
+
+@pytest.mark.parametrize("field", ["native_id", "source_version"])
+@pytest.mark.parametrize("scope", ["all", "active", "retained"])
+def test_native_lookup_plan_uses_scalar_assertion_and_file_indexes(tmp_path, field, scope):
+    from spicy_regs.source_catalog.scope import install_scope
+
+    index = tmp_path / "index.sqlite"
+    data = json.dumps({"mapping": {
+        "native_id": "A", "source_version": "v1", "evidence": record("A", "v1", "/results/0") * 2,
+    }})
+    with connect(index) as db:
+        schema(db)
+        db.execute("INSERT INTO collections VALUES('test','Test','{}')")
+        db.execute("INSERT INTO files VALUES('file','test',NULL,'same','held',NULL,NULL,NULL,?)", (data,))
+        install_scope(db, {
+            "format": "spicy-source-scope", "version": 2,
+            "collections": [{"id": "test", "disposition": "active", "reason": "fixture"}],
+            "excluded_objects": [],
+        })
+        identity_index.prepare(db)
+        identity_index.add(db, "file", data)
+        identity_index.finish(db)
+        assert db.execute("SELECT count(*) FROM file_identity_assertions").fetchone()[0] == 4
+        assert db.execute("SELECT data FROM files").fetchone()[0] == data
+    with connect(index, readonly=True, scope=scope) as db:
+        value = "A" if field == "native_id" else "v1"
+        sql = "SELECT * FROM files WHERE " + identity_index.candidates(field) + " ORDER BY id LIMIT 1"
+        plan = "\n".join(row[3] for row in db.execute("EXPLAIN QUERY PLAN " + sql, (value, field, value)))
+        assert f"USING COVERING INDEX file_identity_{'native' if field == 'native_id' else 'version'}" in plan
+        assert "USING COVERING INDEX file_identity_assertion_value" in plan
+        assert "USING INDEX sqlite_autoindex_files_1 (id=?)" in plan

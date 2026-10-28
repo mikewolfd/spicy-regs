@@ -350,6 +350,16 @@ catalog is an input to a holdings rebuild. The publication reconciliation below
 reuses an already selected holdings catalog. The older corpus importer remains available for separately
 retained historical inventories; it is not used for the central raw archive.
 
+The next justified holdings build also writes indexed native identity/version
+scalars and repeated content assertions from the existing file metadata. These
+lookup tables select candidates; the original evidence still determines whether
+an identity and version belong together, before pagination. Repeated assertions,
+distinct observations and original receipt references remain in the file JSON.
+Existing indexes, including the selected `c5` release, keep the legacy JSON query
+path until that future build. Metadata refresh and publication reconciliation do
+not add these tables. This query improvement alone does not require a rebuild,
+new downloads, selection change or public export.
+
 ## Refresh metadata over unchanged raw holdings
 
 Use `refresh-metadata` when the raw archive already matches the selected index

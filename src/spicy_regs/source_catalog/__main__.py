@@ -10,6 +10,7 @@ from .importer import build
 from .storage import connect
 from .coverage import coverage
 from .refresh import compare, write_report
+from . import identity_index
 
 
 def _identity_scope(fact: dict) -> str | None:
@@ -245,15 +246,21 @@ def main() -> None:
                 if args.name is not None:
                     clauses.append("name LIKE ? ESCAPE '\\'")
                     query_params.append("%" + args.name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+                indexed_identity = (
+                    (args.native_id is not None or args.source_version is not None)
+                    and identity_index.available(db)
+                )
                 for field, value in [("native_id", args.native_id), ("source_version", args.source_version)]:
                     if value is not None:
                         # Content can identify several native records inside one
                         # retained response; those values stay in field evidence.
                         clauses.append(
-                            f"(json_extract(data,'$.mapping.{field}')=? OR EXISTS("
-                            "SELECT 1 FROM json_each(files.data,'$.mapping.evidence') e "
-                            "WHERE json_extract(e.value,'$.origin')='content' "
-                            "AND json_extract(e.value,'$.target')=? AND json_extract(e.value,'$.value')=?))"
+                            identity_index.candidates(field) if indexed_identity else (
+                                f"(json_extract(data,'$.mapping.{field}')=? OR EXISTS("
+                                "SELECT 1 FROM json_each(files.data,'$.mapping.evidence') e "
+                                "WHERE json_extract(e.value,'$.origin')='content' "
+                                "AND json_extract(e.value,'$.target')=? AND json_extract(e.value,'$.value')=?))"
+                            )
                         )
                         query_params.extend((value, field, value))
                 if args.native_id is not None and args.source_version is not None:

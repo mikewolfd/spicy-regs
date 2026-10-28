@@ -118,6 +118,10 @@ def corpus(tmp_path):
 
 def test_rebuild_preserves_aliases_dedup_and_missing(corpus, tmp_path):
     first, second = tmp_path / "first.sqlite", tmp_path / "second.sqlite"
+    inventory = corpus / "collections/unintegrated/files.json"
+    facts = json.loads(inventory.read_text())
+    facts["files"][0]["mapping"] = {"native_id": "native-1", "source_version": "v1"}
+    inventory.write_text(json.dumps(facts))
     config = write(tmp_path, "config.json", {"collections": [], "routes": []})
     one = build(corpus, first, config=config)
     two = build(corpus, second, config=config)
@@ -128,6 +132,9 @@ def test_rebuild_preserves_aliases_dedup_and_missing(corpus, tmp_path):
     assert db.execute("SELECT count(*) FROM files WHERE status='missing-bytes'").fetchone()[0] == 1
     assert db.execute("SELECT count(*) FROM files WHERE status='receipt-only'").fetchone()[0] == 1
     assert db.execute("SELECT count(*) FROM files WHERE name='same.txt'").fetchone()[0] == 2
+    assert db.execute("SELECT value FROM metadata WHERE key='native_identity_index'").fetchone()[0] == '1'
+    scalars = db.execute("SELECT native_id,source_version FROM file_identity_scalars")
+    assert [tuple(row) for row in scalars] == [("native-1", "v1")]
     db.close()
     manifest = export(first, tmp_path / "public", page_size=1)
     internal = export(first, tmp_path / "internal", internal=True, page_size=1)
