@@ -115,6 +115,9 @@ class Reader:
         assert ref == self.ref and len(self.body) <= max_bytes
         return self.body
 
+    def iter_evidence(self, ref):
+        yield self.dictionary if ref == self.dictionary_ref else self.body
+
 
 def test_exact_values_and_alternative_aggregation_levels(tmp_path):
     reader = Reader()

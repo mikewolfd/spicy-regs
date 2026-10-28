@@ -53,10 +53,15 @@ The selection names an explicit year and admitted source:
     "blobs": "/local/source-blobs",
     "logicalId": "<exact source logical ID>",
     "artifactDigest": "sha256:<exact release digest>",
-    "verifierImplementationId": "<accepted source verifier ID>"
+    "verifierImplementationId": "<accepted source verifier ID>",
+    "acquisitionPolicyVersion": "1.1"
   }
 }
 ```
+
+For an existing release admitted under policy `1.0`, set
+`acquisitionPolicyVersion` to `1.0`. Omitting it selects the current policy
+`1.1`. The exact release pin and verifier remain required in either case.
 
 The ordinary source-evidence writer retains each original catalog, dictionary,
 statistics response and data page once by digest. Normal
