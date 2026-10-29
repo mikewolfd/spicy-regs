@@ -132,6 +132,39 @@ def test_gzip_wrapped_native_package_extension_is_not_an_identity_component():
     assert result["native_id"] == "BILLS-119hr1ih"
 
 
+def test_fr_issue_metadata_suffix_is_not_an_inferred_package_identity():
+    from spicy_regs.source_catalog.raw_archive import merge_content
+
+    # Literal local filename from verified sha256:04999d258b1340ac04735a663d8f1c5378789c91d5777bf26a6b05e1f2f1c802.
+    raw = b'''<mods xmlns="http://www.loc.gov/mods/v3"><originInfo><dateIssued>1960-12-31</dateIssued>
+      </originInfo><extension><collectionCode>FR</collectionCode><accessId>FR-1960-12-31</accessId></extension></mods>'''
+    for name in ('FR-1960-12-31_mods.xml', 'FR-1960-12-31.mods.xml.gz'):
+        record = {'original_location': '/old/raw/' + name}
+        mapping = SourceMapper().map_source(record)
+        assert mapping['native_id'] == 'FR-1960-12-31'
+        assert record['original_location'].endswith(name)
+        assert any(e['value'] == record['original_location'] for e in mapping['evidence'])
+        merged = merge_content(mapping, extract_metadata('family:federal-register', raw), 'sha256:' + 'a' * 64)
+        assert not merged['content_metadata'].get('conflict')
+        assert any(p['label'] == '1960-12-31' and p.get('origin') == 'content' for p in merged['periods'])
+
+
+def test_fr_metadata_suffix_normalization_preserves_explicit_receipt_claims_and_real_conflicts():
+    from spicy_regs.source_catalog.raw_archive import merge_content
+
+    record = {'original_location': '/old/raw/FR-1960-12-31_mods.xml',
+              'receipt_context': {'native_id': 'FR-1960-12-30'}}
+    mapping = SourceMapper().map_source(record)
+    assert mapping['native_id'] == 'FR-1960-12-30'
+    merged = merge_content(mapping, {'outcome': 'ok', 'native_id': 'FR-1960-12-31'}, 'sha256:' + 'a' * 64)
+    assert merged['content_metadata']['conflict'] is True
+    assert merged['field_conflicts']['receipt_content_native_id'] == ['FR-1960-12-30', 'FR-1960-12-31']
+    literal = SourceMapper().map_source({'receipt_context': {'native_id': 'FR-1960-12-31_mods'}})
+    assert literal['native_id'] == 'FR-1960-12-31_mods'
+    unrelated = SourceMapper().map_source({'original_location': '/old/raw/FR-1960-12-31_mods-extra.xml'})
+    assert unrelated['native_id'] == 'FR-1960-12-31_mods-extra'
+
+
 def test_comment_acquisition_sidecar_is_not_classified_as_source_body():
     result = SourceMapper().map_source({"original_location": "/corpora/full-comments/acf-campaign/originals/ACF/hash.receipt.json"})
     assert result["dataset_id"] == "family:comments-mirror"

@@ -333,6 +333,9 @@ class SourceMapper:
                 identity = match["id"].rstrip(".")
                 identity = re.sub(r"(?:\.(?:xml|json|pdf|zip|html?|txt|gz))+$", "", identity, flags=re.I)
                 identity = re.sub(r"\.(?:premis|mods)$", "", identity, flags=re.I)
+                # Retained issue metadata uses both .mods.xml and _mods.xml.
+                # This suffix labels the file; it is not the publisher package.
+                identity = re.sub(rf"^(FR-{_DATE})_mods$", r"\1", identity, flags=re.I)
                 bind(self.family_id(_PACKAGE_FAMILIES[kind]), field, location, "publisher-package-id", 2)
                 native("native_id", identity, field)
                 if kind in _CONGRESS_KINDS:

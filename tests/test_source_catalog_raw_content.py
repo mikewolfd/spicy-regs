@@ -103,9 +103,74 @@ def test_fr_uses_spicydocs_identity_rules_for_retained_split_documents():
 
 def test_fr_reader_dependency_tracks_the_source_owned_implementation():
     from pathlib import Path
-    from spicy_docs.sources.federal_register import native
+    from spicy_docs.reading import xml_tree
+    from spicy_docs.sources.federal_register import issues, native
+    from spicy_docs.sources.govinfo import mods
     from spicy_regs.source_catalog.raw_content import reader_inputs
-    assert Path(native.__file__) in reader_inputs('family:federal-register')
+    assert {Path(module.__file__) for module in (native, issues, mods, xml_tree)} <= set(
+        reader_inputs('family:federal-register'))
+
+
+def test_fr_projected_results_use_existing_native_reader_with_explicit_family():
+    # fr_OSH_quote.json, sha256:00e65962f7f30961e53ef2cade93a1e9f5608828e3ebe802bd3d7a42b40e782d,
+    # retains these fields but omits the optional type. Signing is not publication.
+    value = {'results': [{'document_number': '2026-15672', 'publication_date': '2026-08-03',
+                          'signing_date': '2026-07-31'},
+                         {'document_number': '2024-29614', 'publication_date': '2024-12-19'}]}
+    result = extract(value, 'federal-register')
+    assert result['outcome'] == 'ok' and result['primary_records'] == 2
+    assert periods(result) == {('publication-date', '2026-08-03'), ('publication-date', '2024-12-19')}
+    assert [p['field'] for p in result['periods']] == ['/results/0/publication_date',
+                                                      '/results/1/publication_date']
+    assert extract(value)['outcome'] == 'unsupported'
+    assert extract(value, 'bill-family')['outcome'] == 'unsupported'
+
+
+def test_fr_projected_results_refuse_invalid_or_partial_dates_without_partial_metadata():
+    value = {'results': [{'document_number': '2026-15672', 'publication_date': '2026-08-03'},
+                         {'document_number': '2026-15673', 'publication_date': '2026-02-30'}]}
+    result = extract(value, 'federal-register')
+    assert result['outcome'] == 'error' and result['periods'] == []
+    del value['results'][1]['publication_date']
+    assert extract(value, 'federal-register')['outcome'] == 'unsupported'
+
+
+def fr_issue_mods(package='FR-1936-12-31', issued='1936-12-31'):
+    # Minimal shape from verified FR-1936-12-31_mods.xml,
+    # sha256:a6be5b0dc77b878eb728819ea12828678baca0ade7073cd7bd7a8dd5368a6c56.
+    return (f'<mods xmlns="http://www.loc.gov/mods/v3"><originInfo><dateIssued>{issued}</dateIssued>'
+            f'</originInfo><extension><collectionCode>FR</collectionCode><accessId>{package}</accessId>'
+            '</extension></mods>').encode()
+
+
+def test_fr_mods_reuses_issue_reader_and_keeps_metadata_only_scope():
+    result = extract_metadata('family:federal-register', fr_issue_mods())
+    assert result['outcome'] == 'ok' and result['native_id'] == 'FR-1936-12-31'
+    assert result['primary_records'] == 1
+    assert periods(result) == {('publication-date', '1936-12-31')}
+    assert result['periods'][0]['field'] == '/mods/originInfo/dateIssued'
+    assert 'metadata only' in result['scope'] and 'no rendition acquisition' in result['scope']
+    assert extract_metadata(None, fr_issue_mods())['outcome'] == 'ok'
+    assert extract_metadata('family:bill-family', fr_issue_mods())['outcome'] == 'unsupported'
+
+
+@pytest.mark.parametrize('package,issued', [('FR-1936-12-31', '1936-12-30'),
+                                          ('FR-1936-02-30', '1936-02-30'),
+                                          ('FR-1936-12-31', '1936'),
+                                          ('FR-1936-12-31', '1936-12-31/1937-01-01')])
+def test_fr_issue_mods_refuses_date_or_package_disagreement(package, issued):
+    result = extract_metadata('family:federal-register', fr_issue_mods(package, issued))
+    assert result['outcome'] == 'error' and result['periods'] == []
+
+
+def test_fr_granule_mods_does_not_promote_host_issue_date_to_primary_record():
+    # Both retained granule MODS records have a host date and no primary dateIssued.
+    raw = b'''<mods xmlns="http://www.loc.gov/mods/v3"><extension>
+      <collectionCode>FR</collectionCode><accessId>94-8046-Filed</accessId></extension>
+      <relatedItem type="host"><originInfo><dateIssued>1994-04-05</dateIssued></originInfo>
+      <extension><accessId>FR-1994-04-05</accessId></extension></relatedItem></mods>'''
+    result = extract_metadata('family:federal-register', raw)
+    assert result['outcome'] == 'unsupported' and result['periods'] == []
 
 
 @pytest.mark.parametrize("bad", [True, 119.0, None, "", "119.0", "-1", 0])

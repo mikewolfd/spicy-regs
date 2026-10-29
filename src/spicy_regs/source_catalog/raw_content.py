@@ -37,8 +37,10 @@ def reader_inputs(dataset_id: str) -> tuple[Path, ...]:
     """Interpretation dependencies used by the catalog's source-owned reader."""
     paths = [Path(__file__)]
     if dataset_id == 'family:federal-register':
-        from spicy_docs.sources.federal_register import native
-        paths.append(Path(native.__file__))
+        from spicy_docs.reading import xml_tree
+        from spicy_docs.sources.federal_register import issues, native
+        from spicy_docs.sources.govinfo import mods
+        paths.extend(Path(module.__file__) for module in (native, issues, mods, xml_tree))
     return tuple(paths)
 
 
@@ -202,7 +204,7 @@ def _records(value: Any, field: str) -> list[tuple[dict, str]]:
     return [(record, f"{field}/{i}") for i, record in enumerate(value)]
 
 
-def _json_family(value: dict) -> tuple[str, list[tuple[dict, str]], str] | None:
+def _json_family(value: dict, dataset_id: str | None) -> tuple[str, list[tuple[dict, str]], str] | None:
     # Distinct publisher wrappers take priority over generic results lists.
     for key, family in (("houseCommunication", "house-communications"), ("houseCommunications", "house-communications"),
                         ("committeeMeeting", "committee-meetings"), ("committeeMeetings", "committee-meetings"),
@@ -219,7 +221,11 @@ def _json_family(value: dict) -> tuple[str, list[tuple[dict, str]], str] | None:
     records = _records(value["results"], "/results") if "results" in value else [(value, "")]
     if records and all("filing_uuid" in record and "filing_year" in record for record, _ in records):
         return "lobbying-filings", records, "api"
-    if records and all("document_number" in record and "publication_date" in record and "type" in record for record, _ in records):
+    # FR field projections may omit type; require an established family for
+    # those reduced records, then let the native reader validate both fields.
+    if records and all("document_number" in record and "publication_date" in record
+                       and ("type" in record or dataset_id == "family:federal-register")
+                       for record, _ in records):
         return "federal-register", records, "api"
     return None
 
@@ -358,7 +364,27 @@ def _text(parent: Element, name: str) -> str:
     return _string(node.text)
 
 
-def _extract_xml(root: Element) -> dict:
+def _register_mods(raw: bytes, root: Element) -> dict:
+    """Use the source-owned issue reader; granule/host dates stay separate."""
+    from spicy_docs.sources.federal_register.issues import read_fr_issue
+
+    access_ids = root.findall(f"{_MODS}extension/{_MODS}accessId")
+    if len(access_ids) != 1:
+        raise ValueError("ambiguous MODS primary subject")
+    package_id = _string(access_ids[0].text)
+    if re.fullmatch(r"FR-\d{4}-\d{2}-\d{2}", package_id) is None:
+        return _result("unsupported")
+    issue = read_fr_issue(raw, package_id=package_id)
+    facts = _Facts("federal-register")
+    facts.result["scope"] = (
+        "Federal Register issue metadata only; no rendition acquisition or completeness inference."
+    )
+    facts.identity(issue["package_id"], "/mods/extension/accessId", "govinfo-package")
+    facts.period("publication-date", issue["publication_date"], "/mods/originInfo/dateIssued")
+    return facts.finish()
+
+
+def _extract_xml(root: Element, raw: bytes) -> dict:
     if root.tag in {"bill", "resolution", "billStatus"}:
         facts = _Facts("bill-family")
         if root.tag == "billStatus":
@@ -381,6 +407,8 @@ def _extract_xml(root: Element) -> dict:
     if root.tag == _MODS + "mods":
         extensions = root.findall(_MODS + "extension")
         collections = [node.text for ext in extensions for node in ext.findall(_MODS + "collectionCode")]
+        if collections == ["FR"]:
+            return _register_mods(raw, root)
         if collections != ["BILLS"]:
             return _result("unsupported")
         subjects = [ext for ext in extensions if ext.find(_MODS + "accessId") is not None]
@@ -453,7 +481,7 @@ def extract_metadata(dataset_id: str | None, original_bytes: bytes) -> dict:
                 return _result("unsupported")
             if dataset_id is not None and dataset_id not in SUPPORTED_DATASETS:
                 return _result("unsupported")
-            detected = _json_family(value)
+            detected = _json_family(value, dataset_id)
             if detected is None:
                 return _result("unsupported")
             family, records, style = detected
@@ -466,7 +494,7 @@ def extract_metadata(dataset_id: str | None, original_bytes: bytes) -> dict:
                 return _register_html(raw) if dataset_id == "family:federal-register" else _result("unsupported")
             if dataset_id is not None and dataset_id not in SUPPORTED_DATASETS:
                 return _result("unsupported")
-            result = _extract_xml(_xml(raw))
+            result = _extract_xml(_xml(raw), raw)
             if result["dataset_id"] is not None and dataset_id is not None and result["dataset_id"] != dataset_id:
                 return _result("unsupported", reason="Native shape conflicts with the supplied dataset")
             return result
