@@ -1156,24 +1156,26 @@ def _publish_verified_generation(
     # Coverage metadata has its own prefix: table artifacts remain Parquet-only.
     # Save and verify it before advancing the table pointer, including callers
     # that publish native retained generations without RollupPipeline.
-    from tempfile import TemporaryDirectory
-    from spicy_regs.source_catalog.input_proof import save_input_proof
+    from io import BytesIO
+    from rulespec_artifacts import canonical_json_bytes
+    from spicy_regs.source_catalog.input_proof import input_proof
     from spicy_regs.source_evidence import EvidenceMemberSource
 
     proof_prefix = f"generation-inputs/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
-    with TemporaryDirectory(prefix="generation-input-proof-") as temporary:
-        proof = Path(temporary)
-        save_input_proof(proof, artifact, source, tuple(
-            (EvidenceMemberSource(path), item) for path, item in zip(evidence_directories, evidence, strict=True)
-        ))
-        for path in sorted(proof.rglob("*")):
-            if path.is_file():
-                key = proof_prefix + "/" + path.relative_to(proof).as_posix()
-                identity = file_identity(path)
-                _put_immutable(client, bucket, key, path, sha256=identity["sha256"])
-                with _S3Members(client, bucket, proof_prefix).open(path.relative_to(proof).as_posix()) as body:
-                    if _stream_identity(body)["sha256"] != identity["sha256"]:
-                        raise PublicationError("Stored generation input proof differs from its exact inputs")
+    receipt, controls = input_proof(artifact, source, tuple(
+        (EvidenceMemberSource(path), item) for path, item in zip(evidence_directories, evidence, strict=True)
+    ))
+    for name, raw in sorted({**controls, "inputs.json": canonical_json_bytes(receipt)}.items()):
+        if isinstance(raw, tuple):
+            owner, member, expected_sha, size = raw
+            open_body = lambda owner=owner, member=member: owner.open(member)
+        else:
+            expected_sha, size = "sha256:" + hashlib.sha256(raw).hexdigest(), len(raw)
+            open_body = lambda raw=raw: BytesIO(raw)
+        _put_immutable_stream(client, bucket, proof_prefix + "/" + name, open_body, size, sha256=expected_sha)
+        with _S3Members(client, bucket, proof_prefix).open(name) as body:
+            if _stream_identity(body)["sha256"] != expected_sha:
+                raise PublicationError("Stored generation input proof differs from its exact inputs")
     # Each lost race means another writer's pointer write succeeded, so
     # contention resolves in at most one round per concurrent writer.
     # Version 2 is the pointer; version 1 is derived from it afterwards (multi-file design §4.1).
