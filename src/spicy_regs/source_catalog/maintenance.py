@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import json
 import os
+import re
 import sqlite3
 import tempfile
 from contextlib import closing
@@ -62,7 +64,7 @@ def configured_metadata(db, configuration, inputs, base_generation):
 def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
                      publication_reconciliation: Path | None = None, expected_generation: str,
                      include_acquisitions: bool = False, refresh_content: tuple[str, ...] = (),
-                     reuse_unchanged: bool = False) -> dict:
+                     reuse_unchanged: bool = False, refresh_object_list: Path | None = None) -> dict:
     """Clone a pinned raw catalog, refresh metadata, and leave selection separate.
 
     Base input pins retain their original meaning. Phase inputs identify the code,
@@ -112,7 +114,23 @@ def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
         configuration = inputs.json(config)
         require(isinstance(configuration, dict), "Catalog configuration must be an object")
         readers = dict(source_metadata.get('reconciliation', {}).get('inputRefresh', {}).get('contentReaders', {}))
+        partial_readers = dict(source_metadata.get('reconciliation', {}).get('inputRefresh', {}).get('partialContentReaders', {}))
         requested_readers = {}
+        cohort = None
+        cohort_pin = None
+        if refresh_object_list is not None:
+            require(include_acquisitions and refresh_content, "Object replay requires named content refresh collections")
+            path = inputs.pin(plain(refresh_object_list))
+            cohort = tuple(path.read_text().splitlines())
+            require(bool(cohort) and len(set(cohort)) == len(cohort)
+                    and all(re.fullmatch(r"sha256:[0-9a-f]{64}", sha) for sha in cohort),
+                    "Object list must contain unique canonical SHA-256 identities, one per line")
+            cohort = tuple(sorted(cohort))
+            placeholders = ','.join('?' for _ in refresh_content)
+            require(all(source.execute("SELECT 1 FROM files WHERE sha256=? AND collection_id IN ("
+                        + placeholders + ") LIMIT 1", (sha, *refresh_content)).fetchone() for sha in cohort),
+                    "Every replay object must exist in a named collection in the selected catalog")
+            cohort_pin = {'objects': len(cohort), 'objectSetSha256': 'sha256:' + hashlib.sha256(''.join(sha+'\n' for sha in cohort).encode()).hexdigest()}
         if include_acquisitions:
             from .raw_content import SUPPORTED_DATASETS, reader_inputs
             import spicy_docs.storage.raw_archive as archive_reader
@@ -127,9 +145,13 @@ def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
         previous_pins = source_metadata.get('reconciliation', {}).get('phaseInputs', {})
         previous_interpretation = {path: pin for path, pin in previous_pins.items()
                                    if not Path(path).is_relative_to(raw_root)}
+        def reader_current(cid, reader):
+            return readers.get(cid) == reader or (cohort is not None and
+                partial_readers.get(cid) == {**cohort_pin, 'reader': reader})
+
         if (reuse_unchanged and previous_interpretation and indexed_raw == raw
                 and all(previous_interpretation.get(path) == pin for path, pin in inputs.pins.items())
-                and all(readers.get(cid) == value for cid, value in requested_readers.items())):
+                and all(reader_current(cid, value) for cid, value in requested_readers.items())):
             # Reuse only this owner's accepted generation under unchanged file
             # custody and interpretation inputs. Raw bodies are immutable and
             # their deep audit is a separate operation.
@@ -158,9 +180,15 @@ def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
             importer.prepare_metadata()
             refreshed = 0
             for cid, reader in requested_readers.items():
-                if readers.get(cid) != reader:
-                    refreshed += importer.refresh_content((cid,))
-                readers[cid] = reader
+                if not reader_current(cid, reader):
+                    refreshed += importer.refresh_content((cid,), objects=cohort)
+                if cohort is None:
+                    readers[cid] = reader
+                    partial_readers.pop(cid, None)
+                else:
+                    # This reader was applied only to the named byte identities.
+                    # Retain the family-wide reader pin for all other originals.
+                    partial_readers[cid] = {**cohort_pin, 'reader': reader}
             reviews = importer.import_receipts(skip=prior_receipts)
             importer.finish_reviews(reviews)
             for path, pin in inputs.pins.items():
@@ -170,6 +198,7 @@ def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
             require(index_inventory(db, raw_root)[0] == raw, 'Acquisition receipt inventory changed during refresh')
             delta = {'newReceipts': raw['raw_acquisition_receipts'] - len(prior_receipts),
                      'refreshedFileLocations': refreshed, 'contentReaders': readers,
+                     'partialContentReaders': partial_readers,
                      'metadataExtraction': dict(importer.metadata_counts),
                      'baseInventoryReplayed': False}
         classification = classify_retained_objects(db, raw_root, retained_classification_candidates(db))

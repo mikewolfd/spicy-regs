@@ -125,6 +125,8 @@ def main() -> None:
                              help='Import committed receipt additions over the unchanged base snapshot')
     maintenance.add_argument('--refresh-content', action='append', default=[],
                              help='Refresh a named collection when its content reader changes')
+    maintenance.add_argument('--refresh-object-list', type=Path,
+                             help='Replay only listed canonical SHA-256 identities in the named collections')
     maintenance.add_argument('--reuse-unchanged', action='store_true',
                              help='Return the accepted generation without creating a candidate when inputs match')
     reconcile = commands.add_parser("reconcile-publication")
@@ -189,7 +191,8 @@ def main() -> None:
                                   publication_reconciliation=args.publication_reconciliation,
                                   expected_generation=args.expected_generation,
                                   include_acquisitions=args.include_acquisitions,
-                                  refresh_content=tuple(args.refresh_content), reuse_unchanged=args.reuse_unchanged)
+                                  refresh_content=tuple(args.refresh_content), reuse_unchanged=args.reuse_unchanged,
+                                  refresh_object_list=args.refresh_object_list)
     elif args.command == "reconcile-publication":
         from .publication import reconcile
 

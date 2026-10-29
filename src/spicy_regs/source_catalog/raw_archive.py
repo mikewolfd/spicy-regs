@@ -405,13 +405,19 @@ class RawImporter(Importer):
             },
         )
 
-    def refresh_content(self, collections) -> int:
+    def refresh_content(self, collections, *, objects=None) -> int:
         """Reinterpret named collections without replaying the frozen inventory."""
         refreshed = 0
+        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS refresh_content_objects(sha256 TEXT PRIMARY KEY)")
+        self.db.execute("DELETE FROM refresh_content_objects")
+        if objects is not None:
+            self.db.executemany("INSERT INTO refresh_content_objects VALUES(?)", ((sha,) for sha in objects))
         for cid in collections:
             last = ""
             while rows := self.db.execute(
-                "SELECT id,data FROM files WHERE collection_id=? AND id>? ORDER BY id LIMIT 32",
+                "SELECT id,data FROM files WHERE collection_id=? AND id>? "
+                + ("AND sha256 IN (SELECT sha256 FROM refresh_content_objects) " if objects is not None else "")
+                + "ORDER BY id LIMIT 32",
                 (cid, last),
             ).fetchall():
                 for ident, data in rows:
