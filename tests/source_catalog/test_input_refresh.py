@@ -216,3 +216,14 @@ def test_partial_replay_remaps_old_metadata_alias_and_exports_literal_period(tmp
     export(candidate, output)
     files = list(output.rglob('*.json'))
     assert any('1960-12-31' in path.read_text() and 'publication-date' in path.read_text() for path in files)
+
+
+
+def test_partial_replay_requires_one_collection(prepared):
+    root, args = prepared
+    listing = root.parent / 'affected.txt'
+    listing.write_text('sha256:' + 'f'*64 + '\n')
+    with pytest.raises(ValueError, match='exactly one named collection'):
+        maintenance.refresh_metadata(**{**args, 'refresh_content': ('family:federal-register', 'family:bill-family')},
+                                     refresh_object_list=listing)
+    assert not args['output'].exists()

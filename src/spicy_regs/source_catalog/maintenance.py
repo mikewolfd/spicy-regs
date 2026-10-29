@@ -120,6 +120,7 @@ def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
         cohort_pin = None
         if refresh_object_list is not None:
             require(include_acquisitions and refresh_content, "Object replay requires named content refresh collections")
+            require(len(set(refresh_content)) == 1, "Object replay requires exactly one named collection")
             path = inputs.pin(plain(refresh_object_list))
             cohort = tuple(path.read_text().splitlines())
             require(bool(cohort) and len(set(cohort)) == len(cohort)
