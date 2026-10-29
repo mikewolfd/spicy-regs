@@ -76,7 +76,8 @@ Use `scorecard_member_links.normalized_district` for qualified House geography:
 `0` means at-large. It is populated only after a unique member match, with exact
 state, chamber and period context, when all relevant terms for that member and
 chamber agree on geography during the stated period. This checks terms that
-identity matching filtered out as well; it does not assert continuous service.
+identity matching filtered out as well. Confirmation requires continuous coverage
+of every declared source window; disjoint windows are checked independently.
 A term with missing dates or an unknown chamber prevents confirmation when it
 may overlap the period; known bounds can establish that it is outside the period.
 The reason includes `unqualified_geography_term` when this occurs.
@@ -160,3 +161,8 @@ functions need source-specific review before further consolidation; shared
 platform helpers already cover RDS/BT50, VoterVoice, Quorum, CapWiz, workbook and
 qualified PDF families. Full streaming reconstruction requires a separately
 verified replacement for prior-row restoration and complete-family validation.
+
+`geography_evidence_json` version 1 records relevant and uncertain terms, source
+windows and uncovered intervals. `term_candidates_json` retains identity evidence.
+The member-links v4 field policy reads the exact prior v3, v2 and v1 policies
+without inventing geography evidence for historical rows.

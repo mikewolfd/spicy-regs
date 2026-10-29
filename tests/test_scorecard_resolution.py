@@ -189,7 +189,7 @@ def test_geography_checks_all_terms_after_identity_resolution(changed):
 def test_uncertain_term_bounds_and_chamber_qualify_geography(changes, qualified):
     raw = member(chamber_text="House", period_text="2021-01-03/2025-01-03",
                  identifiers_json='[{"scheme":"bioguide","value":"A000001"}]')
-    first = term(start="2021-01-03", end="2023-01-03")
+    first = term(start="2021-01-03", end="2025-01-03")
     second = term(index="1", district="8", **changes)
     found = link(raw, official(terms=[first, second]))
     assert found["resolution_status"] == "resolved"
@@ -1038,7 +1038,7 @@ def test_explicit_edition_congress_qualifies_only_the_unstated_measure_context(f
     assert row[target] == identifier and row["congress"] == "118"
     assert row["vote_id"] is row["session"] is row["roll_number"] is None
     assert row["resolution_rule"].endswith("_edition_congress")
-    assert row["rule_version"] == "scorecard-resolution-v1.9"
+    assert row["rule_version"] == "scorecard-resolution-v1.10"
     assert "explicit_edition_congress_for_measure" in row["reason"]
     context = json.loads(row["source_context_json"])
     assert context["item"].get("congress_text") is None
@@ -1162,7 +1162,7 @@ def test_partial_exact_bill_retains_candidates_without_operational_targets(tmp_p
     assert isinstance(candidates_json, str)
     assert json.loads(candidates_json) == [{"bill_id": "118-hr-1"}]
     assert row["candidate_count"] == "1"
-    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.9"
+    assert RULE_VERSION == row["rule_version"] == "scorecard-resolution-v1.10"
     write_family(tmp_path, results, generation_id="partial-link-test")
     assert read_family(tmp_path, LINK_NAMES, generation_id="partial-link-test") == results
 
@@ -1185,3 +1185,64 @@ def test_unknown_amendment_does_not_publish_an_otherwise_exact_bill_target():
     assert row["bill_id"] is row["amendment_id"] is None
     assert {"bill_id": "118-hr-1"} in json.loads(row["candidates_json"])
     assert "unknown" in row["reason"]
+
+
+def test_normalized_district_checks_all_terms_across_source_period():
+    raw = member(chamber_text="House", period_text="2023-01-03/2025-01-03")
+    data = official(terms=[
+        term(district="7", start="2023-01-03", end="2024-01-03"),
+        term(index="1", district="8", start="2024-01-03", end="2025-01-03"),
+    ])
+    found = link(raw, data)
+    assert found["resolution_status"] == "resolved"
+    assert (found["normalized_district"], found["district_status"]) == (None, "ambiguous_term_district")
+    assert [t["term_district"] for t in json.loads(found["geography_evidence_json"])["terms"]] == ["7", "8"]
+    assert json.loads(found["candidates_json"])[0]["term_indexes"] == ["0"]
+
+
+
+@pytest.mark.parametrize(
+    "terms,expected",
+    [
+        ([term(district="7", start="2023-01-03", end="2024-01-03"),
+          term(index="1", district="7", start="2024-01-03", end="2025-01-03")], ("7", "confirmed")),
+        ([term(district="7", start="2023-01-03", end="2024-01-03")], (None, "unqualified_term_context")),
+        ([term(district="7", start="2023-01-03", end="2024-01-02"),
+          term(index="1", district="7", start="2024-01-03", end="2025-01-03")], (None, "unqualified_term_context")),
+        ([term(district="7", start="2023-01-03", end="2024-01-03"),
+          term(index="1", district=None, start="2024-01-03", end="2025-01-03")], (None, "unqualified_term_district")),
+        ([term(district="7", start="2023-01-03", end="2024-01-03"),
+          term(index="1", district="bad", start="2024-01-03", end="2025-01-03")], (None, "unqualified_term_district")),
+    ],
+)
+def test_geography_requires_complete_terms_for_source_period(terms, expected):
+    raw = member(chamber_text="House", period_text="2023-01-03/2025-01-03")
+    found = link(raw, official(terms=terms))
+    assert found["resolution_status"] == "resolved"
+    assert (found["normalized_district"], found["district_status"]) == expected
+    if expected[1] == "unqualified_term_context":
+        assert found["normalized_state"] is None
+
+
+def test_geography_accepts_disjoint_fully_covered_source_windows():
+    raw = member(chamber_text="House")
+    periods = '[{"period_text":"2023-02-01/2023-03-01"},{"period_text":"2024-02-01/2024-03-01"}]'
+    data = official(terms=[term(district="7", start="2023-01-03", end="2023-04-01"),
+                           term(index="1", district="7", start="2024-01-03", end="2024-04-01")])
+    found = resolve_scorecard_links(sources([raw], periods_json=periods), data, pins())["scorecard_member_links"][0]
+    assert (found["normalized_district"], found["district_status"]) == ("7", "confirmed")
+
+
+def test_geography_keeps_unique_inclusive_end_date_fallback():
+    raw = member(chamber_text="House", period_text="2025-01-03")
+    found = link(raw)
+    assert found["resolution_status"] == "resolved"
+    assert "unique_inclusive_term_end_fallback" in found["reason"]
+    assert (found["normalized_district"], found["district_status"]) == ("7", "confirmed")
+
+
+def test_geography_does_not_extend_inclusive_end_to_an_interval():
+    raw = member(chamber_text="House", period_text="2025-01-03/2025-01-05")
+    found = link(raw)
+    assert found["resolution_status"] != "resolved"
+    assert found["normalized_district"] is None

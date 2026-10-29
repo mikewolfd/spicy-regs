@@ -13,7 +13,7 @@ from spicy_regs.scorecards.action_comparisons import TABLE as COMPARISON_TABLE, 
 
 POLICY_VERSION = "scorecards-etl-v2"
 RATING_POLICY_VERSION = "scorecards-etl-ratings-v4"
-MEMBER_LINK_POLICY_VERSION = "scorecards-etl-member-links-v3"
+MEMBER_LINK_POLICY_VERSION = "scorecards-etl-member-links-v4"
 SOURCE_COLUMNS = {name: contract.columns for name, contract in SCORECARD_TABLES.items()}
 SOURCE_COLUMNS.update(LINK_COLUMNS)
 SOURCE_COLUMNS[COMPARISON_TABLE] = COMPARISON_COLUMNS
@@ -377,6 +377,8 @@ def restore_source_row(name: str, row: Mapping) -> dict:
     geography = {"normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json"}
     if name == "scorecard_member_links" and not geography & row.keys():
         columns = tuple(field for field in columns if field not in geography)
+    if name == "scorecard_member_links" and "geography_evidence_json" not in row:
+        columns = tuple(field for field in columns if field != "geography_evidence_json")
     result = {field: row[field] for field in columns}
     for field, value in row.get("conversion_inputs", {}).items():
         if field not in BOOLEAN_FIELDS | DECIMAL_FIELDS | INTEGER_FIELDS:

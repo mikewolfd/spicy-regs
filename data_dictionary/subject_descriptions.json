@@ -4276,7 +4276,8 @@
       "candidates_json": "JSON array of candidate identifiers retained for review.",
       "reason": "Explanation of the resolution outcome or refusal.",
       "source_context_json": "Source identity and period context used by the resolver, retained as JSON.",
-      "input_pins_json": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table."
+      "input_pins_json": "Immutable input family and artifact pins; sha256 binds a single file and tableDescriptorDigest binds all members of a partitioned table.",
+      "geography_evidence_json": "Version 1 geography evidence: relevant terms, uncertain terms, half-open source windows and uncovered intervals. Separate from identity candidates; confirmation requires complete coverage of every declared window."
     }
   },
   "scorecard_member_ratings": {

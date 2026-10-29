@@ -176,7 +176,8 @@ def test_shared_source_declarations_preserve_prior_columns_order_and_keys():
     baseline = json.loads((Path(__file__).parent / "fixtures/scorecard_source_shapes_before_refactor.json").read_text())
     assert set(SOURCE_COLUMNS) == set(baseline["SOURCE_COLUMNS"]) | {COMPARISON_TABLE}
     assert set(IDENTITIES) == set(baseline["IDENTITIES"]) | {COMPARISON_TABLE}
-    additions = {"normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json"}
+    additions = {"normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json",
+                 "geography_evidence_json"}
     assert {k: [c for c in SOURCE_COLUMNS[k] if k != "scorecard_member_links" or c not in additions]
             for k in baseline["SOURCE_COLUMNS"]} == baseline["SOURCE_COLUMNS"]
     assert additions <= set(SOURCE_COLUMNS["scorecard_member_links"])
@@ -191,7 +192,8 @@ def test_earlier_member_link_policy_and_row_do_not_invent_new_geography():
     from spicy_regs.scorecards.etl import POLICIES, admitted_read_policies
 
     current = POLICIES["scorecard_member_links"]
-    previous, original = earlier_policies(current)
+    geography, previous, original = earlier_policies(current)
+    assert earlier_policies(geography) == (previous, original)
     assert earlier_policies(previous) == (original,)
     assert admitted_read_policies(("scorecard_member_links",), descriptors=[previous.descriptor()]) == {
         "scorecard_member_links": previous}
@@ -201,6 +203,6 @@ def test_earlier_member_link_policy_and_row_do_not_invent_new_geography():
     assert restore_source_row("scorecard_member_links", before) == before
     with pytest.raises(KeyError):
         restore_source_row("scorecard_member_links", before | {"normalized_district": "0"})
-    for policy in (current, previous):
+    for policy in (current, geography, previous):
         with pytest.raises(ValueError):
             earlier_policies(replace(policy, identity_fields=("scorecard_id",)))

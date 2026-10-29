@@ -16,7 +16,7 @@ import unicodedata
 
 from spicy_docs.sources.congress.votes import vote_day
 
-RULE_VERSION = "scorecard-resolution-v1.9"
+RULE_VERSION = "scorecard-resolution-v1.10"
 SOURCE_TABLES = ("scorecards", "scorecard_members", "scorecard_items")
 OFFICIAL_TABLES = ("members", "member_terms", "congress_bills", "amendments", "roll_call_votes")
 INPUT_TABLES = SOURCE_TABLES + OFFICIAL_TABLES
@@ -74,6 +74,7 @@ MEMBER_LINK_COLUMNS = (
     "district_status",
     "correction_evidence_json",
     "term_candidates_json",
+    "geography_evidence_json",
     "override_version",
 ) + COMMON_COLUMNS
 ITEM_LINK_COLUMNS = (
@@ -424,8 +425,9 @@ class _Members:
             matches.append(term)
         return sorted(matches, key=lambda row: (row.get("term_start") or "", row["term_index"]))
 
-    def uncertain_geography_terms(self, bioguide: str, context: dict, inclusive: bool) -> bool:
+    def uncertain_geography_terms(self, bioguide: str, context: dict, inclusive: bool) -> list[Row]:
         """Identify terms that may overlap but cannot be assigned to the chamber and period."""
+        uncertain = []
         for term in self.terms[bioguide]:
             chamber = _chamber(term.get("term_type"))
             if chamber and chamber != context["chamber"]:
@@ -437,14 +439,16 @@ class _Members:
                 start = date.fromisoformat(start_text) if start_text else None
                 end = date.fromisoformat(end_text) if end_text else None
             except (TypeError, ValueError):
-                return True
+                uncertain.append(term)
+                continue
             for left, right in context["windows"]:
                 ends_after_left = end is None or end > left or (
                     inclusive and right - left == timedelta(days=1) and end == left
                 )
                 if (start is None or start < right) and ends_after_left:
-                    return True
-        return False
+                    uncertain.append(term)
+                    break
+        return uncertain
 
     def resolve(self, source: Row, edition: Row, override: Row | None) -> dict:
         context = _context(source, edition)
@@ -587,6 +591,7 @@ class _Members:
         ]
         geography_terms = []
         uncertain_geography = False
+        inclusive = "unique_inclusive_term_end_fallback" in reasons
         if status == "resolved" and chosen is not None:  # every resolution names its member
             # Identity matching may filter by publisher geography. Once the
             # person is known, inspect all terms in the chamber and period so
@@ -595,12 +600,18 @@ class _Members:
             inclusive = "unique_inclusive_term_end_fallback" in reasons
             geography_terms = self.terms_for(chosen, geography_context, inclusive=inclusive)
             if context["windows"] and context["chamber"]:
-                uncertain_geography = self.uncertain_geography_terms(chosen, context, inclusive)
+                uncertain_geography = bool(self.uncertain_geography_terms(chosen, context, inclusive))
                 if uncertain_geography:
                     reasons.append("unqualified_geography_term")
         return {
             "bioguide_id": chosen,
-            **_resolved_geography(source, context, status, geography_terms, uncertain_geography),
+            **_resolved_geography(source, context, status, geography_terms, uncertain_geography, inclusive=inclusive),
+            "geography_evidence_json": _json({
+                "version": 1, "terms": geography_terms, "uncertain_terms":
+                self.uncertain_geography_terms(chosen, context, inclusive) if chosen else [],
+                "windows": _geography_coverage(context["windows"], geography_terms, inclusive),
+                "inclusive_term_end_fallback": inclusive,
+            }),
             "resolution_status": status,
             "resolution_rule": method,
             "candidate_count": str(len(candidates)),
@@ -611,8 +622,30 @@ class _Members:
         }
 
 
+def _geography_coverage(windows, terms, inclusive=False):
+    """Record half-open source windows and their uncovered intervals."""
+    result = []
+    for left, right in windows:
+        covered, gaps = left, []
+        for term in sorted(terms, key=lambda row: row.get("term_start") or ""):
+            if not term.get("term_start") or not term.get("term_end"):
+                continue
+            start, end = date.fromisoformat(term["term_start"]), date.fromisoformat(term["term_end"])
+            if inclusive and right - left == timedelta(days=1) and left == end:
+                end += timedelta(days=1)
+            if end <= covered or start >= right:
+                continue
+            if start > covered:
+                gaps.append([covered.isoformat(), min(start, right).isoformat()])
+            covered = max(covered, min(end, right))
+        if covered < right:
+            gaps.append([covered.isoformat(), right.isoformat()])
+        result.append({"start": left.isoformat(), "end": right.isoformat(), "uncovered": gaps})
+    return result
+
+
 def _resolved_geography(
-    source: Row, context: Mapping, status: str, terms: Sequence[Row], uncertain: bool = False
+    source: Row, context: Mapping, status: str, terms: Sequence[Row], uncertain: bool = False, *, inclusive: bool = False
 ) -> dict:
     """Expose accepted historical geography without changing identity matching or raw facts."""
     result = dict(normalized_state=None, state_status=status + "_identity",
@@ -620,6 +653,8 @@ def _resolved_geography(
     if status != "resolved":
         return result
     if uncertain or not context["windows"] or not context["state"] or not context["chamber"] or not terms:
+        return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
+    if any(window["uncovered"] for window in _geography_coverage(context["windows"], terms, inclusive)):
         return result | dict(state_status="unqualified_term_context", district_status="unqualified_term_context")
     states = {term.get("term_state") for term in terms}
     if None in states or "" in states:

@@ -14,6 +14,16 @@ EARLIER_COLUMNS = {
 
 def earlier_policies(policy):
     from spicy_regs.etl_receipts import DatasetPolicy
+    if policy.dataset == "scorecard_member_links" and policy.policy_version == "scorecards-etl-member-links-v4":
+        previous = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs.scorecards").joinpath(
+            "geography_policy_history.json").read_text()))
+        without_evidence = policy.subject_schema.remove(policy.subject_schema.get_field_index("geography_evidence_json"))
+        if (previous.policy_version != "scorecards-etl-member-links-v3"
+                or previous.identity_fields != policy.identity_fields
+                or previous.receipt_fields != policy.receipt_fields
+                or not previous.subject_schema.equals(without_evidence, check_metadata=True)):
+            raise ValueError("Geography evidence policy changes previous fields or identity")
+        return (previous, *earlier_policies(previous))
     if policy.dataset == "scorecard_member_links" and policy.policy_version in {
         "scorecards-etl-member-links-v3", "scorecards-etl-v2",
     }:
@@ -25,8 +35,8 @@ def earlier_policies(policy):
             if policy.descriptor() != previous.descriptor():
                 raise ValueError("Historical member link policy differs from the exact declared policy")
             return (original,)
-        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
-            "etl_policies/scorecard_member_links.json").read_text()))
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs.scorecards").joinpath(
+            "geography_policy_history.json").read_text()))
         without_geography = policy.subject_schema
         for field in ("normalized_state", "state_status", "normalized_district", "district_status", "correction_evidence_json"):
             without_geography = without_geography.remove(without_geography.get_field_index(field))

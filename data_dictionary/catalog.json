@@ -2891,7 +2891,7 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-member-links-v3",
+        "policy_version": "scorecards-etl-member-links-v4",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
@@ -7416,6 +7416,7 @@
         "district_status",
         "correction_evidence_json",
         "term_candidates_json",
+        "geography_evidence_json",
         "override_version",
         "resolution_status",
         "resolution_rule",

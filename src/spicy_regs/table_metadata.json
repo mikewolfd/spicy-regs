@@ -19279,6 +19279,11 @@
         "description": "JSON object keyed by congressional member identifier, recording the historical terms used for identity matching. Geography also checks other relevant terms in the pinned term input."
       },
       {
+        "column_name": "geography_evidence_json",
+        "column_type": "VARCHAR",
+        "description": "Version 1 geography evidence: relevant terms, uncertain terms, half-open source windows and uncovered intervals. Separate from identity candidates; confirmation requires complete coverage of every declared window."
+      },
+      {
         "column_name": "override_version",
         "column_type": "VARCHAR",
         "description": "Version of an explicit member override, when used."
@@ -33560,7 +33565,7 @@
       {
         "dataset": "scorecard_member_links",
         "receipt_only": false,
-        "policy_version": "scorecards-etl-member-links-v3",
+        "policy_version": "scorecards-etl-member-links-v4",
         "identity_columns": [
           "scorecard_id",
           "publisher_member_key"
