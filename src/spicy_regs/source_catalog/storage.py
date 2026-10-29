@@ -24,10 +24,24 @@ def stable(*parts: object) -> str:
     return hashlib.sha256(json.dumps(parts, separators=(",", ":")).encode()).hexdigest()
 
 
-def connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
+def connect(path: Path, *, readonly: bool = False, scope: str = "active", cache_mib: int = 256) -> sqlite3.Connection:
+    # Match the importer budget for readers too: the SQLite default cache is
+    # too small for the catalog's identifier indexes and causes repeated I/O.
+    # This is a per-connection ceiling, allocated only as pages are touched.
+    if isinstance(cache_mib, bool) or not isinstance(cache_mib, int) or cache_mib < 1:
+        raise ValueError("Catalog page cache must be a positive integer in MiB")
     db = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) if readonly else sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys=ON")
+    db.execute(f"PRAGMA cache_size=-{cache_mib * 1024}")
+    if readonly:
+        from .scope import select_scope
+
+        try:
+            select_scope(db, scope)
+        except BaseException:
+            db.close()
+            raise
     return db
 
 
@@ -80,7 +94,9 @@ def stored_path(root: Path, reference: str, sha: str | None = None) -> Path | No
     """Resolve original or gzip storage; match the retained corpus object reader."""
     paths = [root / reference]
     if sha:
-        paths.append(root / "source-evidence/blobs/sha256" / sha.removeprefix("sha256:"))
+        identity = sha.removeprefix("sha256:")
+        paths.append(root / "raw/objects/sha256" / identity[:2] / identity)
+        paths.append(root / "source-evidence/blobs/sha256" / identity)
     for path in paths:
         for candidate in (path, path.with_suffix(path.suffix + ".gz")):
             if candidate.is_file() and not candidate.is_symlink():

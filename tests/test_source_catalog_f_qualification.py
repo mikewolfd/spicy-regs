@@ -126,7 +126,9 @@ def _retained_fixture_corpus(tmp_path, *, mismatch=False):
     blobs = corpus / "source-evidence/blobs/sha256"
     blobs.mkdir(parents=True)
     for member in json.loads((source_dir / "members.json").read_text())["members"]:
-        shutil.copyfile(evidence.artifact_dir / member["objectKey"], blobs / member["sha256"][7:])
+        from tests.test_source_evidence import read_evidence_member
+
+        (blobs / member["sha256"][7:]).write_bytes(read_evidence_member(evidence, member["objectKey"]))
     generation_dir = tmp_path / "generation"
     generation = build_generation(generation_dir, family="gao-recommendations", files=[table],
                                   expected_keys=[table.name], inputs=evidence.inputs(),
@@ -230,7 +232,9 @@ def _court_fixture(tmp_path, pages):
     blobs = corpus / 'source-evidence/blobs/sha256'
     blobs.mkdir(parents=True)
     for member in json.loads((directory / 'members.json').read_text())['members']:
-        shutil.copyfile(evidence.artifact_dir / member['objectKey'], blobs / member['sha256'][7:])
+        from tests.test_source_evidence import read_evidence_member
+
+        (blobs / member["sha256"][7:]).write_bytes(read_evidence_member(evidence, member["objectKey"]))
     manifest = tmp_path / 'court-selection.json'
     manifest.write_text(json.dumps(court_selection(corpus, artifact.pin.artifact_digest)))
     return manifest, corpus
@@ -396,7 +400,9 @@ def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_deci
     blobs = corpus / "source-evidence/blobs/sha256"
     blobs.mkdir(parents=True)
     for member in json.loads((source_dir / "members.json").read_text())["members"]:
-        shutil.copyfile(evidence.artifact_dir / member["objectKey"], blobs / member["sha256"][7:])
+        from tests.test_source_evidence import read_evidence_member
+
+        (blobs / member["sha256"][7:]).write_bytes(read_evidence_member(evidence, member["objectKey"]))
     generation_dir = tmp_path / "generation"
     from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args
     migrate_outputs((table,))

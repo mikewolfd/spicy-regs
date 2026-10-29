@@ -104,6 +104,109 @@ reading the public index again. Workflow artifacts follow the retention
 period configured in `_rollup.yml`; successfully published evidence remains
 under its immutable object-storage prefix.
 
+Every ordinary table rollup also saves a normalized input proof under
+`output/generation-inputs/<family>/<artifact-digest>/inputs.json`. The common
+publisher stores the same receipt and its pinned native controls under
+`generation-inputs/<family>/<artifact-digest>/` before advancing the table
+pointer. Proof upload or byte-verification failure blocks that pointer update.
+The proof uses the existing `spicy-publication-inputs` format consumed by source
+catalog reconciliation. It records exact table members, managed parent versions,
+prior generations and source observations. A parent held only by ETag and size
+stays separate from cryptographically identified originals. Creating the proof
+reads native controls, not the original bodies again. Build-only rollups retain
+the local proof in their normal workflow output artifact.
+
+A source-aware build can call `evidence.selected_inputs(manifest)` before
+`evidence.inputs()` seals its journal. The manifest has `format` equal to
+`spicy-selected-inputs`, `version: 1`, a named `scope: {id, finite}`, a boolean
+`complete`, and separate `used`, `available` and `expected` arrays. Each inline
+entry states `source_id`, `source_version`, `version_kind`, `asset_kind`,
+`location`, `sha256` and `bytes`. Identity/version duplicates and contradictory
+byte pins refuse. Every used original must match an admitted capture or retained
+raw original by bytes, native identity or locator, location and version.
+An unqualified native version cannot substitute for a content digest.
+`complete: true` requires an explicitly finite scope and describes the
+declared used set; it does not mean every expected item was available or used.
+The declaration is a build responsibility, not an inference from all captures.
+
+Large comparisons can supply `coverage_inventories`, each with `role` equal to
+`used`, `available` or `expected`, `format: parquet`, `path`, `sha256`, `bytes`,
+`columns: {source_id, source_version}`, `version_kind`, `asset_kind` and
+`complete`. `selected_inputs(manifest, base=...)` retains and verifies these files
+through the existing evidence store, outside the raw archive. The proof streams
+them into its own `inventories/` directory and checks the final pins again;
+the publisher uploads and verifies them before moving the table pointer. Local
+runner paths are replaced by retained member paths. Referencing
+an external used inventory does not qualify a complete inline used set. Native
+keys without versions still cannot establish an exact version match.
+
+The explicit `MembersRollup.rebuild_complete_rosters` route declares the current
+and historical roster captures at the maintained source-use loop. Its finite
+scope is those exact roster files.
+
+Readers that discover their inputs while processing call
+`evidence.declare_used_inputs(inputs, scope_id=..., complete=False)` after
+successful parsing. Each input gives `location`, `sha256`, `bytes` and
+`asset_kind`. Repeated calls accumulate one partial scope. A complete finite
+selection uses one call with `complete=True`. At successful seal, the shared
+owner matches these references to recorded originals and writes one selected
+manifest. Unknown, conflicting, refused or derived references fail admission;
+a failed build does not acquire a successful accumulated declaration. Direct
+`selected_inputs` and accumulated declarations cannot be mixed in one build.
+
+The maintained scorecard and FEC candidate/committee history builders declare
+their successful original reads. The scheduled CFR, committee roster, Federal
+Register, press release, Senate expenditure and Unified Agenda paths share
+those declarations with generation evidence. Their incremental scopes remain
+incomplete. Filtered rows still mean the source file was read; a fetched body
+that fails source validation remains an observation. Derived builders reuse
+existing parent-table pins. Unsupported builders keep source use unknown; the
+hook does not reconstruct their historical inputs.
+
+The comment-attributes seed also retains its selected Mirrulations keys, ETags
+and sizes beside its native generation. That inventory describes winning copies
+for this seed only. Mirrulations bodies remain external, unknown versions remain
+unknown, and later incremental builds need their own input evidence. See
+`comment-fields-fill.md` for the existing seed command and optional comparison.
+
+Compare retained Parquet inventories with the maintained command:
+
+```sh
+uv run --frozen python -m spicy_regs.source_catalog.coverage_diff \
+  --expected expected.json --actual available-or-used.json --output comparison/
+```
+
+Each descriptor names its `path` or explicit `files`, `format: parquet`, `role`,
+`columns: {source_id}`, `asset_kind`, `complete` and identical named
+`scope: {id, finite}`. Optional `source_version` and `bytes` column mappings
+retain version and size evidence; mapping `source_version` also requires
+`version_kind`. A pinned descriptor also
+supplies `sha256` and `bytes` for its single file. The comparison writes a
+disk-backed `diff.parquet` and summary with two separate results.
+`identity_status` in the diff and `identity_counts` in the summary report
+`present`, `missing` or `unexpected` for each `source_id` and `asset_kind`,
+regardless of version tokens. `identity_parity` is `equal` or `different` only
+when both inventories declare complete coverage of the same finite scope; it is
+`unqualified` when either inventory is incomplete. Partial matching sets cannot
+establish full coverage. Each side's `measurements` distinguishes input rows,
+unique identities, `duplicate_identities` (identities with repeated rows) and
+`duplicate_rows` (rows beyond the first for each identity).
+
+The existing `status`, `reason` and summary `counts` retain the exact-version
+results: `same`, `missing`, `stale`, `unknown` and `unexpected`. A key can be
+`present` while its version is `unknown` or `stale`; conflicting duplicate
+versions also remain `unknown`. JSON bodies and attachment bodies remain
+distinct in both results. Memory and worker settings are bounded by
+`--memory-limit` and `--threads`; comparison does not read original source bodies.
+
+Without a selected manifest, captures remain observations and the used set is
+unknown. Generic transitive source closure stays `complete: false` even with a
+finite selected declaration: historical parents and actual interpretation still
+require their own evidence. No available inventory or publisher-wide denominator
+is invented. The maintained member-roster regression exercises source acquisition,
+native table/receipt generation, proof publication and catalog import locally;
+it does not regenerate production tables.
+
 Offline regression tests are in `tests/test_source_evidence.py`. They check
 literal input bytes against retained blobs and native output fields, failed
 postconditions, late parsing and listing failures, credential exclusion,

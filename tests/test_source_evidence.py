@@ -11,7 +11,7 @@ import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from rulespec_artifacts import ArtifactInput, ArtifactVerificationError, admit_artifact, LocalMemberSource
+from rulespec_artifacts import ArtifactInput, ArtifactVerificationError, admit_artifact
 from spicy_docs.reading.refusals import RefusedResponse, attach_refused_response
 from spicy_docs.reading.paged_json import PagedJsonBudget, PagedJsonSourceError
 from spicy_docs.sources.legislators import LegislatorsBudget, LegislatorsSourceError
@@ -20,7 +20,7 @@ from spicy_docs.transport.credentials import CredentialRefusedError
 
 from spicy_regs.generations import build_generation, verify_generation
 from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, verify_evidence
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource, SourceEvidenceError, verify_evidence
 from spicy_regs.sources import publication as pub
 from spicy_regs.sources.retained import (
     RetainedGovInfoBodyAcquirer,
@@ -54,8 +54,19 @@ def journal(evidence):
     return [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_bytes().splitlines()]
 
 
+def read_evidence_member(evidence, key):
+    with EvidenceMemberSource(evidence.artifact_dir).open(key) as stream:
+        return stream.read()
+
+
 def bodies(evidence):
-    return [path.read_bytes() for path in (evidence.artifact_dir / "blobs" / "sha256").iterdir()]
+    source = EvidenceMemberSource(evidence.artifact_dir)
+    result = []
+    for key in source.keys():
+        if key.startswith("blobs/sha256/"):
+            with source.open(key) as stream:
+                result.append(stream.read())
+    return result
 
 
 def test_gao_rss_contact_body_is_hash_only_while_source_values_survive(tmp_path):
@@ -185,7 +196,7 @@ def test_no_lis_postcondition_preserves_original_and_no_generation(tmp_path, mon
     assert not (tmp_path / "generations").exists()
     assert any(row["event"] == "refusal" and "no id.lis" in row["message"] for row in journal(evidence))
     assert json.loads((evidence.directory / "run-outcome.json").read_bytes())["outcome"] == "failed"
-    assert admit_artifact(LocalMemberSource(evidence.artifact_dir)).root["spec"]["outcome"] == "failed"
+    assert admit_artifact(EvidenceMemberSource(evidence.artifact_dir)).root["spec"]["outcome"] == "failed"
 
 
 def test_both_roster_originals_reach_member_and_term_outputs(tmp_path, monkeypatch):

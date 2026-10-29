@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from .storage import connect, stable
 from .coverage import coverage
+from .scope import select_retained_responses
 
 
 def pick(value: dict, mapping: dict[str, str]) -> dict:
@@ -21,9 +22,15 @@ def public_url(value: str | None) -> str | None:
     if not value:
         return None
     parts = urlsplit(value)
-    # Catalog URLs containing queries may carry credentials or signed tokens.
-    # Preserve their exact values internally; publish only credential-free links.
-    if parts.scheme not in ["http", "https"] or parts.username or parts.password or parts.query or parts.fragment:
+    # The registered CourtListener bulk listing uses a public directory selector.
+    # Preserve this exact scope; other queries can contain credentials or tokens.
+    public_listing = (
+        parts.netloc == "com-courtlistener-storage.s3-us-west-2.amazonaws.com"
+        and parts.path == "/list.html"
+        and parts.query == "prefix=bulk-data/"
+    )
+    if (parts.scheme not in ["http", "https"] or parts.username or parts.password
+            or (parts.query and not public_listing) or parts.fragment):
         return None
     return value
 
@@ -76,6 +83,58 @@ def validate_public(value: object) -> None:
             validate_public(item)
     elif isinstance(value, str) and safe_text(value) != value:
         raise ValueError("Internal path or credential in public export")
+
+
+
+def file_provenance(facts: dict, *, status: str, local: bool) -> dict:
+    """Describe this retained alias only; identical hashes never join captures.
+
+    The manifest reference identifies the exact indexed row. An original receipt
+    attached by a legacy hash match remains provisional, even when its URL exists.
+    """
+    mapping = facts.get("mapping") or {}
+    context = facts.get("receipt_context") or {}
+    urls = []
+    for owner in (facts, context):
+        for key in ("source_url", "requested_url", "resolved_url", "url"):
+            value = owner.get(key)
+            if isinstance(value, str) and (url := public_url(value)) and url not in urls:
+                urls.append(url)
+    if isinstance(facts.get("original_location"), str):
+        url = public_url(facts["original_location"])
+        if url and url not in urls:
+            urls.append(url)
+    # This field was attached by legacy content-hash reconciliation. It is a
+    # useful candidate origin, never proof of this alias's acquisition.
+    candidate = facts.get("receipt_source_url")
+    if isinstance(candidate, str) and (url := public_url(candidate)) and url not in urls:
+        urls.append(url)
+    ref = mapping.get("receipt_evidence_ref") or {}
+    receipt = {}
+    if isinstance(ref.get("sha256"), str) and re.fullmatch(r"sha256:[a-f0-9]{64}", ref["sha256"]):
+        receipt["sha256"] = ref["sha256"]
+        if type(ref.get("entry")) is int and ref["entry"] > 0:
+            receipt["entry"] = ref["entry"]
+    provisional = facts.get("receipt_status") == "provisional" or bool(facts.get("receipt_matches"))
+    direct_receipt = str(facts.get("receipt_object", "")).startswith("acquisitions/sha256/")
+    basis = "provisional" if provisional else "receipt-backed" if direct_receipt and receipt else "inferred" if urls else "unknown"
+    availability = ("external" if status == "external-by-choice" else "not-acquired" if status == "known-not-acquired"
+                    else "missing" if status == "missing-bytes" else "local" if local else "unknown")
+    result = {"basis": basis, "sourceUrls": urls, "availability": availability}
+    if receipt:
+        result["receipt"] = receipt
+    original = re.fullmatch(r"objects/sha256/[a-f0-9]{2}/([a-f0-9]{64})(?:\.gz)?", str(facts.get("receipt_object", "")))
+    documented_original = context.get("original_receipt_sha256")
+    if isinstance(documented_original, str) and re.fullmatch(r"sha256:[a-f0-9]{64}", documented_original):
+        result["originalReceiptSha256"] = documented_original
+    elif original:
+        result["originalReceiptSha256"] = "sha256:" + original[1]
+    # Mapping normalizes exact per-row receipt timestamps and leaves conflicts
+    # unknown. Never infer capture time from a filename, mtime or content date.
+    captured_at = mapping.get("acquired_at")
+    if basis == "receipt-backed" and isinstance(captured_at, str):
+        result["capturedAt"] = captured_at
+    return result
 
 
 def write_json(path: Path, value: dict, *, internal: bool) -> None:
@@ -138,6 +197,65 @@ def public_publication(item: dict) -> dict:
     check(clean)
     validate_public(clean)
     return clean
+
+
+def public_reconciliation(item: dict) -> dict:
+    """Expose the pinned result, never receipt bodies or local evidence references."""
+    if item.get("scope") not in {"current", "historical"}:
+        raise ValueError("Invalid reconciliation scope")
+    if not isinstance(item.get("version"), str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", item["version"]):
+        raise ValueError("Invalid reconciliation version")
+    if item.get("status") not in {"verified", "missing_local_files", "missing_provenance", "conflicting_evidence"}:
+        raise ValueError("Invalid reconciliation status")
+    clean = pick(item, {key: key for key in ["scope", "version", "status"]})
+    for key in ["sourceFiles", "matchedSourceFiles", "missingSourceFiles", "capturedSourceFiles"]:
+        if type(item.get(key)) is not int or item[key] < 0:
+            raise ValueError("Invalid reconciliation file count")
+        clean[key] = item[key]
+    if clean["matchedSourceFiles"] + clean["missingSourceFiles"] != clean["sourceFiles"]:
+        raise ValueError("Reconciliation file counts disagree")
+    if type(item.get("inputClosureComplete")) is not bool or clean["capturedSourceFiles"] > clean["sourceFiles"]:
+        raise ValueError("Invalid reconciliation input completeness")
+    clean["inputClosureComplete"] = item["inputClosureComplete"]
+    if clean["status"] == "verified" and (not clean["sourceFiles"] or clean["missingSourceFiles"] or not clean["inputClosureComplete"]):
+        raise ValueError("Verified reconciliation requires matching local originals")
+    reasons = item.get("reasons", [])
+    if not isinstance(reasons, list) or any(not isinstance(reason, str) or not reason.strip() for reason in reasons):
+        raise ValueError("Invalid reconciliation reasons")
+    clean["reasons"] = [safe_text(reason) for reason in reasons]
+    links = item.get("evidenceLinks", [])
+    if not isinstance(links, list):
+        raise ValueError("Invalid reconciliation evidence links")
+    clean["evidenceLinks"] = [
+        {"label": safe_text(link["label"]), "url": url}
+        for link in links
+        if isinstance(link, dict) and isinstance(link.get("label"), str) and link["label"].strip()
+        and isinstance(link.get("url"), str) and (url := public_url(link["url"]))
+    ]
+    validate_public(clean)
+    return clean
+
+
+def export_period(item: dict, *, internal: bool) -> dict:
+    """Keep the period allowlist and withhold private display text publicly."""
+    clean = pick(item, {key: key for key in ["kind", "label", "start", "end", "basis"]})
+    if not internal:
+        for field in ["label", "basis"]:
+            if isinstance(clean.get(field), str):
+                clean[field] = safe_text(clean[field])
+    return clean
+
+
+def period_summary(periods: list[dict]) -> dict:
+    """Bound list metadata without combining separately qualified date scopes."""
+    observed = {
+        json.dumps(item, sort_keys=True): item for item in periods
+        if item["kind"] == "observed-retained-scope" and item.get("start")
+    }
+    summary: dict[str, Any] = {"count": len(periods)}
+    if len(observed) == 1:
+        summary["observedRetained"] = next(iter(observed.values()))
+    return summary
 
 
 def public_coverage(report: dict) -> dict:
@@ -237,7 +355,94 @@ def public_coverage(report: dict) -> dict:
     return result
 
 
-def export(index: Path, output: Path, *, internal: bool = False, page_size: int = 500) -> dict:
+def source_coverage_note(table: dict, evidence: list[tuple[str, dict]]) -> str | None:
+    """Show a reviewed source note only for its exact published table version.
+
+    Observations already survive registry-driven rebuilds. This selection keeps
+    source inventory evidence separate from historical build reconciliation.
+    """
+    version = table.get("artifact_digest")
+    if not isinstance(version, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", version):
+        return None
+    notes = set()
+    for kind, item in evidence:
+        if (kind == "observations" and item.get("metadata_kind") == "source-coverage"
+                and item.get("table") == table["id"]
+                and item.get("table_version") == version):
+            note = item.get("note")
+            if not isinstance(note, str) or not note.strip():
+                raise ValueError("Source coverage observation requires a note")
+            notes.add(note)
+    if len(notes) > 1:
+        raise ValueError("Conflicting source coverage notes for the same table version")
+    return next(iter(notes), None)
+
+
+def export_file_pages(db, output: Path, *, cid: str, folder: str, common: dict, internal: bool, page_size: int, retained: bool = False, references=None, publisher=None) -> list[dict]:
+    """Write both inventories through the same bounded, public-safe file format."""
+    if not internal:
+        from .file_inventory import export_pages
+        return export_pages(db, output, dataset_id=cid, publisher=publisher, folder=folder,
+                            generation=common["generation"], page_size=page_size,
+                            inventory_kind="attention" if retained else "active", references=references)
+    pages = []
+    # Select only the per-alias provenance facts needed by public pages.
+    # Receipt bodies and content evidence may be large and remain private.
+    provenance_fields = """json_object(
+        'mapping', json_object('acquired_at', json_extract(data,'$.mapping.acquired_at'),
+            'receipt_evidence_ref', json(json_extract(data,'$.mapping.receipt_evidence_ref'))),
+        'receipt_context', json_object(
+            'source_url', json_extract(data,'$.receipt_context.source_url'),
+            'requested_url', json_extract(data,'$.receipt_context.requested_url'),
+            'resolved_url', json_extract(data,'$.receipt_context.resolved_url'),
+            'url', json_extract(data,'$.receipt_context.url'),
+            'original_receipt_sha256', json_extract(data,'$.receipt_context.original_receipt_sha256')),
+        'source_url', json_extract(data,'$.source_url'),
+        'requested_url', json_extract(data,'$.requested_url'),
+        'resolved_url', json_extract(data,'$.resolved_url'),
+        'original_location', json_extract(data,'$.original_location'),
+        'receipt_source_url', json_extract(data,'$.receipt_source_url'),
+        'receipt_status', json_extract(data,'$.receipt_status'),
+        'receipt_matches', json_extract(data,'$.receipt_matches'),
+        'receipt_object', json_extract(data,'$.receipt_object')) AS provenance_facts"""
+    file_fields = ("*" if internal else "id,name,status,sha256,bytes,route_id") + ", (json_extract(data,'$.encoded_bytes') IS NOT NULL) AS local," + provenance_fields
+    source = "retained_response_files" if retained else "files"
+    cursor = db.execute(f"SELECT {file_fields} FROM {source} WHERE collection_id=? ORDER BY id", (cid,))
+    page_number = 0
+    while batch := cursor.fetchmany(page_size):
+        files = []
+        for row in batch:
+            item = {"id": row["id"], "name": safe_text(row["name"]), "status": row["status"]}
+            for sql, public in [("sha256", "sha256"), ("bytes", "bytes"), ("route_id", "routeId")]:
+                if row[sql] is not None:
+                    item[public] = row[sql]
+            item["provenance"] = file_provenance(
+                json.loads(row["provenance_facts"]), status=row["status"],
+                local=bool(row["local"]),
+            )
+            if internal:
+                item.update(
+                    pick(
+                        json.loads(row["data"]),
+                        {"encoded_bytes": "encodedBytes", "verification": "verification"},
+                    )
+                )
+                if row["local_path"]:
+                    item["localPath"] = row["local_path"]
+            files.append(item)
+        page_prefix = "retained-files" if retained else "files"
+        page_path = f"{folder}/{page_prefix}-{page_number:05d}.json"
+        write_json(
+            output / page_path,
+            {"format": "spicy-source-files", **common, "collectionId": cid, "files": files},
+            internal=internal,
+        )
+        pages.append({"path": page_path, "rows": len(files)})
+        page_number += 1
+    return pages
+
+
+def export(index: Path, output: Path, *, internal: bool = False, page_size: int = 5000) -> dict:
     if page_size < 1 or page_size > 5000:
         raise ValueError("page_size must be between 1 and 5000")
     db = connect(index, readonly=True)
@@ -245,9 +450,15 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
         metadata = {r["key"]: json.loads(r["value"]) for r in db.execute("SELECT * FROM metadata")}
         generation = metadata["generation"]
         prefix = "generations/" + generation.removeprefix("sha256:")
-        common = {"version": 1, "generation": generation}
+        common = {"version": 2 if internal else 3, "generation": generation}
         if internal:
             common["audience"] = "internal"
+        # Coverage already supports the whole catalog. Share its global
+        # evidence reads instead of repeating them for every collection.
+        coverage_by_collection = {item["collection_id"]: item for item in coverage(db)["collections"]}
+        from .file_inventory import ReceiptReferences
+        references = None if internal else ReceiptReferences(db)
+        retained_responses = select_retained_responses(db)
         summaries: list[dict[str, Any]] = []
         for collection in db.execute("SELECT * FROM collections ORDER BY id"):
             cid = collection["id"]
@@ -271,8 +482,10 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
             for kind, item in evidence:
                 if kind in ["observations", "errors"] and item.get("status"):
                     statuses.add(item["status"])
-            if not count:
-                statuses.add("known-not-acquired")
+            # A publication entry can have its originals inventoried in another
+            # collection. A missing association leaves acquisition unresolved.
+            if not count and not statuses.intersection({"known-not-acquired", "external-by-choice"}):
+                statuses.add("inventory-unresolved")
             elif unique[0]:
                 has_table = db.execute("SELECT 1 FROM tables WHERE collection_id=? LIMIT 1", (cid,)).fetchone()
                 if not has_table:
@@ -290,7 +503,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
             if not any(k == "periods" for k, _ in evidence):
                 statuses.add("unknown-scope")
             periods = [
-                pick(item, {"kind": "kind", "label": "label", "start": "start", "end": "end", "basis": "basis"})
+                export_period(item, internal=internal)
                 for kind, item in evidence
                 if kind == "periods"
             ]
@@ -307,7 +520,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                     "custodian": safe_text(item.get("custodian", "unknown")),
                     "contentBehavior": item.get("content_behavior", "unknown"),
                     "periods": [
-                        pick(p, {"kind": "kind", "label": "label", "start": "start", "end": "end", "basis": "basis"})
+                        export_period(p, internal=internal)
                         for p in (
                             item.get("periods", [])
                             + [
@@ -327,18 +540,25 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                 routes.append(route)
             tables = []
             for row in db.execute("SELECT data FROM tables WHERE collection_id=? ORDER BY id", (cid,)):
-                tables.append(
-                    pick(
-                        json.loads(row[0]),
-                        {
-                            "id": "id",
-                            "family": "family",
-                            "status": "status",
-                            "artifact_digest": "artifactDigest",
-                            "coverage_note": "coverageNote",
-                        },
-                    )
+                item = json.loads(row[0])
+                table = pick(
+                    item,
+                    {
+                        "id": "id",
+                        "family": "family",
+                        "status": "status",
+                        "artifact_digest": "artifactDigest",
+                        "coverage_note": "coverageNote",
+                    },
                 )
+                note = source_coverage_note(item, evidence)
+                if note is not None:
+                    table["coverageNote"] = note if internal else safe_text(note)
+                if item.get("publication") is not None:
+                    table["publication"] = public_reconciliation(item["publication"])
+                    if table.get("artifactDigest") != table["publication"]["version"]:
+                        raise ValueError("Reconciliation version differs from the table publication")
+                tables.append(table)
             summary: dict[str, Any] = {
                 "id": cid,
                 "title": safe_text(collection["title"]),
@@ -347,7 +567,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                 "tables": sorted(t["id"] for t in tables),
                 "routeCount": len(routes),
                 "holdings": {"aliases": count, "objects": unique[0], "decodedBytes": unique[1], "missing": missing},
-                "periods": periods,
+                "periodSummary": period_summary(periods),
                 "detailPath": folder + "/collection.json",
             }
             for key in ["publisher", "description"]:
@@ -357,46 +577,26 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                         display = display.get("name") or display.get("title") or "Unknown publisher"
                     summary[key] = safe_text(display)
             summaries.append(summary)
-            pages = []
-            cursor = db.execute("SELECT * FROM files WHERE collection_id=? ORDER BY id", (cid,))
-            page_number = 0
-            while batch := cursor.fetchmany(page_size):
-                files = []
-                for row in batch:
-                    item = {"id": row["id"], "name": safe_text(row["name"]), "status": row["status"]}
-                    for sql, public in [("sha256", "sha256"), ("bytes", "bytes"), ("route_id", "routeId")]:
-                        if row[sql] is not None:
-                            item[public] = row[sql]
-                    if internal:
-                        item.update(
-                            pick(
-                                json.loads(row["data"]),
-                                {"encoded_bytes": "encodedBytes", "verification": "verification"},
-                            )
-                        )
-                        if row["local_path"]:
-                            item["localPath"] = row["local_path"]
-                    files.append(item)
-                page_path = f"{folder}/files-{page_number:05d}.json"
-                write_json(
-                    output / page_path,
-                    {"format": "spicy-source-files", **common, "collectionId": cid, "files": files},
-                    internal=internal,
-                )
-                pages.append({"path": page_path, "rows": len(files)})
-                page_number += 1
+            pages = export_file_pages(db, output, cid=cid, folder=folder, common=common,
+                                      internal=internal, page_size=page_size, references=references, publisher=summary.get("publisher"))
             detail: dict[str, Any] = {
                 "format": "spicy-source-collection",
                 **common,
-                "collection": summary,
+                "collection": {**summary, "periods": periods},
                 "routes": routes,
                 "tables": tables,
                 "files": {"pages": pages, "total": count},
                 "planned": [],
                 "observations": [],
                 "relationships": [],
-                "coverage": public_coverage(coverage(db, cid)["collections"][0]),
+                "coverage": public_coverage(coverage_by_collection[cid]),
             }
+            if retained_responses:
+                retained_count = db.execute("SELECT count(*) FROM retained_response_files WHERE collection_id=?", (cid,)).fetchone()[0]
+                if retained_count:
+                    retained_pages = export_file_pages(db, output, cid=cid, folder=folder, common=common,
+                                                      internal=internal, page_size=page_size, retained=True, references=references, publisher=summary.get("publisher"))
+                    detail["retainedFiles"] = {"pages": retained_pages, "total": retained_count}
             publications = [item for kind, item in evidence if kind == "publication_observation"]
             if publications:
                 detail["publicationObservations"] = [public_publication(item) for item in publications]
@@ -429,6 +629,10 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                 },
             }
             for kind, item in evidence:
+                # Version-bound source notes appear only beside their matching
+                # table; the generic observation shape omits the version pin.
+                if kind == "observations" and item.get("metadata_kind") == "source-coverage":
+                    continue
                 if kind == "errors":
                     kind = "observations"
                 if kind in mappings:

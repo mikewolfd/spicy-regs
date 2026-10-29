@@ -6,10 +6,10 @@ import tempfile
 import pytest
 from rulespec_artifacts import ArtifactVerificationError
 
-from spicy_regs.source_evidence import CaptureEvidence
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource
 from spicy_regs.sources import publication as pub
 from tests.generation_fakes import Store
-from tests.test_source_evidence import candidate, capture
+from tests.test_source_evidence import candidate, capture, read_evidence_member
 
 BODY = b"retained source bytes" * 64
 
@@ -28,8 +28,8 @@ def publish(store, directory, evidence, prior=None):
 
 
 def blob_keys(evidence):
-    return sorted("source-evidence/blobs/sha256/" + path.name
-                  for path in (evidence.artifact_dir / "blobs" / "sha256").iterdir())
+    return sorted("source-evidence/" + key for key in EvidenceMemberSource(evidence.artifact_dir).keys()
+                  if key.startswith("blobs/sha256/"))
 
 
 def test_new_blob_is_uploaded_once_and_read_back_once(tmp_path):
@@ -166,7 +166,7 @@ def test_untrusted_blobs_stream_into_admission_without_local_scratch(tmp_path, m
     store = Streaming()
     if already_present:
         for key in blob_keys(evidence):
-            store.objects[key] = (evidence.artifact_dir / key.removeprefix("source-evidence/")).read_bytes()
+            store.objects[key] = read_evidence_member(evidence, key.removeprefix("source-evidence/"))
             store.etags[key] = '"different-etag-requires-readback"'
 
     def no_scratch(*args, **kwargs):
