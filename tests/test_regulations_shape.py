@@ -156,6 +156,8 @@ def test_each_assigned_table_has_explicit_columns_schema_and_identity():
         'comment_periods': {'unresolved_fr_references_json'},
         'comments': {'comment_reference_values_json', 'pdf_extraction_results_json'},
         'documents': {'pdf_extraction_results_json'},
+        # The Register's literal president object: absent, JSON null and {} stay distinct (SpicyDocs 0.66.6 contract).
+        'federal_register': {'president_json'},
         'proceedings': {'fr_document_joins_json', 'unresolved_fr_references_json'},
         'regulatory_agenda_items': {'unresolved_fr_references_json'},
         'rule_targets': {'fr_references_json'},
