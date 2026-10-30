@@ -9,7 +9,7 @@ import shutil
 from dataclasses import replace
 import pyarrow.parquet as pq
 import pytest
-from spicy_regs.source_evidence import CaptureEvidence
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource
 from spicy_regs.transforms.build_committee_reports import _read_bodies, build_committee_reports
 from spicy_regs.transforms.committee_report_reads import READ_COLUMNS, READS_TABLE, RULE_VERSIONS
 from spicy_regs.transforms.table_merge import prior_scratch_path
@@ -87,8 +87,13 @@ def test_placeholder_reads_offered_pdf_and_journals_digests_not_text(tmp_path):
     captures = [e for e in events if e["event"] == "capture"]
     assert any(e["stage"].endswith(":pdf-fallback") for e in captures)
     # The placeholder's own capture is retained beside the PDF's, each under its own digest.
-    [original] = {e["sha256"] for e in captures
-                  if (evidence.artifact_dir / "blobs/sha256" / e["sha256"][7:]).read_bytes() == PLACEHOLDER}
+    source_reader = EvidenceMemberSource(evidence.artifact_dir)
+    originals = set()
+    for event in captures:
+        with source_reader.open(event["blob_member"]) as stream:
+            if stream.read() == PLACEHOLDER:
+                originals.add(event["sha256"])
+    [original] = originals
     [placeholder] = [e for e in events if e["event"] == "body-placeholder"]
     assert placeholder["source_sha256"] == original and placeholder["offered_formats"] == ["htm", "pdf"]
     [text] = [e for e in events if e["event"] == "body-text"]

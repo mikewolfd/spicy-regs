@@ -142,7 +142,7 @@ def main() -> None:
         contents = {
             name.replace(old_info, new_info): archive.read(name)
             for name in archive.namelist()
-            if not name.endswith("/RECORD")
+            if not name.endswith(("/RECORD", "/"))
         }
     contents.update(overlay)
     metadata = new_info + "/METADATA"

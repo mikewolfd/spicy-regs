@@ -296,7 +296,7 @@ def test_source_failure_after_flush_preserves_output_and_original_error(
 def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path, monkeypatch, failure):
     from spicy_regs.sources import courtlistener as source
     from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
-    from spicy_regs.source_evidence import CaptureEvidence
+    from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource
 
     module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
     monkeypatch.setattr(module, "BATCH_ROWS", 1)
@@ -376,7 +376,13 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
     assert requests[0].url.params["q"] == "cluster_id:[2 TO 3]" and "filed_after" not in requests[0].url.params
     if failure != "budget":
         assert str(requests[1].url) == next_url
-    assert any(b'"Search case"' in p.read_bytes() for p in (evidence.artifact_dir / 'blobs').rglob('*') if p.is_file())
+    source = EvidenceMemberSource(evidence.artifact_dir)
+    retained = []
+    for key in source.keys():
+        if key.startswith("blobs/sha256/"):
+            with source.open(key) as stream:
+                retained.append(stream.read())
+    assert any(b'"Search case"' in body for body in retained)
     events = [json.loads(line) for line in (evidence.artifact_dir / 'journal.jsonl').read_text().splitlines()]
     refusal = next(event for event in events if event.get('stage') == 'courtlistener-traversal')
     assert refusal['traversal']['nextUrl'] == next_url

@@ -1239,7 +1239,7 @@ def _stage_verified_generation(
     proof_prefix = f"generation-inputs/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     receipt, controls = input_proof(artifact, source, tuple(
         (EvidenceMemberSource(path), item) for path, item in zip(evidence_directories, evidence, strict=True)
-    ))
+    ), members=members)
     for name, raw in sorted({**controls, "inputs.json": canonical_json_bytes(receipt)}.items()):
         if isinstance(raw, tuple):
             owner, member, expected_sha, size = raw

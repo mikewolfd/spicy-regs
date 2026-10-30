@@ -96,7 +96,7 @@ def _pin(raw):
     return {"sha256": "sha256:" + hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
 
 
-def input_proof(artifact, source, evidence=()):
+def input_proof(artifact, source, evidence=(), *, members=None):
     """Return normalized receipt and native control bytes, without source rereads.
 
     Callers admit the generation and source artifacts first. Only control files
@@ -121,10 +121,12 @@ def input_proof(artifact, source, evidence=()):
         return {"path": path, **_pin(raw)}
 
     pins = [control(source, "artifact.json", "generation/artifact.json")]
-    pins += [control(source, item.object_key, "generation/" + item.object_key) for item in artifact.manifests]
+    pins += [control(source, item["objectKey"], "generation/" + item["objectKey"])
+             for item in artifact.root["memberManifests"]]
     spec = artifact.root["spec"]
     outputs = []
-    for member in iter_member_descriptors(artifact, source):
+    verified_members = iter_member_descriptors(artifact, source) if members is None else members
+    for member in verified_members:
         if member.object_key is None:
             raise ValueError("Published output lacks an object key")
         outputs.append({"table": member_table(member.object_key).removesuffix(".parquet"),

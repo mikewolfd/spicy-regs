@@ -23,7 +23,8 @@ def test_overlay_reproduces_and_preserves_current_reader_modules():
     changed = set(receipt["changed_package_files"])
     assert changed == {"spicy_docs/storage/raw_archive.py", "spicy_docs/reading/refusals.py"}
     with zipfile.ZipFile(root / "vendor" / receipt["base_wheel"]) as base, zipfile.ZipFile(wheel) as overlay:
-        original_modules = {name for name in base.namelist() if name.startswith("spicy_docs/")}
+        original_modules = {name for name in base.namelist()
+                            if name.startswith("spicy_docs/") and not name.endswith("/")}
         assert {name for name in overlay.namelist() if name.startswith("spicy_docs/")} == original_modules | changed
         for name in original_modules - changed:
             assert overlay.read(name) == base.read(name), name

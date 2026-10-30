@@ -2022,11 +2022,15 @@ def _journal(evidence) -> list[dict]:
 
 
 def _retained(evidence, event: dict) -> bytes:
-    return (evidence.artifact_dir / "blobs" / "sha256" / event["sha256"].removeprefix("sha256:")).read_bytes()
+    from spicy_regs.source_evidence import EvidenceMemberSource
+
+    with EvidenceMemberSource(evidence.artifact_dir).open(event["blob_member"]) as stream:
+        return stream.read()
 
 
 def _no_secret(evidence, secret: str) -> bool:
-    return all(secret.encode() not in path.read_bytes() for path in evidence.directory.rglob("*") if path.is_file())
+    return all(secret.encode() not in path.read_bytes() for root in (evidence.directory, evidence.store.root)
+               for path in root.rglob("*") if path.is_file())
 
 
 @pytest.mark.parametrize("where", ["body", "listing"])

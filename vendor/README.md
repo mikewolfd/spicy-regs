@@ -11,7 +11,7 @@ Base CLI and MCP installs do not require them.
   including current FEC and transport readers, match `0.66.3` exactly. The
   [build receipt](spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.json)
   pins both changed modules and wheel SHA-256
-  `6b220f0f77cb90994b8a79d5ce45b0e15986ea97260c80d13702d647a3aa3fc8`.
+  `b526dfae319cb5b5e2d91491b35bc3eb61f555b18ae02dde10bc376df943215b`.
   `python scripts/package_central_raw_reader.py --check` reproduces the wheel,
   receipt and dependency pins from retained wheels without writing or downloading.
   `--provider` selects a reviewed source checkout for the archive module;
