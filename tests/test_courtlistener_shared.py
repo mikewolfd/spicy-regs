@@ -376,11 +376,11 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
     assert requests[0].url.params["q"] == "cluster_id:[2 TO 3]" and "filed_after" not in requests[0].url.params
     if failure != "budget":
         assert str(requests[1].url) == next_url
-    source = EvidenceMemberSource(evidence.artifact_dir)
+    evidence_source = EvidenceMemberSource(evidence.artifact_dir)
     retained = []
-    for key in source.keys():
+    for key in evidence_source.keys():
         if key.startswith("blobs/sha256/"):
-            with source.open(key) as stream:
+            with evidence_source.open(key) as stream:
                 retained.append(stream.read())
     assert any(b'"Search case"' in body for body in retained)
     events = [json.loads(line) for line in (evidence.artifact_dir / 'journal.jsonl').read_text().splitlines()]
