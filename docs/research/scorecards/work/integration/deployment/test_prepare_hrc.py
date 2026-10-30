@@ -98,7 +98,7 @@ def test_locator_comparison_preserves_page_and_source_record():
 
 
 def test_hash_only_pdf_and_derived_asset_have_no_public_bodies(tmp_path):
-    evidence = CaptureEvidence(tmp_path, "scorecards")
+    evidence = CaptureEvidence(tmp_path, "scorecards", archive_root=tmp_path / "central-raw")
     scope = evidence.for_source("hrc", "hash_only", parser_version="fixture/1", policy_decision_id="hash-only")
     pdf = b"%PDF-1.7\nPRIVATE_ORIGINAL_PDF_BYTES\n%%EOF"
     asset = b'{"private_model_output":"PRIVATE_DERIVED_OBSERVATION_BYTES"}'
@@ -123,7 +123,7 @@ def test_hash_only_pdf_and_derived_asset_have_no_public_bodies(tmp_path):
 
 
 def test_full_body_evidence_cannot_qualify_for_this_deployment(tmp_path):
-    evidence = CaptureEvidence(tmp_path, "scorecards")
+    evidence = CaptureEvidence(tmp_path, "scorecards", archive_root=tmp_path / "central-raw")
     scope = evidence.for_source("hrc", "full", parser_version="fixture/1", policy_decision_id="explicit-fixture-only")
     scope.capture(
         CapturedBodyResponse(
