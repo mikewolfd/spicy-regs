@@ -334,15 +334,20 @@ jobs:
           GAO_PRODUCT_PAGES_UNDO: ${{ inputs.gao_product_pages_undo }}
           GAO_ALLOW_MASS_CLOSE_REASON: ${{ inputs.gao_allow_mass_close_reason }}
           FCC_PROCEEDINGS: ${{ inputs.fcc_proceedings }}
-          # Only the court_dockets rollup gets the CourtListener token: its daily
-          # delta is a few search pages, and keyless runs were timing out on 429s
-          # (2026-09-21/22). A free token is capped per account (measured
-          # 2026-09-22: 10/min, 100/hour, 250/day), below what the cluster
-          # rollup's ~660-page search catch-up needs, so every other rollup
-          # stays keyless. Live search now refuses without a token, so the
-          # cluster rollup's catch-up stops with that message until this job is
-          # given one (an owner call on the token's shared quota).
-          COURTLISTENER_API_TOKEN: ${{ inputs.command == 'run-rollup-courtlistener' && secrets.COURTLISTENER_API_TOKEN || '' }}
+          # The two CourtListener search rollups get the token, because live
+          # search refuses without one: court_dockets (daily, a few search
+          # pages; keyless runs timed out on 429s 2026-09-21/22) and the weekly
+          # court_opinion_clusters search catch-up (owner decision 2026-10-30,
+          # ss-3uia). Both draw on one account's quota, which CourtListener
+          # applies per user (measured 2026-09-22 on a free token: 10/min,
+          # 100/hour, 250/day). The daily docket job has priority: if the quota
+          # runs short, defer or cancel the weekly catch-up, which stops before
+          # replacing its published table and resumes above it next week. The
+          # catch-up allots itself 50 requests a run (CourtListenerReader's
+          # default traversal budget); there is no quota scheduler (ss-yf0a).
+          # Bulk downloads and verified replay need no token; every other
+          # rollup stays keyless.
+          COURTLISTENER_API_TOKEN: ${{ (inputs.command == 'run-rollup-courtlistener' || inputs.command == 'run-rollup-court-opinion-clusters') && secrets.COURTLISTENER_API_TOKEN || '' }}
           # Zyte is a paid proxy; only a rollup that reads www.gao.gov through it gets the token:
           # gao-recommendations (one request a run), and gao-reports only while its product-page read is on.
           ZYTE_TOKEN: ${{ (inputs.command == 'run-rollup-gao-recommendations' || (inputs.command == 'run-rollup-gao-reports' && inputs.gao_product_pages)) && secrets.ZYTE_TOKEN || '' }}
