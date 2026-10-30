@@ -72,7 +72,7 @@ def test_real_rollup_publishes_original_and_receipt_with_safe_retry(tmp_path, mo
     assert remote.objects["source-evidence/" + blob] == raw
     prefix = "source-evidence/" + evidence.artifact.pin.artifact_digest.removeprefix("sha256:")
     blobs = {m.object_key for m in iter_member_descriptors(evidence.artifact, EvidenceMemberSource(evidence.artifact_dir))
-             if m.object_key.startswith("blobs/sha256/")}
+             if m.object_key is not None and m.object_key.startswith("blobs/sha256/")}
     pin = evidence.artifact.pin
     # Remote admission must work after every runner-local original and receipt disappears.
     shutil.rmtree(pipeline.output_dir)
