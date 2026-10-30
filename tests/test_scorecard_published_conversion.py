@@ -143,11 +143,12 @@ def test_conversion_requires_all_selected_parts_and_uses_native_receipts_without
 
 def legacy_analysis_inputs(tmp_path):
     store, index = _inputs(tmp_path)
-    # The added vote-position input stays native; only the existing resolver
+    # Vote and sponsorship comparison inputs stay native; only the existing resolver
     # inputs exercise the explicit historical shaped-conversion route.
     owner = index["families"]["test-inputs"]
-    owner["tables"] = {"member_votes.parquet": owner["tables"]["member_votes.parquet"]}
-    owner["etlReceipts"]["datasets"] = ["member_votes"]
+    owner["tables"] = {name + ".parquet": owner["tables"][name + ".parquet"]
+                       for name in ("member_votes", "bill_cosponsors")}
+    owner["etlReceipts"]["datasets"] = ["member_votes", "bill_cosponsors"]
     directory = tmp_path / "shaped"
     directory.mkdir()
     files = []
