@@ -23,11 +23,13 @@ class FederalRegisterRollup(RollupPipeline):
     """Federal Register documents ingested from federalregister.gov (no API key)."""
 
     name: ClassVar[str] = "federal-register"
+    retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
     output: ClassVar[str] = "federal_register.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return self.build_receipts(output_dir, build_federal_register, since=date_env("FR_SINCE"))
+        return self.build_receipts(output_dir, build_federal_register, since=date_env("FR_SINCE"),
+                                   evidence=self.source_evidence)
 
 
 app = make_rollup_app(FederalRegisterRollup)

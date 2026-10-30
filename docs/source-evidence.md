@@ -134,6 +134,26 @@ postconditions, late parsing and listing failures, credential exclusion,
 unchanged resumes, caps, prior-root pins and publication refusal. They do not
 establish live population completeness or deploy this feature.
 
+Federal Register scheduled builds also retain exact API pages before the source
+reader parses them. The byte-only fetcher exposes the request URL and response
+bytes; final URL, HTTP metadata and source capture time remain unknown. Journal
+time records local retention. Pages are source observations, including probes or
+refused responses, and do not establish a declared used-input set, central-archive
+membership or complete historical coverage. Earlier source gaps remain inherited.
+
+The Federal Register caller uses the existing blob/journal store, R2 publisher
+and always-retained workflow audit directory described above. A subsequent
+catalog/archive refresh can start from the published table's `artifact.json`,
+follow its `inputs` entry with role `source-evidence`, remove `sha256:` from that
+input's `artifactDigest`, and resolve `source-evidence/<hex>/artifact.json`,
+`members.json` and `journal.jsonl`. Each `retained-file` event pins the source URL, byte size and
+SHA-256; its `blob_member` resolves under `source-evidence/`, for example
+`source-evidence/blobs/sha256/<hex>`. Verify the existing artifact and member pins
+before passing those originals and journal receipts to the maintained archive
+import path. This is discovery of retained evidence, not another acquisition or
+writer. Failed-run observations stay in the workflow audit artifact and do not
+appear through a new table pointer.
+
 ## Transport captures and local inputs
 
 Full-retention transport captures stream directly into Rulespec's private
