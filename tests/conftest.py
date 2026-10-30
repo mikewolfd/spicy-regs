@@ -15,13 +15,14 @@ _ISOLATED_NAMES = frozenset({"AGENCIES", "API_GOV", "DATA_GOV_API_KEY", "SAM_API
 
 
 @pytest.fixture(autouse=True)
-def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+def isolate_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Delete pipeline environment variables before each non-``integration`` test."""
     if "integration" in request.keywords:
         return
     for name in list(os.environ):
         if name.startswith(_ISOLATED_PREFIXES) or name in _ISOLATED_NAMES:
             monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "central-raw"))
 
 
 class _NoBulkBillText:

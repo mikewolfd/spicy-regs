@@ -38,6 +38,7 @@ class MembersRollup(RollupPipeline):
                 directory, evidence=self.source_evidence,
                 acquirer=acquirer,
                 download_prior=lambda key, target: False,
+                declare_complete_inputs=True,
             )
 
         return self.build_receipts(output_dir, complete_rosters)

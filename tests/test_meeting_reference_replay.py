@@ -19,7 +19,7 @@ from spicy_docs.transport.captured import CapturedBodyResponse
 from spicy_regs.congress_receipts import write_congress_dataset
 from spicy_regs.pipelines.rollups.subject_receipts import dataset_policy
 from spicy_regs.generations import build_generation, implementation_id
-from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource, SourceEvidenceError
 from spicy_regs.transforms.build_congress_index import INDEX_SPECS, _Held, _unevidenced
 from spicy_regs.transforms.meeting_reference_replay import FIELDS, IDENTITY, replay_meeting_references
 
@@ -45,6 +45,14 @@ def source_files(root, details, *, legacy=False, declare_bodies=True):
         evidence.capture(CapturedBodyResponse(url, url, 200, "application/json", "2026-09-01T00:00:00Z", body),
                          stage="congress-listing-response")
     artifact = evidence.seal(outcome="build-complete")
+    # This fake public bucket and its legacy variants need physical shared
+    # members, just as the real publisher exports the virtual archive members.
+    reader = EvidenceMemberSource(evidence.artifact_dir)
+    for key in reader.blobs:
+        destination = evidence.artifact_dir / key
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with reader.open(key) as stream:
+            destination.write_bytes(stream.read())
     if legacy:
         journal = evidence.artifact_dir / "journal.jsonl"
         events = [json.loads(line) for line in journal.read_bytes().splitlines()]

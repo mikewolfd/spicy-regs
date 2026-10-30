@@ -14,6 +14,7 @@ from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_regs.generation_audit import _Run, _body_shapes
 from spicy_regs.source_evidence import (
     CaptureEvidence,
+    EvidenceMemberSource,
     SourceEvidenceError,
     _verify_receipts,
     require_current_evidence_root,
@@ -100,8 +101,10 @@ def test_file_and_stream_payloads_never_enter_upload_roots(tmp_path, monkeypatch
     verify_evidence(evidence.artifact_dir)
     assert spools and all(not path.exists() for path in spools)
     assert_private(output, PAYLOAD, REQUEST, b"private-source")
+    assert_private(evidence.store.root, PAYLOAD, REQUEST, b"private-source")
     if policy == "metadata_only":
         assert_private(output, hashlib.sha256(PAYLOAD).hexdigest().encode())
+        assert_private(evidence.store.root, hashlib.sha256(PAYLOAD).hexdigest().encode())
 
 
 def test_mixed_contexts_are_immutable_and_one_artifact_retains_only_full(tmp_path):
@@ -113,8 +116,11 @@ def test_mixed_contexts_are_immutable_and_one_artifact_retains_only_full(tmp_pat
         sources[1].policy = "full"
     artifact = evidence.seal(outcome="build-complete")
     verify_evidence(evidence.artifact_dir, expected_pin=artifact.pin)
-    blobs = list((evidence.artifact_dir / "blobs/sha256").iterdir())
-    assert [p.read_bytes() for p in blobs] == [b"full-body"]
+    source = EvidenceMemberSource(evidence.artifact_dir)
+    blobs = [key for key in source.keys() if key.startswith("blobs/sha256/")]
+    assert len(blobs) == 1
+    with source.open(blobs[0]) as stream:
+        assert stream.read() == b"full-body"
     with pytest.raises(SourceEvidenceError, match="sealed"):
         sources[1].capture(capture(PAYLOAD), stage="late")
 

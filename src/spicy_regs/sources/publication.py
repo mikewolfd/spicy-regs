@@ -813,18 +813,24 @@ def file_identity(path: Path, *, part_bytes: int = PART_BYTES) -> dict:
     the part MD5s plus the part count. ``_put_immutable`` uses ``PART_BYTES``;
     boto3's managed transfer uses 8 MiB parts.
     """
-    digest = hashlib.sha256()
-    parts = []
     with path.open("rb") as stream:
-        while chunk := stream.read(part_bytes):
-            checkpoint()
-            digest.update(chunk)
-            parts.append(hashlib.md5(chunk, usedforsecurity=False).digest())
+        return _stream_identity(stream, part_bytes=part_bytes)
+
+
+def _stream_identity(stream, *, part_bytes: int = PART_BYTES) -> dict:
+    """Measure the same upload identity for a file or a decoded central original."""
+    digest = hashlib.sha256()
+    parts, size = [], 0
+    while chunk := stream.read(part_bytes):
+        checkpoint()
+        digest.update(chunk)
+        size += len(chunk)
+        parts.append(hashlib.md5(chunk, usedforsecurity=False).digest())
     if len(parts) <= 1:
         etag = (parts[0] if parts else hashlib.md5(b"", usedforsecurity=False).digest()).hex()
     else:
         etag = f"{hashlib.md5(b''.join(parts), usedforsecurity=False).hexdigest()}-{len(parts)}"
-    return {"bytes": path.stat().st_size, "sha256": "sha256:" + digest.hexdigest(), "etag": f'"{etag}"'}
+    return {"bytes": size, "sha256": "sha256:" + digest.hexdigest(), "etag": f'"{etag}"'}
 
 
 def _get_bounded(client, bucket: str, key: str) -> tuple[bytes, str] | None:
@@ -919,9 +925,13 @@ def _put_immutable(client, bucket: str, key: str, path: Path, *, sha256: str | N
     transit. With ``sha256``, the bytes actually sent must hash to it before the
     object is created, so a content-addressed key never holds other bytes.
     """
+    _put_immutable_stream(client, bucket, key, lambda: path.open("rb"), path.stat().st_size, sha256=sha256)
+
+
+def _put_immutable_stream(client, bucket, key, open_body, size, *, sha256=None) -> None:
+    """Conditional bounded upload from any supported original-byte reader."""
     from botocore.exceptions import ClientError
 
-    size = path.stat().st_size
     if size > PART_BYTES * 10_000:
         raise PublicationError("Generation member exceeds the bounded multipart size")
     digest = hashlib.sha256()
@@ -935,7 +945,11 @@ def _put_immutable(client, bucket: str, key: str, path: Path, *, sha256: str | N
             raise PublicationError(f"Bytes sent for {key} differ from their content address")
 
     if size <= PART_BYTES:
-        body = checked(path.read_bytes())
+        with open_body() as stream:
+            raw = stream.read(size + 1)
+            if len(raw) != size:
+                raise PublicationError(f"Bytes sent for {key} differ from their declared size")
+            body = checked(raw)
         assert_content_address()
         try:
             client.put_object(Bucket=bucket, Key=key, **_IMMUTABLE_HEADERS, **body, ContentLength=size,
@@ -947,12 +961,18 @@ def _put_immutable(client, bucket: str, key: str, path: Path, *, sha256: str | N
 
     def upload_parts(upload_id: str) -> list[dict]:
         parts = []
-        with path.open("rb") as stream:
+        with open_body() as stream:
+            observed = 0
             while chunk := stream.read(PART_BYTES):
+                observed += len(chunk)
+                if observed > size:
+                    raise PublicationError(f"Bytes sent for {key} exceed their declared size")
                 part = len(parts) + 1
                 result = client.upload_part(Bucket=bucket, Key=key, UploadId=upload_id, PartNumber=part,
                                             **checked(chunk))
                 parts.append({"PartNumber": part, "ETag": result["ETag"]})
+        if observed != size:
+            raise PublicationError(f"Bytes sent for {key} differ from their declared size")
         assert_content_address()
         return parts
 
@@ -1028,9 +1048,10 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
     without retaining local verification copies.
     """
     from concurrent.futures import ThreadPoolExecutor
-    from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
+    from rulespec_artifacts import admit_artifact, iter_member_descriptors
+    from spicy_regs.source_evidence import EvidenceMemberSource
 
-    local = LocalMemberSource(path)
+    local = EvidenceMemberSource(path)
     prefix = f"{EVIDENCE_PREFIX}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
     declared = {member.object_key: member for member in iter_member_descriptors(artifact, local)}
     blobs, metadata = [], []
@@ -1047,9 +1068,13 @@ def _publish_evidence(client, bucket: str, path: Path, artifact) -> None:
         """Create the blob if absent; ``True`` when the stored object already equals the local bytes."""
         stored = _head(client, bucket, f"{EVIDENCE_PREFIX}/{key}")
         if stored is None:
-            _put_immutable(client, bucket, f"{EVIDENCE_PREFIX}/{key}", path / key, sha256=declared[key].sha256)
+            _put_immutable_stream(
+                client, bucket, f"{EVIDENCE_PREFIX}/{key}", lambda: local.open(key),
+                declared[key].byte_size, sha256=declared[key].sha256,
+            )
             return False
-        identity = file_identity(path / key)
+        with local.open(key) as stream:
+            identity = _stream_identity(stream)
         if (stored["ContentLength"], stored.get("ETag")) == (identity["bytes"], identity["etag"]):
             return True
         logger.warning("Stored evidence blob {} differs from its expected identity; reading it back", key)
@@ -1203,6 +1228,31 @@ def _stage_verified_generation(
         logger.info("publication: reused {} unchanged member(s) across generation prefixes", reused)
     # S3 success or caller-supplied metadata is not byte-verification evidence.
     admit_artifact(_S3Members(client, bucket, prefix), expected_pin=artifact.pin)
+    # Coverage metadata has its own prefix: table artifacts remain Parquet-only.
+    # Save and verify it before advancing the table pointer, including callers
+    # that publish native retained generations without RollupPipeline.
+    from io import BytesIO
+    from rulespec_artifacts import canonical_json_bytes
+    from spicy_regs.source_catalog.input_proof import input_proof
+    from spicy_regs.source_evidence import EvidenceMemberSource
+
+    proof_prefix = f"generation-inputs/{family}/{artifact.pin.artifact_digest.removeprefix('sha256:')}"
+    receipt, controls = input_proof(artifact, source, tuple(
+        (EvidenceMemberSource(path), item) for path, item in zip(evidence_directories, evidence, strict=True)
+    ), members=members)
+    for name, raw in sorted({**controls, "inputs.json": canonical_json_bytes(receipt)}.items()):
+        if isinstance(raw, tuple):
+            owner, member, expected_sha, size = raw
+            def open_body(owner=owner, member=member):
+                return owner.open(member)
+        else:
+            expected_sha, size = "sha256:" + hashlib.sha256(raw).hexdigest(), len(raw)
+            def open_body(raw=raw):
+                return BytesIO(raw)
+        _put_immutable_stream(client, bucket, proof_prefix + "/" + name, open_body, size, sha256=expected_sha)
+        with _S3Members(client, bucket, proof_prefix).open(name) as body:
+            if _stream_identity(body)["sha256"] != expected_sha:
+                raise PublicationError("Stored generation input proof differs from its exact inputs")
     return entry
 
 

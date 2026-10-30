@@ -358,6 +358,8 @@ jobs:
           if [ "$COMMAND" = 'build-fec-observations' ]; then
             ARGS+=(--manifest "$RUNNER_TEMP/fec-retained-inputs/manifest.json")
           fi
+          # Retain shared originals and receipts even when a build fails.
+          export SPICYGOV_RAW_ROOT="$GITHUB_WORKSPACE/output/raw-source-originals"
           uv run --frozen "$COMMAND" "${ARGS[@]}"
 
       - name: Retain FEC committee source evidence
@@ -388,6 +390,7 @@ jobs:
             output/disk-watch.log
             output/fec-inputs/
             output/source-evidence/
+            output/raw-source-originals/
           if-no-files-found: ignore
           retention-days: 30
 

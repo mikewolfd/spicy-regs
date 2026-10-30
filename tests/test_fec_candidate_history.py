@@ -90,7 +90,9 @@ def test_later_cycle_refusal_preserves_prior_and_never_publishes(tmp_path, monke
     captures = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
     captured = {r["sha256"] for r in captures if r["event"] == "capture"}
     assert {"sha256:" + hashlib.sha256(body).hexdigest() for body in files.values()} <= captured
-    assert list(evidence.artifact_dir.glob("blobs/sha256/*"))
+    for body in files.values():
+        with evidence.store.open("sha256:" + hashlib.sha256(body).hexdigest()) as stream:
+            assert stream.read() == body
     # The raw originals outlive the refused build, outside its staging directory.
     (attempt,) = tmp_path.glob(".builds/*/native.inputs/raw/fec-candidate-master-*")
     for body in files.values():
@@ -125,7 +127,7 @@ def test_complete_generation_binds_exact_responses_and_refresh_retires_rows(tmp_
     attempts = list(tmp_path.glob(".builds/*/native.inputs/raw/fec-candidate-master-*"))
     for body in files.values():
         digest = hashlib.sha256(body).hexdigest()
-        retained = evidence.artifact_dir / "blobs" / "sha256" / digest
+        retained = evidence.store.root / evidence.store.describe_blob(digest)["object"]
         copies = [
             attempt / "blobs" / "sha256" / digest
             for attempt in attempts

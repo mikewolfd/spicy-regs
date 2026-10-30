@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 import yaml
 from rulespec_artifacts import LocalMemberSource, admit_artifact, iter_member_descriptors
-from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
+from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 from spicy_docs.transport import acquisition
 
 from spicy_regs.generations import verify_generation
 from spicy_regs.pipelines.rollups.federal_register import FederalRegisterRollup
-from spicy_regs.source_evidence import JOURNAL, SourceEvidenceError, verify_evidence
+from spicy_regs.source_evidence import JOURNAL, EvidenceMemberSource, SourceEvidenceError, verify_evidence
 from spicy_regs.sources import publication as pub
 from spicy_regs.transforms.build_federal_register import _live_federal_register_documents
 from tests.test_federal_register import _RAW_DOC
@@ -29,6 +29,7 @@ def runner(tmp_path, monkeypatch, raw, *, publish=False):
         yield lambda url: raw
 
     monkeypatch.setattr(acquisition, "federal_register_fetcher", fetcher)
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "runner/output/raw-source-originals"))
     return FederalRegisterRollup(output_dir=tmp_path / "runner" / "output", skip_upload=not publish)
 
 
@@ -77,7 +78,7 @@ def test_real_rollup_publishes_observations_with_safe_retry(tmp_path, monkeypatc
     assert retained["sha256"] == "sha256:" + digest and retained["byte_size"] == len(raw)
     assert retained["requested_url"].startswith("https://www.federalregister.gov/")
     assert "resolved_url" not in retained and "observed_at" not in retained
-    assert not any(event.get("event") == "selected-inputs" for event in events)
+    assert all(not event["manifest"]["complete"] for event in events if event.get("event") == "selected-inputs")
     # The current main publisher moves only its maintained v2 pointer.
     assert remote.writes[-1] == pub.INDEX_V2_KEY
 
@@ -90,13 +91,13 @@ def test_failed_rollup_body_and_journal_survive_workflow_audit_restore(tmp_path,
     evidence = pipeline.source_evidence
     assert not list((pipeline.output_dir / "generations").glob("*"))
     assert evidence.artifact.root["spec"]["outcome"] == "failed"
-    relative = evidence.directory.relative_to(pipeline.output_dir / "source-evidence")
+    relative = evidence.directory.relative_to(pipeline.output_dir)
     packed = shutil.make_archive(str(tmp_path / "audit"), "zip",
-                                 root_dir=pipeline.output_dir / "source-evidence")
+                                 root_dir=pipeline.output_dir)
     shutil.rmtree(pipeline.output_dir.parent)
     restored = tmp_path / "restored-audit"
     shutil.unpack_archive(packed, restored)
-    source = LocalMemberSource(restored / relative / "artifact")
+    source = EvidenceMemberSource(restored / relative / "artifact", archive_root=restored / "raw-source-originals")
     assert admit_artifact(source, expected_pin=evidence.artifact.pin).pin == evidence.artifact.pin
     digest = hashlib.sha256(raw).hexdigest()
     with source.open("blobs/sha256/" + digest) as stream:
@@ -110,7 +111,7 @@ def test_retention_failure_prevents_generation(tmp_path, monkeypatch):
     pipeline = runner(tmp_path, monkeypatch, valid_page())
     def unavailable(*args, **kwargs):
         raise OSError("original storage unavailable")
-    monkeypatch.setattr(LocalSourceNativeBlobStore, "put_blob", unavailable)
+    monkeypatch.setattr(CentralRawArchiveStore, "put_blob", unavailable)
     with pytest.raises(SourceEvidenceError):
         pipeline.run()
     assert not list((pipeline.output_dir / "generations").glob("*"))
@@ -137,3 +138,4 @@ def test_workflow_always_retains_main_evidence_bodies_and_journal():
                  if step.get("name") == "Retain invocation and transferred-input audit")
     assert audit["if"] == "always()"
     assert "output/source-evidence/" in audit["with"]["path"].splitlines()
+    assert "output/raw-source-originals/" in audit["with"]["path"].splitlines()

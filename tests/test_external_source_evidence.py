@@ -14,7 +14,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline
-from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError, verify_evidence
+from spicy_regs.source_evidence import CaptureEvidence, EvidenceMemberSource, SourceEvidenceError, verify_evidence
 from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_regs.sources.crs_reports import CrsReportsReader
 from spicy_regs.sources.gao_reports import GaoReportsReader
@@ -33,7 +33,8 @@ def captures(evidence):
 
 
 def payload(evidence, capture):
-    return (evidence.artifact_dir / 'blobs/sha256' / capture['sha256'][7:]).read_bytes()
+    with EvidenceMemberSource(evidence.artifact_dir).open('blobs/sha256/' + capture['sha256'][7:]) as stream:
+        return stream.read()
 
 
 def stages(evidence):

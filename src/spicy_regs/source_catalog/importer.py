@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from .storage import Inputs, array_items, connect, schema, stable, stored_path
 
@@ -643,8 +644,19 @@ def build(
     publication_observations: Sequence[Path] = (),
     catalog_input: Path | None = None,
     table_inputs_input: Path | None = None,
+    temp_store: str = "file",
+    publication_reconciliation: Path | None = None,
 ) -> dict:
     """Validate a complete temporary index before atomic activation."""
+    if temp_store not in {"file", "memory"}:
+        raise ValueError("temp_store must be 'file' or 'memory'")
+    if (corpus / "raw/snapshot.json").is_file() or (corpus / "raw/acquisitions/sha256").is_dir():
+        corpus = corpus / "raw"
+    is_raw_archive = (corpus / "snapshot.json").is_file() or (corpus / "acquisitions/sha256").is_dir()
+    if is_raw_archive and output.resolve().is_relative_to(corpus.resolve()):
+        raise ValueError("The rebuildable catalog must live outside the raw archive")
+    if is_raw_archive and (catalog_input or table_inputs_input):
+        raise ValueError("Raw archive builds use retained source manifests, not corpus overlays")
     output.parent.mkdir(parents=True, exist_ok=True)
     inputs = Inputs(corpus)
     for source in Path(__file__).parent.glob("*.py"):
@@ -654,11 +666,23 @@ def build(
     descriptor, temporary = tempfile.mkstemp(prefix=output.name + ".", suffix=".tmp", dir=output.parent)
     os.close(descriptor)
     path = Path(temporary)
-    report: dict[str, object] = {"format": "spicy-source-reconciliation", "version": 1, "status": "building"}
+    report: dict[str, Any] = {
+        "format": "spicy-source-reconciliation",
+        "version": 1,
+        "status": "building",
+        "temp_store": temp_store,
+    }
     db = connect(path)
     try:
+        # Choose resource use before any schema or temporary cache is created.
+        db.execute("PRAGMA temp_store=" + temp_store.upper())
         schema(db)
-        importer = Importer(
+        importer_type = Importer
+        if is_raw_archive:
+            from .raw_archive import RawImporter
+
+            importer_type = RawImporter
+        importer = importer_type(
             db,
             inputs,
             configuration,
@@ -670,6 +694,14 @@ def build(
             importer.discovery(inputs.json(discovery_path))
         for selection_path in publication_observations:
             importer.publication_observation(inputs.json(selection_path))
+        if publication_reconciliation is not None:
+            from .publication import import_publications
+
+            report["publication"] = import_publications(db, inputs, publication_reconciliation)
+        if configuration.get("catalog_scope") is not None:
+            from .scope import install_scope
+
+            install_scope(db, configuration["catalog_scope"])
         for row in db.execute("""SELECT id FROM collections WHERE EXISTS
             (SELECT 1 FROM files WHERE files.collection_id=collections.id)
             AND NOT EXISTS (SELECT 1 FROM tables WHERE tables.collection_id=collections.id)
@@ -717,11 +749,23 @@ def build(
             files=len(actual),
             collections=db.execute("SELECT count(*) FROM collections").fetchone()[0],
         )
-        for key, value in {
+        if is_raw_archive:
+            assert isinstance(importer, RawImporter)
+            report["raw_archive"] = importer.summary()
+        metadata = {
             "generation": generation,
             "generatedAt": importer.generated_at,
             "reconciliation": report,
-        }.items():
+        }
+        if "publication" in report:
+            metadata["publication_reconciliation"] = {
+                "format": "spicy-publication-reconciliation-result",
+                "version": 1,
+                "generation": generation,
+                "phaseInputs": inputs.pins,
+                **report["publication"],
+            }
+        for key, value in metadata.items():
             db.execute("INSERT INTO metadata VALUES(?,?)", (key, encoded(value)))
         if db.execute("PRAGMA foreign_key_check").fetchall():
             raise RuntimeError("Catalog references failed validation")

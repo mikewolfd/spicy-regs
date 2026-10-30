@@ -140,13 +140,19 @@ def _live_federal_register_documents(since: date, *, output_dir: Path, evidence=
             body = fetch(url)
             # The fetcher exposes only request URL and bytes. Preserve the exact
             # response before parsing; final URL and HTTP capture time stay unknown.
-            evidence.retain_bytes(body, stage="api-page", source_url=url, requested_url=url,
+            evidence.retain_bytes(body, raw_source=True, stage="api-page", source_url=url, requested_url=url,
                                   covered_period={"requested_from": scope["publishedFrom"],
                                                   "requested_through": scope["publishedThrough"]})
             return body
 
         for page in federal_register.iter_federal_register_pages(retained_fetch, query_scope=scope, traversals=1):
             response = federal_register.parse_page_response(page.response_bytes)
+            import hashlib
+            evidence.declare_used_inputs(
+                [{"location": page.request_key, "sha256": "sha256:" + hashlib.sha256(page.response_bytes).hexdigest(),
+                  "bytes": len(page.response_bytes), "asset_kind": "json-body"}],
+                scope_id=f"{evidence.family}:successful-source-files", complete=False,
+            )
             if not federal_register.federal_register_records_included(response, query_scope=scope, page_window=None):
                 continue
             yield from response["results"]

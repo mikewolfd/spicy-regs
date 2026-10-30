@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from typing import TypedDict
 
+from .scope import UNUSABLE_STATUSES
+
 STAGES = ("expected", "advertised", "acquired", "processed", "published")
 
 
@@ -19,6 +21,7 @@ class _CoverageStage(TypedDict):
 
 def coverage(db, collection_id: str | None = None) -> dict:
     metadata = {row["key"]: json.loads(row["value"]) for row in db.execute("SELECT * FROM metadata")}
+    raw_archive = db.execute("SELECT id FROM evidence WHERE kind='raw-archive' LIMIT 1").fetchone()
     capture = {}
     capture_id = None
     for row in db.execute("SELECT id,data FROM evidence WHERE kind='corpus_catalog' ORDER BY id"):
@@ -86,10 +89,10 @@ def coverage(db, collection_id: str | None = None) -> dict:
                 period=assertion.get("period"),
             )
 
-        files = [
+        files = (
             (r, json.loads(r["data"]))
             for r in db.execute("SELECT * FROM files WHERE collection_id=? ORDER BY id", (cid,))
-        ]
+        )
         advertised = {}
         acquired = {}
         for file, facts in files:
@@ -99,9 +102,16 @@ def coverage(db, collection_id: str | None = None) -> dict:
             if (
                 "encoded_bytes" in facts
                 and file["sha256"]
-                and file["status"] not in {"missing-bytes", "receipt-only", "known-not-acquired", "external-by-choice"}
+                and file["status"]
+                not in UNUSABLE_STATUSES
             ):
-                acquired.setdefault(file["route_id"], []).append(file["id"])
+                # Raw archive membership is already bound by one manifest evidence
+                # record. Keep the count without copying every file ID into each
+                # public collection document; the paged file listing carries them.
+                if raw_archive:
+                    acquired[file["route_id"]] = acquired.get(file["route_id"], 0) + 1
+                else:
+                    acquired.setdefault(file["route_id"], []).append(file["id"])
         for (route, observation), items in sorted(advertised.items(), key=lambda pair: str(pair[0])):
             add(
                 "advertised",
@@ -116,11 +126,11 @@ def coverage(db, collection_id: str | None = None) -> dict:
         for route, ids in sorted(acquired.items(), key=lambda pair: str(pair[0])):
             add(
                 "acquired",
-                count=len(ids),
+                count=ids if raw_archive else len(ids),
                 unit="retained-file-record",
                 scope={"collection_id": cid},
                 route_id=route,
-                evidence_ids=ids,
+                evidence_ids=[raw_archive[0]] if raw_archive else ids,
                 version=metadata.get("generation"),
                 verification="manifest hash and local presence recorded at index build; bytes not rehashed",
             )
