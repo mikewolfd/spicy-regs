@@ -39,7 +39,7 @@ from loguru import logger
 
 from spicy_regs.sources import r2
 from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter
-from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader, record_json
+from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader, record_json, require_api_token
 from spicy_regs.transforms.court_scope import (
     CourtScope,
     build_docket_court_map,
@@ -316,6 +316,9 @@ def build_court_opinion_clusters(
         list_bulk_dumps,
     )
 
+    if not skip_search_catchup:
+        # Refuse before the bulk read: the search catch-up cannot run keyless.
+        require_api_token("Court opinion-cluster search catch-up")
     out_file = output_dir / OUTPUT
     prior_file = out_file if out_file.is_symlink() else output_dir / "_clusters_prior.parquet"
     new_file = output_dir / f".clusters-new-{uuid4().hex}.parquet"

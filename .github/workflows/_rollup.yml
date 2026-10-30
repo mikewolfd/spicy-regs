@@ -338,8 +338,10 @@ jobs:
           # delta is a few search pages, and keyless runs were timing out on 429s
           # (2026-09-21/22). A free token is capped per account (measured
           # 2026-09-22: 10/min, 100/hour, 250/day), below what the cluster
-          # rollup's ~660-page keyless search catch-up needs, so every other
-          # rollup stays keyless.
+          # rollup's ~660-page search catch-up needs, so every other rollup
+          # stays keyless. Live search now refuses without a token, so the
+          # cluster rollup's catch-up stops with that message until this job is
+          # given one (an owner call on the token's shared quota).
           COURTLISTENER_API_TOKEN: ${{ inputs.command == 'run-rollup-courtlistener' && secrets.COURTLISTENER_API_TOKEN || '' }}
           # Zyte is a paid proxy; only a rollup that reads www.gao.gov through it gets the token:
           # gao-recommendations (one request a run), and gao-reports only while its product-page read is on.

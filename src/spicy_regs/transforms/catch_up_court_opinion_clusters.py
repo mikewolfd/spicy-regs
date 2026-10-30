@@ -23,7 +23,7 @@ from spicy_regs.court_subjects import SUBJECT_SCHEMAS
 from spicy_regs.etl_receipts import combine_receipts
 from spicy_regs.selected_generations import SelectedInputs
 from spicy_regs.sources import publication
-from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader
+from spicy_regs.sources.courtlistener import CourtListenerOpinionSearchReader, require_api_token
 from spicy_regs.transforms._courtlistener_writer import CourtListenerTableWriter, check_headroom
 from spicy_regs.transforms.build_court_bulk_tables import _highest_cluster_id
 from spicy_regs.transforms.build_court_opinion_clusters import BATCH_ROWS, _SCHEMA, _shape_search
@@ -93,6 +93,7 @@ def catch_up_court_opinion_clusters(
 
     if not isinstance(source_edition, date) or not isinstance(search_budget, CourtListenerTraversalBudget):
         raise ValueError("Court catch-up requires an explicit source edition and traversal allocation")
+    require_api_token("Court opinion-cluster search catch-up")
     snapshot = evidence.read_snapshot
     if snapshot is None or evidence.family != FAMILY:
         raise ValueError("Court catch-up requires the captured court publication snapshot")

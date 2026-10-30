@@ -4,9 +4,10 @@ The provider owns requests, exact response parsing and cursor validation. Failed
 or incomplete walks raise before consumers replace their prior tables. Docket
 searches select APA/review-of-agency cases (nature of suit 899) or named docket
 ids; opinion searches provide cluster metadata for catch-up, not full opinion
-bodies, selected by filing date or by cluster id. An optional
-COURTLISTENER_API_TOKEN travels only in a request header. Every request is paced
-to the published per-minute limit.
+bodies, selected by filing date or by cluster id. COURTLISTENER_API_TOKEN is
+required for live API dispatch (SpicyDocs 0.66.6 refuses keyless search) and
+travels only in a request header. Every request is paced to the published
+per-minute limit.
 """
 
 from __future__ import annotations
@@ -65,6 +66,17 @@ def record_json(value: object) -> str:
 
 def _resolve_api_token() -> str | None:
     return os.environ.get(API_TOKEN_ENV_VAR, "").strip() or None
+
+
+def require_api_token(purpose: str) -> str:
+    """Refuse before any work when live search would run keyless, which SpicyDocs refuses at dispatch."""
+    token = _resolve_api_token()
+    if token is None:
+        raise CourtListenerError(
+            f"{purpose} requires {API_TOKEN_ENV_VAR}: CourtListener's live search API refuses keyless requests. "
+            "Set the token for this job, or build offline from pinned originals without the search catch-up."
+        )
+    return token
 
 
 class CourtListenerReader(Reader):

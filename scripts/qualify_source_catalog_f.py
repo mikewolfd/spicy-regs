@@ -401,9 +401,17 @@ def _court_replay(manifest_path: Path, output: Path) -> dict:
                 raise ValueError("Court replay request differs from selected occurrence")
             consumed.append(capture)
             return httpx.Response(200, stream=httpx.ByteStream(source.body(event)),
-                                  headers={"content-type": event["content_type"]}, request=request)
+                                  headers={"content-type": event["content_type"]}, request=request,
+                                  extensions={"spicy_docs_retained_observed_at": event["observed_at"]})
+        class HeldTransport(httpx.BaseTransport):
+            def replay_response(self, request):
+                return held_response(request)
+
+            def handle_request(self, request):
+                raise ValueError("Court retained qualification cannot dispatch live requests")
+
         with CourtListenerSearchReader(budget=PagedJsonBudget(1, 12 * 1024 * 1024, 30, 0),
-                                       transport=httpx.MockTransport(held_response)) as reader:
+                                       transport=HeldTransport()) as reader:
             for page_index, page in enumerate(reader.search(group["selection"]["url"], max_pages=len(group["captures"]))):
                 if len(consumed) != page_index + 1:
                     raise ValueError("Court replay page/capture occurrence differs")

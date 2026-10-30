@@ -336,7 +336,11 @@ def test_search_catchup_failure_after_flush_preserves_prior_and_output(tmp_path,
                 closed.append(True)
 
     monkeypatch.setattr(module.pq, "ParquetWriter", Writer)
-    next_url = f"{source.API_BASE}/search/?cursor=catchup-second"
+    from spicy_docs.sources.courtlistener.search import search_url
+
+    # A continuation keeps its selection, and live search carries a token (SpicyDocs 0.66.6).
+    next_url = search_url(kind="o", q="cluster_id:[2 TO 3]") + "&cursor=catchup-second"
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
 
     def respond(request):
         requests.append(request)
@@ -408,6 +412,8 @@ def test_a_prior_holding_the_newest_export_is_only_caught_up(
 ):
     """A weekly run re-streamed 7 GiB of unchanged dumps to add a few thousand search rows; it now reads neither."""
     import spicy_docs.sources.courtlistener.bulk as bulk
+
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")  # the search catch-up cannot run keyless
     from spicy_docs.sources.courtlistener.listing import BulkObject
 
     module = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")

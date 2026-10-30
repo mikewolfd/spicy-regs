@@ -9,7 +9,7 @@ import httpx
 import pyarrow.parquet as pq
 import pytest
 from rulespec_artifacts import LocalMemberSource, canonical_json_bytes, iter_member_descriptors
-from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
+from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget, search_url
 
 from spicy_regs.court_receipts import build_court_generation, local_receipt_selection, write_court_rows
 from spicy_regs.generations import verify_generation
@@ -90,6 +90,8 @@ def transport(monkeypatch, *pages):
             json=response if isinstance(response, dict) else {"detail": "refused"},
         )
 
+    # SpicyDocs 0.66.6 refuses keyless live search; the catch-up requires the token before any work.
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
     monkeypatch.setattr(
         delta,
         "CourtListenerOpinionSearchReader",
@@ -143,7 +145,7 @@ def test_disjoint_append_preserves_prior_values_receipts_and_ordinary_admission(
 def test_incomplete_search_refuses_before_conversion_or_prior_copy(selected, monkeypatch, failure):
     work, kwargs = selected
     kwargs["search_budget"] = CourtListenerTraversalBudget(1, 0)
-    next_url = "https://www.courtlistener.com/api/rest/v4/search/?type=o&cursor=next"
+    next_url = search_url(kind="o", q="cluster_id:[3 TO 6]") + "&cursor=next"  # a continuation keeps its selection
     calls = transport(
         monkeypatch,
         429 if failure == "http" else page([7]) if failure == "range" else page([4], total=2, next_url=next_url),
@@ -182,6 +184,7 @@ def test_overlap_is_refused_without_replacing_prior(selected, tmp_path):
 @pytest.mark.parametrize("member", ["subject", "receipts", "edition"])
 def test_input_mutation_during_search_refuses_before_conversion(selected, monkeypatch, member):
     work, kwargs = selected
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
     target = {
         "subject": kwargs["prior_directory"] / delta.OUTPUT,
         "receipts": kwargs["prior_directory"] / "etl_receipts.parquet",
@@ -199,3 +202,20 @@ def test_input_mutation_during_search_refuses_before_conversion(selected, monkey
     with pytest.raises(ValueError, match="changed"):
         delta.catch_up_court_opinion_clusters(work, **kwargs)
     assert not list(work.glob(".clusters-delta-*.parquet"))
+
+
+def test_catch_up_requires_token_before_reading_its_prior(selected, monkeypatch):
+    """SpicyDocs 0.66.6 refuses keyless live search; the weekly catch-up says so before any work."""
+    work, kwargs = selected
+    monkeypatch.delenv("COURTLISTENER_API_TOKEN", raising=False)
+    monkeypatch.setattr(delta.publication, "table_owner", lambda *_: pytest.fail("prior read before the token check"))
+    with pytest.raises(courtlistener.CourtListenerError, match="requires COURTLISTENER_API_TOKEN"):
+        delta.catch_up_court_opinion_clusters(work, **kwargs)
+
+
+def test_bulk_build_requires_token_before_reading_unless_search_is_skipped(tmp_path, monkeypatch):
+    build = importlib.import_module("spicy_regs.transforms.build_court_opinion_clusters")
+    monkeypatch.delenv("COURTLISTENER_API_TOKEN", raising=False)
+    monkeypatch.setattr(build.r2, "download", lambda *_: pytest.fail("prior read before the token check"))
+    with pytest.raises(courtlistener.CourtListenerError, match="requires COURTLISTENER_API_TOKEN"):
+        build.build_court_opinion_clusters(tmp_path)

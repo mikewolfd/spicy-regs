@@ -170,12 +170,16 @@ class Transport(httpx.MockTransport):
 
 @pytest.fixture(autouse=True)
 def bounded_requests(monkeypatch):
-    """Cap the reader's per-page retry budget so a transport failure surfaces immediately; run unpaced."""
+    """Cap the reader's per-page retry budget so a transport failure surfaces immediately; run unpaced.
+
+    SpicyDocs 0.66.6 refuses keyless live search, so these fake-transport walks carry a fixture token.
+    """
+    monkeypatch.setenv("COURTLISTENER_API_TOKEN", "fixture-token")
     monkeypatch.setattr(source, "_MAX_REQUESTS_PER_PAGE", 1)
     monkeypatch.setattr(source, "MIN_REQUEST_INTERVAL_SECONDS", 0.0)
 
 
-NEXT = f"{source.API_BASE}/search/?cursor=second"
+NEXT = f"{source.API_BASE}/search/?type=r&order_by=dateFiled+asc&nature_of_suit=899&cursor=second"
 
 
 def test_pagination_follows_cursor_next():
@@ -238,7 +242,10 @@ def test_opinion_catchup_stops_at_selected_export_ceiling():
 def test_caller_traversal_budget_stops_before_next_page():
     from spicy_docs.sources.courtlistener.search import CourtListenerTraversalBudget
 
-    transport = Transport(_page([11], NEXT, total=2, kind="o"))
+    from spicy_docs.sources.courtlistener.search import search_url
+
+    next_url = search_url(kind="o", q="cluster_id:[11 TO 13]") + "&cursor=second"
+    transport = Transport(_page([11], next_url, total=2, kind="o"))
     reader = CourtListenerOpinionSearchReader(
         above=10, through=13, transport=transport,
         traversal_budget=CourtListenerTraversalBudget(max_requests=1, max_wait_seconds=0),
@@ -466,3 +473,12 @@ def test_refused_refresh_keeps_prior_and_records_rejected_update(tmp_path, monke
     rows[:] = [{"docket_id": 1, "caseName": "Held", "party": ["Agency"]}]
     fourth = build_courtlistener(tmp_path, max_records=10)
     assert not [r for r in pq.read_table(local_receipt_selection(fourth)[0]).to_pylist() if r['outcome'] == 'refused']
+
+
+@pytest.mark.parametrize("reader", [CourtListenerReader, CourtListenerOpinionSearchReader])
+def test_operational_api_requires_token_before_dispatch(monkeypatch, reader):
+    monkeypatch.delenv("COURTLISTENER_API_TOKEN", raising=False)
+    transport = Transport()
+    with pytest.raises(ValueError, match="requires an API token"):
+        list(reader(transport=transport).iter_records())
+    assert transport.calls == []
