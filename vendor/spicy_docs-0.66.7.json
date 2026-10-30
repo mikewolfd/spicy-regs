@@ -1,0 +1,10 @@
+{
+  "filename": "spicy_docs-0.66.7-py3-none-any.whl",
+  "version": "0.66.7",
+  "sha256": "ed0b69575364a0728fc3122ce20e557bd5f7ec4112c20ed4ecd92c65c7eab073",
+  "byte_size": 2691891,
+  "source_commit": "a87cc3d1774bfb66b61260903f3c3a76ad10227a",
+  "source_state": "SpicyDocs fork main (build: version historical CMS policy admission as 0.66.7)",
+  "build": "uv 0.11.21 build --wheel --offline; two builds from clean git archives of the commit are byte-identical, and the same method reproduces the 0.66.6 wheel from 247bc77b",
+  "scope": "0.66.6 plus cms_profile_for_policy: explicitly declared CMS acquisition policy 1.0 for already admitted Part D and Medicaid releases."
+}
