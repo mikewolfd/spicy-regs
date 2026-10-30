@@ -263,10 +263,15 @@ def build_federal_register(
                 ) WHERE _rn = 1"""
         )
         merged_file = output_dir / "_fr_merged.parquet"
+        # Written in the contract's published order; SpicyDocs 0.66.6 lists ``rin`` before its newest fields.
+        published = published_columns()
+        if sorted(published) != sorted((*FEDERAL_REGISTER_COLUMNS, "rin")):
+            raise ValueError("Federal Register contract differs from its projection plus the derived rin")
+        selected = ", ".join(f"{_RIN_SQL} AS rin" if column == "rin" else column for column in published)
         con.execute(
             f"""
         COPY (
-            SELECT {cols}, {_RIN_SQL} AS rin
+            SELECT {selected}
             FROM _union records JOIN winners USING (_src, _row)
             ORDER BY publication_date DESC, document_number
         ) TO '{merged_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);

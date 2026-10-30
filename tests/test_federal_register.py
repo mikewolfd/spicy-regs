@@ -51,7 +51,8 @@ def test_shape_produces_exact_schema():
     row = project_federal_register_document(_RAW_DOC)
     # Every fetched column present, and nothing extra; ``rin`` is derived in the merge.
     assert set(row) == set(FEDERAL_REGISTER_COLUMNS)
-    assert COLUMNS == (*FEDERAL_REGISTER_COLUMNS, "rin")
+    # The contract orders them; SpicyDocs 0.66.6 lists ``rin`` before its newest fields.
+    assert sorted(COLUMNS) == sorted((*FEDERAL_REGISTER_COLUMNS, "rin")) and len(COLUMNS) == len(set(COLUMNS))
 
 
 def _collision_documents():
