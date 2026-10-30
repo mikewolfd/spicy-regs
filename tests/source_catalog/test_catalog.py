@@ -158,6 +158,31 @@ def test_failed_pin_validation_preserves_active_index(corpus, tmp_path, monkeypa
     assert not list(tmp_path.glob("*.tmp"))
 
 
+def test_rebuild_scope_exports_current_sources_and_keeps_saved_inventory(corpus, tmp_path):
+    config = write(tmp_path, "scope.json", {
+        "catalog_scope": {
+            "format": "spicy-source-scope", "version": 1,
+            "collections": [{"id": "corpus:test", "disposition": "active", "reason": "Published test family."}],
+            "excluded_objects": [],
+        },
+    })
+    first, second = tmp_path / "scoped.sqlite", tmp_path / "rebuilt.sqlite"
+    one = build(corpus, first, config=config)
+    two = build(corpus, second, config=config)
+    assert one["generation"] == two["generation"]
+    with connect(first, readonly=True) as db:
+        active = {r[0] for r in db.execute("SELECT id FROM files")}
+        assert {r[0] for r in db.execute("SELECT id FROM collections")} == {"corpus:test"}
+    with connect(first, readonly=True, scope="retained") as db:
+        retained = {r[0] for r in db.execute("SELECT id FROM files")}
+    with connect(first, readonly=True, scope="all") as db:
+        assert active | retained == {r[0] for r in db.execute("SELECT id FROM files")}
+        assert len(active) + len(retained) == 6
+    manifest = export(first, tmp_path / "scoped-public", page_size=2)
+    assert manifest["totals"]["aliases"] == len(active)
+    assert [c["id"] for c in manifest["collections"]] == ["corpus:test"]
+
+
 def test_discovery_unknown_and_failed_scope_survive(corpus, tmp_path):
     discovery = write(
         tmp_path,
@@ -202,6 +227,16 @@ def test_privacy_guard_rejects_internal_fields_and_secrets():
     for value in [{"localPath": "x"}, {"name": "/Users/private"}, {"url": "https://example.test/?token=secret"}]:
         with pytest.raises(ValueError):
             validate_public(value)
+
+
+def test_public_bulk_listing_preserves_scope_without_allowing_credentials():
+    from spicy_regs.source_catalog.exporter import public_url
+
+    url = "https://com-courtlistener-storage.s3-us-west-2.amazonaws.com/list.html?prefix=bulk-data/"
+    assert public_url(url) == url
+    assert public_url(url + "&token=private") is None
+    assert public_url(url.replace("bulk-data/", "other/")) is None
+    assert public_url(url.replace("com-courtlistener-storage", "other-bucket")) is None
 
 
 def test_native_blob_reference_and_requested_period(corpus, tmp_path):

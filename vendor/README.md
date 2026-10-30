@@ -5,6 +5,20 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
+- **Active: `spicy_docs-0.66.3+centralraw.02cc4431e606`**. Adds the shared raw
+  archive over the current `0.66.3` readers. Only `storage/raw_archive.py` and
+  the blob destination in `reading/refusals.py` differ; all other package files,
+  including current FEC and transport readers, match `0.66.3` exactly. The
+  [build receipt](spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.json)
+  pins both changed modules and wheel SHA-256
+  `6b220f0f77cb90994b8a79d5ce45b0e15986ea97260c80d13702d647a3aa3fc8`.
+  `python scripts/package_central_raw_reader.py --check` reproduces the wheel,
+  receipt and dependency pins from retained wheels without writing or downloading.
+  `--provider` selects a reviewed source checkout for the archive module;
+  `--write` explicitly updates the overlay after review. Keep both retained
+  provider wheels. Tests verify unchanged reader modules, streaming captures,
+  exact-byte reuse of raw and gzip storage, and interrupted-write cleanup.
+
 - `spicy_docs-0.66.3`: built from reviewed SpicyDocs commit `0950db0a`;
   SHA-256 `6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96`. It bounds CourtListener requests
   and waits across a search and honors valid 429 Retry-After delays. Earlier
@@ -28,6 +42,12 @@ Base CLI and MCP installs do not require them.
   qualification retention. Source shapes and existing publisher values remain
   unchanged. See [production operations](../docs/scorecards-production.md).
   Existing evidence pins and earlier wheels remain retained.
+
+- `spicy_docs-0.65.0+centralraw.523052e8a6fe`: retained historical archive
+  module provider; SHA-256
+  `2049deea32da3460cbaf3eac78594dbcf9d092daa6bc2c24d22b762c834f74d4`.
+  The current adapter reuses only `storage/raw_archive.py` from this capsule.
+  Its older FEC client and other reader changes are not adopted.
 
 - `spicy_docs-0.61.0`: tagged source `v0.61.0` at merge commit
   `76ec8628f608b1ed2080b8ef2a4a8c920af72c4f`. Its full tree equals the final

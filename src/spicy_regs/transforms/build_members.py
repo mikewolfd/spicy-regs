@@ -47,6 +47,7 @@ def build_members(
     evidence: CaptureEvidence | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
     receipt_build=None,
+    declare_complete_inputs: bool = False,
 ) -> tuple[Path, ...]:
     """Build members, terms and affiliations from both complete rosters."""
     if receipt_build is not None:
@@ -58,6 +59,7 @@ def build_members(
     member_rows: list[dict] = []
     term_rows: list[dict] = []
     affiliation_rows: list[dict] = []
+    selected = []
     for roster, acquire in (("current", acquirer.acquire_current), ("historical", acquirer.acquire_historical)):
         try:
             acquisition = acquire()
@@ -67,6 +69,11 @@ def build_members(
             raise
         if evidence:
             evidence.capture(acquisition.capture, stage=roster + ":used")
+        if declare_complete_inputs:
+            capture = acquisition.capture
+            selected.append({"source_id": capture.requested_url,
+                "source_version": capture.sha256, "version_kind": "sha256", "asset_kind": "json-body",
+                "sha256": capture.sha256, "bytes": len(capture.body), "location": capture.resolved_url})
         observed_at = acquisition.capture.observed_at
         records = acquisition.file.records
         logger.info("Members: {} roster — {:,} legislators", roster, len(records))
@@ -92,10 +99,15 @@ def build_members(
                     ))
 
     logger.info("Members: {:,} member rows, {:,} term rows", len(member_rows), len(term_rows))
-    return (
+    outputs = (
         merge_contract_table(output_dir, "members", member_rows, download_prior=download_prior),
         merge_contract_table(output_dir, "member_terms", term_rows, download_prior=download_prior),
         # Both complete rosters were read before any output is written. This is
         # the current source history, not a union of earlier captured histories.
         merge_contract_table(output_dir, "member_party_affiliations", affiliation_rows, prior_present=False),
     )
+    if declare_complete_inputs and evidence:
+        evidence.selected_inputs({"format": "spicy-selected-inputs", "version": 1,
+            "scope": {"id": "unitedstates-legislators:current-and-historical", "finite": True},
+            "complete": True, "used": selected, "available": selected, "expected": selected})
+    return outputs

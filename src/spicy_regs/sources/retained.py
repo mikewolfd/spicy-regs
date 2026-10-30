@@ -44,6 +44,16 @@ class RetainedGovInfoDiscoveryReader(GovInfoDiscoveryReader):
         self.evidence = evidence
         self.evidence.credential = self._key or ""
 
+    def packages(self, *args, **kwargs):
+        for page in super().packages(*args, **kwargs):
+            record_used_capture(self.evidence, page.capture, asset_kind="json-body")
+            yield page
+
+    def granules(self, *args, **kwargs):
+        for page in super().granules(*args, **kwargs):
+            record_used_capture(self.evidence, page.capture, asset_kind="json-body")
+            yield page
+
     def page(self, url: str, **kwargs):
         page = super().page(url, **kwargs)
         # pages() can reject count drift/overflow before yielding this page.
@@ -59,7 +69,23 @@ class RetainedCongressListingReader(CongressListingReader):
         self.evidence = evidence
         self.evidence.credential = self._key or ""
 
+    def records(self, *args, **kwargs):
+        for page in super().records(*args, **kwargs):
+            record_used_capture(self.evidence, page.capture, asset_kind="json-body")
+            yield page
+
     def page(self, url: str, **kwargs):
         page = super().page(url, **kwargs)
         self.evidence.capture(page.capture, stage="congress-listing-response")
         return page
+
+
+def record_used_capture(evidence, capture, *, asset_kind):
+    """Record a successfully parsed source file; whole-history closure stays incomplete."""
+    if evidence is None:
+        return
+    evidence.declare_used_inputs(
+        [{"location": capture.resolved_url, "sha256": capture.sha256,
+          "bytes": capture.byte_size, "asset_kind": asset_kind}],
+        scope_id=f"{evidence.family}:successful-source-files", complete=False,
+    )

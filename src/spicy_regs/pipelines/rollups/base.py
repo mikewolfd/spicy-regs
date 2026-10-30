@@ -281,6 +281,16 @@ class RollupPipeline(Pipeline):
                     read_operation.admit_generation(destination, expected_pin=artifact.pin)
             else:
                 publish_directory_no_replace(directory, destination)
+        from rulespec_artifacts import LocalMemberSource
+        from spicy_regs.source_catalog.input_proof import save_input_proof
+        from spicy_regs.source_evidence import EvidenceMemberSource
+
+        evidence = ((EvidenceMemberSource(self.source_evidence.artifact_dir),
+                     self.source_evidence.artifact),) if self.source_evidence else ()
+        save_input_proof(
+            output_dir / "generation-inputs" / family / artifact.pin.artifact_digest.removeprefix("sha256:"),
+            artifact, LocalMemberSource(destination), evidence,
+        )
         if self.skip_upload:
             logger.info("Verified local generation {}; upload skipped", destination)
         else:

@@ -1,8 +1,10 @@
 """Retain owner captures and bind their bytes to a separate audit artifact.
 
-This records responses used by a run, not a complete source population or a
-source-native release. Acquisition, credential checks and parsing stay in
-SpicyDocs. Rulespec owns blob integrity and artifact admission.
+Original responses and acquisition receipts use the central raw archive. Run
+metadata and generated inputs stay with the output; EvidenceMemberSource reads
+original bytes without copying them into each run. This records observed
+responses, not complete source coverage. SpicyDocs owns acquisition and storage;
+Rulespec owns integrity and artifact admission.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import hashlib
 import json
 import os
 import tempfile
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
@@ -31,6 +34,7 @@ from rulespec_artifacts import (
 )
 from spicy_docs.reading.refusals import RefusedResponse, retain_refused_response
 from spicy_docs.storage.blobs import LocalSourceNativeBlobStore
+from spicy_docs.storage.raw_archive import CentralRawArchiveStore, default_raw_archive_root
 from spicy_docs.transport.captured import CapturedBodyResponse, CompletedCapture, attached_capture
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
@@ -60,9 +64,11 @@ _OWNER_FIELDS = frozenset(
         "byte_size",
         "body_retained",
         "blob_member",
+        "blob_store",
         "request_body",
     }
 )
+ARCHIVE_REFERENCE = "source-archive.json"
 
 
 class SourceEvidenceError(RuntimeError):
@@ -73,10 +79,66 @@ class SourceEvidenceError(RuntimeError):
 class _RetainedBlobSource:
     """Open pinned raw members without the blob reader's preliminary hash pass."""
 
-    members: LocalMemberSource
+    store: CentralRawArchiveStore
 
     def open(self, blob_ref: str):
-        return self.members.open("sha256/" + blob_ref.removeprefix("sha256:"))
+        return self.store.open(blob_ref)
+
+
+@contextmanager
+def acquisition_evidence(family: str, *, output_dir: Path | None = None):
+    """Finish an acquisition's durable receipt even when its reader fails.
+
+    Standalone readers need no persistent run directory: central originals and
+    receipts survive removal of their temporary artifact metadata.
+    """
+    workspace = nullcontext(output_dir) if output_dir is not None else tempfile.TemporaryDirectory(prefix="source-evidence-")
+    with workspace as directory:
+        evidence = CaptureEvidence(Path(directory), family)
+        try:
+            yield evidence
+        except BaseException as error:
+            evidence.finish(error)
+            raise
+        else:
+            evidence.finish()
+
+
+class EvidenceMemberSource:
+    """Read run metadata locally and source bodies from the central archive.
+
+    The local pointer is transport configuration, outside the immutable artifact.
+    Artifact admission still hashes every original body against its member pin.
+    Moving an archive requires only updating SPICYGOV_RAW_ROOT, never its receipts.
+    """
+
+    def __init__(self, directory: Path, *, archive_root: Path | None = None):
+        self.local = LocalMemberSource(directory)
+        pointer = directory.parent / ARCHIVE_REFERENCE
+        self.references = json.loads(pointer.read_bytes()) if pointer.exists() else None
+        self.blobs = {}
+        if self.references is not None:
+            with self.local.open(JOURNAL) as stream:
+                for line in stream:
+                    event = json.loads(line)
+                    for body in (event, event.get("request_body"), event.get("response")):
+                        if isinstance(body, dict) and body.get("blob_store") == "central-raw":
+                            key = "blobs/sha256/" + body["sha256"].removeprefix("sha256:")
+                            if body.get("blob_member") != key:
+                                raise SourceEvidenceError("Invalid central source member reference")
+                            self.blobs[key] = body
+        self.store = None if self.references is None else CentralRawArchiveStore(
+            archive_root or Path(os.environ.get("SPICYGOV_RAW_ROOT", self.references["root"])), create=False
+        )
+
+    def keys(self):
+        return sorted(set(self.local.keys()) | self.blobs.keys())
+
+    def open(self, object_key):
+        if object_key in self.blobs:
+            assert self.store is not None
+            return self.store.open(self.blobs[object_key]["sha256"])
+        return self.local.open(object_key)
 
 
 class _StreamCheck:
@@ -118,11 +180,16 @@ class CaptureEvidence:
     treated the error as one item's source refusal.
     """
 
-    def __init__(self, output_dir: Path, family: str):
+    def __init__(self, output_dir: Path, family: str, *, archive_root: Path | None = None):
         self.directory = output_dir / "source-evidence" / uuid4().hex
         self.artifact_dir = self.directory / "artifact"
         self.artifact_dir.mkdir(parents=True)
-        self.store = LocalSourceNativeBlobStore(self.artifact_dir / "blobs")
+        self.store = CentralRawArchiveStore(archive_root or default_raw_archive_root())
+        self.local_store = LocalSourceNativeBlobStore(self.artifact_dir / "blobs")
+        self.run_id = self.directory.name
+        self._pending_blobs: set[str] = set()
+        self._pending_archive_receipts: list[dict] = []
+        self._write_archive_reference()
         self.family = family
         self.policy = "full"
         self._source_policies: dict[str, tuple[str, str, str]] = {}
@@ -135,6 +202,9 @@ class CaptureEvidence:
         #: Where the prior generation's own evidence journal is, and its events once read.
         self._prior_evidence: tuple[str | None, dict] | None = None
         self._prior_events: list[dict] | None = None
+        self._used_input_scope: tuple[str, bool] | None = None
+        self._used_inputs: dict[tuple, dict] = {}
+        self._direct_selection = False
         self.event(
             "run",
             family=family,
@@ -167,14 +237,16 @@ class CaptureEvidence:
         self._restricted_diagnostics |= policy != "full"
         return SourceEvidenceContext(self, publisher_id, policy, parser_version, policy_decision_id)
 
-    def _body(self, body: bytes) -> dict:
+    def _body(self, body: bytes, *, raw_source: bool = True) -> dict:
         """Public receipt for bytes, retaining them only under full policy."""
         result: dict[str, str | int | bool] = {"byte_size": len(body), "body_retained": self.policy == "full"}
         if self.policy != "metadata_only":
             result["sha256"] = "sha256:" + hashlib.sha256(body).hexdigest()
         if self.policy == "full":
-            self._blob(body)
+            self._blob(body, raw_source=raw_source)
             result["blob_member"] = "blobs/sha256/" + hashlib.sha256(body).hexdigest()
+            if raw_source:
+                result["blob_store"] = "central-raw"
         return result
 
     def _safe(self, value):
@@ -208,6 +280,12 @@ class CaptureEvidence:
             raw = canonical_json_bytes(
                 self._safe({"event": event, "recorded_at": datetime.now(UTC).isoformat(), **fields})
             )
+            if event in {"capture", "refusal", "capture-incomplete", "build-outcome"} or (
+                event == "retained-file" and fields.get("blob_store") == "central-raw"
+            ):
+                # Commit source provenance before the disposable run journal.
+                # A run-output failure must not orphan a retained original.
+                self._archive_receipt(json.loads(raw))
             with (self.artifact_dir / JOURNAL).open("ab") as stream:
                 stream.write(raw + b"\n")
                 stream.flush()
@@ -215,18 +293,71 @@ class CaptureEvidence:
         except Exception as error:
             raise self._failure("Cannot retain source evidence journal") from error
 
-    def _blob(self, body: bytes) -> dict:
+    def _write_archive_reference(self) -> None:
+        pointer = self.directory / ARCHIVE_REFERENCE
+        temporary = pointer.with_suffix(".tmp")
+        with temporary.open("wb") as stream:
+            stream.write(canonical_json_bytes({"root": str(self.store.root)}))
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(pointer)
+
+    def _archive_receipt(self, receipt: dict) -> None:
+        self._pending_archive_receipts.append(receipt)
+        self._flush_archive_receipts()
+
+    def _flush_archive_receipts(self) -> None:
+        while self._pending_archive_receipts:
+            receipt = self._pending_archive_receipts[0]
+            self._commit_archive_receipt(receipt)
+            for body in (receipt, receipt.get("request_body"), receipt.get("response")):
+                if isinstance(body, dict) and body.get("blob_store") == "central-raw":
+                    self._pending_blobs.discard(body["sha256"])
+            self._pending_archive_receipts.pop(0)
+
+    def _commit_archive_receipt(self, receipt: dict) -> None:
+        files = []
+        identity = {key: receipt[key] for key in (
+            "dataset_id", "native_id", "covered_period", "source_version", "name", "original_location",
+            "source_family", "source_record_key", "edition", "source_locator", "source_validation",
+        ) if key in receipt}
+        for body in (receipt, receipt.get("request_body"), receipt.get("response")):
+            if isinstance(body, dict) and body.get("blob_store") == "central-raw":
+                files.append({
+                    **identity,
+                    "sha256": body["sha256"], "bytes": body["byte_size"],
+                    "family": self.family,
+                    "source_url": receipt.get("resolved_url") or receipt.get("source_url")
+                    or receipt.get("requested_url") or body.get("request_key"),
+                    "observed_at": receipt.get("observed_at"),
+                    "acquired_at": receipt.get("observed_at") if receipt.get("event") == "capture" else None,
+                    "http_status": receipt.get("status_code"),
+                    "response_complete": receipt.get("response_complete"),
+                    "role": "request-body" if body is receipt.get("request_body") else receipt.get("role", "source-body"),
+                })
+        try:
+            self.store.record_receipt(files=files, receipt={**receipt, "run_id": self.run_id, "family": self.family})
+        except Exception as error:
+            raise self._failure("Cannot retain source acquisition receipt") from error
+
+    def _put_body(self, digest: str, byte_size: int, chunks, *, raw_source: bool) -> None:
+        store = self.store if raw_source else self.local_store
+        store.put_blob(digest, byte_size, chunks)
+        if raw_source:
+            self._pending_blobs.add(digest)
+
+    def _blob(self, body: bytes, *, raw_source: bool = True) -> dict:
         """Store response bytes content-addressed; refuses once the artifact has been sealed."""
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         digest = "sha256:" + hashlib.sha256(body).hexdigest()
         try:
-            self.store.put_blob(digest, len(body), [body])
+            self._put_body(digest, len(body), [body], raw_source=raw_source)
         except Exception as error:
             raise self._failure("Cannot retain source response bytes") from error
         return {"sha256": digest, "byte_size": len(body)}
 
-    def capture(self, capture: CapturedBodyResponse, *, stage: str) -> dict:
+    def capture(self, capture: CapturedBodyResponse, *, stage: str, source_validation: str | None = None, **fields) -> dict:
         """Retain one owner capture's body (and request body) into the evidence store.
 
         Anything that is not a ``CapturedBodyResponse`` raises
@@ -259,6 +390,8 @@ class CaptureEvidence:
                 else "Source response refused; credential-bearing bytes were not retained"
             )
             raise CredentialRefusedError(message)
+        if self.policy != "full" and source_validation not in {None, "refused"}:
+            raise SourceEvidenceError("Non-retaining source validation must use the fixed refusal marker")
         return self._record_capture(
             self._body(capture.body),
             stage=stage,
@@ -270,6 +403,10 @@ class CaptureEvidence:
             content_encoding=capture.content_encoding,
             method=capture.method,
             request_body=capture.request_body,
+            **({"source_validation": source_validation} if source_validation is not None else {}),
+            **{key: value for key, value in fields.items() if key not in _OWNER_FIELDS
+               and key not in {"requested_url", "resolved_url", "observed_at", "status_code",
+                               "content_type", "content_encoding", "method"}},
         )
 
     def _retain_file(
@@ -325,14 +462,14 @@ class CaptureEvidence:
         self.event("capture", **receipt)
         return receipt
 
-    def _file_blob(self, stream: IO[bytes], *, sha256: str, byte_size: int) -> dict:
+    def _file_blob(self, stream: IO[bytes], *, sha256: str, byte_size: int, raw_source: bool = True) -> dict:
         """Store bounded chunks, checking the complete bytes against their selected identity."""
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         try:
             stream.seek(0)
             if self.policy == "full":
-                self.store.put_blob(sha256, byte_size, iter(lambda: stream.read(_CHUNK), b""))
+                self._put_body(sha256, byte_size, iter(lambda: stream.read(_CHUNK), b""), raw_source=raw_source)
             else:
                 check = _StreamCheck(self, byte_size)
                 for chunk in iter(lambda: stream.read(_CHUNK), b""):
@@ -346,14 +483,18 @@ class CaptureEvidence:
             result["sha256"] = sha256
         if self.policy == "full":
             result["blob_member"] = "blobs/sha256/" + sha256.removeprefix("sha256:")
+            if raw_source:
+                result["blob_store"] = "central-raw"
         return result
 
-    def retain_bytes(self, body: bytes, *, stage: str, **fields) -> dict:
+    def retain_bytes(self, body: bytes, *, stage: str, raw_source: bool = False, **fields) -> dict:
         """Retain already bounded local input bytes without inventing an HTTP capture.
 
         Use the existing local-input receipt, with opaque observation identity.
         Restricted policies omit caller metadata because it can contain source
         excerpts or byte-derived identifiers, just as ``retain_file`` does.
+        Set ``raw_source=True`` only for publisher originals or acquisition
+        receipts. Selected fields, manifests and computed inputs stay run-local.
         """
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
@@ -361,7 +502,7 @@ class CaptureEvidence:
             raise SourceEvidenceError("Retained input must be immutable bytes")
         if self.credential and self.credential.encode() in body:
             raise CredentialRefusedError("Source input refused; credential-bearing bytes were not retained")
-        return self._retained(self._body(body), stage=stage, fields=fields)
+        return self._retained(self._body(body, raw_source=raw_source), stage=stage, fields=fields)
 
     def _retained(self, blob: dict, *, stage: str, fields: dict, name: str | None = None) -> dict:
         """Journal one local retained input; caller metadata cannot replace an owner-set field."""
@@ -372,12 +513,14 @@ class CaptureEvidence:
         self.event("retained-file", **receipt)
         return receipt
 
-    def retain_file(self, path: Path, *, stage: str, **fields) -> dict:
+    def retain_file(self, path: Path, *, stage: str, raw_source: bool = False, **fields) -> dict:
         """Retain a local file the run read rather than fetched, its exact bytes and digest, and journal it.
 
         For a one-time input kept outside the repository, such as a converted table, so the generation's evidence
         holds the bytes its rows came from. Hash and scan bounded chunks, then let the existing store verify
         them again while retaining them. A changed file cannot be journaled as a successful retention.
+        ``raw_source=True`` sends an explicit publisher original to the central
+        archive; converted tables and other generated inputs remain run-local.
         """
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
@@ -397,7 +540,7 @@ class CaptureEvidence:
                     or identity(path.stat()) != before
                 ):
                     raise self._failure("Source file changed during retention")
-                blob = self._file_blob(stream, sha256=check.sha256, byte_size=check.size)
+                blob = self._file_blob(stream, sha256=check.sha256, byte_size=check.size, raw_source=raw_source)
                 if identity(os.fstat(stream.fileno())) != before or identity(path.stat()) != before:
                     raise self._failure("Source file changed during retention")
         except (SourceEvidenceError, CredentialRefusedError):
@@ -406,7 +549,7 @@ class CaptureEvidence:
             raise self._failure("Cannot retain source file bytes") from error
         # Arbitrary caller fields and paths may contain excerpts; non-retaining
         # contexts publish only the bounded receipt, never local extraction names.
-        return self._retained(blob, stage=stage, fields=fields, name=path.name)
+        return self._retained(blob, stage=stage, fields={"original_location": str(path.resolve()), **fields}, name=path.name)
 
     def transport(self, transport=None, *, stage: str, max_bytes: int):
         """Observe streamed HTTP responses before owner parsing, including retries.
@@ -482,12 +625,13 @@ class CaptureEvidence:
                                 "sha256": result.blob_ref,
                                 "byte_size": result.byte_size,
                                 "body_retained": True,
+                                "blob_store": "central-raw",
                                 "blob_member": "blobs/sha256/" + result.blob_ref.removeprefix("sha256:"),
                             },
                             **metadata,
                         )
                         completed = CompletedCapture(
-                            source=_RetainedBlobSource(LocalMemberSource(evidence.store.root)),
+                            source=_RetainedBlobSource(evidence.store),
                             sha256=result.blob_ref,
                             byte_size=result.byte_size,
                             capture_id=receipt["capture_id"],
@@ -588,7 +732,7 @@ class CaptureEvidence:
             capture = attached_capture(error)
             if capture is not None:
                 # The exact bytes are retained whole; a second, bounded copy would only duplicate them.
-                self.capture(capture, stage=stage + ":refused")
+                self.capture(capture, stage=stage + ":refused", source_validation="refused")
             elif isinstance(error, Exception) and self.policy != "full":
                 refused = getattr(error, "refused_response", None)
                 if isinstance(refused, RefusedResponse) and refused.response_bytes is not None:
@@ -600,13 +744,14 @@ class CaptureEvidence:
             elif isinstance(error, Exception):
                 try:
                     retained = retain_refused_response(
-                        error, store=self.store.root, max_bytes=24 * 1024 * 1024, credential=self.credential
+                        error, store=self.store, max_bytes=24 * 1024 * 1024, credential=self.credential
                     )
                     if retained and "sha256" in retained:
                         retained.update(
                             body_retained=True,
                             byte_size=retained.pop("bytes"),
                             blob_member="blobs/sha256/" + retained["sha256"].removeprefix("sha256:"),
+                            blob_store="central-raw",
                         )
                 except Exception as failure:
                     raise self._failure("Cannot retain refused source response") from failure
@@ -617,6 +762,7 @@ class CaptureEvidence:
             evidence_policy=self.policy,
             message=self._safe(str(error))[:2000] if self.policy == "full" and not restricted_root else None,
             reason_code="source_refused",
+            source_validation="refused",
             response=retained,
             credential_refused=isinstance(error, CredentialRefusedError),
         )
@@ -678,7 +824,7 @@ class CaptureEvidence:
         if len(pins) > 1:
             raise self._failure("Managed prior names more than one source-evidence input")
         self._prior_evidence = (public_url, pins[0]) if pins else None
-        receipt = self._blob(raw)
+        receipt = self._blob(raw, raw_source=False)
         self.event(
             "lineage",
             prior_generation=prior,
@@ -741,16 +887,17 @@ class CaptureEvidence:
             raise SourceEvidenceError(
                 f"Source retention failed ({self.retention_failure}); evidence cannot seal as a complete build"
             )
+        self._flush_archive_receipts()
+        if self._pending_blobs:
+            raise self._failure("Unclaimed source body has no acquisition receipt")
+        with (self.artifact_dir / JOURNAL).open() as stream:
+            lineage_keys = self._finalize_used_inputs(
+                (json.loads(line) for line in stream), success=outcome == "build-complete"
+            )
         self.event("build-outcome", outcome=outcome)
         from spicy_regs.generations import implementation_id
 
-        source = LocalMemberSource(self.artifact_dir)
-        lineage_keys = set()
-        with (self.artifact_dir / JOURNAL).open() as stream:
-            for line in stream:
-                event = json.loads(line)
-                if event.get("event") == "lineage" and event.get("prior_root"):
-                    lineage_keys.add("blobs/sha256/" + event["prior_root"]["sha256"].removeprefix("sha256:"))
+        source = EvidenceMemberSource(self.artifact_dir, archive_root=self.store.root)
         members = [
             describe_member(
                 source,
@@ -783,6 +930,125 @@ class CaptureEvidence:
         self.artifact = artifact
         return self.artifact
 
+    def declare_used_inputs(self, inputs, *, scope_id: str, complete: bool = True) -> None:
+        """Accumulate successful parser reads; resolve their receipts only at successful seal.
+
+        Incremental readers may repeat one incomplete scope. A complete finite
+        selection has one caller, so incompatible scopes never imply a merger.
+        """
+        from spicy_regs.source_catalog.publication import count, sha
+
+        if self.artifact is not None:
+            raise SourceEvidenceError("Cannot declare inputs on sealed source evidence")
+        if (self._direct_selection or not isinstance(scope_id, str) or not scope_id.strip()
+                or type(complete) is not bool or not isinstance(inputs, (list, tuple))):
+            raise self._failure("Invalid or conflicting used-input declaration")
+        scope = (scope_id, complete)
+        if self._used_input_scope is not None and (self._used_input_scope != scope or complete):
+            raise self._failure("Incompatible used-input scopes or repeated complete selection")
+        normalized = []
+        try:
+            for item in inputs:
+                if (not isinstance(item, dict) or set(item) != {"location", "sha256", "bytes", "asset_kind"}
+                        or any(not isinstance(item[key], str) or not item[key].strip()
+                               for key in ("location", "asset_kind"))):
+                    raise ValueError("Invalid used-input descriptor")
+                normalized.append({**item, "location": self._safe(item["location"]),
+                                   "sha256": sha(item["sha256"]), "bytes": count(item["bytes"])})
+        except (ValueError, TypeError, KeyError) as error:
+            raise self._failure("Invalid used-input descriptor") from error
+        self._used_input_scope = scope
+        for item in normalized:
+            self._used_inputs[tuple(item[key] for key in ("location", "sha256", "bytes", "asset_kind"))] = item
+
+    def _finalize_used_inputs(self, events, *, success: bool) -> set[str]:
+        """Resolve one indexed journal pass; captures alone never create declarations."""
+        from spicy_regs.source_catalog.input_proof import source_observation, validate_selected_inputs
+
+        resolving = success and self._used_input_scope is not None
+        wanted = {(item["sha256"], item["bytes"], item["location"]) for item in self._used_inputs.values()} if resolving else set()
+        indexed, refused, lineage_keys = {}, set(), set()
+        for event in events:
+            if event.get("event") == "lineage" and event.get("prior_root"):
+                lineage_keys.add("blobs/sha256/" + event["prior_root"]["sha256"].removeprefix("sha256:"))
+            if not resolving:
+                continue
+            if event.get("event") == "selected-inputs":
+                raise self._failure("Conflicting direct and accumulated selected inputs")
+            observation = source_observation(event)
+            if observation is not None:
+                pin = observation["sha256"], observation["bytes"]
+                for location in observation["locations"]:
+                    key = (*pin, location)
+                    if key not in wanted:
+                        continue
+                    if event.get("source_validation") == "refused" or str(event.get("stage", "")).endswith(":refused"):
+                        refused.add(key)
+                    elif (observation["provenance"] == "capture-observation"
+                          and event.get("response_complete") is True
+                          and (event["event"] == "retained-file" or 200 <= event.get("status_code", 0) < 300)):
+                        native_id = next((str(event[field]) for field in ("native_id", "source_id")
+                                          if event.get(field) is not None), location)
+                        identity = native_id, observation["source_version"], observation["version_kind"]
+                        indexed.setdefault(key, {})[identity] = observation
+            response = event.get("response")
+            if event.get("event") == "refusal" and isinstance(response, dict) and response.get("sha256"):
+                for location in {response.get(key) or event.get(key) for key in
+                                 ("requested_url", "resolved_url", "original_location", "source_url")} - {None}:
+                    key = response["sha256"], response.get("byte_size", response.get("bytes")), location
+                    if key in wanted:
+                        refused.add(key)
+        if not resolving:
+            return lineage_keys
+        used = {}
+        for item in self._used_inputs.values():
+            key = item["sha256"], item["bytes"], item["location"]
+            matches = indexed.get(key, {})
+            if key in refused or not matches:
+                raise self._failure("Used original lacks a successful recorded capture or central-raw receipt")
+            if len(matches) != 1:
+                raise self._failure("Used original has ambiguous recorded native identity or version")
+            identity = next(iter(matches))[0]
+            matched = next(iter(matches.values()))
+            row = {**item, "source_id": identity, "source_version": matched["source_version"],
+                   "version_kind": matched["version_kind"]}
+            native = tuple(row[key] for key in ("source_id", "source_version", "version_kind", "asset_kind"))
+            if native in used and (used[native]["sha256"], used[native]["bytes"]) != key[:2]:
+                raise self._failure("Used native identity has conflicting bytes")
+            used.setdefault(native, row)
+        scope_id, complete = self._used_input_scope
+        manifest = {"format": "spicy-selected-inputs", "version": 1,
+                    "scope": {"id": scope_id, "finite": True}, "complete": complete,
+                    "used": list(used.values()), "available": [], "expected": []}
+        validate_selected_inputs(manifest)
+        self.event("selected-inputs", manifest=manifest)
+        return lineage_keys
+
+    def selected_inputs(self, manifest: dict, *, base: Path | None = None) -> None:
+        """Declare the build's exact used set and separate available/expected sets.
+
+        Call after input selection and before ``inputs()`` seals the journal.
+        Large inventories may be pinned Parquet files kept outside the raw
+        archive. A complete declaration requires a named finite scope; it does
+        not qualify inherited generations or publisher-wide coverage.
+        """
+        from spicy_regs.source_catalog.input_proof import validate_selected_inputs
+
+        if self._used_input_scope is not None or self._direct_selection:
+            raise self._failure("Conflicting direct and accumulated selected inputs")
+        validate_selected_inputs(manifest)
+        self._direct_selection = True
+        manifest = json.loads(json.dumps(manifest))
+        for item in manifest.get("coverage_inventories", []):
+            path = (base or Path.cwd()) / item["path"]
+            actual = self.retain_file(path, stage="coverage-inventory", raw_source=False,
+                                      original_location="coverage-inventory", inventory_role=item["role"])
+            if actual["sha256"] != item["sha256"] or actual["byte_size"] != item["bytes"]:
+                raise self._failure("Coverage inventory differs from its declared pin")
+            item["path"] = "blobs/sha256/" + actual["sha256"].removeprefix("sha256:")
+            item.setdefault("scope", manifest["scope"])
+        self.event("selected-inputs", manifest=manifest)
+
     def inputs(self) -> list[ArtifactInput]:
         """Seal as build-complete and return this run's artifact inputs for a generation."""
         artifact = self.seal(outcome="build-complete")
@@ -800,25 +1066,29 @@ class CaptureEvidence:
         swallowed = None
         if error is None and self.retention_failure and self.artifact is None:
             error = swallowed = SourceEvidenceError(f"Source retention failed: {self.retention_failure}")
-        if self.artifact is None:
-            if error is not None and not isinstance(error, SourceEvidenceError):
-                self.refusal(error, stage="run")
-            self.seal(outcome="failed" if error else "build-complete")
-        assert self.artifact is not None
-        (self.directory / "run-outcome.json").write_bytes(
-            canonical_json_bytes(
-                self._safe(
-                    {
-                        "outcome": "failed" if error else "complete",
-                        "artifact": self.artifact.pin.as_dict(),
-                        "error_type": type(error).__name__ if error else None,
-                        "message": self._safe(str(error))[:2000]
-                        if error and not self._restricted_diagnostics
-                        else None,
-                    }
-                )
-            )
-        )
+        seal_error = None
+        try:
+            if self.artifact is None:
+                if error is not None and not isinstance(error, SourceEvidenceError):
+                    self.refusal(error, stage="run")
+                self.seal(outcome="failed" if error else "build-complete")
+        except BaseException as failure:
+            # A failed admission still needs a durable failure receipt. It must
+            # never invent an admitted artifact pin or complete-build outcome.
+            error = seal_error = failure
+        outcome = self._safe({
+            "event": "run-outcome",
+            "outcome": "failed" if error else "complete",
+            "artifact": self.artifact.pin.as_dict() if self.artifact is not None else None,
+            "error_type": type(error).__name__ if error else None,
+            "message": self._safe(str(error))[:2000] if error and not self._restricted_diagnostics else None,
+        })
+        try:
+            self._archive_receipt(outcome)
+        finally:
+            (self.directory / "run-outcome.json").write_bytes(canonical_json_bytes(outcome))
+        if seal_error is not None:
+            raise seal_error
         if swallowed is not None:
             raise swallowed
 
@@ -863,6 +1133,9 @@ class SourceEvidenceContext:
 
     def _safe(self, value):
         return self.root._safe(value)
+
+    def _put_body(self, *args, **kwargs):
+        return self.root._put_body(*args, **kwargs)
 
     _blob = CaptureEvidence._blob
     _body = CaptureEvidence._body
@@ -1058,9 +1331,12 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
                     "response",
                     "credential_refused",
                     "bytes_received",
+                    "source_validation",
                 }
                 require(set(event) <= allowed, "Unexpected non-retaining receipt fields")
                 require(event.get("message") is None, "Non-retaining diagnostics contain source text")
+                require("source_validation" not in event or event["source_validation"] == "refused",
+                        "Non-retaining source validation must use the fixed refusal marker")
         if kind == "lineage" and event.get("prior_root") is not None:
             receipt = event["prior_root"]
             key = "blobs/sha256/" + receipt["sha256"].removeprefix("sha256:")
@@ -1077,9 +1353,9 @@ def _verify_receipts(source: MemberSource, artifact) -> None:
     require(set(source.keys()) <= claimed | controls, "Unadmitted file in evidence tree")
 
 
-def verify_evidence(evidence: Path | MemberSource, *, expected_pin=None):
+def verify_evidence(evidence: Path | MemberSource, *, expected_pin=None, archive_root: Path | None = None):
     """Admit the separate artifact from a directory or any member source; it must never masquerade as a table family."""
-    source = LocalMemberSource(evidence) if isinstance(evidence, Path) else evidence
+    source = EvidenceMemberSource(evidence, archive_root=archive_root) if isinstance(evidence, Path) else evidence
     artifact = admit_artifact(source, expected_pin=expected_pin)
     require_current_evidence_root(artifact.root)
     _verify_receipts(source, artifact)
