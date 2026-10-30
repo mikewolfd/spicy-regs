@@ -41,6 +41,7 @@ from loguru import logger
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
 from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
+from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS
 from spicy_regs.transforms.parquet_rows import str_or_none, write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -61,47 +62,10 @@ OVERLAP_DAYS = 7
 # trailing days instead of walking the (enormous) full archive.
 FILINGS_FIRST_RUN_DAYS = 30
 
-PROCEEDING_COLUMNS = (
-    "name",
-    "id_proceeding",
-    "description",
-    "bureau_code",
-    "bureau_name",
-    "rulemaking_or_docket",
-    "filing_status",
-    "date_created",
-    "date_closed",
-    "comment_start_date",
-    "comment_end_date",
-    "reply_comment_start_date",
-    "reply_comment_end_date",
-    "filed_by",
-)
+PROCEEDING_COLUMNS = LEGACY_COLUMNS["fcc_proceedings"]
 _PROCEEDING_SCHEMA = pa.schema([(c, pa.string()) for c in PROCEEDING_COLUMNS])
 
-FILING_COLUMNS = (
-    "id_submission",
-    "proceeding_names_json",
-    "submission_type",
-    "express_comment",
-    "date_received",
-    "date_submission",
-    "date_disseminated",
-    "filing_status",
-    "viewing_status",
-    "exparte_or_late_filed",
-    "filers_json",
-    "authors_json",
-    "lawfirms_json",
-    "bureaus_json",
-    "text_data",
-    "total_page_count",
-    "documents_json",
-    "filing_url",
-    "native_fields_json",
-    "native_fields_sha256",
-    "pdf_extraction_results_json",
-)
+FILING_COLUMNS = LEGACY_COLUMNS["fcc_filings"]
 _FILING_SCHEMA = pa.schema([(c, pa.string()) for c in FILING_COLUMNS])
 
 
@@ -521,6 +485,29 @@ def _docket_documents_in_preference(documents: list[dict]) -> list[dict]:
     return ordered
 
 
+PROCEEDING_SELECTION_RULE = "earliest-created/latest-modified/most-populated/lowest-id"
+
+
+def proceeding_rows(documents: Iterable[dict]) -> tuple[list[dict], list[str], list[str]]:
+    """Published rows for a whole proceedings walk, plus the nameless ids and repeated names it set aside.
+
+    One row per docket name, from its preferred document, newest created first then by name. The
+    builder and the source-catalog replay both call this, so a replay matches the producer by construction.
+    """
+    by_name: dict[str, list[dict]] = {}
+    nameless = []
+    for document in documents:
+        name = document.get("name")
+        if isinstance(name, str) and name.strip():
+            by_name.setdefault(name, []).append(document)
+        else:
+            nameless.append(str(document.get("id_proceeding")))
+    rows = [_shape_proceeding(_docket_documents_in_preference(docs)[0]) for docs in by_name.values()]
+    rows.sort(key=lambda row: row["name"])
+    rows.sort(key=lambda row: row["date_created"] or "", reverse=True)
+    return rows, nameless, sorted(name for name, docs in by_name.items() if len(docs) > 1)
+
+
 @receipt_builder
 def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None = None) -> Path:
     """Build ``fcc_proceedings.parquet`` from a whole walk of ECFS proceedings, one row per docket name.
@@ -541,25 +528,14 @@ def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None 
     documents = list(_fetch_fcc("proceedings", **({"transport": transport} if transport is not None else {})))
     if not documents:
         raise FccEcfsError("ECFS answered no proceedings at all; an empty whole walk is not an empty table")
-    by_name: dict[str, list[dict]] = {}
-    nameless = []
-    for document in documents:
-        name = document.get("name")
-        if isinstance(name, str) and name.strip():
-            by_name.setdefault(name, []).append(document)
-        else:
-            nameless.append(str(document.get("id_proceeding")))
+    rows, nameless, repeated = proceeding_rows(documents)
     if nameless:
         logger.warning("FCC proceedings: left out {} documents with no docket name: {}", len(nameless), nameless)
-    repeated = sorted(name for name, docs in by_name.items() if len(docs) > 1)
     if repeated:
         logger.info("FCC proceedings: {} docket names hold more than one document: {}", len(repeated), repeated)
     if evidence is not None:
         evidence.event("proceeding-selection", nameless_ids=nameless, repeated_names=repeated,
-                       selection_rule="earliest-created/latest-modified/most-populated/lowest-id")
-    rows = [_shape_proceeding(_docket_documents_in_preference(docs)[0]) for docs in by_name.values()]
-    rows.sort(key=lambda row: row["name"])
-    rows.sort(key=lambda row: row["date_created"] or "", reverse=True)
+                       selection_rule=PROCEEDING_SELECTION_RULE)
 
     staged = output_dir / f".{PROCEEDINGS_OUTPUT}.partial"
     pq.write_table(

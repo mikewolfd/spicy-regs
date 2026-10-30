@@ -649,22 +649,12 @@ def fcc_selection(corpus: Path, generation: str = FCC_GENERATION) -> dict:
 
 
 def _fcc_rows(documents: list[dict]) -> tuple[list[dict], dict]:
-    """Match the maintained producer's grouping/order using its preference and shaper."""
-    from spicy_regs.transforms.build_fcc_ecfs import _docket_documents_in_preference, _shape_proceeding
+    """The maintained producer's rows and selection decision for a retained whole walk."""
+    from spicy_regs.transforms.build_fcc_ecfs import PROCEEDING_SELECTION_RULE, proceeding_rows
     if not documents:
         raise ValueError("FCC empty whole refresh refuses")
-    by_name, nameless = {}, []
-    for document in documents:
-        name = document.get("name")
-        if isinstance(name, str) and name.strip():
-            by_name.setdefault(name, []).append(document)
-        else:
-            nameless.append(str(document.get("id_proceeding")))
-    rows = [_shape_proceeding(_docket_documents_in_preference(docs)[0]) for docs in by_name.values()]
-    rows.sort(key=lambda row: row["name"])
-    rows.sort(key=lambda row: row["date_created"] or "", reverse=True)
-    return rows, {"nameless_ids": nameless, "repeated_names": sorted(name for name, docs in by_name.items() if len(docs) > 1),
-                  "selection_rule": "earliest-created/latest-modified/most-populated/lowest-id"}
+    rows, nameless, repeated = proceeding_rows(documents)
+    return rows, {"nameless_ids": nameless, "repeated_names": repeated, "selection_rule": PROCEEDING_SELECTION_RULE}
 
 
 def _fcc_replay(manifest_path: Path, output: Path, owned: list) -> dict:
