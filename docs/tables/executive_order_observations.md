@@ -4,7 +4,7 @@
 
 **Executive order text and publisher history**
 
-Every numbered executive order in an explicitly selected complete Federal Register publication year, with searchable retained text, publisher attribution and literal history notes.
+Every numbered executive order in an explicitly selected complete Federal Register publication year, with retained text, publisher attribution and literal history notes.
 
 **Coverage.** Not a range. Designed for complete explicitly selected publication years with every admitted order represented, including explicit body acquisition failures. Full-year source and body qualification and public delivery are pending. The date records this design statement, not a source measurement. *(measured 2026-10-20)*
 

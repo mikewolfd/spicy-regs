@@ -6,7 +6,7 @@
 
 Source-reported drug and manufacturer spending for one explicitly selected benefit year, with separate Overall rows and literal source evidence.
 
-**Coverage.** Not measured by this schema. The date records this design statement, not a source measurement. The mapper requires one complete admitted Part D release and selects its benefit year. Original rows retain other supplied years. This does not establish current prices, net spending, all Medicare coverage or all historical releases. Local and public qualification are separate. *(measured 2026-10-20)*
+**Coverage.** Sampled by design; source coverage is not measured by this schema. The date records this design statement, not a source measurement. The mapper requires one complete admitted Part D release and selects its benefit year. Original rows retain other supplied years. This does not establish current prices, net spending, all Medicare coverage or all historical releases. Local and public qualification are separate. *(measured 2026-10-20)*
 
 - **Parquet file:** `cms_part_d_drug_spending.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

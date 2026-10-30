@@ -8,12 +8,14 @@ from the public or the budget deficit.
 
 The first retained source scope is United States federal debt on October 16,
 2026 and the September 30, 2026 MTS issue, including its FY2025 and FY2026
-Table 1 observations. Complete source Table 2 remains reconciliation evidence.
-Forecasts, other MTS tables, inflation adjustment and historical backfills are
-outside this typed delivery. This exact retained scope passed the source-release
-reader, domain build, local SQL query and publication checks in an in-memory
-store. Installed-package adoption and public publication remain pending; the
-local check does not establish a current public selection.
+Table 1 observations. Typed Table 2 delivery is pending: on 2026-10-30 the
+owner reversed the Table 1-only scope. Until it lands, the retained complete
+source Table 2 is reconciliation evidence only. Other MTS tables, inflation
+adjustment and historical backfills are outside this typed delivery. This
+exact retained scope passed the source-release reader, domain build, local SQL
+query and publication checks in an in-memory store. Installed-package adoption
+and public publication remain pending; the local check does not establish a
+current public selection.
 
 ## Amounts, dates and revisions
 
@@ -29,7 +31,8 @@ uses outlays minus receipts, while Table 2's surplus/deficit field reverses that
 sign. Table 1's raw `gross` field names remain intact. The statement's
 modified-cash methodology subtracts specified refunds and reimbursements; this
 mapper does not invent a separate gross series. Table 2 forecasts have different
-scale and missing-marker behavior, so its native cells stay untyped.
+scale and missing-marker behavior; typing them is part of the pending Table 2
+delivery, and until then Table 2's native cells stay untyped.
 
 The source `record_date` and `record_fiscal_year` describe the report issue even
 on prior-year rows. Economic years come from explicit `FY YYYY` parents; month

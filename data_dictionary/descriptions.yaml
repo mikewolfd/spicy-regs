@@ -10484,8 +10484,8 @@ tables:
     identity_columns: [observation_id]
     summary: Source-reported drug and manufacturer spending for one explicitly selected benefit year, with separate
       Overall rows and literal source evidence.
-    coverage: Not measured by this schema. The date records this design statement, not a source measurement.
-      The mapper requires one complete admitted Part D release and selects its
+    coverage: Sampled by design; source coverage is not measured by this schema. The date records this design
+      statement, not a source measurement. The mapper requires one complete admitted Part D release and selects its
       benefit year. Original rows retain other supplied years. This does not establish current prices, net spending,
       all Medicare coverage or all historical releases. Local and public qualification are separate.
     measured_on: '2026-10-20'
@@ -10530,8 +10530,8 @@ tables:
     identity_columns: [observation_id]
     summary: Source-reported drug and manufacturer spending for one explicitly selected benefit year, with separate
       Overall rows and literal source evidence.
-    coverage: Not measured by this schema. The date records this design statement, not a source measurement.
-      The mapper requires one complete admitted Medicaid release and selects its
+    coverage: Sampled by design; source coverage is not measured by this schema. The date records this design
+      statement, not a source measurement. The mapper requires one complete admitted Medicaid release and selects its
       benefit year. Original rows retain other supplied years. This does not establish current prices, net spending,
       all Medicaid services or beneficiaries or all historical releases. CMS excludes drugs with fewer than 11 claims in the latest year and redacts earlier-year
       cells below that threshold. A missing drug is not evidence of zero spending. Actual qualification is recorded
@@ -10578,7 +10578,8 @@ tables:
     identity_columns: [observation_id]
     summary: Source-reported fee-for-service drug spending and utilization at HCPCS billing-code grain,
       for one explicitly selected benefit year.
-    coverage: Not measured by this schema. The mapper requires one complete admitted Part B release and selects
+    coverage: Sampled by design; source coverage is not measured by this schema. The mapper requires one complete
+      admitted Part B release and selects
       its benefit year; original rows retain other supplied years. Excludes Medicare Advantage and other
       claims excluded by the CMS methodology. Drugs with fewer than 11 claims in the latest year are excluded;
       earlier-year information below that threshold is redacted. An absent drug is not zero spending.
@@ -10699,7 +10700,7 @@ tables:
     label: Executive order text and publisher history
     subject: reference
     summary: Every numbered executive order in an explicitly selected complete Federal Register publication year,
-      with searchable retained text, publisher attribution and literal history notes.
+      with retained text, publisher attribution and literal history notes.
     coverage: Not a range. Designed for complete explicitly selected publication years with every admitted order
       represented, including explicit body acquisition failures. Full-year source and body qualification and public
       delivery are pending. The date records this design statement, not a source measurement.

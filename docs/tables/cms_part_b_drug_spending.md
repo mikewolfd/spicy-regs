@@ -6,7 +6,7 @@
 
 Source-reported fee-for-service drug spending and utilization at HCPCS billing-code grain, for one explicitly selected benefit year.
 
-**Coverage.** Not measured by this schema. The mapper requires one complete admitted Part B release and selects its benefit year; original rows retain other supplied years. Excludes Medicare Advantage and other claims excluded by the CMS methodology. Drugs with fewer than 11 claims in the latest year are excluded; earlier-year information below that threshold is redacted. An absent drug is not zero spending. Actual qualification is recorded by the selected generation and retained source evidence. *(measured 2026-10-20)*
+**Coverage.** Sampled by design; source coverage is not measured by this schema. The mapper requires one complete admitted Part B release and selects its benefit year; original rows retain other supplied years. Excludes Medicare Advantage and other claims excluded by the CMS methodology. Drugs with fewer than 11 claims in the latest year are excluded; earlier-year information below that threshold is redacted. An absent drug is not zero spending. Actual qualification is recorded by the selected generation and retained source evidence. *(measured 2026-10-20)*
 
 - **Parquet file:** `cms_part_b_drug_spending.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

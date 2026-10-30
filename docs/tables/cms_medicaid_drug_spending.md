@@ -6,7 +6,7 @@
 
 Source-reported drug and manufacturer spending for one explicitly selected benefit year, with separate Overall rows and literal source evidence.
 
-**Coverage.** Not measured by this schema. The date records this design statement, not a source measurement. The mapper requires one complete admitted Medicaid release and selects its benefit year. Original rows retain other supplied years. This does not establish current prices, net spending, all Medicaid services or beneficiaries or all historical releases. CMS excludes drugs with fewer than 11 claims in the latest year and redacts earlier-year cells below that threshold. A missing drug is not evidence of zero spending. Actual qualification is recorded by the selected generation and retained source evidence. *(measured 2026-10-20)*
+**Coverage.** Sampled by design; source coverage is not measured by this schema. The date records this design statement, not a source measurement. The mapper requires one complete admitted Medicaid release and selects its benefit year. Original rows retain other supplied years. This does not establish current prices, net spending, all Medicaid services or beneficiaries or all historical releases. CMS excludes drugs with fewer than 11 claims in the latest year and redacts earlier-year cells below that threshold. A missing drug is not evidence of zero spending. Actual qualification is recorded by the selected generation and retained source evidence. *(measured 2026-10-20)*
 
 - **Parquet file:** `cms_medicaid_drug_spending.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
