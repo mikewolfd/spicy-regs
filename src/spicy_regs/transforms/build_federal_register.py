@@ -153,7 +153,9 @@ def _live_federal_register_documents(since: date, *, output_dir: Path, evidence=
                   "bytes": len(page.response_bytes), "asset_kind": "json-body"}],
                 scope_id=f"{evidence.family}:successful-source-files", complete=False,
             )
-            if not federal_register.federal_register_records_included(response, query_scope=scope, page_window=None):
+            if not federal_register.federal_register_records_included(
+                response, query_scope=scope, page_window=federal_register.federal_register_request_window(page.request_key)
+            ):
                 continue
             yield from response["results"]
 
