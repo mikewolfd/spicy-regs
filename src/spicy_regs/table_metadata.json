@@ -25327,17 +25327,17 @@
       {
         "column_name": "president_json",
         "column_type": "VARCHAR",
-        "description": "The Register's literal presidential attribution object, with identifier and name; no signer inference. NULL means unrequested/missing; JSON null and an empty object remain distinct. NULL also on a row not read since the field was first requested."
+        "description": "The Register's literal presidential attribution object, with identifier and name; no signer inference. NULL means unrequested/missing; JSON null and an empty object remain distinct."
       },
       {
         "column_name": "disposition_notes",
         "column_type": "VARCHAR",
-        "description": "Literal Register disposition prose; NULL if missing/null, empty text if stated empty. NULL also on a row not read since the field was first requested."
+        "description": "Literal Register disposition prose; NULL if missing/null, empty text if stated empty."
       },
       {
         "column_name": "executive_order_notes",
         "column_type": "VARCHAR",
-        "description": "Literal Register executive-order history prose, including spelling and line breaks; not an independently established current legal effect. NULL also on a row not read since the field was first requested."
+        "description": "Literal Register executive-order history prose, including spelling and line breaks; not an independently established current legal effect."
       },
       {
         "column_name": "regulations_dot_gov_agency_id",
