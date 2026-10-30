@@ -83,6 +83,16 @@ on:
         required: false
         default: ''
         type: string
+      spicy_regs_congresses:
+        description: 'Optional comma-separated Congress numbers or range (e.g. 93-119)'
+        required: false
+        default: ''
+        type: string
+      amendments_max_details:
+        description: 'Optional per-run detail request cap for the amendments rollup'
+        required: false
+        default: ''
+        type: string
       bill_family_max_version_fetches:
         description: 'Bill-family printing / pre-108 backfill acquisition cap; 0 disables those requests'
         required: false
@@ -308,7 +318,9 @@ jobs:
           CFR_REPLACE_ALL: ${{ inputs.cfr_replace_all }}
           LDA_SINCE: ${{ inputs.lda_since }}
           LDA_UNTIL: ${{ inputs.lda_until }}
-          BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses }}
+          BILL_FAMILY_CONGRESSES: ${{ inputs.bill_family_congresses || inputs.spicy_regs_congresses }}
+          SPICY_REGS_CONGRESSES: ${{ inputs.spicy_regs_congresses || inputs.bill_family_congresses }}
+          AMENDMENTS_MAX_DETAILS: ${{ inputs.amendments_max_details }}
           BILL_FAMILY_BILL_TYPES: ${{ inputs.bill_family_bill_types }}
           BILL_FAMILY_MAX_VERSION_FETCHES: ${{ inputs.bill_family_max_version_fetches }}
           ROLL_CALL_CHAMBERS: ${{ inputs.roll_call_chambers }}

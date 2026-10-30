@@ -1432,6 +1432,59 @@ def test_a_senate_row_published_before_its_file_columns_is_read_once_more_then_h
     assert resumed.requested == []
 
 
+def test_a_held_senate_nomination_vote_backfills_document_nomination_id_without_refetching(tmp_path, scoped):
+    """A held Senate vote whose documents_json predates nomination_id derives it in place from congress and document."""
+    first = tmp_path / "first"
+    first.mkdir()
+    fresh = _real_run(first, _no_prior, acquirer=RealBodyAcquirer(senate_rolls=(1,)), overlap=0)["119-senate-1-1"]
+    legacy_docs = json.dumps(
+        [
+            {
+                "congress": 119,
+                "type": "PN",
+                "number": "11-01",
+                "name": "PN11-01",
+                "title": "Marco Rubio, of Florida, to be Secretary of State",
+                "short_title": None,
+            },
+            {
+                "congress": 118,
+                "type": "PN",
+                "number": "PN0123-00",
+                "name": "PN0123-00",
+                "title": "Unpartitioned zero-padded PN",
+                "short_title": None,
+            },
+            {
+                "congress": 118,
+                "type": "PN",
+                "number": "PN123-02",
+                "name": "PN123-02",
+                "title": "Partitioned PN",
+                "short_title": None,
+            },
+            {
+                "congress": None,
+                "type": "PN",
+                "number": "730/02",
+                "name": "PN730/02",
+                "title": "Slash-partitioned PN inheriting vote congress",
+                "short_title": None,
+            },
+        ],
+        sort_keys=True,
+    )
+    legacy = {**fresh, "documents_json": legacy_docs}
+
+    second = tmp_path / "second"
+    second.mkdir()
+    acquirer = RealBodyAcquirer(senate_rolls=(1,))
+    rows = _real_run(second, _published({"roll_call_votes": [legacy], "member_votes": []}), acquirer=acquirer, overlap=0)
+    assert acquirer.requested == [], "held Senate row is backfilled in place without re-reading the XML"
+    docs = json.loads(rows["119-senate-1-1"]["documents_json"])
+    assert [d["nomination_id"] for d in docs] == ["119-pn-11-1", "118-pn-123", "118-pn-123-2", "119-pn-730-2"]
+
+
 def test_a_dispatch_names_its_chambers_and_cap_and_refuses_anything_else(monkeypatch):
     from spicy_regs.pipelines.rollups import roll_call_votes as rollup
     from spicy_regs.transforms.build_roll_call_votes import (

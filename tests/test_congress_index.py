@@ -707,6 +707,13 @@ def test_a_held_military_nomination_the_list_no_longer_names_reads_is_civilian_f
     rows, _ = _run(tmp_path, "nominations")
     by_citation = {row["citation"]: row["is_civilian"] for row in rows}
     assert by_citation == {"PN1189": "false", "PN1266": "false", "PN1273-8": "true", "PN937-10": "true"}
+    ids_by_citation = {row["citation"]: row["nomination_id"] for row in rows}
+    assert ids_by_citation == {
+        "PN1189": "119-pn-1189",
+        "PN1266": "119-pn-1266",
+        "PN1273-8": "119-pn-1273-8",
+        "PN937-10": "119-pn-937-10",
+    }
 
 
 @pytest.mark.parametrize('refuse_hearings',[False,True])
@@ -753,3 +760,80 @@ def test_deferred_nomination_details_have_no_fabricated_attempt(tmp_path):
     assert rows and not reader.details
     assert all(row['detail_read']=='false' for row in rows)
     assert not any(event['event']=='congress-detail-result' for event in journal.events)
+
+
+def test_nominations_earlier_congress_list_is_windowed_and_drains_unread_details(tmp_path):
+    listed_119 = json.loads((FIXTURES / "nomination-119.json").read_text())["nominations"]
+    listed_118 = [
+        {**listed_119[0], "congress": 118, "citation": "PN10", "number": 10, "partNumber": None, "updateDate": "2024-05-10T00:00:00Z"},
+        {**listed_119[1], "congress": 118, "citation": "PN20", "number": 20, "partNumber": None, "updateDate": "2024-06-20T00:00:00Z"},
+    ]
+    by_congress = {"119": listed_119, "118": listed_118}
+
+    class MultiCongressNominationReader(FixtureReader):
+        def records(self, route, url, *, max_pages=1):
+            self.urls.append(url)
+            parts = _path_of(url).split("/")
+            congress = parts[1]
+            records = by_congress[congress]
+            if route.name == "nomination":
+                from urllib.parse import parse_qs, urlparse
+
+                from_dt = parse_qs(urlparse(url).query).get("fromDateTime", [None])[0]
+                filtered = [r for r in records if not from_dt or str(r["updateDate"]) >= from_dt]
+                yield SimpleNamespace(records=tuple(filtered), declared_count=len(filtered))
+            elif route.name == "nomination-detail":
+                citation = "PN" + parts[2]
+                yield SimpleNamespace(
+                    records=[next(r for r in records if r["citation"] == citation)],
+                    declared_count=None,
+                )
+            elif route.name == "nomination-committees":
+                yield SimpleNamespace(records=[{"systemCode": "ssju00", "name": "Judiciary"}], declared_count=1)
+            else:
+                yield SimpleNamespace(records=[], declared_count=0)
+
+    first_reader = MultiCongressNominationReader()
+    out1 = build_index_table(
+        tmp_path,
+        INDEX_SPECS["nominations"],
+        reader=first_reader,
+        congresses=[119, 118],
+        max_details=3,
+        download_prior=no_download,
+    )
+    rows1 = pq.read_table(out1).to_pylist()
+    assert len(rows1) == 4
+    by_id1 = {row["nomination_id"]: row for row in rows1}
+    assert by_id1["118-pn-20"]["detail_read"] == "true"
+    assert by_id1["118-pn-10"]["detail_read"] == "false"
+
+    seed(tmp_path, "nominations", rows1)
+    second_reader = MultiCongressNominationReader()
+    out2 = build_index_table(
+        tmp_path,
+        INDEX_SPECS["nominations"],
+        reader=second_reader,
+        congresses=[119, 118],
+        max_details=3,
+        download_prior=no_download,
+    )
+    rows2 = pq.read_table(out2).to_pylist()
+    list_urls_2 = {_path_of(url): url for url in second_reader.urls if "limit=1" not in url and _path_of(url).count("/") == 1}
+    assert "fromDateTime=2024-06-18T23%3A59%3A59Z" in list_urls_2["nomination/118"]
+    assert "nomination/118/10" in second_reader.details
+    assert all(row["detail_read"] == "true" for row in rows2)
+
+    seed(tmp_path, "nominations", rows2)
+    third_reader = MultiCongressNominationReader()
+    build_index_table(
+        tmp_path,
+        INDEX_SPECS["nominations"],
+        reader=third_reader,
+        congresses=[119, 118],
+        max_details=3,
+        download_prior=no_download,
+    )
+    list_urls_3 = {_path_of(url): url for url in third_reader.urls if "limit=1" not in url and _path_of(url).count("/") == 1}
+    assert "fromDateTime=2024-06-18T23%3A59%3A59Z" in list_urls_3["nomination/118"]
+    assert third_reader.details == []

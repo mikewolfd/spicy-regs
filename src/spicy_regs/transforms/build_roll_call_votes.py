@@ -92,7 +92,11 @@ from spicy_docs.interpretation.vote_matching import (
     index_vote_references,
     read_vote_file_statement,
 )
-from spicy_docs.schemas.congress_activity_tables import shape_member_vote, shape_roll_call_vote
+from spicy_docs.schemas.congress_activity_tables import (
+    document_nomination_id,
+    shape_member_vote,
+    shape_roll_call_vote,
+)
 from spicy_docs.sources.congress.bill_status import BillIdentity, BillSourceError
 from spicy_docs.sources.congress.votes import (
     ClerkRollNotServedError,
@@ -465,6 +469,58 @@ def _backfill_vote_day(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.
     return table.append_column("vote_day", column), filled
 
 
+def _backfill_document_nomination_id(table: pa.Table, held: set[tuple[str, ...]]) -> tuple[pa.Table, int]:
+    """Backfill ``nomination_id`` inside ``documents_json`` on held prior Senate roll calls."""
+    import pyarrow as pa
+    from spicy_docs.schemas.tables import json_column
+
+    names = table.column_names
+    if "documents_json" not in names:
+        return table, 0
+    documents = table.column("documents_json").to_pylist()
+    identities = zip(*(table.column(c).to_pylist() for c in IDENTITY_COLUMNS))
+    filled = 0
+    for row, (identity, raw_documents) in enumerate(zip(identities, documents)):
+        if raw_documents is None or tuple(str(part) for part in identity) not in held:
+            continue
+        try:
+            items = json.loads(raw_documents)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(items, list) or not items:
+            continue
+        updated = []
+        changed = False
+        for item in items:
+            if not isinstance(item, dict):
+                updated.append(item)
+                continue
+            expected = document_nomination_id(
+                item.get("type"), item.get("number"), item.get("congress"), vote_congress=identity[0]
+            )
+            if "nomination_id" not in item or item.get("nomination_id") != expected:
+                changed = True
+            updated.append(
+                {
+                    "congress": item.get("congress"),
+                    "type": item.get("type"),
+                    "number": item.get("number"),
+                    "nomination_id": expected,
+                    "name": item.get("name"),
+                    "title": item.get("title"),
+                    "short_title": item.get("short_title"),
+                }
+            )
+        if changed:
+            documents[row] = json_column(updated)
+            filled += 1
+    if not filled:
+        return table, 0
+    logger.info("Roll-call votes: document nomination_id backfilled on {:,} prior roll call(s)", filled)
+    column = pa.array(documents, type=pa.string())
+    return table.set_column(names.index("documents_json"), "documents_json", column), filled
+
+
 def _relink_held_votes(
     table: pa.Table, held: set[tuple[str, ...]], recorded_by_vote: Mapping[VoteKey, Sequence[VoteReference]],
     recorded: frozenset[VoteKey] | None, congresses: Sequence[int], *, evidence: CaptureEvidence | None = None,
@@ -551,10 +607,11 @@ def _repair_held_votes(
 
     table = pq.read_table(prior_file)
     table, filled = _backfill_vote_day(table, held)
+    table, docs_filled = _backfill_document_nomination_id(table, held)
     table, relinked, held_links = _relink_held_votes(
         table, held, recorded_by_vote, recorded, congresses, evidence=evidence
     )
-    if filled or relinked:
+    if filled or docs_filled or relinked:
         staged = prior_file.with_name(f".{prior_file.name}.partial")
         pq.write_table(table, staged, compression="zstd")
         staged.replace(prior_file)

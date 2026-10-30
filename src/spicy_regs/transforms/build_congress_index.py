@@ -34,6 +34,7 @@ from spicy_docs.interpretation.communication_rin import (
 from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.schemas import TABLE_CONTRACTS
 from spicy_docs.schemas.congress_index_tables import (
+    nomination_id,
     shape_committee_meeting,
     shape_house_communication,
     shape_nomination,
@@ -196,16 +197,27 @@ def _rederive_communications(table: Any, read: Sequence[bool]) -> Any:
 
 
 def _rederive_civilian(table: Any, _read: Sequence[bool]) -> Any:
-    """``is_civilian`` again from each row's stored ``nomination_type_json``, through spicy-docs' own shaper.
+    """``is_civilian`` and ``nomination_id`` again from each row's stored columns, through spicy-docs' own rules.
 
     The list route is the table's only source and it drops records: PN1189 and PN1266, military, had left it before
     0.54.0 read ``isMilitary``, so a held row would keep an earlier build's answer for good. The object the shaper
     reads is stored whole, so its rule reaches every held row each run, as ``gao_decisions``' outcome does. O(rows).
     """
     kinds = table["nomination_type_json"].to_pylist()
-    return set_column(table, "is_civilian", [
+    table = set_column(table, "is_civilian", [
         shape_nomination({"nominationType": None if kind is None else json.loads(kind)})["is_civilian"] for kind in kinds
     ])
+    congresses = table["congress"].to_pylist()
+    numbers = table["number"].to_pylist()
+    parts = table["part_number"].to_pylist()
+    return set_column(
+        table,
+        "nomination_id",
+        [
+            nomination_id(congress, number, part_number)
+            for congress, number, part_number in zip(congresses, numbers, parts, strict=True)
+        ],
+    )
 
 
 def _communication_query(row: Row) -> Mapping[str, Any]:
@@ -422,15 +434,23 @@ def _rederive_held(output: Path, spec: IndexSpec) -> None:
 
 
 def _windows(
-    held: Mapping[tuple, _Held], congresses: Sequence[int], today: date | None = None, unevidenced: Set[tuple] = frozenset()
+    held: Mapping[tuple, _Held],
+    congresses: Sequence[int],
+    today: date | None = None,
+    unevidenced: Set[tuple] = frozenset(),
+    *,
+    table: str | None = None,
 ) -> dict[int, str]:
     """``fromDateTime`` per earlier Congress with held rows: the day before its newest stamp.
 
     The current Congress is walked whole. An earlier one is listed
     from the day before its newest held stamp, or before its oldest row whose
     detail is unread or unevidenced, so a row deferred by the detail cap is
-    listed again until it is read. A Congress with nothing held is walked whole
-    once. The key's first part is its Congress.
+    listed again until it is read (except ``nominations``, whose unread held
+    rows already carry their detail query columns in the prior table and are
+    queued directly from ``prior`` without re-walking the Congress list). A
+    Congress with nothing held is walked whole once. The key's first part is
+    its Congress.
     """
     current = current_congress(today)
     earliest: dict[int, str] = {}
@@ -445,11 +465,61 @@ def _windows(
     windows = {}
     for congress in congresses:
         if congress in newest:
-            stamp = earliest.get(congress, newest[congress])
+            stamp = newest[congress] if table == "nominations" else earliest.get(congress, newest[congress])
             opens, _ = utc_day_window(date.fromisoformat(stamp[:10]) - timedelta(days=1), None)
             if opens:
                 windows[congress] = opens
     return windows
+
+
+def _unread_prior_nominations(
+    prior: Path | None,
+    held: Mapping[tuple, _Held],
+    unevidenced: Set[tuple],
+    congresses: Sequence[int],
+    seen_keys: Set[tuple[str, ...]],
+) -> list[_Listed]:
+    """Synthesize ``_Listed`` entries for unread/unevidenced held ``nominations`` rows not in ``seen_keys``."""
+    if prior is None or not prior.exists():
+        return []
+    import pyarrow.parquet as pq
+
+    scoped = {str(int(c)) for c in congresses}
+    entries: list[_Listed] = []
+    for row in pq.read_table(prior).to_pylist():
+        congress = str(row.get("congress") or "")
+        citation = str(row.get("citation") or "")
+        if congress not in scoped or not citation:
+            continue
+        key = (congress, citation)
+        if key in seen_keys:
+            continue
+        state = held.get(key)
+        if state is None or (state.read and key not in unevidenced):
+            continue
+        kind_raw = row.get("nomination_type_json")
+        kind = None if kind_raw is None else json.loads(kind_raw)
+        latest_date = row.get("latest_action_date")
+        latest_text = row.get("latest_action_text")
+        record = {
+            "citation": citation,
+            "congress": int(congress) if congress.isdecimal() else congress,
+            "number": int(str(row["number"])) if str(row.get("number") or "").isdecimal() else row.get("number"),
+            "partNumber": row.get("part_number"),
+            "description": row.get("description"),
+            "organization": row.get("organization"),
+            "receivedDate": row.get("received_date"),
+            "nominationType": kind,
+            "latestAction": (
+                {"actionDate": latest_date, "text": latest_text}
+                if latest_date is not None or latest_text is not None
+                else None
+            ),
+            "updateDate": row.get("update_date"),
+            "url": row.get("url"),
+        }
+        entries.append(_Listed(key, record, shape_nomination(record, None)))
+    return entries
 
 
 @dataclass(slots=True)
@@ -593,8 +663,10 @@ def build_index_table(
         resolved, replay_ambiguous = replay_meeting_references(
             prior, unevidenced, evidence, base_url=os.getenv("R2_PUBLIC_URL", ""))
         unevidenced -= resolved
-    windows = _windows(held, congresses, unevidenced=unevidenced) if spec.trailing_congresses else {}
+    windows = _windows(held, congresses, unevidenced=unevidenced, table=spec.table)
     listed = _walk(reader, spec, congresses, identity, windows)
+    if spec.table == "nominations" and prior is not None:
+        listed.extend(_unread_prior_nominations(prior, held, unevidenced, congresses, {entry.key for entry in listed}))
 
     rows: list[Row] = []
     # Each wanted detail, and whether it is only a re-read for evidence of a row already held.

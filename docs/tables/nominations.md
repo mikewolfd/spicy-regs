@@ -17,6 +17,7 @@ One row per nomination or part, as the Congress.gov nomination list route states
 
 | Column | Type | Description |
 | --- | --- | --- |
+| `nomination_id` | `VARCHAR` | Canonical nomination key ({congress}-pn-{number}, plus -{part} when part_number is non-zero). |
 | `citation` | `VARCHAR` | The publisher's citation, its own display key, with the part where one exists (PN730-20). |
 | `congress` | `VARCHAR` | The numbered Congress the nomination was received in. |
 | `number` | `VARCHAR` | The PN number. |

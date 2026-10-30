@@ -37,11 +37,12 @@ publishing a truncated table.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Sequence
 from datetime import date, datetime, timedelta
 from operator import itemgetter
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from spicy_docs.reading.paged_json import PagedJsonBudget
@@ -91,19 +92,93 @@ OVERLAP_DAYS = 3
 MAX_WINDOW_DAYS = 90
 
 
-def _prior_max_update_date(prior_file: Path) -> date | None:
-    """Largest ``update_date`` in the prior table, or None if empty/absent."""
+def _prior_watermarks(prior_file: Path) -> dict[str, date]:
+    """Largest ``update_date`` per Congress in the prior table, in one scan; empty when absent."""
     if not prior_file.exists():
-        return None
+        return {}
     import duckdb
 
-    row = duckdb.sql(f"SELECT max(update_date) FROM read_parquet('{prior_file}')").fetchone()
-    if not row or row[0] is None:
+    marks = {}
+    for congress, stamp in duckdb.sql(
+        f"SELECT congress, max(update_date) FROM read_parquet('{prior_file}') GROUP BY congress"
+    ).fetchall():
+        try:
+            marks[str(congress)] = date.fromisoformat(str(stamp)[:10])
+        except ValueError:
+            continue
+    return marks
+
+
+def max_details_from_env(var: str = "AMENDMENTS_MAX_DETAILS") -> int | None:
+    """Optional per-run detail request cap from ``AMENDMENTS_MAX_DETAILS``."""
+    raw = os.environ.get(var, "").strip()
+    if not raw:
         return None
     try:
-        return date.fromisoformat(str(row[0])[:10])
-    except ValueError:
-        return None
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{var} must be a non-negative integer, got {raw!r}") from exc
+    if value < 0:
+        raise ValueError(f"{var} must be a non-negative integer, got {raw!r}")
+    return value
+
+
+def _amendment_key(record: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(record["congress"]),
+        str(record["type"]).lower(),
+        str(record["number"]),
+    )
+
+
+def _held_amendment_state(
+    prior_file: Path, congresses: Sequence[int]
+) -> tuple[set[tuple[str, str, str, str | None]], dict[tuple[str, str, str], str | None], list[dict[str, Any]]]:
+    """Return ``(enriched_at_stamp, held_stamps, unenriched_records)`` from ``prior_file`` for ``congresses``."""
+    if not prior_file.exists() or not congresses:
+        return set(), {}, []
+    import pyarrow.parquet as pq
+
+    scoped = {str(int(c)) for c in congresses}
+    enriched: set[tuple[str, str, str, str | None]] = set()
+    held_stamps: dict[tuple[str, str, str], str | None] = {}
+    unenriched: list[dict[str, Any]] = []
+    for row in pq.read_table(prior_file).to_pylist():
+        congress = str(row.get("congress") or "")
+        if congress not in scoped:
+            continue
+        key = (congress, str(row.get("amendment_type") or "").lower(), str(row.get("amendment_number") or ""))
+        stamp = row.get("update_date")
+        held_stamps[key] = stamp
+        has_detail = any(
+            row.get(col) is not None
+            for col in ("sponsor_bioguide_id", "sponsor_full_name", "amended_bill_id", "amended_amendment_id")
+        )
+        if has_detail:
+            enriched.add((*key, stamp))
+        else:
+            latest_date = row.get("latest_action_date")
+            latest_text = row.get("latest_action_text")
+            unenriched.append(
+                {
+                    "congress": int(congress) if congress.isdecimal() else congress,
+                    "type": key[1].upper(),
+                    "number": key[2],
+                    "purpose": row.get("purpose"),
+                    "description": row.get("description"),
+                    "proposedDate": row.get("proposed_date"),
+                    "submittedDate": row.get("submitted_date"),
+                    "chamber": row.get("chamber"),
+                    "updateDate": stamp,
+                    "latestAction": (
+                        {"actionDate": latest_date, "text": latest_text}
+                        if latest_date is not None or latest_text is not None
+                        else None
+                    ),
+                    "url": row.get("url"),
+                }
+            )
+    return enriched, held_stamps, unenriched
 
 
 def _instant(day: date | None, *, end: bool = False) -> str | None:
@@ -140,6 +215,7 @@ def build_amendments(
     reader: CongressListingReader | None = None,
     since: date | None = None,
     until: date | None = None,
+    max_details: int | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
     evidence: CaptureEvidence | None = None,
     receipt_build=None,
@@ -164,36 +240,55 @@ def build_amendments(
     prior_file = prior_scratch_path(output_dir, NAME)
     have_prior = prior_file.exists() or download_prior(OUTPUT, prior_file)
 
-    # 2. The window: from the stored watermark minus an overlap, forward at
-    # most one catch-up span.
-    since = since or date_env("AMENDMENTS_SINCE")
-    until = until or date_env("AMENDMENTS_UNTIL")
-    if since is None and have_prior:
-        watermark = _prior_max_update_date(prior_file)
-        since = (watermark - timedelta(days=OVERLAP_DAYS)) if watermark else None
-    if since is not None:
-        if until is not None and until < since:
-            raise ValueError(f"AMENDMENTS_UNTIL {until} precedes since {since}")
-        until = min(until or date.today(), since + timedelta(days=MAX_WINDOW_DAYS))
-    logger.info(
-        "Amendments: fetching amendments updated {} through {}",
-        since or "the beginning",
-        until or "now",
-    )
+    # 2. The window: explicit since/until when set, or per-Congress watermark
+    # from the prior table minus an overlap, forward at most one catch-up span.
+    explicit_since = since or date_env("AMENDMENTS_SINCE")
+    explicit_until = until or date_env("AMENDMENTS_UNTIL")
+    if max_details is None:
+        max_details = max_details_from_env()
+    if explicit_since is not None and explicit_until is not None and explicit_until < explicit_since:
+        raise ValueError(f"AMENDMENTS_UNTIL {explicit_until} precedes since {explicit_since}")
 
+    congresses = congresses_from_env()
     route = LIST_ROUTES["amendment"]
     rows: list[dict] = []
-    for congress in congresses_from_env():
+    listed_records: dict[tuple[str, str, str], dict[str, Any]] = {}
+    last_since: date | None = explicit_since
+    last_until: date | None = explicit_until
+
+    watermarks = _prior_watermarks(prior_file) if explicit_since is None and have_prior else {}
+    for congress in congresses:
+        congress_since = explicit_since
+        congress_until = explicit_until
+        if congress_since is None and have_prior:
+            watermark = watermarks.get(str(int(congress)))
+            congress_since = (watermark - timedelta(days=OVERLAP_DAYS)) if watermark else None
+        if congress_since is not None:
+            if congress_until is not None and congress_until < congress_since:
+                raise ValueError(f"AMENDMENTS_UNTIL {congress_until} precedes since {congress_since}")
+            congress_until = min(congress_until or date.today(), congress_since + timedelta(days=MAX_WINDOW_DAYS))
+        last_since, last_until = congress_since, congress_until
+        logger.info(
+            "Amendments: Congress {} — fetching amendments updated {} through {}",
+            congress,
+            congress_since or "the beginning",
+            congress_until or "now",
+        )
         url = list_route_url(
             route,
             congress=congress,
             limit=MAX_LIMIT,
             sort="updateDate desc",
-            from_datetime=_instant(since),
-            to_datetime=_instant(until, end=True),
+            from_datetime=_instant(congress_since),
+            to_datetime=_instant(congress_until, end=True),
         )
         pooled = reader.pooled(route, url, key=list_identity, version=itemgetter("updateDate"), max_pages=MAX_PAGES)
-        rows.extend(shape_amendment(_with_detail(reader, dict(record))) for record in pooled.records)
+        if max_details is None:
+            rows.extend(shape_amendment(_with_detail(reader, dict(record))) for record in pooled.records)
+        else:
+            for record in pooled.records:
+                item = dict(record)
+                listed_records[_amendment_key(item)] = item
         logger.info(
             "Amendments: Congress {} — {:,} amendments in window, in {} walk(s)",
             congress,
@@ -201,8 +296,32 @@ def build_amendments(
             pooled.passes,
         )
 
+    if max_details is not None:
+        enriched, held_stamps, unenriched_prior = (
+            _held_amendment_state(prior_file, congresses) if have_prior else (set(), {}, [])
+        )
+        candidates: list[tuple[tuple[str, str, str], dict[str, Any], bool]] = []
+        for key, record in listed_records.items():
+            stamp = record.get("updateDate")
+            if (*key, stamp) in enriched:
+                continue
+            candidates.append((key, record, True))
+        for record in unenriched_prior:
+            key = _amendment_key(record)
+            if key not in listed_records:
+                candidates.append((key, record, False))
+        candidates.sort(
+            key=lambda item: (str(item[1].get("updateDate") or ""), item[0]),
+            reverse=True,
+        )
+        for position, (key, record, from_list) in enumerate(candidates):
+            if position < max_details:
+                rows.append(shape_amendment(_with_detail(reader, dict(record))))
+            elif from_list and key not in held_stamps:
+                rows.append(shape_amendment(dict(record)))
+
     logger.info("Amendments: {:,} rows this run", len(rows))
     if evidence is not None:
-        evidence.event("amendment-selection", since=None if since is None else since.isoformat(),
-                       until=None if until is None else until.isoformat(), rows=len(rows))
+        evidence.event("amendment-selection", since=None if last_since is None else last_since.isoformat(),
+                       until=None if last_until is None else last_until.isoformat(), rows=len(rows))
     return merge_contract_table(output_dir, "amendments", rows, prior_present=have_prior, download_prior=download_prior)

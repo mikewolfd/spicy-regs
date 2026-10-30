@@ -492,3 +492,85 @@ def test_amendments_refuse_a_detail_that_answers_nothing(tmp_path, monkeypatch):
     reader = ShiftingListingReader([([_amendment(404)], 1)])
     with pytest.raises(RuntimeError, match="answered 0 records"):
         build_amendments(tmp_path, reader=reader, download_prior=no_download)
+
+
+def test_amendments_per_congress_watermark_and_bounded_max_details_drain_across_runs(tmp_path, monkeypatch):
+    from spicy_regs.transforms.build_amendments import build_amendments
+
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "118-119")
+    monkeypatch.delenv("AMENDMENTS_SINCE", raising=False)
+    monkeypatch.delenv("AMENDMENTS_UNTIL", raising=False)
+    seed(
+        tmp_path,
+        "amendments",
+        [
+            {
+                "amendment_id": "119-samdt-1",
+                "congress": "119",
+                "amendment_type": "samdt",
+                "amendment_number": "1",
+                "update_date": "2026-09-10T00:00:00Z",
+                "sponsor_bioguide_id": "S1",
+                "amended_bill_id": "119-hr-1",
+            }
+        ],
+    )
+    a118_old = {**_amendment(10, "2024-03-01T00:00:00Z"), "congress": 118}
+    a118_new = {**_amendment(20, "2024-04-01T00:00:00Z"), "congress": 118}
+
+    class MultiCongressReader(PageStubReader):
+        def __init__(self, c118_records):
+            super().__init__()
+            self.c118_records = c118_records
+            self.detail_urls: list[str] = []
+
+        def records(self, route, url, *, max_pages=100):
+            if route.name == "amendment-detail":
+                self.detail_urls.append(url)
+                number = url.split("?")[0].rsplit("/", 1)[1]
+                detail = {
+                    "sponsors": [{"bioguideId": f"S{number}", "fullName": f"Sen. {number}", "party": "D"}],
+                    "amendedBill": {"congress": 118, "type": "S", "number": "1"},
+                    "chamber": "Senate",
+                }
+                return iter((SimpleNamespace(records=(detail,), declared_count=None),))
+            self.urls.append(url)
+            if "/amendment/118" in url:
+                return iter((SimpleNamespace(records=tuple(self.c118_records), declared_count=len(self.c118_records)),))
+            return iter((SimpleNamespace(records=(), declared_count=0),))
+
+    r1 = MultiCongressReader([a118_old, a118_new])
+    out1 = build_amendments(tmp_path, reader=r1, max_details=1, download_prior=no_download)
+    assert any("/amendment/118" in u and "fromDateTime" not in u for u in r1.urls), (
+        "cold 118th Congress walks from the beginning even when 119th has a 2026 watermark"
+    )
+    assert any("/amendment/119" in u and "fromDateTime=2026-09-07" in u for u in r1.urls)
+    assert len(r1.detail_urls) == 1 and r1.detail_urls[0].split("?")[0].endswith("/118/samdt/20")
+    rows1 = {row["amendment_id"]: row for row in pq.read_table(out1).to_pylist()}
+    assert set(rows1) == {"119-samdt-1", "118-samdt-10", "118-samdt-20"}
+    assert rows1["118-samdt-20"]["sponsor_bioguide_id"] == "S20"
+    assert rows1["118-samdt-10"]["sponsor_bioguide_id"] is None
+
+    seed(tmp_path, "amendments", list(rows1.values()))
+    r2 = MultiCongressReader([])
+    out2 = build_amendments(tmp_path, reader=r2, max_details=1, download_prior=no_download)
+    assert any("/amendment/118" in u and "fromDateTime=2024-03-29" in u for u in r2.urls)
+    assert len(r2.detail_urls) == 1 and r2.detail_urls[0].split("?")[0].endswith("/118/samdt/10")
+    rows2 = {row["amendment_id"]: row for row in pq.read_table(out2).to_pylist()}
+    assert rows2["118-samdt-10"]["sponsor_bioguide_id"] == "S10"
+    assert rows2["118-samdt-10"]["amended_bill_id"] == "118-s-1"
+
+    # When an already-enriched row is re-listed with a newer updateDate but deferred by max_details,
+    # its held enriched fields (sponsor_bioguide_id, amended_bill_id) must not be overwritten by a list-only row.
+    seed(tmp_path, "amendments", list(rows2.values()))
+    r3 = MultiCongressReader(
+        [
+            {**_amendment(30, "2024-05-02T00:00:00Z"), "congress": 118},
+            {**_amendment(20, "2024-05-01T00:00:00Z"), "congress": 118},
+        ]
+    )
+    out3 = build_amendments(tmp_path, reader=r3, max_details=1, download_prior=no_download)
+    rows3 = {row["amendment_id"]: row for row in pq.read_table(out3).to_pylist()}
+    assert rows3["118-samdt-30"]["sponsor_bioguide_id"] == "S30"
+    assert rows3["118-samdt-20"]["sponsor_bioguide_id"] == "S20"
+    assert rows3["118-samdt-20"]["amended_bill_id"] == "118-s-1"

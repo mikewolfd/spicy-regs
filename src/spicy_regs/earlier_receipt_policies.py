@@ -118,6 +118,13 @@ def earlier_policies(policy):
             raise ValueError("Current FCC policy differs from the exact declared policy")
         history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
         return tuple(DatasetPolicy.from_descriptor(history[key]) for key in ("fcc_filings_v2", "fcc_filings"))
+    if policy.dataset == "nominations" and policy.policy_version == "congress-subjects/3":
+        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
+            "etl_policies/nominations.json").read_text()))
+        if policy.descriptor() != expected.descriptor():
+            raise ValueError("Current nominations policy differs from the exact declared policy")
+        history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
+        return tuple(DatasetPolicy.from_descriptor(history[key]) for key in ("nominations_v2", "nominations"))
     context_history = json.loads(files("spicy_regs").joinpath("source_context_policy_history.json").read_text())
     if policy.dataset in context_history and policy.policy_version in {
         "regulations-native-v2", "courts/2", "scorecards-etl-v2", "scorecards-etl-ratings-v4", "government-sources/3",
@@ -132,11 +139,13 @@ def earlier_policies(policy):
         return (prior, *earlier_policies(prior))
     history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
     if policy.dataset in history and policy.policy_version in {"congress-subjects/2", "government-sources/2", "navigation-read-outcomes/2"}:
-        if policy.policy_version == "navigation-read-outcomes/2":
+        if policy.policy_version == "navigation-read-outcomes/2" or policy.dataset == "roll_call_votes":
             expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
                 "etl_policies/" + policy.dataset + ".json").read_text()))
             if policy.descriptor() != expected.descriptor():
-                raise ValueError("Current House outcome policy differs from the exact declared policy")
+                if policy.policy_version == "navigation-read-outcomes/2":
+                    raise ValueError("Current House outcome policy differs from the exact declared policy")
+                raise ValueError(f"Current {policy.dataset} policy differs from the exact declared policy")
         earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
         if earlier.identity_fields != policy.identity_fields or earlier.dataset != policy.dataset:
             raise ValueError("Navigation migration changes a historical identity")

@@ -110,3 +110,11 @@ def test_a_non_numeric_congress_is_refused(monkeypatch):
     monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119,next")
     with pytest.raises(ValueError, match="Congress numbers"):
         congresses_from_env()
+
+
+def test_congress_range_and_spicy_regs_congresses_fallback(monkeypatch):
+    monkeypatch.delenv("BILL_FAMILY_CONGRESSES", raising=False)
+    monkeypatch.setenv("SPICY_REGS_CONGRESSES", "93-95, 119")
+    assert congresses_from_env() == (93, 94, 95, 119)
+    monkeypatch.setenv("BILL_FAMILY_CONGRESSES", "119-117")
+    assert congresses_from_env() == (119, 118, 117)

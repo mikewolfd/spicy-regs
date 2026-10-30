@@ -483,3 +483,17 @@ def test_bulk_restore_uses_retained_schema_for_python_mapped_datasets(tmp_path, 
     actual = restore_processing_input(*pair, tmp_path / "bulk.parquet", dataset=dataset, generation_id="g", bulk=True)
     assert pq.read_table(actual).equals(pq.read_table(expected), check_metadata=True)
     assert scans == [dataset] and admissions == [1]
+
+
+def test_earlier_policies_validates_roll_call_votes_current_descriptor():
+    from dataclasses import replace
+    from spicy_regs.congress_receipts import policy as congress_policy
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+
+    current = congress_policy("roll_call_votes")
+    admitted = earlier_policies(current)
+    assert len(admitted) == 1 and admitted[0].policy_version == "congress-subjects/1"
+
+    tampered = replace(current, subject_schema=current.subject_schema.remove(current.subject_schema.get_field_index("question")))
+    with pytest.raises(ValueError, match="Current roll_call_votes policy differs from the exact declared policy"):
+        earlier_policies(tampered)

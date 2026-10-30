@@ -11,9 +11,14 @@ on:
         default: false
         type: boolean
       congresses:
-        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        description: 'Comma-separated Congress numbers or range (e.g. 93-119); scheduled runs use 118-119'
         required: false
-        default: ''
+        default: '93-119'
+        type: string
+      max_details:
+        description: 'Maximum amendment detail requests per run (default 500)'
+        required: false
+        default: '500'
         type: string
 jobs:
   run:
@@ -22,5 +27,7 @@ jobs:
     with:
       command: run-rollup-amendments
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-      bill_family_congresses: ${{ inputs.congresses || '' }}
+      bill_family_congresses: ${{ inputs.congresses || '118-119' }}
+      spicy_regs_congresses: ${{ inputs.congresses || '118-119' }}
+      amendments_max_details: ${{ inputs.max_details || '500' }}
       timeout_minutes: 30

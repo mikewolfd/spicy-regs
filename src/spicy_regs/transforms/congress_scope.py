@@ -108,19 +108,37 @@ def default_congresses(today: date | None = None, *, trailing: int = 0) -> tuple
 def congresses_from_env(
     var: str = "BILL_FAMILY_CONGRESSES", *, today: date | None = None, trailing: int = 0
 ) -> tuple[int, ...]:
-    """Congress numbers from a comma-separated env var, defaulting to :func:`default_congresses`."""
+    """Congress numbers from a comma-separated env var (with inclusive ``start-end`` ranges), defaulting to :func:`default_congresses`."""
     raw = os.environ.get(var, "").strip()
+    if not raw and var == "BILL_FAMILY_CONGRESSES":
+        raw = os.environ.get("SPICY_REGS_CONGRESSES", "").strip()
     if not raw:
         return default_congresses(today, trailing=trailing)
-    congresses = []
+    congresses: list[int] = []
     for part in raw.split(","):
         part = part.strip()
         if not part:
             continue
+        if "-" in part and not part.startswith("-"):
+            bounds = part.split("-")
+            if len(bounds) != 2 or not bounds[0].strip() or not bounds[1].strip():
+                raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}")
+            try:
+                start, end = int(bounds[0].strip()), int(bounds[1].strip())
+            except ValueError as exc:
+                raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}") from exc
+            if start < 1 or end < 1:
+                raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}")
+            step = 1 if start <= end else -1
+            congresses.extend(range(start, end + step, step))
+            continue
         try:
-            congresses.append(int(part))
+            value = int(part)
         except ValueError as exc:
             raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}") from exc
+        if value < 1:
+            raise ValueError(f"{var} must be comma-separated Congress numbers, got {part!r}")
+        congresses.append(value)
     if not congresses:
         return default_congresses(today, trailing=trailing)
     return tuple(congresses)

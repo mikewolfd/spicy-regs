@@ -54,7 +54,9 @@ NATIVE = {
     ("record_issues", "sections_json"): objects("endPage name startPage text", text=objects("type url part")),
     ("record_issues", "entire_issue_json"): objects("part type url"),
     ("roll_call_votes", "tallies_json"): objects("choice count", count=INTEGER),
-    ("roll_call_votes", "documents_json"): objects("congress name number short_title title type", congress=INTEGER),
+    ("roll_call_votes", "documents_json"): objects(
+        "congress name nomination_id number short_title title type", congress=INTEGER
+    ),
     ("roll_call_votes", "amendments_json"): objects(
         "number purpose to_amendment_number to_amendment_to_amendment_number to_document_number to_document_short_title"),
     ("roll_call_votes", "party_totals_json"): objects("party yea-total nay-total present-total not-voting-total",
@@ -155,7 +157,7 @@ INPUT_COLUMNS = {
         'roster observed_at name_nickname'
     .split()),
     'nominations': tuple(
-        'citation congress number part_number description organization received_date is_civilian '
+        'nomination_id citation congress number part_number description organization received_date is_civilian '
         'nomination_type_json latest_action_date latest_action_text update_date url committees_json hearings_json detail_read'
     .split()),
     'press_releases': tuple(

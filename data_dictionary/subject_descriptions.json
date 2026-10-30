@@ -3946,6 +3946,7 @@
   },
   "nominations": {
     "columns": {
+      "nomination_id": "Canonical nomination key ({congress}-pn-{number}, plus -{part} when part_number is non-zero).",
       "citation": "The publisher's citation, its own display key, with the part where one exists (PN730-20).",
       "congress": "The numbered Congress the nomination was received in.",
       "number": "The PN number.",
@@ -4102,7 +4103,7 @@
       "member_vote_count": "How many member positions the file carried; the member_votes row count for this roll call.",
       "bill_id": "The bill this roll call refers to: from a bill action's recorded-vote reference, a vote-list reference, or the vote file's own statement of its measure.",
       "tally_kind": "positions for ordinary totals, candidates for native named-choice totals; NULL on legacy or linkage-only rows.",
-      "documents": "Ordered Senate document objects with native congress, type, number, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; this does not assert a matched bill or nomination. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
+      "documents": "Ordered Senate document objects with native congress, type, number, nomination_id, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; nomination_id carries {congress}-pn-{number}[-{part}] on PN documents and NULL otherwise. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "amendments": "Ordered Senate amendment objects with native number, to_amendment_number, to_amendment_to_amendment_number, to_document_number, to_document_short_title and purpose; [] for captured votes without amendments, NULL for legacy or linkage-only rows. Repeated empty-ID blocks remain separate observations; no document pairing is inferred. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "vote_day": "The chamber's own printed vote date as an ISO day (YYYY-MM-DD) in Eastern local time, which sorts where vote_date does not and is never the UTC day of a Congress.gov recordedVotes date; NULL where the file prints no date, on linkage-only rows, and on rows published before this column until a host backfills them.",
       "legis_num": "The Clerk's own legis-num as the House vote file states it (H R 3354, H RES 682, QUORUM); empty when a captured Clerk file states none; NULL on Senate rows, linkage-only rows and House rows captured before this column.",

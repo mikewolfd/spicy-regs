@@ -23733,8 +23733,8 @@
       },
       {
         "column_name": "documents",
-        "column_type": "STRUCT(congress BIGINT, \"name\" VARCHAR, number VARCHAR, short_title VARCHAR, title VARCHAR, \"type\" VARCHAR)[]",
-        "description": "Ordered Senate document objects with native congress, type, number, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; this does not assert a matched bill or nomination. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
+        "column_type": "STRUCT(congress BIGINT, \"name\" VARCHAR, nomination_id VARCHAR, number VARCHAR, short_title VARCHAR, title VARCHAR, \"type\" VARCHAR)[]",
+        "description": "Ordered Senate document objects with native congress, type, number, nomination_id, name, title and short_title; [] for captured votes without documents, NULL for legacy or linkage-only rows. Numbers retain publisher spelling, including nomination suffixes; nomination_id carries {congress}-pn-{number}[-{part}] on PN documents and NULL otherwise. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
       },
       {
         "column_name": "amendments",
@@ -26812,6 +26812,11 @@
     "measured_on": "2026-09-21",
     "data_quality": "List walks retain each complete Congress/citation identity and newest source update, including partitions. Inconsistent or incomplete walks fail before replacing outputs. Committee and hearing lists are independent: NULL is unread or unstated, while an empty list records a complete empty response. Civilian/military classification uses retained source flags; it does not infer confirmation.",
     "columns": [
+      {
+        "column_name": "nomination_id",
+        "column_type": "VARCHAR",
+        "description": "Canonical nomination key ({congress}-pn-{number}, plus -{part} when part_number is non-zero)."
+      },
       {
         "column_name": "citation",
         "column_type": "VARCHAR",
@@ -33433,7 +33438,7 @@
       {
         "dataset": "nominations",
         "receipt_only": false,
-        "policy_version": "congress-subjects/2",
+        "policy_version": "congress-subjects/3",
         "identity_columns": [
           "congress",
           "citation"
@@ -33587,7 +33592,7 @@
       {
         "dataset": "roll_call_votes",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "vote_id"
         ],

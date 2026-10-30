@@ -11,9 +11,9 @@ on:
         default: false
         type: boolean
       congresses:
-        description: 'Comma-separated Congress numbers (e.g. 118,119); blank uses the current Congress'
+        description: 'Comma-separated Congress numbers or range (e.g. 93-119); scheduled runs use 118-119'
         required: false
-        default: ''
+        default: '93-119'
         type: string
 jobs:
   run:
@@ -22,5 +22,6 @@ jobs:
     with:
       command: run-rollup-nominations
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-      bill_family_congresses: ${{ inputs.congresses || '' }}
+      bill_family_congresses: ${{ inputs.congresses || '118-119' }}
+      spicy_regs_congresses: ${{ inputs.congresses || '118-119' }}
       timeout_minutes: 30

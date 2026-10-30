@@ -2615,7 +2615,7 @@
       {
         "dataset": "nominations",
         "receipt_only": false,
-        "policy_version": "congress-subjects/2",
+        "policy_version": "congress-subjects/3",
         "identity_columns": [
           "congress",
           "citation"
@@ -2769,7 +2769,7 @@
       {
         "dataset": "roll_call_votes",
         "receipt_only": false,
-        "policy_version": "congress-subjects/1",
+        "policy_version": "congress-subjects/2",
         "identity_columns": [
           "vote_id"
         ],
@@ -9464,6 +9464,7 @@
       "measured_on": "2026-09-21",
       "data_quality": "List walks retain each complete Congress/citation identity and newest source update, including partitions. Inconsistent or incomplete walks fail before replacing outputs. Committee and hearing lists are independent: NULL is unread or unstated, while an empty list records a complete empty response. Civilian/military classification uses retained source flags; it does not infer confirmation.",
       "columns": [
+        "nomination_id",
         "citation",
         "congress",
         "number",

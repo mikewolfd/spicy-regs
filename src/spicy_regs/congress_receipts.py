@@ -54,7 +54,13 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         IDENTITIES.get(dataset, ()),
         RECEIPT_FIELDS,
-        policy_version="congress-subjects/2" if dataset in {"committee_meetings", "nominations", "house_communications", "member_vote_terms"} else "congress-subjects/1",
+        policy_version=(
+            "congress-subjects/3"
+            if dataset == "nominations"
+            else "congress-subjects/2"
+            if dataset in {"committee_meetings", "house_communications", "member_vote_terms", "roll_call_votes"}
+            else "congress-subjects/1"
+        ),
         receipt_only=dataset in RECEIPT_ONLY,
     )
 
@@ -89,15 +95,19 @@ def has_unmatched_failures(receipts: Path, priors: Mapping[str, Sequence[Path]] 
 
 def input_policy(dataset: str, subjects: Path | tuple[Path, ...] | None) -> DatasetPolicy:
     """Admit only a current or explicitly retained historical subject schema."""
+    from spicy_regs.etl_receipts import receipt_policies
+
     selected = policy(dataset)
     paths = () if subjects is None else (subjects,) if isinstance(subjects, Path) else subjects
-    if not paths or all(pq.read_schema(path).equals(selected.subject_schema, check_metadata=False) for path in paths):
-        return selected
+    for candidate in receipt_policies(selected):
+        if not paths or all(pq.read_schema(path).equals(candidate.subject_schema, check_metadata=False) for path in paths):
+            return candidate
     history = json.loads(Path(__file__).with_name("navigation_policy_history.json").read_text())
-    if dataset in history:
-        earlier = DatasetPolicy.from_descriptor(history[dataset])
-        if all(pq.read_schema(path).equals(earlier.subject_schema, check_metadata=False) for path in paths):
-            return earlier
+    for key in (f"{dataset}_v2", dataset):
+        if key in history:
+            earlier = DatasetPolicy.from_descriptor(history[key])
+            if all(pq.read_schema(path).equals(earlier.subject_schema, check_metadata=False) for path in paths):
+                return earlier
     raise ValueError(f"{dataset}: subject schema has no supported receipt policy")
 
 
