@@ -117,6 +117,9 @@ def test_late_unread_receipt_keeps_the_previous_selection(prepared, monkeypatch)
 
 def test_receipts_added_and_read_during_iteration_are_consistent(prepared, monkeypatch):
     root, args = prepared
+    # A known addition selects the full reader; another committed receipt can
+    # then arrive while that reader is running.
+    capture(root, b'{"results":[{"document_number":"2026-new"}]}')
     original = archive.iter_acquisition_receipts
     def included(*a, **kw):
         initial = list(original(*a, **kw))
@@ -126,7 +129,7 @@ def test_receipts_added_and_read_during_iteration_are_consistent(prepared, monke
         yield from ((p, r) for p, r in original(*a, **kw) if p not in known)
     monkeypatch.setattr(archive, 'iter_acquisition_receipts', included)
     result = maintenance.refresh_metadata(**args)
-    assert result['inputRefresh']['newReceipts'] == 1
+    assert result['inputRefresh']['newReceipts'] == 2
 
 
 def test_partial_replay_opens_only_named_original_and_preserves_family_pin(prepared, monkeypatch):

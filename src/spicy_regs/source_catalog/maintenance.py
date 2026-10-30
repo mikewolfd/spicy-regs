@@ -98,10 +98,11 @@ def refresh_metadata(index: Path, output: Path, *, config: Path | None = None,
                 and indexed_raw['raw_snapshot_sha256'] == raw['raw_snapshot_sha256']
                 and snapshot_bytes == (raw_root / "snapshot.json").stat().st_size,
                 "Raw inventory changed; rebuild holdings before refreshing metadata")
-        prior_receipts = {row[0] for row in source.execute("SELECT path FROM inputs")
+        prior_receipts = {row[0]: {"sha256": row[1], "bytes": row[2]}
+                          for row in source.execute("SELECT path,sha256,bytes FROM inputs")
                           if Path(row[0]).is_relative_to(raw_root / 'acquisitions/sha256')}
         if include_acquisitions:
-            require(prior_receipts <= {str(p.resolve()) for p in raw_root.glob('acquisitions/sha256/*/*')},
+            require(prior_receipts.keys() <= {str(p.resolve()) for p in raw_root.glob('acquisitions/sha256/*/*')},
                     "Previously indexed acquisition receipts disappeared")
         require(include_acquisitions or not refresh_content, "Content refresh requires acquisition reconciliation")
         require(not source_metadata.get("publication_reconciliation") or publication_reconciliation is not None,

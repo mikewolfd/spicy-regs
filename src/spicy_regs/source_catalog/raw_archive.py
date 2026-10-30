@@ -328,9 +328,64 @@ class RawImporter(Importer):
             CREATE TEMP TABLE retained_classification_candidates(sha256 TEXT PRIMARY KEY);
         """)
 
-    def import_receipts(self, skip=frozenset()):
+    def reuse_receipts(self, pins):
+        """Reuse accepted metadata only when the complete receipt set is unchanged.
+
+        Receipt bytes are authenticated again and checked at commit. Accepted
+        references receive one size check per unique original, using bounded
+        temporary state. New receipts still use the maintained full reader.
+        """
+        paths = self.receipt_paths()
+        if {str(self.root / path) for path in paths} != pins.keys():
+            return None
+        self.db.execute("CREATE TEMP TABLE receipt_checked_objects(object TEXT PRIMARY KEY)")
+        for relative in paths:
+            path = contained_file(self.root, relative)
+            expected = pins[str(path)]
+            with path.open("rb") as source:
+                payload = source.read(expected["bytes"] + 1)
+            actual = {"sha256": "sha256:" + hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
+            if actual != expected or actual["sha256"] != "sha256:" + path.name:
+                raise ValueError("Previously indexed acquisition receipt changed")
+            if self.inputs.pins.setdefault(str(path), actual) != actual:
+                raise ValueError("Acquisition receipt changed during metadata refresh")
+            # The exact bytes were admitted by the maintained reader before
+            # entering this index. Reuse that admission; only custody is mutable.
+            receipt = json.loads(payload)
+            for obj in receipt["objects"]:
+                inserted = self.db.execute("INSERT OR IGNORE INTO receipt_checked_objects VALUES(?)", (obj["object"],))
+                if inserted.rowcount:
+                    current = contained_file(self.root, obj["object"]).lstat()
+                    if not stat.S_ISREG(current.st_mode) or current.st_size != obj["stored_bytes"]:
+                        raise ValueError("Retained original stored size differs from its indexed receipt")
+        content_reviews = []
+        indexed = set()
+        for (data,) in self.db.execute("SELECT data FROM evidence WHERE kind='acquisition-receipt'"):
+            item = json.loads(data)
+            relative = item["object"]
+            path = str(self.root / relative)
+            if path not in pins or item["sha256"] != pins[path]["sha256"] or relative in indexed:
+                raise ValueError("Indexed acquisition receipt metadata differs from its accepted pin")
+            indexed.add(relative)
+            if "content_review" in item["receipt"]:
+                content_reviews.append((item["receipt"]["content_review"], {
+                    "manifest": relative, "sha256": item["sha256"],
+                }))
+        if indexed != set(paths):
+            raise ValueError("Indexed acquisition receipt metadata is incomplete")
+        self.acquisition_paths = paths
+        if self.receipt_paths() != paths:
+            raise RuntimeError("Acquisition receipts changed during catalog rebuild; retry")
+        return content_reviews
+
+    def import_receipts(self, skip=None):
         from spicy_docs.storage.raw_archive import iter_acquisition_receipts
 
+        skip = skip or {}
+        if skip:
+            reused = self.reuse_receipts(skip)
+            if reused is not None:
+                return reused
         visited = set()
         content_reviews = []
         for path, receipt in iter_acquisition_receipts(self.root):
