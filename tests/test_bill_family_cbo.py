@@ -6,21 +6,29 @@ rows), a law title reads through the published ``laws``, and a feed read replace
 A prior stage is re-derived under the running rule, so a rule change emits no ``stage_changed`` event.
 """
 
+import gzip
 import importlib
+import io
 import json
 import shutil
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from spicy_docs.schemas import TABLE_CONTRACTS
-from spicy_docs.sources.cbo import parse_cbo_cost_estimates_feed
+from spicy_docs.sources.cbo import CboEstimateItem, parse_cbo_cost_estimates_feed
 from spicy_docs.sources.congress.bill_status import BillIdentity, parse_bill_status
+from spicy_docs.sources.web_archive import ArchiveCandidate, WebArchiveAcquirer, payload_sha1
+from spicy_docs.storage.raw_archive import iter_acquisition_receipts
+from warcio.statusandheaders import StatusAndHeaders
+from warcio.warcwriter import WARCWriter
 
 from spicy_regs.pipelines.prior_repairs import stage_suppression
+from spicy_regs.source_evidence import CaptureEvidence
 from tests.test_bill_family import (
     FIXTURES,
     StubBodyAcquirer,
@@ -531,3 +539,128 @@ def test_a_bare_summary_digest_refuses_the_run_before_any_compare(tmp_path, scop
     with pytest.raises(ValueError, match="bare-hex content_hash"):
         run(tmp_path / "second", prior=tmp_path / "first", feed=None, bulk=StubBulkAcquirer())
 
+
+
+# --- the archive route (ss-7ovu): Common Crawl captures retained through CaptureEvidence ---------------------------
+
+
+CRAWL = "CC-MAIN-2026-43"
+WARC = "crawl-data/CC-MAIN-2026-43/segments/1/warc/CC-MAIN-20261017050455-20261017080455-00576.warc.gz"
+CARD = (
+    b'<html><head><link rel="canonical" href="https://www.cbo.gov/publication/62720" /></head><body>'
+    b'<a href="/system/files/2026-09/s4429.pdf">View Document</a>'
+    b'<table data-cbo-region="estimate-table"><caption><span data-cbo-field="at-a-glance-title">S. 4429</span>'
+    b'</caption><thead><tr><th data-cbo-cell-type="column-heading">2026</th></tr></thead><tbody>'
+    b'<tr data-cbo-unit="millions-usd" data-cbo-field="revenues"><td data-cbo-cell-type="value" '
+    b'data-cbo-period="2026">-5</td></tr></tbody></table></body></html>'
+)
+NOTICE = b'<html><head><link rel="canonical" href="https://www.cbo.gov/publication/62589" /></head></html>'
+PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
+
+
+def _member(url, payload, mime):
+    stream = io.BytesIO()
+    writer = WARCWriter(stream, gzip=True)
+    http = StatusAndHeaders("200 OK", [("Content-Type", mime), ("x-datadome", "protected")], protocol="HTTP/1.1")
+    writer.write_record(writer.create_warc_record(url, "response", payload=io.BytesIO(payload), http_headers=http))
+    return stream.getvalue()
+
+
+def _archive():
+    """A tiny Common Crawl: one WARC file holding a card page, a notice page and a PDF; its index; its pages."""
+    warc, rows = b"", []
+    for url, payload, mime in (
+        ("https://www.cbo.gov/publication/62720", CARD, "text/html"),
+        ("https://www.cbo.gov/publication/62589", NOTICE, "text/html"),
+        ("https://www.cbo.gov/system/files/2026-09/s4429.pdf", PDF_BYTES, "application/pdf"),
+    ):
+        member = _member(url, payload, mime)
+        rows.append({"url": url, "timestamp": "20261017051839", "status": "200", "mime": mime,
+                     "digest": payload_sha1(payload), "offset": str(len(warc)), "length": str(len(member)),
+                     "filename": WARC, "recordid": url})
+        warc += member
+    return warc, rows
+
+
+def _transport(warc, rows, calls):
+    def handle(request):
+        calls.append(request)
+        url = str(request.url)
+        if request.url.host == "index.commoncrawl.org":
+            if "showNumPages" in url:
+                return httpx.Response(200, stream=httpx.ByteStream(b'{"pages": 1}'),
+                                      headers={"content-type": "text/x-ndjson"})
+            pattern = request.url.params["url"].removesuffix("*")
+            body = b"".join(json.dumps(row).encode() + b"\n" for row in rows if pattern in row["url"])
+            return httpx.Response(200, stream=httpx.ByteStream(body), headers={"content-type": "text/x-ndjson"})
+        first, last = map(int, request.headers["Range"].removeprefix("bytes=").split("-"))
+        return httpx.Response(206, stream=httpx.ByteStream(warc[first:last + 1]),
+                              headers={"content-type": "application/octet-stream",
+                                       "content-range": f"bytes {first}-{last}/{len(warc)}"})
+    return httpx.MockTransport(handle)
+
+
+def test_archived_cards_are_gated_and_every_capture_receipt_names_its_archive_coordinates(tmp_path):
+    warc, rows = _archive()
+    calls = []
+    evidence = CaptureEvidence(tmp_path / "run", "bill-family")
+    bound = cbo.cbo_archive_evidence(evidence)
+    items = [CboEstimateItem(0, "62720", "S. 4429", "Wed, 16 Sep 2026 17:00:00 -0400",
+                             "https://www.cbo.gov/publication/62720", None, "S. 4429"),
+             CboEstimateItem(1, "62589", "Suspension", "Fri, 11 Sep 2026 17:00:00 -0400",
+                             "https://www.cbo.gov/publication/62589", None, None),
+             CboEstimateItem(2, "1", "Never crawled", "Fri, 11 Sep 2026 17:00:00 -0400",
+                             "https://www.cbo.gov/publication/1", None, None)]
+    with WebArchiveAcquirer(max_requests=12, min_request_interval_seconds=0,
+                            transport=_transport(warc, rows, calls)) as acquirer:
+        sweep = cbo.sweep_cbo_archive_index([CRAWL], acquirer=acquirer, evidence=bound, reserve=3)
+        cards = cbo.read_cbo_archive_cards(items, 119, sweep, acquirer=acquirer, evidence=bound)
+        assert acquirer.request_count == len(calls) == 7  # 2 page counts + 2 index pages + 2 pages + 1 PDF
+    evidence.finish()
+    assert all(call.url.host in {"index.commoncrawl.org", "data.commoncrawl.org"} for call in calls)
+    assert [(card.publication_id, card.outcome) for card in cards] == [
+        ("62720", "card"), ("62589", "absent"), ("1", "unarchived")]
+    assert cards[0].card.measures == {"revenues": ("-5",)}
+    assert (cards[0].pdf_path, cards[0].match_rule) == ("/system/files/2026-09/s4429.pdf", "page_pdf")
+    assert cards[0].pdf.response.payload == PDF_BYTES
+    receipts = [document["receipt"] for _, document in iter_acquisition_receipts(tmp_path / "central-raw")]
+    records = [r for r in receipts if r.get("stage") in {"cbo-archive-page", "cbo-archive-pdf"}]
+    assert len(records) == 3 and len([r for r in receipts if r.get("stage") == "cbo-archive-index"]) == 4
+    for receipt in records:
+        assert receipt["authority"] == "archive" and receipt["archive_operator"] == "Common Crawl"
+        assert receipt["requested_url"] == receipt["resolved_url"] == "https://data.commoncrawl.org/" + WARC
+        assert receipt["original_publisher_url"].startswith("https://www.cbo.gov/")
+        assert receipt["archive_timestamp"] == "20261017051839" and receipt["crawl_id"] == CRAWL
+        assert receipt["index_sha256"].startswith("sha256:") and receipt["index_digest"] == receipt["payload_sha1"]
+        assert receipt["warc_filename"] == WARC and receipt["warc_length"] > 0
+        assert receipt["warc_record_id"] and ["x-datadome", "protected"] in receipt["archived_publisher_headers"]
+        assert receipt["publisher_id"] == "cbo-web-archive" and receipt["policy_decision_id"] == "cbo-archive-route-q21/1"
+    assert {r["native_id"] for r in records} == {"62720", "62589"}
+    assert gzip.decompress(warc).count(b"WARC/1.0") == 3
+
+
+def test_the_sweep_keeps_its_reserve_and_lists_what_it_left_unread(tmp_path):
+    warc, rows = _archive()
+    calls = []
+    evidence = CaptureEvidence(tmp_path / "run", "bill-family")
+    with WebArchiveAcquirer(max_requests=5, min_request_interval_seconds=0,
+                            transport=_transport(warc, rows, calls)) as acquirer:
+        sweep = cbo.sweep_cbo_archive_index([CRAWL, "CC-MAIN-2026-38"], acquirer=acquirer,
+                                            evidence=cbo.cbo_archive_evidence(evidence), reserve=3)
+        assert acquirer.remaining_requests == 3
+    evidence.finish()
+    assert len(calls) == 2
+    assert sweep.unread == ((CRAWL, "www.cbo.gov/system/files/*", "budget"),
+                            ("CC-MAIN-2026-38", "www.cbo.gov/publication/*", "budget"),
+                            ("CC-MAIN-2026-38", "www.cbo.gov/system/files/*", "budget"))
+
+
+def test_latest_capture_prefers_the_newest_200_without_a_query():
+    def row(url, timestamp, status=200):
+        return ArchiveCandidate("Common Crawl", url, timestamp, status, "text/html", "A" * 32)
+
+    plain, query, newer_403 = (row("https://www.cbo.gov/publication/1", "20260101000000"),
+                               row("https://www.cbo.gov/publication/1?utm_source=x", "20260301000000"),
+                               row("https://www.cbo.gov/publication/1", "20260401000000", 403))
+    assert cbo.latest_capture([plain, query, newer_403]) is plain
+    assert cbo.latest_capture([newer_403]) is None

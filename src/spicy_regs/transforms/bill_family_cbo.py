@@ -31,6 +31,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from loguru import logger
 from spicy_docs.interpretation.bill_family import FamilyRefusal, build_cbo_feed_cost_estimates
@@ -193,12 +194,197 @@ def cost_estimate_publication(
     return [*fresh, *added], (("bill_id", "source"), scope)
 
 
+# ---------------------------------------------------------------------------
+# The archive route (ticket ss-7ovu): CBO's estimate pages and PDFs as Common Crawl captured them. cbo.gov is never
+# requested; spicy-docs' WebArchiveAcquirer refuses any host but the archives', and one acquirer's budget bounds a
+# whole run. Every capture is retained through CaptureEvidence, so the raw store holds the archive's own WARC member
+# (the original) and a receipt naming the archive coordinates; the decoded payload is derived and not stored twice.
+
+#: The two prefixes one Common Crawl index query per crawl reads: the publication pages and every PDF.
+CBO_ARCHIVE_PATTERNS = ("www.cbo.gov/publication/*", "www.cbo.gov/system/files/*")
+#: Bounds of the first bounded acquisition (owner approval for ss-7ovu D12): 20 pages, 20 PDFs.
+CBO_ARCHIVE_MAX_PAGES = 20
+CBO_ARCHIVE_MAX_PDFS = 20
+#: The publisher binding of every archived capture: retained in full, as the owner accepted the archive route (Q21).
+CBO_ARCHIVE_PUBLISHER = "cbo-web-archive"
+CBO_ARCHIVE_POLICY = "cbo-archive-route-q21/1"
+
+
+def cbo_archive_evidence(evidence: Any) -> Any:
+    """The run's evidence bound to the archive route: full retention under the owner's Q21 decision."""
+    from importlib.metadata import version
+
+    return evidence.for_source(CBO_ARCHIVE_PUBLISHER, "full", parser_version=version("spicy-docs"),
+                               policy_decision_id=CBO_ARCHIVE_POLICY)
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveSweep:
+    """Every index row the sweep read, the retained index answer that listed each, and the crawls left unread."""
+
+    candidates: tuple[Any, ...]
+    listed_by: Mapping[Any, Any]
+    unread: tuple[tuple[str, str, str], ...]
+
+
+def sweep_cbo_archive_index(crawls: Sequence[str], *, acquirer: Any, evidence: Any, reserve: int,
+                            patterns: Sequence[str] = CBO_ARCHIVE_PATTERNS) -> ArchiveSweep:
+    """Read each crawl's index once per prefix, newest crawl first, keeping ``reserve`` requests for the captures.
+
+    ``showNumPages`` precedes each query so a multi-page answer is read whole, never silently cut at page 0. A
+    crawl whose index fails (Common Crawl answers 504 under load) is recorded as a refusal and listed in ``unread``;
+    the sweep stops before a crawl it could not finish within the budget left above ``reserve``.
+    """
+    from spicy_docs.sources.web_archive import WebArchiveError
+
+    candidates: list[Any] = []
+    listed_by: dict[Any, Any] = {}
+    unread: list[tuple[str, str, str]] = []
+    for crawl in crawls:
+        for pattern in patterns:
+            if acquirer.remaining_requests - reserve < 2:
+                unread.append((crawl, pattern, "budget"))
+                continue
+            try:
+                pages, counted = acquirer.acquire_cc_num_pages(crawl, pattern)
+                evidence.capture(counted, stage="cbo-archive-index", authority="archive",
+                                 archive_operator="Common Crawl", crawl_id=crawl, dataset_id="cc-index-pages",
+                                 native_id=f"{crawl}:{pattern}", original_location=pattern)
+                if acquirer.remaining_requests - reserve < pages:
+                    unread.append((crawl, pattern, "budget"))
+                    continue
+                for page in range(pages):
+                    read = acquirer.acquire_cc_index(crawl, pattern, page=page)
+                    evidence.capture(read.capture, stage="cbo-archive-index", authority="archive",
+                                     archive_operator="Common Crawl", crawl_id=crawl, dataset_id="cc-index",
+                                     native_id=f"{crawl}:{pattern}:{page}", original_location=pattern,
+                                     index_rows=len(read.candidates))
+                    candidates.extend(read.candidates)
+                    listed_by.update(dict.fromkeys(read.candidates, read.capture))
+            except (WebArchiveError, OSError) as error:
+                evidence.refusal(error, stage="cbo-archive-index")
+                unread.append((crawl, pattern, type(error).__name__))
+    return ArchiveSweep(tuple(candidates), listed_by, tuple(unread))
+
+
+def latest_capture(candidates: Iterable[Any]) -> Any | None:
+    """The capture a row is read from: the latest status-200 one, a URL without a query before one with."""
+    usable = [candidate for candidate in candidates if candidate.status == 200]
+    return max(usable, key=lambda c: ("?" not in c.original_url, c.timestamp), default=None)
+
+
+@dataclass(frozen=True, slots=True)
+class ArchivedCard:
+    """One sampled publication: its page capture's outcome, the card where gated, and its PDF where archived."""
+
+    publication_id: str
+    outcome: str
+    reason: str | None = None
+    card: Any = None
+    page: Any = None
+    pdf: Any = None
+    pdf_path: str | None = None
+    match_rule: str | None = None
+    captures: int = 0
+
+
+def _receipt(record: Any, sweep: ArchiveSweep, *, native_id: str, dataset_id: str) -> dict[str, Any]:
+    candidate = record.candidate
+    return {**record.receipt_fields(sweep.listed_by.get(candidate)), "native_id": native_id,
+            "dataset_id": dataset_id, "source_record_key": f"{candidate.crawl_id}:{candidate.filename}:"
+            f"{candidate.offset}"}
+
+
+def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSweep, *, acquirer: Any,
+                           evidence: Any, max_pages: int = CBO_ARCHIVE_MAX_PAGES,
+                           max_pdfs: int = CBO_ARCHIVE_MAX_PDFS) -> tuple[ArchivedCard, ...]:
+    """Fetch, retain and gate the archived page of each item, then its archived PDF; at most the stated counts.
+
+    One dict join of the sweep's rows by publication id and by PDF path, so the cost is linear in index rows plus
+    sampled items. Each outcome is ``card``, ``absent`` (a genuine page without a card), ``refused`` (the gate or
+    a digest check said no) or ``unarchived``; a refusal is retained as evidence and never becomes a card.
+    """
+    from spicy_docs.reading.pdf_bytes import check_pdf_bytes
+    from spicy_docs.sources.cbo import (
+        CboCardAbsent,
+        archived_publication_id,
+        parse_cbo_estimate_card,
+        select_estimate_pdf,
+    )
+    from spicy_docs.sources.web_archive import WebArchiveError
+
+    pages: dict[str, list[Any]] = {}
+    pdfs: dict[str, list[Any]] = {}
+    for candidate in sweep.candidates:
+        identifier = archived_publication_id(candidate.original_url)
+        if identifier is not None:
+            pages.setdefault(identifier, []).append(candidate)
+        elif candidate.mime == "application/pdf" and candidate.status == 200:
+            pdfs.setdefault(urlsplit(candidate.original_url).path, []).append(candidate)
+    results: list[ArchivedCard] = []
+    fetched_pages = fetched_pdfs = 0
+    for item in items:
+        chosen = latest_capture(pages.get(item.publication_id, ()))
+        if chosen is None:
+            results.append(ArchivedCard(item.publication_id, "unarchived"))
+            continue
+        if fetched_pages >= max_pages:
+            break
+        fetched_pages += 1
+        captures = sum(1 for c in pages[item.publication_id] if c.status == 200)
+        try:
+            page = acquirer.acquire_cc_record(chosen)
+            evidence.capture(page.capture, stage="cbo-archive-page",
+                             **_receipt(page, sweep, native_id=item.publication_id, dataset_id="cbo-publication-page"))
+        except (WebArchiveError, OSError) as error:
+            evidence.refusal(error, stage="cbo-archive-page")
+            results.append(ArchivedCard(item.publication_id, "refused", str(error), captures=captures))
+            continue
+        try:
+            card = parse_cbo_estimate_card(page.response.payload, publication_id=item.publication_id,
+                                           archived_url=page.response.target_uri)
+        except CboCardAbsent as absent:
+            results.append(ArchivedCard(item.publication_id, "absent", str(absent), page=page, captures=captures))
+            continue
+        except CboSourceError as refused:
+            evidence.event("source-validation", stage="cbo-archive-page", native_id=item.publication_id,
+                           outcome="refused", message=str(refused))
+            results.append(ArchivedCard(item.publication_id, "refused", str(refused), page=page, captures=captures))
+            continue
+        chosen_pdf = select_estimate_pdf(card.documents, item, congress, pdfs)
+        pdf = None
+        if chosen_pdf is not None and fetched_pdfs < max_pdfs:
+            fetched_pdfs += 1
+            try:
+                pdf = acquirer.acquire_cc_record(latest_capture(pdfs[chosen_pdf[0]]))
+                check_pdf_bytes(pdf.response.payload, error_type=CboSourceError, label="archived CBO estimate PDF")
+                evidence.capture(pdf.capture, stage="cbo-archive-pdf",
+                                 **_receipt(pdf, sweep, native_id=item.publication_id, dataset_id="cbo-estimate-pdf"),
+                                 match_rule=chosen_pdf[1])
+            except (WebArchiveError, CboSourceError, OSError) as error:
+                evidence.refusal(error, stage="cbo-archive-pdf")
+                pdf = None
+        results.append(ArchivedCard(item.publication_id, "card", card=card, page=page, pdf=pdf,
+                                    pdf_path=None if chosen_pdf is None else chosen_pdf[0],
+                                    match_rule=None if chosen_pdf is None else chosen_pdf[1], captures=captures))
+    return tuple(results)
+
+
 __all__ = [
+    "CBO_ARCHIVE_MAX_PAGES",
+    "CBO_ARCHIVE_MAX_PDFS",
+    "CBO_ARCHIVE_PATTERNS",
     "CBO_FEED_BUDGET",
     "CBO_FEED_FLOOR",
+    "ArchiveSweep",
+    "ArchivedCard",
     "FeedRead",
+    "cbo_archive_evidence",
     "cost_estimate_publication",
+    "latest_capture",
     "law_bills_from",
     "prior_citations",
+    "read_cbo_archive_cards",
     "read_cbo_feeds",
+    "sweep_cbo_archive_index",
 ]
