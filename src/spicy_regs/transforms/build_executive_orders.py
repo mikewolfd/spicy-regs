@@ -178,8 +178,10 @@ def build_executive_orders(reader, output_dir: Path, *, year: int, body_paths, l
             for capture in result.captures:
                 evidence.capture(capture, stage="executive-order-body")
             if result.refused_response is not None:
+                from spicy_docs.reading.refusals import attach_refused_response
+
                 error = ValueError("Retained executive-order body acquisition failed")
-                error.refused_response = result.refused_response
+                attach_refused_response(error, result.refused_response)
                 evidence.refusal(error, stage="executive-order-body")
             evidence.retain_bytes(
                 json_value(result.manifest).encode(), stage="executive-order-body-result", source_record_id=identity
