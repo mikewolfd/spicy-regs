@@ -10,7 +10,9 @@ import re
 #: every reader of a RIN column goes through :func:`normalize_rin`. SpicyDocs' wider
 #: shapes (``0648-A110``, ``2060-XXXX``) are for detection only; as a key they admit
 #: only damage and placeholders (parsing survey 2026-09-23, section 5).
-_RIN = re.compile(r"^\d{4}-[A-Z]{2}\d{2}$")
+#: ASCII digits, spelled so Python ``re`` and DuckDB's RE2 read the one pattern identically.
+RIN_PATTERN = "[0-9]{4}-[A-Z]{2}[0-9]{2}"
+_RIN = re.compile(f"^{RIN_PATTERN}$")
 
 
 def normalize_rin(value: object) -> str | None:

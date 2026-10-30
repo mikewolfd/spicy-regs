@@ -85,3 +85,53 @@ def test_lobbying_native_expansion_preserves_duplicate_and_null_positions():
             ('filing', 0, 2, None, None), ('filing', 0, 3, None, 'Unknown')]
         plan = con.execute('EXPLAIN SELECT * FROM candidate').fetchone()
         assert plan is not None and 'DELIM_JOIN' not in plan[1]
+
+
+def test_agenda_related_rins_resolve_each_occurrence_against_held_editions():
+    """Malformed first by the published RIN pattern, then same edition, other editions, unlisted.
+
+    1235-0018 is the wider navigation pattern's blind spot (9000-AN27 states it in five editions): it must be
+    malformed here, not unlisted. Repeats and self-references stay; a NULL list states nothing.
+    """
+    specs = {spec.name: spec for spec in native_regulations_views(['unified_agenda'])}
+    view = specs['agenda_related_rins']
+    assert view.required == {'unified_agenda': ('rin', 'agenda_edition', 'related_rins')}
+    with duckdb.connect() as con:
+        con.execute('CREATE TABLE unified_agenda(rin VARCHAR, agenda_edition VARCHAR, '
+                    'related_rins STRUCT(rin VARCHAR, rin_relation VARCHAR)[])')
+        con.executemany('INSERT INTO unified_agenda VALUES (?, ?, ?)', [
+            ('1904-AF61', '202404', [{'rin': '1904-AF53', 'rin_relation': 'Related to'},
+                                     {'rin': '0000-AA00', 'rin_relation': 'Related to'},
+                                     {'rin': '1904-AF53', 'rin_relation': 'Previously reported as'},
+                                     {'rin': '1235-0018', 'rin_relation': 'Related to'},
+                                     {'rin': '1904-AF61', 'rin_relation': 'Related to'},
+                                     {'rin': None, 'rin_relation': 'Related t'},
+                                     {'rin': '1904-AF54', 'rin_relation': 'Merged with'}]),
+            ('1904-AF53', '202404', None),
+            ('1904-AF54', '202310', []),
+        ])
+        con.execute('CREATE VIEW agenda_related_rins AS ' + view.query({}))
+        assert con.execute('SELECT source_ordinal, related_rin, rin_relation, self_reference, resolution_status '
+                           'FROM agenda_related_rins ORDER BY source_ordinal').fetchall() == [
+            (0, '1904-AF53', 'Related to', False, 'same_edition'),
+            (1, '0000-AA00', 'Related to', False, 'unlisted'),
+            (2, '1904-AF53', 'Previously reported as', False, 'same_edition'),
+            (3, '1235-0018', 'Related to', False, 'malformed'),
+            (4, '1904-AF61', 'Related to', True, 'same_edition'),
+            (5, None, 'Related t', None, 'malformed'),
+            (6, '1904-AF54', 'Merged with', False, 'other_edition_only'),
+        ]
+        planned = con.execute('EXPLAIN SELECT * FROM agenda_related_rins').fetchone()
+        assert planned is not None
+        assert 'DELIM_JOIN' not in planned[1]
+
+
+def test_agenda_related_rins_is_unsupported_without_the_column():
+    from spicy_regs.relationship_views.sql_views import install_sql_views
+
+    specs = [spec for spec in native_regulations_views(['unified_agenda']) if spec.name == 'agenda_related_rins']
+    with duckdb.connect() as con:
+        con.execute('CREATE TABLE unified_agenda(rin VARCHAR, agenda_edition VARCHAR)')
+        result = install_sql_views(con, ['unified_agenda'], specs)
+    assert result['agenda_related_rins']['status'] == 'unsupported'
+    assert 'unified_agenda.related_rins' in result['agenda_related_rins']['reason']

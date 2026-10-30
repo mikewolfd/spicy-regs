@@ -7,6 +7,8 @@ Integration selects this installer for receipt-migrated generations only.
 
 from __future__ import annotations
 
+from spicy_regs.identifiers import RIN_PATTERN
+
 from .core import quoted
 from .sql_views import SQLView, install_sql_views
 
@@ -128,6 +130,36 @@ def native_regulations_views(available_tables):
               ON i.rin=e.rin AND i.rin<>'' """,
             "Agenda editions sharing the exact reported RIN; each edition stays separate.",
             ("agenda_item_id", "agenda_edition"))
+    if "unified_agenda" in available:
+        # Malformed is decided first, by the published RIN key's own pattern: the wider "[0-9]{4}-[A-Z0-9]{4}" above
+        # would admit the 15 "1235-00xx" values. SELECT-list expansion, as above, and joins against DISTINCT keys:
+        # no correlated EXISTS or delimiter join per occurrence.
+        add("agenda_related_rins", {"unified_agenda": ("rin", "agenda_edition", "related_rins")},
+            f"""WITH occurrences AS (
+                SELECT s.rin, s.agenda_edition, unnest(s.related_rins) AS item,
+                       generate_subscripts(s.related_rins, 1) - 1 AS source_ordinal
+                FROM unified_agenda s),
+              held AS (SELECT DISTINCT agenda_edition, rin FROM unified_agenda),
+              ever_held AS (SELECT DISTINCT rin FROM unified_agenda)
+            SELECT o.rin, o.agenda_edition, o.source_ordinal, o.item.rin AS related_rin,
+                   o.item.rin_relation AS rin_relation, o.item.rin = o.rin AS self_reference,
+                   CASE WHEN o.item.rin IS NULL OR NOT regexp_full_match(o.item.rin, '{RIN_PATTERN}') THEN 'malformed'
+                        WHEN h.rin IS NOT NULL THEN 'same_edition'
+                        WHEN e.rin IS NOT NULL THEN 'other_edition_only'
+                        ELSE 'unlisted' END AS resolution_status
+            FROM occurrences o
+            LEFT JOIN held h ON h.agenda_edition = o.agenda_edition AND h.rin = o.item.rin
+            LEFT JOIN ever_held e ON e.rin = o.item.rin""",
+            "Each related RIN an agenda entry states, in source order, resolved against held agenda rows.",
+            ("rin", "agenda_edition", "source_ordinal"), {
+                "related_rin": "The related RIN as the publisher states it, stripped; malformed values remain.",
+                "rin_relation": "The publisher's stated relation, literal, including the cut-offs `Related t` and "
+                                "`Previously report`; the documented `Merge with` is written `Merged with`.",
+                "self_reference": "True when the entry names its own RIN; kept, not dropped.",
+                "resolution_status": "malformed (not a RIN), same_edition (a held row in this edition), "
+                                     "other_edition_only (held only in other editions) or unlisted (in no held "
+                                     "edition). A found RIN is a held agenda row, not a verified relationship.",
+            })
     if "comments" in available:
         required = {"comments": ("comment_id", "docket_id", "comment_on_document_id", "comment_on_object_id", "original_document_id")}
         sql = """SELECT comment_id,docket_id,'regulations_document' AS target_kind,comment_on_document_id AS target_key

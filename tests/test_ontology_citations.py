@@ -118,7 +118,8 @@ def test_the_rin_grammar_has_one_definition():
         str(path.relative_to(REPO_ROOT))
         for directory in ("src", "tools")
         for path in (REPO_ROOT / directory).rglob("*.py")
-        if r"\d{4}-[A-Z]{2}\d{2}" in path.read_text()
+        # Either spelling: identifiers.RIN_PATTERN writes [0-9] so DuckDB's RE2 reads it as Python does.
+        if any(spelling in path.read_text() for spelling in (r"\d{4}-[A-Z]{2}\d{2}", "[0-9]{4}-[A-Z]{2}[0-9]{2}"))
     )
 
     assert restating == ["src/spicy_regs/identifiers.py"]
