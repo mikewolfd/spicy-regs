@@ -35,7 +35,9 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from spicy_regs.pipelines.keyed_regulations import keyed_reader, load_outcomes, save_outcomes
+from spicy_regs.pipelines.regulatory_publication import finish_dataset
 from spicy_regs.schemas.regulations import RECORD_TYPES
+from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 from spicy_regs.sources import iceberg, r2
 from spicy_regs.transforms import ExtractRecords, write_staging
 
@@ -119,6 +121,10 @@ def fill(
 ) -> dict[str, int]:
     """Ask for each due missing docket, merge what is served, and record every answer."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Capture the selected generation before fetching or merging. The existing
+    # publisher rejects a concurrent change and advances native rows and receipts
+    # together, so the subsequent base-family rollup sees these served dockets.
+    selected = SelectedInputs(output_dir, unique_build_directory(output_dir)) if not skip_upload else None
     local = {key: output_dir / key for key in ("documents.parquet", "comments_index.parquet", "dockets.parquet")}
     for key, path in local.items():
         if not path.exists() and not r2.download_working_copy(key, path):
@@ -147,8 +153,7 @@ def fill(
             write_staging("regulations-gov-api", DOCKETS.name, rows, Path(staging), DOCKETS.schema)
             exported = iceberg.merge_and_export(Path(staging), output_dir, DOCKETS)
         if exported is not None:
-            r2.preflight_uploads(output_dir, [exported])
-            r2.upload_file(exported, remote_key=exported.name)
+            finish_dataset(output_dir, DOCKETS.name, exported, publish=True, inputs=selected)
 
     observed_at = now().isoformat()
     save_outcomes(
