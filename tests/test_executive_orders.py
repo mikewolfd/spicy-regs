@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import date
 import hashlib
 import json
+from typing import Any
 
 import httpx
 import pyarrow.parquet as pq
@@ -22,12 +23,16 @@ from tests.generation_fakes import Store
 
 
 class Reader:
+    page_captures: list[dict[str, Any]]
+
     def __init__(self, rows):
         self.body = json.dumps(rows).encode()
         self.ref = "sha256:" + hashlib.sha256(self.body).hexdigest()
         self.pin = ArtifactPin("urn:test:executive-orders", self.ref)
-        self.records = [{"sourceRecordId": federal_register_source_record_id(row), "record": row} for row in rows]
-        self.collection_outcome = {
+        self.records: list[dict[str, Any]] = [
+            {"sourceRecordId": federal_register_source_record_id(row), "record": row} for row in rows
+        ]
+        self.collection_outcome: dict[str, Any] = {
             "requestedScope": {
                 "publishedFrom": "2025-01-01",
                 "publishedThrough": "2025-12-31",
@@ -132,6 +137,7 @@ def test_ordinary_publication_lookup_text_history_and_failed_original(tmp_path, 
     assert json.loads(rows[1]["raw_metadata_json"]) == second
     assert json.loads(rows[1]["offered_renditions_json"]) == {"pdf_url": second["pdf_url"]}
     refusal = load_body_capture(paths[reader.records[1]["sourceRecordId"]], record=second).refused_response
+    assert refusal is not None and refusal.response_bytes is not None
     digest = hashlib.sha256(refusal.response_bytes).hexdigest()
     assert (evidence / "blobs" / "sha256" / digest).read_bytes() == refusal.response_bytes
     assert module.TABLE in data_dictionary.expected_schemas()
@@ -150,7 +156,7 @@ def test_ordinary_publication_lookup_text_history_and_failed_original(tmp_path, 
         "wrong_locator",
     ],
 )
-def test_refusal_preserves_previous_table(tmp_path, defect):
+def test_refusal_preserves_previous_table(tmp_path, monkeypatch, defect):
     reader = Reader([record()])
     paths = captured(tmp_path / "bodies", reader)
     output = tmp_path / "build"
@@ -177,7 +183,7 @@ def test_refusal_preserves_previous_table(tmp_path, defect):
     else:
         original = list(reader.iter_record_evidence())
         original[0]["sourceRecordId"] = "wrong"
-        reader.iter_record_evidence = lambda: iter(original)
+        monkeypatch.setattr(reader, "iter_record_evidence", lambda: iter(original))
     with pytest.raises(ValueError):
         module.build_executive_orders(
             reader, output, year=2025, body_paths=paths, load_body=load_body_capture, evidence=evidence

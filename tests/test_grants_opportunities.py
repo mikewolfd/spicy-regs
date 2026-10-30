@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 import hashlib
 import json
+from typing import Any
 
 import pyarrow.parquet as pq
 import pytest
@@ -30,14 +31,14 @@ class Reader:
             "observed_at": "2026-10-20T12:00:00Z",
             "byte_size": len(self.body),
         }
-        self.collection_outcome = {
+        self.collection_outcome: dict[str, Any] = {
             "requestedScope": {"snapshot_date": snapshot, "capture": capture, "member_name": "fixture.xml"},
             "failedRecordCount": 0,
             "discardedObservationCount": 0,
             "discoveredRecordCount": len(rows),
             "publishedRecordCount": len(rows),
         }
-        self.records = []
+        self.records: list[dict[str, Any]] = []
         for ordinal, (kind, fields) in enumerate(rows):
             native = dict(fields)
             source_xpath = f"/Grants/Opportunity{kind.title()}Detail_1_0[{ordinal + 1}]"

@@ -1,5 +1,6 @@
 """Part D aggregation levels, exact values, atomic refusal and ordinary serving."""
 
+from typing import Any
 from copy import deepcopy
 from decimal import Decimal
 import hashlib
@@ -56,7 +57,7 @@ class Reader:
             }
         ).encode()
         self.dictionary_ref = "sha256:" + hashlib.sha256(self.dictionary).hexdigest()
-        self.selection = {
+        self.selection: dict[str, Any] = {
             "series_title": "Medicare Part D Spending by Drug",
             "series_id": "urn:fixture:series",
             "dataset_id": "urn:fixture:release",
@@ -73,7 +74,7 @@ class Reader:
             "response_sha256": self.ref,
             "observed_at": "2026-10-20T14:00:00Z",
         }
-        self.collection_outcome = {
+        self.collection_outcome: dict[str, Any] = {
             "requestedScope": {
                 "selection": self.selection,
                 "captures": [

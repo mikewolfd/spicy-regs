@@ -3,6 +3,7 @@
 from copy import deepcopy
 import hashlib
 import json
+from typing import Any
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -34,7 +35,7 @@ class Reader:
             "observed_at": observation,
             "byte_size": len(self.body),
         }
-        self.collection_outcome = {
+        self.collection_outcome: dict[str, Any] = {
             "requestedScope": {
                 "selected_list": selected, "capture": capture,
                 "member_name": records[0]["source_locator"]["member_name"],
@@ -42,7 +43,7 @@ class Reader:
             "failedRecordCount": 0, "discardedObservationCount": 0,
             "discoveredRecordCount": len(records), "publishedRecordCount": len(records),
         }
-        self.records = []
+        self.records: list[dict[str, Any]] = []
         for record in records:
             record["source_locator"].update({key: capture[key] for key in ("response_sha256", "observed_at")})
             self.records.append({"sourceRecordId": record["id"], "record": record})
