@@ -2105,14 +2105,14 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.66.3+centralraw.02cc4431e606"
-source = { path = "vendor/spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.whl" }
+version = "0.66.6+centralraw.02cc4431e606"
+source = { path = "vendor/spicy_docs-0.66.6+centralraw.02cc4431e606-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.whl", hash = "sha256:b526dfae319cb5b5e2d91491b35bc3eb61f555b18ae02dde10bc376df943215b" },
+    { filename = "spicy_docs-0.66.6+centralraw.02cc4431e606-py3-none-any.whl", hash = "sha256:b9c65f65df036e37350a8f0bb2de768d04746ea5596c6f437f477747d0a6223c" },
 ]
 
 [package.optional-dependencies]
@@ -2258,7 +2258,7 @@ requires-dist = [
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
     { name = "smart-open", extras = ["s3"], marker = "extra == 'source-readers'", specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.66.6+centralraw.02cc4431e606-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2283,7 +2283,7 @@ source-readers = [
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" },
     { name = "smart-open", extras = ["s3"], specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], path = "vendor/spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], path = "vendor/spicy_docs-0.66.6+centralraw.02cc4431e606-py3-none-any.whl" },
 ]
 
 [[package]]

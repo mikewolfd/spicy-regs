@@ -1,7 +1,9 @@
-"""Build and pin a reproducible local overlay over the retained 0.66.3 wheel.
+"""Build and pin a reproducible local overlay over a retained SpicyDocs release wheel.
 
 The raw archive module is added and refusal writes gain the shared store API.
-Other current reader modules stay unchanged. The default check compares in-memory
+Other current reader modules stay unchanged. The base is the current overlay's
+recorded base unless --base names another retained release wheel, whose digest
+must match its vendor receipt. The default check compares in-memory
 reproduction with existing wheel, receipt, project and lock bytes. --write is
 explicit and preserves identical files, including an existing overlay.
 """
@@ -34,17 +36,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", type=Path, default=None,
                         help="Optional reviewed SpicyDocs source checkout; otherwise reuse the pinned archive module")
+    parser.add_argument("--base", type=Path, default=None,
+                        help="Retained vendor release wheel to overlay; defaults to the current overlay's base")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="Compare exact existing bytes (default)")
     mode.add_argument("--write", action="store_true", help="Write reviewed wheel and matching project/lock pins")
     args = parser.parse_args()
     provider = args.provider.resolve() if args.provider is not None else None
-    base = consumer / "vendor/spicy_docs-0.66.3-py3-none-any.whl"
-    base_bytes = base.read_bytes()
-    base_sha = "6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96"
-    if sha256(base_bytes) != base_sha:
-        raise ValueError("retained base wheel does not match its qualified digest")
-
     project = consumer / "pyproject.toml"
     lock = consumer / "uv.lock"
     project_text = project.read_text()
@@ -52,10 +50,24 @@ def main() -> None:
     project_data = tomllib.loads(project_text)
     lock_data = tomllib.loads(lock_text)
     old_path = project_data["tool"]["uv"]["sources"]["spicy-docs"]["path"]
-    match = re.fullmatch(r"vendor/spicy_docs-(0\.66\.3(?:\+centralraw\.[0-9a-f]{12})?)-py3-none-any\.whl", old_path)
+    match = re.fullmatch(r"vendor/spicy_docs-(\d+\.\d+\.\d+(?:\+centralraw\.[0-9a-f]{12})?)-py3-none-any\.whl", old_path)
     if match is None:
-        raise ValueError("current reader pin is not the retained base or an owned centralraw overlay")
+        raise ValueError("current reader pin is not a retained release or an owned centralraw overlay")
     old_version = match[1]
+    if args.base is not None:
+        base = args.base.resolve()
+    elif "+centralraw." in old_version:
+        base = consumer / "vendor" / json.loads((consumer / old_path).with_suffix(".json").read_text())["base_wheel"]
+    else:
+        base = consumer / old_path
+    base_match = re.fullmatch(r"spicy_docs-(\d+\.\d+\.\d+)-py3-none-any\.whl", base.name)
+    if base_match is None or base.parent != consumer / "vendor":
+        raise ValueError("base must be a retained vendor release wheel")
+    base_version = base_match[1]
+    base_bytes = base.read_bytes()
+    base_sha = json.loads((consumer / f"vendor/spicy_docs-{base_version}.json").read_text())["sha256"]
+    if sha256(base_bytes) != base_sha:
+        raise ValueError("retained base wheel does not match its qualified digest")
     old_name = Path(old_path).name
     (old_package,) = (package for package in lock_data["package"] if package["name"] == "spicy-docs")
     if old_package["version"] != old_version or old_package["source"] != {"path": old_path}:
@@ -75,7 +87,7 @@ def main() -> None:
     else:
         overlay = {name: (provider / "src" / name).read_bytes() for name in module_names}
     # Adapt the reviewed archive module to the current reader's one-pass
-    # completed-capture path. All other 0.66.3 package modules stay unchanged.
+    # completed-capture path. All other base package modules stay unchanged.
     streaming = b"""    def put_stream(self, chunks: Iterable[bytes], *, max_bytes: int) -> SourceNativeBlobWrite:
         \"\"\"Retain an unknown identity, reusing even lossless legacy wrappers.\"\"\"
         class ExistingOriginal(Exception):
@@ -135,8 +147,8 @@ def main() -> None:
     overlay["spicy_docs/reading/refusals.py"] = refusal.replace(before, after)
     source_hashes = {name: sha256(body) for name, body in overlay.items()}
     identity = sha256(json.dumps(source_hashes, sort_keys=True).encode())[:12]
-    version = "0.66.3+centralraw." + identity
-    old_info = "spicy_docs-0.66.3.dist-info"
+    version = f"{base_version}+centralraw." + identity
+    old_info = f"spicy_docs-{base_version}.dist-info"
     new_info = f"spicy_docs-{version}.dist-info"
     with zipfile.ZipFile(io.BytesIO(base_bytes)) as archive:
         contents = {
@@ -146,7 +158,9 @@ def main() -> None:
         }
     contents.update(overlay)
     metadata = new_info + "/METADATA"
-    contents[metadata], count = re.subn(rb"(?m)^Version: 0\.66\.3$", ("Version: " + version).encode(), contents[metadata])
+    contents[metadata], count = re.subn(
+        rb"(?m)^Version: " + re.escape(base_version).encode() + rb"$", ("Version: " + version).encode(), contents[metadata]
+    )
     if count != 1:
         raise ValueError("base wheel metadata does not declare exactly one expected version")
     record = io.StringIO()

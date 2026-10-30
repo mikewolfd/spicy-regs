@@ -1,0 +1,11 @@
+{
+  "filename": "spicy_docs-0.66.6-py3-none-any.whl",
+  "version": "0.66.6",
+  "sha256": "8b5d4d2144d269610ddf33595a1a4577cee217b1c51551fe313301022ee46471",
+  "byte_size": 2691583,
+  "source_commit": "247bc77bfbc8179feca8dbcf1d28ebffad82614f",
+  "source_state": "SpicyDocs fork main (Harden the merged source stack per thesis review)",
+  "build": "uv 0.11.21 build --wheel --offline; two builds from clean git archives of the commit are byte-identical",
+  "scope": "CMS, Grants.gov, OFAC and Treasury fiscal source profiles, executive order body captures and the source-native release reader, over the CourtListener traversal allocation of 0.66.3.",
+  "other_consumers": "Not the branch-only 0.66.6 build of 7cefbe92 (sha256 af418de49de0bd7e00678905ba388961ab8be2b30dbad6769821e38b3e2d61eb); main adds CMS, Grants.gov and Federal Register body-capture shape checks and the Grants.gov profile registration over that commit."
+}

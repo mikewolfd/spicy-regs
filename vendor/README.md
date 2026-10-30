@@ -5,19 +5,37 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- **Active: `spicy_docs-0.66.3+centralraw.02cc4431e606`**. Adds the shared raw
-  archive over the current `0.66.3` readers. Only `storage/raw_archive.py` and
-  the blob destination in `reading/refusals.py` differ; all other package files,
-  including current FEC and transport readers, match `0.66.3` exactly. The
-  [build receipt](spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.json)
+- **Active: `spicy_docs-0.66.6+centralraw.02cc4431e606`**. The same shared raw
+  archive overlay over `spicy_docs-0.66.6`, built from SpicyDocs fork main
+  `247bc77b`; it adds the CMS, Grants.gov, OFAC and Treasury fiscal source
+  profiles, executive order body captures and the source-native release reader
+  that the CMS Part B/D and Medicaid, Grants, executive order, OFAC and Treasury
+  tables read, and keeps the CourtListener traversal allocation of 0.66.3. Only
+  `storage/raw_archive.py` and the blob destination in `reading/refusals.py`
+  differ from the base; the overlay modules are byte-identical to the 0.66.3
+  overlay's, so the identity is unchanged. The
+  [build receipt](spicy_docs-0.66.6+centralraw.02cc4431e606-py3-none-any.json)
   pins both changed modules and wheel SHA-256
-  `b526dfae319cb5b5e2d91491b35bc3eb61f555b18ae02dde10bc376df943215b`.
+  `b9c65f65df036e37350a8f0bb2de768d04746ea5596c6f437f477747d0a6223c`.
   `python scripts/package_central_raw_reader.py --check` reproduces the wheel,
   receipt and dependency pins from retained wheels without writing or downloading.
-  `--provider` selects a reviewed source checkout for the archive module;
-  `--write` explicitly updates the overlay after review. Keep both retained
-  provider wheels. Tests verify unchanged reader modules, streaming captures,
-  exact-byte reuse of raw and gzip storage, and interrupted-write cleanup.
+  `--base` selects another retained release wheel, `--provider` a reviewed source
+  checkout for the archive module; `--write` explicitly updates the overlay after
+  review. Keep both retained provider wheels. Tests verify unchanged reader
+  modules, streaming captures, exact-byte reuse of raw and gzip storage, and
+  interrupted-write cleanup.
+
+- `spicy_docs-0.66.6`: built from SpicyDocs fork main `247bc77b`; SHA-256
+  `8b5d4d2144d269610ddf33595a1a4577cee217b1c51551fe313301022ee46471`; two builds
+  from clean archives are byte-identical. A different build of the same version
+  from `7cefbe92` (SHA-256 `af418de4…`) produced the live OFAC generation on an
+  unmerged branch; main adds CMS, Grants.gov and body-capture shape checks and
+  the Grants.gov profile registration over it. See [package receipt](spicy_docs-0.66.6.json).
+
+- `spicy_docs-0.66.3+centralraw.02cc4431e606`: the previous overlay over
+  `0.66.3`; SHA-256
+  `b526dfae319cb5b5e2d91491b35bc3eb61f555b18ae02dde10bc376df943215b`
+  ([receipt](spicy_docs-0.66.3+centralraw.02cc4431e606-py3-none-any.json)).
 
 - `spicy_docs-0.66.3`: built from reviewed SpicyDocs commit `0950db0a`;
   SHA-256 `6df098b7f50f2e7d3b781e1987cb9ff5d37118334aa7ced23f6f603733916c96`. It bounds CourtListener requests
