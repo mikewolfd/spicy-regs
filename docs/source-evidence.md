@@ -212,3 +212,25 @@ literal input bytes against retained blobs and native output fields, failed
 postconditions, late parsing and listing failures, credential exclusion,
 unchanged resumes, caps, prior-root pins and publication refusal. They do not
 establish live population completeness or deploy this feature.
+
+Federal Register scheduled builds retain each exact API response before the
+SpicyDocs reader parses it. Successful reads declare the used page hashes; the
+incremental selection stays incomplete and inherits earlier source uncertainty.
+The shared publisher retains original bodies and the acquisition-event journal
+in R2 before advancing the table publication. It supplies no invented HTTP
+status, response headers or acquisition time where the byte-only fetcher exposes
+none. The journal preserves the requested URL, byte hash and size.
+
+On hosted Federal Register runs, `SPICYGOV_RAW_ROOT` points inside
+`output/raw-source-originals`. The existing failure/dry-run output artifact then
+includes central originals and acquisition receipts alongside the run evidence.
+After restoring that artifact elsewhere, set `SPICYGOV_RAW_ROOT` to its restored
+`raw-source-originals` directory. Successful publications use the existing R2
+evidence writer. `tests/test_federal_register_retention.py` checks both lifetimes
+through the scheduled rollup, including malformed/refused input and an interrupted
+store publication; local store tests do not establish a completed hosted CI run.
+
+Other unsupported builders adopt the existing successful-read declaration when
+next regenerated, as tracked in `ss-es27`. Retention alone does not prove a file
+was used. No builder-wide migration or reconstruction of historical processing
+is required to maintain the source inventory.

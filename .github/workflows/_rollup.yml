@@ -330,6 +330,11 @@ jobs:
           if [ "$COMMAND" = 'build-fec-observations' ]; then
             ARGS+=(--manifest "$RUNNER_TEMP/fec-retained-inputs/manifest.json")
           fi
+          # Keep FR originals and central receipts inside failure/dry-run artifacts.
+          # Successful publications retain originals through the shared R2 evidence writer.
+          if [ "$COMMAND" = 'run-rollup-federal-register' ]; then
+            export SPICYGOV_RAW_ROOT="$GITHUB_WORKSPACE/output/raw-source-originals"
+          fi
           uv run --frozen "$COMMAND" "${ARGS[@]}"
 
       - name: Retain FEC committee source evidence

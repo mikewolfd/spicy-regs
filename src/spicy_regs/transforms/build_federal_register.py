@@ -88,7 +88,7 @@ def _prior_max_publication_date(prior_file: Path) -> date | None:
         return None
 
 
-def _live_federal_register_documents(since: date) -> Iterator[dict]:
+def _live_federal_register_documents(since: date, *, output_dir: Path | None = None, evidence=None) -> Iterator[dict]:
     """Yield raw FR document dicts published in ``[since, today]`` through the SpicyDocs owner.
 
     The owner acquires exact API pages with its cap-safe date-window traversal:
@@ -116,9 +116,28 @@ def _live_federal_register_documents(since: date) -> Iterator[dict]:
         "publishedFrom": since.isoformat(),
         "publishedThrough": date.today().isoformat(),
     }
-    with federal_register_fetcher(None) as fetch:
-        for page in federal_register.iter_federal_register_pages(fetch, query_scope=scope, traversals=1):
+    from spicy_regs.source_evidence import acquisition_evidence
+
+    from contextlib import nullcontext
+    context = nullcontext(evidence) if evidence is not None else acquisition_evidence("federal-register", output_dir=output_dir)
+    with context as evidence, federal_register_fetcher(None) as fetch:
+        def retained_fetch(url):
+            body = fetch(url)
+            # The owner exposes bytes and a source URL, not HTTP metadata.
+            # Preserve those facts before parsing without inventing a capture time.
+            evidence.retain_bytes(body, raw_source=True, stage="api-page", source_url=url, requested_url=url,
+                                  covered_period={"requested_from": scope["publishedFrom"],
+                                                  "requested_through": scope["publishedThrough"]})
+            return body
+
+        for page in federal_register.iter_federal_register_pages(retained_fetch, query_scope=scope, traversals=1):
             response = federal_register.parse_page_response(page.response_bytes)
+            import hashlib
+            evidence.declare_used_inputs(
+                [{"location": page.request_key, "sha256": "sha256:" + hashlib.sha256(page.response_bytes).hexdigest(),
+                  "bytes": len(page.response_bytes), "asset_kind": "json-body"}],
+                scope_id=f"{evidence.family}:successful-source-files", complete=False,
+            )
             if not federal_register.federal_register_records_included(response, query_scope=scope, page_window=None):
                 continue
             yield from response["results"]
@@ -130,6 +149,7 @@ def build_federal_register(
     since: date | None = None,
     documents: Callable[[date], Iterable[dict]] | None = None,
     download_prior: Callable[[str, Path], bool] = r2.download,
+    evidence=None,
 ) -> Path:
     """Build ``federal_register.parquet`` (incremental merge with the prior table).
 
@@ -157,7 +177,7 @@ def build_federal_register(
     logger.info("FR: fetching documents published since {}", since)
 
     # 3. Fetch + shape into a "new rows" parquet.
-    fetch = documents or _live_federal_register_documents
+    fetch = documents or (lambda start: _live_federal_register_documents(start, output_dir=output_dir, evidence=evidence))
     rows = [project_federal_register_document(doc) for doc in fetch(since)]
     new_file = output_dir / "_fr_new.parquet"
     table = pa.Table.from_pylist(rows, schema=schema) if rows else schema.empty_table()
