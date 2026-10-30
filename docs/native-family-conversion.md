@@ -275,6 +275,18 @@ SPICY_REGS_REQUIRE_BULK=true R2_PUBLIC_URL=https://data.spicygov.ai \
   --allow court-opinion-clusters --work "$COURT_WORK" --expect-main "$MAIN" \
   --expect-spicy-docs "$WHEEL" --remote fork --require-bulk \
   --retained-member-map "$COURT_INPUT_MAP"
+PRODUCER="$MAIN"  # write it down with the preparation; main may move before publication
+```
+
+Publish the sealed receipt with the producer pin, from the clean main current
+at publication time:
+
+```sh
+MAIN=$(git rev-parse HEAD)
+R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py \
+  --publish-prepared "$COURT_WORK/conversion.json" --allow court-opinion-clusters \
+  --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --expect-producer "$PRODUCER" --remote fork \
+  --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
 ```
 
 ### Families the nightly refreshes wait on (historical audit of 2026-10-17)
@@ -447,7 +459,12 @@ and compares both producer and verifier implementation identities. Its
 historical vendored wheel must match its lock, the sealed wheel, and the
 current installed wheel. This path requires identical historical and current
 `uv.lock` bytes. Missing history, a different locked runtime, or an unproved
-producer refuses. Same-revision API callers may omit the producer pin.
+producer refuses. Every operator `--publish-prepared` passes
+`--expect-producer` with that receipt's `source.checkout`, even when main has
+not moved: peers land on main while a publication is prepared and qualified,
+and the pin is what keeps a sealed receipt publishable from a later main. On
+an unmoved main the pin costs nothing (the producer is its own ancestor and
+the lock is identical). Only same-revision API callers, such as tests, omit it.
 
 Prepared publication reruns byte checks, native admission and exact input
 restoration; it never runs the source writer. It refuses an altered or
