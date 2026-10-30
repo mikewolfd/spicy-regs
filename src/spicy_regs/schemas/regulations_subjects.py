@@ -293,6 +293,10 @@ SOURCE_COLUMNS = {
         ("correction_of", "VARCHAR"),
         ("corrections_json", "VARCHAR"),
         ("significant", "VARCHAR"),
+        # SpicyDocs 0.66.6 projection: literal publisher fields, kept as stated (regulations-native-v2).
+        ("president_json", "VARCHAR"),
+        ("disposition_notes", "VARCHAR"),
+        ("executive_order_notes", "VARCHAR"),
     ],
     "feed_summary": [
         ("docket_id", "VARCHAR"),

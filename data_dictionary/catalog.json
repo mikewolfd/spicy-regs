@@ -2167,7 +2167,7 @@
       {
         "dataset": "federal_register",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "document_number",
           "publication_date"
@@ -9087,6 +9087,9 @@
         "correction_of",
         "corrections",
         "significant",
+        "president_json",
+        "disposition_notes",
+        "executive_order_notes",
         "regulations_dot_gov_agency_id",
         "regulations_dot_gov_title",
         "regulations_dot_gov_regulation_id_number",

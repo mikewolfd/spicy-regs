@@ -504,6 +504,33 @@ def test_cfr_internal_prior_restores_qualified_placement_metadata(tmp_path):
     assert pq.read_schema(internal).metadata == table.schema.metadata
 
 
+def test_v1_federal_register_pair_restores_and_rewrites_under_v2_with_new_fields_null(tmp_path):
+    """A pair written before the SpicyDocs 0.66.6 projection stays readable; v2 only adds three literal columns."""
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+    from spicy_regs.etl_receipts import write_dataset
+    from spicy_regs.transforms.regulations_shape import shape_record
+
+    current = policy("federal_register")
+    (prior,) = earlier_policies(current)
+    assert (prior.policy_version, current.policy_version) == ("regulations-native-v1", "regulations-native-v2")
+    added = {"president_json", "disposition_notes", "executive_order_notes"}
+    assert set(current.subject_schema.names) - set(prior.subject_schema.names) == added
+    assert set(prior.subject_schema.names) <= set(current.subject_schema.names)
+    raw = {"document_number": "1", "publication_date": "2026-01-01", "title": "old",
+           "regulation_id_numbers_json": "[]", "docket_ids_json": "[]", "agencies_json": "[]"}
+    shaped = shape_record("federal_register", raw)
+    held = {name: shaped.get(name) for name in prior.input_fields}
+    subject, receipts = write_dataset([(held, context("old"))], tmp_path / "old", prior)
+    assert subject is not None
+    original = subject.read_bytes()
+    [restored] = read_internal(ReceiptInput("federal_register", (subject,), receipts, "old"))
+    assert subject.read_bytes() == original
+    new = write(tmp_path, "federal_register", [restored], generation="new", label="new")
+    [row] = pq.read_table(new.subjects[0]).to_pylist()
+    assert all(row[name] is None for name in added)
+    assert row["document_number"] == "1" and row["publication_date"] == "2026-01-01" and row["title"] == "old"
+
+
 def test_native_source_ingest_uses_qualified_fr_prior_and_preserves_dated_records(tmp_path):
     from spicy_regs.transforms.regulations_ingest import federal_register_generation
 

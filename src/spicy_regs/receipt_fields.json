@@ -2734,7 +2734,10 @@
      "action",
      "correction_of",
      "corrections_json",
-     "significant"
+     "significant",
+     "president_json",
+     "disposition_notes",
+     "executive_order_notes"
     ]
    },
    "renamed": {

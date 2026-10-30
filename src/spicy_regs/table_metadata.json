@@ -25325,6 +25325,21 @@
         "description": "Whether the document was deemed significant under Executive Order 12866, as the API states it: `true` or `false`; NULL where the API states neither, which is common, so NULL does not mean `false`."
       },
       {
+        "column_name": "president_json",
+        "column_type": "VARCHAR",
+        "description": "The Register's literal presidential attribution object, with identifier and name; no signer inference. NULL means unrequested/missing; JSON null and an empty object remain distinct. NULL also on a row not read since the field was first requested."
+      },
+      {
+        "column_name": "disposition_notes",
+        "column_type": "VARCHAR",
+        "description": "Literal Register disposition prose; NULL if missing/null, empty text if stated empty. NULL also on a row not read since the field was first requested."
+      },
+      {
+        "column_name": "executive_order_notes",
+        "column_type": "VARCHAR",
+        "description": "Literal Register executive-order history prose, including spelling and line breaks; not an independently established current legal effect. NULL also on a row not read since the field was first requested."
+      },
+      {
         "column_name": "regulations_dot_gov_agency_id",
         "column_type": "VARCHAR",
         "description": "Agency identifier stated by the linked Regulations.gov document metadata."
@@ -32796,7 +32811,7 @@
       {
         "dataset": "federal_register",
         "receipt_only": false,
-        "policy_version": "regulations-native-v1",
+        "policy_version": "regulations-native-v2",
         "identity_columns": [
           "document_number",
           "publication_date"
