@@ -5,17 +5,17 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- **Active: `spicy_docs-0.66.7+centralraw.02cc4431e606`**. The same shared raw
-  archive overlay over `spicy_docs-0.66.7`, built from SpicyDocs fork main
-  `a87cc3d1`: 0.66.6 plus `cms_profile_for_policy`, which admits the retained
-  CMS Part D and Medicaid releases under their declared acquisition policy 1.0
-  so the live 2024 generations can be rebuilt from them. Only
-  `storage/raw_archive.py` and the blob destination in `reading/refusals.py`
-  differ from the base; the overlay modules are byte-identical to the 0.66.6
-  overlay's, so the identity is unchanged. The
-  [build receipt](spicy_docs-0.66.7+centralraw.02cc4431e606-py3-none-any.json)
+- **Active: `spicy_docs-0.66.8+centralraw.02cc4431e606`**. The same shared raw
+  archive overlay over `spicy_docs-0.66.8`, built from SpicyDocs fork main
+  `c970f0ac`: 0.66.7 plus `nomination_id` (`{congress}-pn-{number}[-{part}]`)
+  on the nominations contract and on Senate PN entries of
+  `roll_call_votes.documents_json` (ss-vhi2). Only `storage/raw_archive.py`
+  and the blob destination in `reading/refusals.py` differ from the base; the
+  overlay modules are byte-identical to the 0.66.7 overlay's, so the identity
+  is unchanged. The
+  [build receipt](spicy_docs-0.66.8+centralraw.02cc4431e606-py3-none-any.json)
   pins both changed modules and wheel SHA-256
-  `6b4344bee64a51ced4cff8c4d865e87be59ddf5ad2bf4bd22405c35d32f9304b`.
+  `1ae028e87696192b074103062bb819632b6a40209266606af4a1cb8e919d17ec`.
   `python scripts/package_central_raw_reader.py --check` reproduces the wheel,
   receipt and dependency pins from retained wheels without writing or downloading.
   `--base` selects another retained release wheel, `--provider` a reviewed source
@@ -23,6 +23,17 @@ Base CLI and MCP installs do not require them.
   review. Keep both retained provider wheels. Tests verify unchanged reader
   modules, streaming captures, exact-byte reuse of raw and gzip storage, and
   interrupted-write cleanup.
+
+- `spicy_docs-0.66.8`: built from SpicyDocs fork main `c970f0ac`; SHA-256
+  `1f7df1a064e7c478aad9d93549b5b08695da924f18ec93ca53d7dd27ebfd7961`; two builds
+  from clean archives are byte-identical. See [package receipt](spicy_docs-0.66.8.json).
+
+- `spicy_docs-0.66.7+centralraw.02cc4431e606`: the previous overlay over
+  `0.66.7`; SHA-256
+  `6b4344bee64a51ced4cff8c4d865e87be59ddf5ad2bf4bd22405c35d32f9304b`
+  ([receipt](spicy_docs-0.66.7+centralraw.02cc4431e606-py3-none-any.json)). The
+  0.66.7 base adds `cms_profile_for_policy`, which admits the retained CMS
+  Part D and Medicaid releases under their declared acquisition policy 1.0.
 
 - `spicy_docs-0.66.7`: built from SpicyDocs fork main `a87cc3d1`; SHA-256
   `ed0b69575364a0728fc3122ce20e557bd5f7ec4112c20ed4ecd92c65c7eab073`; two builds

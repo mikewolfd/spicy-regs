@@ -1,0 +1,10 @@
+{
+  "filename": "spicy_docs-0.66.8-py3-none-any.whl",
+  "version": "0.66.8",
+  "sha256": "1f7df1a064e7c478aad9d93549b5b08695da924f18ec93ca53d7dd27ebfd7961",
+  "byte_size": 2692745,
+  "source_commit": "c970f0ac6b9ad1cbedcd3e29dcb26df1ccef4d13",
+  "source_state": "SpicyDocs fork main (build: version nomination_id as 0.66.8)",
+  "build": "uv 0.11.21 build --wheel --offline; two builds from clean git archives of the commit are byte-identical",
+  "scope": "0.66.7 plus nomination_id on NOMINATIONS and on Senate PN entries of ROLL_CALL_VOTES documents_json (ss-vhi2)."
+}

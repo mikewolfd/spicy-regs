@@ -1,0 +1,12 @@
+{
+  "version": "0.66.8+centralraw.02cc4431e606",
+  "wheel": "spicy_docs-0.66.8+centralraw.02cc4431e606-py3-none-any.whl",
+  "sha256": "1ae028e87696192b074103062bb819632b6a40209266606af4a1cb8e919d17ec",
+  "base_wheel": "spicy_docs-0.66.8-py3-none-any.whl",
+  "base_sha256": "1f7df1a064e7c478aad9d93549b5b08695da924f18ec93ca53d7dd27ebfd7961",
+  "changed_package_files": {
+    "spicy_docs/storage/raw_archive.py": "a92b8d6652441478f77eea232e03a35d3919265a4959ed2de9aab1634448e4e8",
+    "spicy_docs/reading/refusals.py": "69b54afdcd8bed7546e07cc9b88c26663786b4895d2d1d5ae153c97af7a285a0"
+  },
+  "scope": "Local central raw archive adoption; all other packaged source bytes equal the pinned base wheel."
+}
