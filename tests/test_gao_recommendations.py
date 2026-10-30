@@ -239,9 +239,18 @@ def test_the_evidence_copy_is_spicy_docs_redaction_of_the_export(tmp_path, monke
     """The one redactor lives beside the reader's header; the retained copy is its output, byte for byte."""
     from spicy_docs.sources.gao.recommendations import redact_director_phone
 
-    _rollup(tmp_path, monkeypatch, EXCERPT).run()
+    from spicy_regs.source_evidence import EvidenceMemberSource
+
+    pipeline = _rollup(tmp_path, monkeypatch, EXCERPT)
+    pipeline.run()
+    assert pipeline.source_evidence is not None
+    source = EvidenceMemberSource(pipeline.source_evidence.artifact_dir)
     redacted, emptied = redact_director_phone(EXCERPT)
-    blobs = [path.read_bytes() for path in (tmp_path / "source-evidence").rglob("sha256/*") if path.is_file()]
+    blobs = []
+    for key in source.keys():
+        if key.startswith("blobs/sha256/"):
+            with source.open(key) as stream:
+                blobs.append(stream.read())
     assert redacted in blobs and EXCERPT not in blobs and emptied == len(STATED) == 14
 
 
