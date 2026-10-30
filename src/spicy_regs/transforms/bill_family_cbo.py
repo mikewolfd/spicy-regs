@@ -235,6 +235,7 @@ def sweep_cbo_archive_index(crawls: Sequence[str], *, acquirer: Any, evidence: A
     crawl whose index fails (Common Crawl answers 504 under load) is recorded as a refusal and listed in ``unread``;
     the sweep stops before a crawl it could not finish within the budget left above ``reserve``.
     """
+    import httpx
     from spicy_docs.sources.web_archive import WebArchiveError
 
     candidates: list[Any] = []
@@ -261,7 +262,8 @@ def sweep_cbo_archive_index(crawls: Sequence[str], *, acquirer: Any, evidence: A
                                      index_rows=len(read.candidates))
                     candidates.extend(read.candidates)
                     listed_by.update(dict.fromkeys(read.candidates, read.capture))
-            except (WebArchiveError, OSError) as error:
+            except (WebArchiveError, httpx.HTTPError, OSError) as error:
+                # The index answers 502/504 under load (5 of 22 index requests, 2026-10-30): a gap, not a stop.
                 evidence.refusal(error, stage="cbo-archive-index")
                 unread.append((crawl, pattern, type(error).__name__))
     return ArchiveSweep(tuple(candidates), listed_by, tuple(unread))
@@ -304,6 +306,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
     sampled items. Each outcome is ``card``, ``absent`` (a genuine page without a card), ``refused`` (the gate or
     a digest check said no) or ``unarchived``; a refusal is retained as evidence and never becomes a card.
     """
+    import httpx
     from spicy_docs.reading.pdf_bytes import check_pdf_bytes
     from spicy_docs.sources.cbo import (
         CboCardAbsent,
@@ -336,7 +339,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
             page = acquirer.acquire_cc_record(chosen)
             evidence.capture(page.capture, stage="cbo-archive-page",
                              **_receipt(page, sweep, native_id=item.publication_id, dataset_id="cbo-publication-page"))
-        except (WebArchiveError, OSError) as error:
+        except (WebArchiveError, httpx.HTTPError, OSError) as error:
             evidence.refusal(error, stage="cbo-archive-page")
             results.append(ArchivedCard(item.publication_id, "refused", str(error), captures=captures))
             continue
@@ -361,7 +364,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
                 evidence.capture(pdf.capture, stage="cbo-archive-pdf",
                                  **_receipt(pdf, sweep, native_id=item.publication_id, dataset_id="cbo-estimate-pdf"),
                                  match_rule=chosen_pdf[1])
-            except (WebArchiveError, CboSourceError, OSError) as error:
+            except (WebArchiveError, CboSourceError, httpx.HTTPError, OSError) as error:
                 evidence.refusal(error, stage="cbo-archive-pdf")
                 pdf = None
         results.append(ArchivedCard(item.publication_id, "card", card=card, page=page, pdf=pdf,

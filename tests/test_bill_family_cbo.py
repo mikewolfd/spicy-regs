@@ -664,3 +664,24 @@ def test_latest_capture_prefers_the_newest_200_without_a_query():
                                row("https://www.cbo.gov/publication/1", "20260401000000", 403))
     assert cbo.latest_capture([plain, query, newer_403]) is plain
     assert cbo.latest_capture([newer_403]) is None
+
+
+def test_an_index_that_answers_5xx_is_a_recorded_gap_not_a_stopped_sweep(tmp_path):
+    warc, rows = _archive()
+    calls = []
+    inner = _transport(warc, rows, [])
+
+    def handle(request):
+        calls.append(request)
+        if "system/files" in str(request.url) and "showNumPages" not in str(request.url):
+            return httpx.Response(502, stream=httpx.ByteStream(b"bad gateway"))
+        return inner.handle_request(request)
+
+    evidence = CaptureEvidence(tmp_path / "run", "bill-family")
+    with WebArchiveAcquirer(max_requests=10, min_request_interval_seconds=0,
+                            transport=httpx.MockTransport(handle)) as acquirer:
+        sweep = cbo.sweep_cbo_archive_index([CRAWL], acquirer=acquirer, evidence=cbo.cbo_archive_evidence(evidence),
+                                            reserve=0)
+    evidence.finish()
+    assert sweep.unread == ((CRAWL, "www.cbo.gov/system/files/*", "RetryableHTTPStatusError"),)
+    assert len(sweep.candidates) == 2 and len(calls) == 5  # 2 page counts, 1 index, 2 attempts at the 502
