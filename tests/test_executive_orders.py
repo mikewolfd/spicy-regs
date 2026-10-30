@@ -139,7 +139,9 @@ def test_ordinary_publication_lookup_text_history_and_failed_original(tmp_path, 
     refusal = load_body_capture(paths[reader.records[1]["sourceRecordId"]], record=second).refused_response
     assert refusal is not None and refusal.response_bytes is not None
     digest = hashlib.sha256(refusal.response_bytes).hexdigest()
-    assert (evidence / "blobs" / "sha256" / digest).read_bytes() == refusal.response_bytes
+    from spicy_regs.source_evidence import EvidenceMemberSource
+    with EvidenceMemberSource(evidence).open("blobs/sha256/" + digest) as original:
+        assert original.read() == refusal.response_bytes
     assert module.TABLE in data_dictionary.expected_schemas()
 
 
