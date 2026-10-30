@@ -50,6 +50,7 @@ AGENCIES = pa.list_(
 )
 CFR_REFERENCES = pa.list_(pa.struct([("title", pa.int64()), ("part", S), ("chapter", S)]))
 TIMETABLE = pa.list_(pa.struct([("action", S), ("date", S), ("fr_citation", S)]))
+RELATED_RINS = pa.list_(pa.struct([("rin", S), ("rin_relation", S)]))
 STAGE_EVENTS = pa.list_(
     pa.struct(
         [
@@ -116,6 +117,7 @@ NATIVE_FIELDS = {
         "timetable_json": ("timetable", TIMETABLE),
         "cfr_references_json": ("cfr_references", STRINGS),
         "legal_authority_json": ("legal_authority", STRINGS),
+        "related_rins_json": ("related_rins", RELATED_RINS),
     },
 }
 TYPE_OVERRIDES = {

@@ -38,10 +38,19 @@ def old_records(body: bytes, edition: str = "202510") -> list[dict]:
         return list(reader._fetch_edition(edition))
 
 
+def frozen_fields(row: dict) -> dict:
+    """The fields the frozen walker knew; ``related_rins`` (SpicyDocs 0.67.0) postdates it and has its own tests."""
+    return {key: value for key, value in row.items() if key not in ("related_rins", "related_rins_json")}
+
+
 def shared_records(body: bytes, edition: str = "202510") -> list[dict]:
     rows: list[dict] = []
-    scan_unified_agenda_records(body, on_record=lambda item: rows.append(_normalize(item, edition)))
+    scan_unified_agenda_records(body, on_record=lambda item: rows.append(frozen_fields(_normalize(item, edition))))
     return rows
+
+
+def read_frozen_fields(source: UnifiedAgendaReader) -> list[dict]:
+    return [frozen_fields(row) for row in source.iter_records()]
 
 
 def reader(body: bytes, edition: str = "202510", status: int = 200) -> UnifiedAgendaReader:
@@ -69,8 +78,8 @@ def test_exact_source_excerpts(pin):
         expected = old_records(body, pin["edition"])
         assert shared_records(body, pin["edition"]) == expected
         actual = list(reader(body, pin["edition"]).iter_records())
-        assert actual == expected
-        assert [_shape(row) for row in actual] == [_shape(row) for row in expected]
+        assert [frozen_fields(row) for row in actual] == expected
+        assert [frozen_fields(_shape(row)) for row in actual] == [frozen_fields(_shape(row)) for row in expected]
 
 
 @pytest.mark.parametrize(
@@ -129,7 +138,7 @@ def test_exact_source_excerpts(pin):
 def test_normalization_mutations_match_frozen_walker(fields):
     body = document(record(fields))
     assert shared_records(body) == old_records(body)
-    assert list(reader(body).iter_records()) == old_records(body)
+    assert read_frozen_fields(reader(body)) == old_records(body)
 
 
 @pytest.mark.parametrize(
@@ -211,7 +220,7 @@ def test_completed_editions_remain_available_when_a_later_edition_fails():
         )
 
     rows = UnifiedAgendaReader(editions=("202510", "202504"), transport=httpx.MockTransport(respond)).iter_records()
-    assert next(rows) == old_records(document(record()))[0]
+    assert frozen_fields(next(rows)) == old_records(document(record()))[0]
     with pytest.raises(UnifiedAgendaSourceError, match="HTTP 404"):
         next(rows)
     assert requests == ["REGINFO_RIN_DATA_202510.xml", "REGINFO_RIN_DATA_202504.xml"]

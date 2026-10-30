@@ -576,6 +576,7 @@ tables:
       first_action_date: "Earliest distinct calendar date derived from the timetable, or NULL when none is derivable. Source month-only dates (MM/00/YYYY) use day 01 here; timetable_json retains their original precision."
       next_action_date: "Second distinct calendar date derived from the timetable, or NULL when fewer than two dates are derivable. May be historical; it is not selected relative to today. Source month-only dates use day 01 here; timetable_json retains the literal dates."
       url: "URL of the entry's detail page on reginfo.gov."
+      related_rins_json: "JSON array of the RINs the publisher lists as related to this entry, each with its stated relation (`rin`, `rin_relation`), in source order. Values are stripped of leading and trailing whitespace and otherwise kept as written: no RIN shape is checked, so self-references, repeated pairs, malformed RINs and the cut-off relations `Related t` and `Previously report` remain. NULL when the edition states no related-RIN list."
   # The materialized rulemaking dataset (`materialize-rulemaking`): eight tables that publish as one
   # snapshot under `materialized/rulemaking/latest.json`, not the publication index. Meanings follow
   # docs/ontology.md and each builder's docstring.

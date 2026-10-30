@@ -3,7 +3,7 @@
 Covers the two pieces with real logic: parsing the reginfo.gov
 ``REGINFO_RIN_DATA`` XML export into normalized RIN dicts
 (``UnifiedAgendaReader.iter_records`` / ``_normalize``) and mapping those onto
-the published 17-column schema (``_shape``, including timetable-date derivation
+the 18-column raw input schema (``_shape``, including timetable-date derivation
 and the deterministic per-RIN URL). The HTTP transport returns fixtures without network access.
 """
 
@@ -318,3 +318,68 @@ def test_the_backfill_completes_over_runs_and_keeps_every_prior_row(tmp_path, mo
         out.replace(tmp_path / "_ua_prior.parquet")  # the next run's prior table
     assert counts == [21, 41, 60, 60]
     assert editions == {"201210" if stem == "2012" else stem for stem in module.edition_series()}
+
+
+def _agenda(*records: tuple[str, str]) -> bytes:
+    return (
+        "<REGINFO_RIN_DATA>"
+        + "".join(
+            f"<RIN_INFO><RIN>{rin}</RIN><PUBLICATION><PUBLICATION_ID>202004</PUBLICATION_ID></PUBLICATION>"
+            f"{fields}</RIN_INFO>"
+            for rin, fields in records
+        )
+        + "</REGINFO_RIN_DATA>"
+    ).encode()
+
+
+def _related(*pairs: tuple[str, str]) -> str:
+    return (
+        "<RELATED_RIN_LIST>"
+        + "".join(f"<RELATED_RIN><RIN>{rin}</RIN><RIN_RELATION>{relation}</RIN_RELATION></RELATED_RIN>" for rin, relation in pairs)
+        + "</RELATED_RIN_LIST>"
+    )
+
+
+# Literal publisher values: 1125-AB08 (202004) states " 1615-NYD" with the cut-off "Related t";
+# 1904-AF61 (202404) lists 1904-AF53 first and third; 80 related RINs across the editions name their own row.
+_RELATED_EDITION = _agenda(
+    ("1125-AB08", _related((" 1615-NYD", "Related t"))),
+    ("1904-AF61", _related(("1904-AF53", "Related to"), ("1904-AF54", "Related to"), ("1904-AF53", "Previously reported as"))),
+    ("1545-BL70", _related(("1545-BL70", "Related to"))),
+    ("1545-BL71", "<RELATED_RIN_LIST/>"),
+    ("1545-BL72", ""),
+)
+
+
+def test_related_rins_are_stripped_but_never_shape_checked_or_deduplicated():
+    from spicy_regs.sources.unified_agenda import normalize_retained_edition
+
+    rows = {row["rin"]: row for row in normalize_retained_edition(_RELATED_EDITION, edition="202004")}
+    assert rows["1125-AB08"]["related_rins"] == [{"rin": "1615-NYD", "rin_relation": "Related t"}]
+    assert [(item["rin"], item["rin_relation"]) for item in rows["1904-AF61"]["related_rins"]] == [
+        ("1904-AF53", "Related to"),
+        ("1904-AF54", "Related to"),
+        ("1904-AF53", "Previously reported as"),
+    ]
+    assert rows["1545-BL70"]["related_rins"] == [{"rin": "1545-BL70", "rin_relation": "Related to"}]
+    # A stated empty list and an absent one stay distinct: [] and NULL.
+    assert rows["1545-BL71"]["related_rins"] == []
+    assert rows["1545-BL72"]["related_rins"] is None
+    assert _shape(rows["1545-BL71"])["related_rins_json"] == "[]"
+    assert _shape(rows["1545-BL72"])["related_rins_json"] == "null"
+    assert json.loads(_shape(rows["1125-AB08"])["related_rins_json"]) == rows["1125-AB08"]["related_rins"]
+
+
+def test_related_rins_strip_agrees_with_the_spicy_docs_projection_collapse():
+    """The table strips; SpicyDocs' projection collapses. They agree only while no value holds an internal run."""
+    from spicy_docs.sources.unified_agenda import UnifiedAgendaEdition
+    from spicy_docs.sources.unified_agenda.projection import project_unified_agenda_edition
+
+    from spicy_regs.sources.unified_agenda import normalize_retained_edition
+
+    projected: list = []
+    project_unified_agenda_edition(_RELATED_EDITION, edition=UnifiedAgendaEdition("202004"), on_record=projected.append)
+    table = normalize_retained_edition(_RELATED_EDITION, edition="202004")
+    assert [[(item.rin, item.rin_relation) for item in row.related_rins] for row in projected] == [
+        [(item["rin"], item["rin_relation"]) for item in row["related_rins"] or ()] for row in table
+    ]

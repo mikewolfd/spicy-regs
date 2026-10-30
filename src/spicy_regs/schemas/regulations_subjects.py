@@ -453,6 +453,8 @@ SOURCE_COLUMNS = {
         ("first_action_date", "VARCHAR"),
         ("next_action_date", "VARCHAR"),
         ("url", "VARCHAR"),
+        # SpicyDocs 0.67.0 reads RELATED_RIN_LIST; the column moved unified_agenda to regulations-native-v2.
+        ("related_rins_json", "VARCHAR"),
     ],
 }
 

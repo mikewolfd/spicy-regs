@@ -107,6 +107,12 @@ def normalize_retained_edition(
 
     The table keeps its strip-only normalization. Historical repair is shared
     with acquisition, qualified by the full original digest, and receipted.
+    ``related_rins`` is None when the record states no ``RELATED_RIN_LIST``;
+    each entry's RIN and relation are stripped, never shape-checked, so
+    self-references, repeats and cut-off values ("Related t") stay as stated.
+    SpicyDocs' projection collapses internal whitespace instead; the two agree
+    on all 28,720 related RINs of the 60 retained editions only because none
+    holds an internal whitespace run.
     No rows or success receipt escape a failed whole-edition scan.
     """
     import hashlib
@@ -198,4 +204,10 @@ def _normalize(record: UnifiedAgendaRecordObservation, edition: str) -> dict:
             if (text := field.leading_text.strip())
         ],
         "timetable": timetable,
+        "related_rins": [
+            {"rin": _text(entry.children, "RIN"), "rin_relation": _text(entry.children, "RIN_RELATION")}
+            for entry in _items(fields, "RELATED_RIN_LIST", "RELATED_RIN")
+        ]
+        if _find(fields, "RELATED_RIN_LIST") is not None
+        else None,
     }

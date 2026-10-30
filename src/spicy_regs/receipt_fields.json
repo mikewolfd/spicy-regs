@@ -4529,17 +4529,20 @@
      "legal_authority_json",
      "first_action_date",
      "next_action_date",
-     "url"
+     "url",
+     "related_rins_json"
     ]
    },
    "renamed": {
     "cfr_references_json": "cfr_references",
     "legal_authority_json": "legal_authority",
+    "related_rins_json": "related_rins",
     "timetable_json": "timetable"
    },
    "meanings": {
     "cfr_references_json": "JSON array of CFR citations affected by the rulemaking. The join key to the CFR.",
     "legal_authority_json": "JSON array of legal-authority citations the agency cites for the rulemaking.",
+    "related_rins_json": "JSON array of the RINs the publisher lists as related to this entry, each with its stated relation (`rin`, `rin_relation`), in source order. Values are stripped of leading and trailing whitespace and otherwise kept as written: no RIN shape is checked, so self-references, repeated pairs, malformed RINs and the cut-off relations `Related t` and `Previously report` remain. NULL when the edition states no related-RIN list.",
     "timetable_json": "JSON array of planned and actual milestone actions with literal source dates and Federal Register citations. A date with day 00 has month precision; labels such as To Be Determined remain unchanged.",
     "url": "URL of the entry's detail page on reginfo.gov."
    }

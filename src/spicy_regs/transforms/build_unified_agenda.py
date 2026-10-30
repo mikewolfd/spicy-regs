@@ -1,6 +1,6 @@
 """Transform: build ``unified_agenda.parquet`` from the reginfo.gov export.
 
-Produces the pinned 17 all-VARCHAR columns keyed by (``rin``, ``agenda_edition``).
+Produces the pinned 18 all-VARCHAR columns keyed by (``rin``, ``agenda_edition``).
 The Unified Agenda is a Tier-1 rulemaking-lifecycle source: keyed by RIN, it is
 the upstream, forward-looking companion to ``federal_register`` (also RIN-keyed)
 and the regulations.gov ``dockets``/``documents`` view — it lists actions
@@ -30,7 +30,7 @@ from 11.5% and 5.7% with the Fall 2025 edition alone.
 
 The reginfo.gov XML export the reader parses is documented in
 :mod:`spicy_regs.sources.unified_agenda`; :func:`_shape` maps the reader's
-normalized per-RIN dict onto the pinned 17 columns.
+normalized per-RIN dict onto the pinned 18 columns.
 """
 
 from __future__ import annotations
@@ -61,8 +61,9 @@ UNREADABLE_EDITIONS = frozenset({"199504", "201204"})
 #: complete backfill takes three runs.
 BACKFILL_EDITIONS_PER_RUN = 20
 
-# The published schema: 17 columns, all VARCHAR; array-valued fields serialized
-# as JSON strings. Primary / dedup key is (rin, agenda_edition).
+# The raw input schema: 18 columns, all VARCHAR; array-valued fields serialized
+# as JSON strings. Primary / dedup key is (rin, agenda_edition). related_rins_json
+# (SpicyDocs 0.67.0) is appended last so the earlier columns keep their positions.
 COLUMNS = (
     "rin",
     "agency_code",
@@ -81,6 +82,7 @@ COLUMNS = (
     "first_action_date",
     "next_action_date",
     "url",
+    "related_rins_json",
 )
 _SCHEMA = pa.schema([(c, pa.string()) for c in COLUMNS])
 
@@ -155,6 +157,8 @@ def _shape(doc: dict) -> dict:
         "first_action_date": first_action,
         "next_action_date": next_action,
         "url": url,
+        # NULL, not [], when the edition states no RELATED_RIN_LIST (owner rule: absent lists are NULL).
+        "related_rins_json": json.dumps(doc.get("related_rins")),
     }
 
 

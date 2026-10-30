@@ -531,6 +531,42 @@ def test_v1_federal_register_pair_restores_and_rewrites_under_v2_with_new_fields
     assert row["document_number"] == "1" and row["publication_date"] == "2026-01-01" and row["title"] == "old"
 
 
+def test_v1_unified_agenda_pair_restores_and_rewrites_under_v2_with_related_rins_null(tmp_path):
+    """A pair written before SpicyDocs 0.67.0 read RELATED_RIN_LIST stays readable; NULL there means never read."""
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+    from spicy_regs.etl_receipts import write_dataset
+    from spicy_regs.transforms.regulations_shape import shape_record
+
+    current = policy("unified_agenda")
+    (prior,) = earlier_policies(current)
+    assert (prior.policy_version, current.policy_version) == ("regulations-native-v1", "regulations-native-v2")
+    assert set(current.subject_schema.names) - set(prior.subject_schema.names) == {"related_rins"}
+    assert current.subject_schema.names[:-1] == prior.subject_schema.names  # appended; earlier columns keep places
+    raw = {"rin": "1000-AA00", "agenda_edition": "202510", "timetable_json": "[]"}
+    shaped = shape_record("unified_agenda", raw)
+    held = {name: shaped.get(name) for name in prior.input_fields}
+    subject, receipts = write_dataset([(held, context("old"))], tmp_path / "old", prior)
+    assert subject is not None
+    original = subject.read_bytes()
+    [restored] = read_internal(ReceiptInput("unified_agenda", (subject,), receipts, "old"))
+    assert subject.read_bytes() == original
+    new = write(tmp_path, "unified_agenda", [restored], generation="new", label="new")
+    [row] = pq.read_table(new.subjects[0]).to_pylist()
+    assert row["related_rins"] is None
+    assert (row["rin"], row["agenda_edition"], row["timetable"]) == ("1000-AA00", "202510", [])
+
+
+def test_unified_agenda_related_rins_refuse_an_unknown_member():
+    from spicy_regs.transforms.regulations_shape import RegulationsShapeError, shape_record
+
+    row = {"rin": "1000-AA00", "agenda_edition": "202510",
+           "related_rins_json": '[{"rin": "1000-AA01", "rin_relation": "Related to", "note": "x"}]'}
+    with pytest.raises(RegulationsShapeError):
+        shape_record("unified_agenda", row)
+    row["related_rins_json"] = '[{"rin": "1000-AA01", "rin_relation": "Related to"}]'
+    assert shape_record("unified_agenda", row)["related_rins"] == [{"rin": "1000-AA01", "rin_relation": "Related to"}]
+
+
 def test_native_source_ingest_uses_qualified_fr_prior_and_preserves_dated_records(tmp_path):
     from spicy_regs.transforms.regulations_ingest import federal_register_generation
 

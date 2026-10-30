@@ -78,8 +78,15 @@ def unified_agenda_generation(
     generation_id: str,
     witnesses: Sequence[Mapping],
     prior: ReceiptInput | None = None,
+    source_only: bool = False,
+    source_receipts: list[dict] | None = None,
 ):
-    """Use the edition merge with literal timetable/legal-authority structures."""
+    """Use the edition merge with literal timetable/legal-authority structures.
+
+    ``source_only`` replays the selected retained editions with no prior (``build_unified_agenda`` refuses one),
+    the only way a column added to the reader reaches every held edition; ``source_receipts`` collects the
+    readers' input pins and repairs into the subject's metadata.
+    """
     from spicy_regs.transforms.build_unified_agenda import build_unified_agenda
 
     return _build(
@@ -94,6 +101,8 @@ def unified_agenda_generation(
             editions=tuple(records_by_edition),
             records=records_by_edition.__getitem__,
             download_prior=lambda *_: False,
+            source_only=source_only,
+            source_receipts=source_receipts,
         ),
     )
 
