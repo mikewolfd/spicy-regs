@@ -1,0 +1,60 @@
+{
+ "record": {
+  "applicant_name": "",
+  "bureau": {
+   "code": "WT",
+   "edocs_bureau_code": "WTB",
+   "name": "Wireless Telecommunications Bureau"
+  },
+  "callsign": "",
+  "channel": "",
+  "city": "",
+  "consolidated_proceeding_id": null,
+  "date_archived": "1996-10-25T00:00:00.000-04:00",
+  "date_closed": "1996-10-25T00:00:00.000-04:00",
+  "date_commission_decision": null,
+  "date_designated": null,
+  "date_effective": null,
+  "date_hot_docket": null,
+  "date_initial_decision": null,
+  "date_nprm": "1996-04-01T00:00:00.000-05:00",
+  "date_oral_argument": null,
+  "date_proceeding_created": "1996-04-19T00:00:00.000-04:00",
+  "date_public_notice": null,
+  "date_reporting_and_order": "1996-10-18T00:00:00.000-04:00",
+  "date_rule_board_decision": null,
+  "description": "AMENDMENT OF THE COMMISSION'S RULES TO PERMIT OPERATION OF CERTAIN DOMESTIC SHIP & AIRCRAFT RADIO STATIONS WITHOUT INDIVIDUAL LICENSES",
+  "description_display": "AMENDMENT OF THE COMMISSION'S RULES TO PERMIT OPERATION OF CERTAIN DOMESTIC SHIP & AIRCRAFT RADIO STATIONS WITHOUT INDIVIDUAL LICENSES",
+  "dro_cc_exemption": "N",
+  "face_card_id": null,
+  "file_number": "",
+  "filed_by": "",
+  "flag_archived": "N",
+  "flag_exparte_allowed": "N",
+  "flag_historical_data_exists": "N",
+  "flag_internet_file": "N",
+  "flag_open_close": "C",
+  "flag_rulemaking_or_docket": "D",
+  "flag_small_business_impact": " ",
+  "id_bureau": "12",
+  "id_proceeding": 308877,
+  "id_state": null,
+  "location": "",
+  "name": "96-82",
+  "recent_filing_count": 0,
+  "rule_section": "PART 80 AND 87",
+  "state": {
+   "abbreviation": null,
+   "id": null,
+   "name": null
+  },
+  "total_filing_count": 31
+ },
+ "source": {
+  "locator": "/proceeding",
+  "note": "ECFS proceedings API page body, retained in corpora/spicyregs/raw; record copied verbatim",
+  "record_name": "96-82",
+  "retained_object": "objects/sha256/cf/cf5ef628c7c6935523e9ca9b2b740d5b5e954ec1d822ed9bd7bf34413467d7d8.gz",
+  "sha256": "cf5ef628c7c6935523e9ca9b2b740d5b5e954ec1d822ed9bd7bf34413467d7d8"
+ }
+}

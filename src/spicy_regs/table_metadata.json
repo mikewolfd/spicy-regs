@@ -23115,33 +23115,53 @@
       {
         "column_name": "comment_start_date",
         "column_type": "VARCHAR",
-        "description": "Start of the initial comment window, when ECFS records one. Often null."
+        "description": "Start of the initial comment window. ECFS returns the key on some proceedings but has never filled it: NULL in every live row (0 of 21,724, 2026-10-30) and every retained ECFS proceeding record (26,517 of 250,251 records carry the key, all null; six walks to 2026-10-08). Use the notice itself for comment dates."
       },
       {
         "column_name": "comment_end_date",
         "column_type": "VARCHAR",
-        "description": "End of the initial comment window, when ECFS records one. Often null."
+        "description": "End of the initial comment window. ECFS returns the key on some proceedings but has never filled it: NULL in every live row (0 of 21,724, 2026-10-30) and every retained ECFS proceeding record (26,517 of 250,251 records carry the key, all null; six walks to 2026-10-08). Use the notice itself for comment dates."
       },
       {
         "column_name": "reply_comment_start_date",
         "column_type": "VARCHAR",
-        "description": "Start of the reply-comment window, when ECFS records one. Often null."
+        "description": "Start of the reply-comment window. ECFS returns the key on some proceedings but has never filled it: NULL in every live row (0 of 21,724, 2026-10-30) and every retained ECFS proceeding record (26,517 of 250,251 records carry the key, all null; six walks to 2026-10-08). Use the notice itself for comment dates."
       },
       {
         "column_name": "reply_comment_end_date",
         "column_type": "VARCHAR",
-        "description": "End of the reply-comment window, when ECFS records one. Often null."
+        "description": "End of the reply-comment window. ECFS returns the key on some proceedings but has never filled it: NULL in every live row (0 of 21,724, 2026-10-30) and every retained ECFS proceeding record (26,517 of 250,251 records carry the key, all null; six walks to 2026-10-08). Use the notice itself for comment dates."
       },
       {
         "column_name": "filed_by",
         "column_type": "VARCHAR",
         "description": "ECFS account that created the proceeding. An internal FCC username; occasionally useful for spotting bureau conventions."
+      },
+      {
+        "column_name": "date_nprm",
+        "column_type": "VARCHAR",
+        "description": "ECFS `date_nprm`: date of the proceeding's Notice of Proposed Rulemaking as ECFS records it, an ISO 8601 string with the publisher's UTC offset as written (96-82: `1996-04-01T00:00:00.000-05:00`). NULL when ECFS records none; 6,023 of 21,705 dockets carry one (retained walk 2026-10-08)."
+      },
+      {
+        "column_name": "date_reporting_and_order",
+        "column_type": "VARCHAR",
+        "description": "ECFS `date_reporting_and_order`: date of the Report and Order as ECFS records it, an ISO 8601 string with the publisher's UTC offset as written (96-82: `1996-10-18T00:00:00.000-04:00`). NULL when ECFS records none; 5,290 of 21,705 dockets carry one (retained walk 2026-10-08)."
+      },
+      {
+        "column_name": "rule_section",
+        "column_type": "VARCHAR",
+        "description": "ECFS `rule_section`: the CFR part or section the proceeding concerns, as typed by FCC staff (96-82: `PART 80 AND 87`; 96-96: `73.202(B)`). Free text, not a normalized citation, published as written: empty or a single space when ECFS has none, and some values carry leading or trailing spaces (` Part 76`). 11,259 of 21,705 dockets carry non-blank text (retained walk 2026-10-08)."
       }
     ],
     "subject": "rulemaking",
     "grain": null,
     "identity_columns": [
       "name"
+    ],
+    "later_policy_columns": [
+      "date_nprm",
+      "date_reporting_and_order",
+      "rule_section"
     ]
   },
   "fcc_filings": {
@@ -35565,7 +35585,7 @@
       {
         "dataset": "fcc_proceedings",
         "receipt_only": false,
-        "policy_version": "government-sources/1",
+        "policy_version": "government-sources/2",
         "identity_columns": [
           "name"
         ],

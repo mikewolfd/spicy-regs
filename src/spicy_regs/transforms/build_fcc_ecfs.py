@@ -107,6 +107,10 @@ def _shape_proceeding(raw: dict) -> dict:
         "reply_comment_start_date": raw.get("comment_reply_start_date"),
         "reply_comment_end_date": raw.get("comment_reply_end_date"),
         "filed_by": raw.get("filed_by"),
+        # Published as ECFS writes them: offset timestamps stay VARCHAR, and rule_section keeps staff spacing.
+        "date_nprm": raw.get("date_nprm"),
+        "date_reporting_and_order": raw.get("date_reporting_and_order"),
+        "rule_section": raw.get("rule_section"),
     }
 
 

@@ -112,6 +112,9 @@ LEGACY_COLUMNS = {
         "reply_comment_start_date",
         "reply_comment_end_date",
         "filed_by",
+        "date_nprm",
+        "date_reporting_and_order",
+        "rule_section",
     ),
     "gao_decisions": (
         "decision_number",
