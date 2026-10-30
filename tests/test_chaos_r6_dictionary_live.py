@@ -46,7 +46,7 @@ def test_a_lobbyist_id_on_a_second_registrants_filing_is_confined_to_2020_2022(u
     assert "all on filings of 2020-2022" in " ".join(dd.load_descriptions()["lobbying_activity_lobbyists"]["columns"]
                                                     ["lobbyist_id"].split())
     first, last = con.execute(f"""
-        WITH r AS (SELECT l.lobbyist_id, f.registrant_id, f.filing_year
+        WITH r AS (SELECT l.lobbyist_id, f.registrant_id, CAST(f.filing_year AS INTEGER) AS filing_year
                    FROM {_scan(urls, 'lobbying_activity_lobbyists')} l JOIN {_scan(urls, 'lobbying_filings')} f
                    USING (filing_uuid) WHERE l.lobbyist_id IS NOT NULL),
              per AS (SELECT lobbyist_id, registrant_id, count(*) n, min(filing_year) y0, max(filing_year) y1
@@ -54,7 +54,7 @@ def test_a_lobbyist_id_on_a_second_registrants_filing_is_confined_to_2020_2022(u
              minor AS (SELECT * FROM per WHERE lobbyist_id IN (SELECT lobbyist_id FROM per GROUP BY 1 HAVING count(*) > 1)
                        QUALIFY row_number() OVER (PARTITION BY lobbyist_id ORDER BY n DESC, registrant_id) > 1)
         SELECT min(y0), max(y1) FROM minor""").fetchone()
-    assert (first, last) == ("2020", "2022")
+    assert (first, last) == (2020, 2022)
 
 
 def test_filing_link_status_is_unresolved_with_no_filing_key_on_every_row_it_says(urls, con):
