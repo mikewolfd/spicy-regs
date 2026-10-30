@@ -561,6 +561,7 @@ def test_remote_base_expansion_keeps_pins_and_failed_replacement(scoped_remote, 
     mcp, index, admitted = scoped_remote
     _tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities LIMIT 1"})
     original = server._cached_connection
+    assert original is not None
     monkeypatch.setattr(server, "_read_publication", lambda: pytest.fail("Expansion must reuse captured pins"))
     with pytest.raises(Exception, match="Published schema differs"):
         _tool_data(mcp, "query_sql", {"sql": "SELECT * FROM broken_rows"})
@@ -568,7 +569,7 @@ def test_remote_base_expansion_keeps_pins_and_failed_replacement(scoped_remote, 
     assert original.execute("SELECT filing_uuid FROM lobbying_activities").fetchone() == ("filing-1",)
     assert _records(_tool_data(mcp, "query_sql", {"sql": "SELECT id FROM other_rows"})) == [{"id": 7}]
     expanded = server._cached_connection
-    assert expanded is not original and server._connection_index(expanded) == index
+    assert expanded is not None and expanded is not original and server._connection_index(expanded) == index
     before = list(admitted)
     _tool_data(mcp, "query_sql", {"sql": "SELECT filing_uuid FROM lobbying_activities"})
     assert server._cached_connection is expanded and admitted == before
@@ -657,4 +658,5 @@ def test_explicit_remote_receipts_keep_all_families_and_catalog_queries_expand(s
     assert "other_rows" not in admitted
     result = _tool_data(mcp, "query_sql", {"sql": "SHOW TABLES"})
     assert "other_rows" in {row["name"] for row in _records(result)}
-    assert server._pinned_record(server._cached_connection, "_spicy_query_scope") is None
+    connection = server._cached_connection
+    assert connection is not None and server._pinned_record(connection, "_spicy_query_scope") is None
