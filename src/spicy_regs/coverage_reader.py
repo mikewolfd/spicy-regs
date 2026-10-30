@@ -60,6 +60,7 @@ def _identity_files():
             )
         ),
         *sorted(root.glob("*policy_history*.json")),
+        *sorted((root / "scorecards").glob("*policy_history*.json")),
         *sorted((root / "etl_policies").glob("*.json")),
     ]
 
