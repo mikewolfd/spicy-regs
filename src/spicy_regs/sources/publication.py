@@ -531,6 +531,51 @@ class DownloadedMember:
     state: tuple[int, int, int, int, int, int]
 
 
+class _PinnedBody:
+    """One member's response body, chunk by chunk, held to its pin while it streams.
+
+    The single streaming loop behind :func:`fetch_member` and :func:`verify_member`. A pinned body longer than its
+    pin stops at the first excess chunk; once exhausted, ``sha256`` and ``byte_size`` describe what arrived, and a
+    pinned body that differs raises.
+    """
+
+    def __init__(self, response: httpx.Response, member: Member, label: str):
+        self._response, self._member, self._label = response, member, label
+        self.sha256: str | None = None
+        self.byte_size = 0
+
+    def __iter__(self) -> Iterator[bytes]:
+        member, digest = self._member, hashlib.sha256()
+        for chunk in self._response.iter_bytes():
+            checkpoint()
+            self.byte_size += len(chunk)
+            if member.sha256 is not None and self.byte_size > (member.byte_size or 0):
+                raise RuntimeError(f"Published generation member differs from its pin: {self._label}")
+            digest.update(chunk)
+            yield chunk
+        self.sha256 = "sha256:" + digest.hexdigest()
+        if member.sha256 is not None and (member.byte_size != self.byte_size or member.sha256 != self.sha256):
+            raise RuntimeError(f"Published generation member differs from its pin: {self._label}")
+
+
+@contextmanager
+def _member_body(base_url: str, member: Member, label: str, *, headers: Mapping[str, str] | None,
+                 timeout: float | None) -> Iterator[_PinnedBody | None]:
+    """``None`` only when an unpinned (legacy) file is absent (HTTP 404); any other non-200 status raises."""
+    request: dict = {name: value for name, value in (("headers", headers), ("timeout", remaining_timeout(timeout)))
+                     if value is not None}
+    with httpx.stream("GET", f"{base_url.rstrip('/')}/{member.path}", follow_redirects=True, **request) as response:
+        if response.status_code == 404:
+            if member.sha256 is not None:
+                raise RuntimeError(f"Published generation member is missing: {label}")
+            logger.info("{} not found on R2 (404)", label)
+            yield None
+            return
+        if response.status_code != 200:
+            raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
+        yield _PinnedBody(response, member, label)
+
+
 def fetch_member(base_url: str, member: Member, local_path: Path, label: str | None = None, *,
                  headers: Mapping[str, str] | None = None, timeout: float | None = None) -> DownloadedMember | bool:
     """Stream one table file to ``local_path`` through a sibling temp file, checked against its pin when it has one.
@@ -540,37 +585,21 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
     ``headers`` and ``timeout`` pass through to the request when given.
     """
     label = label or member.path
-    url = f"{base_url.rstrip('/')}/{member.path}"
     from spicy_regs.local_data import file_state_from_stat
 
     temp_path = None
-    timeout = remaining_timeout(timeout)
-    request: dict = {name: value for name, value in (("headers", headers), ("timeout", timeout)) if value is not None}
-    digest, byte_size = hashlib.sha256(), 0
     try:
-        with httpx.stream("GET", url, follow_redirects=True, **request) as response:
-            if response.status_code == 404:
-                if member.sha256 is not None:
-                    raise RuntimeError(f"Published generation member is missing: {label}")
-                logger.info("{} not found on R2 (404)", label)
+        with _member_body(base_url, member, label, headers=headers, timeout=timeout) as body:
+            if body is None:
                 return False
-            if response.status_code != 200:
-                raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
             fd, temporary = mkstemp(prefix=local_path.name + ".", suffix=".tmp", dir=local_path.parent)
             temp_path = Path(temporary)
             with os.fdopen(fd, "wb") as out:
-                for chunk in response.iter_bytes():
-                    checkpoint()
+                for chunk in body:
                     out.write(chunk)
-                    digest.update(chunk)
-                    byte_size += len(chunk)
-                actual_digest = "sha256:" + digest.hexdigest()
-                if member.sha256 is not None and (
-                        member.byte_size != byte_size or member.sha256 != actual_digest):
-                    raise RuntimeError(f"Published generation member differs from its pin: {label}")
                 out.flush()
                 written = file_state_from_stat(os.fstat(out.fileno()))
-                if written[2] != byte_size or file_state_from_stat(temp_path.lstat()) != written:
+                if written[2] != body.byte_size or file_state_from_stat(temp_path.lstat()) != written:
                     raise RuntimeError(f"Downloaded member changed before adoption: {label}")
                 temp_path.replace(local_path)
                 state = file_state_from_stat(os.fstat(out.fileno()))
@@ -578,13 +607,30 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
                     raise RuntimeError(f"Downloaded member changed during adoption: {label}")
                 if file_state_from_stat(local_path.lstat()) != state:
                     raise RuntimeError(f"Downloaded member replaced during adoption: {label}")
-                result = DownloadedMember(actual_digest, byte_size, state)
+                result = DownloadedMember(str(body.sha256), body.byte_size, state)
     except BaseException:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
         raise
     logger.info("Downloaded {} from R2", label)
     return result
+
+
+def verify_member(base_url: str, member: Member, label: str | None = None) -> int:
+    """Stream one pinned member as an anonymous consumer receives it and hold it to its pin; nothing is written.
+
+    Returns the byte count. An absent member, any other status, a transport error or bytes that differ raise.
+    ``Accept-Encoding: identity`` keeps the hash over the stored bytes rather than a decoded transfer.
+    """
+    if member.sha256 is None:
+        raise ValueError(f"Read-back needs a pinned member: {member.path}")
+    label = label or member.path
+    with _member_body(base_url, member, label, headers={"User-Agent": "spicy-regs", "Accept-Encoding": "identity"},
+                      timeout=60) as body:
+        assert body is not None  # a pinned 404 raised above
+        for _ in body:
+            pass
+    return body.byte_size
 
 
 def parquet_scan(paths: Sequence[str]) -> str:

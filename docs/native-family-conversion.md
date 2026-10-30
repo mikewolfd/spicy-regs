@@ -70,9 +70,13 @@ It admits the subject and receipt members once, holds their checked processing
 rows, and compares them directly with each retained original. Qualification
 does not write disposable restored Parquet files. The operation checks that
 members remain unchanged before reuse and rejects readers after it closes.
-Publication in the same process reuses the admitted bytes; anonymous readback
-downloads and independently admits the published generation. Download hashing
-and local artifact verification remain separate checks.
+Publication in the same process reuses the admitted bytes. Anonymous readback
+then streams every published member from the public URL through a SHA-256 and
+holds it, the root and every manifest to the admitted candidate's bytes; it keeps
+no copy on disk and does not admit the same bytes a second time, because
+identical bytes admit identically. A missing or differing public byte fails
+the readback with the family published and the rollback record intact. The
+receipt's `read_back.public_bytes` records the members and bytes streamed.
 
 If a writer completed its immutable generation but stopped before saving
 `conversion.json`, `--resume-generation` can qualify that generation without
@@ -589,7 +593,7 @@ defaults and command arguments stay the same.
 - The command's last line is "published and read back", and
   `conversion.json` shows `rows_only_in_restored` and `rows_only_in_retained`
   both 0 for every table, no `type_changes` or `metadata_changes`, and
-  `read_back.anonymous_read_rows` equal to the retained counts.
+  `read_back.qualified_original_rows` equal to the retained counts.
 - `conversion.json` records the bucket and endpoint host under `target`, and
   under `lineage` the inputs the converted generation names.
 - `publication.v2.json` carries `etlReceipts` for the family.

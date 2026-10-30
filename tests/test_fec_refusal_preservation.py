@@ -53,7 +53,7 @@ def test_production_decoder_and_qualification_preserve_order_duplicates_and_fail
         assert len(list(reader.read_subjects(DATASET))) == 2
         assert reader.preserved_source_page_refusals() == 3
         built = conversion._Built(generation, {DATASET: dataset_policy(DATASET).policy_version},
-                                  reader.compare_original, lambda *_: 0, read_operation=operation)
+                                  reader.compare_original, lambda *_: {}, read_operation=operation)
         proof, problems, qualified = conversion._qualify_conversion('page-test', built,
             {'tables': {DATASET + '.parquet': {'rows': 5}}}, {DATASET + '.parquet': original},
             {'inputs': []}, False, [])
@@ -115,7 +115,7 @@ def test_permitted_page_refusals_do_not_qualify_other_dataset_refusals(tmp_path)
         assert reader.outcome_counts() == {'accepted': 1, 'refused': 2}
         assert reader.preserved_source_page_refusals() == 1
         built = conversion._Built(generation, {name: dataset_policy(name).policy_version for name in datasets},
-            reader.compare_original, lambda *_: 0, added_tables=frozenset({'fec_filings.parquet'}), read_operation=operation)
+            reader.compare_original, lambda *_: {}, added_tables=frozenset({'fec_filings.parquet'}), read_operation=operation)
         _, problems, proof = conversion._qualify_conversion('mixed-page-test', built,
             {'tables': {DATASET + '.parquet': {'rows': 2}}}, {DATASET + '.parquet': original}, {'inputs': []}, False, [])
         assert proof is None

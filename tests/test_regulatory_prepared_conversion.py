@@ -63,7 +63,7 @@ def test_regulatory_preparation_batches_and_publishes_exact_artifact_once(tmp_pa
         expect_bucket=BUCKET, state=lambda _: dict(STATE),
     )
     assert published["generation"] == prepared["generation"]
-    assert published["read_back"]["anonymous_read_rows"][dataset] == len(original_rows)
+    assert published["read_back"]["qualified_original_rows"][dataset] == len(original_rows)
     assert {p.relative_to(generation): p.read_bytes() for p in generation.rglob("*") if p.is_file()} == sealed
     assert calls == [dataset]
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
@@ -191,5 +191,5 @@ def test_attribute_families_convert_from_their_typed_published_shape(tmp_path, m
         publication.publish_generation(tmp_path / "generation", client=bucket, bucket=BUCKET,
                                        prior_index=publication.current_index(BASE))
     receipt = convert(family, tmp_path / "work", publish=True)
-    assert receipt["read_back"]["anonymous_read_rows"][dataset] == 2
+    assert receipt["read_back"]["qualified_original_rows"][dataset] == 2
     assert dataset in publication.current_index(BASE)["families"][family]["etlReceipts"]["datasets"]

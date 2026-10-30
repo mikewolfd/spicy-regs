@@ -686,8 +686,8 @@ def _open_family_reader(subjects, receipts, policies, *, generation_id, guard, s
 class ConversionReadOperation:
     """Keep actual admitted generation state until this explicit operation closes.
 
-    Build, full original comparisons and same-process publication share this
-    lifetime. A restart or anonymous remote source creates a new operation.
+    Build, full original comparisons, same-process publication and the public
+    byte read-back share this lifetime. A restart creates a new operation.
     """
     def __init__(self):
         self._stack = ExitStack()
@@ -811,37 +811,31 @@ class ConversionReadOperation:
         self.verified_source(directory)
         self._reader_stacks[directory].close()
 
-    def admit_public_generation(self, base, index, family, directory):
-        """Fetch each actual credentialless remote member once, then independently admit those bytes."""
-        from rulespec_artifacts import ArtifactPin, parse_admitted_json, sha256_digest, validate_object_key
+    def verify_public_generation(self, base, index, family, directory):
+        """Hold the anonymous public bytes to this operation's admitted candidate: no copy, no second admission.
+
+        The root and every manifest must equal the admitted bytes, and every member streams through a SHA-256 against
+        its admitted descriptor. Identical bytes admit identically, so admitting the downloaded copy again (and
+        keeping it on disk) proved nothing more; this is what a consumer of the public URL receives.
+        """
+        from rulespec_artifacts import iter_member_descriptors
         from spicy_regs.sources import publication
 
-        if not self.active:
-            raise ValueError("Conversion read operation is closed")
-        directory = Path(directory)
-        directory.mkdir(parents=True, exist_ok=False)
+        artifact, source = self.verified_source(directory)
+        members = list(iter_member_descriptors(artifact, source))
         entry = index['families'][family]
-        raw, root = publication.load_family_root(base, entry)
-        (directory / 'artifact.json').write_bytes(raw)
-        keys = set()
-        for manifest in root['memberManifests']:
-            key = validate_object_key(manifest['objectKey'], path='manifest.objectKey')
+        if (family != artifact.root['spec']['family']
+                or publication._generation_entry(entry) != publication.generation_entry(artifact, members)):
+            raise ValueError("Public generation differs from the admitted conversion candidate")
+        for key in ['artifact.json', *(item['objectKey'] for item in artifact.root['memberManifests'])]:
             raw = publication._bounded_get(f"{base.rstrip('/')}/{entry['prefix']}/{key}",
                                           allow_missing=False, limit=publication.EVIDENCE_CONTROL_LIMIT)
-            if raw is None or sha256_digest(raw) != manifest['sha256']:
-                raise ValueError("Public generation manifest differs from its pin")
-            target = directory / key
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
-            for member in parse_admitted_json(raw)['members']:
-                member_key = validate_object_key(member['objectKey'], path='member.objectKey')
-                if member_key in keys:
-                    raise ValueError("Public generation repeats a member")
-                keys.add(member_key)
-                target = directory / member_key
-                target.parent.mkdir(parents=True, exist_ok=True)
-                descriptor = publication.Member(entry['prefix'] + '/' + member_key, member['sha256'],
-                                                member['byteSize'], member.get('recordCount'))
-                if not publication.fetch_member(base, descriptor, target):
-                    raise ValueError("Public generation member is absent")
-        return self.admit_generation(directory, expected_pin=ArtifactPin(entry['logicalId'], entry['artifactDigest']))
+            with source.open(key) as local:
+                if raw is None or raw != local.read(publication.EVIDENCE_CONTROL_LIMIT + 1):
+                    raise ValueError("Public generation root or manifest differs from its qualified bytes")
+        total = sum(publication.verify_member(base, publication.Member(
+            f"{entry['prefix']}/{member.object_key}", member.sha256, member.byte_size, member.record_count))
+            for member in members)
+        self.verified_source(directory)
+        return {'artifactDigest': artifact.pin.artifact_digest, 'members': len(members), 'bytes': total,
+                'root_and_manifests': 'exact', 'retained_payload_copies': 0}

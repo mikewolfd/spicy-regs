@@ -65,7 +65,7 @@ def test_maintained_vote_preparation_and_publication_reuse(tmp_path, monkeypatch
         expect_bucket=BUCKET, state=lambda _: dict(STATE),
     )
     assert published["generation"] == prepared["generation"]
-    assert published["read_back"]["anonymous_read_rows"] == {name: len(values) for name, values in original.items()}
+    assert published["read_back"]["qualified_original_rows"] == {name: len(values) for name, values in original.items()}
     assert {p.relative_to(generation): p.read_bytes() for p in generation.rglob("*") if p.is_file()} == sealed
     assert calls == [(dataset, True) for dataset in datasets]
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
