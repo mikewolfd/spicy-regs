@@ -10,7 +10,7 @@ from spicy_docs.reading.paged_json import PagedJsonSourceError
 from spicy_docs.sources.regulations_gov.api import RegulationsGovApiUnavailableError
 from spicy_docs.transport.captured import CapturedBodyResponse, attach_capture
 
-import spicy_regs.pipelines.docket_gaps as docket_gaps
+from spicy_regs.pipelines import docket_gaps
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.sources import r2
 
@@ -106,16 +106,23 @@ def test_a_served_docket_becomes_a_row_through_the_etl_extraction():
 
 
 def test_a_served_docket_is_merged_and_the_working_copy_uploaded(working, monkeypatch):
-    merged, uploaded = [], []
+    from tests.regulatory_publication_fakes import install
+
+    install(monkeypatch)
+    merged, uploaded, finalized = [], [], []
 
     def merge(staging_dir, output_dir, record_type):
         merged.extend(pl.read_parquet(next((staging_dir / record_type.name).glob("*.parquet")))["docket_id"])
         return output_dir / "dockets.parquet"
 
     monkeypatch.setattr(docket_gaps.iceberg, "merge_and_export", merge)
-    monkeypatch.setattr(r2, "preflight_uploads", lambda output_dir, files: None)
+    monkeypatch.setattr(docket_gaps, "finish_dataset", lambda root, dataset, source, **kw:
+                        finalized.append((root, dataset, source, kw)))
     monkeypatch.setattr(r2, "upload_file", lambda path, remote_key=None: uploaded.append(remote_key))
     with pytest.raises(RuntimeError):
         docket_gaps.fill(working, _Reader(), skip_upload=False, now=lambda: NOW)
     assert sorted(merged) == ["BIS-2023-0005", "GIPSA-2010-FGIS-0004"]
-    assert uploaded == ["dockets.parquet", docket_gaps.OUTCOMES]
+    assert uploaded == [docket_gaps.OUTCOMES]
+    [(root, dataset, source, options)] = finalized
+    assert (root, dataset, source) == (working, "dockets", working / "dockets.parquet")
+    assert options["publish"] is True and options["inputs"].index is not None
