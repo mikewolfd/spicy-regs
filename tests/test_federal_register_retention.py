@@ -66,7 +66,7 @@ def test_real_rollup_publishes_observations_with_safe_retry(tmp_path, monkeypatc
     assert remote.objects["source-evidence/" + blob] == raw
     prefix = "source-evidence/" + evidence.artifact.pin.artifact_digest.removeprefix("sha256:")
     blobs = {m.object_key for m in iter_member_descriptors(evidence.artifact, LocalMemberSource(evidence.artifact_dir))
-             if m.object_key.startswith("blobs/sha256/")}
+             if m.object_key is not None and m.object_key.startswith("blobs/sha256/")}
     pin = evidence.artifact.pin
     # The only remaining original and receipt copies are in the publication store.
     shutil.rmtree(pipeline.output_dir)
