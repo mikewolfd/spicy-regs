@@ -117,7 +117,7 @@ def _processing_sql(dataset: str, schema: pa.Schema, originals: list[tuple[str, 
 
 def write_bundle(
     dataset: str,
-    source: Path,
+    source: Path | pa.Table,
     subject_path: Path,
     receipt_path: Path,
     *,
@@ -140,9 +140,12 @@ def write_bundle(
     pass through to ``etl_bulk.write_split``.
     """
     lit = etl_bulk._literal
-    source = Path(source)
-    with pq.ParquetFile(source) as file:
-        schema, expected = file.schema_arrow, file.metadata.num_rows
+    if isinstance(source, pa.Table):
+        schema, expected = source.schema, source.num_rows
+    else:
+        source = Path(source)
+        with pq.ParquetFile(source) as file:
+            schema, expected = file.schema_arrow, file.metadata.num_rows
     if not eligible(dataset, schema):
         raise etl_bulk.NotBulkEligible(f"{dataset}: the source schema has columns the court bulk writer does not map")
     # The shared checks on the constants (witness shape and digest, nonempty identities).

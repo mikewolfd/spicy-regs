@@ -23,7 +23,7 @@ from hashlib import sha256
 from itertools import batched
 from os import getenv
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import ExitStack, closing, contextmanager
+from contextlib import ExitStack, closing, contextmanager, nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -320,7 +320,7 @@ def write_split(
     con: duckdb.DuckDBPyConnection,
     query: str,
     *,
-    source: Path,
+    source: Path | pa.Table,
     batch_rows: int,
     expected_rows: int,
     subject_schema: pa.Schema,
@@ -339,6 +339,9 @@ def write_split(
     subject_writer: pq.ParquetWriter | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
+
+    ``source`` is a Parquet file or an in-memory Arrow table (a caller that already holds the rows, sorted, need not
+    write them out to be read back).
 
     ``query`` reads :data:`SOURCE_BATCH` (the source's rows with a ``file_row_number`` column, as ``read_parquet(...,
     file_row_number = true)`` gives them) and yields the subject columns, the receipt columns, ``_ordinal`` and
@@ -415,9 +418,11 @@ def write_split(
             return len(decided_subjects)
 
         try:
-            with pq.ParquetFile(source) as original:
+            with nullcontext(source) if isinstance(source, pa.Table) else pq.ParquetFile(source) as original:
                 start = 0
-                for piece in original.iter_batches(batch_size=batch_rows):
+                pieces = (original.to_batches(max_chunksize=batch_rows) if isinstance(original, pa.Table)
+                          else original.iter_batches(batch_size=batch_rows))
+                for piece in pieces:
                     piece_start = start
                     checkpoint()
                     piece.validate(full=True)
