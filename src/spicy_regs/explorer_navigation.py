@@ -319,12 +319,13 @@ def declarations(processing_joins: tuple = ()) -> list[dict]:
               meaning="Source-stated Senate amendment numbers; no positional pairing with vote document blocks."),
     ]
     # Resolver-owned routes qualify candidate identities, including ranges and ambiguous targets.
-    # Navigate each recorded candidate key rather than reconstructing its original citation.
-    from spicy_regs.citation_resolution import ROUTES
+    # Navigate each recorded candidate key rather than reconstructing its original citation. Native rows record
+    # candidates under the native routes (a usc_section candidate names law_code_sections rows).
+    from spicy_regs.citation_resolution import NATIVE_ROUTES
     legal_targets = [route(r.table, r.identity, tuple(key(part(c)) for c in r.identity),
                            guard("target_table_selected", values=(r.table,)),
                            guard("target_status", values=("found", "ambiguous")))
-                     for r in {(r.table, r.identity): r for r in ROUTES.values()}.values()]
+                     for r in {(r.table, r.identity): r for r in NATIVE_ROUTES.values()}.values()]
     specs.append(array("native_legal_targets", "native_legal_references", ("target_candidates", "target_candidates_json"), tuple(legal_targets),
                        receipt_fields=("target_candidates_json",),
                        candidates=True,

@@ -7,7 +7,7 @@ an annual edition this host does not hold. The verdict therefore never says abse
 
 import json
 
-from spicy_regs.identifiers import usc_section_key_sql
+from spicy_regs.identifiers import section_order_sql, usc_section_key_sql
 
 from .core import literal
 from .sql_views import SQLView, pin
@@ -26,22 +26,6 @@ RELEASE_POINT_SECTIONS_SQL = f"""SELECT observation_id, edition_id,
           FROM uscode_edition_sections
           WHERE source_kind = 'release-point-corpus' AND source_context = 'main-body-candidate')
     WHERE regexp_full_match(identifier, '{_SECTION_ID}')"""
-
-
-#: A section's parts in Code order: integer stem, letters, the number after a dash, then any remainder (1857f-5a).
-_PARTS = r"^([0-9]+)([a-z]*)(?:-([0-9]+))?(.*)$"
-
-
-def _order(section: str) -> str:
-    """A section's place in Code order, so a range stub's bounds and a key compare as OLRC numbers them.
-
-    Each number compares as a number and the letters by length first: 34c < 34d < 35, 698v < 698v-4 < 698v-10, and
-    2689r < 2689z < 2689aa. RefSpec ``_section_key`` compares the part after the stem as text, which misorders the
-    last two; the release point holds stubs of both shapes (``698v...698v-10``, ``2689r...2689aa``).
-    """
-    stem, letters, number, rest = (f"regexp_extract({section}, '{_PARTS}', {group})" for group in range(1, 5))
-    return (f"struct_pack(stem := TRY_CAST({stem} AS BIGINT), letters_length := length({letters}), "
-            f"letters := {letters}, number := coalesce(TRY_CAST({number} AS BIGINT), -1), rest := {rest})")
 
 
 _SOURCES = ("document_citations", "law_code_sections", "table3_records")
@@ -75,8 +59,8 @@ def _query(p):
         SELECT usc_title, section, count(*) AS release_point_rows, list(DISTINCT edition_id ORDER BY edition_id) AS editions
         FROM release WHERE section NOT LIKE '%...%' GROUP BY usc_title, section),
     stubs AS (
-        SELECT usc_title, section AS stub, {_order("split_part(section, '...', 1)")} AS low,
-               {_order("split_part(section, '...', 2)")} AS high
+        SELECT usc_title, section AS stub, {section_order_sql("split_part(section, '...', 1)")} AS low,
+               {section_order_sql("split_part(section, '...', 2)")} AS high
         FROM release WHERE section LIKE '%...%'),
     exact AS (
         SELECT k.*, coalesce(p.release_point_rows, 0) AS release_point_rows, p.editions AS release_point_editions
@@ -87,7 +71,7 @@ def _query(p):
         SELECT e.usc_title, e.usc_section_key, list(DISTINCT s.stub ORDER BY s.stub) AS stubs
         FROM exact e JOIN stubs s ON e.usc_title = s.usc_title
         WHERE e.release_point_rows = 0
-          AND {_order("e.usc_section_key")} BETWEEN s.low AND s.high
+          AND {section_order_sql("e.usc_section_key")} BETWEEN s.low AND s.high
         GROUP BY e.usc_title, e.usc_section_key)
     SELECT e.usc_title, e.usc_section_key, e.document_citation_count, e.law_code_section_count,
            e.table3_record_count, e.release_point_rows, e.release_point_editions,
@@ -105,7 +89,33 @@ def _query(p):
     FROM exact e LEFT JOIN ranged r ON e.usc_title = r.usc_title AND e.usc_section_key = r.usc_section_key"""
 
 
+def _release_point_sections(_p):
+    return f"""SELECT usc_title, usc_section_key,
+           CASE WHEN usc_section_key LIKE '%...%' THEN {section_order_sql("split_part(usc_section_key, '...', 1)")} END AS range_low,
+           CASE WHEN usc_section_key LIKE '%...%' THEN {section_order_sql("split_part(usc_section_key, '...', 2)")} END AS range_high
+    FROM (SELECT DISTINCT usc_title, section AS usc_section_key FROM ({RELEASE_POINT_SECTIONS_SQL}))"""
+
+
 USCODE_VIEWS = (
+    SQLView(
+        'usc_release_point_sections', {
+            'uscode_edition_sections': ('observation_id', 'edition_id', 'source_kind', 'source_context',
+                                        'native_identifier'),
+        }, _release_point_sections,
+        'Each U.S. Code section the held OLRC release point prints, once per (usc_title, usc_section_key), keys '
+        'only: the target resolve_document_citations looks a usc_section citation up in. A range stub '
+        '(low...high, usually repealed or omitted sections) is one row with its bounds in Code order. An OLRC '
+        'duplicate numbering is one row, not two sections.',
+        ('usc_title', 'usc_section_key'), rule_version='usc-release-point-sections-v1',
+        column_descriptions={
+            'usc_title': 'U.S. Code title as the release point keys it; an appendix title keeps its upper-case letter '
+                         '(50A, 18A).',
+            'usc_section_key': 'Section folded as spicy-docs usc_section_key folds a citation: trimmed, lower-cased, '
+                               'every dash spelling an ASCII hyphen; a range stub keeps its low...high.',
+            'range_low': 'For a range stub, its first section in Code order (stem, letters length, letters, dash '
+                         'number, rest); NULL for a printed section.',
+            'range_high': 'For a range stub, its last section in Code order; NULL for a printed section.',
+        }),
     SQLView(
         'usc_citation_verdicts', {
             'document_citations': ('cite_kind', 'target_key', 'target_resolved'),
@@ -131,8 +141,9 @@ USCODE_VIEWS = (
                                   'more than one is an OLRC duplicate numbering, not two sections.',
             'release_point_editions': 'Each held release-point edition_id printing this exact section.',
             'release_point_range_stubs': 'For an unprinted key, each release-point range stub (low...high, in Code '
-                                         'order: integer stem, then suffix) spanning it. A stub is the publisher\'s '
-                                         'placeholder for a span, usually repealed or omitted, not printed text.',
+                                         'order: integer stem, letters by length then spelling, the number after a '
+                                         'dash, then any rest) spanning it. A stub is the publisher\'s placeholder '
+                                         'for a span, usually repealed or omitted, not printed text.',
             'verdict': 'printed_at_release_point, in_range_stub or not_printed_at_release_point; never absent.',
             'reason': 'Only for not_printed_at_release_point: appendix_title (a lettered title), classified_as_new '
                       '(a law_code_sections row states action new, so a later law may have created it) or '

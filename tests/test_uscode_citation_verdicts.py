@@ -3,6 +3,7 @@
 import duckdb
 import pytest
 
+from spicy_regs.citation_resolution import ROUTES, resolve_citations
 from spicy_regs.relationship_views.sql_views import install_sql_views
 from spicy_regs.relationship_views.uscode import USCODE_VIEWS
 
@@ -98,7 +99,9 @@ def con():
     _table(con, "law_code_sections", ("usc_title", "usc_section_key", "action"), CLASSIFICATIONS)
     _table(con, "table3_records", ("usc_title", "usc_section_key"), TABLE3)
     tables = ("uscode_edition_sections", "document_citations", "law_code_sections", "table3_records")
-    assert install_sql_views(con, tables, USCODE_VIEWS)["usc_citation_verdicts"]["status"] == "available"
+    installed = install_sql_views(con, tables, USCODE_VIEWS)
+    assert {name: entry["status"] for name, entry in installed.items()} == {
+        "usc_citation_verdicts": "available", "usc_release_point_sections": "available"}
     return con
 
 
@@ -121,3 +124,20 @@ def test_one_row_per_key_and_every_source_key_is_counted_both_ways(con):
 def test_the_view_never_says_absent(con):
     verdicts = {row[0] for row in con.execute("SELECT DISTINCT verdict FROM usc_citation_verdicts").fetchall()}
     assert verdicts == {"printed_at_release_point", "in_range_stub", "not_printed_at_release_point"}
+
+
+def test_the_route_finds_what_the_release_point_prints_or_spans(con):
+    """resolve_document_citations' usc_section route agrees with the verdict view key for key."""
+    occurrences = [{"cite_kind": kind, "target_key": key, "target_resolved": settled}
+                   for kind, key, settled in CITATIONS if kind == "usc_section" and settled == "true"]
+    resolved = resolve_citations(con, occurrences, {"uscode_edition_sections": {"status": "managed_generation"}})
+    assert ROUTES["usc_section"].pinned_by == "uscode_edition_sections"
+    outcomes = {tuple(row["target_key"].split("-", 1)): (row["target_status"], row.get("match_basis"))
+                for row in resolved["occurrences"]}
+    by_verdict = {"printed_at_release_point": ("found", "printed_section"), "in_range_stub": ("found", "range_stub"),
+                  "not_printed_at_release_point": ("missing", None)}
+    assert outcomes == {key: by_verdict[expected[5]] for key, expected in EXPECTED.items() if expected[0]}
+    # An OLRC duplicate numbering is one target, not two.
+    [duplicate] = [row for row in resolved["occurrences"] if row["target_key"] == "10-130g"]
+    assert duplicate["candidate_keys"] == [{"usc_title": "10", "usc_section_key": "130g"}]
+    assert resolved["resolution_rule"] == "selected-target-lookup/2"

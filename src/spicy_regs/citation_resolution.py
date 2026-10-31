@@ -14,11 +14,15 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from spicy_regs.identifiers import normalize_rin
+from spicy_regs.identifiers import normalize_rin, section_order_sql
 from spicy_regs.citation_sources import TEXT_SOURCES
 from spicy_regs.gao_citation_keys import CITATION_PRODUCT_SQL
 
-RESOLUTION_RULE = "selected-target-lookup/1"
+#: /2: a usc_section citation is looked up in the published U.S. Code (release point sections) rather than in
+#: the current Congress's OLRC classification rows, so ``found`` means the release point prints the section.
+RESOLUTION_RULE = "selected-target-lookup/2"
+#: The rule native_legal_references records: its routes (:data:`NATIVE_ROUTES`) are /1's, unchanged.
+NATIVE_RESOLUTION_RULE = "selected-target-lookup/1"
 #: Each ``document_citations.document_kind`` a writer emits, to the table holding its documents: the print-citations
 #: rollup's two GovInfo families (spicy-docs ``GOVINFO_PACKAGE``, ``BUDGET_VOLUME``; literal here because the server
 #: does not require spicy-docs) and every held-field kind. Its keys are the kinds the citation tool accepts.
@@ -47,6 +51,10 @@ class Route:
     range_sql: str | None = None
     #: Columns ``range_sql`` reads that an older generation may lack; lacking one, a key matches ``key_sql`` alone.
     range_columns: tuple[str, ...] = ()
+    #: What ``match_basis`` says when the rows matched by key only, by range only, or both.
+    match_bases: tuple[str, str, str] = ("first_page", "page_range", "first_page_and_page_range")
+    #: The published table whose pin stands for ``table`` when ``table`` is a view over it.
+    pinned_by: str | None = None
 
 
 ROUTES = {
@@ -64,10 +72,19 @@ ROUTES = {
                                          "BETWEEN TRY_CAST(t.statutes_at_large_page AS INTEGER) "
                                          "AND TRY_CAST(t.statutes_at_large_last_page AS INTEGER)",
                                range_columns=("statutes_at_large_last_page",)),
-    "usc_section": Route("law_code_sections", "usc_title || '-' || usc_section_key", ("congress", "session", "seq"),
-                         "many", grain="OLRC classification rows naming this section; not hosted Code text. A "
-                                       "section no row classifies may still be in the Code: usc_citation_verdicts "
-                                       "says whether the held release point prints it"),
+    # A section the held OLRC release point prints, or one inside a range stub it prints (match_basis says which).
+    "usc_section": Route("usc_release_point_sections", "usc_title || '-' || usc_section_key",
+                         ("usc_title", "usc_section_key"), "many",
+                         grain="a section the held OLRC release point prints, or a range stub (low...high, usually "
+                               "repealed or omitted sections) spanning it; not Code text or current applicability. "
+                               "Missing means that release point does not print it: a later law, an appendix title "
+                               "or an annual edition may (usc_citation_verdicts)",
+                         range_sql="t.range_low IS NOT NULL "
+                                   "AND t.usc_title = regexp_extract(r.lookup_key, '^([^-]+)-', 1) AND "
+                                   + section_order_sql("regexp_extract(r.lookup_key, '^[^-]+-(.+)$', 1)")
+                                   + " BETWEEN t.range_low AND t.range_high",
+                         match_bases=("printed_section", "range_stub", "printed_section_and_range_stub"),
+                         pinned_by="uscode_edition_sections"),
     # A part citation (2-200) keys every structural row of the part; its own granule is the target.
     "cfr_section": Route("cfr_sections", "cfr_ref", ("package_id", "granule_id"),
                          predicate="section IS NOT NULL OR part_granule = 'true'",
@@ -85,10 +102,19 @@ ROUTES = {
     "us_reports_cite": Route("court_citations", "volume || '-' || page", ("cluster_id",),
                         predicate="reporter = 'U.S.'", grain="CourtListener clusters named by U.S. reporter citations"),
 }
+#: Before /2, a usc_section citation named the OLRC classification rows. native_legal_references still resolves
+#: with these routes (its recorded candidate keys have no release-point identity), and explorer navigation keeps
+#: linking candidates recorded against law_code_sections.
+LEGACY_USC_SECTION_ROUTE = Route(
+    "law_code_sections", "usc_title || '-' || usc_section_key", ("congress", "session", "seq"), "many",
+    grain="OLRC classification rows naming this section; not hosted Code text. A section no row classifies may "
+          "still be in the Code: usc_citation_verdicts says whether the held release point prints it")
+NATIVE_ROUTES = {**ROUTES, "usc_section": LEGACY_USC_SECTION_ROUTE}
 
 
-def _route(kind: str) -> Route | None:
-    return ROUTES.get(kind)
+def _snapshot(snapshots: Mapping[str, Mapping[str, Any]], route: Route) -> Mapping[str, Any] | None:
+    """The pin of the route's table, or of the published table a view route reads (``pinned_by``)."""
+    return snapshots.get(route.table) or (snapshots.get(route.pinned_by) if route.pinned_by else None)
 
 
 def _occurrence_key(item: Mapping[str, Any]) -> str:
@@ -109,15 +135,11 @@ def _predicate(cursor: Any, route: Route) -> str:
     return route.predicate if _holds(cursor, route, route.predicate_columns) else "true"
 
 
-#: What ``match_basis`` says for a route with a range form, by whether its matches came by key or by range.
-MATCH_BASES = {(False, False): "first_page", (True, True): "page_range", (True, False): "first_page_and_page_range"}
-
-
 def _lookup(cursor: Any, route: Route, keys: list[str], max_candidates: int) -> dict[str, dict]:
     """One parameterized read per distinct-key batch; retain bounded candidates and actual match counts.
 
     A route with a range form also matches a row whose range holds the key (and whose key is not it), and each
-    result says how its rows matched (:data:`MATCH_BASES`).
+    result says how its rows matched (``route.match_bases``).
     """
     predicate = _predicate(cursor, route)
     columns = ', '.join(f'CAST(t."{c}" AS VARCHAR) AS "{c}"' for c in route.identity)
@@ -141,7 +163,8 @@ def _lookup(cursor: Any, route: Route, keys: list[str], max_candidates: int) -> 
     for lookup_key, *identity, count, any_range, all_range in cursor.execute(sql, [keys, max_candidates]).fetchall():
         result = found.setdefault(lookup_key, {"candidate_keys": [], "match_count": int(count)})
         if route.range_sql is not None:
-            result["match_basis"] = MATCH_BASES[bool(any_range), bool(all_range)]
+            by_key, by_range, both = route.match_bases
+            result["match_basis"] = both if any_range and not all_range else by_range if any_range else by_key
         candidate = dict(zip(route.identity, identity))
         if candidate not in result["candidate_keys"]:
             result["candidate_keys"].append(candidate)
@@ -151,13 +174,15 @@ def _lookup(cursor: Any, route: Route, keys: list[str], max_candidates: int) -> 
 def resolve_citations(cursor: Any, occurrences: Sequence[Mapping[str, Any]],
                       target_snapshots: Mapping[str, Mapping[str, Any]], *,
                       source_digests: Mapping[tuple[str, str], str] | None = None,
-                      max_target_keys: int = 500, max_candidates: int = 100) -> dict:
+                      max_target_keys: int = 500, max_candidates: int = 100,
+                      routes: Mapping[str, Route] = ROUTES, rule: str = RESOLUTION_RULE) -> dict:
     """Resolve current-text occurrences, reporting skipped and unread scope explicitly.
 
     Text citations require the held source digest. Native-field callers can omit
     text_sha256 and source_digests. Unknown/legacy-unversioned target selections
     remain not_checked; callers must supply a real target identity, not invent one.
     Partial parsed citations remain not_checked even if a coincidental key exists.
+    ``routes`` and ``rule`` default to the tool's; native_legal_references passes its own.
     """
     if not 1 <= max_target_keys <= 10_000 or not 1 <= max_candidates <= 1_000:
         raise ValueError("Resolution bounds must be positive and within the supported limits")
@@ -166,10 +191,10 @@ def resolve_citations(cursor: Any, occurrences: Sequence[Mapping[str, Any]],
     admitted: set[tuple[Route, str]] = set()
     for item in occurrences:
         kind, key = str(item.get("cite_kind", "")), str(item.get("target_key") or "")
-        route = _route(kind)
+        route = routes.get(kind)
         row = {**item, "occurrence_key": str(item.get("occurrence_key") or _occurrence_key(item)), "target_kind": kind, "normalized_key": key,
-               "target_snapshot": dict(target_snapshots.get(route.table, {})) if route else None,
-               "target_status": "not_checked", "candidate_keys": [], "resolution_rule": RESOLUTION_RULE,
+               "target_snapshot": dict(_snapshot(target_snapshots, route) or {}) if route else None,
+               "target_status": "not_checked", "candidate_keys": [], "resolution_rule": rule,
                "expected_cardinality": route.expected_cardinality if route else None,
                "target_table_selected": route.table if route else None, "target_grain": route.grain if route else None,
                "source_status": "native_field", "reason": None, "match_count": None}
@@ -192,7 +217,7 @@ def resolve_citations(cursor: Any, occurrences: Sequence[Mapping[str, Any]],
         if kind == "rin" and normalize_rin(key) != key:
             row["reason"] = "unsettled_key"
             continue
-        snapshot = target_snapshots.get(route.table)
+        snapshot = _snapshot(target_snapshots, route)
         if not snapshot or snapshot.get("status") in {"legacy_unversioned", "local_unversioned", "unavailable"}:
             row["reason"] = "target_snapshot_unavailable"
             continue
@@ -238,4 +263,4 @@ def resolve_citations(cursor: Any, occurrences: Sequence[Mapping[str, Any]],
     return {"occurrences": outputs, "coverage": {"input_occurrences": len(occurrences),
             "target_status_counts": dict(statuses), "reason_counts": dict(reasons), "distinct_target_keys_read": read_keys, "distinct_target_keys_selected": len(admitted),
             "target_batches": reads, "partial": bool(reasons), "max_target_keys": max_target_keys,
-            "max_candidates": max_candidates}, "resolution_rule": RESOLUTION_RULE}
+            "max_candidates": max_candidates}, "resolution_rule": rule}

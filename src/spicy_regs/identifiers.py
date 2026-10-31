@@ -49,3 +49,20 @@ USC_DASH_SPELLINGS = "‐‑‒–—―−\x96\x97"
 def usc_section_key_sql(expression: str) -> str:
     """SQL for spicy-docs ``usc_section_key`` over a trusted ``expression``: trimmed, lower-cased, dashes as hyphens."""
     return f"lower(translate(trim({expression}), '{USC_DASH_SPELLINGS}', '{'-' * len(USC_DASH_SPELLINGS)}'))"
+
+
+#: A U.S. Code section's parts in Code order: integer stem, letters, the number after a dash, then any remainder
+#: (1857f-5a).
+_SECTION_PARTS = r"^([0-9]+)([a-z]*)(?:-([0-9]+))?(.*)$"
+
+
+def section_order_sql(section: str) -> str:
+    """SQL for a folded section's place in Code order: stem, letters length, letters, dash number, rest.
+
+    Each number compares as a number and the letters by length first: 34c < 34d < 35, 698v < 698v-4 < 698v-10, and
+    2689r < 2689z < 2689aa. RefSpec ``_section_key`` compares the part after the stem as text, which misorders the
+    last two; the release point holds range stubs of both shapes (``698v...698v-10``, ``2689r...2689aa``).
+    """
+    stem, letters, number, rest = (f"regexp_extract({section}, '{_SECTION_PARTS}', {group})" for group in range(1, 5))
+    return (f"struct_pack(stem := TRY_CAST({stem} AS BIGINT), letters_length := length({letters}), "
+            f"letters := {letters}, number := coalesce(TRY_CAST({number} AS BIGINT), -1), rest := {rest})")

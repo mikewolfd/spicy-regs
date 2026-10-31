@@ -2,7 +2,7 @@
 
 No network or provider dependency is loaded. Routes name existing SpicyDocs APIs;
 workers must inspect retained evidence and enforce those APIs' source budgets.
-A missing OLRC classification row does not establish missing U.S. Code text.
+A section the held OLRC release point does not print may still be in a later law or another edition.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _route(kind: str, key: str) -> dict:
                 "api": "spicy_docs.sources.gao.files.GaoReportFileAcquirer.acquire_report_pdf",
                 "arguments": {"product_id": key.lower()}}
     return {"provider": None, "native_identifier": key, "edition": None, "api": None,
-            "reason": "classification_is_not_code_text_and_edition_unselected" if kind == "usc_section" else "unsupported_acquisition_identity"}
+            "reason": "release_point_unprinted_and_edition_unselected" if kind == "usc_section" else "unsupported_acquisition_identity"}
 
 
 def build_missing_target_queue(resolution: Mapping[str, Any], *,

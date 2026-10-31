@@ -35,7 +35,7 @@ from spicy_docs.sources.uscode.references import scan_uscode_references
 from spicy_docs.sources.congress.native_references import scan_bill_references
 from spicy_docs.sources.govinfo.native_references import scan_law_references
 
-from spicy_regs.citation_resolution import ROUTES, resolve_citations
+from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE, NATIVE_ROUTES, resolve_citations
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceContext
 from spicy_regs.transforms.table_merge import merge_contract_table, prior_scratch_path
 
@@ -98,7 +98,7 @@ def build_native_legal_references(
     with duckdb.connect() as cursor:
         snapshots = {}
         targets = selection.get("targets", {})
-        allowed = {route.table for route in ROUTES.values()}
+        allowed = {route.table for route in NATIVE_ROUTES.values()}
         for table, spec in targets.items():
             if table not in allowed:
                 raise ValueError("unsupported target table")
@@ -202,7 +202,8 @@ def build_native_legal_references(
         coverage: dict[str, Any] = {}
 
         def lookup(candidates: list[dict[str, Any]], texts: dict[tuple[str, str], str]) -> list[dict[str, Any]]:
-            resolved = resolve_citations(cursor, candidates, snapshots, source_digests=texts)
+            resolved = resolve_citations(cursor, candidates, snapshots, source_digests=texts,
+                                         routes=NATIVE_ROUTES, rule=NATIVE_RESOLUTION_RULE)
             coverage.update(resolved["coverage"])
             return resolved["occurrences"]
 

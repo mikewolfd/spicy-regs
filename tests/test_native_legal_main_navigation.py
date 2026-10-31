@@ -4,7 +4,7 @@ import json
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.citation_resolution import ROUTES
+from spicy_regs.citation_resolution import NATIVE_RESOLUTION_RULE, NATIVE_ROUTES
 from spicy_regs.etl_receipts import DatasetPolicy
 from spicy_regs.legislative_documents import (
     LegislativeShapeError, NATIVE_TARGET_KEY_FIELDS, map_subject, recorded_subject,
@@ -22,16 +22,16 @@ def observation(candidates, **extra):
                rule_version="native-legal-reference/003", target_candidates_json=json.dumps(candidates), **extra)
 
 
-@pytest.mark.parametrize("kind", ROUTES)
+@pytest.mark.parametrize("kind", NATIVE_ROUTES)
 def test_every_maintained_route_keeps_its_complete_identity_and_recorded_pin(kind):
-    route = ROUTES[kind]
+    route = NATIVE_ROUTES[kind]
     keys = {name: f"literal-{name}" for name in route.identity}
     pin = {"status": "published", "family": "selected-family", "generation_id": "original-generation",
            "artifact_digest": "sha256:" + "b" * 64, "receipt_sha256": "sha256:" + "c" * 64}
     candidate = dict(cite_kind=kind, target_kind=kind, target_key="retained-key", target_resolved=True,
                      candidate_keys=[keys, keys], expected_cardinality=route.expected_cardinality,
                      target_table_selected=route.table, target_status="found", match_count=2,
-                     target_snapshot=pin, resolution_rule="selected-target-lookup/1",
+                     target_snapshot=pin, resolution_rule=NATIVE_RESOLUTION_RULE,
                      derivation_rule="retained-rule", derivation_version="004", occurrence_key="original:0")
     result = map_subject("native_legal_references", observation([candidate, None, candidate]))
     assert result is not None
@@ -50,8 +50,9 @@ def test_every_maintained_route_keeps_its_complete_identity_and_recorded_pin(kin
         assert all(key[name] is None for name in set(NATIVE_TARGET_KEY_FIELDS) - set(route.identity))
 
 
-def test_typed_key_union_is_exactly_the_resolvers_twelve_route_identities():
-    assert set(NATIVE_TARGET_KEY_FIELDS) == {name for route in ROUTES.values() for name in route.identity}
+def test_typed_key_union_is_exactly_the_native_route_identities():
+    """native_legal_references records candidates under NATIVE_ROUTES, so its typed keys are their identities."""
+    assert set(NATIVE_TARGET_KEY_FIELDS) == {name for route in NATIVE_ROUTES.values() for name in route.identity}
 
 
 @pytest.mark.parametrize("status,reason,count,keys", [

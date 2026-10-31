@@ -21,6 +21,8 @@ from spicy_docs.schemas.tables import DASH_SPELLINGS, bill_id, usc_section_key
 
 from spicy_regs.citation_resolution import CITE_KINDS, ROUTES, SOURCE_TABLES, resolve_citations
 from spicy_regs.citation_sources import TEXT_SOURCES
+from spicy_regs.relationship_views.sql_views import install_sql_views
+from spicy_regs.relationship_views.uscode import USCODE_VIEWS
 from spicy_regs.identifiers import USC_DASH_SPELLINGS, normalize_rin, usc_section_key_sql
 from spicy_docs.interpretation.citation_grammar import cfr_key
 
@@ -44,9 +46,10 @@ TARGETS = {
     "congress_bills": [{"bill_id": bill_id(SimpleNamespace(congress=117, bill_type="hr", number=2617))}],
     "laws": [{"law_id": law_id(117, "public", 328), "congress": "117", "law_type": "public", "number": "328",
               "statutes_at_large_volume": "136", "statutes_at_large_page": "4459"}],
-    "law_code_sections": [{"usc_title": title, "usc_section_key": usc_section_key(section), "congress": "117",
-                           "session": "2", "seq": str(seq)} for seq, (title, section) in enumerate((("5", "553"),
-                                                                                                    ("26", "45Q")))],
+    "uscode_edition_sections": [{"observation_id": f"o{n}", "edition_id": "rp-119-102",
+                                 "source_kind": "release-point-corpus", "source_context": "main-body-candidate",
+                                 "native_identifier": f"/us/usc/t{title}/s{section}"}
+                                for n, (title, section) in enumerate((("5", "553"), ("26", "45Q")))],
     "cfr_sections": [{"cfr_ref": cfr_key(40, 60, 1), "package_id": "CFR-2025-title40-vol7",
                       "granule_id": "CFR-2025-title40-vol7-sec60-1"}],
     "federal_register": [{"volume": "88", "start_page": "12345", "document_number": "2023-01234",
@@ -64,7 +67,8 @@ def test_every_route_finds_the_key_spicy_docs_prints():
     findings = find_citations(PRINTED, congress=117,
                               committees=[(canonical_alnum("Committee on the Judiciary"), "hsju00")])
     assert set(ROUTES) == {finding.kind for finding in findings}, "each routed kind needs a printed example"
-    assert {route.table for route in ROUTES.values()} == set(TARGETS)
+    # A route to a view reads the published table the view is built from.
+    assert {route.pinned_by or route.table for route in ROUTES.values()} == set(TARGETS)
     occurrences = [{"cite_kind": finding.kind, "target_key": finding.target_key,
                     "target_resolved": str(finding.target_resolved).lower()} for finding in findings]
     with duckdb.connect() as con:
@@ -72,6 +76,7 @@ def test_every_route_finds_the_key_spicy_docs_prints():
             con.execute(f'CREATE TABLE "{table}" ({", ".join(f"{column} VARCHAR" for column in rows[0])})')
             con.executemany(f'INSERT INTO "{table}" VALUES ({", ".join("?" * len(rows[0]))})',
                             [list(row.values()) for row in rows])
+        install_sql_views(con, TARGETS, USCODE_VIEWS)
         pins = {table: {"status": "managed_generation"} for table in TARGETS}
         resolved = resolve_citations(con, occurrences, pins)["occurrences"]
     assert [(row["cite_kind"], row["target_key"], row["target_status"]) for row in resolved
