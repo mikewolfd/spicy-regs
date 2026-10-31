@@ -1359,7 +1359,7 @@
       "candidate_id": "The FEC candidate id (`CAND_ID`).",
       "cycle": "The two-year cycle the file covers, as its closing even year.",
       "name": "The candidate's name as that cycle's file states it (`CAND_NAME`); NULL when blank.",
-      "party": "The party affiliation code (`CAND_PTY_AFFILIATION`), literal; NULL when blank.",
+      "party": "The party affiliation code (`CAND_PTY_AFFILIATION`); NULL when blank.",
       "election_year": "The candidate's election year as filed (`CAND_ELECTION_YR`); NULL when blank.",
       "office_state": "The office's state code (`CAND_OFFICE_ST`); NULL when blank.",
       "office": "The office sought code (`CAND_OFFICE`), literal; NULL when blank.",

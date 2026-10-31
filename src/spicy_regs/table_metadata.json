@@ -26920,7 +26920,7 @@
       {
         "column_name": "party",
         "column_type": "VARCHAR",
-        "description": "The party affiliation code (`CAND_PTY_AFFILIATION`), literal; NULL when blank."
+        "description": "The party affiliation code (`CAND_PTY_AFFILIATION`); NULL when blank."
       },
       {
         "column_name": "election_year",

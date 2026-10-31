@@ -18,7 +18,7 @@ One row per FEC candidate per two-year cycle, as that cycle's bulk candidate mas
 | `candidate_id` | `VARCHAR` | The FEC candidate id (`CAND_ID`). |
 | `cycle` | `INTEGER` | The two-year cycle the file covers, as its closing even year. |
 | `name` | `VARCHAR` | The candidate's name as that cycle's file states it (`CAND_NAME`); NULL when blank. |
-| `party` | `VARCHAR` | The party affiliation code (`CAND_PTY_AFFILIATION`), literal; NULL when blank. |
+| `party` | `VARCHAR` | The party affiliation code (`CAND_PTY_AFFILIATION`); NULL when blank. |
 | `election_year` | `INTEGER` | The candidate's election year as filed (`CAND_ELECTION_YR`); NULL when blank. |
 | `office_state` | `VARCHAR` | The office's state code (`CAND_OFFICE_ST`); NULL when blank. |
 | `office` | `VARCHAR` | The office sought code (`CAND_OFFICE`), literal; NULL when blank. |
