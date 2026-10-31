@@ -3694,6 +3694,24 @@
       "measurement": null
     },
     {
+      "child": "court_opinion_pdf_extractions",
+      "child_columns": [
+        "opinion_id"
+      ],
+      "parent": "court_opinion_texts",
+      "parent_columns": [
+        "opinion_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "An opinion the export holds no text for has a court_opinion_texts row with text_source none; its extracted PDF, where one exists, is this row. Only a bounded build of the texts exists, so the relationship has no complete baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
       "child": "court_citation_map",
       "child_columns": [
         "citing_opinion_id"
@@ -9992,6 +10010,15 @@
         "parent_table": "court_opinion_clusters",
         "parent_columns": [
           "cluster_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "opinion_id"
+        ],
+        "parent_table": "court_opinion_texts",
+        "parent_columns": [
+          "opinion_id"
         ]
       }
     ],

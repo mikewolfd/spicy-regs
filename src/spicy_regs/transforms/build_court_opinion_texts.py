@@ -22,9 +22,15 @@ text, as ``opinion_id`` is), so a point read names one member. The width is chos
 (``lengths-full.parquet``, scaled by the 2026-10-30 Markdown size model): 76 blocks whose largest is projected at
 0.84 GB. Spill buckets are a third of a block so the heaviest one (1.99 GB of source HTML) sorts in memory.
 
-Receipts point at the converted value and never copy it: the export's file witness, the record's id and
-``source_sha256`` (of the rendering converted), with the converter's identity in the diagnostics. A rendering the
-converter refuses becomes a refused receipt carrying the same pointer, never an empty text.
+Receipts point at the converted value and never copy it (owner, 2026-10-31): the export's file witness (its
+SHA-256), the record's id, ``source_column`` (the rendering converted) and ``source_sha256`` (of that rendering's
+value), with the converter's identity in the diagnostics. A rendering the converter refuses becomes a refused
+receipt carrying the same pointer, never an empty text. An opinion without text is a row with ``text_source``
+'none' and NULL Markdown; ``court_opinion_pdf_extractions`` joins it by ``opinion_id`` where a PDF was extracted.
+
+The run receipt ``court_opinion_texts-run.json`` is written last and marks the build done. A run that stopped
+before it resumes on the same command: from the spill if phase 1 finished, at the first uncommitted block in
+phase 2, and by re-joining the committed parts after that (each block's routed-row count is kept with its part).
 
 A run bounded by ``max_rows`` reads the export's head, writes a ``bounded`` run receipt beside its output and never
 selects or admits a generation.
@@ -97,12 +103,13 @@ SPILL_GROUP_BYTES = 2 << 20
 #: Records per conversion task, so a task's HTML stays in the tens of MB.
 _TASK_ROWS = 500
 _SPILL_COMPLETE = "_complete.json"
+_RUN = f"{DATASET}-run.json"
 _REFUSED = "_refused.parquet"
 _RECEIPT_PARTS = "_receipts"
 _BUCKET = "spill_bucket"
 _SPILL_SCHEMA = pa.schema([
     *((name, pa.string()) for name in POLICIES[DATASET].subject_schema.names),
-    ("source_sha256", pa.string()), ("dump_date", pa.string()), (_BUCKET, pa.int32()),
+    ("source_column", pa.string()), ("source_sha256", pa.string()), ("dump_date", pa.string()), (_BUCKET, pa.int32()),
 ])
 
 Converter = Callable[[dict], Any]
@@ -143,19 +150,21 @@ def _convert(rows: list[dict], dump_date: str, convert: Converter | None, versio
         except ValueError as error:  # OpinionMarkdownError is a ValueError
             column = next((c for c in ("html_with_citations", "html", "plain_text") if (row.get(c) or "").strip()), None)
             value = (row.get(column) or "").encode() if column else b""
-            refused.append({"opinion_id": opinion_id, "cluster_id": row["cluster_id"], "text_source": column,
+            refused.append({"opinion_id": opinion_id, "cluster_id": row["cluster_id"], "source_column": column,
                             "source_sha256": "sha256:" + hashlib.sha256(value).hexdigest(), "error": error})
             continue
-        value = (row.get(text.text_source) or "").encode() if text.text_source != "none" else b""
+        column = text.text_source if text.text_source != "none" else None
+        value = (row.get(column) or "").encode() if column else b""
         source_bytes += len(value)
         out["opinion_id"].append(opinion_id)
         out["cluster_id"].append(row["cluster_id"])
         out["date_modified"].append(row["date_modified"])
         out["text_source"].append(text.text_source)
-        out["markdown"].append(text.markdown if text.text_source != "none" else None)
+        out["markdown"].append(text.markdown if column else None)
         out["converter_version"].append(version)
         out["opinion_block"].append(PARTITIONING.value(opinion_id))
-        out["source_sha256"].append("sha256:" + hashlib.sha256(value).hexdigest() if value else None)
+        out["source_column"].append(column)
+        out["source_sha256"].append("sha256:" + hashlib.sha256(value).hexdigest() if column else None)
         out["dump_date"].append(dump_date)
         out[_BUCKET].append(int(opinion_id) // SPILL_WIDTH)
     batch = pa.RecordBatch.from_pydict(out, schema=_SPILL_SCHEMA)
@@ -221,14 +230,16 @@ def build_court_opinion_texts(
     ``local_file`` is a content-addressed raw object rather than the publisher's file name.
 
     A rerun into the same directory after a failure resumes: a complete spill (its ``_complete.json`` written last)
-    is not read again, and phase 2 restarts at the first block whose receipts were not committed. The rerun must
-    name the same export, converter and bound; it reuses the first run's generation id.
+    is not read again, phase 2 restarts at the first block whose receipts were not committed, and a run that stopped
+    after the last block re-joins the receipts and writes the run receipt. The rerun must name the same export,
+    converter and bound; it reuses the first run's generation id. A directory holding a run receipt is done.
     """
     table_dir = output_dir / DATASET
     spill_dir = output_dir / f".{DATASET}-spill"
     receipt_path = output_dir / "etl_receipts.parquet"
-    if receipt_path.exists():
-        raise FileExistsError(f"{receipt_path} exists; build into an empty directory")
+    run_path = output_dir / _RUN
+    if run_path.exists():
+        raise FileExistsError(f"{run_path} exists; build into an empty directory")
     witness = file_witness(local_file, source_id=source_id)
     identity = _converter().converter_identity() if convert is None else {"converter_version": "test"}
     marker = spill_dir / _SPILL_COMPLETE
@@ -241,7 +252,7 @@ def build_court_opinion_texts(
         if generation_id not in (None, spill["generation_id"]):
             raise ValueError(f"{spill_dir} belongs to generation {spill['generation_id']}")
     else:
-        for path in (table_dir, spill_dir):
+        for path in (table_dir, spill_dir, receipt_path):
             if path.exists():
                 raise FileExistsError(f"{path} exists without a complete spill; build into an empty directory")
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -251,7 +262,6 @@ def build_court_opinion_texts(
     phase2 = time.perf_counter()
     diagnostics = _diagnostics(spill)
     routed = _write_members(spill, spill_dir, table_dir, receipt_path, diagnostics, row_group_text_bytes)
-    shutil.rmtree(spill_dir)
     run = {
         "dataset": DATASET, "generation_id": spill["generation_id"], "dump_date": spill["dump_date"],
         "witness": witness, "status": "bounded" if max_rows is not None else "complete",
@@ -263,7 +273,11 @@ def build_court_opinion_texts(
         "phase2_seconds": round(time.perf_counter() - phase2, 1),
         "max_rss_main_process_bytes": _rss_bytes(), "diagnostics": diagnostics,
     }
-    (output_dir / f"{DATASET}-run.json").write_text(json.dumps(run, indent=2, sort_keys=True, default=str) + "\n")
+    # The run receipt commits the build; the spill (and the resume state in it) goes only after it is in place.
+    pending = run_path.with_name(f".{run_path.name}.tmp")
+    pending.write_text(json.dumps(run, indent=2, sort_keys=True, default=str) + "\n")
+    pending.rename(run_path)
+    shutil.rmtree(spill_dir)
     return run
 
 
@@ -337,7 +351,7 @@ def _spill(local_file: Path, spill_dir: Path, *, generation_id: str, witness: di
     counts["refused"] = len(refusals)
     spill.update(
         completed_read=dump.completed, counts=counts, rows_by_text_source=dict(sorted(by_source.items())),
-        refused_by_text_source=dict(sorted(Counter(str(r["text_source"]) for r in refusals).items())),
+        refused_by_text_source=dict(sorted(Counter(str(r["source_column"]) for r in refusals).items())),
         spill_bytes=sum(p.stat().st_size for p in files), spill_files=len(files),
         spill_row_groups=sum(pq.ParquetFile(p).metadata.num_row_groups for p in files),
         phase1_seconds=round(time.perf_counter() - started, 1),
@@ -396,8 +410,10 @@ def _write_members(spill: dict, spill_dir: Path, table_dir: Path, receipt_path: 
     """Phase 2: each block's buckets sorted by numeric id into its member; its receipts committed last, per block.
 
     A block is done once its receipt part is renamed into place; only then are its buckets deleted. So a failed run
-    resumes at the first block without a part, and the spill shrinks as the members grow. The parts are joined into
-    ``receipt_path`` (pointers only, about 156 B a row) once every block is done, then the refusals.
+    resumes at the first block without a part, and the spill shrinks as the members grow. Each block's count of rows
+    the row function decided is written beside its part before the part is committed, so the total survives a
+    resume. The parts are joined into ``receipt_path`` (pointers only, about 156 B a row) once every block is done,
+    then the refusals; the join is repeated whole on a resume, so a run stopped mid-join or after it recovers.
     """
     parts = spill_dir / _RECEIPT_PARTS
     parts.mkdir(exist_ok=True)
@@ -406,7 +422,7 @@ def _write_members(spill: dict, spill_dir: Path, table_dir: Path, receipt_path: 
         number = int(bucket.stem.partition("=")[2])
         blocks.setdefault(number * SPILL_WIDTH // OPINION_BLOCK_WIDTH, []).append(bucket)
     done = {int(p.stem) for p in parts.glob("*.parquet")}
-    routed = 0
+    routed = sum(json.loads((parts / f"{block}.json").read_text())["rows_routed_to_row_function"] for block in done)
     for block in sorted(blocks.keys() | done):
         buckets = sorted(blocks.get(block, []), key=lambda p: int(p.stem.partition("=")[2]))
         part = parts / f"{block}.parquet"
@@ -414,18 +430,21 @@ def _write_members(spill: dict, spill_dir: Path, table_dir: Path, receipt_path: 
             member_path = table_dir / f"opinion_block={block}" / "part-000000.parquet"
             member_path.unlink(missing_ok=True)  # a failed attempt's, never committed
             pending = parts / f".{block}.parquet.tmp"
+            block_routed = 0
             with etl_bulk.new_receipt_writer(pending) as receipts, _member_writer(member_path) as member:
                 for bucket in buckets:
                     table = pq.read_table(bucket)
                     table = table.take(pc.call_function("sort_indices", [pc.cast(table["opinion_id"], pa.int64())]))
-                    routed += _write_bulk_pair(
+                    block_routed += _write_bulk_pair(
                         DATASET, table, table_dir / ".unused.parquet", pending,
                         generation_id=spill["generation_id"], witnesses=[spill["witness"]], processor=PROCESSOR,
                         diagnostics=diagnostics, attempt_prefix=f"{spill['dump_date']}:{bucket.stem}",
                         receipt_writer=receipts, subject_writer=member, segments=byte_segments(row_group_text_bytes),
                     )
                     del table
+            (parts / f"{block}.json").write_text(json.dumps({"rows_routed_to_row_function": block_routed}) + "\n")
             pending.rename(part)
+            routed += block_routed
         for bucket in buckets:
             bucket.unlink()
     joined = receipt_path.with_name(f".{receipt_path.name}.tmp")

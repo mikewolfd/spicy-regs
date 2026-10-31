@@ -2,7 +2,8 @@
 
 The export fixture is written in the publisher's dialect with its records out of id order, across three opinion
 blocks. The converter is a stand-in (the real one is SpicyDocs' and is tested there); what is tested here is the
-build: order, member layout, row-group and footer bounds, receipts as pointers, refusals and the point read.
+build: order, member layout, row-group and footer bounds, receipts as pointers, refusals, resume and the point read
+routed through the publication index.
 """
 
 from __future__ import annotations
@@ -63,6 +64,8 @@ def _rows() -> list[tuple]:
     rows = []
     for n in ids:
         text = "x" * (200 + n % 50)
+        if n % 17 == 0:  # a control character the SQL encoding spells differently: decided by the row function
+            text += "\x1b"
         if n % 11 == 0:
             rows.append((str(n), str(n * 3), "2026-06-01T00:00:00Z", "", text, None))
         elif n % 13 == 0:
@@ -131,6 +134,7 @@ def test_every_record_is_counted_once_and_no_text_is_null_markdown(built) -> Non
     by_source = {s: table["text_source"].to_pylist().count(s) for s in set(table["text_source"].to_pylist())}
     assert run["rows_read"] == len(rows) == table.num_rows + run["refused"]
     assert run["refused"] == 1 and run["status"] == "complete" and run["completed_read"]
+    assert run["rows_routed_to_row_function"] == sum(1 for r in rows if int(r[0]) % 17 == 0) > 0
     assert run["rows_by_text_source"] == by_source
     assert sum(by_source.values()) + run["refused"] == run["rows_read"]
     assert by_source["none"] == 1 and set(by_source) == {"html_with_citations", "html", "plain_text", "none"}
@@ -152,20 +156,28 @@ def test_receipts_point_at_the_rendering_and_never_copy_it(built) -> None:
     assert "UNCONVERTIBLE" not in refused[0]["processing_json"]
     assert processing and json.dumps(processing).count("sha256:") >= 1
     # Each pointer is the digest of the rendering the converter was given (none for a record without text).
+    columns = ("html_with_citations", "html", "plain_text")
     rendered = {}
     for n, _, _, *renderings in rows:
-        value = next((v for v in renderings if v and v.strip()), None)
-        rendered[n] = None if value is None else "sha256:" + hashlib.sha256(value.encode()).hexdigest()
-    def pointer(receipt: dict) -> tuple[str, str | None]:
+        column = next((c for c, v in zip(columns, renderings) if v and v.strip()), None)
+        value = renderings[columns.index(column)] if column else None
+        rendered[n] = (column, None if value is None else "sha256:" + hashlib.sha256(value.encode()).hexdigest())
+
+    def pointer(receipt: dict) -> tuple[str, tuple[str | None, str | None]]:
+        """The four parts: the witness (above), the opinion id, the source column and its value's digest."""
         opinion_id = re.search(r'"opinion_id"\],\["str","(\d+)"', receipt["identity_json"])
+        column = re.search(r'"source_column",\["str","(\w+)"', receipt["processing_json"])
         digest = re.search(r'"source_sha256",\["str","(sha256:[0-9a-f]{64})"', receipt["processing_json"])
         assert opinion_id is not None
-        return opinion_id.group(1), digest and digest.group(1)
+        return opinion_id.group(1), (column and column.group(1), digest and digest.group(1))
 
     assert dict(map(pointer, accepted)) == {n: d for n, d in rendered.items() if n != str(2 * WIDTH + 9)}
-    assert pointer(accepted[0])[1] is not None and rendered[str(WIDTH + 2)] is None
+    assert pointer(accepted[0])[1][1] is not None and rendered[str(WIDTH + 2)] == (None, None)
+    assert '"source_column",["null",null]' in next(r["processing_json"] for r in accepted
+                                                    if pointer(r)[0] == str(WIDTH + 2))
     refusal = refused[0]["processing_json"]  # no identity: the record's id and pointer ride in its raw fields
-    assert f'"{2 * WIDTH + 9}"' in refusal and rendered[str(2 * WIDTH + 9)] in refusal
+    assert f'"{2 * WIDTH + 9}"' in refusal and rendered[str(2 * WIDTH + 9)][1] in refusal
+    assert '"source_column",["str","html_with_citations"]' in refusal
 
 
 def test_the_spill_is_one_file_per_bucket_and_refusals_are_counted_by_rendering(built) -> None:
@@ -205,8 +217,32 @@ def test_a_failed_phase_2_resumes_at_the_first_uncommitted_block(built, tmp_path
     resumed = build.build_court_opinion_texts(export, again, dump_date=date(2026, 6, 30), workers=0, convert=never,
                                               parse_workers=1, row_group_text_bytes=2_000)
     assert resumed["resumed"] and resumed["generation_id"] == run["generation_id"] and not spill.exists()
+    # Block 0's row-function decisions were made by the failed run; the resumed total still counts them.
+    assert resumed["rows_routed_to_row_function"] == run["rows_routed_to_row_function"]
     for name in ("etl_receipts.parquet", *(m.relative_to(out).as_posix() for m in _members(out))):
         assert pq.ParquetFile(again / name).read().equals(pq.ParquetFile(out / name).read()), name
+
+
+def test_a_run_stopped_after_the_receipts_join_resumes_to_its_run_receipt(built, tmp_path, monkeypatch) -> None:
+    """The receipts are in place but the run receipt is not: a rerun finishes it rather than refusing the directory."""
+    out, run, _ = built
+    export = out.parent / "opinions-2026-06-30.csv.bz2"
+    again = tmp_path / "out"
+    kwargs = dict(dump_date=date(2026, 6, 30), workers=0, convert=stand_in, parse_workers=1, row_group_text_bytes=2_000)
+    rss = build._rss_bytes
+    monkeypatch.setattr(build, "_rss_bytes", lambda: (_ for _ in ()).throw(RuntimeError("killed")))
+    with pytest.raises(RuntimeError, match="killed"):
+        build.build_court_opinion_texts(export, again, **kwargs)
+    assert (again / "etl_receipts.parquet").exists() and not (again / f"{build.DATASET}-run.json").exists()
+    assert (again / f".{build.DATASET}-spill" / "_complete.json").exists()  # the resume state outlives the join
+    monkeypatch.setattr(build, "_rss_bytes", rss)
+    finished = build.build_court_opinion_texts(export, again, **kwargs)
+    assert finished["resumed"] and json.loads((again / f"{build.DATASET}-run.json").read_text()) == json.loads(
+        json.dumps(finished, default=str))
+    assert finished["rows_routed_to_row_function"] == run["rows_routed_to_row_function"]
+    assert pq.read_table(again / "etl_receipts.parquet").num_rows == pq.read_table(out / "etl_receipts.parquet").num_rows
+    with pytest.raises(FileExistsError, match="run.json"):
+        build.build_court_opinion_texts(export, again, **kwargs)
 
 
 def test_the_output_is_admitted_as_a_split_generation(built, tmp_path) -> None:
@@ -226,6 +262,35 @@ def test_the_output_is_admitted_as_a_split_generation(built, tmp_path) -> None:
     assert members == [m.relative_to(out).as_posix() for m in _members(out)]
     listed = json.loads((tmp_path / "generation" / "members.json").read_text())["members"]
     assert sorted(m["objectKey"] for m in listed if m["objectKey"] != "etl_receipts.parquet") == members
+
+
+def test_a_point_read_is_routed_by_the_published_index_to_one_member(built, tmp_path) -> None:
+    """The publication index lists each member with its opinion_block: the id-range manifest a point read uses."""
+    from rulespec_artifacts import LocalMemberSource, iter_member_descriptors
+
+    from spicy_regs.court_receipts import POLICIES
+    from spicy_regs.generations import build_generation
+    from spicy_regs.sources import publication
+
+    out, run, _ = built
+    copy = tmp_path / "copy"
+    shutil.copytree(out / build.DATASET, copy / build.DATASET)
+    artifact = build_generation(tmp_path / "generation", family=build.DATASET, files=[copy / build.DATASET],
+                                expected_keys=[f"{build.DATASET}.parquet"],
+                                partitioned={f"{build.DATASET}.parquet": ["opinion_block"]},
+                                receipt_path=out / "etl_receipts.parquet", receipt_policies=[POLICIES[build.DATASET]],
+                                receipt_generation_id=run["generation_id"])
+    entry = publication.generation_entry(artifact, iter_member_descriptors(artifact, LocalMemberSource(tmp_path / "generation")))
+    published = entry["tables"][f"{build.DATASET}.parquet"]["members"]
+    for member in published:  # each member holds exactly its block's id range
+        ids = [int(v) for v in pq.ParquetFile(tmp_path / "generation" / member["key"]).read(columns=["opinion_id"])["opinion_id"].to_pylist()]
+        block = int(member["partition"]["opinion_block"])
+        assert block * WIDTH <= min(ids) and max(ids) < (block + 1) * WIDTH and member["rows"] == len(ids)
+    target = 2 * WIDTH + 12
+    (member,) = [m for m in published if m["partition"] == {"opinion_block": str(target // WIDTH)}]
+    row = duckdb.sql(f"SELECT opinion_id, markdown FROM read_parquet('{tmp_path / 'generation' / member['key']}') "
+                     f"WHERE opinion_id = '{target}'").fetchall()
+    assert [r[0] for r in row] == [str(target)] and row[0][1].startswith("md:")
 
 
 def test_the_spill_schema_is_what_the_bulk_writer_maps() -> None:

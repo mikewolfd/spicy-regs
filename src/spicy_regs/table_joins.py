@@ -849,6 +849,13 @@ JOINS: tuple[Join, ...] = (
             'Both rows come from the same CourtListener opinions export; only a bounded build of its head exists, so '
             'the relationship has no complete baseline yet.', expected_cardinality='one')
       for key, parent in (('opinion_id', 'court_opinions'), ('cluster_id', 'court_opinion_clusters'))),
+    # The pointer from an opinion without text (text_source 'none') to its extracted PDF (owner, 2026-10-31).
+    _join('court_opinion_pdf_extractions', 'opinion_id',
+          'court_opinion_texts', 'opinion_id',
+          0, 0, 'unmeasured',
+          'An opinion the export holds no text for has a court_opinion_texts row with text_source none; its '
+          'extracted PDF, where one exists, is this row. Only a bounded build of the texts exists, so the '
+          'relationship has no complete baseline yet.', expected_cardinality='one'),
     _join('court_citation_map', ('citing_opinion_id', 'dump_date'),
           'court_opinions', ('opinion_id', 'dump_date'),
           7_511_929, 262, 'scope',

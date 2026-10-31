@@ -4,11 +4,11 @@
 
 **Court opinion texts (Markdown)**
 
-Each CourtListener opinion's text as Markdown (CommonMark with GFM tables and footnotes), its citations as links [cite](opinion:ID) to the cited opinion_id. Stored one file per block of 150,000 opinion ids: opinion_block is opinion_id // 150000, so a lookup that filters opinion_block and opinion_id opens one file. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters (court_is_federal selects federal courts). Receipts point at the export and the SHA-256 of the rendering converted, not a copy.
+Each CourtListener opinion's text as Markdown in the GitHub Flavored Markdown dialect with footnotes ([^n] references and definitions), its citations as links [cite](opinion:ID) to the cited opinion_id. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters (court_is_federal selects federal courts). An opinion without text has a row with text_source 'none' and NULL markdown; where a PDF of it was extracted, court_opinion_pdf_extractions joins it by opinion_id. Stored id sorted, one file per block of 150,000 opinion ids (opinion_block is opinion_id // 150000): route a point read through the publication index, whose court_opinion_texts entry lists each file with its opinion_block, and read that one file (4 HTTP range requests measured). A filter on opinion_id alone over every file is the slow path: it opens each file's footer. opinion_id is text, so filter it with a quoted literal (opinion_id = '123'); an unquoted number casts every row and skips no file. Rows are in numeric id order within a file; ORDER BY opinion_id sorts as text, so order by CAST(opinion_id AS BIGINT). Receipts point at the export (its SHA-256), the opinion id, the export column converted and the SHA-256 of that column's value, not a copy of it.
 
-**Coverage.** Not a range. Not published: only a bounded build of the head of the 2026-06-30 CourtListener opinions export has run; it proves the build path and establishes no completeness. *(measured 2026-10-30)*
+**Coverage.** Not a range. Not published: only a bounded build of the head of the 2026-06-30 CourtListener opinions export has run; it proves the build path and establishes no completeness. Every opinion of an export gets a row, federal or not; select federal courts by joining cluster_id to court_opinion_clusters and filtering court_is_federal. *(measured 2026-10-30)*
 
-**Data quality.** The text is converted from the publisher's html_with_citations, else html, else plain_text (in the whole 2026-06-30 export 9,355 opinions fall back to html, 7,976 to plain_text and 554 have no text); images are dropped. Preformatted bodies (a fifth of the export) keep their line breaks and indentation. On 500 sampled opinions stratified by source rendering, all 5,539 citation links kept their cited id and text, and no heading, blockquote or table was lost; 2 of 406 footnote markers, 6 of 400 footnote bodies and 0.28% of italic characters were. A plain CommonMark reader misreads footnote definitions; read with a GFM + footnote parser.
+**Data quality.** The text is converted from the publisher's html_with_citations, else html, else plain_text (in the whole 2026-06-30 export 9,355 opinions fall back to html, 7,976 to plain_text and 554 have no text); images are dropped. Preformatted bodies (a fifth of the export) keep their line breaks and indentation. Accepted fidelity (owner, 2026-10-31): no citation link, heading, blockquote or paragraph lost; footnotes and italics at most 0.5% lost; tables at most 1%. On 500 sampled opinions stratified by source rendering, all 5,539 citation links kept their cited id and text, and no heading, blockquote or table was lost; 0.28% of italic characters and 2 of 406 footnote markers were, and 6 of 400 footnote bodies (1.5%, over the accepted 0.5%). A plain CommonMark reader misreads footnote definitions; read with a GFM parser that supports footnotes.
 
 - **Parquet file:** `court_opinion_texts.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -17,10 +17,10 @@ Each CourtListener opinion's text as Markdown (CommonMark with GFM tables and fo
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `opinion_id` | `VARCHAR` | CourtListener opinion ID. Primary key; joins court_opinions.opinion_id and the opinion ids of court_citation_map. |
-| `cluster_id` | `VARCHAR` | CourtListener decision-cluster ID; joins court_opinion_clusters.cluster_id. |
-| `opinion_block` | `VARCHAR` | opinion_id // 150000 as text: the file a row is stored in. Filter it with opinion_id for a one-file lookup. |
+| `opinion_id` | `VARCHAR` | CourtListener opinion ID, as text; filter it with a quoted literal (opinion_id = '123'). Primary key; joins court_opinions.opinion_id, court_opinion_pdf_extractions.opinion_id and the opinion ids of court_citation_map. |
+| `cluster_id` | `VARCHAR` | CourtListener decision-cluster ID; joins court_opinion_clusters.cluster_id, whose court_is_federal selects federal courts. |
+| `opinion_block` | `VARCHAR` | opinion_id // 150000 as text: the file a row is stored in, listed per file in the publication index. Filter it with opinion_id for a one-file lookup. |
 | `date_modified` | `VARCHAR` | Timestamp the publisher last modified the opinion record, as the export states it. |
 | `text_source` | `VARCHAR` | The export column the Markdown was converted from: html_with_citations, html, plain_text, or none. |
-| `markdown` | `VARCHAR` | The opinion body as Markdown; citations are [text](opinion:ID) or [text](cite:path) links. NULL when text_source is none. |
+| `markdown` | `VARCHAR` | The opinion body as GitHub Flavored Markdown with footnotes; citations are [text](opinion:ID) or [text](cite:path) links. NULL when text_source is none. |
 | `converter_version` | `VARCHAR` | Version of the SpicyDocs opinion Markdown converter; the receipt diagnostics carry its code digest and lxml build. |

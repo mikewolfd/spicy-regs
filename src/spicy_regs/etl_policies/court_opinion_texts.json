@@ -6,6 +6,7 @@
     "opinion_id"
   ],
   "receipt_fields": [
+    "source_column",
     "source_sha256",
     "dump_date",
     "conversion_inputs",
