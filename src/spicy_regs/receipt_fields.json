@@ -1069,6 +1069,7 @@
   "court_opinions": {
    "meanings": {
     "date_created": "Timestamp the publisher created the opinion record.",
+    "date_modified": "Timestamp the publisher last modified the opinion record.",
     "dump_date": "The CourtListener bulk export the row was copied from (ISO date).",
     "extracted_by_ocr": "Publisher flag for text extracted by OCR (`t` or `f`).",
     "local_path": "Path of the original document in CourtListener's storage, not a SpicyRegs file."

@@ -124,6 +124,7 @@ OPINIONS = BulkTable(
         ("local_path", "local_path"),
         ("extracted_by_ocr", "extracted_by_ocr"),
         ("date_created", "date_created"),
+        ("date_modified", "date_modified"),
     ),
 )
 

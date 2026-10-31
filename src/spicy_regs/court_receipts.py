@@ -24,10 +24,8 @@ from spicy_regs.etl_receipts import (
     read_with_receipts, select_receipts, split_record, validate_receipt_bundle, write_dataset,
 )
 
-#: Court tables past courts/1; earlier_receipt_policies replays each one's earlier receipts.
-POLICY_VERSIONS = {'court_opinions': 'courts/3', 'court_opinion_pdf_extractions': 'courts/2', 'court_opinion_texts': 'courts/3'}
 POLICIES = {
-    name: DatasetPolicy(name, schema, IDENTITIES[name], RECEIPT_FIELDS[name], policy_version=POLICY_VERSIONS.get(name, 'courts/1'))
+    name: DatasetPolicy(name, schema, IDENTITIES[name], RECEIPT_FIELDS[name], policy_version='courts/2' if name in {'court_opinions', 'court_opinion_pdf_extractions'} else 'courts/1')
     for name, schema in SUBJECT_SCHEMAS.items()
 }
 

@@ -131,20 +131,6 @@ def earlier_policies(policy):
             raise ValueError("Current nominations policy differs from the exact declared policy")
         history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
         return tuple(DatasetPolicy.from_descriptor(history[key]) for key in ("nominations_v2", "nominations"))
-    if policy.dataset == "court_opinions" and policy.policy_version in {"courts/3", "courts/2"}:
-        # courts/3 moved date_modified to court_opinion_texts; courts/2 is then history, not the declared policy.
-        history = json.loads(files("spicy_regs").joinpath("navigation_policy_history.json").read_text())
-        context = json.loads(files("spicy_regs").joinpath("source_context_policy_history.json").read_text())
-        original = DatasetPolicy.from_descriptor(context["court_opinions"])
-        if policy.policy_version == "courts/2":
-            if policy.descriptor() != history["court_opinions_v2"]:
-                raise ValueError("Historical court opinion policy differs from the exact declared policy")
-            return (original,)
-        expected = DatasetPolicy.from_descriptor(json.loads(files("spicy_regs").joinpath(
-            "etl_policies/court_opinions.json").read_text()))
-        if policy.descriptor() != expected.descriptor():
-            raise ValueError("Current court opinion policy differs from the exact declared policy")
-        return (DatasetPolicy.from_descriptor(history["court_opinions_v2"]), original)
     context_history = json.loads(files("spicy_regs").joinpath("source_context_policy_history.json").read_text())
     if policy.dataset in context_history and policy.policy_version in {
         "regulations-native-v2", "courts/2", "scorecards-etl-v2", "scorecards-etl-ratings-v4", "government-sources/3",
