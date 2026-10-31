@@ -109,6 +109,21 @@ def _amount(raw):
     return value, "value"
 
 
+def _fiscal_year(day: date) -> int:
+    """Federal fiscal year containing a date: October starts the next year."""
+    return day.year + (day.month >= 10)
+
+
+def _month_start(fiscal_year: int, month: int) -> date:
+    return date(fiscal_year - (month >= 10), month, 1)
+
+
+def _fiscal_months(fiscal_year: int, through: date) -> list[date]:
+    """Month starts of a fiscal year, October first, up to and including ``through``."""
+    starts = (_month_start(fiscal_year, month) for month in (*range(10, 13), *range(1, 10)))
+    return [start for start in starts if start <= through]
+
+
 def _cell(raw, field, line, review):
     """Type one Table 2 cell; a 0.00 estimate needs the edition's page-5 determination.
 
@@ -186,7 +201,7 @@ def _statement_rows(reader, items, report, qualification):
             parents[identity] = (int(match[1]), item)
         else:
             children[identity] = item
-    report_fy = report.year + (report.month >= 10)
+    report_fy = _fiscal_year(report)
     periods, output = {}, []
     for item in children.values():
         raw = item["record"]["raw"]
@@ -200,8 +215,8 @@ def _statement_rows(reader, items, report, qualification):
             raise ValueError("Treasury statement issue must name a month end")
         if raw["classification_desc"] in _MONTHS and raw["record_type_cd"] == "MTH":
             month = _MONTHS[raw["classification_desc"]]
-            year = fiscal_year - (month >= 10)
-            start, end = date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+            start = _month_start(fiscal_year, month)
+            end = date(start.year, month, calendar.monthrange(start.year, month)[1])
             kind = "month"
         elif raw["classification_desc"] == "Year-to-Date" and raw["data_type_cd"] == "T":
             start, end, kind = date(fiscal_year - 1, 10, 1), year_end, "fiscal_year_to_date"
@@ -228,10 +243,7 @@ def _statement_rows(reader, items, report, qualification):
         })
     for fiscal_year, _ in parents.values():
         end = date(fiscal_year, 9, 30) if fiscal_year < report_fy else report
-        months = [date(fiscal_year - (month >= 10), month, 1)
-                  for month in (*range(10, 13), *range(1, 10))
-                  if date(fiscal_year - (month >= 10), month, 1) <= end]
-        keys = [(fiscal_year, "month", start) for start in months]
+        keys = [(fiscal_year, "month", start) for start in _fiscal_months(fiscal_year, end)]
         ytd = (fiscal_year, "fiscal_year_to_date", date(fiscal_year - 1, 10, 1))
         if any(key not in periods for key in (*keys, ytd)):
             raise ValueError("Unsupported Treasury report shape: missing required monthly or fiscal-year-to-date period")
@@ -251,7 +263,7 @@ def _native_int(raw, key):
 
 def _table2_rows(reader, items, report, qualification):
     """Emit every native line and measure of one Table 2 issue, with its cell markers."""
-    report_fy = report.year + (report.month >= 10)
+    report_fy = _fiscal_year(report)
     lines, identities = {}, {}
     for item in items:
         raw = item["record"]["raw"]
@@ -312,16 +324,14 @@ def _check_identities(cells):
 
 def _table1_failures(cells, periods, report):
     """Count Table 2 actual cells that differ from one Table 1 release of the same issue."""
-    fy = report.year + (report.month >= 10)
+    fy = _fiscal_year(report)
     by_key = {(row["economic_fiscal_year"], row["period_kind"], row["period_start"]): row for row in periods}
-    months = [month for month in (*range(10, 13), *range(1, 10))
-              if date(fy - 1 - (month >= 10), month, 1) <= date(report.year - 1, report.month, 1)]
     try:
         expected = {
             "current_month_budget_amt": [by_key[fy, "month", date(report.year, report.month, 1)]],
             "current_fytd_budget_amt": [by_key[fy, "fiscal_year_to_date", date(fy - 1, 10, 1)]],
-            "prior_fytd_budget_amt": [by_key[fy - 1, "month", date(fy - 1 - (month >= 10), month, 1)]
-                                      for month in months],
+            "prior_fytd_budget_amt": [by_key[fy - 1, "month", start]
+                                      for start in _fiscal_months(fy - 1, date(report.year - 1, report.month, 1))],
         }
     except KeyError:
         return None
