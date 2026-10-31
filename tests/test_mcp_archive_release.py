@@ -251,7 +251,7 @@ def test_tools_describe_the_release_and_pin_query_replies(release, monkeypatch):
         return asyncio.run(tools.call_tool(name, arguments)).structured_content
 
     try:
-        listed = call("list_sources", {})["archive"]
+        listed = call("list_sources", {"subject": "archive"})["archive"]
         assert listed["release_id"] == release[1] and listed["status"] == "bound"
         assert {item["id"]: item["available_here"] for item in listed["recipes"]} == {
             "hearing_documents": True, "committee_roster": False}

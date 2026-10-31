@@ -73,9 +73,10 @@ def _tool_data(server, name, arguments):
     return asyncio.run(server.call_tool(name, arguments)).structured_content
 
 
-def _listed(reply):
-    """A list_sources reply's table entries, which it groups by subject, in the order it lists them."""
-    return [entry for group in reply["subjects"] for entry in group["tables"]]
+def _listed(server):
+    """Every table entry list_sources lists, paged by subject, in the order the subjects are listed."""
+    return [entry for group in _tool_data(server, "list_sources", {})["subjects"]
+            for entry in _tool_data(server, "list_sources", {"subject": group["subject"]})["subjects"][0]["tables"]]
 
 
 def _records(reply):
@@ -99,7 +100,7 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
 
     sources = _tool_data(server, "list_sources", {})
     declared = mcp_server._table_metadata()["org_committee_links"]
-    assert _listed(sources) == [
+    assert _listed(server) == [
         {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"], "rows": None}
     ]
     assert "fec_committees" in sources["unavailable_tables"]
@@ -197,7 +198,7 @@ def test_local_directory_runs_actual_connection_without_remote_fallback(tmp_path
     assert sources["source"] == "local"
     assert sources["base_path"] == str(tmp_path)
     assert "base_url" not in sources
-    assert [entry["table"] for entry in _listed(sources)] == ["fec_committees"]
+    assert [entry["table"] for entry in _listed(server)] == ["fec_committees"]
     assert loaded == []
     described = _tool_data(server, "describe_table", {"table": "fec_committees"})
     assert described["available"] is True
@@ -530,8 +531,7 @@ def test_connect_queries_r2_end_to_end():
     """
     server = mcp_server.build_server()
 
-    sources = asyncio.run(server.call_tool("list_sources", {}))
-    assert mcp_server.TABLES[0] in str(sources)
+    assert mcp_server.TABLES[0] in {entry["table"] for entry in _listed(server)}
 
     schema = asyncio.run(server.call_tool("describe_table", {"table": "agency_stats"}))
     assert "column" in str(schema).lower()

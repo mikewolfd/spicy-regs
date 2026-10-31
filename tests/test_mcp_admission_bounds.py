@@ -8,7 +8,7 @@ import pytest
 from spicy_regs import etl_bulk, local_data, mcp_server as server, selected_generations
 from spicy_regs.runtime_bounds import RequestBound, checkpoint, current_bound
 from tests.test_local_native_selection import selected_family
-from tests.test_mcp_server import _records, _tool_data
+from tests.test_mcp_server import _listed, _records, _tool_data
 
 
 @pytest.fixture(autouse=True)
@@ -55,7 +55,7 @@ def test_general_discovery_defers_binding_but_query_preserves_schema_refusal(mon
 
     monkeypatch.setattr(server, '_build_connection', connection)
     mcp = server.build_server()
-    listed = _tool_data(mcp, 'list_sources', {})
+    listed = _tool_data(mcp, 'list_sources', {'subject': 'views'})
     # Find the maintained name rather than assuming one from the source field.
     discovery_connection = server._cached_discovery_connection
     assert discovery_connection is not None
@@ -178,9 +178,11 @@ def test_financial_discovery_defers_exact_rows_but_query_still_admits(tmp_path, 
     monkeypatch.setattr(server, '_build_connection', lambda: connection(index))
     mcp = server.build_server()
     listed = _tool_data(mcp, 'list_sources', {})
+    views = _tool_data(mcp, 'list_sources', {'subject': 'views'})
     assert not restored
     assert listed['fec_release']['status_counts'] == {'compatible': len(specs)}
-    assert {name for entry in listed['deferred_views'] for name in entry['views']} >= {spec.view.name for spec in specs}
+    assert {name for entry in views['deferred_views'] for name in entry['views']} >= {spec.view.name for spec in specs}
+    assert sum(entry['count'] for entry in listed['deferred_views']) == sum(len(entry['views']) for entry in views['deferred_views'])
     described = _tool_data(mcp, 'describe_table', {'table': specs[0].view.name, 'detail': True})
     assert not restored
     assert specs[0].view.name not in listed['unavailable_tables']
@@ -366,8 +368,7 @@ def test_old_receipt_only_discovery_is_hidden_without_payload_restore(tmp_path, 
     monkeypatch.setattr(server, 'DATA_DIR', root)
     monkeypatch.setattr(server, 'TABLES', ())
     mcp = server.build_server()
-    listed = _tool_data(mcp, 'list_sources', {})
-    assert 'fec_collections' not in {item['table'] for group in listed['subjects'] for item in group['tables']}
+    assert 'fec_collections' not in {item['table'] for item in _listed(mcp)}
     with pytest.raises(ToolError, match='Unknown table'):
         _tool_data(mcp, 'describe_table', {'table': 'fec_collections'})
     assert server._cached_connection is None

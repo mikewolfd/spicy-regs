@@ -219,7 +219,7 @@ def test_a_matching_export_receipt_states_its_rows_labelled_as_an_export(tmp_pat
     con = server._build_connection()
     monkeypatch.setattr(server, "_get_connection", lambda: con)
     mcp = server.build_server()
-    [entry] = [t for t in _listed(_tool_data(mcp, "list_sources", {})) if t["table"] == "comments_index"]
+    [entry] = [t for t in _listed(mcp) if t["table"] == "comments_index"]
     assert entry["rows"] == 143_564 and entry["rows_basis"] == "comments_export_receipt"
     assert heads == [f"{server.R2_BASE_URL}/comments_index.parquet"]  # only the served export, not every listed file
     pin = _tool_data(mcp, "describe_table", {"table": "comments_index"})["publication"]
@@ -241,7 +241,7 @@ def test_an_export_object_that_moved_since_its_receipt_states_no_rows(tmp_path, 
     built, _ = _export_server(tmp_path, monkeypatch, etag='"moved"')
     con = server._build_connection()
     monkeypatch.setattr(server, "_get_connection", lambda: con)
-    [entry] = [t for t in _listed(_tool_data(server.build_server(), "list_sources", {}))
+    [entry] = [t for t in _listed(server.build_server())
                if t["table"] == "comments_index"]
     assert entry["rows"] is None and entry["rows_basis"] == "export_receipt_does_not_match_object"
     built[0].inner.close()
@@ -251,7 +251,7 @@ def test_without_a_receipt_an_export_states_no_rows_and_no_basis(tmp_path, monke
     built, heads = _export_server(tmp_path, monkeypatch, receipt=None)
     con = server._build_connection()
     monkeypatch.setattr(server, "_get_connection", lambda: con)
-    [entry] = [t for t in _listed(_tool_data(server.build_server(), "list_sources", {}))
+    [entry] = [t for t in _listed(server.build_server())
                if t["table"] == "comments_index"]
     assert entry == {"table": "comments_index", "label": entry["label"], "coverage": entry["coverage"], "rows": None}
     assert heads == []

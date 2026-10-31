@@ -223,8 +223,8 @@
       <h2>Tools exposed</h2>
       <p class="sub">Three read-only tools, querying parquet on Cloudflare R2 via DuckDB.</p>
       <dl>
-        <dt>list_sources</dt>
-        <dd>List the logical tables available in the dataset.</dd>
+        <dt>list_sources(subject)</dt>
+        <dd>With no subject, list the subjects with table and row counts; with one, list that subject's tables.</dd>
         <dt>describe_table(table)</dt>
         <dd>Return the column schema for one table.</dd>
         <dt>query_sql(sql, max_rows=25)</dt>

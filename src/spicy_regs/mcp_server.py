@@ -330,8 +330,9 @@ def _parse_timeout_seconds(raw: str) -> float | None:
 STATEMENT_TIMEOUT_SECONDS = _parse_timeout_seconds(STATEMENT_TIMEOUT)
 
 INSTRUCTIONS = (
-    "Query Spicy Regs public datasets across government and attributed third-party sources. Use list_sources "
-    "to discover available tables and declared outputs, describe_table for actual "
+    "Query Spicy Regs public datasets across government and attributed third-party sources. Discover tables in two steps: "
+    "list_sources with no subject lists the subjects with table and row counts, then list_sources(subject) lists "
+    "that subject's tables; unavailable_tables names declared outputs not loaded. Use describe_table for actual "
     "schemas, field meanings, identifiers and coverage caveats, and query_sql for "
     "read-only queries and joins. A declared output or coverage measurement does "
     "not establish publication or freshness. qualification reports the output "
@@ -456,6 +457,8 @@ MEMORY_LIMIT = _resolve_memory_limit()
 TEMP_DIR = _resolve_temp_dir()
 TOOL_CONCURRENCY = _resolve_tool_concurrency()
 REPLY_CHARS = _resolve_reply_chars()
+#: list_sources' page name for the tables the dictionary gives no subject; their group's subject stays null.
+UNASSIGNED_SUBJECT = "unassigned"
 #: Room a refusal keeps for the clause it asks the caller to add (ORDER BY, LIMIT, OFFSET), which the reply echoes.
 RE_ASK_CHARS = 100
 
@@ -2573,36 +2576,26 @@ def _tools() -> list[Tool]:
         return lookup(namespace, identifier, on_date=on_date)
 
     @tool
-    def list_sources() -> dict[str, Any]:
-        """List tables by subject (null: unassigned), label, coverage and pinned rows; views grouped.
+    def list_sources(subject: Annotated[str | None, Field(min_length=1, max_length=64)] = None) -> dict[str, Any]:
+        """List subjects, then one subject's tables: call with no subject first, then list_sources(subject).
 
-        FEC subject tables contain the build-shaped facts. Entries marked child_query
-        expose response or array-element rows and name their source_tables.
-        Categories distinguish diagnostics, evidence, leads and samples. Generic
-        query_data declarations are omitted here; absent category can also mean
-        undeclared. describe_table retains declarations and limits.
-        coverage is the dictionary's kind: true_range, window, sampled,
-        derived, not_a_range or empty; a window or a sample does not hold the
-        source's full history. rows is the pinned count for a managed or
-        snapshot table (describe_table gives the pin): 0 means this
-        generation publishes no rows; null means no pointer pins the table. A
-        later run can land after the pin; rows is not a freshness claim.
-        A comments export at a fixed URL is not pinned: rows_basis
-        comments_export_receipt marks its export receipt's count, stated while
-        the file matched the receipt when this connection was built (a later
-        statement can read a newer export); export_receipt_does_not_match_object
-        means the file moved and rows is null.
-        Discovery binds source schemas without restoring receipt-backed rows.
-        deferred_views names views whose schema binding or exact receipt admission remains pending
-        until query_sql opens a separate query connection, grouped by reason.
-        Relationship groups list identities; describe_table gives labels and meanings.
-        Deferred views supply no output schema or execution claim. Source schemas
-        are not a data or freshness audit. Call describe_table before querying for
-        columns, caveats, joins, data pins and ledger audit.
-        fec_release.status_counts summarizes compatible and disabled views;
-        it does not qualify raw financial totals. Available and unavailable
-        names remain listed. describe_table gives each view's release evidence
-        and reasons, including unavailable views.
+        With no subject: each subject's table_count and rows total (unassigned: tables the dictionary gives
+        no subject), relationship and deferred view counts, unavailable_tables, the receipt summary and
+        fec_release.status_counts. A subject returns its tables in full. views names relationship views by
+        summary, unavailable views, deferred views by the reason schema binding or receipt admission waits
+        for query_sql's own connection, and the FEC release; archive gives the bound archive release. An
+        unknown subject is refused with the names.
+        A table gives label, coverage and pinned rows. coverage is the dictionary's kind: true_range, window,
+        sampled, derived, not_a_range or empty; a window or a sample does not hold the source's full history.
+        rows is the pinned count (describe_table gives the pin): 0 means this generation publishes no rows;
+        null means no pointer pins the table. A later run can land after the pin; rows is not a freshness
+        claim. rows_basis comments_export_receipt marks a fixed-URL comments export's receipt count;
+        export_receipt_does_not_match_object means the file moved and rows is null. child_query entries
+        expose response or array-element rows and name source_tables. category marks diagnostics, evidence,
+        leads and samples; generic query_data is omitted and absent can mean undeclared.
+        Deferred views supply no output schema or execution claim. fec_release.status_counts summarizes
+        compatible and disabled views; it does not qualify raw financial totals. Call describe_table before
+        querying for columns, caveats, joins, data pins, ledger audit and each view's release evidence.
         """
         cursor = _get_connection().cursor()
         with _statement_timeout(cursor):
@@ -2648,27 +2641,58 @@ def _tools() -> list[Tool]:
                         if relationship else {})})
         if None in subjects:
             subjects[None] = subjects.pop(None)
-        return {
-            **_source_details(cursor),
-            "subjects": [{"subject": subject, "tables": tables} for subject, tables in subjects.items()],
-            "relationship_views": [{"views": names} for names in views.values()],
-            "relationship_view_details": "Call describe_table for group labels, full meanings, identities, dependencies and purpose limits.",
-            "category_details": "Generic query_data declarations are omitted; absent category can also mean undeclared. describe_table gives declared categories and limits.",
-            "unavailable_tables": [name for name in (*TABLES, *relationships)
-                                   if name not in available and relationships.get(name, {}).get("status") != "deferred"],
-            "deferred_views": [{"views": names, "reason": reason, "query_admission": admission}
-                               for (reason, admission), names in deferred.items()],
-            "etl_receipts": {
-                "available": "etl_receipts" in available,
-                "query_table": "etl_receipts" if "etl_receipts" in available else None,
-                "dataset_count": len(metadata.get("etl_receipts", {}).get("datasets", [])),
-                "details": "describe_table('etl_receipts') gives datasets, columns and every selected family's generation/hash/row pins.",
-                "members": [{"family": name} for name in _receipt_families(index, local)],
-                "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
-            },
-            "fec_release": _fec_release_reply(cursor),
-            "archive": _archive_summary(archive, available),
-        }
+        # Paged by subject (owner decision 2026-10-31, ss-ehe5): the whole catalog reached 39,135 of the 40,000-character
+        # reply budget, and every new table added about 111. A page's table entries are exactly the whole reply's were.
+        pages = {UNASSIGNED_SUBJECT if name is None else name: name for name in subjects}
+        other_pages = ["views", *(["archive"] if archive else [])]
+        # A disabled FEC release makes every qualified view unavailable (72 names), so view names stay on their page.
+        present = set(available)
+        unavailable = dict.fromkeys(name for name in (*TABLES, *relationships)
+                                    if name not in present and relationships.get(name, {}).get("status") != "deferred")
+        declared = set(TABLES)
+        unavailable_views = [name for name in unavailable if name not in declared]
+        if subject is None:
+            receipt_families = _receipt_families(index, local)
+            return {
+                **_source_details(cursor),
+                "subjects": [{"subject": UNASSIGNED_SUBJECT if name is None else name, "table_count": len(tables),
+                              "rows": sum(table["rows"] or 0 for table in tables)} for name, tables in subjects.items()],
+                "unavailable_tables": [name for name in unavailable if name in declared],
+                "relationship_views": {"available": sum(len(names) for names in views.values()),
+                                       "unavailable": len(unavailable_views)},
+                "deferred_views": [{"count": len(names), "reason": reason, "query_admission": admission}
+                                   for (reason, admission), names in deferred.items()],
+                "etl_receipts": {
+                    "available": "etl_receipts" in available,
+                    "dataset_count": len(metadata.get("etl_receipts", {}).get("datasets", [])),
+                    "family_count": len(receipt_families),
+                    "details": "describe_table('etl_receipts') gives datasets, columns and every selected family's generation/hash/row pins.",
+                    "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
+                },
+                "fec_release": {"status_counts": _fec_release_reply(cursor)["status_counts"]},
+                **({"archive": {"status": archive["status"], "views": len(archive.get("views", {}))}} if archive else {}),
+                "pages": other_pages,
+                "details": "list_sources(subject) takes a subject above or one of pages.",
+            }
+        if subject in pages:
+            return {
+                **_source_details(cursor),
+                "subjects": [{"subject": pages[subject], "tables": subjects[pages[subject]]}],
+                "category_details": "Generic query_data declarations are omitted; absent category can also mean undeclared. describe_table gives declared categories and limits.",
+            }
+        if subject == "views":
+            return {
+                **_source_details(cursor),
+                "relationship_views": [{"views": names} for names in views.values()],
+                "relationship_view_details": "Call describe_table for group labels, full meanings, identities, dependencies and purpose limits.",
+                "unavailable_views": unavailable_views,
+                "deferred_views": [{"views": names, "reason": reason, "query_admission": admission}
+                                   for (reason, admission), names in deferred.items()],
+                "fec_release": _fec_release_reply(cursor),
+            }
+        if subject == "archive" and archive:
+            return {**_source_details(cursor), "archive": _archive_summary(archive, available)}
+        raise ValueError(f"Unknown subject '{subject}'. list_sources takes one of: {', '.join([*pages, *other_pages])}.")
 
     @tool
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:

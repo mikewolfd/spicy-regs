@@ -32,9 +32,10 @@ def test_primary_and_necessary_children_share_discovery(monkeypatch):
     server: Any = mcp_server.build_server()
     sources = asyncio.run(server.call_tool("list_sources", {})).structured_content
     assert "query_views" not in sources
-    names = {item["table"]: item for item in _listed(sources)}
+    names = {item["table"]: item for item in _listed(server)}
     assert "category" not in names[table]
-    assert "undeclared" in sources["category_details"]
+    page = asyncio.run(server.call_tool("list_sources", {"subject": "campaign_finance"})).structured_content
+    assert "undeclared" in page["category_details"]
     primary = asyncio.run(server.call_tool("describe_table", {"table": table})).structured_content
     assert primary["metadata"]["category"] == "query_data"
     assert names["fec_filing_text"]["role"] == "child_query"

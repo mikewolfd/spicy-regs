@@ -387,10 +387,18 @@ FEC subject tables are shaped at build time. Necessary response/array child view
 appear in the same table list with `role: child_query` and their `source_tables`.
 See [FEC tables and child rows](docs/fec-query-views.md) for grains, evidence and release limits.
 
-`list_sources` returns each queryable table in `tables` with its label and
-coverage kind (`true_range`, `window`, `sampled`, `derived`, `not_a_range` or
-`empty`), the relationship views grouped under their shared summary, and
-declared names without a loaded view in `unavailable_tables`. Discovery checks
+`list_sources` is used in two steps. With no argument it lists each subject
+with its table count and pinned row total (`unassigned` holds tables the
+dictionary gives no subject), declared tables without a loaded view in
+`unavailable_tables`, relationship and deferred view counts, the receipt
+summary and the FEC release status counts. `list_sources(subject)` then returns
+that subject's tables with their label, coverage kind (`true_range`, `window`,
+`sampled`, `derived`, `not_a_range` or `empty`) and pinned rows; an unknown
+subject is refused with the valid names. The `views` page lists the relationship
+views grouped under their shared summary, unavailable views, deferred views and
+the FEC release; the `archive` page gives the bound archive release. The whole
+catalog in one reply had reached 39,135 of the 40,000-character reply budget
+(2026-10-31); each page is now held 1,000 characters under it. Discovery checks
 selected source schemas without restoring receipt-backed rows. `deferred_views`
 lists views whose exact receipt admission and output schema remain pending;
 `query_sql` validates those rows in a separate query connection. Matching FEC

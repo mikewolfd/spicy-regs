@@ -410,8 +410,11 @@ def test_hosted_readback_counts_all_source_origins_and_binds_family_among_other_
                 assert tool != "read_receipt_fields"
                 assert arguments.get("table") != "etl_receipts"
                 assert "FROM etl_receipts" not in arguments.get("sql", "")
-            if tool == "list_sources":
-                body = dict(tables=[dict(table=key.removesuffix(".parquet")) for key in family["tables"]])
+            if tool == "list_sources" and "subject" in arguments:
+                body = dict(subjects=[dict(subject=None, tables=[dict(table=key.removesuffix(".parquet"))
+                                                                 for key in family["tables"]])])
+            elif tool == "list_sources":
+                body = dict(subjects=[dict(subject="unassigned", table_count=len(family["tables"]), rows=0)])
             elif tool == "describe_table":
                 body: dict[str, object] = dict(available=True)
                 if arguments["table"] == "scorecard_member_ratings":

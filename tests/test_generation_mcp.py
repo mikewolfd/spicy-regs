@@ -318,8 +318,7 @@ def test_admitted_table_without_dictionary_is_available_but_helpers_are_not(tmp_
     inner.execute("CREATE TABLE unrelated_helper (id VARCHAR)")
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: inner)
     server = mcp_server.build_server()
-    result = _tool_data(server, "list_sources", {})
-    assert [entry["table"] for entry in _listed(result)] == ["extra"]
+    assert [entry["table"] for entry in _listed(server)] == ["extra"]
     described = _tool_data(server, "describe_table", {"table": "extra"})
     assert described["publication"]["status"] == "managed_generation"
     assert described["available"] is True

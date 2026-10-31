@@ -13,7 +13,7 @@ import pyarrow.parquet as pq
 from spicy_regs import citation_receipts as inputs, mcp_server
 from spicy_regs.selected_generations import SelectedDataset, remember_selection
 from tests.test_citation_receipts import select, occurrence
-from tests.test_mcp_server import _tool_data
+from tests.test_mcp_server import _listed, _tool_data
 from tests.test_receipt_key_index import sidecar
 from tests.receipt_lookup_fixtures import index_of, published
 
@@ -161,8 +161,7 @@ def test_real_source_listing_and_sql_do_not_prepare_citations(tmp_path, monkeypa
     with mcp_server._build_connection() as con:
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
         server = mcp_server.build_server()
-        listing = _tool_data(server, "list_sources", {})
-        assert "document_citations" in json.dumps(listing)
+        assert "document_citations" in {entry["table"] for entry in _listed(server)}
         assert not inputs._has_inputs(con)
         result = _tool_data(server, "query_sql", {"sql": "SELECT count(*) AS n FROM document_citations"})
         assert result["rows"] == [[1]]

@@ -157,7 +157,8 @@ def test_compatible_mcp_responses_include_exact_receipt_dependency_and_consumer_
         result = _tool_data(mcp, "query_sql", {"sql": f"SELECT * FROM {name}"})
         attestation = result["publication"][name]["release_compatibility"]
         assert _records(result) == [{"id": 1}]
-        assert attestation["receipt_sha256"] == discovery["fec_release"]["receipt_sha256"]
+        views = _tool_data(mcp, "list_sources", {"subject": "views"})
+        assert attestation["receipt_sha256"] == views["fec_release"]["receipt_sha256"]
         full = described["publication"]["release_compatibility"]
         assert full["consumer"] == consumer
         assert full["dependencies"]["fec_filings"] == release.captured_table(index, "fec_filings")
@@ -220,7 +221,7 @@ def test_discovery_fits_sse_limit_with_many_views_and_partitioned_dependencies(t
     with connection(index) as con:
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         with TestClient(server.build_app()) as client:
-            listed = call(client, "list_sources", {})
+            listed = call(client, "list_sources", {"subject": "views"})
             # MCP sends both text and structured content in the same SSE event.
             assert len(json.dumps(listed).encode()) < 1024 * 1024
             summary = listed["structuredContent"]["fec_release"]
@@ -286,8 +287,9 @@ def test_receipt_or_deployment_failure_leaves_raw_tables_queryable(tmp_path, mon
         mcp = server.build_server()
         listed = _tool_data(mcp, "list_sources", {})
         assert listed["fec_release"]["status_counts"] == {"disabled": len(specs)}
+        unavailable = _tool_data(mcp, "list_sources", {"subject": "views"})["unavailable_views"]
         for spec in specs:
-            assert spec.view.name in listed["unavailable_tables"]
+            assert spec.view.name in unavailable
             described = _tool_data(mcp, "describe_table", {"table": spec.view.name})
             assert described["relationship"]["release_compatibility"]["status"] == "disabled"
             assert described["relationship"]["release_compatibility"]["reasons"]
