@@ -582,6 +582,33 @@ Export to a staging directory and select it with its matching candidate as shown
 above; direct export to the selected public directory would leave the local
 selection's manifest and member pins stale.
 
+For a local refresh, pass `export --completion-cache <selected-cache>` to retain
+native export completion under that cache's `.export-completions/` directory.
+The exporter validates each shard once, hashes the candidate, checks the written
+members, and atomically records their relationship. The record binds the candidate's
+file identity, implementation and dependency versions, page layout, staging path,
+member hashes, and the external receipt paths actually consulted, including absent
+references. It is local evidence owned by the exporter; do not copy admissions with
+an export or write them yourself. The cache has the same local trust boundary as
+`current.json` and `selection.json`.
+
+`select` rechecks those member bytes and reference identities, along with its
+existing candidate, raw inventory, sidecar and rollback checks. It skips the second
+export and Parquet row decode only for a matching native completion. Missing
+completion uses canonical replay; a present but changed completion refuses.
+Retrying a completed export after losing its command response reuses the record.
+After selection moves the candidate and staging members, recover through the
+native selection controls rather than rerunning export. Retain the admission with
+its run until completion or investigation ends; it may then be removed with that
+run's diagnostic artifacts. It does not establish a new current selection.
+
+Candidate refreshes add `files_holdings(collection_id,status,sha256,id)` once to
+older indexes. This covers compact summary reads while retaining `files_collection`
+for ordered export. The migration has an initial scan and storage cost; inherited
+physical and foreign-key checks remain. Named start/end phase diagnostics go to
+stderr, outside catalogue identity, so a long query or check can be identified
+before the command returns its final report.
+
 Copy the whole raw archive to mirror it. Transfer original objects before their
 acquisition receipts, and transfer the frozen snapshot after its selected base
 indexes. Verify the destination before treating the mirror as complete. Catalog
