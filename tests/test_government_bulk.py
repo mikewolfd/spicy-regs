@@ -243,3 +243,27 @@ def test_mapped_dataset_refuses_changed_source_schema_when_bulk_is_required(tmp_
     with etl_bulk.bulk_limits(threads=1, memory_limit="1GB", require_bulk=True):
         with pytest.raises(ValueError, match="reference fallback disabled"):
             gr.migrate_outputs((source,), generation_id="refuse-mapped-row-route")
+
+
+def test_stripped_text_is_the_same_in_both_writers_and_the_receipt_keeps_it_as_written(tmp_path):
+    """fcc_proceedings ``rule_section`` (owner, 2026-10-31): edges stripped, blank as NULL, the original in the receipt.
+
+    Spellings from the retained 2026-10-08 walk (a single space, `` Part 76``) plus the edges the two writers could
+    disagree on: every ASCII whitespace character DuckDB's ``trim`` is given, and non-ASCII spaces, which stay."""
+    from spicy_regs.etl_receipts import _unpack
+
+    spellings = [None, "", " ", "   ", " Part 76", "Part 76 ", "\t73.202(B)\r\n", "\v\f", "PART 80 AND 87",
+                 "\xa0Part 1\xa0", " ", "a  b"]
+    rows = [{**_generic_row("fcc_proceedings", n), "rule_section": value} for n, value in enumerate(spellings)]
+    source = _source(tmp_path, "fcc_proceedings", rows)
+    row, bulk, routed = _write_both(tmp_path, "fcc_proceedings", source)
+    published = [r["rule_section"] for r in pq.read_table(bulk / "s.parquet").to_pylist()]
+    assert published == [None, None, None, None, "Part 76", "Part 76", "73.202(B)", None, "PART 80 AND 87",
+                         "\xa0Part 1\xa0", " ", "a  b"]
+    assert pq.read_table(bulk / "s.parquet").to_pylist() == pq.read_table(row / "s.parquet").to_pylist()
+    receipts = pq.read_table(bulk / "r.parquet").to_pylist()
+    assert receipts == pq.read_table(row / "r.parquet").to_pylist()
+    kept = [dict(_unpack(json.loads(r["processing_json"]))["raw_record"])["rule_section"] for r in receipts]
+    assert kept == spellings
+    # Plain spellings stay on the SQL path; only what DuckDB spells differently in JSON reaches the row code.
+    assert routed <= 2

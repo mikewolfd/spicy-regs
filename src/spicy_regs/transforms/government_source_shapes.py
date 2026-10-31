@@ -107,10 +107,6 @@ LEGACY_COLUMNS = {
         "filing_status",
         "date_created",
         "date_closed",
-        "comment_start_date",
-        "comment_end_date",
-        "reply_comment_start_date",
-        "reply_comment_end_date",
         "filed_by",
         "date_nprm",
         "date_reporting_and_order",
@@ -356,6 +352,14 @@ def subject_schema(dataset: str) -> pa.Schema:
 
 SUBJECT_SCHEMAS = {dataset: subject_schema(dataset) for dataset in LEGACY_COLUMNS}
 
+#: Text columns published with edge whitespace stripped and a blank (empty or whitespace-only) value as NULL. The
+#: receipt's ``raw_record`` keeps the value as written. fcc_proceedings ``rule_section`` (owner, 2026-10-31): FCC staff
+#: type it freely, so ECFS writes a single space for "none" (643 of 21,705 dockets, walk 2026-10-08) and pads some
+#: values (`` Part 76``); ``government_bulk`` states the same rule in SQL.
+STRIPPED_TEXT = {"fcc_proceedings": frozenset({"rule_section"})}
+#: The whitespace stripped: ASCII only, the set DuckDB's ``trim`` is given, so both writers agree on every value.
+EDGE_WHITESPACE = " \t\n\v\f\r"
+
 
 def _text(value: Any, *, identifier: bool = False) -> str | None:
     if value is None or isinstance(value, str):
@@ -561,6 +565,8 @@ def map_subject(dataset: str, row: Mapping[str, Any], *, generation_id: str | No
                 raise GovernmentShapeError(f"{name}: invalid offset timestamp") from error
         elif pa.types.is_string(field.type):
             value = _text(value)
+            if value is not None and name in STRIPPED_TEXT.get(dataset, ()):
+                value = value.strip(EDGE_WHITESPACE) or None
         subject[name] = value
     if subject.get(IDENTITY_FIELDS[dataset][0]) in (None, ""):
         raise GovernmentShapeError(f"{dataset}: missing stable identity")

@@ -59,8 +59,9 @@ from spicy_regs.transforms.parquet_rows import write_rows
 #: family's. Columns returned from the receipt to the subject table on 2026-10-05: gao_decisions
 #: ``b_numbers_truncated``; gao_recommendations ``first_seen`` and ``last_seen``. Columns added on 2026-10-05 (owner
 #: decision 2026-10-04): gao_reports ``major_rule_agency``, ``major_rule_rins`` and ``major_rule_fr_citations``.
-#: Columns added on 2026-10-30 (ss-17vd): fcc_proceedings ``date_nprm``, ``date_reporting_and_order`` and
-#: ``rule_section``, ECFS fields the July 2026 column list left out by mistake.
+#: fcc_proceedings gs/2 (ss-17vd): ``date_nprm``, ``date_reporting_and_order`` and ``rule_section`` added, ECFS fields
+#: the July 2026 column list left out by mistake; the four comment-window columns ECFS never filled dropped (owner,
+#: 2026-10-31).
 POLICY_VERSIONS = {
     "fcc_filings": "government-sources/3",
     "fcc_proceedings": "government-sources/2",
@@ -103,7 +104,8 @@ def _without(dataset: str, *columns: str) -> DatasetPolicy:
 #: original rows; every write uses POLICIES. On 2026-10-04 gao-reports published gao_decisions without
 #: ``b_numbers_truncated`` and gao-recommendations published without ``first_seen`` and ``last_seen``; gao-reports
 #: published gao_reports to 2026-10-05 without the three major-rule letter columns, which no receipt held either.
-#: fcc-proceedings published fcc_proceedings to 2026-10-30 without its three ECFS NPRM/order/rule-section columns.
+#: fcc-proceedings published fcc_proceedings to 2026-10-30 without its three ECFS NPRM/order/rule-section columns and
+#: with the four always-NULL comment-window columns.
 EARLIER_POLICIES: dict[str, tuple[DatasetPolicy, ...]] = {
     "gao_decisions": (_without("gao_decisions", "b_numbers_truncated"),),
     "gao_recommendations": (_without("gao_recommendations", "first_seen", "last_seen"),),

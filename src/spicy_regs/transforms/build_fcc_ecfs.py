@@ -102,12 +102,10 @@ def _shape_proceeding(raw: dict) -> dict:
         "filing_status": raw.get("filingStatus"),
         "date_created": raw.get("date_proceeding_created"),
         "date_closed": raw.get("date_closed"),
-        "comment_start_date": raw.get("comment_start_date"),
-        "comment_end_date": raw.get("comment_end_date"),
-        "reply_comment_start_date": raw.get("comment_reply_start_date"),
-        "reply_comment_end_date": raw.get("comment_reply_end_date"),
         "filed_by": raw.get("filed_by"),
-        # Published as ECFS writes them: offset timestamps stay VARCHAR, and rule_section keeps staff spacing.
+        # Copied as ECFS writes them: offset timestamps stay VARCHAR. rule_section keeps staff spacing here, so the
+        # receipt's raw_record holds it; map_subject strips it for the published row (STRIPPED_TEXT).
+        # ECFS's four comment-window keys are not read: never filled in 250,251 retained records (ss-17vd).
         "date_nprm": raw.get("date_nprm"),
         "date_reporting_and_order": raw.get("date_reporting_and_order"),
         "rule_section": raw.get("rule_section"),

@@ -76,17 +76,22 @@ Entries link to the pull request that introduced the change.
     rule's reads back. The rollup's cron moves from 17:00 to 17:20 UTC, after
     `rollup-gao-recommendations`.
 
-- **`fcc_proceedings`: three ECFS proceeding fields, published as written**
-  (ss-17vd). `date_nprm`, `date_reporting_and_order` and `rule_section` are
-  VARCHAR columns copied from the proceeding's selected ECFS document with no
-  trimming or date parsing, like `date_created`; a `rule_section` of a single
-  space stays a single space. The table moves to policy
-  `government-sources/2`; receipts written under `/1` still validate against
+- **`fcc_proceedings`: three ECFS proceeding fields added, four empty ones dropped**
+  (ss-17vd). `date_nprm` and `date_reporting_and_order` are VARCHAR columns
+  copied from the proceeding's selected ECFS document with no date parsing,
+  like `date_created`. `rule_section` is published with leading and trailing
+  whitespace stripped and a blank value as NULL (owner decision 2026-10-31):
+  ECFS writes an empty string or a single space for "none" and pads some
+  values; each receipt's `raw_record` keeps the value as written. The four
+  comment-window columns (`comment_start_date`, `comment_end_date`,
+  `reply_comment_start_date`, `reply_comment_end_date`) are removed: ECFS
+  never filled them (0 of 21,724 live rows; 26,517 of 250,251 retained records
+  carry the keys, all null). The table moves to policy `government-sources/2`
+  once for both changes; receipts written under `/1` still validate against
   its frozen descriptor. Nothing is backfilled: each daily run re-walks every
-  proceeding, so the next run republishes the whole table with the new
-  columns, and every row's `subject_version` changes then. The four
-  comment-window columns are kept; their descriptions now say ECFS never
-  fills them.
+  proceeding, so the next run republishes the whole table, and every row's
+  `subject_version` changes then. The rollup's unused `fcc_since` dispatch
+  input is removed; proceedings are always walked whole.
 
 ### Changed
 

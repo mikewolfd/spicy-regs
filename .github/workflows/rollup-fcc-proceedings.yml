@@ -1,7 +1,7 @@
 name: Rollup — fcc_proceedings
 on:
   schedule:
-    # 18:10 UTC — incremental merge of new FCC ECFS proceedings.
+    # 18:10 UTC — a whole walk of every FCC ECFS proceeding; no prior table is read or merged.
     - cron: '10 18 * * *'
   workflow_dispatch:
     inputs:
@@ -10,11 +10,6 @@ on:
         required: false
         default: false
         type: boolean
-      fcc_since:
-        description: 'Optional backfill start date (YYYY-MM-DD)'
-        required: false
-        default: ''
-        type: string
 jobs:
   run:
     uses: ./.github/workflows/_rollup.yml
@@ -22,4 +17,3 @@ jobs:
     with:
       command: run-rollup-fcc-proceedings
       skip_upload: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_upload || false }}
-      fcc_since: ${{ github.event_name == 'workflow_dispatch' && inputs.fcc_since || '' }}

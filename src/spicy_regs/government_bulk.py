@@ -24,7 +24,9 @@ from spicy_regs import etl_bulk
 from spicy_regs.etl_receipts import DatasetPolicy, _unpack, exact_json
 from spicy_regs.native_types import described_schema, extra_field_checker
 from spicy_regs.transforms.government_source_shapes import (
+    EDGE_WHITESPACE,
     LEGACY_COLUMNS,
+    STRIPPED_TEXT,
     SUBJECT_SCHEMAS,
     GovernmentShapeError,
     list_value,
@@ -101,6 +103,9 @@ def _column(dataset: str, field: pa.Field, names: Sequence[str]) -> tuple[str, s
     elif pa.types.is_timestamp(dtype):
         value = f"CASE WHEN regexp_full_match({s}, {_STAMP}) THEN TRY_CAST({s} AS TIMESTAMPTZ) END"
     elif pa.types.is_string(dtype):
+        if name in STRIPPED_TEXT.get(dataset, ()):
+            edges = " || ".join(f"chr({ord(c)})" for c in EDGE_WHITESPACE)
+            return f"NULLIF(trim({s}, {edges}), '')", None
         return s, None
     else:
         raise etl_bulk.NotBulkEligible(f"{dataset}.{name}: no SQL mapping for {dtype}")
