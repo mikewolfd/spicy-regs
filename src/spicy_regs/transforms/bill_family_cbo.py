@@ -310,7 +310,9 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
     from spicy_docs.reading.pdf_bytes import check_pdf_bytes
     from spicy_docs.sources.cbo import (
         CboCardAbsent,
+        CboCostEstimatesFeed,
         archived_publication_id,
+        cbo_feed_bills,
         parse_cbo_estimate_card,
         select_estimate_pdf,
     )
@@ -324,6 +326,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
             pages.setdefault(identifier, []).append(candidate)
         elif candidate.mime == "application/pdf" and candidate.status == 200:
             pdfs.setdefault(urlsplit(candidate.original_url).path, []).append(candidate)
+    item_bills = cbo_feed_bills(CboCostEstimatesFeed(tuple(items)), congress).by_publication()
     results: list[ArchivedCard] = []
     fetched_pages = fetched_pdfs = 0
     for item in items:
@@ -354,7 +357,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
                            outcome="refused", message=str(refused))
             results.append(ArchivedCard(item.publication_id, "refused", str(refused), page=page, captures=captures))
             continue
-        chosen_pdf = select_estimate_pdf(card.documents, item, congress, pdfs)
+        chosen_pdf = select_estimate_pdf(card.documents, item, item_bills.get(item.publication_id, ()), pdfs)
         pdf = None
         if chosen_pdf is not None and fetched_pdfs < max_pdfs:
             fetched_pdfs += 1
