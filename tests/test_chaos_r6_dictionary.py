@@ -63,11 +63,15 @@ def test_a_source_family_shares_one_subject(subject, tables):
 
 
 def test_every_relationship_view_has_a_base_table_with_a_subject():
-    """A relationship view takes its base table's subject: the first table it reads, which must be a dictionary table."""
+    """A relationship view takes its base table's subject: the first table it reads, which must be a dictionary table.
+
+    A vendored reference table (role ``reference``) reads no held table, so it has no base to take a subject from.
+    """
     from spicy_regs.relationship_views import RELATIONSHIP_VIEWS, SQL_RELATIONSHIP_VIEWS
 
     entries = dd.load_descriptions()
-    bases = {spec.source_table for spec in RELATIONSHIP_VIEWS} | {next(iter(spec.required)) for spec in SQL_RELATIONSHIP_VIEWS}
+    bases = {spec.source_table for spec in RELATIONSHIP_VIEWS} | {
+        next(iter(spec.required)) for spec in SQL_RELATIONSHIP_VIEWS if spec.required or spec.role != "reference"}
     from spicy_regs.fec_receipt_adapter import processing_declarations
     processing = processing_declarations()
     assert {base for base in bases if (entries.get(base, {}).get("subject") or

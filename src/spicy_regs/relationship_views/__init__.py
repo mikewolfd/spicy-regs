@@ -29,6 +29,7 @@ from .comments import install_comment_references
 from .congress import CONGRESS_RELATIONSHIPS, NATIVE_CONGRESS_RELATIONSHIPS, NATIVE_COMMUNICATION_RINS
 from .core import ArrayRelationship, install_arrays
 from .regulatory import REGULATORY_RELATIONSHIPS
+from .reference import REFERENCE_VIEWS
 from .uscode import USCODE_VIEWS
 
 RELATIONSHIP_VIEWS = (*CONGRESS_RELATIONSHIPS, *REGULATORY_RELATIONSHIPS, *ARTIFACT_TOPIC_RELATIONSHIPS)
@@ -49,6 +50,7 @@ SQL_RELATIONSHIP_VIEWS = (
     *LOBBYING_NATIVE_VIEWS,
     *LIFECYCLE_DATE_VIEWS,
     *USCODE_VIEWS,
+    *REFERENCE_VIEWS,
 )
 
 
@@ -87,7 +89,7 @@ def describe_relationship_views(
         if spec.rule_version not in versions[spec.name]:
             versions[spec.name].append(spec.rule_version)
         if spec.name not in results:
-            results.update(install_sql_views(connection, (), [spec], publication))
+            results.update(install_sql_views(connection, (), [spec], publication, bind=False))
     reachable = set(available)
     while True:
         added = {name for name, entry in results.items() if set(entry['dependencies']) <= reachable} - reachable

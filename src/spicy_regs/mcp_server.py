@@ -1085,7 +1085,11 @@ def _build_connection_inputs(con, publication):
         if immutable_inputs is not None and immutable_inputs != _immutable_metadata_inputs(
                 publication_index, rulemaking, allowed_paths):
             raise RuntimeError("Immutable SQL inputs changed before the security lock")
-        _apply_security_settings(con, allowed_paths)
+        from spicy_regs.relationship_views.reference import reference_paths
+
+        # The vendored reference files are package bytes, not immutable published members: admit them after the
+        # metadata-cache check so they do not turn that cache off.
+        _apply_security_settings(con, [*allowed_paths, *reference_paths()])
     except BaseException:
         con.close()
         raise

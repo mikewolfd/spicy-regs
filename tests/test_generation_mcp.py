@@ -15,6 +15,7 @@ import spicy_regs.native_types  # noqa: F401
 from spicy_regs import data_dictionary as dd
 from spicy_regs import mcp_server
 from spicy_regs.pipelines.rulemaking_dataset import RulemakingDatasetPipeline
+from spicy_regs.relationship_views.reference import REFERENCE_TABLES, reference_paths
 from spicy_regs.sources import publication as pub
 from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
 from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
@@ -24,6 +25,11 @@ from spicy_regs.transforms.build_regulatory_agenda import ITEM_COLUMNS, RELATION
 from spicy_regs.transforms.build_rule_targets import COLUMNS as RULE_TARGET_COLUMNS
 from tests.generation_fakes import Store
 from tests.test_generation_publication import build, publish
+
+#: RefSpec's vendored reference tables: every connection serves them, after its published tables, and admits
+#: their package paths after its published members (reference/refspec/README.md).
+REFERENCE = list(REFERENCE_TABLES)
+REFERENCE_PATHS = list(reference_paths())
 
 MANAGED_ONLY_RELEASE_TABLES = (
     "administration_policy_bill_links", "administration_policy_statements",
@@ -244,7 +250,7 @@ def test_views_and_status_use_one_captured_generation(tmp_path, monkeypatch):
     [con] = built
     assert not con.closed
     status = mcp_server._publication_status(con.cursor())
-    assert status["tables"] == ["a", "b", "legacy"]
+    assert status["tables"] == ["a", "b", "legacy", *REFERENCE]
     assert status["publication"]["legacy"] == {"status": "legacy_unversioned"}
     assert status["publication"]["a"]["artifact_digest"] == index["families"]["test"]["artifactDigest"]
     assert con.inner.execute("SELECT * FROM a JOIN b USING (id)").fetchall() == [("one",)]
@@ -406,7 +412,7 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     assert reads.count(pointer) == 1  # once per connection build, not per call
     prefix = f"{mcp_server.R2_BASE_URL}/materialized/rulemaking/snapshots"
     expected = [f"{prefix}/{SNAPSHOT_A}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
-    assert first.allowed_paths == expected
+    assert first.allowed_paths == [*expected, *REFERENCE_PATHS]
     assert sorted(first.seen) == sorted(expected)
 
     monkeypatch.setattr(mcp_server, "_CONNECTION_TTL_SECONDS", 0.0)
@@ -423,7 +429,7 @@ def test_rulemaking_views_read_the_pointers_snapshot_and_a_moved_pointer_at_the_
     [_, second] = built
     assert reads.count(pointer) == 3  # the rebuild pins the pointer its poll read
     expected = [f"{prefix}/{SNAPSHOT_B}/{table}.parquet" for table in dd.RULEMAKING_TABLES]
-    assert second.allowed_paths == expected
+    assert second.allowed_paths == [*expected, *REFERENCE_PATHS]
     assert sorted(second.seen) == sorted(expected)
     assert second.inner.execute(query).fetchall() == [("EPA-B",)]
     assert first.inner.execute(query).fetchall() == [("EPA-A",)]  # a connection keeps the snapshot it pinned
@@ -496,8 +502,8 @@ def test_no_published_pointer_leaves_the_rulemaking_tables_unavailable(tmp_path,
     built = connection_fixture(monkeypatch, pub.empty_index(), {}, tables=dd.RULEMAKING_TABLES)
     mcp_server._build_connection()
     [con] = built
-    assert mcp_server._publication_status(con.cursor())["tables"] == []
-    assert con.allowed_paths == []
+    assert mcp_server._publication_status(con.cursor())["tables"] == REFERENCE
+    assert con.allowed_paths == REFERENCE_PATHS
     assert sorted(con.seen) == sorted(f"{mcp_server.R2_BASE_URL}/{table}.parquet" for table in dd.RULEMAKING_TABLES)
 
 
@@ -576,10 +582,10 @@ def test_the_index_wins_over_the_snapshot_for_a_table_both_name(tmp_path, monkey
         f"{base}/{pub.single_member(index, 'b.parquet').path}",
         f"{base}/{snapshot_key}",
     ]
-    assert con.allowed_paths == expected
+    assert con.allowed_paths == [*expected, *REFERENCE_PATHS]
     assert sorted(con.seen) == sorted(expected)
     status = mcp_server._publication_status(con.cursor())
-    assert status["tables"] == ["a", "b", "rule_targets"]  # rule_targets is not in TABLES here
+    assert status["tables"] == ["a", "b", "rule_targets", *REFERENCE]  # rule_targets is not in TABLES here
     assert status["publication"]["a"]["status"] == "managed_generation"
     assert status["publication"]["rule_targets"]["status"] == "rulemaking_snapshot"
     urls = pub.published_urls(base)

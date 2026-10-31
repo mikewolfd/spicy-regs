@@ -38,8 +38,12 @@ def pin(publication: Mapping[str, object], table: str) -> str:
 
 def install_sql_views(connection: Any, available_tables: Iterable[str], specs: Iterable[SQLView],
                       publication: Mapping[str, object] | None = None, *,
-                      _schemas: dict[str, list[str]] | None = None) -> dict[str, dict[str, Any]]:
-    """Check actual columns; a selected install may share its connection-local observations."""
+                      _schemas: dict[str, list[str]] | None = None, bind: bool = True) -> dict[str, dict[str, Any]]:
+    """Check actual columns; a selected install may share its connection-local observations.
+
+    ``bind=False`` documents the views without creating them: a view with no dependencies (a reference table) is
+    otherwise available on any input set, and discovery must not touch the database.
+    """
     available, publication = set(available_tables), publication or {}
     result: dict[str, dict[str, Any]] = {}
     schemas: dict[str, list[str]] = {} if _schemas is None else _schemas
@@ -58,7 +62,7 @@ def install_sql_views(connection: Any, available_tables: Iterable[str], specs: I
         elif missing_columns:
             status, reason = 'unsupported', 'Missing source columns: ' + ', '.join(missing_columns)
         lineage: dict[str, list[str]] = {}
-        if status == 'available':
+        if status == 'available' and bind:
             select = spec.query(publication)
             inputs = {t: table_columns(t, schemas[t]) for t in spec.required}
             # An output may itself be a later dependency, including replacement

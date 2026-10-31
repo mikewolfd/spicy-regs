@@ -7,6 +7,7 @@ import duckdb
 import pytest
 
 from spicy_regs import mcp_server as server
+from spicy_regs.relationship_views.reference import reference_paths
 from spicy_regs.sources import publication
 
 
@@ -220,7 +221,8 @@ def test_remote_build_collects_paths_then_relationships_then_security(tmp_path, 
 
     def security(root, allowed):
         assert all(c.closed for c in root.children)
-        assert allowed == [str(tmp_path / f"s{i}.parquet") for i in range(4)]
+        # Published members first, then the vendored reference tables' package paths.
+        assert allowed == [str(tmp_path / f"s{i}.parquet") for i in range(4)] + list(reference_paths())
         order.append("security")
         return server_security(root, allowed)
 

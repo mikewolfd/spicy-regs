@@ -1,4 +1,4 @@
-# RefSpec agency projection and agency registry view (vendored bytes)
+# RefSpec vendored bytes: agency projection, agency registry view, U.S. Code oracle and act sections
 
 These files are RefSpec's and must never be edited in place. A new RefSpec
 release is a new copy, with new digests pinned in `spicy_regs/ontology/agencies.py`.
@@ -102,3 +102,34 @@ stated parents, but not the events' effective dates: every document takes today'
 whatever its own date. A current successor's code wins over the original's own (the owner's rule,
 round 5): FR 200, which REF-038 codes FNS, is FNA. It never reads the non-emissions: the
 Export-Import Bank, Udall Foundation, IBWC and CISA items leave REF-038's codes as they are.
+
+## U.S. Code section oracle and Table III act sections (`usc-section-oracle/`, `usc-act-index/`)
+
+Owner answers of 2026-10-31 (layer2-citations Q2 and Q4): vendor RefSpec's six digest-pinned
+OLRC oracle tables and its Table III act-sections table as reference SQL tables. Each file is
+served as a view of the same name (`relationship_views/reference.py`, which pins every sha256
+below and refuses other bytes); `tests/test_reference_tables.py` holds the bytes, these pins and
+this table equal.
+
+Copied from RefSpec `f8857c8669a412bd6c254aa0b3a23cf05a52e04d` (origin/main, 2026-10-31), where
+the bytes are tracked in git:
+
+- the oracle, `research/evidence/usc-section-oracle-2026-08-24/` (generation 2). Its README's
+  Files table and `refspec.registry.usc_section_oracle._ORACLE_PINS` state these six digests.
+  Sources: OLRC release point 119-102 USLM XML and the annual historical archives 1994-2024.
+  RefSpec's `_section_key` orders range bounds as (stem, rest as text), which misorders
+  `698v-4`/`698v-10` and `2689s`/`2689aa`; these tables carry the bounds as printed, so a reader
+  orders them itself (`identifiers.section_order_sql`).
+- the act sections, `portfolio/distributions/usc-act-index-2026-08-22/` (`receipt.json`,
+  `outputs`): OLRC Table III bulk member `fulldump@119-73.xml`, release point 119-73, which the
+  publisher no longer serves. Its popular-names and quarantine tables are not vendored.
+
+| View | File | Bytes | Rows | sha256 |
+| --- | --- | ---: | ---: | --- |
+| `usc_oracle_sections` | `usc-section-oracle/usc-oracle-sections.parquet` | 303,565 | 59,364 | `bbb450afb00cc7a28e2fcab7943d47207e8c1899f1e83209bd92d893fe39daac` |
+| `usc_oracle_ranges` | `usc-section-oracle/usc-oracle-ranges.parquet` | 40,666 | 1,751 | `070226e36d324a15226bd84ce9f5e4a297b43ff83365dba37ed281d3186cd736` |
+| `usc_oracle_annual_sections` | `usc-section-oracle/usc-oracle-annual-sections.parquet` | 7,594,553 | 1,572,225 | `4757327d2bbcd5258d0fc51f0658df7fc9999c21d5a40dbe0c2d466cf25e7323` |
+| `usc_oracle_annual_ranges` | `usc-section-oracle/usc-oracle-annual-ranges.parquet` | 178,394 | 49,960 | `c8cd96e1d13e4f429e1024f3a9fe25b8527036eae0adfd9ad29d9656522b43a3` |
+| `usc_oracle_subsections` | `usc-section-oracle/usc-oracle-subsections.parquet` | 1,100,246 | 160,209 | `d7502945223eed92bdeb65e6a73cf52240febefe9814180675fc4df512cd08ed` |
+| `usc_oracle_chapters` | `usc-section-oracle/usc-oracle-chapters.parquet` | 11,668 | 2,905 | `031ae7f3435f7ba2969bdf2c94b699170a63fe3183dd289ca23fa0ce45e90cb3` |
+| `usc_act_sections` | `usc-act-index/usc-act-sections.parquet` | 2,213,252 | 302,156 | `9040d4460e90704aef911b4d4f704e9f432cebd7b58717f31f090a3008ca6159` |

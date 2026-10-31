@@ -154,6 +154,7 @@ def test_registration_does_not_make_unpublished_tables_available(monkeypatch):
 def test_unpublished_registered_tables_skip_bare_fallback(monkeypatch):
     from spicy_regs import mcp_server
     from spicy_regs.sources import publication
+    from spicy_regs.relationship_views.reference import REFERENCE_TABLES
     from tests.test_generation_mcp import connection_fixture
 
     monkeypatch.setattr(mcp_server, "DATA_DIR", None)
@@ -162,7 +163,7 @@ def test_unpublished_registered_tables_skip_bare_fallback(monkeypatch):
     mcp_server._build_connection()
     con, = built
     try:
-        assert mcp_server._publication_status(con.cursor())["tables"] == []
+        assert mcp_server._publication_status(con.cursor())["tables"] == list(REFERENCE_TABLES)
         assert con.seen == []
     finally:
         con.close()
@@ -173,6 +174,8 @@ def test_unpublished_registered_table_never_requests_failing_bare_key(monkeypatc
     from spicy_regs.sources import publication
     from tests.test_generation_mcp import connection_fixture
 
+    from spicy_regs.relationship_views.reference import REFERENCE_TABLES
+
     monkeypatch.setattr(mcp_server, "DATA_DIR", None)
     name = REGISTERED_RELEASE_DATASETS[0]
     built = connection_fixture(monkeypatch, publication.empty_index(), {},
@@ -180,7 +183,7 @@ def test_unpublished_registered_table_never_requests_failing_bare_key(monkeypatc
     mcp_server._build_connection()
     try:
         assert built[0].seen == []
-        assert mcp_server._available_tables(built[0].cursor()) == []
+        assert mcp_server._available_tables(built[0].cursor()) == list(REFERENCE_TABLES)
     finally:
         built[0].close()
 
