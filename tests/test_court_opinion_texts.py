@@ -8,8 +8,11 @@ build: order, member layout, row-group and footer bounds, receipts as pointers, 
 from __future__ import annotations
 
 import bz2
+import hashlib
 import json
 import random
+import re
+import shutil
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
@@ -148,6 +151,81 @@ def test_receipts_point_at_the_rendering_and_never_copy_it(built) -> None:
     processing = json.loads(refused[0]["processing_json"])
     assert "UNCONVERTIBLE" not in refused[0]["processing_json"]
     assert processing and json.dumps(processing).count("sha256:") >= 1
+    # Each pointer is the digest of the rendering the converter was given (none for a record without text).
+    rendered = {}
+    for n, _, _, *renderings in rows:
+        value = next((v for v in renderings if v and v.strip()), None)
+        rendered[n] = None if value is None else "sha256:" + hashlib.sha256(value.encode()).hexdigest()
+    def pointer(receipt: dict) -> tuple[str, str | None]:
+        opinion_id = re.search(r'"opinion_id"\],\["str","(\d+)"', receipt["identity_json"])
+        digest = re.search(r'"source_sha256",\["str","(sha256:[0-9a-f]{64})"', receipt["processing_json"])
+        assert opinion_id is not None
+        return opinion_id.group(1), digest and digest.group(1)
+
+    assert dict(map(pointer, accepted)) == {n: d for n, d in rendered.items() if n != str(2 * WIDTH + 9)}
+    assert pointer(accepted[0])[1] is not None and rendered[str(WIDTH + 2)] is None
+    refusal = refused[0]["processing_json"]  # no identity: the record's id and pointer ride in its raw fields
+    assert f'"{2 * WIDTH + 9}"' in refusal and rendered[str(2 * WIDTH + 9)] in refusal
+
+
+def test_the_spill_is_one_file_per_bucket_and_refusals_are_counted_by_rendering(built) -> None:
+    _, run, _ = built
+    assert run["spill_files"] == run["spill_row_groups"] == 3  # 77 rows in three buckets, none reopened
+    assert run["refused_by_text_source"] == {"html_with_citations": 1} and not run["resumed"]
+    assert run["max_rss_main_process_bytes"] > 1 << 20
+
+
+def test_a_failed_phase_2_resumes_at_the_first_uncommitted_block(built, tmp_path, monkeypatch) -> None:
+    out, run, _ = built
+    export = out.parent / "opinions-2026-06-30.csv.bz2"  # the same bytes and path, so the same witness
+    calls = {"n": 0}
+    write = build._write_bulk_pair
+
+    def failing(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:  # the second block's only bucket
+            raise RuntimeError("interrupted")
+        return write(*args, **kwargs)
+
+    monkeypatch.setattr(build, "_write_bulk_pair", failing)
+    again = tmp_path / "out"
+    with pytest.raises(RuntimeError, match="interrupted"):
+        build.build_court_opinion_texts(export, again, dump_date=date(2026, 6, 30), workers=0, convert=stand_in,
+                                        parse_workers=1, row_group_text_bytes=2_000, generation_id=run["generation_id"])
+    spill = again / f".{build.DATASET}-spill"
+    assert (spill / "_complete.json").exists() and not (again / "etl_receipts.parquet").exists()
+    assert [p.name for p in (spill / "_receipts").glob("*.parquet")] == ["0.parquet"]  # block 1 uncommitted
+    monkeypatch.setattr(build, "_write_bulk_pair", write)
+
+    def never(row):
+        raise AssertionError("a resumed run converted again")
+
+    with pytest.raises(ValueError, match="another export"):
+        build.build_court_opinion_texts(export, again, dump_date=date(2026, 7, 1), workers=0, convert=never)
+    resumed = build.build_court_opinion_texts(export, again, dump_date=date(2026, 6, 30), workers=0, convert=never,
+                                              parse_workers=1, row_group_text_bytes=2_000)
+    assert resumed["resumed"] and resumed["generation_id"] == run["generation_id"] and not spill.exists()
+    for name in ("etl_receipts.parquet", *(m.relative_to(out).as_posix() for m in _members(out))):
+        assert pq.ParquetFile(again / name).read().equals(pq.ParquetFile(out / name).read()), name
+
+
+def test_the_output_is_admitted_as_a_split_generation(built, tmp_path) -> None:
+    """build_generation, with the full publication admission, accepts the members and receipts as written."""
+    from spicy_regs.court_receipts import POLICIES
+    from spicy_regs.generations import build_generation
+
+    out, run, _ = built
+    copy = tmp_path / "copy"
+    shutil.copytree(out / build.DATASET, copy / build.DATASET)
+    build_generation(tmp_path / "generation", family=build.DATASET, files=[copy / build.DATASET],
+                     expected_keys=[f"{build.DATASET}.parquet"], partitioned={f"{build.DATASET}.parquet": ["opinion_block"]},
+                     receipt_path=out / "etl_receipts.parquet", receipt_policies=[POLICIES[build.DATASET]],
+                     receipt_generation_id=run["generation_id"])
+    members = sorted(p.relative_to(tmp_path / "generation").as_posix()
+                     for p in (tmp_path / "generation").rglob("part-*.parquet"))
+    assert members == [m.relative_to(out).as_posix() for m in _members(out)]
+    listed = json.loads((tmp_path / "generation" / "members.json").read_text())["members"]
+    assert sorted(m["objectKey"] for m in listed if m["objectKey"] != "etl_receipts.parquet") == members
 
 
 def test_the_spill_schema_is_what_the_bulk_writer_maps() -> None:
