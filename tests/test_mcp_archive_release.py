@@ -191,6 +191,21 @@ def test_an_unreachable_archive_is_reported_unavailable_in_discovery_and_refuses
         build({"archive_list"})
 
 
+def test_a_pruned_file_under_a_cached_manifest_degrades_discovery_but_refuses_a_named_query(release):
+    origin, release_id = release
+    build().close()  # caches the manifest and schema for the process, as a long-running server does
+    (origin / "releases" / release_id / "recordings.parquet").unlink()
+    con = build()
+    try:
+        record = server._pinned_record(con.cursor(), "_spicy_archive")
+        assert record is not None and record["status"] == "unavailable" and "archive_recordings" in record["reason"]
+        assert not registered(con) & set(archive_release.VIEWS)
+    finally:
+        con.close()
+    with pytest.raises(RuntimeError, match="archive_recordings"):
+        build({"archive_recordings"})
+
+
 def test_local_copy_is_hashed_and_a_corrupt_byte_refuses(release):
     origin, release_id = release
     assert archive_release.bind(release_id, str(origin), hash_files=True).hashed

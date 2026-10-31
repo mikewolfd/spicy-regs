@@ -353,16 +353,26 @@ pin's lifetime rule and why it is served from GitHub main).
 - **Blast radius.** Unlike the rulemaking pointer, an unreachable archive in an
   unscoped build (discovery) is recorded `unavailable` in `_spicy_archive` and
   the build proceeds: it is another host, and spicy-regs tables do not depend
-  on it. A query naming an archive view refuses instead.
+  on it. That covers an unreadable release file too (`degrade`), such as a
+  release pruned under the manifest this process cached: every archive view is
+  retracted, never a partial set. A query naming an archive view refuses instead.
 - **Trust.** Remote bytes read by HTTPS range are not hashed; `describe_table`
   states this (`publication.trust`). Local mode reads only
   `$SPICY_REGS_DATA_DIR/archive/releases/<release_id>/`, hashes every bound
-  file at each build, and never falls back to the network.
+  file at each build (linear in release size), and never falls back
+  to the network. No download command fills that directory yet: copy the
+  release's files, `manifest.json` included, from
+  `<ORIGIN>/releases/<release_id>/` by hand; the binding then verifies them.
 - **Recipes as published.** `describe_table` shows `schema.json` relationships
   and recipes unchanged, with `name_map` from release table names to views;
   those needing the producer=`spicy-regs` files (rosters, committees, members,
   bills, nominations) carry `available_here: false`, since spicy-regs serves
-  those facts from its own tables.
+  those facts from its own tables. The meeting and witness document recipes
+  join with `list_contains`, which is fine for one meeting but superlinear as a
+  table-wide join; a maintained meetings-to-documents view must unnest
+  `meeting_keys`/`witness_keys` into `(key, list_row)` pairs once and hash-join,
+  as `scripts/compare_committee_meetings_archive.py` does. No such view exists
+  yet; it lands with the committee_meetings retirement (ss-ikn9 stage 3).
 
 ## Declared joins (`_table_joins`)
 

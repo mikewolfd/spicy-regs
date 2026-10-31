@@ -129,7 +129,8 @@ def lookup_key(url: str) -> bytes | None:
     ``lookup_url`` drops the scheme, a leading ``www.``, the default port, the
     fragment and one trailing path slash, and lowercases the host; the query is
     kept byte for byte (congressional-tech archive_format.py lookup_values and
-    the site's ``lookupUrl``). A URL that is not absolute has no key.
+    the site's ``lookupUrl``). A URL that is not absolute has no key. Like the producer's SQL, userinfo and
+    other schemes are keyed as spelled: the site's refusal of them validates user input, not the key rule.
     """
     match = _URL.fullmatch(url)
     if match is None or not match[2]:

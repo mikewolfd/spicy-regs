@@ -624,6 +624,8 @@ class _RemoteSourceView(NamedTuple):
     export: bool
     #: The view body when it is not ``SELECT *`` over ``urls`` (archive views name columns and add list_row).
     select: str | None = None
+    #: Skip on any read failure instead of refusing; the caller retracts the source's whole group.
+    degrade: bool = False
 
 
 def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
@@ -640,6 +642,9 @@ def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
             if source.columns is not None and [[row[0], row[1]] for row in actual] != source.columns:
                 raise RuntimeError(f"Published schema differs from admitted generation: {source.name}")
     except duckdb.Error as exc:
+        if source.degrade:
+            logger.warning("source %s unreadable at %s; skipping view: %s", source.name, source.urls, exc)
+            return False
         if source.required or not (isinstance(exc, duckdb.HTTPException) and exc.status_code == 404):
             kind = "Published generation member" if source.required else "Legacy table"
             raise RuntimeError(f"{kind} unavailable: {source.name}") from exc
@@ -853,7 +858,8 @@ def _bind_archive(query_scope):
     Remote: the verified manifest and schema are read once per process. Local: the release is read only from
     ``<SPICY_REGS_DATA_DIR>/archive/releases/<release_id>/`` and every bound file is hashed; a missing copy
     is reported unavailable and never fetched. An unscoped remote build (discovery, catalog SQL) reports an
-    unreachable archive as unavailable rather than taking every table down; a query that names an archive
+    unreachable archive as unavailable rather than taking every table down (an unreadable release file is
+    handled the same way at admission, see ``_RemoteSourceView.degrade``); a query that names an archive
     view, or a corrupt local copy, refuses.
     """
     from spicy_regs import archive_release
@@ -989,12 +995,12 @@ def _build_connection_inputs(con, publication):
     exports: list[str] = []
     remote_sources: list[_RemoteSourceView] = []
     archive, archive_record = _bind_archive(query_scope)
-    if archive_record is not None:
-        con.execute("CREATE TABLE _spicy_archive (snapshot VARCHAR)")
-        con.execute("INSERT INTO _spicy_archive VALUES (?)", [json.dumps(archive_record)])
     for view, stem in (_archive_views(query_scope) if archive is not None else ()):
         if local is None:
-            remote_sources.append(_RemoteSourceView(view, [archive.url(stem)], None, True, False, archive.view_sql(stem)))
+            # Unscoped (discovery) builds tolerate an unreadable release file, e.g. a release pruned under a
+            # manifest cached for the process; a query that names the view still refuses.
+            remote_sources.append(_RemoteSourceView(view, [archive.url(stem)], None, True, False,
+                                                    archive.view_sql(stem), degrade=query_scope is None))
             continue
         try:
             with _diagnostic_phase("view_registration", view):
@@ -1061,11 +1067,23 @@ def _build_connection_inputs(con, publication):
     except BaseException:
         con.close()
         raise
+    unreadable = [source.name for source, available in zip(remote_sources, admitted) if source.degrade and not available]
+    if unreadable:
+        # The archive is bound whole or not at all: retract its admitted views and report it unavailable.
+        for source, available in zip(remote_sources, admitted):
+            if source.degrade and available:
+                con.execute(f'DROP VIEW "{source.name}"')
+        admitted = [available and not source.degrade for source, available in zip(remote_sources, admitted)]
+        archive, archive_record = None, {"status": "unavailable", "release_id": archive_record["release_id"],
+                                         "reason": f"Unreadable release files: {', '.join(unreadable)}"}
     for source, available in zip(remote_sources, admitted):
         if available:
             allowed_paths.extend(source.urls)
             if source.export:
                 exports.append(source.name)
+    if archive_record is not None:
+        con.execute("CREATE TABLE _spicy_archive (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_archive VALUES (?)", [json.dumps(archive_record)])
     if comments is not None:
         try:
             matched = _comments_exports(comments, exports)
