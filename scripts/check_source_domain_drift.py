@@ -17,16 +17,21 @@ moment a re-pin moves either half and leaves the ledger behind, which is exactly
 when a human is watching. The test suite runs the offline half in CI; refreshing
 the observed half is the manual step below.
 
-``--observe --data-dir DIR`` re-observes the published tables from parquet and
-prints the same report against that data; add ``--write-snapshot`` to re-pin the
-checked-in snapshot from that observation. Each dated snapshot file observes its
-own domains: ``--snapshot FILE`` selects which one an observation covers (the
-2026-09-22 file by default), and ``--domains`` names them for a new file; each file observes whole tables.
-``--unpublished`` records no publisher URL, for an observation of a built but
-not yet published generation that must be re-pinned once it is published. ``DIR`` holds the published tables
-under their own names (``documents.parquet`` and so on) — a fresh download of
-the published corpus, or any directory built from it. The recorded publisher
-URLs resolve through the publication index of the host the reader chain selects
+``--observe`` re-observes the published tables and prints the same report
+against that data; add ``--write-snapshot`` to re-pin the checked-in snapshot
+from that observation. Each dated snapshot file observes its own domains:
+``--snapshot FILE`` selects which one an observation covers (the 2026-10-30
+file by default), and ``--domains`` names them for a new file. With
+``--data-dir DIR`` it reads local copies named as published
+(``documents.parquet`` and so on) and records each file's own SHA-256; add
+``--unpublished`` for a built but not yet published generation, which records
+no publisher URL and must be re-pinned once it is published. Without
+``--data-dir`` it reads each table at its published URL, column by column, so
+nothing is downloaded (``comments`` alone is 9.7 GB, and only two of its columns
+are read); the digest it records is then the publication index's pin for that
+member, marked ``"digest_basis": "publication-index"``, and the parquet footer's
+row count must equal the index's. Either way the publisher URLs resolve through
+the publication index of the host the reader chain selects
 (``SPICY_REGS_R2_URL``, then ``R2_PUBLIC_URL``), so an observation records where
 the bytes actually live. Re-pinning a capture is
 the other manual step: refetch it from the ``source_url`` its manifest entry
@@ -101,41 +106,51 @@ def _file_identity(path: Path) -> tuple[str, int]:
     return "sha256:" + digest.hexdigest(), length
 
 
-def _value_query(path: Path, column: str) -> tuple[str, str]:
-    """The distinct-value query for a scalar column or a ``list_column.member`` path, and its row-count query."""
+def _value_query(column: str) -> tuple[str, str]:
+    """The distinct-value query for a scalar column or a ``list_column.member`` path, and its element-count query.
+
+    Both take the table's read target (a local path or a published URL) as their one parameter.
+    """
 
     if "." not in column:
         return (
-            f"SELECT \"{column}\" AS value, count(*) AS n FROM read_parquet('{path}') GROUP BY 1 ORDER BY n DESC, 1",
-            f"SELECT count(*) FROM read_parquet('{path}')",
+            f'SELECT "{column}" AS value, count(*) AS n FROM read_parquet(?) GROUP BY 1 ORDER BY n DESC, 1',
+            "SELECT count(*) FROM read_parquet(?)",
         )
     list_column, member = column.split(".", 1)
-    elements = f"FROM read_parquet('{path}'), UNNEST(\"{list_column}\") AS t(item)"
+    elements = f'FROM read_parquet(?), UNNEST("{list_column}") AS t(item)'
     return (
-        f"SELECT item.\"{member}\" AS value, count(*) AS n {elements} GROUP BY 1 ORDER BY n DESC, 1",
+        f'SELECT item."{member}" AS value, count(*) AS n {elements} GROUP BY 1 ORDER BY n DESC, 1',
         f"SELECT count(*) {elements}",
     )
 
 
 def observe(
-    data_dir: Path,
+    data_dir: Path | None,
     documented: Mapping[str, DocumentedDomain],
     *,
     base_url: str | None,
     observed_at: str,
     producer_revision: str,
 ) -> ObservedSnapshot:
-    """Scan the published tables in ``data_dir`` for each declared domain's distinct values.
+    """Scan the published tables for each declared domain's distinct values.
 
     Takes the register the caller already parsed, so the observation and the diff
-    it feeds cover the same domains, read from the same captures once. With no
-    ``base_url`` the tables are an unpublished build and no publisher URL is recorded.
+    it feeds cover the same domains, read from the same captures once. Each
+    domain is one ``GROUP BY`` over one column, so a remote read fetches that
+    column's chunks and nothing else: linear in the column, once per domain.
+    With no ``base_url`` the tables are an unpublished local build and no
+    publisher URL is recorded.
     """
 
+    if data_dir is None and base_url is None:
+        raise SourceDomainError("an unpublished observation reads local tables; pass --data-dir")
     tables = sorted({domain.table for domain in documented.values()})
-    urls = table_urls(current_index(base_url), base_url, tables) if base_url else dict.fromkeys(tables)
+    index = current_index(base_url) if base_url else None
+    urls = table_urls(index, base_url, tables) if index is not None and base_url else dict.fromkeys(tables)
     connection = _connect()
     sources = []
+    reads: dict[str, str] = {}
     row_counts: dict[str, int] = {}
     for table in tables:
         # Where a table is published comes from the registry that publishes it,
@@ -143,16 +158,29 @@ def observe(
         # version of this snapshot recorded a hostname this project never served.
         if table not in TABLES:
             raise SourceDomainError(f"{table!r} is not one of the published tables in spicy_regs.data_dictionary")
-        path = data_dir / f"{table}.parquet"
-        if not path.is_file():
-            raise SourceDomainError(f"{data_dir} lacks the published table {table}.parquet")
-        digest, byte_length = _file_identity(path)
-        (row_count,) = connection.execute(f"SELECT count(*) FROM read_parquet('{path}')").fetchone()
+        if data_dir is None:
+            url = urls[table]
+            assert index is not None and url is not None  # a remote read is always a published one
+            member = single_member(index, f"{table}.parquet")
+            if member.sha256 is None or member.byte_size is None:
+                raise SourceDomainError(f"the publication index pins no digest for {table}.parquet")
+            reads[table] = url
+            digest, byte_length, basis, pinned_rows = member.sha256, member.byte_size, "publication-index", member.rows
+        else:
+            path = data_dir / f"{table}.parquet"
+            if not path.is_file():
+                raise SourceDomainError(f"{data_dir} lacks the published table {table}.parquet")
+            reads[table] = str(path)
+            (digest, byte_length), basis, pinned_rows = _file_identity(path), "local-file", None
+        (row_count,) = connection.execute("SELECT count(*) FROM read_parquet(?)", [reads[table]]).fetchone()
+        if pinned_rows is not None and int(row_count) != pinned_rows:
+            raise SourceDomainError(f"{table} holds {row_count} rows; the publication index pins {pinned_rows}")
         row_counts[table] = int(row_count)
         sources.append(
             {
                 "byte_length": byte_length,
                 "bytes_digest": digest,
+                "digest_basis": basis,
                 "publisher_url": urls[table],
                 "row_count": int(row_count),
                 "table": table,
@@ -161,11 +189,11 @@ def observe(
 
     observed: dict[str, ObservedDomain] = {}
     for key, domain in documented.items():
-        values, count_rows = _value_query(data_dir / f"{domain.table}.parquet", domain.column)
-        rows = connection.execute(values).fetchall()
+        values, count_rows = _value_query(domain.column)
+        rows = connection.execute(values, [reads[domain.table]]).fetchall()
         null_count = sum(int(count) for value, count in rows if value is None)
         if "." in domain.column:
-            (element_count,) = connection.execute(count_rows).fetchone()
+            (element_count,) = connection.execute(count_rows, [reads[domain.table]]).fetchone()
             row_counts_for_domain = int(element_count)
         else:
             row_counts_for_domain = row_counts[domain.table]
@@ -216,8 +244,8 @@ def _report(findings: tuple[DomainFinding, ...], unrecorded: tuple[DomainFinding
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.observe and not args.data_dir:
-        parser.error("--observe needs --data-dir")
+    if args.data_dir and not args.observe:
+        parser.error("--data-dir names what --observe reads; it needs --observe")
     if args.write_snapshot and not args.observe:
         parser.error("--write-snapshot re-pins an observation; it needs --observe")
     if args.write_snapshot and not (args.observed_at and args.producer_revision):
@@ -244,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         if unknown := sorted(set(selected) - set(documented)):
             parser.error(f"--domains names undeclared domains {unknown}")
         snapshot = observe(
-            Path(args.data_dir),
+            Path(args.data_dir) if args.data_dir else None,
             {key: documented[key] for key in selected},
             base_url=None if args.unpublished else resolve_r2_base_url(),
             observed_at=args.observed_at,
@@ -288,7 +316,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-observe from parquet in --data-dir instead of reading the checked-in snapshot",
     )
-    parser.add_argument("--data-dir", help="directory holding the published tables as <table>.parquet")
+    parser.add_argument(
+        "--data-dir",
+        help="directory holding local copies of the published tables as <table>.parquet; "
+        "omit it to read the published URLs directly",
+    )
     parser.add_argument("--observed-at", default="", help="observation timestamp to record in a written snapshot")
     parser.add_argument(
         "--producer-revision",

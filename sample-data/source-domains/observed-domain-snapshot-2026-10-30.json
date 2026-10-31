@@ -1,0 +1,895 @@
+{
+  "domains": [
+    {
+      "column": "action_type",
+      "key": "billstatus-action-type",
+      "null_count": 1093,
+      "row_count": 932877,
+      "table": "bill_actions",
+      "value_counts": [
+        [
+          "IntroReferral",
+          524726
+        ],
+        [
+          "Floor",
+          193471
+        ],
+        [
+          "Committee",
+          159939
+        ],
+        [
+          "Calendars",
+          19251
+        ],
+        [
+          "President",
+          12955
+        ],
+        [
+          "BecameLaw",
+          8489
+        ],
+        [
+          "ResolvingDifferences",
+          6117
+        ],
+        [
+          "Discharge",
+          5775
+        ],
+        [
+          "NotUsed",
+          849
+        ],
+        [
+          "Veto",
+          212
+        ]
+      ]
+    },
+    {
+      "column": "designation",
+      "key": "fec-committee-designation",
+      "null_count": 79,
+      "row_count": 298596,
+      "table": "fec_committee_history",
+      "value_counts": [
+        [
+          "U",
+          153087
+        ],
+        [
+          "P",
+          106823
+        ],
+        [
+          "B",
+          14091
+        ],
+        [
+          "J",
+          10123
+        ],
+        [
+          "A",
+          8285
+        ],
+        [
+          "D",
+          6108
+        ]
+      ]
+    },
+    {
+      "column": "committee_type",
+      "key": "fec-committee-type",
+      "null_count": 42,
+      "row_count": 298596,
+      "table": "fec_committee_history",
+      "value_counts": [
+        [
+          "H",
+          85213
+        ],
+        [
+          "Q",
+          71667
+        ],
+        [
+          "N",
+          55577
+        ],
+        [
+          "S",
+          18252
+        ],
+        [
+          "O",
+          17851
+        ],
+        [
+          "P",
+          13802
+        ],
+        [
+          "I",
+          8961
+        ],
+        [
+          "Y",
+          7172
+        ],
+        [
+          "X",
+          6656
+        ],
+        [
+          "C",
+          3639
+        ],
+        [
+          "V",
+          3274
+        ],
+        [
+          "U",
+          2951
+        ],
+        [
+          "E",
+          1438
+        ],
+        [
+          "D",
+          805
+        ],
+        [
+          "Z",
+          657
+        ],
+        [
+          "W",
+          639
+        ]
+      ]
+    },
+    {
+      "column": "filing_frequency",
+      "key": "fec-filing-frequency",
+      "null_count": 0,
+      "row_count": 298596,
+      "table": "fec_committee_history",
+      "value_counts": [
+        [
+          "Q",
+          191081
+        ],
+        [
+          "T",
+          52609
+        ],
+        [
+          "M",
+          29515
+        ],
+        [
+          "A",
+          25390
+        ],
+        [
+          "D",
+          1
+        ]
+      ]
+    },
+    {
+      "column": "organization_type",
+      "key": "fec-organization-type",
+      "null_count": 209616,
+      "row_count": 298596,
+      "table": "fec_committee_history",
+      "value_counts": [
+        [
+          "C",
+          42676
+        ],
+        [
+          "T",
+          19342
+        ],
+        [
+          "M",
+          13869
+        ],
+        [
+          "L",
+          9045
+        ],
+        [
+          "W",
+          2846
+        ],
+        [
+          "V",
+          1156
+        ],
+        [
+          "H",
+          26
+        ],
+        [
+          "I",
+          20
+        ]
+      ]
+    },
+    {
+      "column": "filing_type",
+      "key": "lda-filing-type",
+      "null_count": 0,
+      "row_count": 1965087,
+      "table": "lobbying_filings",
+      "value_counts": [
+        [
+          "Q2",
+          314420
+        ],
+        [
+          "Q1",
+          308750
+        ],
+        [
+          "Q3",
+          291551
+        ],
+        [
+          "Q4",
+          283671
+        ],
+        [
+          "RR",
+          121588
+        ],
+        [
+          "MM",
+          118297
+        ],
+        [
+          "YY",
+          117593
+        ],
+        [
+          "Q1Y",
+          43190
+        ],
+        [
+          "Q2Y",
+          41829
+        ],
+        [
+          "Q4Y",
+          41765
+        ],
+        [
+          "Q3Y",
+          41476
+        ],
+        [
+          "RA",
+          19606
+        ],
+        [
+          "1A",
+          16387
+        ],
+        [
+          "2A",
+          15052
+        ],
+        [
+          "YYY",
+          14234
+        ],
+        [
+          "4T",
+          13515
+        ],
+        [
+          "4A",
+          13018
+        ],
+        [
+          "MMY",
+          12670
+        ],
+        [
+          "3A",
+          12482
+        ],
+        [
+          "YT",
+          11487
+        ],
+        [
+          "1TY",
+          11140
+        ],
+        [
+          "1T",
+          9683
+        ],
+        [
+          "2T",
+          9399
+        ],
+        [
+          "MT",
+          9114
+        ],
+        [
+          "4TY",
+          8917
+        ],
+        [
+          "3T",
+          8195
+        ],
+        [
+          "2TY",
+          8036
+        ],
+        [
+          "YTY",
+          6960
+        ],
+        [
+          "3TY",
+          6934
+        ],
+        [
+          "MTY",
+          6513
+        ],
+        [
+          "MA",
+          6106
+        ],
+        [
+          "YA",
+          5330
+        ],
+        [
+          "1AY",
+          1504
+        ],
+        [
+          "2AY",
+          1420
+        ],
+        [
+          "4AY",
+          1370
+        ],
+        [
+          "3AY",
+          1238
+        ],
+        [
+          "Y@",
+          1227
+        ],
+        [
+          "4@",
+          1085
+        ],
+        [
+          "YAY",
+          946
+        ],
+        [
+          "M@",
+          905
+        ],
+        [
+          "MAY",
+          861
+        ],
+        [
+          "M@Y",
+          798
+        ],
+        [
+          "Y@Y",
+          772
+        ],
+        [
+          "2@",
+          715
+        ],
+        [
+          "1@",
+          682
+        ],
+        [
+          "1@Y",
+          610
+        ],
+        [
+          "3@",
+          587
+        ],
+        [
+          "4@Y",
+          567
+        ],
+        [
+          "2@Y",
+          495
+        ],
+        [
+          "3@Y",
+          397
+        ]
+      ]
+    },
+    {
+      "column": "general_issue_code",
+      "key": "lda-general-issue-code",
+      "null_count": 0,
+      "row_count": 3628235,
+      "table": "lobbying_activities",
+      "value_counts": [
+        [
+          "BUD",
+          418543
+        ],
+        [
+          "HCR",
+          270677
+        ],
+        [
+          "TAX",
+          263601
+        ],
+        [
+          "DEF",
+          189221
+        ],
+        [
+          "TRA",
+          156993
+        ],
+        [
+          "ENG",
+          147322
+        ],
+        [
+          "MMM",
+          132687
+        ],
+        [
+          "TRD",
+          126743
+        ],
+        [
+          "ENV",
+          108209
+        ],
+        [
+          "EDU",
+          104820
+        ],
+        [
+          "FIN",
+          85812
+        ],
+        [
+          "AGR",
+          84659
+        ],
+        [
+          "LBR",
+          74478
+        ],
+        [
+          "GOV",
+          69207
+        ],
+        [
+          "TEC",
+          68597
+        ],
+        [
+          "NAT",
+          67865
+        ],
+        [
+          "HOM",
+          65116
+        ],
+        [
+          "SCI",
+          53395
+        ],
+        [
+          "BAN",
+          52931
+        ],
+        [
+          "CPT",
+          48644
+        ],
+        [
+          "IMM",
+          47279
+        ],
+        [
+          "CAW",
+          45266
+        ],
+        [
+          "AVI",
+          43049
+        ],
+        [
+          "LAW",
+          40518
+        ],
+        [
+          "CSP",
+          38935
+        ],
+        [
+          "FOR",
+          38610
+        ],
+        [
+          "HOU",
+          38427
+        ],
+        [
+          "ECN",
+          35154
+        ],
+        [
+          "INS",
+          33832
+        ],
+        [
+          "IND",
+          33705
+        ],
+        [
+          "MAR",
+          32467
+        ],
+        [
+          "MED",
+          30510
+        ],
+        [
+          "COM",
+          30118
+        ],
+        [
+          "VET",
+          28596
+        ],
+        [
+          "FOO",
+          26901
+        ],
+        [
+          "MAN",
+          26664
+        ],
+        [
+          "CPI",
+          26307
+        ],
+        [
+          "RET",
+          25430
+        ],
+        [
+          "PHA",
+          24811
+        ],
+        [
+          "SMB",
+          23547
+        ],
+        [
+          "DIS",
+          21949
+        ],
+        [
+          "FUE",
+          20409
+        ],
+        [
+          "URB",
+          20317
+        ],
+        [
+          "UTI",
+          18533
+        ],
+        [
+          "RES",
+          17910
+        ],
+        [
+          "AER",
+          15525
+        ],
+        [
+          "CIV",
+          14924
+        ],
+        [
+          "AUT",
+          14869
+        ],
+        [
+          "RRR",
+          14461
+        ],
+        [
+          "CHM",
+          13725
+        ],
+        [
+          "ROD",
+          13108
+        ],
+        [
+          "ANI",
+          11702
+        ],
+        [
+          "GAM",
+          11152
+        ],
+        [
+          "TOR",
+          10512
+        ],
+        [
+          "POS",
+          10434
+        ],
+        [
+          "TOB",
+          10401
+        ],
+        [
+          "TAR",
+          10293
+        ],
+        [
+          "TOU",
+          8807
+        ],
+        [
+          "ART",
+          8545
+        ],
+        [
+          "WAS",
+          7749
+        ],
+        [
+          "INT",
+          7696
+        ],
+        [
+          "FAM",
+          7685
+        ],
+        [
+          "TRU",
+          7590
+        ],
+        [
+          "ALC",
+          6858
+        ],
+        [
+          "BNK",
+          6416
+        ],
+        [
+          "ACC",
+          6282
+        ],
+        [
+          "WEL",
+          6213
+        ],
+        [
+          "SPO",
+          6029
+        ],
+        [
+          "ADV",
+          5109
+        ],
+        [
+          "CON",
+          5066
+        ],
+        [
+          "FIR",
+          4895
+        ],
+        [
+          "BEV",
+          4698
+        ],
+        [
+          "MIA",
+          4115
+        ],
+        [
+          "CDT",
+          3908
+        ],
+        [
+          "APP",
+          3126
+        ],
+        [
+          "UNM",
+          2384
+        ],
+        [
+          "REL",
+          1987
+        ],
+        [
+          "DOC",
+          1782
+        ],
+        [
+          "MON",
+          1425
+        ]
+      ]
+    },
+    {
+      "column": "document_type",
+      "key": "regulations-gov-comment-document-type",
+      "null_count": 0,
+      "row_count": 26418078,
+      "table": "comments",
+      "value_counts": [
+        [
+          "Public Submission",
+          26417470
+        ],
+        [
+          "Other",
+          493
+        ],
+        [
+          "Supporting & Related Material",
+          115
+        ]
+      ]
+    },
+    {
+      "column": "docket_type",
+      "key": "regulations-gov-docket-type",
+      "null_count": 0,
+      "row_count": 279719,
+      "table": "dockets",
+      "value_counts": [
+        [
+          "Nonrulemaking",
+          216516
+        ],
+        [
+          "Rulemaking",
+          63203
+        ]
+      ]
+    },
+    {
+      "column": "document_type",
+      "key": "regulations-gov-document-type",
+      "null_count": 0,
+      "row_count": 2004396,
+      "table": "documents",
+      "value_counts": [
+        [
+          "Other",
+          729855
+        ],
+        [
+          "Supporting & Related Material",
+          719029
+        ],
+        [
+          "Notice",
+          398993
+        ],
+        [
+          "Rule",
+          104011
+        ],
+        [
+          "Proposed Rule",
+          52134
+        ],
+        [
+          "Public Submission",
+          374
+        ]
+      ]
+    }
+  ],
+  "format_version": "spicyregs-source-domains/observed-v1",
+  "observed_at": "2026-10-31T01:59:08Z",
+  "producer_revision": "publication.v2.json sha256:74157933fbcbeb9b54adae90442b24af81601abe330bc92a9e104e58666f1fb5",
+  "sources": [
+    {
+      "byte_length": 11506349,
+      "bytes_digest": "sha256:ded5f49598848192c847dd6e2b4ba0bd57b26209c0606a4d3d27f6dea32d78a9",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/bill-family/f719442c6a814666c5747624ef8a52da002bc2982f4ebd7f2be990f86bc38d42/bill_actions.parquet",
+      "row_count": 932877,
+      "table": "bill_actions"
+    },
+    {
+      "byte_length": 9700315113,
+      "bytes_digest": "sha256:802a5e9a494b4be9add638c779e1994ed97582e1ea3c21627c77b4030b976ea4",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/comments/08e42cccdb0a57ff5e9fb7c0e0a825ff578c2e349e308289acaab86f766266a1/comments.parquet",
+      "row_count": 26418078,
+      "table": "comments"
+    },
+    {
+      "byte_length": 15480748,
+      "bytes_digest": "sha256:81dcc636e24666cab8ccf4b215e24e80d74a13e5a0780ad7690efaaaa6316a44",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/dockets/6890875d7aaf081b6974df133d307bddc2b5e4c9fb9793dcfc33a49707a2a9d2/dockets.parquet",
+      "row_count": 279719,
+      "table": "dockets"
+    },
+    {
+      "byte_length": 104974489,
+      "bytes_digest": "sha256:c9cc1d2decbcc66a91b51824b826501d8d70189affc0138fae53703bf495ad2b",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/documents/5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71/documents.parquet",
+      "row_count": 2004396,
+      "table": "documents"
+    },
+    {
+      "byte_length": 19853914,
+      "bytes_digest": "sha256:03a6f17fddd3f008b23e4e595d65945154994a8a935f046400f342198440c80d",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/fec-committee-history/181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320/fec_committee_history.parquet",
+      "row_count": 298596,
+      "table": "fec_committee_history"
+    },
+    {
+      "byte_length": 276852510,
+      "bytes_digest": "sha256:506cc4d810da258723db43171c3ba4bfd44b48cec37f0183b69bae14c0e3c98d",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/lobbying-filings/eb88eb812bec81a5028c8be59e71a470efeb7a397dfc79c33a457865fd1d9923/lobbying_activities.parquet",
+      "row_count": 3628235,
+      "table": "lobbying_activities"
+    },
+    {
+      "byte_length": 302907726,
+      "bytes_digest": "sha256:25b015cb5cdb235045727e760bba0170b45ff60f2131303b92f7c4a3482b4b54",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/lobbying-filings/eb88eb812bec81a5028c8be59e71a470efeb7a397dfc79c33a457865fd1d9923/lobbying_filings.parquet",
+      "row_count": 1965087,
+      "table": "lobbying_filings"
+    }
+  ]
+}

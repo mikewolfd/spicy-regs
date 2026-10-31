@@ -34,7 +34,11 @@ from spicy_regs.sources.source_domains import (
     UNDOCUMENTED,
     SourceDomainError,
     documented_domains,
+    documented_values,
     domain_findings,
+    fec_code_values,
+    label_only_domains,
+    lda_constant_values,
     load_capture_manifest,
     load_observed_snapshot,
     load_observed_snapshots,
@@ -51,12 +55,13 @@ DOMAIN_DIR = ROOT / DEFAULT_SOURCE_DOMAIN_DIR
 TOOL = ROOT / "scripts" / "check_source_domain_drift.py"
 
 #: The host the dated snapshot recorded its URLs under, resolved through the publication
-#: index: the bucket's r2.dev host, which stays enabled beside the data.spicygov.ai domain.
-FORK_PUBLIC_URL = "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev"
+#: index: the data.spicygov.ai domain, since the bucket's r2.dev host answered 429 to the
+#: column reads of a remote observation (2026-10-30).
+FORK_PUBLIC_URL = "https://data.spicygov.ai"
 
 #: The live publication index is a network fetch, so a fragment of it is checked
 #: in beside the snapshot for the offline URL assertions.
-PUBLISHED_INDEX_FRAGMENT = "published-index-fragment-2026-09-22.json"
+PUBLISHED_INDEX_FRAGMENT = "published-index-fragment-2026-10-30.json"
 
 
 def _published_index() -> dict:
@@ -116,17 +121,30 @@ def test_every_accepted_finding_states_a_reason():
         assert len(entry.reason) > 60, entry
 
 
-def test_the_findings_are_the_twelve_the_snapshots_carry(findings):
+def test_the_findings_are_the_ones_this_snapshot_carries(findings):
     """Pinned so a silent change in either half shows up as a number, not a shrug.
 
     This list deliberately transcribes the ledger a second time. The set-equality
     tests above compare the ledger against the findings, so both pass when someone
     edits the ledger and the snapshot to agree on something wrong. This one states
-    the twelve independently of both, and catches that. Kept for that reason.
+    them independently of both, and catches that. Kept for that reason. The 17
+    listed action types no action carries are counted rather than spelled out.
     """
 
-    identifiers = sorted(finding.identifier for finding in findings)
+    identifiers = sorted(
+        finding.identifier
+        for finding in findings
+        if not (finding.domain_key == "billstatus-action-type" and finding.kind == "unobserved-value")
+    )
     assert identifiers == [
+        "billstatus-action-type/undocumented-value/Veto",
+        "fec-filing-frequency/unobserved-value/W",
+        "fec-organization-type/undocumented-value/H",
+        "fec-organization-type/undocumented-value/I",
+        "regulations-gov-comment-document-type/undocumented-value/Public Submission",
+        "regulations-gov-comment-document-type/unobserved-value/Notice",
+        "regulations-gov-comment-document-type/unobserved-value/Proposed Rule",
+        "regulations-gov-comment-document-type/unobserved-value/Rule",
         "regulations-gov-document-type/undocumented-value/Public Submission",
         "unified-agenda-priority-category/undocumented-value/Section 3(f)(1) Significant",
         "unified-agenda-priority-category/unobserved-value/Not Major",
@@ -140,14 +158,27 @@ def test_the_findings_are_the_twelve_the_snapshots_carry(findings):
         "unified-agenda-rin-status/unobserved-value/Previously published in the Unified Agenda",
         "unified-agenda-rule-stage/unobserved-value/No Stage",
     ]
+    unobserved_types = [f for f in findings if f.domain_key == "billstatus-action-type" and f.kind == "unobserved-value"]
+    assert len(unobserved_types) == 17
+
+
+def test_the_lda_and_fec_codes_the_tickets_named_agree_with_their_registries(findings, snapshot):
+    """LDA issue codes 79/79 and filing types 50/50 observed with no finding; FEC committee type 16/16."""
+
+    drifted = {finding.domain_key for finding in findings}
+    assert {"lda-general-issue-code", "lda-filing-type", "fec-committee-type", "fec-committee-designation"}.isdisjoint(
+        drifted
+    )
+    assert len(snapshot.domains["lda-general-issue-code"].value_counts) == 79
+    assert len(snapshot.domains["lda-filing-type"].value_counts) == 50
 
 
 def test_public_submission_carries_its_row_support(findings):
     """The finding that matters most is a count, not an adjective."""
 
-    (finding,) = [one for one in findings if one.value == "Public Submission"]
-    assert finding.kind == UNDOCUMENTED
-    assert finding.row_count == 374
+    support = {one.domain_key: one.row_count for one in findings if one.value == "Public Submission"}
+    assert support == {"regulations-gov-document-type": 374, "regulations-gov-comment-document-type": 26_417_470}
+    assert {one.kind for one in findings if one.value == "Public Submission"} == {UNDOCUMENTED}
 
 
 def test_two_domains_agree_completely(findings):
@@ -231,7 +262,16 @@ def test_an_unobserved_domain_fails(documented, observed):
 
 def test_captures_verify_against_their_pins():
     captures = load_capture_manifest(DOMAIN_DIR)
-    assert sorted(captures) == ["reginfo-rin-data-xsd", "regulations-gov-openapi-v4"]
+    assert sorted(captures) == [
+        "billstatus-user-guide",
+        "fec-committee-master-file",
+        "fec-committee-type-codes",
+        "fec-party-codes",
+        "lda-filing-types",
+        "lda-general-issue-codes",
+        "reginfo-rin-data-xsd",
+        "regulations-gov-openapi-v4",
+    ]
     for capture in captures.values():
         assert len(read_capture(capture, root=DOMAIN_DIR)) == capture.byte_length
         assert capture.source_url.startswith("https://")
@@ -364,12 +404,96 @@ def test_an_xsd_the_shared_reader_refuses_is_a_source_domain_error(payload, reas
         xsd_documented_options(payload, "MAJOR")
 
 
+# --- the BILLSTATUS guide, the LDA constants, the FEC lists ----------------
+
+
+@pytest.fixture(scope="module")
+def labels_only():
+    return label_only_domains(DOMAIN_DIR)
+
+
+def test_bill_action_types_are_the_guides_twenty_six_and_carry_no_invented_label(documented):
+    """Section 4 states the type text alone, so the value is its own meaning and no label is made up."""
+
+    domain = documented["billstatus-action-type"]
+    assert len(domain.values) == 26
+    assert domain.values[:2] == ("Actions by the President", "Actions Related to President")
+    assert domain.labels == {}
+
+
+def test_action_codes_are_labels_only_and_carry_the_guides_own_caveat(labels_only):
+    """The guide says no complete list exists and codes were reused, so the labels say so and gate nothing."""
+
+    domain = labels_only["billstatus-action-code"]
+    assert len(domain.values) == 36
+    assert domain.labels["B00100"] == "Sponsor introductory remarks on measure"
+    assert "a complete, authoritative list of action codes does not exist" in (domain.caveat or "")
+    assert "re-used over the years" in (domain.caveat or "")
+    assert "billstatus-action-code" not in DOMAIN_KEYS
+
+
+def test_lda_lists_are_the_publishers_json_read_directly(documented):
+    """Re-derived from the pinned bytes with ``json`` alone: 79 issue codes (not the ticket's 80), 50 filing types."""
+
+    for key, filename, count in (
+        ("lda-general-issue-code", "lda-general-issue-codes-2026-07-30.json", 79),
+        ("lda-filing-type", "lda-filing-types-2026-07-30.json", 50),
+    ):
+        items = json.loads((DOMAIN_DIR / filename).read_bytes())
+        assert documented[key].values == tuple(item["value"] for item in items)
+        assert dict(documented[key].labels) == {item["value"]: item["name"] for item in items}
+        assert len(items) == count
+    assert documented["lda-filing-type"].labels["RR"] == "Registration"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b'{"value": "ACC"}', b'[{"value": "ACC"}]', b'[{"value": "ACC", "name": "A"}, {"value": "ACC", "name": "B"}]'],
+)
+def test_a_drifted_lda_constants_response_is_refused(payload):
+    with pytest.raises(SourceDomainError):
+        lda_constant_values(payload)
+
+
+def test_fec_lists_come_from_refspecs_parse_of_the_pinned_pages(documented, labels_only):
+    assert documented["fec-committee-designation"].values == ("A", "B", "D", "J", "P", "U")
+    assert len(documented["fec-committee-type"].values) == 16
+    assert len(labels_only["fec-committee-party"].values) == 95
+    assert labels_only["fec-candidate-party"].labels["REP"] == "Republican Party"
+
+
+def test_a_vendored_fec_list_parsed_from_other_bytes_is_refused(tmp_path):
+    """The derived list is not its own witness: its recorded source digest must be the pinned capture's."""
+
+    capture = load_capture_manifest(DOMAIN_DIR)["fec-committee-master-file"]
+    vendored = json.loads((ROOT / "src/spicy_regs/reference/refspec/fec-committee-codes.json").read_bytes())
+    vendored["resources"]["committeeDesignation"]["source_sha256"] = "sha256:" + "0" * 64
+    lists = tmp_path / "fec-committee-codes.json"
+    lists.write_text(json.dumps(vendored), encoding="utf-8")
+    with pytest.raises(SourceDomainError, match="not the pinned capture"):
+        fec_code_values(capture, "committeeDesignation", lists=lists)
+
+
+def test_documented_values_mark_which_lists_gate():
+    """What the dictionary carries: the checked gated list and the unchecked labels, each with its source."""
+
+    values = documented_values(DOMAIN_DIR)
+    filing_type = values["lobbying_filings"]["filing_type"]
+    assert filing_type["checked"] is True
+    assert {"value": "RR", "label": "Registration"} in filing_type["values"]
+    party = values["fec_committee_history"]["party"]
+    assert party["checked"] is False
+    assert party["source_url"] == "https://www.fec.gov/campaign-finance-data/party-code-descriptions/"
+    assert "caveat" in values["bill_actions"]["action_code"]
+    assert values["bill_actions"]["action_type"]["values"][0] == {"value": "Actions by the President"}
+
+
 # --- the observed snapshot's own provenance ---------------------------------
 
 
-def test_every_domain_names_a_real_published_column(documented):
+def test_every_domain_names_a_real_published_column(documented, labels_only):
     schemas = expected_schemas()
-    for domain in documented.values():
+    for domain in (*documented.values(), *labels_only.values()):
         columns = dict(schemas[domain.table])
         column, _, member = domain.column.partition(".")
         assert column in columns, f"{domain.table}.{column} is not a published column"
@@ -378,10 +502,21 @@ def test_every_domain_names_a_real_published_column(documented):
 
 
 def test_the_snapshot_states_where_its_rows_came_from(snapshot):
-    assert snapshot.observed_at == "2026-09-22T16:50:25Z"
-    assert snapshot.producer_revision == "ae1c4e108bf764b2d15370c11832cfeff11487d1"
+    assert snapshot.observed_at == "2026-10-31T01:59:08Z"
+    assert snapshot.producer_revision == (
+        "publication.v2.json sha256:74157933fbcbeb9b54adae90442b24af81601abe330bc92a9e104e58666f1fb5"
+    )
     sources = {str(one["table"]): one for one in snapshot.sources}
-    assert sorted(sources) == ["dockets", "documents"]  # unified_agenda is observed whole in its own file
+    # unified_agenda is observed whole in its own dated file.
+    assert sorted(sources) == [
+        "bill_actions",
+        "comments",
+        "dockets",
+        "documents",
+        "fec_committee_history",
+        "lobbying_activities",
+        "lobbying_filings",
+    ]
     index = _published_index()
     for table, source in sources.items():
         # The recorded URL is a string in a checked-in data file; the expected one
@@ -389,11 +524,17 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
         # Two origins, so this fails when the corpus moves or a generation
         # advances and nobody re-pins the snapshot — exactly how this file first
         # shipped naming a host we never served.
-        key = single_member(index, f"{table}.parquet").path
-        assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{key}"
-        assert str(source["bytes_digest"]).startswith("sha256:")
-        assert int(source["byte_length"]) > 0
-    assert sources["documents"]["row_count"] == 2_001_531
+        member = single_member(index, f"{table}.parquet")
+        assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{member.path}"
+        # Read remotely, so the digest is the index's pin for that member, and says so.
+        assert source["digest_basis"] == "publication-index"
+        assert (source["bytes_digest"], source["byte_length"], source["row_count"]) == (
+            member.sha256,
+            member.byte_size,
+            member.rows,
+        )
+    assert sources["documents"]["row_count"] == 2_004_396
+    assert sources["bill_actions"]["row_count"] == 932_877
 
 
 @pytest.mark.parametrize("filename", OBSERVED_SNAPSHOT_FILENAMES)
@@ -411,6 +552,18 @@ def test_the_snapshot_row_counts_add_up(filename):
         assert sum(count for _, count in domain.value_counts) + domain.null_count == domain.row_count
         if "." not in domain.column:  # a list-member domain counts list elements, not table rows
             assert domain.row_count == sources[domain.table]["row_count"]
+
+
+def test_the_nullable_domains_are_the_measured_ones(snapshot):
+    """Nulls are not findings, so their counts are pinned here instead of passing unseen."""
+
+    nulls = {key: domain.null_count for key, domain in snapshot.domains.items() if domain.null_count}
+    assert nulls == {
+        "billstatus-action-type": 1_093,
+        "fec-committee-designation": 79,
+        "fec-committee-type": 42,
+        "fec-organization-type": 209_616,
+    }
 
 
 def test_the_agenda_snapshot_observes_the_whole_table_of_an_unpublished_build(agenda_snapshot):
@@ -466,7 +619,7 @@ def test_nulls_occur_only_where_the_xsd_makes_the_element_optional(observed):
     MAJOR is absent from most of 199510 and 199604 (9,830 of its 9,879 nulls); the rest are single records.
     """
 
-    nulls = {key: domain.null_count for key, domain in observed.items() if domain.null_count}
+    nulls = {key: domain.null_count for key, domain in observed.items() if domain.null_count and domain.table == "unified_agenda"}
     assert nulls == {
         "unified-agenda-priority-category": 15,
         "unified-agenda-rin-status": 2,
@@ -481,7 +634,7 @@ def test_the_snapshot_file_is_small_enough_to_read():
     """A domain snapshot is a summary, not a copy of the table it summarizes."""
 
     for filename in OBSERVED_SNAPSHOT_FILENAMES:
-        assert (DOMAIN_DIR / filename).stat().st_size < 16_384
+        assert (DOMAIN_DIR / filename).stat().st_size < 32_768
 
 
 # --- the tool ---------------------------------------------------------------
@@ -490,8 +643,8 @@ def test_the_snapshot_file_is_small_enough_to_read():
 def test_the_tool_passes_on_the_committed_inputs():
     result = subprocess.run([sys.executable, str(TOOL)], capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr
-    assert "7 documented domains" in result.stdout
-    assert "12 findings" in result.stdout
+    assert "15 documented domains" in result.stdout
+    assert "37 findings" in result.stdout
     assert "UNRECORDED" not in result.stdout
 
 
@@ -509,7 +662,10 @@ def test_the_recorded_urls_resolve_through_the_pinned_index(snapshot):
         key = single_member(index, f"{source['table']}.parquet").path
         assert source["publisher_url"] == f"{FORK_PUBLIC_URL}/{key}"
     urls = table_urls(index, FORK_PUBLIC_URL, sorted({str(one["table"]) for one in snapshot.sources}))
-    assert urls["documents"] == f"{FORK_PUBLIC_URL}/documents.parquet"
+    assert urls["documents"] == (
+        f"{FORK_PUBLIC_URL}/generations/documents/"
+        "5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71/documents.parquet"
+    )
 
 
 def test_the_tool_refuses_to_write_a_snapshot_without_provenance():

@@ -23,6 +23,78 @@
       "publisher_revision": "Ver10262011",
       "source_url": "https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd",
       "states": "the Unified Agenda RIN-data element list, whose controlled domains live in xs:documentation prose rather than xs:enumeration"
+    },
+    {
+      "byte_length": 38802,
+      "bytes_digest": "sha256:a10909696b2ed2244d75c76e75fa32bc3e4eb926deab7e4e00592a6a01c3ad3a",
+      "key": "billstatus-user-guide",
+      "media_type": "text/markdown",
+      "observed_at": "2026-08-03T19:29:08Z",
+      "path": "billstatus-xml-user-guide-2026-08-03.md",
+      "publisher": "gpo-billstatus",
+      "publisher_revision": "usgpo/bill-status master as retrieved; the guide states no release number",
+      "source_url": "https://raw.githubusercontent.com/usgpo/bill-status/master/BILLSTATUS-XML_User_User-Guide.md",
+      "states": "the BILLSTATUS XML user guide's action code (section 3) and action type (section 4) tables"
+    },
+    {
+      "byte_length": 3596,
+      "bytes_digest": "sha256:e1820ef17f3e63048ae50e526c2f56e507b2cf60d720fc227c76ee7c3610d5bf",
+      "key": "lda-general-issue-codes",
+      "media_type": "application/json",
+      "observed_at": "2026-07-30T12:45:14Z",
+      "path": "lda-general-issue-codes-2026-07-30.json",
+      "publisher": "senate-lda",
+      "publisher_revision": "LDA API interface 1.0.0",
+      "source_url": "https://lda.gov/api/v1/constants/filing/lobbyingactivityissues/",
+      "states": "the LDA general issue code constants (value and name)"
+    },
+    {
+      "byte_length": 2803,
+      "bytes_digest": "sha256:49fbd39383b0be63fb474878aa229d4e397880a30c2e0dac1a0905bc660a3149",
+      "key": "lda-filing-types",
+      "media_type": "application/json",
+      "observed_at": "2026-07-30T12:45:14Z",
+      "path": "lda-filing-types-2026-07-30.json",
+      "publisher": "senate-lda",
+      "publisher_revision": "LDA API interface 1.0.0",
+      "source_url": "https://lda.gov/api/v1/constants/filing/filingtypes/",
+      "states": "the LDA filing type constants (value and name)"
+    },
+    {
+      "byte_length": 29343,
+      "bytes_digest": "sha256:dda49be2e360d39bb1b7dcbc53239e627109a26fbaefe172688aca84abc4ff66",
+      "key": "fec-committee-master-file",
+      "media_type": "text/html",
+      "observed_at": "2026-08-03T19:24:00Z",
+      "path": "fec-committee-master-file-description-2026-08-03.html",
+      "publisher": "fec",
+      "publisher_revision": "the page states no revision",
+      "source_url": "https://www.fec.gov/campaign-finance-data/committee-master-file-description/",
+      "states": "the committee master file description: designation, filing frequency and interest-group (organization type) codes inline"
+    },
+    {
+      "byte_length": 28121,
+      "bytes_digest": "sha256:84e9f16628fd2475750cd89a3947f2c737a5f66c8ced04aea6b1118ac2aecaa4",
+      "key": "fec-committee-type-codes",
+      "media_type": "text/html",
+      "observed_at": "2026-08-03T19:24:00Z",
+      "path": "fec-committee-type-code-descriptions-2026-08-03.html",
+      "publisher": "fec",
+      "publisher_revision": "the page states no revision",
+      "source_url": "https://www.fec.gov/campaign-finance-data/committee-type-code-descriptions/",
+      "states": "the committee type code descriptions"
+    },
+    {
+      "byte_length": 29578,
+      "bytes_digest": "sha256:e17420381df0e5709449a8c9702600fde97503ea378ef357beef4c40ed6a6b09",
+      "key": "fec-party-codes",
+      "media_type": "text/html",
+      "observed_at": "2026-08-03T19:24:00Z",
+      "path": "fec-party-code-descriptions-2026-08-03.html",
+      "publisher": "fec",
+      "publisher_revision": "the page states no revision",
+      "source_url": "https://www.fec.gov/campaign-finance-data/party-code-descriptions/",
+      "states": "the party code descriptions"
     }
   ],
   "format_version": "spicyregs-source-domains/capture-v1"

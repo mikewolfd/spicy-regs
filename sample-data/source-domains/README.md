@@ -1,8 +1,11 @@
 # Documented column domains
 
-GSA and reginfo.gov decide what `document_type`, `docket_type`, `rule_stage`,
-`priority_category`, `rin_status` and `major` may hold; our builders copy those
-strings through untouched. So this directory keeps both halves of the claim: the
+GSA, reginfo.gov, GPO (BILLSTATUS), the Senate LDA office and the FEC decide
+what a set of published columns may hold — `document_type`, `docket_type`, the
+Unified Agenda's `rule_stage`, `priority_category`, `rin_status` and `major`,
+`bill_actions.action_type`, LDA `general_issue_code` and `filing_type`, and the
+FEC committee type, designation, filing frequency and organization type codes;
+our builders copy those strings through untouched. So this directory keeps both halves of the claim: the
 publishers' own documents, byte for byte, and one dated observation of what our
 published tables actually hold. `scripts/check_source_domain_drift.py` compares
 them in both directions and fails on every disagreement nobody has recorded a
@@ -38,6 +41,20 @@ nothing exercises is a claim nobody checked.
 |---|---|---|---|
 | `regulations-gov-openapi-v4-2026-08-03.yaml` | 60,826 | `be43c866f5ca424a456bde36ea03cb9326c454ef4e1894a13df80b6dc6e22488` | `https://open.gsa.gov/api/regulationsgov/v4/openapi.yaml` |
 | `reginfo-rin-data-ver10262011.xsd` | 22,730 | `94fdcf4b382830cc44b9956c00439dc20a9643de402c298cee71293a14153b24` | `https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd` |
+| `billstatus-xml-user-guide-2026-08-03.md` | 38,802 | `a10909696b2ed2244d75c76e75fa32bc3e4eb926deab7e4e00592a6a01c3ad3a` | `https://raw.githubusercontent.com/usgpo/bill-status/master/BILLSTATUS-XML_User_User-Guide.md` |
+| `lda-general-issue-codes-2026-07-30.json` | 3,596 | `e1820ef17f3e63048ae50e526c2f56e507b2cf60d720fc227c76ee7c3610d5bf` | `https://lda.gov/api/v1/constants/filing/lobbyingactivityissues/` |
+| `lda-filing-types-2026-07-30.json` | 2,803 | `49fbd39383b0be63fb474878aa229d4e397880a30c2e0dac1a0905bc660a3149` | `https://lda.gov/api/v1/constants/filing/filingtypes/` |
+| `fec-committee-master-file-description-2026-08-03.html` | 29,343 | `dda49be2e360d39bb1b7dcbc53239e627109a26fbaefe172688aca84abc4ff66` | `https://www.fec.gov/campaign-finance-data/committee-master-file-description/` |
+| `fec-committee-type-code-descriptions-2026-08-03.html` | 28,121 | `84e9f16628fd2475750cd89a3947f2c737a5f66c8ced04aea6b1118ac2aecaa4` | `https://www.fec.gov/campaign-finance-data/committee-type-code-descriptions/` |
+| `fec-party-code-descriptions-2026-08-03.html` | 29,578 | `e17420381df0e5709449a8c9702600fde97503ea378ef357beef4c40ed6a6b09` | `https://www.fec.gov/campaign-finance-data/party-code-descriptions/` |
+
+The six added on 2026-10-30 are copied byte for byte from RefSpec's pinned test
+fixtures at `f8857c86` (the digests above equal RefSpec's own pins). The guide
+is read with spicy-docs' `read_billstatus_guide`, and the LDA responses are
+plain JSON. The FEC pages are prose HTML tables, so they are read through
+RefSpec's parser rather than a second one: RefSpec's parse is vendored as
+`src/spicy_regs/reference/refspec/fec-committee-codes.json`, and each list in it
+is used only when the source digest RefSpec recorded equals the pinned page's.
 
 `documented-enumeration-capture-manifest-v1.json` binds each capture to its
 digest, byte length, publisher URL and capture time.
@@ -92,52 +109,65 @@ only the reason justifies anything.
 API documentation page is not captured here, and a domain nobody published is not
 a documented domain.
 
-`comments.category` (documented by `SubmitterType`) and `comments.document_type`
-(by the same `DocumentType` list already checked against `documents`) are an open
-gap, not a decision. `comments` ships as a flat `comments.parquet` monolith like
-the other tables, so both are observable; they stay uncovered only because the
-2026-09-22 observation skipped that table. Closing the gap takes a re-observation
-that includes it.
+`comments.document_type` is now checked against `DocumentType`.
+`comments.category` is not covered, by decision: it is not the `SubmitterType`
+list the earlier note assumed but an agency-specific category (409 distinct
+values on 1.86M of 26.4M rows, measured 2026-10-30), which no publisher list
+documents.
+
+Two lists are **labels only**: the dictionary shows their labels and nothing
+gates on them. The BILLSTATUS action codes (guide section 3) because the guide
+says "a complete, authoritative list of action codes does not exist" and that
+codes were reused over the years (164 distinct live codes, 32 of the guide's 36,
+on 529,762 of 694,998 coded rows); every label carries that caveat. FEC `party`
+on both history tables because 141 and 139 off-list values (0.29% and 0.30% of
+rows) are case variants and junk, so a gate would be a ledger of exceptions.
+LDA covered government entities have no captured list at all.
+
+Every documented list, gated or not, reaches `describe_table` as the table's
+`metadata.documented_values` with `detail=true`, each column marked `checked`
+or not, with its source URL, locator and any caveat.
 
 ## The observation
 
-`observed-domain-snapshot-2026-09-22.json` is derived, not captured: for each
-declared column it holds the distinct values with their row support, the null
+`observed-domain-snapshot-2026-10-30.json` is derived, not captured: for each
+gated column it holds the distinct values with their row support, the null
 count, and the row count of the table they came from.
 `scripts/check_source_domain_drift.py --observe --write-snapshot` generates it,
 so the code that writes it is the code that reads it back.
 
-It names its inputs: the published tables it scanned, at the fork's
-public bucket (`https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`, the
-`R2_PUBLIC_URL` the fork's workflows publish to), as of producer revision
-`ae1c4e108bf764b2d15370c11832cfeff11487d1`, each with
-the SHA-256 and byte length the scan actually read. Where each table lives comes
-from the publication index, not from this file: `documents` and `dockets` sit at
-the bucket root, and a fragment of
-the index (`published-index-fragment-2026-09-22.json`) is checked in beside the
-snapshot so the recorded URLs stay verifiable offline. Those digests are
-provenance, not verification — nothing recomputes them later, because the tables
-run to 90 MB and stay out of the repository. That is the whole reason a few-KB
-summary of 2,280,655 rows exists. Its `unified_agenda` domains and source were
-removed when that table moved to its own dated file (git history keeps that
-202510-only observation); the rest is unchanged.
+It names its inputs: the published tables it read at
+`https://data.spicygov.ai`, as of publication index
+`sha256:74157933fbcbeb9b54adae90442b24af81601abe330bc92a9e104e58666f1fb5`. It read
+them remotely, one column per query, so nothing was downloaded (`comments` alone
+is 9.7 GB); each source therefore records the index's pin for that member
+(`"digest_basis": "publication-index"`), and the observation refused to proceed
+unless each file's parquet footer row count equalled the index's. A fragment of
+that index (`published-index-fragment-2026-10-30.json`) is checked in beside the
+snapshot so the recorded URLs stay verifiable offline. The per-value counts were
+re-derived for every table but `comments` with the DuckDB CLI over the same URLs
+and agreed exactly, and `comments.document_type` with a separate CLI run. It
+superseded the 2026-09-22 file (`documents` and `dockets` from the fork's r2.dev
+bucket; git history keeps it), and its `unified_agenda` read was dropped when
+that table's own dated file below landed, so each table is pinned by one digest.
+
+The observation run took 172 s and 0.94 GB peak resident memory. This is a dated
+lock, not live validation: a value a later generation adds fails nothing until
+someone re-observes.
 
 `observed-domain-snapshot-2026-10-30-unified-agenda.json` observes
 `unified_agenda` whole: its five domains, `RIN_RELATION` included, over all 60
-retained editions (241,726 rows). The 2026-09-22 file's `unified_agenda` read
-held edition 202510 only (3,954 rows), so its domains moved here rather than
-leaving the table pinned by two digests; that file now covers `documents` and
-`dockets`. A `related_rins.rin_relation` domain counts the 28,720 list elements,
-so its `row_count` is elements and its source's `row_count` table rows. It was
-observed from the source-only replay built on the branch that added the column,
-before that generation was published, so it records no publisher URL
-(`--unpublished`); its digest names that local build, whose other columns equal
-the live table's both ways. Its `producer_revision` names the rebased commit; the
-build ran at the pre-rebase `ad3fc0e7`, whose tree differs only in
-generation-retention files. The pin holds only if that exact replay (two builds,
-byte-identical) is what ships; an incremental rollup writes different bytes and
-counts. Nothing in the gate re-reads published bytes, so re-pin it as part of
-publishing whichever generation ships:
+retained editions (241,726 rows). A `related_rins.rin_relation` domain counts
+the 28,720 list elements, so its `row_count` is elements and its source's
+`row_count` table rows. It was observed from the source-only replay built on the
+branch that added the column, before that generation was published, so it
+records no publisher URL (`--unpublished`); its digest names that local build,
+whose other columns equal the live table's both ways. Its `producer_revision`
+names the rebased commit; the build ran at the pre-rebase `ad3fc0e7`, whose tree
+differs only in generation-retention files. The pin holds only if that exact
+replay (two builds, byte-identical) is what ships; an incremental rollup writes
+different bytes and counts. Nothing in the gate re-reads published bytes, so
+re-pin it as part of publishing whichever generation ships:
 
 ```
 scripts/check_source_domain_drift.py --observe --data-dir <dir with unified_agenda.parquet> \
@@ -158,13 +188,14 @@ whose two inputs are both checked in.
 Re-observe against a fresh download of the published tables:
 
 ```
-SPICY_REGS_R2_URL=https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev \
-scripts/check_source_domain_drift.py --observe --data-dir <dir of published parquet> \
-    --observed-at <ISO-8601> --producer-revision <sha> --write-snapshot
+SPICY_REGS_R2_URL=https://data.spicygov.ai \
+uv run --frozen python scripts/check_source_domain_drift.py --observe \
+    --observed-at <ISO-8601> --producer-revision "publication.v2.json sha256:<index digest>" --write-snapshot
 ```
 
-The URLs the observation records resolve through the publication index of that
-host; if a table's generation advanced, refresh the checked-in index fragment
+Add `--data-dir <dir>` to read local copies instead and record their own
+digests. The r2.dev host answers 429 to the remote column reads. The URLs the
+observation records resolve through the publication index of that host; if a table's generation advanced, refresh the checked-in index fragment
 too, or the URL assertions fail.
 
 Re-pin a capture by refetching it from the `source_url` its manifest entry names,

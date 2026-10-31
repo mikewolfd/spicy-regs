@@ -1,0 +1,1050 @@
+{
+  "format": "spicy-regs-publication",
+  "version": 2,
+  "families": {
+    "bill-family": {
+      "artifactDigest": "sha256:f719442c6a814666c5747624ef8a52da002bc2982f4ebd7f2be990f86bc38d42",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:f78022d0df3024e0061d4685322fb731504c6d609386406ef5ceba7865161a8e",
+      "prefix": "generations/bill-family/f719442c6a814666c5747624ef8a52da002bc2982f4ebd7f2be990f86bc38d42",
+      "publishedAt": "2026-10-30T05:07:28Z",
+      "tables": {
+        "bill_actions.parquet": {
+          "byteSize": 11506349,
+          "columns": [
+            [
+              "bill_id",
+              "VARCHAR"
+            ],
+            [
+              "action_index",
+              "BIGINT"
+            ],
+            [
+              "action_date",
+              "VARCHAR"
+            ],
+            [
+              "action_time",
+              "VARCHAR"
+            ],
+            [
+              "action_text",
+              "VARCHAR"
+            ],
+            [
+              "action_code",
+              "VARCHAR"
+            ],
+            [
+              "action_type",
+              "VARCHAR"
+            ],
+            [
+              "source_system_name",
+              "VARCHAR"
+            ],
+            [
+              "recorded_vote_count",
+              "BIGINT"
+            ],
+            [
+              "is_latest_action",
+              "BOOLEAN"
+            ],
+            [
+              "stage",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 932877,
+          "sha256": "sha256:ded5f49598848192c847dd6e2b4ba0bd57b26209c0606a4d3d27f6dea32d78a9"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 3026562002,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "congress_bills",
+          "bill_actions",
+          "bill_cosponsors",
+          "bill_committees",
+          "bill_committee_activities",
+          "bill_publisher_summaries",
+          "bill_versions",
+          "bill_sections",
+          "section_diffs",
+          "section_diff_items",
+          "financial_changes",
+          "section_classifications",
+          "bill_summaries",
+          "diff_summaries",
+          "cbo_cost_estimates",
+          "cbo_feed_items",
+          "public_activity_events",
+          "bill_family_archives",
+          "bill_vote_references",
+          "bill_family_backfills",
+          "bill_family_backfill_walks",
+          "bill_family_document_file_outcomes"
+        ],
+        "generationId": "7523c42415324c86a93543af8ea5665a",
+        "key": "etl_receipts.parquet",
+        "rows": 10089926,
+        "sha256": "sha256:a767e2a3267a81df7469df28c6fc4b8bd43f93395a97a3b5c95b631229668899"
+      }
+    },
+    "comments": {
+      "artifactDigest": "sha256:08e42cccdb0a57ff5e9fb7c0e0a825ff578c2e349e308289acaab86f766266a1",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:0c43821e17ebcb87e6ba88fed09447088337d072726c92a89c2f15078850c7a3",
+      "prefix": "generations/comments/08e42cccdb0a57ff5e9fb7c0e0a825ff578c2e349e308289acaab86f766266a1",
+      "publishedAt": "2026-10-10T15:45:23Z",
+      "tables": {
+        "comments.parquet": {
+          "byteSize": 9700315113,
+          "columns": [
+            [
+              "comment_id",
+              "VARCHAR"
+            ],
+            [
+              "docket_id",
+              "VARCHAR"
+            ],
+            [
+              "comment_on_document_id",
+              "VARCHAR"
+            ],
+            [
+              "comment_on_object_id",
+              "VARCHAR"
+            ],
+            [
+              "original_document_id",
+              "VARCHAR"
+            ],
+            [
+              "comment_reference_values_json",
+              "VARCHAR"
+            ],
+            [
+              "agency_code",
+              "VARCHAR"
+            ],
+            [
+              "first_name",
+              "VARCHAR"
+            ],
+            [
+              "last_name",
+              "VARCHAR"
+            ],
+            [
+              "organization",
+              "VARCHAR"
+            ],
+            [
+              "category",
+              "VARCHAR"
+            ],
+            [
+              "title",
+              "VARCHAR"
+            ],
+            [
+              "comment",
+              "VARCHAR"
+            ],
+            [
+              "document_type",
+              "VARCHAR"
+            ],
+            [
+              "posted_date",
+              "VARCHAR"
+            ],
+            [
+              "modify_date",
+              "VARCHAR"
+            ],
+            [
+              "receive_date",
+              "VARCHAR"
+            ],
+            [
+              "attachments",
+              "STRUCT(title VARCHAR, formats STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[], attachment_id VARCHAR, restrict_reason VARCHAR, restrict_reason_type VARCHAR)[]"
+            ],
+            [
+              "text_content",
+              "VARCHAR"
+            ],
+            [
+              "text_extraction_status",
+              "VARCHAR"
+            ],
+            [
+              "pdf_extraction_results_json",
+              "VARCHAR"
+            ],
+            [
+              "subtype",
+              "VARCHAR"
+            ],
+            [
+              "duplicate_comments",
+              "INTEGER"
+            ],
+            [
+              "comment_text",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 26418078,
+          "sha256": "sha256:802a5e9a494b4be9add638c779e1994ed97582e1ea3c21627c77b4030b976ea4"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 3968509123,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "comments",
+          "comments_index"
+        ],
+        "generationId": "comments-v2-c2dd1f166abd441b80eb02373d625c88",
+        "key": "etl_receipts.parquet",
+        "rows": 26561684,
+        "sha256": "sha256:3a9a9cddb235d5055ae49d8fbe430c61dcce8bcfdec9e14023c7db5adcd9ea0d"
+      }
+    },
+    "dockets": {
+      "artifactDigest": "sha256:6890875d7aaf081b6974df133d307bddc2b5e4c9fb9793dcfc33a49707a2a9d2",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:0bd671f8b53e23ef6ea876a16df813bbb953acd020a71054987f40c29dbb3448",
+      "prefix": "generations/dockets/6890875d7aaf081b6974df133d307bddc2b5e4c9fb9793dcfc33a49707a2a9d2",
+      "publishedAt": "2026-10-06T10:21:34Z",
+      "tables": {
+        "dockets.parquet": {
+          "byteSize": 15480748,
+          "columns": [
+            [
+              "docket_id",
+              "VARCHAR"
+            ],
+            [
+              "agency_code",
+              "VARCHAR"
+            ],
+            [
+              "title",
+              "VARCHAR"
+            ],
+            [
+              "docket_type",
+              "VARCHAR"
+            ],
+            [
+              "modify_date",
+              "VARCHAR"
+            ],
+            [
+              "abstract",
+              "VARCHAR"
+            ],
+            [
+              "rin",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 279719,
+          "sha256": "sha256:81dcc636e24666cab8ccf4b215e24e80d74a13e5a0780ad7690efaaaa6316a44"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 58573148,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "dockets"
+        ],
+        "generationId": "772285b4fbf24509a067ec258deaaa6a",
+        "key": "etl_receipts.parquet",
+        "rows": 279720,
+        "sha256": "sha256:1bfc2b0d05b2f81bc39ee49633fd6560255652ec34f2567b02e45846b96c24c0"
+      }
+    },
+    "documents": {
+      "artifactDigest": "sha256:5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:ca0edadb4d17176175e546d0e16f12bb48db01fefda1c8121cf40266ec13886d",
+      "prefix": "generations/documents/5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71",
+      "publishedAt": "2026-10-07T06:51:54Z",
+      "tables": {
+        "documents.parquet": {
+          "byteSize": 104974489,
+          "columns": [
+            [
+              "document_id",
+              "VARCHAR"
+            ],
+            [
+              "docket_id",
+              "VARCHAR"
+            ],
+            [
+              "agency_code",
+              "VARCHAR"
+            ],
+            [
+              "title",
+              "VARCHAR"
+            ],
+            [
+              "document_type",
+              "VARCHAR"
+            ],
+            [
+              "posted_date",
+              "VARCHAR"
+            ],
+            [
+              "modify_date",
+              "VARCHAR"
+            ],
+            [
+              "comment_start_date",
+              "VARCHAR"
+            ],
+            [
+              "comment_end_date",
+              "VARCHAR"
+            ],
+            [
+              "file_url",
+              "VARCHAR"
+            ],
+            [
+              "attachments",
+              "STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[]"
+            ],
+            [
+              "attachment_records",
+              "STRUCT(attachment_id VARCHAR, title VARCHAR, file_formats STRUCT(url VARCHAR, format VARCHAR, size BIGINT)[], restrict_reason VARCHAR, restrict_reason_type VARCHAR)[]"
+            ],
+            [
+              "fr_doc_num",
+              "VARCHAR"
+            ],
+            [
+              "withdrawn",
+              "BOOLEAN"
+            ],
+            [
+              "reason_withdrawn",
+              "VARCHAR"
+            ],
+            [
+              "additional_rins",
+              "VARCHAR[]"
+            ],
+            [
+              "text_content",
+              "VARCHAR"
+            ],
+            [
+              "text_extraction_status",
+              "VARCHAR"
+            ],
+            [
+              "pdf_extraction_results_json",
+              "VARCHAR"
+            ],
+            [
+              "publisher_status",
+              "VARCHAR"
+            ],
+            [
+              "removed_observed_at",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 2004396,
+          "sha256": "sha256:c9cc1d2decbcc66a91b51824b826501d8d70189affc0138fae53703bf495ad2b"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 929674726,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "documents"
+        ],
+        "generationId": "25eb36e5e4124e1e9c71abef4e676fc3",
+        "key": "etl_receipts.parquet",
+        "rows": 2004397,
+        "sha256": "sha256:ed863ed4115ea41faf360269d8880e1ebce8b4a7a4c36ad229cc47af8c967cbb"
+      }
+    },
+    "fec-committee-history": {
+      "artifactDigest": "sha256:181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:60e8957193148dd4ab2866a4bd1d7e9306a28e3db791a0a696da762c389b3983",
+      "prefix": "generations/fec-committee-history/181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320",
+      "publishedAt": "2026-10-30T19:52:18Z",
+      "tables": {
+        "fec_committee_history.parquet": {
+          "byteSize": 19853914,
+          "columns": [
+            [
+              "committee_id",
+              "VARCHAR"
+            ],
+            [
+              "cycle",
+              "INTEGER"
+            ],
+            [
+              "name",
+              "VARCHAR"
+            ],
+            [
+              "treasurer_name",
+              "VARCHAR"
+            ],
+            [
+              "street_1",
+              "VARCHAR"
+            ],
+            [
+              "street_2",
+              "VARCHAR"
+            ],
+            [
+              "city",
+              "VARCHAR"
+            ],
+            [
+              "state",
+              "VARCHAR"
+            ],
+            [
+              "zip",
+              "VARCHAR"
+            ],
+            [
+              "designation",
+              "VARCHAR"
+            ],
+            [
+              "committee_type",
+              "VARCHAR"
+            ],
+            [
+              "party",
+              "VARCHAR"
+            ],
+            [
+              "filing_frequency",
+              "VARCHAR"
+            ],
+            [
+              "organization_type",
+              "VARCHAR"
+            ],
+            [
+              "connected_organization_name",
+              "VARCHAR"
+            ],
+            [
+              "candidate_id",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 298596,
+          "sha256": "sha256:03a6f17fddd3f008b23e4e595d65945154994a8a935f046400f342198440c80d"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 36864113,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "fec_committee_history"
+        ],
+        "generationId": "0246f4cddd174ac3950e93809fc05386",
+        "key": "etl_receipts.parquet",
+        "rows": 298596,
+        "sha256": "sha256:0c2cdf7f088babb3ac4aa8a396ba2798093a6c3db9758e0c4c7a471a2336e68f"
+      }
+    },
+    "lobbying-filings": {
+      "artifactDigest": "sha256:eb88eb812bec81a5028c8be59e71a470efeb7a397dfc79c33a457865fd1d9923",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:fa6c1ebe2d449a61e5eb3b391a8d5c5744c6905f44b0be43330adc9658655984",
+      "prefix": "generations/lobbying-filings/eb88eb812bec81a5028c8be59e71a470efeb7a397dfc79c33a457865fd1d9923",
+      "publishedAt": "2026-10-19T17:50:17Z",
+      "tables": {
+        "lobbying_activities.parquet": {
+          "byteSize": 276852510,
+          "columns": [
+            [
+              "filing_uuid",
+              "VARCHAR"
+            ],
+            [
+              "activity_index",
+              "BIGINT"
+            ],
+            [
+              "general_issue_code",
+              "VARCHAR"
+            ],
+            [
+              "general_issue_code_display",
+              "VARCHAR"
+            ],
+            [
+              "description",
+              "VARCHAR"
+            ],
+            [
+              "foreign_entity_issues",
+              "VARCHAR"
+            ],
+            [
+              "government_entities",
+              "STRUCT(id VARCHAR, \"name\" VARCHAR)[]"
+            ]
+          ],
+          "rows": 3628235,
+          "sha256": "sha256:506cc4d810da258723db43171c3ba4bfd44b48cec37f0183b69bae14c0e3c98d"
+        },
+        "lobbying_filings.parquet": {
+          "byteSize": 302907726,
+          "columns": [
+            [
+              "filing_uuid",
+              "VARCHAR"
+            ],
+            [
+              "filing_type",
+              "VARCHAR"
+            ],
+            [
+              "filing_year",
+              "BIGINT"
+            ],
+            [
+              "filing_period",
+              "VARCHAR"
+            ],
+            [
+              "dt_posted",
+              "TIMESTAMP WITH TIME ZONE"
+            ],
+            [
+              "registrant_name",
+              "VARCHAR"
+            ],
+            [
+              "registrant_id",
+              "VARCHAR"
+            ],
+            [
+              "client_name",
+              "VARCHAR"
+            ],
+            [
+              "client_id",
+              "VARCHAR"
+            ],
+            [
+              "income",
+              "DECIMAL(38,6)"
+            ],
+            [
+              "expenses",
+              "DECIMAL(38,6)"
+            ],
+            [
+              "lobbying_activities",
+              "STRUCT(general_issue_code VARCHAR, general_issue_code_display VARCHAR, description VARCHAR)[]"
+            ],
+            [
+              "government_entities",
+              "STRUCT(id VARCHAR, \"name\" VARCHAR)[]"
+            ]
+          ],
+          "rows": 1965087,
+          "sha256": "sha256:25b015cb5cdb235045727e760bba0170b45ff60f2131303b92f7c4a3482b4b54"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 2993835029,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "lobbying_filings",
+          "lobbying_activities",
+          "lobbying_activity_lobbyists"
+        ],
+        "generationId": "b3507aaad2ef4a87aa35dab6947b0158",
+        "key": "etl_receipts.parquet",
+        "rows": 15882805,
+        "sha256": "sha256:aee767327b134e92965e886b16164bc3448d1213af303eae5e4366ec2159dc1a"
+      }
+    },
+    "unified-agenda": {
+      "artifactDigest": "sha256:d562881f25c54d8c403e9969a05a42b17196926949bc3645b35432072522d645",
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:300871e2a2b2ef5a2e9988a64cb3db9e6707e53b76aca4d664a51ab9ae453129",
+      "prefix": "generations/unified-agenda/d562881f25c54d8c403e9969a05a42b17196926949bc3645b35432072522d645",
+      "publishedAt": "2026-10-30T20:17:42Z",
+      "tables": {
+        "unified_agenda.parquet": {
+          "byteSize": 66240434,
+          "columns": [
+            [
+              "rin",
+              "VARCHAR"
+            ],
+            [
+              "agency_code",
+              "VARCHAR"
+            ],
+            [
+              "agency_name",
+              "VARCHAR"
+            ],
+            [
+              "title",
+              "VARCHAR"
+            ],
+            [
+              "abstract",
+              "VARCHAR"
+            ],
+            [
+              "rin_status",
+              "VARCHAR"
+            ],
+            [
+              "rule_stage",
+              "VARCHAR"
+            ],
+            [
+              "priority_category",
+              "VARCHAR"
+            ],
+            [
+              "agenda_edition",
+              "VARCHAR"
+            ],
+            [
+              "major",
+              "VARCHAR"
+            ],
+            [
+              "publication_id",
+              "VARCHAR"
+            ],
+            [
+              "timetable",
+              "STRUCT(\"action\" VARCHAR, date VARCHAR, fr_citation VARCHAR)[]"
+            ],
+            [
+              "cfr_references",
+              "VARCHAR[]"
+            ],
+            [
+              "legal_authority",
+              "VARCHAR[]"
+            ],
+            [
+              "first_action_date",
+              "VARCHAR"
+            ],
+            [
+              "next_action_date",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 241726,
+          "sha256": "sha256:aa4f83bc0219d3e8eb1cf025f551bd3e17202a0b48968746931125ad0feb2b15"
+        }
+      },
+      "etlReceipts": {
+        "byteSize": 113234866,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "unified_agenda"
+        ],
+        "generationId": "5afcfd25afbd428c96d3ec0a6438c513",
+        "key": "etl_receipts.parquet",
+        "rows": 241727,
+        "sha256": "sha256:f4ad0d10ecf6b9d13b7bd2930e281a999a601b78c5a815d9057d50aab2440d34"
+      }
+    }
+  }
+}
