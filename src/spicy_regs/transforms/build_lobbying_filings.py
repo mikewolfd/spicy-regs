@@ -145,9 +145,10 @@ def _iter_filings(reader: LdaFilingsReader, url: str, *, max_records: int | None
     after ``max_passes`` (default ``DEFAULT_POOL_PASSES``) raises
     ``IncompleteWalkError`` rather than publishing a short year. A 1999-2006
     year, whose filings are almost all posted on day-precision ties, lost 1.9%
-    (2000) to 6.7% (1999) of its filings in one walk; at that rate four passes
-    settle all eight years only about one time in five and six settle each
-    with 0.3% risk, so the re-walk sets ``LDA_POOL_PASSES=6`` (ss-hqoi). One
+    (2000) to 6.7% (1999) of its filings in one walk. The owner capped the
+    1999-2006 re-walk at four passes (2026-10-31, ss-hqoi), the default; a year
+    still short after four refuses and is reported, not published short. An
+    unset ``LDA_POOL_PASSES`` means the default; zero or less is refused. One
     walk's filings are held in memory, as the whole-window read always was.
     """
     from dataclasses import replace
@@ -163,7 +164,7 @@ def _iter_filings(reader: LdaFilingsReader, url: str, *, max_records: int | None
         yield from itertools.islice(prefix, max_records)
         return
     pooled = pool_walks(lambda _: WalkPass.from_pages(pages(), label="LDA filings"),
-                        key=lambda filing: filing["filing_uuid"], max_passes=max_passes or DEFAULT_POOL_PASSES,
+                        key=lambda filing: filing["filing_uuid"], max_passes=DEFAULT_POOL_PASSES if max_passes is None else max_passes,
                         label="LDA filings")
     if pooled.passes > 1:
         logger.warning("LDA: {} walks of {} pooled to its declared {:,} filings", pooled.passes, url, pooled.declared)

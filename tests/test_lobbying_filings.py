@@ -278,6 +278,8 @@ def test_the_pass_budget_bounds_the_pooled_walks(tmp_path, monkeypatch):
     _mock_http(monkeypatch, _tied_walks([short, short, short, short, (["c", "a"], ["d", "a"])]))
     with pytest.raises(IncompleteWalkError, match="after 3 passes"):
         bld.build_lobbying_filings(tmp_path, max_passes=3)
+    with pytest.raises(ValueError):  # zero is refused, not read as the default
+        bld.build_lobbying_filings(tmp_path, max_passes=0)
     seen = {}
     monkeypatch.setattr(rollup, "build_lobbying_filings", lambda output_dir, **kwargs: seen.update(kwargs) or ())
     monkeypatch.setenv("LDA_POOL_PASSES", "8")
