@@ -1,13 +1,14 @@
 """The congressional-tech archive release spicy-regs reads, pinned by release_id (L2-A3, L2-A4).
 
-``archive_release_pins.json`` beside this module is both the binding record and
-the published pin list. It is the ct-cov3 v1 wire contract
-(``{"version": 1, "updated_at", "releases": [64-hex]}``) plus ``bound``, the one
-release spicy-regs reads now; readers of the wire contract ignore ``bound``.
-The archive's maintenance keeps only ``live`` and ``last_good`` plus external
-pins (engine-first-architecture §10.3.7), so it reads this file from GitHub
-main by raw URL, as spicy-regs reads DocSpec's pins (``generation_retention``).
-The pin is live when the commit merges, before any MCP deploy binds it.
+``archive_release_pins.json`` beside this module is the binding record: the
+ct-cov3 v1 wire contract (``{"version": 1, "updated_at", "releases": [64-hex]}``)
+plus ``bound``, the one release spicy-regs reads now. The archive's maintenance
+keeps only ``live`` and ``last_good`` plus external pins
+(engine-first-architecture §10.3.7), so spicy-regs publishes the wire keys alone
+to its own bucket at ``PINS_URL`` (owner, 2026-10-31: each project writes only
+its own bucket; the archive reads it over HTTPS). ``main`` here renders that
+document and, with ``--publish``, uploads and reads it back; the publish
+workflow runs it when the record changes on main, before any MCP deploy binds it.
 
 Lifetime rule: when ``bound`` moves to a newer release, keep the superseded id
 in ``releases`` until the hosted MCP has redeployed onto its successor, so the
@@ -32,7 +33,11 @@ from typing import Any, NamedTuple
 from spicy_regs.sources import publication
 
 ORIGIN = "https://congressional-data.spicygov.ai/viewer-publications"
-PINS_URL = "https://raw.githubusercontent.com/mikewolfd/spicy-regs/main/src/spicy_regs/archive_release_pins.json"
+#: The published pin list, in spicy-regs' own bucket; ct-cov3 reads it.
+PINS_KEY = "pins/archive-releases.json"
+PINS_URL = f"https://data.spicygov.ai/{PINS_KEY}"
+#: The ct-cov3 v1 wire keys; ``bound`` stays in the repo-held record.
+WIRE_KEYS = ("version", "updated_at", "releases")
 #: The archive's own bound on control documents (congressional-tech release.py CONTROL_BYTES).
 CONTROL_BYTES = 32 << 20
 #: The release files L2-A4 binds; url_state, url_variants and the capture_* controls stay unexposed,
@@ -67,6 +72,11 @@ def parse_pins(raw: bytes | str) -> dict[str, Any]:
 def load_pins() -> dict[str, Any]:
     """The repo-held pin document shipped with this package."""
     return parse_pins(files("spicy_regs").joinpath("archive_release_pins.json").read_bytes())
+
+
+def wire_bytes(document: dict[str, Any]) -> bytes:
+    """The published pin list: a validated record cut to exactly the ct-cov3 v1 keys."""
+    return (json.dumps({key: document[key] for key in WIRE_KEYS}, indent=2) + "\n").encode()
 
 
 def release_identity(schema_version: Any, entries: list[dict[str, Any]]) -> str:
@@ -252,3 +262,29 @@ def description(binding: Binding) -> dict[str, Any]:
                           for item in document.get("relationships", [])],
         "recipes": [{**item, "available_here": here(item["requires"])} for item in document.get("recipes", [])],
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Render ``pins/archive-releases.json`` from the shipped record; ``--publish`` uploads it and reads it back."""
+    import argparse
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    parser.add_argument("--output", type=Path, default=Path("output") / PINS_KEY)
+    parser.add_argument("--publish", action="store_true", help=f"Upload to R2 as {PINS_KEY} and verify the public copy")
+    args = parser.parse_args(argv)
+    raw = wire_bytes(load_pins())
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_bytes(raw)
+    if args.publish:
+        from spicy_regs.public_url import resolve_r2_base_url
+        from spicy_regs.sources.r2 import upload_file, verify_public_file
+
+        # Short edge lifetime: a newly pinned release must reach the archive's pruner before it runs.
+        upload_file(args.output, PINS_KEY, cache_control="public, max-age=60, must-revalidate")
+        print(json.dumps({"published": PINS_KEY, **verify_public_file(args.output, PINS_KEY, resolve_r2_base_url())}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

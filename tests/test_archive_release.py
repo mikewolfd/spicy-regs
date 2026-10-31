@@ -93,3 +93,26 @@ def test_lookup_key_follows_the_fixed_lookup_url_spelling(url, spelling):
 
 def test_relative_urls_have_no_lookup_key():
     assert archive_release.lookup_key("/meetings/x.pdf") is None
+
+
+def test_the_published_pin_list_is_exactly_the_wire_contract(tmp_path):
+    out = tmp_path / "archive-releases.json"
+    assert archive_release.main(["--output", str(out)]) == 0
+    published = json.loads(out.read_bytes())
+    shipped = archive_release.load_pins()
+    # ct-cov3 reads version/updated_at/releases; the binding record's ``bound`` is not published.
+    assert published == {"version": 1, "updated_at": shipped["updated_at"], "releases": shipped["releases"]}
+    assert archive_release.PINS_URL == "https://data.spicygov.ai/pins/archive-releases.json"
+
+
+def test_publish_uploads_the_rendered_list_to_its_key_and_reads_it_back(tmp_path, monkeypatch):
+    from spicy_regs.sources import r2
+
+    calls = []
+    monkeypatch.setattr(r2, "upload_file", lambda path, key, cache_control: calls.append(("put", path.read_bytes(), key)))
+    monkeypatch.setattr(r2, "verify_public_file", lambda path, key, base: calls.append(("read", key, base)) or {})
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.spicygov.ai")
+    out = tmp_path / "archive-releases.json"
+    archive_release.main(["--output", str(out), "--publish"])
+    assert calls == [("put", out.read_bytes(), archive_release.PINS_KEY),
+                     ("read", archive_release.PINS_KEY, "https://data.spicygov.ai")]

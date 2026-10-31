@@ -333,7 +333,8 @@ second view path.
 The archive's documents, meetings and witnesses are bound as nine flat views,
 `archive_list` … `archive_recordings`, read from the release
 `archive_release_pins.json` names as `bound` (see `archive_release.py` for the
-pin's lifetime rule and why it is served from GitHub main).
+pin's lifetime rule; its wire keys are published to `pins/archive-releases.json`
+in the spicy-regs bucket, where the archive's pruner reads them).
 
 - **Same admission path.** Archive views are `_RemoteSourceView`s admitted by
   `_admit_remote_source_views`, so `_remote_query_scope` decides: a query that
