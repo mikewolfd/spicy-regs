@@ -111,7 +111,8 @@ def test_publish_uploads_the_rendered_list_to_its_key_and_reads_it_back(tmp_path
     calls = []
     monkeypatch.setattr(r2, "upload_file", lambda path, key, cache_control: calls.append(("put", path.read_bytes(), key)))
     monkeypatch.setattr(r2, "verify_public_file", lambda path, key, base: calls.append(("read", key, base)) or {})
-    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.spicygov.ai")
+    # A configured base elsewhere (the workflow's fallback) must not be what the read-back proves.
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.spicy-regs.dev")
     out = tmp_path / "archive-releases.json"
     archive_release.main(["--output", str(out), "--publish"])
     assert calls == [("put", out.read_bytes(), archive_release.PINS_KEY),

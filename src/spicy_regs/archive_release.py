@@ -277,12 +277,13 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(raw)
     if args.publish:
-        from spicy_regs.public_url import resolve_r2_base_url
         from spicy_regs.sources.r2 import upload_file, verify_public_file
 
         # Short edge lifetime: a newly pinned release must reach the archive's pruner before it runs.
         upload_file(args.output, PINS_KEY, cache_control="public, max-age=60, must-revalidate")
-        print(json.dumps({"published": PINS_KEY, **verify_public_file(args.output, PINS_KEY, resolve_r2_base_url())}))
+        # Read back from the origin readers use, not the configured upload base: a pass proves PINS_URL serves it.
+        origin = PINS_URL.removesuffix("/" + PINS_KEY)
+        print(json.dumps({"published": PINS_KEY, **verify_public_file(args.output, PINS_KEY, origin)}))
     return 0
 
 
