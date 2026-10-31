@@ -58,6 +58,7 @@ null when the publisher supplied no docket, and there is no prefix inference.
 
 | View | Grain and safeguards |
 | --- | --- |
+| `usc_citation_verdicts` | One row per U.S. Code (title, section) key that `document_citations` (settled `usc_section`), `law_code_sections` or `table3_records` names, with each source's count and whether the held OLRC release point prints it, spans it with a range stub (matched in Code order: integer stem, then suffix), or does not print it. Not printed never means absent: `reason` says only what was observed (`appendix_title`, `classified_as_new`, `not_printed`). Duplicate OLRC numberings stay one key with `release_point_rows` above one. |
 | `agenda_item_editions` | Every exact RIN/edition/URL target stays separate. Duplicate edition rows are ambiguous; no latest-edition selection. |
 | `uei_identifiers`, `sam_uei_registrations` | Literal UEIs remain namespaced by source and registrations retain native EFT, including NULL. Shape checks do not adjudicate entity identity. |
 | `recipient_sam_entities` | One source recipient row with matching registration count. Grouping registrations before enrichment prevents monetary row multiplication. Original amounts and capture dates remain unchanged; parent/child totals may overlap. |
