@@ -533,8 +533,10 @@ conditional pointer retry. Unrelated family updates remain intact.
 A preparation seals the validator identity it started with. If the checkout,
 its uncommitted or untracked files, the installed SpicyDocs, or the SpicyRegs,
 SpicyDocs or Rulespec code bytes change while it runs, it refuses to seal and
-saves the receipt unsealed; finish it with `--resume-generation` from an
-unchanged checkout. Hosted main may move during a preparation.
+saves the receipt unsealed; finish it with `--resume-generation` from a
+clean checkout of current main plus `--expect-producer <the preparation's
+checkout>` (the refusal names that commit). Hosted main may move during a
+preparation.
 
 Only a completed official dry run is eligible. Partial writer outputs,
 old unsealed receipts, rehearsal reports, and already attempted or published

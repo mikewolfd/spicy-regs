@@ -257,11 +257,12 @@ def test_a_seal_names_only_the_code_its_run_started_with(tmp_path, monkeypatch, 
         done = convert("cfr-sections", work, state=state)
         assert done["prepared"]["validationIdentity"] == started and len(calls) == 2
         return
-    with pytest.raises(conversion.ConversionRefused, match="stays unsealed"):
+    with pytest.raises(conversion.ConversionRefused, match="stays unsealed: resume it with --resume-generation from "
+                       f"a clean checkout of current main and --expect-producer {MAIN} "):
         convert("cfr-sections", work, state=state)
     receipt = json.loads((work / conversion.RECEIPT).read_bytes())
     assert "prepared" not in receipt and "refused" not in receipt and receipt["generation"]
-    # The unsealed receipt resumes from an unchanged checkout without rerunning the writer.
+    # The unsealed receipt resumes, pinned to the preparation's checkout, without rerunning the writer.
     identity = json.loads((Path(receipt["generation"]["directory"]) / "artifact.json").read_bytes())
     monkeypatch.setattr(conversion, "_seal_prepared", real_seal)
     monkeypatch.setattr(generations, "validation_identity", lambda: started)

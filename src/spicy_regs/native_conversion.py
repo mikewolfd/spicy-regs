@@ -773,6 +773,12 @@ def _prepared_digest(receipt: Mapping) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
+def _resume_unsealed(source: Mapping) -> str:
+    """How to finish a preparation that refused to seal: resume on current main, pinned to the code that prepared it."""
+    return ("the receipt stays unsealed: resume it with --resume-generation from a clean checkout of current main and "
+            f"--expect-producer {source['checkout']} (the preparation's checkout)")
+
+
 def _seal_prepared(receipt: dict, built: _Built, work: Path, identity: Mapping) -> None:
     """Seal a qualified preparation: its pin, captured index, evidence, and the identity its admission ran under.
 
@@ -792,8 +798,8 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path, identity: Mapping) 
     if built.read_operation is None:
         raise ConversionRefused("Preparation seal requires its active admitted operation")
     if validation_identity() != identity:
-        raise ConversionRefused("The validator code on disk changed during this preparation; the receipt stays "
-                                "unsealed: resume it from an unchanged checkout")
+        raise ConversionRefused("The validator code on disk changed during this preparation; "
+                                + _resume_unsealed(receipt["source"]))
     if built.check_originals:
         built.check_originals()
     admitted, _ = built.read_operation.verified_source(built.generation)
@@ -1323,8 +1329,8 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         try:
             # Hosted main may move during a long preparation; the checkout and wheel this process loaded may not.
             if _local_state(state(remote)) != _local_state(started):
-                raise ConversionRefused("The checkout or installed SpicyDocs moved during this preparation; the "
-                                        "receipt stays unsealed: resume it from an unchanged checkout")
+                raise ConversionRefused("The checkout or installed SpicyDocs moved during this preparation; "
+                                        + _resume_unsealed(started))
             _seal_prepared(receipt, built, work, validator)
         except ConversionRefused:
             save()
