@@ -222,11 +222,18 @@ def build_unified_agenda(
     # 2. Fetch + shape the requested edition(s) into a "new rows" parquet: the
     # current edition plus a bounded backfill of editions the prior table lacks.
     if editions is None:
+        # An edition is held only when every prior row was read for related_rins (SpicyDocs 0.67.0). Rows
+        # restored from a regulations-native-v1 generation carry SQL NULL there (a read edition that states
+        # no list carries the JSON text "null"), so the bounded backfill re-reads those editions instead of
+        # republishing them with the column empty.
         held = set()
-        if have_prior:
+        if have_prior and "related_rins_json" in pq.read_schema(prior_file).names:
             held = {
                 row[0]
-                for row in duckdb.sql(f"SELECT DISTINCT agenda_edition FROM read_parquet('{prior_file}')").fetchall()
+                for row in duckdb.sql(
+                    f"SELECT agenda_edition FROM read_parquet('{prior_file}') "
+                    "GROUP BY 1 HAVING count(related_rins_json) = count(*)"
+                ).fetchall()
             }
         editions = editions_to_fetch(held, newest_edition())
     logger.info("Unified Agenda: fetching editions {}", ", ".join(editions))
@@ -274,8 +281,11 @@ def build_unified_agenda(
             con.close()
             raise ValueError("Source-only Unified Agenda rebuild requires unique non-null native identities")
     if have_prior:
+        # A prior written before a column existed (a 17-column table) merges with that column NULL.
+        prior_names = set(pq.read_schema(prior_file).names)
+        prior_cols = ", ".join(c if c in prior_names else f"NULL AS {c}" for c in COLUMNS)
         union = (
-            f"SELECT {cols}, 0 AS _src FROM read_parquet('{prior_file}') "
+            f"SELECT {prior_cols}, 0 AS _src FROM read_parquet('{prior_file}') "
             f"UNION ALL BY NAME "
             f"SELECT {cols}, 1 AS _src FROM read_parquet('{new_file}')"
         )

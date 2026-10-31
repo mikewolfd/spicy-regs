@@ -535,6 +535,7 @@ def test_v1_unified_agenda_pair_restores_and_rewrites_under_v2_with_related_rins
     """A pair written before SpicyDocs 0.67.0 read RELATED_RIN_LIST stays readable; NULL there means never read."""
     from spicy_regs.earlier_receipt_policies import earlier_policies
     from spicy_regs.etl_receipts import write_dataset
+    from spicy_regs.transforms.regulations_receipts import materialize_internal
     from spicy_regs.transforms.regulations_shape import shape_record
 
     current = policy("unified_agenda")
@@ -548,12 +549,20 @@ def test_v1_unified_agenda_pair_restores_and_rewrites_under_v2_with_related_rins
     subject, receipts = write_dataset([(held, context("old"))], tmp_path / "old", prior)
     assert subject is not None
     original = subject.read_bytes()
-    [restored] = read_internal(ReceiptInput("unified_agenda", (subject,), receipts, "old"))
+    selected = ReceiptInput("unified_agenda", (subject,), receipts, "old")
+    [restored] = read_internal(selected)
     assert subject.read_bytes() == original
+    # The incremental build's prior: SQL NULL, never the JSON text "null", so build_unified_agenda re-reads it.
+    [prior_row] = pq.read_table(materialize_internal(selected, tmp_path / "_ua_prior.parquet")).to_pylist()
+    assert "related_rins_json" in prior_row and prior_row["related_rins_json"] is None
     new = write(tmp_path, "unified_agenda", [restored], generation="new", label="new")
     [row] = pq.read_table(new.subjects[0]).to_pylist()
     assert row["related_rins"] is None
     assert (row["rin"], row["agenda_edition"], row["timetable"]) == ("1000-AA00", "202510", [])
+    # A v2 row whose edition was read and states no list keeps the JSON text, so its edition counts as held.
+    read = write(tmp_path, "unified_agenda", [{**raw, "related_rins_json": "null"}], generation="read", label="read")
+    [read_prior] = pq.read_table(materialize_internal(read, tmp_path / "_ua_read_prior.parquet")).to_pylist()
+    assert read_prior["related_rins_json"] == "null"
 
 
 def test_unified_agenda_related_rins_refuse_an_unknown_member():

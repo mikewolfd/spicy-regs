@@ -383,3 +383,68 @@ def test_related_rins_strip_agrees_with_the_spicy_docs_projection_collapse():
     assert [[(item.rin, item.rin_relation) for item in row.related_rins] for row in projected] == [
         [(item["rin"], item["rin_relation"]) for item in row["related_rins"] or ()] for row in table
     ]
+
+
+def test_the_backfill_rereads_editions_restored_before_related_rins_were_read(tmp_path, monkeypatch):
+    """A v1-restored edition (related_rins_json SQL NULL) is not held; a read edition with no list ("null") is."""
+    import sys
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    import spicy_regs.transforms.build_unified_agenda  # noqa: F401 -- the package re-exports the function by this name
+
+    module = sys.modules["spicy_regs.transforms.build_unified_agenda"]
+    requested: list[str] = []
+
+    class Reader:
+        def __init__(self, *, editions, on_source=None):
+            requested.extend(editions)
+            self.editions = editions
+
+        def iter_records(self):
+            for stem in self.editions:
+                edition = "201210" if stem == "2012" else stem
+                yield {"rin": f"0000-{edition}", "agenda_edition": edition, "timetable": [], "related_rins": []}
+
+    unread = {"202404", "201210"}
+    prior = [
+        {**dict.fromkeys(COLUMNS), "rin": f"0000-{edition}", "agenda_edition": edition,
+         "related_rins_json": None if edition in unread else "null"}
+        for edition in ("201210" if stem == "2012" else stem for stem in module.edition_series())
+    ]
+    pq.write_table(pa.Table.from_pylist(prior, schema=module._SCHEMA), tmp_path / "_ua_prior.parquet")
+    monkeypatch.setattr(module, "UnifiedAgendaReader", Reader)
+    monkeypatch.setattr(module, "newest_edition", lambda: "202510")
+    out = module.build_unified_agenda(tmp_path, download_prior=lambda *args: False)
+    assert requested == ["202510", "202404", "2012"]
+    rows = {row["agenda_edition"]: row["related_rins_json"] for row in pq.read_table(out).to_pylist()}
+    assert len(rows) == 60 and None not in rows.values()
+    assert rows["202404"] == rows["201210"] == "[]" and rows["202310"] == "null"
+
+
+def test_a_prior_without_the_related_rins_column_is_reread_from_the_newest_edition(tmp_path, monkeypatch):
+    import sys
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    import spicy_regs.transforms.build_unified_agenda  # noqa: F401 -- the package re-exports the function by this name
+
+    module = sys.modules["spicy_regs.transforms.build_unified_agenda"]
+    requested: list[str] = []
+
+    class Reader:
+        def __init__(self, *, editions, on_source=None):
+            requested.extend(editions)
+
+        def iter_records(self):
+            return iter(())
+
+    seventeen = pa.schema([(name, pa.string()) for name in COLUMNS if name != "related_rins_json"])
+    pq.write_table(pa.Table.from_pylist([{"rin": "0000-AA00", "agenda_edition": "202504"}], schema=seventeen),
+                   tmp_path / "_ua_prior.parquet")
+    monkeypatch.setattr(module, "UnifiedAgendaReader", Reader)
+    monkeypatch.setattr(module, "newest_edition", lambda: "202510")
+    module.build_unified_agenda(tmp_path, download_prior=lambda *args: False)
+    assert requested[:3] == ["202510", "202504", "202410"] and len(requested) == 1 + module.BACKFILL_EDITIONS_PER_RUN
