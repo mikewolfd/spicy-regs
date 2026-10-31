@@ -1,9 +1,12 @@
-"""Bounded Treasury fixtures exercise values, periods, revisions and existing serving."""
+"""Bounded Treasury fixtures exercise values, periods, revisions, Table 2 cells and existing serving."""
 from copy import deepcopy
 from datetime import date
 from decimal import Decimal
 import hashlib
 import json
+from pathlib import Path
+
+import httpx
 
 import pyarrow.parquet as pq
 import pytest
@@ -18,19 +21,21 @@ from tests.generation_fakes import Store
 DEBT_DATE = date(2025, 10, 31)
 ISSUE = date(2025, 10, 31)
 QUALIFICATION = {"sha256": "sha256:" + "a" * 64, "url": "https://fiscaldata.treasury.gov/fixture.pdf"}
+FIXTURES = Path(__file__).parent / "fixtures" / "treasury"
+TABLE2 = list(module.UNIT_RULES["datasets"]["mts_table_2"])
 
 
 class Reader:
-    def __init__(self, dataset, when, rows, *, revision="first"):
-        self.body = json.dumps(rows).encode()
+    def __init__(self, dataset, when, rows, *, revision="first", body=None, metadata=None):
+        self.body = body or json.dumps(rows).encode()
         digest = hashlib.sha256(self.body + revision.encode()).hexdigest()
         self.pin = ArtifactPin("urn:test:treasury:" + digest, "sha256:" + digest)
         self.records = [{
             "sourceRecordId": dataset + ":" + when.isoformat() + ":" + str(index),
             "record": {
                 "dataset": dataset, "selection": {"dataset": dataset, "record_date": when.isoformat(), "page_size": 50},
-                "raw": raw, "field_metadata": {"labels": {"record_date": "Record Date"},
-                                             "dataTypes": {"record_date": "DATE"}, "dataFormats": {}},
+                "raw": raw, "field_metadata": metadata or {"labels": {"record_date": "Record Date"},
+                                                           "dataTypes": {"record_date": "DATE"}, "dataFormats": {}},
                 "source_locator": {"request_url": "https://api.fiscaldata.treasury.gov/fixture",
                                    "response_sha256": "sha256:" + hashlib.sha256(self.body).hexdigest(),
                                    "observed_at": "2026-10-20T00:00:00Z", "byte_size": len(self.body),
@@ -50,6 +55,15 @@ class Reader:
         assert len(self.body) <= max_bytes
         return self.body
 
+    @classmethod
+    def retained(cls, name):
+        """One exact retained API response (tests/fixtures/treasury), as its release would admit it."""
+        body = (FIXTURES / (name + ".json")).read_bytes()
+        value = json.loads(body)
+        dataset, when = name.rsplit("-", 3)[0], date.fromisoformat(name.split("-", 1)[1])
+        metadata = {key: value["meta"][key] for key in ("labels", "dataTypes", "dataFormats")}
+        return cls(dataset, when, value["data"], body=body, metadata=metadata)
+
 
 def debt():
     return Reader("debt_to_penny", DEBT_DATE, [{
@@ -58,52 +72,89 @@ def debt():
     }])
 
 
-def statement(when=ISSUE, *, fiscal_year=2026, receipt="1.01", revision="first"):
-    parent = {
-        "record_date": when.isoformat(), "classification_id": "header", "parent_id": "null",
-        "classification_desc": f"FY {fiscal_year}", "record_fiscal_year": str(when.year + (when.month >= 10)),
-        "table_nbr": "1", "data_type_cd": "S", "record_type_cd": "SL", "sequence_number_cd": "1",
-        **dict.fromkeys(module.BUDGET_FIELDS.values(), "null"),
-    }
-    rows, months = [parent], []
-    for month in (*range(10, 13), *range(1, 10)):
-        if date(fiscal_year - (month >= 10), month, 1) <= when:
-            months.append(month)
-    for index, month in enumerate(months, 1):
-        rows.append(parent | {
-            "classification_id": str(index), "parent_id": "header",
+def statement(when=ISSUE, *, fiscal_years=None, receipt="1.01", revision="first"):
+    """Table 1 rows: by default the complete prior fiscal year and the current year through the issue."""
+    current = when.year + (when.month >= 10)
+    rows = []
+    for fiscal_year in fiscal_years or (current - 1, current):
+        parent = {
+            "record_date": when.isoformat(), "classification_id": f"header{fiscal_year}", "parent_id": "null",
+            "classification_desc": f"FY {fiscal_year}", "record_fiscal_year": str(current),
+            "table_nbr": "1", "data_type_cd": "S", "record_type_cd": "SL", "sequence_number_cd": "1",
+            **dict.fromkeys(module.BUDGET_FIELDS.values(), "null"),
+        }
+        months = [month for month in (*range(10, 13), *range(1, 10))
+                  if date(fiscal_year - (month >= 10), month, 1) <= when]
+        children = [parent | {
+            "classification_id": f"{fiscal_year}.{index}", "parent_id": parent["classification_id"],
             "classification_desc": next(name for name, number in module._MONTHS.items() if number == month),
             "data_type_cd": "D", "record_type_cd": "MTH", "sequence_number_cd": f"1.{index}",
             "current_month_gross_rcpt_amt": receipt, "current_month_gross_outly_amt": "2.02",
             "current_month_dfct_sur_amt": str(Decimal("2.02") - Decimal(receipt)),
-        })
-    rows.append(parent | {
-        "classification_id": "ytd", "parent_id": "header", "classification_desc": "Year-to-Date",
-        "data_type_cd": "T", "sequence_number_cd": f"1.{len(months) + 1}",
-        **{field: str(sum(Decimal(row[field]) for row in rows[1:])) for field in module.BUDGET_FIELDS.values()},
-    })
+        } for index, month in enumerate(months, 1)]
+        rows += [parent, *children, parent | {
+            "classification_id": f"{fiscal_year}.ytd", "parent_id": parent["classification_id"],
+            "classification_desc": "Year-to-Date", "data_type_cd": "T", "sequence_number_cd": f"1.{len(months) + 1}",
+            **{field: str(sum(Decimal(row[field]) for row in children)) for field in module.BUDGET_FIELDS.values()},
+        }]
     return Reader("mts_table_1", when, rows, revision=revision)
 
 
+#: Estimate cells ($ millions) that satisfy every Table 2 identity without a 0.00 cell.
+ESTIMATES = {2: "4.00", 3: "3.00", 4: "1.00", 5: "6.00", 6: "5.50", 7: "0.50", 8: "-2.00", 9: "-2.50",
+             10: "0.50", 11: "2.00", 13: "1.50", 14: "0.25", 15: "0.25"}
+
+
+def table2(when=ISSUE, *, receipt="1.01", revision="first"):
+    """A native 15-line Table 2 whose actuals reconcile with statement(when, receipt=receipt)."""
+    current = when.year + (when.month >= 10)
+    months = sum(1 for month in (*range(10, 13), *range(1, 10)) if date(current - (month >= 10), month, 1) <= when)
+    outlay = Decimal("2.02")
+    actual = {"current_month_budget_amt": (Decimal(receipt), outlay),
+              "current_fytd_budget_amt": (Decimal(receipt) * months, outlay * months),
+              "prior_fytd_budget_amt": (Decimal(receipt) * months, outlay * months)}
+    rows = []
+    for line, (desc, kind, parent) in module.TABLE2_LAYOUT.items():
+        row = {"record_date": when.isoformat(), "classification_id": str(7000 + line),
+               "parent_id": "null" if parent is None else str(7000 + parent), "classification_desc": desc,
+               "table_nbr": "2", "src_line_nbr": str(line), "print_order_nbr": str(line),
+               "sequence_level_nbr": "1" if parent is None else "2", "sequence_number_cd": f"{line}",
+               "data_type_cd": kind, "record_type_cd": "SL", "record_fiscal_year": str(current)}
+        for field in TABLE2:
+            if kind == "S":
+                row[field] = "null"
+            elif field in actual:
+                r, o = actual[field]
+                zero = Decimal("0.00")
+                row[field] = str({2: r, 3: r, 4: zero, 5: o, 6: o, 7: zero, 8: r - o, 9: r - o, 10: zero,
+                                  11: o - r, 13: o - r, 14: zero, 15: zero}[line])
+            else:
+                row[field] = ESTIMATES[line]
+        rows.append(row)
+    return Reader("mts_table_2", when, rows, revision=revision)
+
+
 def control(when=ISSUE):
-    return Reader("mts_table_2", when, [{"record_date": when.isoformat(), "classification_id": "forecast",
-                                       "current_year_budget_est_amt": "0.00"}])
+    return table2(when)
 
 
 def write(readers, tmp_path, issues=(ISSUE,)):
-    return module.build_treasury_fiscal(
+    files, _ = module.build_treasury_fiscal(
         readers, tmp_path, debt_dates=(DEBT_DATE,), report_dates=issues,
         qualifications={issue: QUALIFICATION for issue in issues},
     )
+    return files
 
 
 @pytest.mark.parametrize(("raw", "status"), [(None, "json_null"), ("null", "publisher_null"), ("", "blank")])
 def test_literal_nulls_exact_decimals_and_raw_context(tmp_path, raw, status):
     source = statement()
-    source.records[1]["record"]["raw"]["current_month_gross_rcpt_amt"] = raw
-    source.records[-1]["record"]["raw"]["current_month_gross_rcpt_amt"] = raw
+    for item in source.records:
+        if item["record"]["raw"]["classification_id"] in ("2026.1", "2026.ytd"):
+            item["record"]["raw"]["current_month_gross_rcpt_amt"] = raw
     write([debt(), source, control()], tmp_path)
-    row = pq.read_table(tmp_path / (module.STATEMENTS + ".parquet")).to_pylist()[0]
+    row, = [row for row in pq.read_table(tmp_path / (module.STATEMENTS + ".parquet")).to_pylist()
+            if row["classification_id"] == "2026.1"]
     assert row["budget_receipts_usd"] is None
     assert row["budget_outlays_usd"] == Decimal("2.02")
     assert json.loads(row["amount_statuses_json"])["budget_receipts_usd"] == status
@@ -116,15 +167,15 @@ def test_literal_nulls_exact_decimals_and_raw_context(tmp_path, raw, status):
 
 def test_parent_fiscal_year_and_sequence_stay_distinct_from_report_context(tmp_path):
     issue = date(2026, 9, 30)
-    write([debt(), statement(issue, fiscal_year=2025), control(issue)], tmp_path, (issue,))
+    write([debt(), statement(issue), control(issue)], tmp_path, (issue,))
     rows = pq.read_table(tmp_path / (module.STATEMENTS + ".parquet")).to_pylist()
-    july, = [row for row in rows if row["classification_desc"] == "July"]
+    july, = [row for row in rows if row["classification_desc"] == "July" and row["economic_fiscal_year"] == 2025]
     assert july["sequence_number_cd_literal"] == "1.10"
-    assert july["economic_fiscal_year"] == 2025 and july["period_start"] == date(2025, 7, 1)
+    assert july["period_start"] == date(2025, 7, 1)
     assert july["report_date"] == issue
     assert json.loads(july["raw_row_json"])["record_fiscal_year"] == "2026"
-    assert rows[-1]["period_kind"] == "fiscal_year_to_date"
-    assert rows[-1]["period_start"] == date(2024, 10, 1) and rows[-1]["period_end"] == date(2025, 9, 30)
+    total, = [row for row in rows if row["period_kind"] == "fiscal_year_to_date" and row["economic_fiscal_year"] == 2025]
+    assert total["period_start"] == date(2024, 10, 1) and total["period_end"] == date(2025, 9, 30)
 
 
 @pytest.mark.parametrize("same_issue", [False, True])
@@ -133,21 +184,40 @@ def test_issue_and_same_issue_revisions_preserve_both_observations(tmp_path, sam
     first, revised = statement(), statement(later, receipt="1.11", revision="revised")
     readers = [debt(), first, revised, control()]
     if not same_issue:
-        readers.append(control(later))
+        readers.append(table2(later, receipt="1.11"))
     write(readers, tmp_path, tuple(sorted({ISSUE, later})))
     rows = pq.read_table(tmp_path / (module.STATEMENTS + ".parquet")).to_pylist()
-    october = [row for row in rows if row["classification_desc"] == "October"]
+    october = [row for row in rows if row["classification_desc"] == "October" and row["economic_fiscal_year"] == 2026]
     assert [row["budget_receipts_usd"] for row in october] == [Decimal("1.01"), Decimal("1.11")]
     assert [row["report_date"] for row in october] == [ISSUE, later]
     assert len({row["source_release_digest"] for row in october}) == 2
 
 
-@pytest.mark.parametrize("defect", ["period", "parent", "date", "controls", "decimal", "deficit", "debt_total"])
+def test_table2_release_needs_one_reconciling_table1_release_of_its_issue(tmp_path):
+    """Same-issue Table 1 revisions stay separate; Table 2 must match one of them, not all."""
+    first, revised = statement(), statement(receipt="1.11", revision="revised")
+    _, summary = module.build_treasury_fiscal(
+        [debt(), first, revised, table2(receipt="1.11")], tmp_path / "ok", debt_dates=(DEBT_DATE,),
+        report_dates=(ISSUE,), qualifications={ISSUE: QUALIFICATION})
+    assert summary[0]["table1_cells_evaluated"] == 9
+    with pytest.raises(ValueError, match="every Table 1 release"):
+        write([debt(), first, revised, table2(receipt="1.21")], tmp_path / "refused")
+
+
+def _table2_cell(reader, line, field, literal):
+    reader.records[line - 1]["record"]["raw"][field] = literal
+
+
+@pytest.mark.parametrize("defect", [
+    "period", "parent", "date", "controls", "decimal", "deficit", "debt_total",
+    "t2_on_off", "t2_receipts_outlays", "t2_financing", "t2_means", "t2_table1", "t2_layout", "t2_parent",
+    "t2_repeat", "t2_unreviewed_zero", "unit_rule",
+])
 def test_refusal_preserves_prior_tables(tmp_path, defect):
     write([debt(), statement(), control()], tmp_path)
     before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    source, debt_reader = statement(), debt()
-    readers = [debt_reader, source, control()]
+    source, debt_reader, cells = statement(), debt(), control()
+    readers = [debt_reader, source, cells]
     if defect == "period":
         source.records.pop(1)
     elif defect == "parent":
@@ -160,11 +230,80 @@ def test_refusal_preserves_prior_tables(tmp_path, defect):
         source.records[1]["record"]["raw"]["current_month_gross_rcpt_amt"] = "1.001"
     elif defect == "deficit":
         source.records[1]["record"]["raw"]["current_month_dfct_sur_amt"] = "-1.01"
-    else:
+    elif defect == "debt_total":
         debt_reader.records[0]["record"]["raw"]["tot_pub_debt_out_amt"] = "3.00"
+    elif defect == "t2_on_off":
+        _table2_cell(cells, 3, "current_year_budget_est_amt", "3.10")
+    elif defect == "t2_receipts_outlays":
+        _table2_cell(cells, 8, "next_year_budget_est_amt", "-2.10")
+    elif defect == "t2_financing":
+        _table2_cell(cells, 11, "current_year_budget_est_amt", "2.10")
+    elif defect == "t2_means":
+        _table2_cell(cells, 15, "next_year_budget_est_amt", "0.35")
+    elif defect == "t2_table1":
+        _table2_cell(cells, 2, "prior_fytd_budget_amt", "1.02")
+        _table2_cell(cells, 3, "prior_fytd_budget_amt", "1.02")
+    elif defect == "t2_layout":
+        _table2_cell(cells, 13, "classification_desc", "Borrowing")
+    elif defect == "t2_parent":
+        _table2_cell(cells, 3, "parent_id", "7005")
+    elif defect == "t2_repeat":
+        cells.records[14]["record"]["raw"]["src_line_nbr"] = "14"
+    elif defect == "t2_unreviewed_zero":
+        _table2_cell(cells, 14, "next_year_budget_est_amt", "0.00")
+        _table2_cell(cells, 15, "next_year_budget_est_amt", "0.50")
+    else:
+        source.records[1]["record"]["raw"]["future_estimate_amt"] = "1.00"
     with pytest.raises(ValueError):
         write(readers, tmp_path)
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+
+
+def test_retained_editions_type_every_cell_with_reviewed_markers(tmp_path):
+    """Real 2026-09-30 and 2026-03-31 responses: 75 cells each, page-5 marker tallies, units and years."""
+    issues = (date(2026, 3, 31), date(2026, 9, 30))
+    readers = [Reader.retained(name) for name in (
+        "debt_to_penny-2026-10-16", "mts_table_1-2026-03-31", "mts_table_2-2026-03-31",
+        "mts_table_1-2026-09-30", "mts_table_2-2026-09-30")]
+    for reader in readers:
+        assert "sha256:" + hashlib.sha256(reader.body).hexdigest() in (FIXTURES / "README.md").read_text().replace(
+            "| ", "| sha256:")
+    _, summary = module.build_treasury_fiscal(
+        readers, tmp_path, debt_dates=(date(2026, 10, 16),), report_dates=issues,
+        qualifications={issue: QUALIFICATION for issue in issues})
+    rows = pq.read_table(tmp_path / (module.CELLS + ".parquet")).to_pylist()
+    for issue in issues:
+        cells = [row for row in rows if row["report_date"] == issue]
+        tally = {kind: sum(row["marker_kind"] == kind for row in cells) for kind in {row["marker_kind"] for row in cells}}
+        assert len(cells) == 75 and tally == {"value": 51, "no_transactions": 14, "publisher_null": 10}
+    assert {entry["identities"]["evaluated"] for entry in summary} == {28}
+    september = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[1]}
+    estimate = september[2, "current_year_budget_est_amt"]
+    assert (estimate["amount"], estimate["amount_unit"], estimate["measure_fiscal_year"]) == (
+        Decimal("5475705.00"), "usd_millions", 2026)
+    assert september[2, "next_year_budget_est_amt"]["measure_fiscal_year"] == 2027
+    prior = september[2, "prior_fytd_budget_amt"]
+    assert (prior["amount"], prior["amount_unit"], prior["measure_fiscal_year"]) == (
+        Decimal("5234616472030.91"), "usd", 2025)
+    dots = september[8, "next_year_budget_est_amt"]
+    assert (dots["amount"], dots["amount_literal"], dots["marker_kind"]) == (None, "0.00", "no_transactions")
+    assert september[9, "current_month_budget_amt"]["parent_src_line_nbr"] == 8
+    assert september[1, "current_month_budget_amt"]["parent_src_line_nbr"] is None
+
+
+def test_classification_ids_are_reassigned_per_edition_while_native_lines_hold():
+    """Never join editions on classification_id: ids differ, the native line structure does not."""
+    def structure(name):
+        rows = json.loads((FIXTURES / (name + ".json")).read_bytes())["data"]
+        lines = {row["classification_id"]: row["src_line_nbr"] for row in rows}
+        return {row["classification_id"] for row in rows}, {
+            row["src_line_nbr"]: (row["classification_desc"], row["sequence_number_cd"], row["sequence_level_nbr"],
+                                  row["data_type_cd"], row["record_type_cd"], lines.get(row["parent_id"]),
+                                  row["print_order_nbr"], row["line_code_nbr"]) for row in rows}
+    march_ids, march = structure("mts_table_2-2026-03-31")
+    september_ids, september = structure("mts_table_2-2026-09-30")
+    assert not march_ids & september_ids
+    assert march == september and len(march) == len(module.TABLE2_LAYOUT)
 
 
 def test_decimal_arithmetic_keeps_cents_beyond_default_context_precision(tmp_path):
@@ -195,7 +334,7 @@ def test_ordinary_generation_publication_and_local_query(tmp_path, monkeypatch):
     report.write_bytes(b"%PDF synthetic report control")
     qualified = QUALIFICATION | {"path": str(report), "sha256": "sha256:" + hashlib.sha256(report.read_bytes()).hexdigest()}
     output = tmp_path / "build"
-    artifact, evidence = pipeline.build(
+    artifact, evidence, _ = pipeline.build(
         [debt(), statement(), control()], output, debt_dates=(DEBT_DATE,), report_dates=(ISSUE,),
         reports={ISSUE: qualified},
     )
@@ -209,9 +348,56 @@ def test_ordinary_generation_publication_and_local_query(tmp_path, monkeypatch):
         values = connection.execute(f"""
             SELECT report_date, period_start, budget_receipts_usd, budget_outlays_usd, budget_deficit_usd,
                    json_extract_string(source_locator_json, '$.request_url')
-            FROM {module.STATEMENTS} WHERE period_kind='month'
+            FROM {module.STATEMENTS} WHERE period_kind='month' AND economic_fiscal_year = 2026
+        """).fetchall()
+        cells = connection.execute(f"""
+            SELECT c.measure, c.measure_fiscal_year, c.amount, c.amount_unit, p.budget_receipts_usd
+            FROM {module.CELLS} c JOIN {module.STATEMENTS} p
+              ON p.report_date = c.report_date AND p.period_kind = 'month'
+             AND p.period_start = date_trunc('month', c.report_date)
+            WHERE c.src_line_nbr = 2 AND c.measure = 'current_month_budget_amt'
         """).fetchall()
     assert values == [(ISSUE, date(2025, 10, 1), Decimal("1.01"), Decimal("2.02"), Decimal("1.01"),
                        "https://api.fiscaldata.treasury.gov/fixture")]
+    assert cells == [("current_month_budget_amt", 2026, Decimal("1.01"), "usd", Decimal("1.01"))]
     for name, schema in module.SCHEMAS.items():
         assert pq.read_schema(output / (name + ".parquet")).equals(schema)
+
+
+def test_acquire_records_receipt_scopes_and_rebuilds_identical_releases_from_raw(tmp_path):
+    """Captures go to the raw archive once; each release is rebuilt from its descriptors alone."""
+    bodies = {("mts_table_1", "2026-09-30"): "mts_table_1-2026-09-30", ("mts_table_2", "2026-09-30"):
+              "mts_table_2-2026-09-30", ("debt_to_penny", "2026-10-16"): "debt_to_penny-2026-10-16"}
+    report = b"%PDF-1.7 retained statement"
+    listing = [{"report_date": "2026-09-30", "report_group_id": "5",
+                "path": "/static-data/published-reports/mts/MonthlyTreasuryStatement_202609.pdf"}]
+    requests = []
+
+    def serve(request):
+        requests.append(str(request.url))
+        if request.url.path.endswith(".pdf"):
+            return httpx.Response(200, content=report, headers={"content-type": "application/pdf"})
+        if request.url.path.endswith("/publishedfiles"):
+            return httpx.Response(200, json=listing)
+        dataset = request.url.path.rsplit("/", 1)[-1]
+        name = bodies[dataset, request.url.params["filter"].removeprefix("record_date:eq:")]
+        return httpx.Response(200, content=(FIXTURES / (name + ".json")).read_bytes(),
+                              headers={"content-type": "application/json"})
+
+    selection = pipeline.acquire(
+        [(dataset, date.fromisoformat(when)) for dataset, when in bodies], [date(2026, 9, 30)],
+        tmp_path / "acquire", transport=httpx.MockTransport(serve))
+    assert len(requests) == 5
+    assert [scope["captures"][0]["response_sha256"] for scope in selection["releases"]] == [
+        "sha256:" + hashlib.sha256((FIXTURES / (name + ".json")).read_bytes()).hexdigest() for name in bodies.values()]
+    assert selection["reports"]["2026-09-30"]["sha256"] == "sha256:" + hashlib.sha256(report).hexdigest()
+    digests = []
+    for run in ("first", "second"):
+        artifact, _, summary = pipeline.build_from_captures(selection, tmp_path / run)
+        digests.append(sorted(json.loads((root / "artifact.json").read_bytes())["artifactDigest"]
+                              for root in (tmp_path / run / "source-releases").iterdir() if root.name.isdigit()))
+        assert summary[0]["identities"] == {"evaluated": 28, "skipped": 12}
+    assert digests[0] == digests[1] and len(digests[0]) == 3
+    cells = pq.read_table(tmp_path / "first" / (module.CELLS + ".parquet")).to_pylist()
+    assert {json.loads(row["source_locator_json"])["observed_at"] for row in cells} == {
+        selection["releases"][1]["captures"][0]["observed_at"]}

@@ -1,4 +1,4 @@
-"""Exact Treasury stocks and Table 1 budget actuals from admitted source rows."""
+"""Exact Treasury stocks, Table 1 budget actuals and Table 2 classification cells from admitted source rows."""
 from __future__ import annotations
 
 import calendar
@@ -14,6 +14,9 @@ from spicy_regs.parquet_rows import write_rows
 
 DEBT = "treasury_debt_observations"
 STATEMENTS = "treasury_statement_periods"
+CELLS = "treasury_statement_classification_cells"
+#: Reviewed per-field units and per-edition 0.00-estimate determinations; see the file's note.
+UNIT_RULES = json.loads(Path(__file__).with_name("treasury_units.json").read_text())
 DEBT_FIELDS = {
     "total_debt_usd": "tot_pub_debt_out_amt",
     "public_debt_usd": "debt_held_public_amt",
@@ -24,6 +27,28 @@ BUDGET_FIELDS = {
     "budget_outlays_usd": "current_month_gross_outly_amt",
     "budget_deficit_usd": "current_month_dfct_sur_amt",
 }
+#: Native Table 2 lines: (classification_desc, data_type_cd, parent src_line_nbr). The identities
+#: below name these lines, so a different layout refuses instead of checking the wrong rows.
+TABLE2_LAYOUT = {
+    1: ("Total On-Budget and Off-Budget Results:", "S", None),
+    2: ("Total Receipts", "T", 1), 3: ("On-Budget Receipts", "D", 2), 4: ("Off-Budget Receipts", "D", 2),
+    5: ("Total Outlays", "T", 1), 6: ("On-Budget Outlays", "D", 5), 7: ("Off-Budget Outlays", "D", 5),
+    8: ("Total Surplus (+) or Deficit (-)", "T", 1),
+    9: ("On-Budget Surplus (+) or Deficit (-)", "D", 8), 10: ("Off-Budget Surplus (+) or Deficit (-)", "D", 8),
+    11: ("Total On-Budget and Off-Budget Financing", "T", 1), 12: ("Means of Financing:", "S", None),
+    13: ("Borrowing from the Public", "D", 12), 14: ("Reduction of Operating Cash, Increase (-)", "D", 12),
+    15: ("By Other Means", "D", 12),
+}
+#: (result line, signed operand lines) per measure: on plus off equals total, receipts minus outlays
+#: equals surplus, financing equals minus surplus, and the means of financing sum to financing.
+TABLE2_IDENTITIES = (
+    (2, ((3, 1), (4, 1))), (5, ((6, 1), (7, 1))), (8, ((9, 1), (10, 1))),
+    (8, ((2, 1), (5, -1))), (9, ((3, 1), (6, -1))), (10, ((4, 1), (7, -1))),
+    (11, ((8, -1),)), (11, ((13, 1), (14, 1), (15, 1))),
+)
+#: Table 2 actual columns against Table 1: (Table 2 line, Table 1 column, sign).
+TABLE2_TABLE1_LINES = ((2, "budget_receipts_usd", 1), (5, "budget_outlays_usd", 1), (8, "budget_deficit_usd", -1))
+_ARITHMETIC = ("value", "zero")
 _MONTHS = {name: index for index, name in enumerate(
     ("January", "February", "March", "April", "May", "June",
      "July", "August", "September", "October", "November", "December"), 1)}
@@ -49,6 +74,17 @@ SCHEMAS = {
         ("qualification_report_sha256", pa.string()), ("qualification_report_url", pa.string()),
         *_SOURCE_COLUMNS,
     ]),
+    CELLS: pa.schema([
+        ("report_date", pa.date32()), ("src_line_nbr", pa.int32()), ("parent_src_line_nbr", pa.int32()),
+        ("print_order_nbr", pa.int32()), ("sequence_level_nbr", pa.int32()),
+        ("sequence_number_cd_literal", pa.string()), ("classification_id", pa.string()),
+        ("parent_id_literal", pa.string()), ("classification_desc", pa.string()),
+        ("data_type_cd", pa.string()), ("record_type_cd", pa.string()),
+        ("measure", pa.string()), ("measure_fiscal_year", pa.int32()), ("amount_literal", pa.string()),
+        ("amount", pa.decimal128(38, 2)), ("amount_unit", pa.string()), ("marker_kind", pa.string()),
+        ("qualification_report_sha256", pa.string()), ("qualification_report_url", pa.string()),
+        *_SOURCE_COLUMNS,
+    ]),
 }
 
 
@@ -71,6 +107,34 @@ def _amount(raw):
         if value != value.quantize(Decimal(".01")) or abs(value) >= Decimal("1e36"):
             raise ValueError("Treasury amount exceeds exact DECIMAL(38,2)")
     return value, "value"
+
+
+def _cell(raw, field, line, review):
+    """Type one Table 2 cell; a 0.00 estimate needs the edition's page-5 determination.
+
+    The publisher prints some 0.00 estimates as '......' (No Transactions) and
+    others as a projected zero, so the field name alone cannot decide.
+    """
+    if field not in raw:
+        raise ValueError("Treasury Table 2 row omits an amount field")
+    value, status = _amount(raw[field])
+    if status != "value" or value != 0:
+        return value, status
+    if not UNIT_RULES["datasets"]["mts_table_2"][field]["estimate"]:
+        return value, "zero"
+    if line in review.get("no_transactions", {}).get(field, ()):
+        return None, "no_transactions"
+    if line in review.get("zero", {}).get(field, ()):
+        return value, "zero"
+    raise ValueError("Treasury 0.00 estimate has no page-review determination")
+
+
+def _require_unit_rules(row):
+    rules = UNIT_RULES["datasets"].get(row["dataset"], {})
+    types = row["field_metadata"].get("dataTypes", {})
+    if any((types.get(field) == "CURRENCY" or field.endswith("_amt")) and field not in rules
+           for field in set(types) | set(row["raw"])):
+        raise ValueError("Treasury amount field has no committed unit rule")
 
 
 def _amounts(raw, fields):
@@ -179,18 +243,115 @@ def _statement_rows(reader, items, report, qualification):
     return output
 
 
+def _native_int(raw, key):
+    if not isinstance(raw[key], str) or not raw[key].isascii() or not raw[key].isdigit():
+        raise ValueError("Treasury native order field is not an integer literal")
+    return int(raw[key])
+
+
+def _table2_rows(reader, items, report, qualification):
+    """Emit every native line and measure of one Table 2 issue, with its cell markers."""
+    report_fy = report.year + (report.month >= 10)
+    lines, identities = {}, {}
+    for item in items:
+        raw = item["record"]["raw"]
+        line = _native_int(raw, "src_line_nbr")
+        if raw["table_nbr"] != "2" or raw["record_fiscal_year"] != str(report_fy):
+            raise ValueError("Treasury Table 2 record has a different table or fiscal year")
+        if line in lines or raw["classification_id"] in identities:
+            raise ValueError("Repeated Treasury Table 2 line within a report release")
+        lines[line], identities[raw["classification_id"]] = item, line
+    pages = {item["record"]["source_locator"]["response_sha256"] for item in items}
+    if set(lines) != set(TABLE2_LAYOUT) or len(pages) != 1:
+        raise ValueError("Unsupported Treasury Table 2 layout")
+    review = UNIT_RULES["zero_estimates"].get(pages.pop(), {})
+    rules = UNIT_RULES["datasets"]["mts_table_2"]
+    output, cells = [], {}
+    for line, item in sorted(lines.items()):
+        raw = item["record"]["raw"]
+        parent = None if raw["parent_id"] in (None, "null") else identities.get(raw["parent_id"], "unresolved")
+        if (raw["classification_desc"], raw["data_type_cd"], parent) != TABLE2_LAYOUT[line]:
+            raise ValueError("Unsupported Treasury Table 2 layout")
+        for field, rule in rules.items():
+            amount, marker = cells[line, field] = _cell(raw, field, line, review)
+            output.append({
+                "report_date": report, "src_line_nbr": line, "parent_src_line_nbr": parent,
+                "print_order_nbr": _native_int(raw, "print_order_nbr"),
+                "sequence_level_nbr": _native_int(raw, "sequence_level_nbr"),
+                "sequence_number_cd_literal": raw["sequence_number_cd"],
+                "classification_id": raw["classification_id"], "parent_id_literal": raw["parent_id"],
+                "classification_desc": raw["classification_desc"], "data_type_cd": raw["data_type_cd"],
+                "record_type_cd": raw["record_type_cd"], "measure": field,
+                "measure_fiscal_year": report_fy + rule["fiscal_year_offset"], "amount_literal": raw[field],
+                "amount": amount, "amount_unit": rule["unit"], "marker_kind": marker,
+                "qualification_report_sha256": qualification["sha256"],
+                "qualification_report_url": qualification["url"],
+                **_source(reader, item),
+            })
+    reviewed = {(kind, line, field) for kind in ("no_transactions", "zero")
+                for field, listed in review.get(kind, {}).items() for line in listed}
+    if reviewed - {(marker, line, field) for (line, field), (_, marker) in cells.items()}:
+        raise ValueError("Treasury page review names a cell that is not a 0.00 estimate")
+    return output, cells
+
+
+def _check_identities(cells):
+    """Evaluate each identity where every operand is a number; markers without a number skip."""
+    evaluated = skipped = 0
+    for field in UNIT_RULES["datasets"]["mts_table_2"]:
+        for result, terms in TABLE2_IDENTITIES:
+            if any(cells[line, field][1] not in _ARITHMETIC for line in (result, *(line for line, _ in terms))):
+                skipped += 1
+                continue
+            evaluated += 1
+            total = _sum(cells[line, field][0] * sign for line, sign in terms)
+            if total != cells[result, field][0]:
+                raise ValueError(f"Treasury Table 2 identity fails for line {result} {field}")
+    return {"evaluated": evaluated, "skipped": skipped}
+
+
+def _table1_failures(cells, periods, report):
+    """Count Table 2 actual cells that differ from one Table 1 release of the same issue."""
+    fy = report.year + (report.month >= 10)
+    by_key = {(row["economic_fiscal_year"], row["period_kind"], row["period_start"]): row for row in periods}
+    months = [month for month in (*range(10, 13), *range(1, 10))
+              if date(fy - 1 - (month >= 10), month, 1) <= date(report.year - 1, report.month, 1)]
+    try:
+        expected = {
+            "current_month_budget_amt": [by_key[fy, "month", date(report.year, report.month, 1)]],
+            "current_fytd_budget_amt": [by_key[fy, "fiscal_year_to_date", date(fy - 1, 10, 1)]],
+            "prior_fytd_budget_amt": [by_key[fy - 1, "month", date(fy - 1 - (month >= 10), month, 1)]
+                                      for month in months],
+        }
+    except KeyError:
+        return None
+    failures = evaluated = 0
+    for field, sources in expected.items():
+        for line, column, sign in TABLE2_TABLE1_LINES:
+            amount, marker = cells[line, field]
+            values = [row[column] for row in sources]
+            if marker not in _ARITHMETIC or any(value is None for value in values):
+                continue
+            evaluated += 1
+            failures += _sum(values) * sign != amount
+    return failures, evaluated
+
+
 def build_treasury_fiscal(readers, output_dir: Path, *, debt_dates, report_dates, qualifications):
-    """Build one explicit set of source releases, retaining issue/revision identity."""
+    """Build one explicit set of source releases, retaining issue/revision identity.
+
+    Returns the written tables and one check summary per Table 2 release.
+    """
     debt_dates, report_dates = set(debt_dates), set(report_dates)
     if not debt_dates or not report_dates or set(qualifications) != report_dates:
         raise ValueError("Declare debt/report dates and a qualified report for every issue")
-    rows, seen_debt, seen_reports, releases = {DEBT: [], STATEMENTS: []}, set(), set(), set()
-    controls = set()
+    rows, seen_debt, seen_reports, releases = {DEBT: [], STATEMENTS: [], CELLS: []}, set(), set(), set()
+    table1, table2 = {}, {}
     for reader in readers:
         if reader.pin in releases:
             raise ValueError("A Treasury source release was supplied twice")
         releases.add(reader.pin)
-        statements, seen_records = {}, set()
+        statements, classifications, seen_records = {}, {}, set()
         for item in reader.iter_records():
             row, raw = item["record"], item["record"]["raw"]
             dataset, when = row["dataset"], date.fromisoformat(raw["record_date"])
@@ -199,6 +360,7 @@ def build_treasury_fiscal(readers, output_dir: Path, *, debt_dates, report_dates
             seen_records.add(item["sourceRecordId"])
             if row["selection"]["dataset"] != dataset or row["selection"]["record_date"] != when.isoformat():
                 raise ValueError("Treasury row differs from its declared source selection")
+            _require_unit_rules(row)
             if dataset == "debt_to_penny":
                 if when not in debt_dates:
                     raise ValueError("Unexpected Treasury debt observation date")
@@ -211,10 +373,7 @@ def build_treasury_fiscal(readers, output_dir: Path, *, debt_dates, report_dates
             elif dataset in ("mts_table_1", "mts_table_2"):
                 if when not in report_dates:
                     raise ValueError("Unexpected Treasury report issue")
-                if dataset == "mts_table_1":
-                    statements.setdefault(when, []).append(item)
-                else:
-                    controls.add(when)
+                (statements if dataset == "mts_table_1" else classifications).setdefault(when, []).append(item)
             else:
                 raise ValueError("Unsupported Treasury dataset")
         for report, items in statements.items():
@@ -222,11 +381,27 @@ def build_treasury_fiscal(readers, output_dir: Path, *, debt_dates, report_dates
             if not derived:
                 raise ValueError("Treasury report contains no budget periods")
             rows[STATEMENTS].extend(derived)
+            table1.setdefault(report, []).append(derived)
             seen_reports.add(report)
-    if seen_debt != debt_dates or seen_reports != report_dates or controls != report_dates:
+        for report, items in classifications.items():
+            derived, cells = _table2_rows(reader, items, report, qualifications[report])
+            rows[CELLS].extend(derived)
+            table2.setdefault(report, []).append((reader.pin, cells))
+    if seen_debt != debt_dates or seen_reports != report_dates or set(table2) != report_dates:
         raise ValueError("Requested Treasury period is unavailable; no latest-period substitution")
+    summary = []
+    for report, releases_of_issue in sorted(table2.items()):
+        for pin, cells in releases_of_issue:
+            # Same-issue revisions stay separate releases: each Table 2 release must
+            # reconcile with at least one Table 1 release of its issue, not with all.
+            pairs = [_table1_failures(cells, periods, report) for periods in table1[report]]
+            matched = [pair for pair in pairs if pair is not None and pair[0] == 0]
+            if not matched:
+                raise ValueError("Treasury Table 2 actuals differ from every Table 1 release of the issue")
+            summary.append({"report_date": report.isoformat(), "source_release_digest": pin.artifact_digest,
+                            "identities": _check_identities(cells), "table1_cells_evaluated": matched[0][1]})
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    # These explicitly bounded selections are validated before either table is written.
-    return [write_rows(rows[name], output_dir / (name + ".parquet"), schema)
-            for name, schema in SCHEMAS.items()]
+    # These explicitly bounded selections are validated before any table is written.
+    files = [write_rows(rows[name], output_dir / (name + ".parquet"), schema) for name, schema in SCHEMAS.items()]
+    return files, summary

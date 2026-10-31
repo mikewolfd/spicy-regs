@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "note": "Fiscal Data declares dataFormats \"$10.20\" and dataTypes CURRENCY for every amount field, including the Table 2 budget-estimate fields, which hold $ millions (page 5 prints '[$ millions]'; the 2026-09-30 FYTD dollars divided by the matching estimate is about 986781.93). Units come from this reviewed file, never from that metadata. A CURRENCY or *_amt field absent here refuses the build.",
+  "datasets": {
+    "debt_to_penny": {
+      "tot_pub_debt_out_amt": {
+        "unit": "usd"
+      },
+      "debt_held_public_amt": {
+        "unit": "usd"
+      },
+      "intragov_hold_amt": {
+        "unit": "usd"
+      }
+    },
+    "mts_table_1": {
+      "current_month_gross_rcpt_amt": {
+        "unit": "usd"
+      },
+      "current_month_gross_outly_amt": {
+        "unit": "usd"
+      },
+      "current_month_dfct_sur_amt": {
+        "unit": "usd"
+      }
+    },
+    "mts_table_2": {
+      "current_month_budget_amt": {
+        "unit": "usd",
+        "fiscal_year_offset": 0,
+        "estimate": false
+      },
+      "current_fytd_budget_amt": {
+        "unit": "usd",
+        "fiscal_year_offset": 0,
+        "estimate": false
+      },
+      "prior_fytd_budget_amt": {
+        "unit": "usd",
+        "fiscal_year_offset": -1,
+        "estimate": false
+      },
+      "current_year_budget_est_amt": {
+        "unit": "usd_millions",
+        "fiscal_year_offset": 0,
+        "estimate": true
+      },
+      "next_year_budget_est_amt": {
+        "unit": "usd_millions",
+        "fiscal_year_offset": 1,
+        "estimate": true
+      }
+    }
+  },
+  "zero_estimates_note": "Keyed by the Table 2 response SHA-256. A 0.00 estimate becomes no_transactions (amount NULL) only where that edition's printed page shows '......'; 'zero' lists projected zeros printed as numbers. Any 0.00 estimate not listed refuses, and a listed cell that is not 0.00 refuses. Reviewed editions with no 0.00 estimate (2015-03-31, response sha256:ace73f71...) need no entry.",
+  "zero_estimates": {
+    "sha256:47e84e9d3c87c85ae52bf9e9c6a7d0a6d4c6b755263f37ef8e1f82c265a44404": {
+      "report_date": "2025-09-30",
+      "review": "MonthlyTreasuryStatement_202509.pdf sha256:2a975e8f8d145ef18f53de2dc60c6cb265892cd500e8d725f6297726c78605e8 page 5: every 0.00 estimate prints '......' (legend '... No Transactions')",
+      "no_transactions": {
+        "current_year_budget_est_amt": [
+          14
+        ],
+        "next_year_budget_est_amt": [
+          14
+        ]
+      },
+      "zero": {}
+    },
+    "sha256:ffd92cf3f59ca59b51a0c8f77ad087e22ae9842448c13efebfefdabb93bfa312": {
+      "report_date": "2025-10-31",
+      "review": "MonthlyTreasuryStatement_202510.pdf sha256:6734e5f003e1df5bb9be7f4b54b8fe8afdd4f5309f4a7a8bac652efd19e9228b page 5: every 0.00 estimate prints '......' (legend '... No Transactions')",
+      "no_transactions": {
+        "current_year_budget_est_amt": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          13,
+          14,
+          15
+        ],
+        "next_year_budget_est_amt": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          13,
+          14,
+          15
+        ]
+      },
+      "zero": {}
+    },
+    "sha256:70e6f349c45074c0e5a65f7dcf81cf367880c9123975f1bdb741bf6b8ba61921": {
+      "report_date": "2026-03-31",
+      "review": "MonthlyTreasuryStatement_202603.pdf sha256:c1863ae1ca1d1baa1b762694a80b3bc26381935683ee140000ff796037c4a848 page 5: every 0.00 estimate prints '......' (legend '... No Transactions')",
+      "no_transactions": {
+        "current_year_budget_est_amt": [
+          8,
+          9,
+          10,
+          11,
+          13,
+          14,
+          15
+        ],
+        "next_year_budget_est_amt": [
+          8,
+          9,
+          10,
+          11,
+          13,
+          14,
+          15
+        ]
+      },
+      "zero": {}
+    },
+    "sha256:bc155ed21fd17c91444f5b0282da6cc83956503f6a25fda8c7c5016eb182f2bc": {
+      "report_date": "2026-09-30",
+      "review": "MonthlyTreasuryStatement_202609.pdf sha256:fcabeccdc7052960ffe8ec2c8a539aed9c1f49d47aedc2cbee39d50f0585e7db page 5: every 0.00 estimate prints '......' (legend '... No Transactions')",
+      "no_transactions": {
+        "current_year_budget_est_amt": [
+          8,
+          9,
+          10,
+          11,
+          13,
+          14,
+          15
+        ],
+        "next_year_budget_est_amt": [
+          8,
+          9,
+          10,
+          11,
+          13,
+          14,
+          15
+        ]
+      },
+      "zero": {}
+    }
+  }
+}
