@@ -228,21 +228,25 @@ def test_a_run_stopped_after_the_receipts_join_resumes_to_its_run_receipt(built,
     out, run, _ = built
     export = out.parent / "opinions-2026-06-30.csv.bz2"
     again = tmp_path / "out"
-    kwargs = dict(dump_date=date(2026, 6, 30), workers=0, convert=stand_in, parse_workers=1, row_group_text_bytes=2_000)
+
+    def rebuild() -> dict:
+        return build.build_court_opinion_texts(export, again, dump_date=date(2026, 6, 30), workers=0, convert=stand_in,
+                                               parse_workers=1, row_group_text_bytes=2_000)
+
     rss = build._rss_bytes
     monkeypatch.setattr(build, "_rss_bytes", lambda: (_ for _ in ()).throw(RuntimeError("killed")))
     with pytest.raises(RuntimeError, match="killed"):
-        build.build_court_opinion_texts(export, again, **kwargs)
+        rebuild()
     assert (again / "etl_receipts.parquet").exists() and not (again / f"{build.DATASET}-run.json").exists()
     assert (again / f".{build.DATASET}-spill" / "_complete.json").exists()  # the resume state outlives the join
     monkeypatch.setattr(build, "_rss_bytes", rss)
-    finished = build.build_court_opinion_texts(export, again, **kwargs)
+    finished = rebuild()
     assert finished["resumed"] and json.loads((again / f"{build.DATASET}-run.json").read_text()) == json.loads(
         json.dumps(finished, default=str))
     assert finished["rows_routed_to_row_function"] == run["rows_routed_to_row_function"]
     assert pq.read_table(again / "etl_receipts.parquet").num_rows == pq.read_table(out / "etl_receipts.parquet").num_rows
     with pytest.raises(FileExistsError, match="run.json"):
-        build.build_court_opinion_texts(export, again, **kwargs)
+        rebuild()
 
 
 def test_the_output_is_admitted_as_a_split_generation(built, tmp_path) -> None:
