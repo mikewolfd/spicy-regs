@@ -8,6 +8,7 @@ shared receipt writer. Invalid structures refuse rather than lose properties.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pyarrow as pa
@@ -105,6 +106,25 @@ def _list(value, mapper):
 
 def _select(item, fields, allowed=None):
     return {name: _object(item, allowed or fields, "nested value").get(name) for name in fields}
+
+
+# C1 controls in filing text mean Windows punctuation was decoded as latin-1
+# (FEC-1981885 read U+0092 for an apostrophe); cp1252 reads the intended text.
+_C1_CONTROL = re.compile("[\x80-\x9f]")
+
+
+def _text_fragment(item):
+    fragment = _select(
+        item,
+        ["field_position", "text"],
+        ["field_position", "text", "source_column", "source_pointer", "text_status", "body_reference_json"],
+    )
+    if isinstance(fragment["text"], str) and (match := _C1_CONTROL.search(fragment["text"])):
+        raise ValueError(
+            f"FEC filing text carries C1 control U+{ord(match.group()):04X} at character {match.start()};"
+            " decode the filing with spicy-docs filing_encoding (UTF-8, then cp1252), not latin-1"
+        )
+    return fragment
 
 
 def _scalar(value, dtype):
@@ -321,14 +341,7 @@ def prepare_subject(table, row):
             ),
         )
     elif table == "fec_filing_text_observations":
-        result["text_fragments"] = _list(
-            row.get("text_fragments"),
-            lambda v: _select(
-                v,
-                ["field_position", "text"],
-                ["field_position", "text", "source_column", "source_pointer", "text_status", "body_reference_json"],
-            ),
-        )
+        result["text_fragments"] = _list(row.get("text_fragments"), _text_fragment)
     elif table == "fec_agency_reports":
         result["organizations"] = _list(_decode(row.get("organizations_json")), _organization)
         meta = _decode(row.get("metadata_json"))

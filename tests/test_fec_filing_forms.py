@@ -483,3 +483,20 @@ def test_report_native_values_resolve_through_evidence_without_duplicate_array()
     assert witness["collection_id"] == original["collection_id"]
     assert json.loads(original["metadata_json"])["fields"]["93"] == "undefined-extra"
     assert result["reported_measures"][0]["raw_value"] == "100.00"
+
+
+# FEC-1981885 bytes "PAC\x92s" and FEC-1998705 "\x93Agreement\x94": latin-1 reads C1, cp1252 the punctuation.
+@pytest.mark.parametrize("body", [b"AFC PAC\x92s bank account", b"this \x93Agreement\x94"])
+def test_release_refuses_c1_controls_in_mapped_text(body):
+    """Mapped text read as latin-1 carries C1 controls and refuses at the subject boundary; cp1252 passes."""
+    from spicy_regs.transforms.fec_native_subjects import prepare_subject
+
+    row = {name: None for name in FILING_TEXT_SCHEMA.names}
+    latin, _ = narrative(text_record(), read_body=lambda _: body.decode("latin-1"))
+    row.update(latin)
+    with pytest.raises(ValueError, match=r"C1 control U\+009[234]"):
+        prepare_subject("fec_filing_text_observations", row)
+    readable, _ = narrative(text_record(), read_body=lambda _: body.decode("cp1252"))
+    row.update(readable)
+    subject, _ = prepare_subject("fec_filing_text_observations", row)
+    assert subject["text_fragments"][0]["text"] == body.decode("cp1252")
