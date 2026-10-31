@@ -308,16 +308,30 @@ def cmd_agencies(args):
 
 
 def cmd_mirror(args):
-    """Bring a local mirror in the R2 key layout up to the current publication index, fetching only absent files."""
-    from spicy_regs.sources.publication import load_index, mirror_generation
+    """Bring a local mirror in the R2 key layout up to the current publication index, fetching only absent files.
+
+    Refuses before any write when the bytes still to fetch would leave less than ``--min-free-gib`` free on the
+    mirror's volume. ``--prune`` then deletes each mirrored family's superseded generations.
+    """
+    import shutil
+
+    from spicy_regs.sources.publication import load_index, mirror_absent_bytes, mirror_generation, prune_superseded
 
     base_url = resolve_r2_base_url()
     families = load_index(base_url)["families"]
     if unknown := sorted(set(args.family or ()) - set(families)):
         sys.exit(f"Not a published family: {', '.join(unknown)}")
-    for family in args.family or sorted(families):
-        counts = mirror_generation(Path(args.root), families[family], base_url=base_url)
-        print(json.dumps({"family": family, "prefix": families[family]["prefix"], **counts}))
+    root, selected = Path(args.root), args.family or sorted(families)
+    absent = sum(mirror_absent_bytes(root, families[family]) for family in selected)
+    volume = next(path for path in (root, *root.absolute().parents) if path.exists())
+    free = shutil.disk_usage(volume).free
+    if free - absent < args.min_free_gib * 2**30:
+        sys.exit(f"Mirroring needs {absent / 2**30:.1f} GiB and {free / 2**30:.1f} GiB is free on {volume}; "
+                 f"that would leave less than {args.min_free_gib} GiB")
+    for family in selected:
+        counts = mirror_generation(root, families[family], base_url=base_url)
+        pruned = [path.name for path in prune_superseded(root, families[family])] if args.prune else []
+        print(json.dumps({"family": family, "prefix": families[family]["prefix"], **counts, "pruned": pruned}))
 
 
 def main():
@@ -369,6 +383,10 @@ def main():
         "mirror", help="Fetch the selected generations into a local mirror in the R2 key layout")
     mirror_parser.add_argument("root", help="Mirror root, e.g. corpora/spicyregs/output/publication")
     mirror_parser.add_argument("--family", action="append", type=_table_name, help="Only this family (repeatable)")
+    mirror_parser.add_argument("--min-free-gib", type=float, default=30,
+                               help="Refuse when fetching would leave less free space than this (default 30)")
+    mirror_parser.add_argument("--prune", action="store_true",
+                               help="Delete each mirrored family's superseded generations (R2 keeps them)")
     mirror_parser.set_defaults(func=cmd_mirror)
 
     args = parser.parse_args()

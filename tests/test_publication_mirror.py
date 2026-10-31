@@ -1,5 +1,6 @@
 """Local publication mirror: the uploaded generation keys in the R2 layout, cloned at publish or fetched later."""
 import httpx
+import pytest
 from rulespec_artifacts import LocalMemberSource
 
 from spicy_regs.generations import admit_generation_for_publication
@@ -53,8 +54,7 @@ def serve(monkeypatch, store):
     return fetched
 
 
-def test_mirror_is_off_unless_configured(tmp_path, monkeypatch):
-    monkeypatch.delenv(pub.PUBLICATION_MIRROR, raising=False)
+def test_mirror_is_off_unless_configured(tmp_path):
     publish(tmp_path, Store())
     assert not (tmp_path / "mirror").exists()
 
@@ -113,7 +113,6 @@ def test_the_shared_seam_mirrors_for_every_publisher(tmp_path, monkeypatch):
 def test_catch_up_fetches_only_what_is_absent(tmp_path, monkeypatch):
     """The `spicy-regs mirror` path: no local build, public GETs checked against their pins."""
     store = Store()
-    monkeypatch.delenv(pub.PUBLICATION_MIRROR, raising=False)
     _, index, _ = publish(tmp_path, store)
     entry, root = index["families"]["test"], tmp_path / "mirror"
     fetched = serve(monkeypatch, store)
@@ -129,7 +128,6 @@ def test_catch_up_fetches_only_what_is_absent(tmp_path, monkeypatch):
 
 def test_a_truncated_leftover_is_replaced_and_no_source_counts_missing(tmp_path, monkeypatch):
     store = Store()
-    monkeypatch.delenv(pub.PUBLICATION_MIRROR, raising=False)
     directory, index, _ = publish(tmp_path, store)
     entry, root = index["families"]["test"], tmp_path / "mirror"
     member = next(m for m in pub.generation_files(entry).values() if m.sha256 is not None)
@@ -150,17 +148,55 @@ def test_generation_files_include_receipts_and_their_key_index():
                                                    "etl_receipts.parquet", "members.json", "t.parquet"]
 
 
-def test_mirror_command_mirrors_each_named_family(tmp_path, monkeypatch, capsys):
-    import json
+def test_conftest_isolates_the_mirror_root():
+    """An operator's SPICYGOV_PUBLICATION_MIRROR must never receive fixture generations."""
+    import os
+
+    assert pub.PUBLICATION_MIRROR not in os.environ
+
+
+def run_mirror_command(tmp_path, monkeypatch, index, *arguments, free=2**50):
+    import shutil
     import sys
+    from types import SimpleNamespace
 
     from spicy_regs import cli
 
-    index = {"families": {"a": {"prefix": "generations/a/x"}, "b": {"prefix": "generations/b/y"}}}
     calls = []
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(free=free))
     monkeypatch.setattr(pub, "load_index", lambda base: index)
     monkeypatch.setattr(pub, "mirror_generation", lambda root, entry, base_url: calls.append(entry) or {"kept": 1})
-    monkeypatch.setattr(sys, "argv", ["spicy-regs", "mirror", str(tmp_path), "--family", "b"])
+    monkeypatch.setattr(sys, "argv", ["spicy-regs", "mirror", str(tmp_path), *arguments])
     cli.main()
-    assert calls == [index["families"]["b"]]
-    assert json.loads(capsys.readouterr().out) == {"family": "b", "prefix": "generations/b/y", "kept": 1}
+    return calls
+
+
+def test_mirror_command_mirrors_each_named_family(tmp_path, monkeypatch, capsys):
+    import json
+
+    index = {"families": {"a": {"prefix": "generations/a/x", "tables": {}},
+                          "b": {"prefix": "generations/b/y", "tables": {}}}}
+    assert run_mirror_command(tmp_path, monkeypatch, index, "--family", "b") == [index["families"]["b"]]
+    assert json.loads(capsys.readouterr().out) == {"family": "b", "prefix": "generations/b/y", "kept": 1,
+                                                   "pruned": []}
+
+
+def test_mirror_command_refuses_below_the_free_space_floor(tmp_path, monkeypatch):
+    pin = {"sha256": "sha256:" + "0" * 64, "byteSize": 3 * 2**30, "rows": 1}
+    index = {"families": {"a": {"prefix": "generations/a/" + "a" * 64, "tables": {"t.parquet": pin}}}}
+    with pytest.raises(SystemExit, match="needs 3.0 GiB and 5.0 GiB is free"):
+        run_mirror_command(tmp_path, monkeypatch, index, "--min-free-gib", "4", free=5 * 2**30)
+    assert run_mirror_command(tmp_path, monkeypatch, index, "--min-free-gib", "1",
+                              free=5 * 2**30) == [index["families"]["a"]]
+
+
+def test_prune_keeps_only_the_selected_generation(tmp_path):
+    selected, older = "a" * 64, "b" * 64
+    entry = {"prefix": f"generations/f/{selected}", "tables": {}}
+    for name in (selected, older, "notes"):
+        (tmp_path / "generations/f" / name).mkdir(parents=True)
+        (tmp_path / "generations/f" / name / "x").write_bytes(b"x")
+    (tmp_path / "generations/g" / older).mkdir(parents=True)
+    assert pub.prune_superseded(tmp_path, entry) == [tmp_path / "generations/f" / older]
+    assert sorted(p.name for p in (tmp_path / "generations/f").iterdir()) == [selected, "notes"]
+    assert (tmp_path / "generations/g" / older).is_dir()  # another family is untouched

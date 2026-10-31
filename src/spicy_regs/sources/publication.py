@@ -1359,7 +1359,7 @@ def mirror_generation(root: Path, entry: Mapping, *, local: Path | None = None,
     counts = {"kept": 0, "cloned": 0, "fetched": 0, "missing": 0}
     for key, member in sorted(generation_files(entry).items()):
         target = root / member.path
-        if target.is_file() and (member.byte_size is None or target.stat().st_size == member.byte_size):
+        if _mirrored(target, member):
             counts["kept"] += 1
         elif local is not None and (local / key).is_file():
             _clone_into(local / key, target, member.byte_size)
@@ -1374,6 +1374,33 @@ def mirror_generation(root: Path, entry: Mapping, *, local: Path | None = None,
     if (held := root / entry["prefix"] / "artifact.json").is_file():
         family_root(held.read_bytes(), entry)
     return counts
+
+
+def _mirrored(target: Path, member: Member) -> bool:
+    """``target`` holds ``member`` as far as the mirror checks: present, at its pinned size when it has one."""
+    return target.is_file() and (member.byte_size is None or target.stat().st_size == member.byte_size)
+
+
+def mirror_absent_bytes(root: Path, entry: Mapping) -> int:
+    """The pinned bytes ``mirror_generation`` would still have to write under ``root`` for ``entry``."""
+    return sum(member.byte_size or 0 for member in generation_files(entry).values()
+               if not _mirrored(root / member.path, member))
+
+
+def prune_superseded(root: Path, entry: Mapping) -> list[Path]:
+    """Delete every other generation of ``entry``'s family under ``root``; return what was removed.
+
+    The mirror's retention rule: it holds the selected generation per family and nothing older. R2 keeps every
+    published generation (``restore_family`` rolls back there), so a superseded local copy is only disk.
+    """
+    import shutil
+
+    selected = root / entry["prefix"]
+    removed = [path for path in sorted(selected.parent.iterdir())
+               if path != selected and path.is_dir() and re.fullmatch(r"[0-9a-f]{64}", path.name)]
+    for path in removed:
+        shutil.rmtree(path)
+    return removed
 
 
 def _mirror_published(index: Mapping, family: str, local: Path | None) -> None:
