@@ -84,7 +84,7 @@ the same.
 | --- | --- | --- |
 | `document_id` 🔑 | `VARCHAR` | Unique document identifier. Primary key / dedup key. |
 | `docket_id` | `VARCHAR` | Parent docket this document belongs to. Foreign key to `dockets.docket_id`. |
-| `agency_code` | `VARCHAR` | Posting agency's short code. |
+| `agency_code` | `VARCHAR` | Posting agency's short code. `lookup_agency` resolves it through RefSpec's REF-038 projection: measured 2026-10-30, 307 of 316 codes on 2,003,671 of 2,004,396 rows; the rest (`USC`, `BSC`, `TRAIN`, `PCSCOTUS`, `GAPFAC`, `ERULE`, `ARCTICGAS`, `PRES`, `EOA`) have no projection row. |
 | `title` | `VARCHAR` | Document title. |
 | `document_type` | `VARCHAR` | Document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`). |
 | `posted_date` | `VARCHAR` | Date the document was posted publicly (ISO 8601 string). |

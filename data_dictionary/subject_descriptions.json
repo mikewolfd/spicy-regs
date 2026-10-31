@@ -718,7 +718,7 @@
   "dockets": {
     "columns": {
       "docket_id": "Unique docket identifier (e.g. `EPA-HQ-OAR-2021-0317`). Primary key / dedup key.",
-      "agency_code": "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`).",
+      "agency_code": "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). `lookup_agency` resolves it to Federal Register, eCFR and Federal Hierarchy organizations through RefSpec's REF-038 projection (vendored `reference/refspec/agency-projection.parquet`): measured 2026-10-30, 189 of 196 codes on 279,595 of 279,719 rows; `TRAIN`, `PCSCOTUS`, `USC`, `ERULE`, `EOA`, `BSC` and `GAPFAC` have no projection row.",
       "title": "Human-readable docket title.",
       "docket_type": "Docket category, typically `Rulemaking` or `Nonrulemaking`.",
       "modify_date": "Timestamp the docket was last modified on regulations.gov (ISO 8601 string).",
@@ -798,7 +798,7 @@
     "columns": {
       "document_id": "Unique document identifier. Primary key / dedup key.",
       "docket_id": "Parent docket this document belongs to. Foreign key to `dockets.docket_id`.",
-      "agency_code": "Posting agency's short code.",
+      "agency_code": "Posting agency's short code. `lookup_agency` resolves it through RefSpec's REF-038 projection: measured 2026-10-30, 307 of 316 codes on 2,003,671 of 2,004,396 rows; the rest (`USC`, `BSC`, `TRAIN`, `PCSCOTUS`, `GAPFAC`, `ERULE`, `ARCTICGAS`, `PRES`, `EOA`) have no projection row.",
       "title": "Document title.",
       "document_type": "Document category (e.g. `Rule`, `Proposed Rule`, `Notice`, `Supporting & Related Material`).",
       "posted_date": "Date the document was posted publicly (ISO 8601 string).",

@@ -16,7 +16,7 @@
       {
         "column_name": "agency_code",
         "column_type": "VARCHAR",
-        "description": "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`)."
+        "description": "Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). `lookup_agency` resolves it to Federal Register, eCFR and Federal Hierarchy organizations through RefSpec's REF-038 projection (vendored `reference/refspec/agency-projection.parquet`): measured 2026-10-30, 189 of 196 codes on 279,595 of 279,719 rows; `TRAIN`, `PCSCOTUS`, `USC`, `ERULE`, `EOA`, `BSC` and `GAPFAC` have no projection row."
       },
       {
         "column_name": "title",
@@ -123,7 +123,7 @@
       {
         "column_name": "agency_code",
         "column_type": "VARCHAR",
-        "description": "Posting agency's short code."
+        "description": "Posting agency's short code. `lookup_agency` resolves it through RefSpec's REF-038 projection: measured 2026-10-30, 307 of 316 codes on 2,003,671 of 2,004,396 rows; the rest (`USC`, `BSC`, `TRAIN`, `PCSCOTUS`, `GAPFAC`, `ERULE`, `ARCTICGAS`, `PRES`, `EOA`) have no projection row."
       },
       {
         "column_name": "title",

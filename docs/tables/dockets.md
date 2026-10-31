@@ -17,7 +17,7 @@ One row per regulations.gov docket. A docket is the top-level folder a federal a
 | Column | Type | Description |
 | --- | --- | --- |
 | `docket_id` 🔑 | `VARCHAR` | Unique docket identifier (e.g. `EPA-HQ-OAR-2021-0317`). Primary key / dedup key. |
-| `agency_code` | `VARCHAR` | Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). |
+| `agency_code` | `VARCHAR` | Posting agency's short code (e.g. `EPA`, `FDA`, `ACF`). `lookup_agency` resolves it to Federal Register, eCFR and Federal Hierarchy organizations through RefSpec's REF-038 projection (vendored `reference/refspec/agency-projection.parquet`): measured 2026-10-30, 189 of 196 codes on 279,595 of 279,719 rows; `TRAIN`, `PCSCOTUS`, `USC`, `ERULE`, `EOA`, `BSC` and `GAPFAC` have no projection row. |
 | `title` | `VARCHAR` | Human-readable docket title. |
 | `docket_type` | `VARCHAR` | Docket category, typically `Rulemaking` or `Nonrulemaking`. |
 | `modify_date` | `VARCHAR` | Timestamp the docket was last modified on regulations.gov (ISO 8601 string). |
