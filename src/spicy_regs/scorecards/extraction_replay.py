@@ -28,7 +28,13 @@ FORMAT = "scorecard-page-observations/1"
 
 
 def page_bytes(page: PageResult) -> bytes:
-    return exact_json(dict(format_version=FORMAT, page=asdict(page))).encode()
+    """Canonical page bytes; an issue without a box omits the key, as pages retained before SpicyDocs 0.67.0 do."""
+    value = asdict(page)
+    for observation in value["content"]["observations"]:
+        for issue in observation["issues"]:
+            if issue.get("box", ...) is None:
+                del issue["box"]
+    return exact_json(dict(format_version=FORMAT, page=value)).encode()
 
 
 def _fields(value: dict[str, Any], **changes: Any) -> dict[str, Any]:
@@ -61,7 +67,7 @@ def _observation(value) -> Observation:
             value,
             blocks=tuple(_block(block) for block in value["blocks"]),
             images=tuple(Raster(**_fields(image, box=_box(image["box"]))) for image in value["images"]),
-            issues=tuple(ProcessingIssue(**issue) for issue in value["issues"]),
+            issues=tuple(ProcessingIssue(**_fields(issue, box=_box(issue.get("box")))) for issue in value["issues"]),
             inspected_region=_box(value["inspected_region"]),
             tables=tuple(_table(table) for table in value["tables"]),
         )

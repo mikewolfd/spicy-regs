@@ -5,17 +5,14 @@ The optional `source-readers` extra enables the same readers for package install
 its wheels must be supplied explicitly until they are published in a registry.
 Base CLI and MCP installs do not require them.
 
-- **Active: `spicy_docs-0.66.8+centralraw.02cc4431e606`**. The same shared raw
-  archive overlay over `spicy_docs-0.66.8`, built from SpicyDocs fork main
-  `c970f0ac`: 0.66.7 plus `nomination_id` (`{congress}-pn-{number}[-{part}]`)
-  on the nominations contract and on Senate PN entries of
-  `roll_call_votes.documents_json` (ss-vhi2). Only `storage/raw_archive.py`
+- **Active: `spicy_docs-0.67.0+centralraw.02cc4431e606`**. The same shared raw
+  archive overlay over `spicy_docs-0.67.0`, the consolidated Layer 1 release
+  (SpicyDocs fork main `3e68ec10`, tag `v0.67.0`). Only `storage/raw_archive.py`
   and the blob destination in `reading/refusals.py` differ from the base; the
-  overlay modules are byte-identical to the 0.66.7 overlay's, so the identity
-  is unchanged. The
-  [build receipt](spicy_docs-0.66.8+centralraw.02cc4431e606-py3-none-any.json)
+  overlay modules are unchanged, so the identity is unchanged. The
+  [build receipt](spicy_docs-0.67.0+centralraw.02cc4431e606-py3-none-any.json)
   pins both changed modules and wheel SHA-256
-  `1ae028e87696192b074103062bb819632b6a40209266606af4a1cb8e919d17ec`.
+  `e3eecedfe268c630de671bb5eaff6ce0898e74172dcd6bcbf5ff81252e4702f3`.
   `python scripts/package_central_raw_reader.py --check` reproduces the wheel,
   receipt and dependency pins from retained wheels without writing or downloading.
   `--base` selects another retained release wheel, `--provider` a reviewed source
@@ -23,6 +20,24 @@ Base CLI and MCP installs do not require them.
   review. Keep both retained provider wheels. Tests verify unchanged reader
   modules, streaming captures, exact-byte reuse of raw and gzip storage, and
   interrupted-write cleanup.
+
+- `spicy_docs-0.67.0`: built from SpicyDocs fork main `3e68ec10`; SHA-256
+  `b4d147cf3ae2860509f0bda1cfba168e007cfe4f86798858983bdc5426c95545`; two builds
+  from clean archives are byte-identical. It carries the CourtListener
+  bankruptcy CSV dialect, the GPO symbol-font glyph table with unmapped-glyph
+  routing (body text derivation 003; `ProcessingIssue.box`), Unified Agenda
+  related RINs, the opinion Markdown converter, select-committee parent codes
+  and SD bill files, the private-law version code, the CBO Common Crawl archive
+  reader, FEC filing encoding decisions, `literal_sheets` number formats,
+  `congress_sessions` party control and every CBO letter. Its `acquisition`
+  extra adds `warcio`. See [package receipt](spicy_docs-0.67.0.json).
+
+- `spicy_docs-0.66.8+centralraw.02cc4431e606`: the previous overlay over
+  `0.66.8`; SHA-256
+  `1ae028e87696192b074103062bb819632b6a40209266606af4a1cb8e919d17ec`
+  ([receipt](spicy_docs-0.66.8+centralraw.02cc4431e606-py3-none-any.json)). The
+  0.66.8 base adds `nomination_id` on the nominations contract and on Senate PN
+  entries of `roll_call_votes.documents_json` (ss-vhi2).
 
 - `spicy_docs-0.66.8`: built from SpicyDocs fork main `c970f0ac`; SHA-256
   `1f7df1a064e7c478aad9d93549b5b08695da924f18ec93ca53d7dd27ebfd7961`; two builds
