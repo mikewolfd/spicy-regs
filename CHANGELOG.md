@@ -52,6 +52,23 @@ Entries link to the pull request that introduced the change.
 
 ### Changed
 
+- Prepared native conversions publish by an operator-named receipt digest.
+  `--publish-prepared` now requires `--expect-receipt-digest`, the
+  `prepared receipt digest` line the preparation printed (never copied from
+  `conversion.json`). The prepared seal moves to version 2 because it now
+  carries the admission identity: `validationIdentity` (the code, runtime and
+  platform the preparation started with) and `admissionKey`. A publisher under
+  the same key keeps every byte, structure, membership, lineage and policy
+  check and skips row admission and original restoration;
+  `--full-verification` forces them, and any other key takes the full path.
+  Version-1 seals still publish, always through the full path. A preparation
+  whose code or checkout changed while it ran refuses to seal and resumes
+  with `--resume-generation`. Publication reads the public copy back by
+  streamed member digest instead of downloading and admitting it again; the
+  receipt's `read_back.anonymous_read_rows` is replaced by
+  `read_back.public_bytes` (members and bytes streamed per table);
+  `read_back.table_rows` still records the public pointer's counts.
+
 - Native family conversion reads the replaced generation's source evidence
   before it downloads or hashes any table, so a family whose inherited
   evidence is not current completed-build evidence (another kind, an

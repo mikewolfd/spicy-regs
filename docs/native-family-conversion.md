@@ -465,7 +465,11 @@ R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_f
 that sealed receipt's `source.checkout` and `source.main`. `RECEIPT_DIGEST`
 is the `prepared receipt digest` line the preparation printed (its terminal,
 log or job output). Never copy it from `conversion.json`: a digest read from
-the receipt it covers checks nothing. For an earlier
+the receipt it covers checks nothing. A version-1 seal (prepared before
+2026-10-30) printed no digest; take it from that preparation's archived log if
+one exists, otherwise from the receipt's `prepared.receiptDigest`. That is
+acceptable only because a version-1 seal always takes the full re-check
+below, so an edited receipt still meets every row check. For an earlier
 producer, the command verifies its commit and ancestry in the same repository,
 hashes historical Python Git blobs using the generation's path ordering,
 and compares both producer and verifier implementation identities. Its
@@ -487,11 +491,19 @@ again only when the seal's admission key differs from the publisher's, for a
 version-1 seal, for `fec-query` with staged observations (its parent's
 admission is not in the seal), or with `--full-verification`; the receipt's
 `publish_attempt.verification` records which mode ran and how long it took.
-After any commit to `src/spicy_regs` the key differs, so a publish from a
-moved main takes the full path. On 2026-10-30 the comment-attributes publish
-spent 25.0 minutes re-checking locally and 24.1 minutes downloading and
-re-admitting the public copy; the sealed path skips the first, and the digest
-read-back above replaces the second. It refuses an operator digest that
+After any commit to `src/spicy_regs`, or any change to the SpicyDocs or
+Rulespec code bytes, the key differs, so a publish from a moved main takes the
+full path. Such commits are frequent: about a third of 3-hour windows on fork
+main from 2026-09-30 to 028736f3 cross a `src/spicy_regs` commit (653
+commits; 34.2% of windows started every 10 minutes, by commit time). To get
+the skip for a Mac preparation, publish from a clean worktree at `PRODUCER`
+itself. On 2026-10-30 the comment-attributes publish spent 25.0 minutes
+re-checking locally and 24.1 minutes downloading and re-admitting the public
+copy. The digest read-back above replaces the second on every publish (an
+estimate of about 13.6 minutes of re-admission and a 4.5 GB copy); the sealed
+path skips the first only when no validator code moved. Replace these
+estimates with `publish_attempt.verification.seconds` from the next approved
+publish. Prepared publication refuses an operator digest that
 differs from the seal (an edited and resealed receipt), an altered or
 incomplete receipt, unproved producer or changed publisher/runtime, missing
 or altered members,
@@ -505,6 +517,12 @@ release package's native-field and installed reader qualifications still
 apply; a known relevant mapper defect requires a fresh preparation.
 Timestamp-only changes to that entry also refuse, including during a
 conditional pointer retry. Unrelated family updates remain intact.
+
+A preparation seals the validator identity it started with. If the checkout,
+its uncommitted or untracked files, the installed SpicyDocs, or the SpicyRegs,
+SpicyDocs or Rulespec code bytes change while it runs, it refuses to seal and
+saves the receipt unsealed; finish it with `--resume-generation` from an
+unchanged checkout. Hosted main may move during a preparation.
 
 Only a completed official dry run is eligible. Partial writer outputs,
 old unsealed receipts, rehearsal reports, and already attempted or published
