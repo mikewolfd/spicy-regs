@@ -142,13 +142,29 @@ def test_another_identity_or_an_older_seal_runs_the_full_path(tmp_path, monkeypa
     assert publication.current_index(BASE)["families"]["cfr-sections"] == old
 
 
-def test_sealed_and_full_paths_reach_identical_entries_and_proofs(tmp_path, monkeypatch, bucket):
-    old, path, digest = prepare(tmp_path, monkeypatch, bucket)
-    reached = {}
+def _family_rows(family):
+    """One rollup, one regulatory base and one court family: the three converters a seal can stand in for."""
+    if family == "documents":
+        from tests.test_regulatory_prepared_conversion import rows
+        return "documents", rows("documents")
+    if family == "court-opinions":
+        from tests.test_court_opinions_prepared_conversion import opinions
+        return "court_opinions", opinions()
+    return "cfr_sections", CFR
+
+
+@pytest.mark.parametrize("family", ["cfr-sections", "documents", "court-opinions"])
+def test_sealed_and_full_paths_reach_identical_entries_and_proofs(tmp_path, monkeypatch, bucket, family):
+    table, rows = _family_rows(family)
+    old = publish_old(bucket, monkeypatch, tmp_path, family, {table: rows})
+    done = convert(family, tmp_path / "work")
+    path, digest = tmp_path / "work" / conversion.RECEIPT, done["prepared"]["receiptDigest"]
+    reached, calls = {}, count_validators(monkeypatch)
     for full in (False, True):
+        calls.clear()
         with ConversionReadOperation() as operation:
             verified = conversion._verify_prepared(
-                path, allowed=["cfr-sections"], expected_main=MAIN, expected_spicy_docs=WHEEL, expect_bucket=BUCKET,
+                path, allowed=[family], expected_main=MAIN, expected_spicy_docs=WHEEL, expect_bucket=BUCKET,
                 expected_receipt_digest=digest, remote="origin", state=lambda _: dict(STATE), expected_producer=None,
                 full_verification=full, read_operation=operation)
             artifact, source = operation.verified_source(verified.built.generation)
@@ -157,14 +173,21 @@ def test_sealed_and_full_paths_reach_identical_entries_and_proofs(tmp_path, monk
                 "receipt_only": verified.built.receipt_only_tables, "added": verified.built.added_tables,
                 "entry": publication.generation_entry(artifact, list(iter_member_descriptors(artifact, source))),
             }
+        # The full path restores originals through the family reader; the sealed path does not.
+        assert ("_open_family_reader" in calls) == full
     assert set(reached) == {"sealed-admission", "full"}
     assert reached["sealed-admission"] == reached["full"]
     assert reached["full"]["proof"] is not None
-    done = publish(path, digest)
-    assert done["publish_attempt"]["verification"]["mode"] == "sealed-admission"
-    assert publication._generation_entry(done["published"]["entry"]) == reached["full"]["entry"]
-    conversion.rollback(path, expect_bucket=BUCKET)
-    assert publication.current_index(BASE)["families"]["cfr-sections"] == old
+    sealed = path.read_bytes()
+    for full in (False, True):
+        path.write_bytes(sealed)  # each publication starts from the untouched sealed receipt
+        done = conversion.publish_prepared(path, allowed=[family], expected_main=MAIN, expected_spicy_docs=WHEEL,
+                                           expect_bucket=BUCKET, state=lambda _: dict(STATE),
+                                           expected_receipt_digest=digest, full_verification=full)
+        assert done["publish_attempt"]["verification"]["mode"] == ("full" if full else "sealed-admission")
+        assert publication._generation_entry(done["published"]["entry"]) == reached["full"]["entry"]
+        conversion.rollback(path, expect_bucket=BUCKET)
+        assert publication.current_index(BASE)["families"][family] == old
 
 
 def test_a_corrupted_upload_fails_read_back_and_keeps_the_rollback_record(tmp_path, monkeypatch, bucket):
