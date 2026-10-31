@@ -1885,9 +1885,9 @@ tables:
     grain: "One CourtListener opinion's body, converted once from one export."
     identity_columns: [opinion_id]
     coverage: >-
-      Not published. Only a bounded build of the head of the 2026-06-30
-      CourtListener opinions export has run; it proves the build path, is not a
-      range and establishes no completeness.
+      Not a range. Not published: only a bounded build of the head of the
+      2026-06-30 CourtListener opinions export has run; it proves the build path
+      and establishes no completeness.
     measured_on: "2026-10-30"
     summary: >-
       Each CourtListener opinion's text as Markdown (CommonMark with GFM tables and

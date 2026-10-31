@@ -6,7 +6,7 @@
 
 Each CourtListener opinion's text as Markdown (CommonMark with GFM tables and footnotes), its citations as links [cite](opinion:ID) to the cited opinion_id. Stored one file per block of 150,000 opinion ids: opinion_block is opinion_id // 150000, so a lookup that filters opinion_block and opinion_id opens one file. Join opinion_id to court_opinions and cluster_id to court_opinion_clusters (court_is_federal selects federal courts). Receipts point at the export and the SHA-256 of the rendering converted, not a copy.
 
-**Coverage.** Not published. Only a bounded build of the head of the 2026-06-30 CourtListener opinions export has run; it proves the build path, is not a range and establishes no completeness. *(measured 2026-10-30)*
+**Coverage.** Not a range. Not published: only a bounded build of the head of the 2026-06-30 CourtListener opinions export has run; it proves the build path and establishes no completeness. *(measured 2026-10-30)*
 
 **Data quality.** The text is converted from the publisher's html_with_citations, else html, else plain_text (in the whole 2026-06-30 export 9,355 opinions fall back to html, 7,976 to plain_text and 554 have no text); images are dropped. Preformatted bodies (a fifth of the export) keep their line breaks and indentation. On 500 sampled opinions stratified by source rendering, all 5,539 citation links kept their cited id and text, and no heading, blockquote or table was lost; 2 of 406 footnote markers, 6 of 400 footnote bodies and 0.28% of italic characters were. A plain CommonMark reader misreads footnote definitions; read with a GFM + footnote parser.
 
