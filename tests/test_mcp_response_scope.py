@@ -34,7 +34,7 @@ def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path,
         assert specs[1].view.name in available
         assert specs[0].view.name not in available
         assert specs[0].view.name in views["unavailable_views"]
-        assert discovery["relationship_views"]["unavailable"] == len(views["unavailable_views"])
+        assert discovery["unavailable_views"] == len(views["unavailable_views"])
         assert "fec_receipts" in {entry["table"] for entry in _listed(mcp)}
         selected = _tool_data(mcp, "describe_table", {"table": specs[0].view.name})
         assert selected["relationship"]["release_compatibility"]["reasons"]

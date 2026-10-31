@@ -437,9 +437,17 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
             group["rows"] = widest
         listed["fec_release"]["status_counts"] = statuses
         listed["deferred_views"] = [{"count": len(qualified), "query_admission": "pending_receipt_rows", "reason": reason}]
+        # The fixture loads every declared table; live, ten were unloaded (2026-10-31). Widen to the longest names.
+        assert listed["unavailable_tables"] == [] and listed["unavailable_table_count"] == 0
+        listed["unavailable_tables"] = sorted(server.TABLES, key=len, reverse=True)[:server.UNAVAILABLE_TABLES_LISTED]
+        listed["unavailable_table_count"] = len(server.TABLES)
+        listed["unavailable_views"] = 1 << 20
+        # The fixture binds no archive; the default carries its status and view count (the archive test bounds the page).
+        listed["archive"] = {"status": "unavailable", "views": 1 << 20}
+        pages, listed["pages"] = listed["pages"], ["views", "archive"]
         assert _size(listed) <= DEFAULT_REPLY_CHARS
-        assert listed["pages"] == ["views"]
-        for page in [*(group["subject"] for group in listed["subjects"]), *listed["pages"]]:
+        assert pages == ["views"]
+        for page in [*(group["subject"] for group in listed["subjects"]), *pages]:
             reply = _tool_data(mcp, "list_sources", {"subject": page})
             for group in reply.get("subjects", []):
                 for table in group["tables"]:
@@ -453,6 +461,7 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
                                             consumer=runtime_consumer("sha256:" + "b" * 64))
                 reply["deferred_views"].append({"views": qualified, "query_admission": "pending_receipt_rows",
                                                 "reason": reason})
+                reply["unavailable_tables"] = list(server.TABLES)
             assert _size(reply) <= server.REPLY_CHARS - 1_000, page
         sizes = {}
         for name in [*server.TABLES, *server._connection_relationships(con.cursor())]:
@@ -507,17 +516,23 @@ def test_list_sources_groups_tables_by_subject_with_unassigned_tables_last(monke
                  for name in [*(group["subject"] for group in listed["subjects"]), *listed["pages"]]}
         with pytest.raises(ToolError) as refused:
             _tool_data(mcp, "list_sources", {"subject": "rulemakng"})
+        # A declared subject with no loaded table is empty, not unknown.
+        spending = _tool_data(mcp, "list_sources", {"subject": "spending"})
     assert "tables" not in listed
-    assert listed["subjects"] == [{"subject": "rulemaking", "table_count": 2, "rows": 0},
-                                  {"subject": "congress", "table_count": 1, "rows": 0},
-                                  {"subject": "unassigned", "table_count": 1, "rows": 0}]
+    # No table here is pinned, so no subject claims a row total; 0 would read as an empty publication.
+    assert listed["subjects"] == [{"subject": "rulemaking", "table_count": 2, "rows": None},
+                                  {"subject": "congress", "table_count": 1, "rows": None},
+                                  {"subject": "unassigned", "table_count": 1, "rows": None}]
+    assert spending["subjects"] == [{"subject": "spending", "tables": []}]
+    assert {reply["generation"] for reply in (listed, spending, *pages.values())} == {listed["generation"]}
     assert listed["pages"] == ["views"]
     assert [(group["subject"], [row["table"] for row in group["tables"]])
             for name in ("rulemaking", "congress", "unassigned") for group in pages[name]["subjects"]] == [
         ("rulemaking", ["dockets", "documents"]), ("congress", ["laws"]), (None, ["comments"])]
     assert set(pages["rulemaking"]["subjects"][0]["tables"][0]) == {"table", "label", "coverage", "rows"}
-    assert str(refused.value) == ("Error executing tool list_sources: Unknown subject 'rulemakng'. "
-                                  "list_sources takes one of: rulemaking, congress, unassigned, views.")
+    assert str(refused.value).startswith("Error executing tool list_sources: Unknown subject 'rulemakng'. "
+                                         "list_sources takes one of: rulemaking, congress, unassigned, ")
+    assert ", spending, " in str(refused.value) and str(refused.value).endswith(", views.")
 
 
 def test_a_subject_page_carries_exactly_the_entries_the_whole_catalog_listed(monkeypatch):
@@ -537,15 +552,18 @@ def test_a_subject_page_carries_exactly_the_entries_the_whole_catalog_listed(mon
     groups = [group for name in names for group in pages[name].get("subjects", [])]
     assert [(group["subject"] or "unassigned", len(group["tables"])) for group in groups] == [
         (group["subject"], group["table_count"]) for group in listed["subjects"]]
-    assert [sum(table["rows"] or 0 for table in group["tables"]) for group in groups] == [
-        group["rows"] for group in listed["subjects"]]
+    assert [sum(pinned) if (pinned := [table["rows"] for table in group["tables"] if table["rows"] is not None])
+            else None for group in groups] == [group["rows"] for group in listed["subjects"]]
     # Every available table is on exactly one subject page, every relationship view on the views page.
     tables = [table["table"] for group in groups for table in group["tables"]]
     views = [name for group in pages["views"]["relationship_views"] for name in group["views"]]
     assert len(tables) == len(set(tables)) and not set(tables) & set(views)
     assert sum(len(group["views"]) for group in pages["views"]["deferred_views"]) == sum(
         group["count"] for group in listed["deferred_views"])
-    assert listed["relationship_views"] == {"available": len(views), "unavailable": len(pages["views"]["unavailable_views"])}
+    assert listed["relationship_views"] == {"available": len(views)}
+    assert listed["unavailable_views"] == len(pages["views"]["unavailable_views"])
+    assert listed["unavailable_tables"] == pages["views"]["unavailable_tables"][:server.UNAVAILABLE_TABLES_LISTED]
+    assert listed["unavailable_table_count"] == len(pages["views"]["unavailable_tables"])
     assert {name for name, entry in relationships.items()
             if entry["metadata"].get("view_role") != "child_query" and entry["status"] == "available"} <= set(views)
     assert listed["etl_receipts"]["dataset_count"] == len(metadata["etl_receipts"]["datasets"])

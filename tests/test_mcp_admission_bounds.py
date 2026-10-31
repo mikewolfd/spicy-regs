@@ -185,7 +185,7 @@ def test_financial_discovery_defers_exact_rows_but_query_still_admits(tmp_path, 
     assert sum(entry['count'] for entry in listed['deferred_views']) == sum(len(entry['views']) for entry in views['deferred_views'])
     described = _tool_data(mcp, 'describe_table', {'table': specs[0].view.name, 'detail': True})
     assert not restored
-    assert specs[0].view.name not in listed['unavailable_tables']
+    assert specs[0].view.name not in {*views['unavailable_tables'], *views['unavailable_views']}
     assert described['available'] is False
     assert described['relationship']['status'] == 'deferred'
     assert described['metadata']['query_admission'] == 'pending_receipt_rows'

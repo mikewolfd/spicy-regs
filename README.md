@@ -356,7 +356,7 @@ converts, and `check` holds it.
 
 ## Use it from an AI assistant
 
-The read-only MCP server provides `list_sources()`, `describe_table(table)`,
+The read-only MCP server provides `list_sources(subject=None)`, `describe_table(table)`,
 `query_sql(sql)`, `resolve_document_citations(...)`,
 `read_receipt_fields(table, keys, fields)` and
 `lookup_agency(namespace, identifier, on_date=None)`.
@@ -388,19 +388,24 @@ appear in the same table list with `role: child_query` and their `source_tables`
 See [FEC tables and child rows](docs/fec-query-views.md) for grains, evidence and release limits.
 
 `list_sources` is used in two steps. With no argument it lists each subject
-with its table count and pinned row total (`unassigned` holds tables the
-dictionary gives no subject), declared tables without a loaded view in
-`unavailable_tables`, relationship and deferred view counts, the receipt
-summary and the FEC release status counts. `list_sources(subject)` then returns
-that subject's tables with their label, coverage kind (`true_range`, `window`,
-`sampled`, `derived`, `not_a_range` or `empty`) and pinned rows; an unknown
-subject is refused with the valid names. The `views` page lists the relationship
-views grouped under their shared summary, unavailable views, deferred views and
-the FEC release; the `archive` page gives the bound archive release. The whole
+with its table count and the row total of its pinned tables (null when none is
+pinned; `unassigned` holds tables the dictionary gives no subject), the first
+declared tables without a loaded view in `unavailable_tables` with their count,
+relationship, unavailable and deferred view counts, the receipt summary and the
+FEC release status counts. `list_sources(subject)` then returns that subject's
+tables with their label, coverage kind (`true_range`, `window`, `sampled`,
+`derived`, `not_a_range` or `empty`) and pinned rows; a declared subject with
+no loaded table returns none, and an unknown subject is refused with the valid
+names. The `views` page lists the relationship views grouped under their shared
+summary, every unavailable table and view, the deferred view names and the FEC
+release; the `archive` page gives the bound archive release. Every reply carries
+`generation`, a digest of the connection's pins: pages whose generations differ
+came from different connections (the connection refreshes every five minutes). The whole
 catalog in one reply had reached 39,135 of the 40,000-character reply budget
 (2026-10-31); each page is now held 1,000 characters under it. Discovery checks
-selected source schemas without restoring receipt-backed rows. `deferred_views`
-lists views whose exact receipt admission and output schema remain pending;
+selected source schemas without restoring receipt-backed rows. The `views`
+page's `deferred_views` names views whose exact receipt admission and output
+schema remain pending;
 `query_sql` validates those rows in a separate query connection. Matching FEC
 release declarations do not mean deferred views have executed. Availability
 reflects the current cached connection, which normally refreshes after five minutes; it does not certify

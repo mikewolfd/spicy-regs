@@ -103,7 +103,8 @@ def test_discovery_reports_actual_parquet_schema_and_dictionary_caveats(tmp_path
     assert _listed(server) == [
         {"table": "org_committee_links", "label": declared["label"], "coverage": declared["kind"], "rows": None}
     ]
-    assert "fec_committees" in sources["unavailable_tables"]
+    unavailable = _tool_data(server, "list_sources", {"subject": "views"})["unavailable_tables"]
+    assert "fec_committees" in unavailable and sources["unavailable_table_count"] == len(unavailable)
 
     result = _tool_data(server, "describe_table", {"table": "org_committee_links"})
     assert result["available"] is True

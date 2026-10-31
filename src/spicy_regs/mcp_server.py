@@ -13,6 +13,7 @@ from spicy_regs.subject_catalog import subject_tables
 import base64
 import difflib
 import functools
+import hashlib
 import inspect
 import json
 import logging
@@ -332,7 +333,7 @@ STATEMENT_TIMEOUT_SECONDS = _parse_timeout_seconds(STATEMENT_TIMEOUT)
 INSTRUCTIONS = (
     "Query Spicy Regs public datasets across government and attributed third-party sources. Discover tables in two steps: "
     "list_sources with no subject lists the subjects with table and row counts, then list_sources(subject) lists "
-    "that subject's tables; unavailable_tables names declared outputs not loaded. Use describe_table for actual "
+    "that subject's tables; unavailable_tables names declared outputs not loaded (all on the views page). Use describe_table for actual "
     "schemas, field meanings, identifiers and coverage caveats, and query_sql for "
     "read-only queries and joins. A declared output or coverage measurement does "
     "not establish publication or freshness. qualification reports the output "
@@ -459,6 +460,9 @@ TOOL_CONCURRENCY = _resolve_tool_concurrency()
 REPLY_CHARS = _resolve_reply_chars()
 #: list_sources' page name for the tables the dictionary gives no subject; their group's subject stays null.
 UNASSIGNED_SUBJECT = "unassigned"
+#: The default list_sources reply names this many unavailable declared tables; the views page names them all. All 213
+#: unavailable at once would be 5,045 characters, against the default reply's 2,000 (ss-ehe5 review).
+UNAVAILABLE_TABLES_LISTED = 8
 #: Room a refusal keeps for the clause it asks the caller to add (ORDER BY, LIMIT, OFFSET), which the reply echoes.
 RE_ASK_CHARS = 100
 
@@ -1209,6 +1213,18 @@ def _pinned_record(cursor: duckdb.DuckDBPyConnection, table: str) -> dict | None
         return _parsed_pin(row[0]) if row is not None else None
     except duckdb.CatalogException:
         return None
+
+
+def _connection_generation(cursor: duckdb.DuckDBPyConnection) -> str:
+    """A short digest of every pin this connection holds, so a client paging list_sources can tell its pages match."""
+    digest = hashlib.sha256()
+    for table in ("_spicy_publication", "_spicy_rulemaking", "_spicy_local_selection", "_spicy_archive"):
+        try:
+            row = cursor.execute(f"SELECT snapshot FROM {table}").fetchone()
+        except duckdb.CatalogException:
+            row = None
+        digest.update(f"{table}\0{row[0] if row else ''}\0".encode())
+    return digest.hexdigest()[:16]
 
 
 def _connection_local_selection(cursor: duckdb.DuckDBPyConnection) -> dict | None:
@@ -2579,12 +2595,13 @@ def _tools() -> list[Tool]:
     def list_sources(subject: Annotated[str | None, Field(min_length=1, max_length=64)] = None) -> dict[str, Any]:
         """List subjects, then one subject's tables: call with no subject first, then list_sources(subject).
 
-        With no subject: each subject's table_count and rows total (unassigned: tables the dictionary gives
-        no subject), relationship and deferred view counts, unavailable_tables, the receipt summary and
-        fec_release.status_counts. A subject returns its tables in full. views names relationship views by
-        summary, unavailable views, deferred views by the reason schema binding or receipt admission waits
-        for query_sql's own connection, and the FEC release; archive gives the bound archive release. An
-        unknown subject is refused with the names.
+        No subject: each subject's table_count and rows over pinned tables (null if none; unassigned: no
+        dictionary subject), view counts (unavailable_views: every declared view not loaded), the first
+        unavailable_tables, receipt summary and fec_release.status_counts. A subject gives its tables (none if
+        declared but unloaded). views lists relationship views by shared summary, every unavailable table and
+        view, deferred views by the reason binding waits for query_sql's own connection, and the FEC release;
+        archive gives the archive release. Unknown subjects are refused. generation digests the connection's
+        pins: pages that differ in it came from different connections.
         A table gives label, coverage and pinned rows. coverage is the dictionary's kind: true_range, window,
         sampled, derived, not_a_range or empty; a window or a sample does not hold the source's full history.
         rows is the pinned count (describe_table gives the pin): 0 means this generation publishes no rows;
@@ -2651,22 +2668,30 @@ def _tools() -> list[Tool]:
                                     if name not in present and relationships.get(name, {}).get("status") != "deferred")
         declared = set(TABLES)
         unavailable_views = [name for name in unavailable if name not in declared]
+        unavailable_tables = [name for name in unavailable if name in declared]
+        identity = {**_source_details(cursor), "generation": _connection_generation(cursor)}
+
+        def total(tables: list[dict[str, Any]]) -> int | None:
+            pinned = [table["rows"] for table in tables if table["rows"] is not None]
+            return sum(pinned) if pinned else None
+
         if subject is None:
             receipt_families = _receipt_families(index, local)
             return {
-                **_source_details(cursor),
+                **identity,
                 "subjects": [{"subject": UNASSIGNED_SUBJECT if name is None else name, "table_count": len(tables),
-                              "rows": sum(table["rows"] or 0 for table in tables)} for name, tables in subjects.items()],
-                "unavailable_tables": [name for name in unavailable if name in declared],
-                "relationship_views": {"available": sum(len(names) for names in views.values()),
-                                       "unavailable": len(unavailable_views)},
+                              "rows": total(tables)} for name, tables in subjects.items()],
+                "unavailable_tables": unavailable_tables[:UNAVAILABLE_TABLES_LISTED],
+                "unavailable_table_count": len(unavailable_tables),
+                "relationship_views": {"available": sum(len(names) for names in views.values())},
+                "unavailable_views": len(unavailable_views),
                 "deferred_views": [{"count": len(names), "reason": reason, "query_admission": admission}
                                    for (reason, admission), names in deferred.items()],
                 "etl_receipts": {
                     "available": "etl_receipts" in available,
                     "dataset_count": len(metadata.get("etl_receipts", {}).get("datasets", [])),
                     "family_count": len(receipt_families),
-                    "details": "describe_table('etl_receipts') gives datasets, columns and every selected family's generation/hash/row pins.",
+                    "details": "describe_table('etl_receipts') gives datasets, columns and, while it is available, each family's pins.",
                     "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
                 },
                 "fec_release": {"status_counts": _fec_release_reply(cursor)["status_counts"]},
@@ -2674,25 +2699,30 @@ def _tools() -> list[Tool]:
                 "pages": other_pages,
                 "details": "list_sources(subject) takes a subject above or one of pages.",
             }
-        if subject in pages:
+        # A declared subject with no loaded table is empty here, not unknown (a partial or local server).
+        empty = [name for name in dict.fromkeys(entry.get("subject") for entry in metadata.values())
+                 if name is not None and name not in pages]
+        if subject in pages or subject in empty:
+            key = pages.get(subject, subject)
             return {
-                **_source_details(cursor),
-                "subjects": [{"subject": pages[subject], "tables": subjects[pages[subject]]}],
+                **identity,
+                "subjects": [{"subject": key, "tables": subjects.get(key, [])}],
                 "category_details": "Generic query_data declarations are omitted; absent category can also mean undeclared. describe_table gives declared categories and limits.",
             }
         if subject == "views":
             return {
-                **_source_details(cursor),
+                **identity,
                 "relationship_views": [{"views": names} for names in views.values()],
                 "relationship_view_details": "Call describe_table for group labels, full meanings, identities, dependencies and purpose limits.",
+                "unavailable_tables": unavailable_tables,
                 "unavailable_views": unavailable_views,
                 "deferred_views": [{"views": names, "reason": reason, "query_admission": admission}
                                    for (reason, admission), names in deferred.items()],
                 "fec_release": _fec_release_reply(cursor),
             }
         if subject == "archive" and archive:
-            return {**_source_details(cursor), "archive": _archive_summary(archive, available)}
-        raise ValueError(f"Unknown subject '{subject}'. list_sources takes one of: {', '.join([*pages, *other_pages])}.")
+            return {**identity, "archive": _archive_summary(archive, available)}
+        raise ValueError(f"Unknown subject '{subject}'. list_sources takes one of: {', '.join([*pages, *empty, *other_pages])}.")
 
     @tool
     def describe_table(table: str, detail: bool = False) -> dict[str, Any]:
