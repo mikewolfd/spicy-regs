@@ -38,3 +38,14 @@ def action_evidence_rin(value: object) -> str | None:
     """
     rin = normalize_rin(value)
     return None if rin is None or _X_CODE.fullmatch(rin) else rin
+
+
+#: Every dash a U.S. Code section is printed with: spicy-docs ``schemas.tables.DASH_SPELLINGS`` (hyphen, non-breaking
+#: hyphen, figure dash, en and em dash, horizontal bar, minus, and the Windows-1252 en/em bytes), restated because the
+#: serving modules cannot import spicy-docs; ``tests/test_citation_parity.py`` holds the copy equal to its owner.
+USC_DASH_SPELLINGS = "‐‑‒–—―−\x96\x97"
+
+
+def usc_section_key_sql(expression: str) -> str:
+    """SQL for spicy-docs ``usc_section_key`` over a trusted ``expression``: trimmed, lower-cased, dashes as hyphens."""
+    return f"lower(translate(trim({expression}), '{USC_DASH_SPELLINGS}', '{'-' * len(USC_DASH_SPELLINGS)}'))"

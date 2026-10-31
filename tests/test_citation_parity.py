@@ -17,11 +17,11 @@ from spicy_docs.interpretation.identifier_shapes import published_rin
 from spicy_docs.schemas.budget_volume_tables import BUDGET_VOLUME
 from spicy_docs.schemas.document_citation_tables import GOVINFO_PACKAGE
 from spicy_docs.schemas.law_tables import law_id
-from spicy_docs.schemas.tables import bill_id, usc_section_key
+from spicy_docs.schemas.tables import DASH_SPELLINGS, bill_id, usc_section_key
 
 from spicy_regs.citation_resolution import CITE_KINDS, ROUTES, SOURCE_TABLES, resolve_citations
 from spicy_regs.citation_sources import TEXT_SOURCES
-from spicy_regs.identifiers import normalize_rin
+from spicy_regs.identifiers import USC_DASH_SPELLINGS, normalize_rin, usc_section_key_sql
 from spicy_docs.interpretation.citation_grammar import cfr_key
 
 
@@ -91,3 +91,19 @@ def test_the_rin_shape_is_spicy_docs_published_rin(value):
 
 def test_the_dash_fold_is_the_one_recorded_difference():
     assert (normalize_rin("2060–AV12"), published_rin("2060–AV12")) == (None, "2060-AV12")
+
+
+def test_the_dash_spellings_are_spicy_docs_dash_spellings():
+    assert USC_DASH_SPELLINGS == DASH_SPELLINGS
+
+
+#: Section spellings the release point and the classification tables print: padding, case, every dash, a range stub.
+SECTIONS = [" 553 ", "45Q", "2000e\u20135", "1400Z\u20111", "636h\x962", "1" + DASH_SPELLINGS + "2", "2601...2606", "",
+            None]
+
+
+@pytest.mark.parametrize("value", SECTIONS)
+def test_the_sql_section_fold_is_spicy_docs_usc_section_key(value):
+    with duckdb.connect() as con:
+        [(folded,)] = con.execute(f"SELECT {usc_section_key_sql('?')}", [value]).fetchall()
+    assert folded == usc_section_key(value)
