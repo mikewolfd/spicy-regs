@@ -327,6 +327,13 @@ def reconcile(index: Path, output: Path, selection: Path, *, expected_generation
     Base input pins describe the unchanged raw rows. New code and evidence pins
     belong to this reconciliation phase, rather than pretending to rebuild raw.
     """
+    from .selection import check_identities, identity, metadata, plain, require
+
+    index, output = plain(index), plain(output)
+    require(index != output and (not output.exists() or not os.path.samefile(index, output)),
+            'Publication reconciliation requires a separate candidate')
+    require(not output.exists(), 'Publication reconciliation requires new candidate output')
+    source_identity = identity(index)
     output.parent.mkdir(parents=True, exist_ok=True)
     source = connect(index, readonly=True, scope="all")
     descriptor, temporary = tempfile.mkstemp(prefix=output.name + ".", suffix=".tmp", dir=output.parent)
@@ -345,6 +352,8 @@ def reconcile(index: Path, output: Path, selection: Path, *, expected_generation
         if expected_generation is not None and expected_generation != base_generation:
             raise ValueError("Selected base catalog generation changed")
         method = _clone_index(index, candidate, source)
+        check_identities({index: source_identity}, 'Base catalog changed while cloning publication candidate')
+        require(metadata(candidate)['generation'] == base_generation, 'Cloned publication base generation differs')
         db = connect(candidate)
         inputs = Inputs(selection.parent)
         for code in (Path(__file__), Path(__file__).with_name("storage.py"), Path(__file__).with_name("scope.py")):
@@ -375,7 +384,8 @@ def reconcile(index: Path, output: Path, selection: Path, *, expected_generation
             os.fsync(stream.fileno())
         # The source remains read-locked until the replacement is durable. No
         # full raw scan, code reclassification, or mutation of the base is needed.
-        os.replace(candidate, output)
+        check_identities({index: source_identity}, 'Base catalog changed during publication reconciliation')
+        os.link(candidate, output)
         directory = os.open(output.parent, os.O_RDONLY)
         try:
             try:
@@ -403,9 +413,37 @@ def check_publication(index: Path, selection: Path) -> dict:
         pin = report.get("phaseInputs", {}).get(str(selection.resolve()))
         selected = bool(pin and pin["sha256"] == digest(selection) and pin["bytes"] == selection.stat().st_size)
         counts = Counter()
+        current = []
         for row in db.execute("SELECT data FROM tables"):
             publication = json.loads(row[0]).get("publication", {})
             if publication.get("scope") == "current":
                 counts[publication["status"]] += 1
+                item = json.loads(row[0])
+                current.append((item['family'], publication['version'], item['id'], item.get('publication_descriptor')))
+        # Check the selected target descriptors independently of provenance
+        # completeness. Existing uncertainty remains valid catalogue information.
+        from spicy_regs.sources.publication import parse_index
+
+        inputs = Inputs(selection.parent)
+        target = inputs.json(selection)
+        publication = parse_index(pinned(inputs, target['publication'], selection.parent).read_bytes())
+        expected = [(family, sha(entry['artifactDigest']), table.removesuffix('.parquet'), descriptor)
+                    for family, entry in publication['families'].items() for table, descriptor in entry['tables'].items()]
+        if 'rulemaking' in target:
+            refs = target['rulemaking']
+            pointer = inputs.json(pinned(inputs, refs['pointer'], selection.parent))
+            manifest = inputs.json(pinned(inputs, refs['manifest'], selection.parent))
+            prefix = 'materialized/rulemaking/snapshots/' + pointer['snapshot_id']
+            if pointer['manifest_key'] != prefix + '/manifest.json' or manifest['snapshot_id'] != pointer['snapshot_id']:
+                raise ValueError('Rulemaking target manifest differs from selected pointer')
+            import hashlib
+
+            version = 'sha256:' + hashlib.sha256(encoded(manifest).encode()).hexdigest()
+            expected.extend(('rulemaking', version, table.removesuffix('.parquet'), {
+                'sha256': sha(item['sha256']), 'byteSize': count(item['bytes']), 'rows': count(item['rows']),
+            }) for table, item in manifest['artifacts'].items()
+                if item.get('visibility') == 'public' and table.endswith('.parquet'))
+        target_matches = sorted(map(encoded, current)) == sorted(map(encoded, expected))
         return {"verified": selected and bool(counts) and set(counts) == {"verified"},
-                "selectionMatches": selected, "currentTables": sum(counts.values()), "statuses": dict(counts)}
+                "selectionMatches": selected, 'targetMatches': target_matches,
+                "currentTables": sum(counts.values()), "statuses": dict(counts)}

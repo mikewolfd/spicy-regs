@@ -114,6 +114,9 @@ class ReceiptReferences:
 
     def __init__(self, db):
         self.db, self.pins, self.cache = db, {}, {}
+        row = db.execute("SELECT value FROM metadata WHERE key='receipt_admission'").fetchone()
+        admission = json.loads(row[0]) if row else {}
+        self.admitted_receipts = admission.get('receipts', {}) if admission.get('version') == 1 else {}
         self.roots = []
         for row in db.execute("SELECT path,sha256,bytes FROM inputs"):
             path, digest, size = row
@@ -138,8 +141,13 @@ class ReceiptReferences:
             for path, size in candidates:
                 if path.is_file() and not path.is_symlink() and path.stat().st_size == size:
                     from .storage import digest as hash_file
+                    from .selection import identity as file_identity
 
-                    if hash_file(path) != digest:
+                    admitted = self.admitted_receipts.get(key)
+                    qualified = (admitted is not None and admitted.get('sha256') == digest
+                                 and admitted.get('bytes') == size
+                                 and admitted.get('custody') == list(file_identity(path)))
+                    if not qualified and hash_file(path) != digest:
                         raise ValueError("Pinned receipt bytes changed")
                     found = True
                     break
@@ -208,6 +216,9 @@ def native_row(row, facts, *, dataset_id, publisher, inventory_kind, references)
         basis = period.get("basis")
         if period.get("origin") == "content" and isinstance(basis, str) and basis.startswith("Original /"):
             basis = "Observed in source content"
+        elif (period.get("origin") == "publication-context" and period.get("kind") == "publication-date"
+              and period.get("rule") == "exact-original-unique-published-date-context/1"):
+            basis = "Observed in pinned publication context"
         item = {key: text(basis if key == "basis" else period.get(key), "period-" + key)
                 for key in ("kind", "label", "basis", "start", "end")}
         if item["kind"] and item["label"]:
@@ -393,7 +404,7 @@ def validate(body, *, generation, dataset_id, inventory_kind):
     return rows
 
 
-def export_pages(db, output: Path, *, dataset_id, publisher, folder, generation, page_size, inventory_kind, references):
+def export_pages(db, output: Path, *, dataset_id, publisher, folder, generation, page_size, inventory_kind, references, emit=None, page_rows=None):
     """Stream selected SQL observations into immutable, size-bounded shards."""
     source = "files" if inventory_kind == "active" else "retained_response_files"
 
@@ -453,14 +464,17 @@ def export_pages(db, output: Path, *, dataset_id, publisher, folder, generation,
         prefix = "files" if inventory_kind == "active" else "retained-files"
         relative = f"{folder}/{prefix}-{len(pages):05d}.parquet"
         path = output / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            if path.read_bytes() != body:
-                raise ValueError(f"Immutable export collision: {path}")
+        if emit is not None:
+            emit(path, body)
         else:
-            temporary = path.with_suffix(".tmp")
-            temporary.write_bytes(body)
-            temporary.replace(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists():
+                if path.read_bytes() != body:
+                    raise ValueError(f"Immutable export collision: {path}")
+            else:
+                temporary = path.with_suffix(".tmp")
+                temporary.write_bytes(body)
+                temporary.replace(path)
         pages.append(
             {
                 "path": relative,
@@ -472,7 +486,22 @@ def export_pages(db, output: Path, *, dataset_id, publisher, folder, generation,
             }
         )
 
-    while batch := cursor.fetchmany(min(page_size, MAX_ROWS)):
+    sizes = iter(page_rows) if page_rows is not None else None
+    while True:
+        size = next(sizes, None) if sizes is not None else min(page_size, MAX_ROWS)
+        if size is None:
+            if cursor.fetchone() is not None:
+                raise ValueError("Staged public pages omit candidate rows")
+            break
+        if not 0 < size <= MAX_ROWS:
+            raise ValueError("Invalid staged public page size")
+        batch = cursor.fetchmany(size)
+        if not batch:
+            if sizes is not None:
+                raise ValueError("Staged public pages exceed candidate rows")
+            break
+        if sizes is not None and len(batch) != size:
+            raise ValueError("Staged public page size differs from candidate rows")
         rows = [
             native_row(
                 row,

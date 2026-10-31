@@ -14,7 +14,7 @@ import shutil
 import sqlite3
 import tempfile
 
-from .exporter import validate_public
+from .exporter import export, validate_public
 from .storage import digest
 
 
@@ -184,7 +184,8 @@ def public_members(root, generation):
 
 
 def select(candidate: Path, reconciliation: Path, staged_public: Path, cache: Path, public: Path,
-           raw_root: Path, *, expected_generation: str, allow_inventory_change: bool = False) -> dict:
+           raw_root: Path, *, expected_generation: str, allow_inventory_change: bool = False,
+           receipt_snapshot: Path | None = None, receipt_snapshot_sha256: str | None = None) -> dict:
     """Replace an existing local selection, optionally accepting reviewed new raw inventory.
 
     Builders own SQLite integrity checks. Selection checks their matching report,
@@ -202,11 +203,11 @@ def select(candidate: Path, reconciliation: Path, staged_public: Path, cache: Pa
     require(cache.is_dir() and public.is_dir(), "An existing local selection is required")
     with selection_lock(cache):
         return _select(candidate, reconciliation, staged_public, cache, public, raw_root, expected_generation,
-                       allow_inventory_change)
+                       allow_inventory_change, receipt_snapshot, receipt_snapshot_sha256)
 
 
 def _select(candidate, reconciliation, staged_public, cache, public, raw_root, expected_generation,
-            allow_inventory_change):
+            allow_inventory_change, receipt_snapshot=None, receipt_snapshot_sha256=None):
     selected_index = cache / "index.sqlite"
     targets = [selected_index, cache / "index.sqlite.reconciliation.json", cache / "reconciliation.json",
                cache / "selection.json", public / "manifest.json", cache / "current.json"]
@@ -219,6 +220,20 @@ def _select(candidate, reconciliation, staged_public, cache, public, raw_root, e
     require(digest(public / "manifest.json").removeprefix("sha256:") == current["public_manifest_sha256"],
             "Selected public manifest pin differs")
     require(read(public / "manifest.json")["generation"] == expected_generation, "Selected public generation differs")
+    prior_digest = current.get('index_sha256')
+    require(isinstance(prior_digest, str) and bool(re.fullmatch(r'[a-f0-9]{64}', prior_digest)),
+            'Selected index has no recorded byte identity')
+    if receipt_snapshot is not None or receipt_snapshot_sha256 is not None:
+        from .maintenance import check_receipt_snapshot
+
+        qualified, _ = check_receipt_snapshot(receipt_snapshot, receipt_snapshot_sha256,
+                                               index=selected_index, expected_generation=expected_generation)
+        require(Path(qualified['rawRoot']) == raw_root, 'Receipt qualification uses another raw archive')
+        require(qualified['baseIndex']['sha256'] == 'sha256:' + prior_digest,
+                'Receipt qualification differs from selected index identity')
+    else:
+        require(digest(selected_index).removeprefix('sha256:') == prior_digest,
+                'Selected index bytes differ from their recorded identity')
     previous_metadata = metadata(selected_index)
     require(previous_metadata["generation"] == expected_generation, "Selected index generation differs")
     require(read(targets[1]) == read(targets[2]) and read(targets[1])["generation"] == expected_generation,
@@ -250,6 +265,8 @@ def _select(candidate, reconciliation, staged_public, cache, public, raw_root, e
             "Candidate must have a new catalog generation")
     require(report.get("status") == "validated" and report.get("generation") == generation,
             "Candidate reconciliation is not validated for this generation")
+    require(report.get('baseGeneration', expected_generation) == expected_generation
+            or expected_generation in report.get('ancestry', []), 'Candidate belongs to another selected base')
     require(report in (candidate_metadata.get("reconciliation"), candidate_metadata.get("publication_reconciliation")),
             "Candidate reconciliation differs from index metadata")
     if previous_metadata.get("publication_reconciliation"):
@@ -257,6 +274,45 @@ def _select(candidate, reconciliation, staged_public, cache, public, raw_root, e
                 and candidate_metadata.get("publication_reconciliation", {}).get("currentTables") == current_tables,
                 "Candidate dropped selected publication accounting")
     members, staged_identities = public_members(staged_public, generation)
+    staged_manifest = read(staged_public / "manifest.json")
+    version = staged_manifest["version"]
+    layout = {}
+    for summary in staged_manifest["collections"]:
+        detail = read(staged_public / summary["detailPath"])
+        for field, kind in (("files", "active"), ("retainedFiles", "attention")):
+            inventory = detail.get(field)
+            if inventory is None:
+                continue
+            pages = inventory["pages"]
+            provenance = set()
+            if version in (1, 2):
+                for page in pages:
+                    value = read(staged_public / page["path"])
+                    provenance.update("provenance" in row for row in value["files"])
+                require(len(provenance) <= 1, "Mixed legacy provenance layouts")
+                require(version == 1 or provenance != {False}, "Version 2 provenance is missing")
+            layout[(summary["id"], kind)] = {"rows": [page["rows"] for page in pages],
+                                              "provenance": next(iter(provenance), True)}
+    # Reproduce the public export from the candidate, comparing one generated
+    # member at a time to the pinned staged bytes. A receipt supplied with the
+    # staged output cannot itself prove the output came from this index.
+    expected = {item["path"]: item for item in members}
+    emitted = set()
+
+    def compare(path, body):
+        name = str(path.relative_to(staged_public))
+        item = expected.get(name)
+        if item is None or name in emitted:
+            raise ValueError(f"Staged public member differs from candidate export: {name}")
+        if path.suffix == ".json":
+            require(json.loads(body) == read(path), f"Staged public member differs from candidate export: {name}")
+        else:
+            require(len(body) == item["bytes"] and "sha256:" + hashlib.sha256(body).hexdigest() == item["sha256"],
+                    f"Staged public member differs from candidate export: {name}")
+        emitted.add(name)
+
+    export(candidate, staged_public, emit=compare, public_version=version, page_layout=layout)
+    require(emitted == set(expected), "Staged public members differ from candidate export")
     index_sha256 = digest(candidate).removeprefix("sha256:")
     generation_name = generation.removeprefix("sha256:")
     source_generation = staged_public / "generations" / generation_name
@@ -270,6 +326,11 @@ def _select(candidate, reconciliation, staged_public, cache, public, raw_root, e
         check_identities(baseline, "Selected files changed during validation")
         check_identities({candidate: candidate_identity, reconciliation: report_identity}, "Candidate changed during validation")
         check_identities(staged_identities, "Staged public files changed")
+        if receipt_snapshot is not None:
+            # Validation/export can outlive the initial custody check. Recheck
+            # raw inputs here without rebinding the hard-linked selected index.
+            qualified, _ = check_receipt_snapshot(receipt_snapshot, receipt_snapshot_sha256)
+            require(Path(qualified['rawRoot']) == raw_root, 'Receipt qualification uses another raw archive')
         require(raw_selection(raw_root) == raw, "Raw inventory changed during validation")
         metadata(selected_index)
         metadata(candidate)

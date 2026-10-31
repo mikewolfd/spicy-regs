@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 import inspect
 from spicy_regs.etl_receipts import RECEIPT_SCHEMA, receipt_policies
 from spicy_regs.legislative_receipts import policy as legislative_policy
+from spicy_regs.legislative_documents import field_registry
 from spicy_regs.native_types import described_schema
 from spicy_regs.pipelines.rollups.subject_receipts import SelectedPriors, dataset_policy
 from spicy_regs.selected_generations import SelectedDataset, remember_selection
@@ -29,49 +30,75 @@ def file_hash(path):
 PACKAGE_ROOT = Path(inspect.getfile(legislative_policy)).parent
 
 
-def _identity_files():
-    """Every file whose bytes decide what this reader admits, restores or describes."""
+def _admission_files():
+    """Shared byte, receipt, policy-history and mutation guards used by every route."""
     root = PACKAGE_ROOT
-    return [
-        Path(__file__),
-        *(
-            root / name
-            for name in (
-                "etl_receipts.py",
-                "legislative_receipts.py",
-                "legislative_documents.py",
-                "legislative_document_fields.json",
-                "congress_receipts.py",
-                "congress_subjects.py",
-                "selected_generations.py",
-                "native_types.py",
-                "parquet_rows.py",
-                "transforms/parquet_rows.py",
-                "pipelines/rollups/subject_receipts.py",
-                "etl_bulk.py",
-                "regulations_bulk.py",
-                "transforms/regulations_receipts.py",
-                "transforms/regulations_shape.py",
-                "transforms/fec_identity_receipts.py",
-                # current_receipts admits every declared earlier policy version, so the chains and the policy
-                # files they are checked against decide what it admits.
-                "earlier_receipt_policies.py",
-                "scorecards/historical_rating_policies.json",
-            )
-        ),
-        *sorted(root.glob("*policy_history*.json")),
+    return [Path(__file__), *(root / name for name in (
+        "etl_receipts.py", "etl_bulk.py", "native_types.py", "parquet_rows.py",
+        "transforms/parquet_rows.py", "local_data.py", "runtime_bounds.py",
+        "earlier_receipt_policies.py", "scorecards/historical_rating_policies.json",
+    )), *sorted(root.glob("*policy_history*.json")),
         *sorted((root / "scorecards").glob("*policy_history*.json")),
-        *sorted((root / "etl_policies").glob("*.json")),
-    ]
+        *sorted((root / "etl_policies").glob("*.json"))]
 
 
-def implementation_identity():
+RESTORATION_FILES = {
+    "congress": ("congress_receipts.py", "congress_subjects.py", "congress_bulk.py",
+                 "votes_batch_receipts.py", "receipt_history.py"),
+    "legislative": ("legislative_receipts.py", "legislative_documents.py",
+                    "legislative_document_fields.json", "navigation_read_outcomes.py"),
+    "regulation": ("regulations_bulk.py", "transforms/regulations_receipts.py",
+                   "transforms/regulations_shape.py", "schemas/regulations_subjects.py",
+                   "sources/regulatory_catalog.py"),
+    "fec": ("transforms/fec_identity_receipts.py", "transforms/fec_identity_context_fields.py",
+            "transforms/build_fec_committees.py"),
+}
+
+
+def restoration_route(dataset):
+    # Match SelectedPriors.get's dispatch; importing a module does not mean every
+    # dataset runs its restoration code. Whole-file hashes keep each real owner.
+    from spicy_regs.pipelines.rollups import subject_receipts
+    if dataset in subject_receipts.CONGRESS:
+        return "congress"
+    if dataset in field_registry():
+        return "legislative"
+    if dataset in subject_receipts.REGULATIONS:
+        return "regulation"
+    if dataset in subject_receipts.FEC:
+        return "fec"
+    raise ValueError(f"No coordinated processing reader for {dataset}")
+
+
+def _identity_files(dataset=None):
+    root = PACKAGE_ROOT
+    routes = RESTORATION_FILES if dataset is None else (restoration_route(dataset),)
+    files = _admission_files() + [root / name for name in (
+        "pipelines/rollups/subject_receipts.py", "selected_generations.py", "sources/publication.py",
+    )]
+    files.extend(root / name for route in routes for name in RESTORATION_FILES[route])
+    # Citation admission reconstructs native court-opinion document keys.
+    if dataset is None or dataset == "document_citations":
+        files.append(root / "court_subjects.py")
+    return list(dict.fromkeys(files))
+
+
+def _files_identity(files):
     digest = hashlib.sha256()
-    for file in _identity_files():
+    for file in files:
         data = file.read_bytes()
         digest.update(len(data).to_bytes(8, "big"))
         digest.update(data)
     return "sha256:" + digest.hexdigest()
+
+
+def admission_identity():
+    """Identity for callers that admit directly without SelectedPriors restoration."""
+    return _files_identity(_admission_files())
+
+
+def implementation_identity(dataset=None):
+    return _files_identity(_identity_files(dataset))
 
 
 def checked_member(value):
@@ -182,7 +209,7 @@ def restore(request):
         "processingMembers": [
             {"path": str(path), "sha256": file_hash(path), "byteSize": path.stat().st_size} for path in members
         ],
-        "implementationSha256": implementation_identity(),
+        "implementationSha256": implementation_identity(dataset),
     }
 
 
@@ -201,7 +228,7 @@ def main():
                     "receiptOnly": selected_policy.receipt_only,
                     "policyVersion": selected_policy.policy_version,
                     "policy": selected_policy.descriptor(),
-                    "implementationSha256": implementation_identity(),
+                    "implementationSha256": implementation_identity(args.schema),
                 }
             )
         )

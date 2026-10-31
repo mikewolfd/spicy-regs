@@ -1087,6 +1087,12 @@ class CaptureEvidence:
             self._archive_receipt(outcome)
         finally:
             (self.directory / "run-outcome.json").write_bytes(canonical_json_bytes(outcome))
+        from spicy_regs.catalog_refresh_request import notify
+
+        self.catalog_refresh_request = notify("acquisition-complete", {
+            "runId":self.run_id,"family":self.family,"outcome":outcome["outcome"],
+            "runOutcome":str(self.directory / "run-outcome.json"),
+        },raw_root=self.store.root)
         if seal_error is not None:
             raise seal_error
         if swallowed is not None:

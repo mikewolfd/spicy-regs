@@ -146,15 +146,66 @@ def test_failed_update_keeps_selected_database_and_removes_candidate(fixture):
     before = output.read_bytes()
     fixture["generation"]["complete"] = False
     update(fixture)
-    with pytest.raises(ValueError, match="unresolved"):
+    with pytest.raises(ValueError, match="new candidate output"):
         reconcile(fixture["index"], output, fixture["selection_path"], require_verified=True)
     assert output.read_bytes() == before
     assert not list(fixture["root"].glob("*.tmp"))
     fixture["selection"]["publication"]["bytes"] += 1
     write(fixture["selection_path"], fixture["selection"])
-    with pytest.raises(ValueError, match="pin mismatch"):
+    with pytest.raises(ValueError, match="new candidate output"):
         reconcile(fixture["index"], output, fixture["selection_path"])
     assert output.read_bytes() == before
+
+
+@pytest.mark.parametrize('alias', ['same', 'hardlink', 'symlink'])
+def test_publication_refuses_alias_of_selected_input(fixture, alias):
+    import os
+
+    source = fixture['index']
+    output = source if alias == 'same' else source.with_name(alias + '.sqlite')
+    if alias == 'hardlink':
+        os.link(source, output)
+    elif alias == 'symlink':
+        output.symlink_to(source)
+    before = source.read_bytes()
+    with pytest.raises(ValueError, match='separate candidate|Linked path'):
+        reconcile(source, output, fixture['selection_path'])
+    assert source.read_bytes() == before
+
+
+def test_publication_clone_replacement_refuses_wrong_ancestry(fixture, monkeypatch):
+    from spicy_regs.source_catalog import publication
+
+    source = fixture['index']
+    replacement = source.with_name('replacement.sqlite')
+    import shutil
+
+    shutil.copyfile(source, replacement)
+    with connect(replacement) as db:
+        db.execute("UPDATE metadata SET value=? WHERE key='generation'", (json.dumps('sha256:' + '9' * 64),))
+    clone = publication._clone_index
+
+    def replace(*args):
+        replacement.replace(source)
+        return clone(*args)
+
+    monkeypatch.setattr(publication, '_clone_index', replace)
+    output = source.with_name('candidate.sqlite')
+    with pytest.raises(ValueError, match='changed while cloning'):
+        reconcile(source, output, fixture['selection_path'])
+    assert not output.exists()
+
+
+def test_publication_target_match_preserves_provenance_uncertainty(fixture):
+    output = fixture['root'] / 'target.sqlite'
+    reconcile(fixture['index'], output, fixture['selection_path'])
+    result = check_publication(output, fixture['selection_path'])
+    assert result['selectionMatches'] and result['targetMatches'] and not result['verified']
+    with connect(output) as db:
+        data = json.loads(db.execute('SELECT data FROM tables').fetchone()[0])
+        data['publication_descriptor']['rows'] += 1
+        db.execute('UPDATE tables SET data=?', (json.dumps(data),))
+    assert not check_publication(output, fixture['selection_path'])['targetMatches']
 
 
 def test_historical_versions_do_not_replace_current_table(fixture):

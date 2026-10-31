@@ -1710,11 +1710,12 @@ def _query_reply_pins(pins: dict[str, dict], relationships: dict) -> dict[str, d
 # Refresh: the publication index and the rulemaking pointer name immutable URLs,
 # so a remote connection stays right until one of them moves. Past the TTL the
 # first caller re-reads both (three small GETs) and rebuilds only when they
-# moved; a local connection is rebuilt, since its ``current`` link and member
+# moved. Explicit discovery or a missing declared table can check earlier,
+# subject to the shared cooldown below. A local connection is rebuilt, since its ``current`` link and member
 # signatures are re-read at build. A rebuild is a new DuckDB instance: the
 # security settings lock the allowed URLs, so a locked instance cannot admit a
 # new generation's views. Other callers keep the current connection meanwhile,
-# and a failed refresh keeps it until the next TTL; only a cold start raises.
+# and a failed refresh keeps it until another eligible check; only a cold start raises.
 # The old connection is dropped, never closed: a cursor still mid-query keeps it
 # alive until it drains.
 _CONNECTION_TTL_SECONDS = float(os.environ.get("SPICY_REGS_CONNECTION_TTL", "300"))
@@ -1727,6 +1728,11 @@ _refreshing = False
 _discovery_lock = threading.Lock()
 _cached_discovery_connection = None
 _cached_discovery_at = 0.0
+# Explicit discovery and missing declared tables may check before the normal
+# TTL. Both caches share one refresh owner and cooldown, including failures.
+_EARLY_REFRESH_COOLDOWN_SECONDS = 5.0
+_pointer_refresh_lock = threading.Lock()
+_last_pointer_refresh_at: float | None = None
 
 
 @contextmanager
@@ -1748,15 +1754,50 @@ def _get_discovery_connection():
         if _cached_discovery_connection is None:
             _cached_discovery_connection = _build_connection()
             _cached_discovery_at = _monotonic()
-        elif _monotonic() - _cached_discovery_at >= _CONNECTION_TTL_SECONDS:
+        elif _claim_pointer_refresh(_cached_discovery_connection, _cached_discovery_at):
             try:
                 _cached_discovery_connection = _refreshed(_cached_discovery_connection)
             except TimeoutError:
                 raise
             except Exception:
                 logger.exception("discovery refresh failed; keeping its pinned schemas")
-            _cached_discovery_at = _monotonic()
+            finally:
+                _cached_discovery_at = _finish_pointer_refresh()
         return _cached_discovery_connection
+
+
+def _claim_pointer_refresh(current, cached_at: float) -> bool:
+    """Admit one pointer check; arbitrary SQL names never make an early check eligible."""
+    now = _monotonic()
+    expired = now - cached_at >= _CONNECTION_TTL_SECONDS
+    if not expired:
+        requested = _requested_relations.get()
+        if requested is None or not requested and not _discovery_only.get():
+            return False
+        if not (_discovery_only.get() and not requested):
+            with current.cursor() as cursor:
+                relationships = _connection_relationships(cursor)
+                # Deferred/unsupported relationships already have their own
+                # admission/refusal path; a pointer poll cannot repair them.
+                known = {*TABLES, "etl_receipts"} | {
+                    name for name, entry in relationships.items() if entry["status"] == "unavailable"
+                }
+                if not (requested & known) - _registered_tables(cursor):
+                    return False
+    if not _pointer_refresh_lock.acquire(blocking=False):
+        return False
+    if not expired and (_last_pointer_refresh_at is not None
+                        and now - _last_pointer_refresh_at < _EARLY_REFRESH_COOLDOWN_SECONDS):
+        _pointer_refresh_lock.release()
+        return False
+    return True
+
+
+def _finish_pointer_refresh() -> float:
+    global _last_pointer_refresh_at
+    _last_pointer_refresh_at = _monotonic()
+    _pointer_refresh_lock.release()
+    return _last_pointer_refresh_at
 
 
 def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
@@ -1799,7 +1840,7 @@ def _expand_query_connection(current: duckdb.DuckDBPyConnection) -> duckdb.DuckD
 
 @_diagnostic_phase('connection_access')
 def _get_connection() -> duckdb.DuckDBPyConnection:
-    """Return the shared connection, building it on first use and refreshing it past the TTL (see above).
+    """Return the shared connection, refreshing at expiry or for a bounded missing-table check.
 
     Callers run their statements on ``.cursor()`` of the returned connection, so
     concurrent calls do not share a statement and a timeout interrupt stays
@@ -1817,8 +1858,16 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
             # needing more views gets its own pinned replacement, never mutates
             # the locked connection or overwrites the refresh's cache entry.
             return _expand_query_connection(_cached_connection)
-        if _monotonic() - _cached_connection_at < _CONNECTION_TTL_SECONDS:
+        expired = _monotonic() - _cached_connection_at >= _CONNECTION_TTL_SECONDS
+        if not expired:
+            # Additional scoped views are admitted from the existing pins
+            # before deciding whether a missing table warrants a pointer read.
             _cached_connection = _expand_query_connection(_cached_connection)
+        if not _claim_pointer_refresh(_cached_connection, _cached_connection_at):
+            if expired:
+                # Discovery may own the shared pointer check; query admission
+                # can still expand from this cache's existing snapshot.
+                _cached_connection = _expand_query_connection(_cached_connection)
             return _cached_connection
         current, _refreshing = _cached_connection, True
     replacement = current
@@ -1827,10 +1876,10 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
     except TimeoutError:
         raise
     except Exception:
-        logger.exception("connection refresh failed; serving the pinned connection until the next TTL")
+        logger.exception("connection refresh failed; serving the pinned connection until the next eligible check")
     finally:
         with _diagnostic_phase("connection_lock"), _connection_lock:
-            _cached_connection, _cached_connection_at, _refreshing = replacement, _monotonic(), False
+            _cached_connection, _cached_connection_at, _refreshing = replacement, _finish_pointer_refresh(), False
     return replacement
 
 
@@ -1859,10 +1908,12 @@ def _refreshed(current: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
 def _reset_connection_cache() -> None:
     """Forget the cached connection so the next call rebuilds. For tests."""
     global _cached_connection, _cached_connection_at, _refreshing, _cached_discovery_connection, _cached_discovery_at
+    global _last_pointer_refresh_at
     with _connection_lock:
         _cached_connection, _cached_connection_at, _refreshing = None, 0.0, False
     with _discovery_lock:
         _cached_discovery_connection, _cached_discovery_at = None, 0.0
+    _last_pointer_refresh_at = None
 
 
 @contextmanager
@@ -2209,13 +2260,18 @@ def _describe_archive_view(cursor, archive: dict, table: str, *, available: bool
     }
 
 
-def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
-    """Tables/views registered in this connection, in declared display order."""
+def _registered_tables(cursor: duckdb.DuckDBPyConnection) -> set[str]:
+    """Actual main-schema tables/views, without reading data or publication metadata."""
     rows = cursor.execute(
         "SELECT table_name FROM information_schema.tables "
         "WHERE table_schema = 'main' AND table_catalog = current_database()"
     ).fetchall()
-    registered = {row[0] for row in rows}
+    return {row[0] for row in rows}
+
+
+def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
+    """Tables/views registered in this connection, in declared display order."""
+    registered = _registered_tables(cursor)
     managed = [
         key.removesuffix(".parquet")
         for entry in _connection_index(cursor)["families"].values()
@@ -2545,6 +2601,8 @@ def _tools() -> list[Tool]:
                                 if write_statement is not None:
                                     raise ValueError(f"query_sql is read-only; refusing {write_statement} statement")
                                 requested_token = _requested_relations.set(_tables_named(parser, arguments['sql']))
+                        elif name in ('list_sources', 'describe_table'):
+                            requested_token = _requested_relations.set({arguments['table']} if name == 'describe_table' else set())
                         return _run_observed_tool(fn, arguments)
                 finally:
                     if requested_token is not None:

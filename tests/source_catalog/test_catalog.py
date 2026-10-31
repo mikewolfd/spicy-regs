@@ -154,7 +154,8 @@ def test_failed_pin_validation_preserves_active_index(corpus, tmp_path, monkeypa
     with pytest.raises(RuntimeError, match="changed"):
         build(corpus, output, config=config)
     assert output.read_bytes() == before
-    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "failed"
+    assert json.loads(output.with_suffix(".sqlite.failed-reconciliation.json").read_text())["status"] == "failed"
+    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "validated"
     assert not list(tmp_path.glob("*.tmp"))
 
 
@@ -735,7 +736,8 @@ def test_malformed_catalog_overlay_preserves_existing_output(corpus, tmp_path, v
     with pytest.raises(ValueError):
         build(corpus, output, config=config, catalog_input=overlay)
     assert output.read_bytes() == before
-    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "failed"
+    assert json.loads(output.with_suffix(".sqlite.failed-reconciliation.json").read_text())["status"] == "failed"
+    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "validated"
 
 
 @pytest.mark.parametrize(
@@ -1010,7 +1012,8 @@ def test_retained_publication_rejects_invalid_selection_atomically(corpus, tmp_p
     with pytest.raises(ValueError):
         build(corpus, output, config=config, publication_observations=[selection_path])
     assert output.read_bytes() == before
-    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "failed"
+    assert json.loads(output.with_suffix(".sqlite.failed-reconciliation.json").read_text())["status"] == "failed"
+    assert json.loads(output.with_suffix(".sqlite.reconciliation.json").read_text())["status"] == "validated"
 
 
 def test_identical_publication_bytes_keep_distinct_client_captures(corpus, tmp_path):

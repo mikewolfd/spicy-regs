@@ -385,17 +385,47 @@ class RawImporter(Importer):
             raise RuntimeError("Acquisition receipts changed during catalog rebuild; retry")
         return content_reviews
 
-    def import_receipts(self, skip=None):
+    def qualified_reviews(self, pins):
+        """Recover accepted review decisions from the authenticated base index."""
+        reviews, indexed = [], set()
+        for (data,) in self.db.execute("SELECT data FROM evidence WHERE kind='acquisition-receipt'"):
+            item = json.loads(data)
+            relative = item['object']
+            path = str(self.root / relative)
+            if path not in pins or item['sha256'] != pins[path]['sha256'] or relative in indexed:
+                raise ValueError('Indexed acquisition receipt metadata differs from its accepted pin')
+            indexed.add(relative)
+            if 'content_review' in item['receipt']:
+                reviews.append((item['receipt']['content_review'], {'manifest': relative, 'sha256': item['sha256']}))
+        if indexed != {str(Path(path).relative_to(self.root)) for path in pins}:
+            raise ValueError('Indexed acquisition receipt metadata is incomplete')
+        return reviews
+
+    def import_receipts(self, skip=None, *, receipt_snapshot=None):
         from spicy_docs.storage.raw_archive import iter_acquisition_receipts
 
         skip = skip or {}
-        if skip:
+        if skip and receipt_snapshot is None:
             reused = self.reuse_receipts(skip)
             if reused is not None:
                 return reused
         visited = set()
         content_reviews = []
-        for path, receipt in iter_acquisition_receipts(self.root):
+        receipt_keys = None
+        if receipt_snapshot is not None:
+            frozen = receipt_snapshot['receipts']
+            inherited = {str(Path(path).relative_to(self.root)) for path in skip}
+            if not inherited <= frozen.keys() or any(
+                    {k: frozen[relative][k] for k in ('sha256', 'bytes')} != skip[str(self.root / relative)]
+                    for relative in inherited):
+                raise ValueError('Frozen receipts differ from accepted base pins')
+            visited.update(inherited)
+            content_reviews = self.qualified_reviews(skip)
+            receipt_keys = sorted(frozen.keys() - inherited)
+            self.metadata_counts['inherited_receipt_payloads_reused'] = len(inherited)
+        receipts = (iter_acquisition_receipts(self.root) if receipt_keys is None else
+                    iter_acquisition_receipts(self.root, receipt_keys=receipt_keys))
+        for path, receipt in receipts:
             visited.add(str(path.relative_to(self.root)))
             if str(path.resolve()) in skip:
                 if "content_review" in receipt["receipt"]:
@@ -403,7 +433,17 @@ class RawImporter(Importer):
                         "manifest": str(path.relative_to(self.root)), "sha256": digest(path),
                     }))
                 continue
-            self.inputs.pin(path)
+            if receipt_snapshot is None:
+                self.inputs.pin(path)
+            else:
+                # The provider just authenticated these bytes against the key.
+                # Reuse that read for the input/evidence pin; Inputs.check still
+                # verifies the small new delta at the commit boundary.
+                pin = receipt_snapshot['receipts'][str(path.relative_to(self.root))]
+                self.inputs.pins[str(path)] = {k: pin[k] for k in ('sha256', 'bytes')}
+                self.metadata_counts['new_receipt_payload_reads'] += 1
+                self.metadata_counts['new_receipt_bytes'] += pin['bytes']
+            receipt_pin = self.inputs.pins[str(path.resolve())]['sha256']
             recorded_at = receipt["receipt"].get("recorded_at") or receipt["receipt"].get("acquired_at")
             if isinstance(recorded_at, str):
                 self.generated_at = max(self.generated_at, recorded_at)
@@ -422,19 +462,19 @@ class RawImporter(Importer):
                 None,
                 "acquisition-receipt",
                 {
-                    "sha256": digest(path),
+                    "sha256": receipt_pin,
                     "object": str(path.relative_to(self.root)),
                     "receipt": receipt["receipt"],
                 },
             )
             if "content_review" in receipt["receipt"]:
                 content_reviews.append((receipt["receipt"]["content_review"], {
-                    "manifest": str(path.relative_to(self.root)), "sha256": digest(path),
+                    "manifest": str(path.relative_to(self.root)), "sha256": receipt_pin,
                 }))
         self.acquisition_paths = tuple(sorted(visited))
-        if self.receipt_paths() != self.acquisition_paths:
+        if receipt_snapshot is None and self.receipt_paths() != self.acquisition_paths:
             raise RuntimeError("Acquisition receipts changed during catalog rebuild; retry")
-        return content_reviews
+        return sorted(content_reviews, key=lambda item: item[1]['manifest'])
 
     def finish_reviews(self, content_reviews) -> None:
         # The transport can retain bytes before parsing. A later explicit source
@@ -744,7 +784,8 @@ def merge_content(mapping: dict, content: dict, sha: str) -> dict:
         },
     }
     mapping["evidence"] = list(mapping.get("evidence", [])) + [
-        dict(item, origin="content") for item in content.get("evidence", [])
+        dict(item, origin="publication-context" if item.get("origin") == "publication-context" else "content")
+        for item in content.get("evidence", [])
     ]
     if content.get("outcome") != "ok" or content.get("role") == "acquisition-receipt":
         return mapping
@@ -781,7 +822,7 @@ def merge_content(mapping: dict, content: dict, sha: str) -> dict:
     periods = list(mapping.get("periods", []))
     for item in content.get("periods", []):
         if item not in periods:
-            periods.append(dict(item, origin="content"))
+            periods.append(dict(item, origin="publication-context" if item.get("origin") == "publication-context" else "content"))
     mapping["periods"] = periods
     return mapping
 

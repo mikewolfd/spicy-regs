@@ -12,6 +12,46 @@ from spicy_regs.source_evidence import CaptureEvidence
 from validate_hrc_candidate import value_readback
 
 
+@pytest.fixture(autouse=True)
+def deny_shared_archive(monkeypatch, tmp_path):
+    """Apply to this research collection root, including integration markers."""
+    from pathlib import Path
+    from spicy_regs import source_evidence
+
+    original = source_evidence.CentralRawArchiveStore
+
+    def forbidden_default():
+        raise AssertionError('Synthetic research captures require an explicit temporary archive')
+
+    def isolated(root, *args, **kwargs):
+        assert Path(root).resolve().is_relative_to(tmp_path.resolve()), 'Shared archive writer denied'
+        return original(root, *args, **kwargs)
+
+    monkeypatch.delenv('SPICYGOV_CATALOG_REQUEST', raising=False)
+    monkeypatch.setenv('SPICYGOV_RAW_ROOT', str(tmp_path / 'central-raw'))
+    monkeypatch.setattr(source_evidence, 'default_raw_archive_root', forbidden_default)
+    monkeypatch.setattr(source_evidence, 'CentralRawArchiveStore', isolated)
+
+
+def test_missing_explicit_archive_cannot_fall_back_to_shared_writer(tmp_path):
+    with pytest.raises(AssertionError, match='explicit temporary archive'):
+        CaptureEvidence(tmp_path, 'scorecards')
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize('outcome', ['complete', 'refused', 'exception'])
+def test_synthetic_integration_capture_lifecycle_stays_isolated(tmp_path, outcome):
+    archive = tmp_path / 'central-raw'
+    evidence = CaptureEvidence(tmp_path, 'scorecards', archive_root=archive)
+    scope = evidence.for_source('hrc', 'full', parser_version='fixture/1', policy_decision_id='explicit-fixture-only')
+    scope.capture(CapturedBodyResponse('https://example.org/hrc.pdf', 'https://example.org/hrc.pdf',
+                  200, 'application/pdf', '2026-10-03T22:43:07Z', b'%PDF-fixture'), stage='pdf')
+    if outcome == 'refused':
+        scope.refusal(ValueError('synthetic source refusal'), stage='pdf')
+    evidence.finish(RuntimeError('synthetic interruption') if outcome == 'exception' else None)
+    assert list((archive / 'acquisitions/sha256').glob('*/*'))
+
+
 def source_receipt(body):
     return {
         "requested_url": "https://example.org/hrc.pdf",
