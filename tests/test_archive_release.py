@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -78,3 +79,17 @@ def test_a_bound_file_republished_by_spicy_regs_or_sharded_refuses():
         next(item for item in manifest["files"] if item["name"] == "meetings.parquet").update(change)
         with pytest.raises(ArchiveReleaseError):
             archive_release.bound_files(manifest)
+
+
+@pytest.mark.parametrize(("url", "spelling"), [
+    ("https://www.Example.gov:443/a/b/?q=1#frag", "example.gov/a/b?q=1"),
+    ("http://example.gov:80/a", "example.gov/a"),
+    ("https://example.gov:8443/a//", "example.gov:8443/a/"),
+    ("HTTPS://docs.house.gov/meetings/AP/AP00/20240101/1/HHRG.pdf", "docs.house.gov/meetings/AP/AP00/20240101/1/HHRG.pdf"),
+])
+def test_lookup_key_follows_the_fixed_lookup_url_spelling(url, spelling):
+    assert archive_release.lookup_key(url) == hashlib.sha256(f"lookup:{spelling}".encode()).digest()[:8]
+
+
+def test_relative_urls_have_no_lookup_key():
+    assert archive_release.lookup_key("/meetings/x.pdf") is None

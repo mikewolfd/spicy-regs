@@ -1,0 +1,242 @@
+{
+  "inputs": {
+    "committee_meetings": {
+      "artifactDigest": "sha256:fbf5357992a8299aae2c4e8d98181580917a734e020d2e4f92a83fa434d9b83a",
+      "sha256": "sha256:13e9f135a754d3f1f0864e448ca1e85784bbd68bffeb29633f44d299d1c6b7a3",
+      "publishedAt": "2026-10-30T06:42:22Z"
+    },
+    "archive": {
+      "release_id": "c94bfedcfcf0287ce9868b4532766c7dcf4b3202187d48db07874a05fd703a78",
+      "files": {
+        "meetings": "8bce72531a927007368512d54053dde61996608174b336389346bfa8fbedf799",
+        "witnesses": "c158ff67096f9648228be777dd2bba1d568e31d435a65c50fb5efb1abf291ab2",
+        "list": "c082ce6311e8c78cf81b1976111ed6c660ecda7ac1c667886592426829f624ad",
+        "detail": "71e0a3a76e11759e17c856314a2cb1faf9e99578512ae4e9b02a982f745c26a7",
+        "sources": "f0b470f92537ef7a289ee72269a1354a0a8b4544ee4eb3e074a5fdac99a713e4",
+        "urls": "9879369d194d5ace318f14e809ed95e4ea628c35fe2acd815fcb4d3c00b5cdfb"
+      }
+    }
+  },
+  "rows": {
+    "committee_meetings": 6098,
+    "committee_meetings_non_numeric_event_id": 0,
+    "committee_meetings_distinct_event_id": 6098,
+    "archive_meetings": 18687,
+    "archive_distinct_event_id": 18687
+  },
+  "coverage_committee_meetings_to_archive": [
+    {
+      "chamber": "house",
+      "rows": 3762,
+      "in_archive": 3761,
+      "missing": 1,
+      "missing_event_ids": [
+        "117688"
+      ],
+      "archive_chamber_null": 1
+    },
+    {
+      "chamber": "nochamber",
+      "rows": 71,
+      "in_archive": 71,
+      "missing": 0,
+      "missing_event_ids": null,
+      "archive_chamber_null": 71
+    },
+    {
+      "chamber": "senate",
+      "rows": 2265,
+      "in_archive": 2259,
+      "missing": 6,
+      "missing_event_ids": [
+        "335202",
+        "335760",
+        "335780",
+        "337725",
+        "338764",
+        "338786"
+      ],
+      "archive_chamber_null": 0
+    }
+  ],
+  "coverage_archive_to_committee_meetings": [
+    {
+      "chamber": "house",
+      "rows": 13399,
+      "in_committee_meetings": 3760,
+      "absent_within_committee_meetings_date_window": 0,
+      "absent_before_window": 9639,
+      "no_meeting_date": 0
+    },
+    {
+      "chamber": "senate",
+      "rows": 4575,
+      "in_committee_meetings": 2259,
+      "absent_within_committee_meetings_date_window": 0,
+      "absent_before_window": 2316,
+      "no_meeting_date": 0
+    },
+    {
+      "chamber": null,
+      "rows": 713,
+      "in_committee_meetings": 72,
+      "absent_within_committee_meetings_date_window": 0,
+      "absent_before_window": 95,
+      "no_meeting_date": 547
+    }
+  ],
+  "committee_meetings_date_window": [
+    "2023-01-24",
+    "2026-10-23"
+  ],
+  "field_disagreement_on_matched_rows": {
+    "matched": 6091,
+    "chamber": 1,
+    "title": 2,
+    "meeting_type": 1384,
+    "status": 1,
+    "meeting_date_vs_utc_date": 7
+  },
+  "meeting_type_pairs": [
+    {
+      "chamber": "house",
+      "committee_meetings": "Hearing",
+      "archive": "HHRG",
+      "rows": 726
+    },
+    {
+      "chamber": "house",
+      "committee_meetings": "Markup",
+      "archive": "HMKP",
+      "rows": 429
+    },
+    {
+      "chamber": "house",
+      "committee_meetings": "Meeting",
+      "archive": "HMTG",
+      "rows": 228
+    },
+    {
+      "chamber": "house",
+      "committee_meetings": "Hearing",
+      "archive": null,
+      "rows": 1
+    }
+  ],
+  "witness_meetings_both_ways": [
+    {
+      "chamber": "house",
+      "committee_meetings_with_witnesses": 2736,
+      "archive_with_witnesses": 2839,
+      "only_committee_meetings": 2,
+      "only_archive": 105
+    },
+    {
+      "chamber": "nochamber",
+      "committee_meetings_with_witnesses": 0,
+      "archive_with_witnesses": 33,
+      "only_committee_meetings": 0,
+      "only_archive": 33
+    },
+    {
+      "chamber": "senate",
+      "committee_meetings_with_witnesses": 0,
+      "archive_with_witnesses": 612,
+      "only_committee_meetings": 0,
+      "only_archive": 612
+    }
+  ],
+  "meeting_documents_per_event": [
+    {
+      "chamber": "house",
+      "committee_meetings_with_documents": 2162,
+      "archive_with_meeting_key_documents": 3646,
+      "documents_only_in_committee_meetings": 2,
+      "committee_meetings_documents": 40217,
+      "archive_documents": 65834
+    },
+    {
+      "chamber": "nochamber",
+      "committee_meetings_with_documents": 0,
+      "archive_with_meeting_key_documents": 49,
+      "documents_only_in_committee_meetings": 0,
+      "committee_meetings_documents": null,
+      "archive_documents": 52
+    },
+    {
+      "chamber": "senate",
+      "committee_meetings_with_documents": 1,
+      "archive_with_meeting_key_documents": 1095,
+      "documents_only_in_committee_meetings": 1,
+      "committee_meetings_documents": 2,
+      "archive_documents": 1548
+    }
+  ],
+  "offered_urls": [
+    {
+      "chamber": "house",
+      "distinct_urls": 62552,
+      "exact_in_sources": 60865,
+      "resolved_by_lookup_key": 61146,
+      "resolved_to_a_row_naming_the_meeting": 61146
+    }
+  ],
+  "lookup_key_self_check": {
+    "source_urls": 529386,
+    "found_in_urls": 529386
+  },
+  "meeting_linked_document_fields": {
+    "list_rows": 205574,
+    "document_kind": 198390,
+    "format": 205574,
+    "title": 22600,
+    "congress": 176252,
+    "detail_package_id": 40210,
+    "detail_saved_body": 205574,
+    "meeting_key_pairs": 207184,
+    "meeting_keys": 16108
+  },
+  "column_destinations": {
+    "congress": null,
+    "chamber": "meetings.chamber (NULL for nochamber)",
+    "event_id": "meetings.event_id (BIGINT)",
+    "title": "meetings.title",
+    "meeting_type": "meetings.meeting_type (House XML codes for House rows)",
+    "meeting_status": "meetings.status",
+    "meeting_date": "meetings.meeting_date (local DATE) and sittings[].start",
+    "location_building": null,
+    "location_room": null,
+    "committee_system_code": "meetings.committees[].system_code",
+    "committee_count": "len(meetings.committees)",
+    "committees": "meetings.committees[].system_code; name and url through the committees table by system code",
+    "hearing_jacket": "meetings.transcripts[].package_id",
+    "hearing_jacket_count": "len(meetings.transcripts)",
+    "hearing_jackets": "meetings.transcripts[].package_id",
+    "bill_count": "count(DISTINCT list.measure_keys) on the meeting's documents (document-level)",
+    "bill_ids": "list.measure_keys on the meeting's documents (document-level, not meeting-level)",
+    "witness_count": "count(witnesses) by event_id",
+    "witnesses": "witnesses (name, position, organization)",
+    "witness_document_count": "count(list rows) by witnesses.witness_key in list.witness_keys",
+    "witness_documents": "list rows by witness_key: document_kind, format; no source URL column (urls.parquet resolves a URL)",
+    "meeting_document_count": "count(list rows) by event_id in list.meeting_keys",
+    "meeting_documents": "list rows by meeting key: title, document_kind, format; detail.package_id, saved_body",
+    "document_urls": "sources.url and urls.lookup_key -> list_row",
+    "videos": "meetings.videos",
+    "update_date": null,
+    "nomination_references_json": null,
+    "treaty_references_json": null
+  },
+  "state_without_destination": [
+    "committee_meetings_detail_reads (the per-event detail-read table) and the detail_read / list-only state",
+    "Congress.gov meeting_type labels for House rows (the archive states House XML codes)",
+    "meeting_documents description, name and documentType (list.title is set on few meeting-linked rows)"
+  ],
+  "columns_without_destination": [
+    "congress",
+    "location_building",
+    "location_room",
+    "nomination_references_json",
+    "treaty_references_json",
+    "update_date"
+  ]
+}

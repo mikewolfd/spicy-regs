@@ -39,6 +39,7 @@ CONTROL_BYTES = 32 << 20
 #: and producer ``spicy-regs`` entity files are spicy-regs' own tables republished.
 BOUND_FILES = ("list", "detail", "links", "urls", "sources", "recoveries", "meetings", "witnesses", "recordings")
 _RELEASE_ID = re.compile(r"[0-9a-f]{64}")
+_URL = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*)://([^/?#]*)([^?#]*)(\?[^#]*)?(?:#.*)?")
 
 
 class ArchiveReleaseError(ValueError):
@@ -110,3 +111,19 @@ def bound_files(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
             raise ArchiveReleaseError(f"Archive {stem}.parquet is sharded; sharded offsets are not defined")
         found[stem] = entry
     return found
+
+
+def lookup_key(url: str) -> bytes | None:
+    """DATA-MODEL §8.2's ``urls.parquet`` key: the first 8 bytes of ``sha256('lookup:' || lookup_url(url))``.
+
+    ``lookup_url`` drops the scheme, a leading ``www.``, the default port, the
+    fragment and one trailing path slash, and lowercases the host; the query is
+    kept byte for byte (congressional-tech archive_format.py lookup_values and
+    the site's ``lookupUrl``). A URL that is not absolute has no key.
+    """
+    match = _URL.fullmatch(url)
+    if match is None or not match[2]:
+        return None
+    scheme, host = match[1].lower(), re.sub(r"^www\.", "", match[2].lower())
+    host = re.sub(r":80$", "", host) if scheme == "http" else re.sub(r":443$", "", host) if scheme == "https" else host
+    return sha256(f"lookup:{host}{re.sub(r'/$', '', match[3])}{match[4] or ''}".encode()).digest()[:8]
