@@ -6,7 +6,7 @@
 
 Monthly Treasury Statement Table 1 receipts, outlays and deficit, with separate report and economic periods and preserved revisions.
 
-**Coverage.** Sampled: complete declared Table 1 report issues. Supported shape requires current fiscal-year months from October through the report month, complete prior fiscal years, and a separate fiscal-year-to-date row per parent. Other layouts refuse. Table 2 remains source evidence; forecasts and other statement tables are not typed here. *(measured 2026-10-20)*
+**Coverage.** Sampled: complete declared Table 1 report issues. Supported shape requires current fiscal-year months from October through the report month, complete prior fiscal years, and a separate fiscal-year-to-date row per parent. Other layouts refuse. Table 2 cells are typed in treasury_statement_classification_cells; other statement tables are not typed here. *(measured 2026-10-20)*
 
 - **Parquet file:** `treasury_statement_periods.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

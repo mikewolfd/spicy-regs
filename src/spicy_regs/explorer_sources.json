@@ -168,7 +168,7 @@
       "name": "U.S. Treasury Fiscal Data",
       "url": "https://fiscaldata.treasury.gov/",
       "kind": "government",
-      "note": "Selected Debt to the Penny and Monthly Treasury Statement observations retain their request, report and source evidence."
+      "note": "Selected Debt to the Penny, Monthly Treasury Statement Table 1 periods and Table 2 classification cells retain their request, report and source evidence."
     },
     "cms": {
       "id": "cms",

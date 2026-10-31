@@ -71,6 +71,7 @@ nav:
       - grants_opportunity_observations: tables/grants_opportunity_observations.md
       - treasury_debt_observations: tables/treasury_debt_observations.md
       - treasury_statement_periods: tables/treasury_statement_periods.md
+      - treasury_statement_classification_cells: tables/treasury_statement_classification_cells.md
       - census_acs_county_observations: tables/census_acs_county_observations.md
       - law_sections: tables/law_sections.md
       - dockets: tables/dockets.md

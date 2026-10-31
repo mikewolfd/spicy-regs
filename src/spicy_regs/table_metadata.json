@@ -22784,7 +22784,7 @@
     "table": "treasury_statement_periods",
     "label": "Treasury monthly and fiscal-year budget actuals",
     "summary": "Monthly Treasury Statement Table 1 receipts, outlays and deficit, with separate report and economic periods and preserved revisions.",
-    "coverage": "Sampled: complete declared Table 1 report issues. Supported shape requires current fiscal-year months from October through the report month, complete prior fiscal years, and a separate fiscal-year-to-date row per parent. Other layouts refuse. Table 2 remains source evidence; forecasts and other statement tables are not typed here.",
+    "coverage": "Sampled: complete declared Table 1 report issues. Supported shape requires current fiscal-year months from October through the report month, complete prior fiscal years, and a separate fiscal-year-to-date row per parent. Other layouts refuse. Table 2 cells are typed in treasury_statement_classification_cells; other statement tables are not typed here.",
     "kind": "sampled",
     "measured_on": "2026-10-20",
     "data_quality": null,
@@ -22912,6 +22912,155 @@
     ],
     "subject": "spending",
     "grain": "One report issue, source release and economic monthly or fiscal-year-to-date period.",
+    "identity_columns": []
+  },
+  "treasury_statement_classification_cells": {
+    "table": "treasury_statement_classification_cells",
+    "label": "Treasury budget results and financing by classification",
+    "summary": "Monthly Treasury Statement Table 2 cells, one per native line and measure, with literal amounts, per-field units and explicit No Transactions, zero and null markers.",
+    "coverage": "Sampled: explicitly selected MTS issues (2015-03-31, 2025-10-31, 2026-03-31 and 2026-09-30 qualified locally). Every issue must carry the 15-line native layout; each 0.00 estimate needs a page-5 review entry in treasury_units.json, and the on/off, receipts-outlays, financing and means-of-financing identities plus the Table 1 month, FYTD and prior-FYTD values refuse on mismatch. Identities skip cells without a number, so editions whose estimates print No Transactions verify fewer estimate identities. Estimates stay in $ millions; no dollar companion is derived.",
+    "kind": "sampled",
+    "measured_on": "2026-10-31",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "report_date",
+        "column_type": "DATE",
+        "description": "Source record_date identifying the report issue; joins treasury_statement_periods.report_date."
+      },
+      {
+        "column_name": "src_line_nbr",
+        "column_type": "INTEGER",
+        "description": "Native Table 2 source line number; with measure and source_release_digest, the row key within an issue."
+      },
+      {
+        "column_name": "parent_src_line_nbr",
+        "column_type": "INTEGER",
+        "description": "Source line of the native parent classification within the same issue; null for section headings."
+      },
+      {
+        "column_name": "print_order_nbr",
+        "column_type": "INTEGER",
+        "description": "Native print order on the statement page."
+      },
+      {
+        "column_name": "sequence_level_nbr",
+        "column_type": "INTEGER",
+        "description": "Native hierarchy depth."
+      },
+      {
+        "column_name": "sequence_number_cd_literal",
+        "column_type": "VARCHAR",
+        "description": "Exact native sequence code text."
+      },
+      {
+        "column_name": "classification_id",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher classification id. Reassigned for every issue; never join issues on it."
+      },
+      {
+        "column_name": "parent_id_literal",
+        "column_type": "VARCHAR",
+        "description": "Literal parent classification id, including the text null for headings."
+      },
+      {
+        "column_name": "classification_desc",
+        "column_type": "VARCHAR",
+        "description": "Original classification label."
+      },
+      {
+        "column_name": "data_type_cd",
+        "column_type": "VARCHAR",
+        "description": "Native data type code (S heading, T total, D detail)."
+      },
+      {
+        "column_name": "record_type_cd",
+        "column_type": "VARCHAR",
+        "description": "Native record type code."
+      },
+      {
+        "column_name": "measure",
+        "column_type": "VARCHAR",
+        "description": "Native amount field name, one of current_month_budget_amt, current_fytd_budget_amt, prior_fytd_budget_amt, current_year_budget_est_amt or next_year_budget_est_amt."
+      },
+      {
+        "column_name": "measure_fiscal_year",
+        "column_type": "INTEGER",
+        "description": "Fiscal year the measure describes; prior fiscal year to date is the report year minus one and next-year estimates plus one."
+      },
+      {
+        "column_name": "amount_literal",
+        "column_type": "VARCHAR",
+        "description": "Exact original API text, including 0.00 behind a No Transactions marker and the text null."
+      },
+      {
+        "column_name": "amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact amount in amount_unit; null for no_transactions, publisher_null, json_null and blank markers. Never rescaled."
+      },
+      {
+        "column_name": "amount_unit",
+        "column_type": "VARCHAR",
+        "description": "usd for actuals; usd_millions for budget estimates, whatever the API dataFormats declares."
+      },
+      {
+        "column_name": "marker_kind",
+        "column_type": "VARCHAR",
+        "description": "value, zero (a printed zero), no_transactions (0.00 printed as dots), publisher_null, json_null or blank."
+      },
+      {
+        "column_name": "qualification_report_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the explicitly supplied report PDF used to review this issue."
+      },
+      {
+        "column_name": "qualification_report_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher-stated URL of that report."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Native row identity within the admitted source release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted source release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact release digest; preserves same-issue refreshes and later-issue revisions separately."
+      },
+      {
+        "column_name": "source_page_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the original API page containing this row; keys the page review in treasury_units.json."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Exact request URL, observation time, response digest, byte size and JSON row pointer."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Explicit dataset, report date and page size of the source selection."
+      },
+      {
+        "column_name": "field_metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Original publisher labels, types and display formats; the declared $10.20 CURRENCY format does not give the estimate scale."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native row with every measure and native code."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One source release, report issue, native source line and measure.",
     "identity_columns": []
   },
   "census_acs_county_observations": {
