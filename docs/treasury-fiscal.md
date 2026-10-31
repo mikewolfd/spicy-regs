@@ -12,10 +12,12 @@ The first published scope is United States federal debt on October 16, 2026 and
 the September 30, 2026 MTS issue. Table 2 is typed since 2026-10-31 (the owner
 reversed the Table 1-only scope on 2026-10-30). The issues 2015-03-31 (the
 oldest the API serves), 2025-09-30, 2025-10-31 and 2026-03-31 were captured on
-2026-10-31 with their printed reports. A local generation over 2015-03-31,
-2025-10-31, 2026-03-31 and 2026-09-30 passes every check; 2025-09-30 refuses on
-a publisher inconsistency (see below) and awaits an owner decision. Publication
-of the added issues is pending. Other MTS tables, inflation adjustment and
+2026-10-31 with their printed reports, and the owner approved recapturing the
+2026-09-30 Table 1 and Table 2 responses the same day so that issue carries
+observed capture times (both byte-identical to the pilot's retained responses).
+A local generation over all five issues passes every check; 2025-09-30 ships a
+publisher inconsistency under a digest-pinned exception (see below). Nothing
+is published by a local build. Other MTS tables, inflation adjustment and
 historical backfills are outside this delivery.
 
 ## Amounts, dates and revisions
@@ -43,7 +45,10 @@ Units therefore come from the reviewed file
 `src/spicy_regs/transforms/treasury_units.json`, never from the API metadata.
 Any `CURRENCY` or `*_amt` field of any Treasury dataset without an entry there
 refuses the build. `amount` stays in `amount_unit` (`usd` or `usd_millions`);
-nothing is rescaled.
+nothing is rescaled. `amount_usd` beside it multiplies by the unit's scale
+(`unit_scales` in the same file: 1 or 1,000,000). The publisher states
+estimates to $0.01 million, so an estimate's dollar figure is exact arithmetic
+but precise only to $10,000; its last four digits are scale, not information.
 
 `marker_kind` is `value`, `zero`, `no_transactions`, `publisher_null`,
 `json_null` or `blank`. The API returns `0.00` for estimate cells the printed
@@ -62,16 +67,21 @@ receipts, outlays and surplus; receipts minus outlays equals the surplus;
 financing equals minus the surplus; and the three means of financing sum to
 financing. An identity is evaluated only when every cell in it has a number, so
 estimates printed as dots are skipped: of 40 identity checks per issue the
-local build skipped 1 for 2015-03-31, 16 for 2025-10-31 and 12 each for
-2026-03-31 and 2026-09-30. Table 2 actuals must also equal Table 1: the month,
+local build skipped 1 for 2015-03-31, 2 for 2025-09-30, 16 for 2025-10-31 and
+12 each for 2026-03-31 and 2026-09-30. Table 2 actuals must also equal Table 1: the month,
 the current fiscal year to date, and the prior fiscal year's months through the
 same month. Same-issue revisions stay separate releases, so each Table 2 release
 must reconcile with at least one Table 1 release of its issue.
 
 The 2025-09-30 issue prints prior-year means of financing of 1,959,809, -228,836
 and 85,831 ($ millions), which sum to 1,816,804, against financing of 1,816,790.
-The API carries the same figures (a gap of exactly $14,258,000.00), so the build
-refuses that issue until the owner decides how to publish it.
+The API carries the same figures (a gap of exactly $14,258,000.00). The owner
+kept the identity as a refusal and allowed one exception, pinned in
+`identity_exceptions` of `treasury_units.json` to that Table 2 response digest,
+that identity, measure and exact difference, citing the page. The build
+publishes the publisher's values unchanged, so the gap stays visible in the
+cells, and journals each excepted identity in `treasury-table2-checks`. A
+pinned exception whose identity holds or differs by another amount refuses.
 
 `classification_id` is reassigned for every issue (no id is shared between any
 two captured issues), while the native line structure is identical; join issues
@@ -83,7 +93,8 @@ names determine calendar periods. Sequence codes such as `1.10` remain text.
 The supported layout requires complete prior fiscal years and current-year
 October-through-report-month rows, each with its own fiscal-year-to-date total.
 Unsupported or missing periods refuse. Real-source qualification currently
-covers the retained September issue, not every historical MTS layout.
+covers the five retained issues (2015-03-31 through 2026-09-30), not every
+historical MTS layout.
 
 The report's revision note describes an August outlay correction. The earlier
 issue was not acquired, so no exact historical revision delta is claimed.
@@ -109,8 +120,9 @@ python -m spicy_regs.pipelines.treasury_fiscal acquire \
 
 The report URL is read from the publisher's own listing
 (`services/dtg/publishedfiles`, report group 5), never constructed. The listing
-is captured into the raw archive like the pages and PDFs, and its digest is
-journaled beside each report URL it stated. The command
+is captured into the raw archive like the pages and PDFs, and the digest of
+those retained wire bytes (gzip-encoded as served) is journaled beside each
+report URL it stated. The command
 writes a capture selection: each source release as its Fiscal Data scope (the
 selection and the descriptors of every page, copied from the receipts) plus
 each report's URL and digest.
@@ -127,8 +139,9 @@ Release members are therefore disposable: the capture selection plus the raw
 archive rebuild the same release digests with the same code. Keep the capture
 selection with the generation it fed. Debt and report dates come from the
 selection; a report issue needs Table 1, Table 2 and a report control. The 2026-10-20
-Table 1 and debt descriptors predate receipt observation times; they were
-copied from the published generation's `source_locator_json`.
+debt descriptor predates receipt observation times; it was copied from the
+published generation's `source_locator_json`. The 2026-09-30 Table 1 and Table 2
+descriptors now come from the 2026-10-31 recaptures.
 
 The report is an explicitly reviewed qualification input: the build checks its
 bytes and retains it, but does not rerun PDF interpretation.
@@ -156,7 +169,7 @@ Table 2 cells join Table 1 periods on the report issue:
 
 ```sql
 SELECT c.report_date, c.classification_desc, c.measure, c.measure_fiscal_year,
-       c.amount, c.amount_unit, c.marker_kind, p.budget_receipts_usd
+       c.amount, c.amount_unit, c.amount_usd, c.marker_kind, p.budget_receipts_usd
 FROM treasury_statement_classification_cells c
 JOIN treasury_statement_periods p
   ON p.report_date = c.report_date AND p.period_kind = 'month'

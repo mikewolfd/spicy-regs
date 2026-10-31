@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Fiscal Data declares dataFormats \"$10.20\" and dataTypes CURRENCY for every amount field, including the Table 2 budget-estimate fields, which hold $ millions (page 5 prints '[$ millions]'; the 2026-09-30 FYTD dollars divided by the matching estimate is about 986781.93). Units come from this reviewed file, never from that metadata. A CURRENCY or *_amt field absent here refuses the build.",
+  "note": "Fiscal Data declares dataFormats \"$10.20\" and dataTypes CURRENCY for every amount field, including the Table 2 budget-estimate fields, which hold $ millions (page 5 prints '[$ millions]'; the 2026-09-30 FYTD dollars divided by the matching estimate is about 986781.93). Units come from this reviewed file, never from that metadata. A CURRENCY or *_amt field absent here refuses the build. Each unit's dollar scale (usd 1, usd_millions 1000000) is in unit_scales; amount_usd multiplies by it.",
   "datasets": {
     "debt_to_penny": {
       "tot_pub_debt_out_amt": {
@@ -154,5 +154,26 @@
       },
       "zero": {}
     }
+  },
+  "unit_scales": {
+    "usd": "1",
+    "usd_millions": "1000000"
+  },
+  "identity_exceptions_note": "Keyed by the Table 2 response SHA-256. A listed identity may fail only by exactly the pinned difference (operand sum minus result) and only where the cited printed page shows the same inconsistency; the edition publishes the publisher's values unchanged, so the gap stays visible. A listed identity that holds or differs by another amount refuses.",
+  "identity_exceptions": {
+    "sha256:47e84e9d3c87c85ae52bf9e9c6a7d0a6d4c6b755263f37ef8e1f82c265a44404": [
+      {
+        "report_date": "2025-09-30",
+        "result_line": 11,
+        "operand_lines": [
+          13,
+          14,
+          15
+        ],
+        "measure": "prior_fytd_budget_amt",
+        "difference": "14258000.00",
+        "evidence": "MonthlyTreasuryStatement_202509.pdf sha256:2a975e8f8d145ef18f53de2dc60c6cb265892cd500e8d725f6297726c78605e8 page 5, Table 2, Comparable Prior Period Year to Date (2024): lines 13-15 print 1,959,809 + (-228,836) + 85,831 = 1,816,804 while line 11 prints 1,816,790 ($ millions); visual review corpora/session-reports-2026-10-30/treasury-t2/visual-review/mts-202509-page-05.png"
+      }
+    ]
   }
 }

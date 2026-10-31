@@ -6,7 +6,7 @@
 
 Monthly Treasury Statement Table 2 cells, one per native line and measure, with literal amounts, per-field units and explicit No Transactions, zero and null markers.
 
-**Coverage.** Sampled: explicitly selected MTS issues (2015-03-31, 2025-10-31, 2026-03-31 and 2026-09-30 qualified locally). Every issue must carry the 15-line native layout; each 0.00 estimate needs a page-5 review entry in treasury_units.json, and the on/off, receipts-outlays, financing and means-of-financing identities plus the Table 1 month, FYTD and prior-FYTD values refuse on mismatch. Identities skip cells without a number, so editions whose estimates print No Transactions verify fewer estimate identities. Estimates stay in $ millions; no dollar companion is derived. *(measured 2026-10-31)*
+**Coverage.** Sampled: explicitly selected MTS issues (2015-03-31, 2025-09-30, 2025-10-31, 2026-03-31 and 2026-09-30 qualified locally). Every issue must carry the 15-line native layout; each 0.00 estimate needs a page-5 review entry in treasury_units.json, and the on/off, receipts-outlays, financing and means-of-financing identities plus the Table 1 month, FYTD and prior-FYTD values refuse on mismatch. Identities skip cells without a number, so editions whose estimates print No Transactions verify fewer estimate identities. One publisher inconsistency ships under a digest-pinned exception: in 2025-09-30 the prior-FYTD means of financing (lines 13-15) exceed financing (line 11), as printed on page 5; the values are unchanged and the gap is pinned in treasury_units.json. Estimates are stated in $ millions; amount_usd scales them to dollars without adding precision. *(measured 2026-10-31)*
 
 - **Parquet file:** `treasury_statement_classification_cells.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -31,6 +31,7 @@ Monthly Treasury Statement Table 2 cells, one per native line and measure, with 
 | `amount_literal` | `VARCHAR` | Exact original API text, including 0.00 behind a No Transactions marker and the text null. |
 | `amount` | `DECIMAL(38,2)` | Exact amount in amount_unit; null for no_transactions, publisher_null, json_null and blank markers. Never rescaled. |
 | `amount_unit` | `VARCHAR` | usd for actuals; usd_millions for budget estimates, whatever the API dataFormats declares. |
+| `amount_usd` | `DECIMAL(38,2)` | amount in US dollars (usd_millions times 1,000,000); null where amount is null. Estimates are stated to $0.01 million, so their dollar figures are precise only to $10,000; the trailing digits are scale, not publisher precision. |
 | `marker_kind` | `VARCHAR` | value, zero (a printed zero), no_transactions (0.00 printed as dots), publisher_null, json_null or blank. |
 | `qualification_report_sha256` | `VARCHAR` | Digest of the explicitly supplied report PDF used to review this issue. |
 | `qualification_report_url` | `VARCHAR` | Publisher-stated URL of that report. |

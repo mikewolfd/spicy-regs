@@ -11,4 +11,6 @@ Exact Fiscal Data API responses copied from the central raw archive
 | mts_table_2-2025-10-31.json | ffd92cf3f59ca59b51a0c8f77ad087e22ae9842448c13efebfefdabb93bfa312 |
 | mts_table_1-2015-03-31.json | 2911513d4e81f7801c4c04bd1d666f76a63b4a138552e997f54c0db06d97f3d6 |
 | mts_table_2-2015-03-31.json | ace73f719883d4bcf1e9b29f5109c33a8bfbceef000d6b3afd30e3959cddcfb9 |
+| mts_table_1-2025-09-30.json | 13bfa69bc55045c9d8fbd059e6c86b343513da51f7e2231d355519e7a1dad510 |
+| mts_table_2-2025-09-30.json | 47e84e9d3c87c85ae52bf9e9c6a7d0a6d4c6b755263f37ef8e1f82c265a44404 |
 | debt_to_penny-2026-10-16.json | 99d0f4b900bdf7bf9506d712bfdaaf1cd02adcba00fe1020095ec6e0d4451e37 |

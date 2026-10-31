@@ -22918,7 +22918,7 @@
     "table": "treasury_statement_classification_cells",
     "label": "Treasury budget results and financing by classification",
     "summary": "Monthly Treasury Statement Table 2 cells, one per native line and measure, with literal amounts, per-field units and explicit No Transactions, zero and null markers.",
-    "coverage": "Sampled: explicitly selected MTS issues (2015-03-31, 2025-10-31, 2026-03-31 and 2026-09-30 qualified locally). Every issue must carry the 15-line native layout; each 0.00 estimate needs a page-5 review entry in treasury_units.json, and the on/off, receipts-outlays, financing and means-of-financing identities plus the Table 1 month, FYTD and prior-FYTD values refuse on mismatch. Identities skip cells without a number, so editions whose estimates print No Transactions verify fewer estimate identities. Estimates stay in $ millions; no dollar companion is derived.",
+    "coverage": "Sampled: explicitly selected MTS issues (2015-03-31, 2025-09-30, 2025-10-31, 2026-03-31 and 2026-09-30 qualified locally). Every issue must carry the 15-line native layout; each 0.00 estimate needs a page-5 review entry in treasury_units.json, and the on/off, receipts-outlays, financing and means-of-financing identities plus the Table 1 month, FYTD and prior-FYTD values refuse on mismatch. Identities skip cells without a number, so editions whose estimates print No Transactions verify fewer estimate identities. One publisher inconsistency ships under a digest-pinned exception: in 2025-09-30 the prior-FYTD means of financing (lines 13-15) exceed financing (line 11), as printed on page 5; the values are unchanged and the gap is pinned in treasury_units.json. Estimates are stated in $ millions; amount_usd scales them to dollars without adding precision.",
     "kind": "sampled",
     "measured_on": "2026-10-31",
     "data_quality": null,
@@ -23002,6 +23002,11 @@
         "column_name": "amount_unit",
         "column_type": "VARCHAR",
         "description": "usd for actuals; usd_millions for budget estimates, whatever the API dataFormats declares."
+      },
+      {
+        "column_name": "amount_usd",
+        "column_type": "DECIMAL(38,2)",
+        "description": "amount in US dollars (usd_millions times 1,000,000); null where amount is null. Estimates are stated to $0.01 million, so their dollar figures are precise only to $10,000; the trailing digits are scale, not publisher precision."
       },
       {
         "column_name": "marker_kind",

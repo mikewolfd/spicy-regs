@@ -267,6 +267,8 @@ def test_refusal_preserves_prior_tables(tmp_path, defect):
 RETAINED_EDITIONS = {
     # 2015: a literal "null" in line 14 next_year and fractional-million estimates.
     date(2015, 3, 31): ({"value": 64, "publisher_null": 11}, {"evaluated": 39, "skipped": 1}),
+    # 2025-09: line 14 estimates print dots; the prior-FYTD means of financing gap ships under its pinned exception.
+    date(2025, 9, 30): ({"value": 63, "no_transactions": 2, "publisher_null": 10}, {"evaluated": 38, "skipped": 2}),
     # 2025-10: every estimate is a reviewed No Transactions cell (zero_estimates ffd92cf3).
     date(2025, 10, 31): ({"value": 39, "no_transactions": 26, "publisher_null": 10}, {"evaluated": 24, "skipped": 16}),
     date(2026, 3, 31): ({"value": 51, "no_transactions": 14, "publisher_null": 10}, {"evaluated": 28, "skipped": 12}),
@@ -293,22 +295,76 @@ def test_retained_editions_type_every_cell_with_reviewed_markers(tmp_path):
     assert {date.fromisoformat(entry["report_date"]): entry["identities"] for entry in summary} == {
         issue: identities for issue, (_, identities) in RETAINED_EDITIONS.items()}
     assert {entry["table1_cells_evaluated"] for entry in summary} == {9}
+    assert {entry["report_date"]: [(item["result_line"], item["measure"], item["difference"])
+                                   for item in entry["identity_exceptions"]] for entry in summary} == {
+        issue.isoformat(): [(11, "prior_fytd_budget_amt", "14258000.00")] if issue == date(2025, 9, 30) else []
+        for issue in issues}
     march_2015 = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[0]}
     literal_null = march_2015[14, "next_year_budget_est_amt"]
     assert (literal_null["amount"], literal_null["amount_literal"], literal_null["marker_kind"]) == (
         None, "null", "publisher_null")
-    september = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[3]}
+    september = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[-1]}
     estimate = september[2, "current_year_budget_est_amt"]
-    assert (estimate["amount"], estimate["amount_unit"], estimate["measure_fiscal_year"]) == (
-        Decimal("5475705.00"), "usd_millions", 2026)
+    assert (estimate["amount"], estimate["amount_unit"], estimate["amount_usd"], estimate["measure_fiscal_year"]) == (
+        Decimal("5475705.00"), "usd_millions", Decimal("5475705000000.00"), 2026)
     assert september[2, "next_year_budget_est_amt"]["measure_fiscal_year"] == 2027
     prior = september[2, "prior_fytd_budget_amt"]
-    assert (prior["amount"], prior["amount_unit"], prior["measure_fiscal_year"]) == (
-        Decimal("5234616472030.91"), "usd", 2025)
+    assert (prior["amount"], prior["amount_unit"], prior["amount_usd"], prior["measure_fiscal_year"]) == (
+        Decimal("5234616472030.91"), "usd", Decimal("5234616472030.91"), 2025)
     dots = september[8, "next_year_budget_est_amt"]
-    assert (dots["amount"], dots["amount_literal"], dots["marker_kind"]) == (None, "0.00", "no_transactions")
+    assert (dots["amount"], dots["amount_usd"], dots["amount_literal"], dots["marker_kind"]) == (
+        None, None, "0.00", "no_transactions")
+    gap = {(row["src_line_nbr"], row["measure"]): row["amount"] for row in rows if row["report_date"] == issues[1]}
+    means = sum(gap[line, "prior_fytd_budget_amt"] for line in (13, 14, 15))
+    assert means - gap[11, "prior_fytd_budget_amt"] == Decimal("14258000.00")
     assert september[9, "current_month_budget_amt"]["parent_src_line_nbr"] == 8
     assert september[1, "current_month_budget_amt"]["parent_src_line_nbr"] is None
+
+
+def _reviewed(monkeypatch, reader, key, entry):
+    """Pin one review entry to a synthetic Table 2 page digest, as treasury_units.json would."""
+    page = "sha256:" + hashlib.sha256(reader.body).hexdigest()
+    monkeypatch.setitem(module.UNIT_RULES[key], page, entry)
+
+
+@pytest.mark.parametrize(("kind", "amount"), [("zero", Decimal("0.00")), ("no_transactions", None)])
+def test_a_zero_estimate_follows_its_editions_printed_page(tmp_path, monkeypatch, kind, amount):
+    """A printed zero stays a zero; dots become No Transactions; nothing is decided from 0.00 alone."""
+    cells = control()
+    _table2_cell(cells, 14, "next_year_budget_est_amt", "0.00")
+    _table2_cell(cells, 15, "next_year_budget_est_amt", "0.50")
+    _reviewed(monkeypatch, cells, "zero_estimates", {"no_transactions": {}, "zero": {}} | {
+        kind: {"next_year_budget_est_amt": [14]}})
+    _, summary = module.build_treasury_fiscal(
+        [debt(), statement(), cells], tmp_path, debt_dates=(DEBT_DATE,), report_dates=(ISSUE,),
+        qualifications={ISSUE: QUALIFICATION})
+    row = next(row for row in pq.read_table(tmp_path / (module.CELLS + ".parquet")).to_pylist()
+               if row["src_line_nbr"] == 14 and row["measure"] == "next_year_budget_est_amt")
+    assert (row["marker_kind"], row["amount"], row["amount_usd"], row["amount_literal"]) == (
+        kind, amount, amount, "0.00")
+    assert summary[0]["identities"]["skipped"] == (kind == "no_transactions")
+
+
+@pytest.mark.parametrize(("literal", "outcome"), [("0.35", "excepted"), ("0.45", "refused"), ("0.25", "unused")])
+def test_identity_exception_is_pinned_to_its_page_and_exact_difference(tmp_path, monkeypatch, literal, outcome):
+    """Line 15 is 0.25 when the identity holds; the pin allows exactly a 0.10 gap and nothing else."""
+    cells = control()
+    _table2_cell(cells, 15, "next_year_budget_est_amt", literal)
+    _reviewed(monkeypatch, cells, "identity_exceptions", [{
+        "result_line": 11, "operand_lines": [13, 14, 15], "measure": "next_year_budget_est_amt",
+        "difference": "0.10", "evidence": "fixture page 5"}])
+    if outcome != "excepted":
+        with pytest.raises(ValueError, match="identity"):
+            write([debt(), statement(), cells], tmp_path)
+        return
+    _, summary = module.build_treasury_fiscal(
+        [debt(), statement(), cells], tmp_path, debt_dates=(DEBT_DATE,), report_dates=(ISSUE,),
+        qualifications={ISSUE: QUALIFICATION})
+    assert summary[0]["identity_exceptions"] == [{"result_line": 11, "measure": "next_year_budget_est_amt",
+                                                  "difference": "0.10", "evidence": "fixture page 5"}]
+    row = next(row for row in pq.read_table(tmp_path / (module.CELLS + ".parquet")).to_pylist()
+               if row["src_line_nbr"] == 15 and row["measure"] == "next_year_budget_est_amt")
+    assert (row["amount"], row["amount_usd"]) == (Decimal("0.35"), Decimal("350000.00"))
 
 
 def test_classification_ids_are_reassigned_per_edition_while_native_lines_hold():
