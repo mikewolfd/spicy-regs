@@ -94,7 +94,10 @@ class NativeConversionProof(NamedTuple):
 
     Only native_conversion creates this after checking every captured table's
     schema, metadata, ordered values and repetitions, plus native receipts and
-    family membership. A saved receipt or a row count cannot supply this proof.
+    family membership. A row count cannot supply this proof, nor can a saved
+    receipt on its own word: a prepared receipt's restoration stands in only
+    under the digest its operator carried from the preparation and under the
+    same admission key (native_conversion.publish_prepared).
     """
 
     logical_id: str

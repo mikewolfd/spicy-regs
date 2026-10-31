@@ -12,13 +12,14 @@ from spicy_regs.sources import publication
 from tests.test_native_conversion import (
     BASE, BUCKET, CFR, COMMON, DOCKET, MAIN, PINNED_WHEEL, STATE, WHEEL,
     bucket as _bucket,
-    convert, publish_old, publish_old_with_evidence, publish_split_sections, stored,
+    convert, prepared_digest, publish_old, publish_old_with_evidence, publish_split_sections, stored,
 )
 
 bucket = _bucket  # Expose the existing hermetic fixture to pytest in this module.
 
 
 def publish_prepared(path, family="cfr-sections", **kwargs):
+    kwargs.setdefault("expected_receipt_digest", prepared_digest(path))
     return conversion.publish_prepared(path, allowed=[family], expected_main=MAIN, expected_spicy_docs=WHEEL,
                                        expect_bucket=BUCKET, state=lambda _: dict(STATE), **kwargs)
 
@@ -99,7 +100,8 @@ def test_prepared_allow_runtime_and_target_remain_explicit(tmp_path, monkeypatch
                     {"state": lambda _: STATE | {"main": "ff" * 20}}, {"state": lambda _: STATE | {"spicy_docs": "other"}}):
         options: dict = dict(allowed=["cfr-sections"], expect_bucket=BUCKET, state=lambda _: dict(STATE)) | changes
         with pytest.raises(conversion.ConversionRefused):
-            conversion.publish_prepared(path, expected_main=MAIN, expected_spicy_docs=WHEEL, **options)
+            conversion.publish_prepared(path, expected_main=MAIN, expected_spicy_docs=WHEEL,
+                                        expected_receipt_digest=prepared_digest(path), **options)
     assert bucket.writes == before
 
 
@@ -126,7 +128,7 @@ def test_prepared_steps_report_a_bulk_failure_by_its_kind(tmp_path, monkeypatch,
 
     monkeypatch.setattr(etl_bulk, "_check_receipts", fail)
     run = {
-        "publish": lambda: publish_prepared(work / conversion.RECEIPT),
+        "publish": lambda: publish_prepared(work / conversion.RECEIPT, full_verification=True),
         "resume": lambda: conversion.resume_prepared(
             generation,
             work=work,
@@ -250,7 +252,8 @@ def test_prepared_cli_and_second_publication_refusal(tmp_path, monkeypatch, buck
     monkeypatch.setattr(conversion, "source_state", lambda _: dict(STATE))
     work = tmp_path / "work"
     convert("cfr-sections", work)
-    args = ["--publish-prepared", str(work / conversion.RECEIPT), *COMMON, "--expect-bucket", BUCKET]
+    args = ["--publish-prepared", str(work / conversion.RECEIPT), *COMMON, "--expect-bucket", BUCKET,
+            "--expect-receipt-digest", prepared_digest(work / conversion.RECEIPT)]
     assert conversion.main(args) == 0
     assert "published and read back" in capsys.readouterr().out
     before = list(bucket.writes)
@@ -289,7 +292,8 @@ def test_prepared_cli_prior_history_never_claims_an_unchanged_pointer(
     elif refusal == "wheel":
         state["spicy_docs_wheel"] = STATE["spicy_docs_wheel"] | {"installed_differs": ["changed.py"]}
     monkeypatch.setattr(conversion, "source_state", lambda _: state)
-    args = ["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET]
+    args = ["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET,
+            "--expect-receipt-digest", prepared_digest(path)]
     if refusal == "environment":
         env = tmp_path / "conflicting.env"
         env.write_text("R2_PUBLIC_URL=https://another.invalid\n")
@@ -312,7 +316,8 @@ def test_prepared_api_prior_history_requires_read_only_reconciliation(tmp_path, 
     before = (list(bucket.writes), dict(bucket.reads), path.read_bytes())
     with pytest.raises(conversion.ConversionRefused) as failure:
         conversion.publish_prepared(path, allowed=["cfr-sections"], expected_main=MAIN, expected_spicy_docs=WHEEL,
-                                    expect_bucket=BUCKET, state=lambda _: state)
+                                    expect_bucket=BUCKET, state=lambda _: state,
+                                    expected_receipt_digest=prepared_digest(path))
     _assert_no_new_attempt(failure.value.state, path)
     assert (bucket.writes, bucket.reads, path.read_bytes()) == before
 
@@ -333,7 +338,8 @@ def test_prepared_current_attempt_retains_its_confirmed_not_moved_state(tmp_path
         raise publication.PublicationError("injected publication refusal")
 
     monkeypatch.setattr(publication, "_publish_verified_generation", refuse)
-    assert conversion.main(["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET]) == 1
+    assert conversion.main(["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET,
+                            "--expect-receipt-digest", prepared_digest(path)]) == 1
     state = capsys.readouterr().err
     assert conversion.NOTHING_PUBLISHED in state and "no new publication attempt" not in state
     assert json.loads(path.read_bytes())["publish_attempt"]["outcome"] == "not moved"
@@ -342,8 +348,11 @@ def test_prepared_current_attempt_retains_its_confirmed_not_moved_state(tmp_path
     assert stored(bucket) == old
 
 
-def test_prepared_native_admission_is_repeated_instead_of_trusting_saved_success(tmp_path, monkeypatch, bucket):
-    from spicy_regs import conversion_reads
+@pytest.mark.parametrize("publisher", ["other-identity", "forced-full"])
+def test_prepared_native_admission_is_repeated_unless_the_seal_holds_this_identity(
+        tmp_path, monkeypatch, bucket, publisher):
+    """A publisher under another admission key, or asked for it, repeats the real admission and its refusal."""
+    from spicy_regs import conversion_reads, generations
 
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
     work = tmp_path / "work"
@@ -353,16 +362,18 @@ def test_prepared_native_admission_is_repeated_instead_of_trusting_saved_success
     open_reader = conversion_reads._open_family_reader
 
     def refuse(*args, **kwargs):
-        # Repeat the real byte-bound receipt/subject admission, then fail inside
-        # its owned lifetime. A saved preparation success cannot avoid this path.
+        # Repeat the real byte-bound receipt/subject admission, then fail inside its owned lifetime.
         with open_reader(*args, **kwargs):
             intercepted.append(kwargs["generation_id"])
             raise ValueError("native admission refused this selected bundle")
 
     monkeypatch.setattr(conversion_reads, "_open_family_reader", refuse)
+    if publisher == "other-identity":
+        identity = generations.validation_identity()
+        monkeypatch.setattr(generations, "validation_identity", lambda: identity | {"runtime": "another runtime"})
     before = list(bucket.writes)
     with pytest.raises(conversion.ConversionRefused, match="native admission refused"):
-        publish_prepared(work / conversion.RECEIPT)
+        publish_prepared(work / conversion.RECEIPT, full_verification=publisher == "forced-full")
     assert len(intercepted) == 1
     assert bucket.writes == before and stored(bucket) == old
 
@@ -375,7 +386,8 @@ def test_prepared_rechecks_code_after_qualification_before_upload(tmp_path, monk
     before = list(bucket.writes)
     with pytest.raises(conversion.ConversionRefused, match="Main or the pinned wheel moved") as failure:
         conversion.publish_prepared(work / conversion.RECEIPT, allowed=["cfr-sections"], expected_main=MAIN,
-                                    expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: next(states))
+                                    expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: next(states),
+                                    expected_receipt_digest=prepared_digest(work / conversion.RECEIPT))
     _assert_no_new_attempt(failure.value.state, work / conversion.RECEIPT)
     assert bucket.writes == before
 

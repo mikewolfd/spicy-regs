@@ -24,6 +24,10 @@ on:
         description: 'Full retained producer commit, required when source_run_id is supplied'
         default: ''
         type: string
+      expected_receipt_digest:
+        description: 'With source_run_id: the "prepared receipt digest" line from that run''s prepare log, typed in by the operator'
+        default: ''
+        type: string
       expected_bucket:
         description: 'Explicit expected bucket, required for publication'
         default: ''
@@ -46,6 +50,7 @@ jobs:
       PUBLISH: ${{ inputs.publish }}
       SOURCE_RUN_ID: ${{ inputs.source_run_id }}
       EXPECTED_PRODUCER: ${{ inputs.expected_producer }}
+      EXPECTED_RECEIPT_DIGEST: ${{ inputs.expected_receipt_digest }}
       EXPECTED_BUCKET: ${{ inputs.expected_bucket }}
       R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
       SPICY_REGS_DISK_FLOOR_GIB: '4'
@@ -78,6 +83,14 @@ jobs:
           elif [ -n "$EXPECTED_PRODUCER" ]; then
             echo 'expected_producer belongs to a retained source_run_id'; exit 1
           fi
+          # The digest of a downloaded receipt comes from the operator, who copies it from the preparing run's log:
+          # never from the artifact being checked. A same-job preparation hands its printed digest on directly.
+          if [ -n "$SOURCE_RUN_ID" ] && [ "$PUBLISH" = true ]; then
+            [[ "$EXPECTED_RECEIPT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || { echo 'Require expected_receipt_digest from the preparing run'"'"'s log'; exit 1; }
+          elif [ -n "$EXPECTED_RECEIPT_DIGEST" ]; then
+            echo 'expected_receipt_digest belongs to publishing a retained source_run_id'; exit 1
+          fi
           ARGS=(--family "$FAMILY" --entry-sha256 "$ENTRY_SHA256" --output output/invocation)
           if [ "$PUBLISH" = true ]; then ARGS+=(--publish); fi
           if [ -n "$SOURCE_RUN_ID" ]; then ARGS+=(--source-run-id "$SOURCE_RUN_ID"); fi
@@ -105,6 +118,7 @@ jobs:
           name: native-family-${{ inputs.family }}
           path: output/native
       - name: Prepare the complete family through its maintained writer
+        id: prepare
         if: inputs.source_run_id == ''
         run: |
           set -euo pipefail
@@ -117,6 +131,10 @@ jobs:
               --allow "$FAMILY" --work "$GITHUB_WORKSPACE/output/native/$FAMILY" \
               --expect-main "$(git rev-parse HEAD)" --expect-spicy-docs "$WHEEL" --remote origin \
               2>&1 | tee output/logs/prepare.log
+          # This job's own printed digest; it guards against a stale or edited receipt, not a compromised job.
+          DIGEST=$(sed -n 's/^prepared receipt digest \(sha256:[0-9a-f]\{64\}\)$/\1/p' output/logs/prepare.log)
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Preparation printed no receipt digest'; exit 1; }
+          echo "receipt_digest=$DIGEST" >> "$GITHUB_OUTPUT"
       - name: Check the prepared artifact captured the exact requested prior
         run: |
           set -euo pipefail
@@ -132,19 +150,21 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          PREPARED_DIGEST: ${{ steps.prepare.outputs.receipt_digest }}
         run: |
           set -euo pipefail
           mkdir -p output/logs
           WHEEL=$(uv run --frozen python -c 'from importlib.metadata import version; print(version("spicy-docs"))')
           PRODUCER="$EXPECTED_PRODUCER"
-          if [ -z "$SOURCE_RUN_ID" ]; then PRODUCER=$(git rev-parse HEAD); fi
+          DIGEST="$EXPECTED_RECEIPT_DIGEST"
+          if [ -z "$SOURCE_RUN_ID" ]; then PRODUCER=$(git rev-parse HEAD); DIGEST="$PREPARED_DIGEST"; fi
           /usr/bin/time -v -o output/logs/publish-resources.txt \
             timeout --signal=TERM --kill-after=30s 90m \
             uv run --frozen python scripts/convert_family_to_native.py \
               --publish-prepared "$GITHUB_WORKSPACE/output/native/$FAMILY/conversion.json" \
               --allow "$FAMILY" --expect-main "$(git rev-parse HEAD)" --expect-spicy-docs "$WHEEL" \
-              --expect-producer "$PRODUCER" --remote origin --expect-bucket "$EXPECTED_BUCKET" \
-              2>&1 | tee output/logs/publish.log
+              --expect-producer "$PRODUCER" --expect-receipt-digest "$DIGEST" --remote origin \
+              --expect-bucket "$EXPECTED_BUCKET" 2>&1 | tee output/logs/publish.log
       - name: Retain prepared bytes, including interrupted and refused outputs
         if: always()
         uses: actions/upload-artifact@v4

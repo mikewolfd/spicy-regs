@@ -12,7 +12,7 @@ from spicy_regs import native_conversion as conversion
 from tests.test_native_conversion import (
     BUCKET, CFR, MAIN, STATE, WHEEL,
     bucket as _bucket,
-    convert, publish_old, stored,
+    convert, prepared_digest, publish_old, stored,
 )
 
 bucket = _bucket
@@ -105,7 +105,7 @@ def _historical_fixture(monkeypatch, identity=None):
 
 def _publish(path, **overrides):
     arguments: dict = dict(allowed=["cfr-sections"], expected_main=PUBLISHER, expected_spicy_docs=WHEEL,
-                     expect_bucket=BUCKET, expected_producer=MAIN,
+                     expect_bucket=BUCKET, expected_producer=MAIN, expected_receipt_digest=prepared_digest(path),
                      state=lambda _: STATE | {"checkout": PUBLISHER, "main": PUBLISHER}) | overrides
     return conversion.publish_prepared(path, **arguments)
 

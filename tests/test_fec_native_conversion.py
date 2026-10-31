@@ -156,7 +156,8 @@ def test_production_query_prepares_with_official_staged_parent_and_rejects_stale
     # Candidate staging is not pointer publication: query cannot publish until its exact parent is selected.
     with pytest.raises(conversion.ConversionRefused, match='parent|Parent'):
         conversion.publish_prepared(work / 'conversion.json', allowed=['fec-query'], expected_main=MAIN,
-            expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
+            expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE),
+            expected_receipt_digest=done['prepared']['receiptDigest'])
     assert publication.current_index(BASE) == snapshot
 
 

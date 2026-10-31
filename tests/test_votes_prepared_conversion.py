@@ -63,6 +63,7 @@ def test_maintained_vote_preparation_and_publication_reuse(tmp_path, monkeypatch
     published = conversion.publish_prepared(
         work / conversion.RECEIPT, allowed=[family], expected_main=MAIN, expected_spicy_docs=WHEEL,
         expect_bucket=BUCKET, state=lambda _: dict(STATE),
+        expected_receipt_digest=prepared["prepared"]["receiptDigest"],
     )
     assert published["generation"] == prepared["generation"]
     assert published["read_back"]["qualified_original_rows"] == {name: len(values) for name, values in original.items()}

@@ -61,9 +61,13 @@ receipts can make a complete native subject much smaller. The proof requires
 the exact prior entry, including its timestamp, on every pointer retry.
 Partition, table membership, receipt ownership, installed policy, and immutable
 byte-verification checks still run. Added tables and ordinary publications keep
-the size guard. A saved success report cannot supply the proof; prepared
-publication repeats the full checks while preserving the original seal and
-candidate bytes.
+the size guard. A saved receipt cannot supply the proof by itself, because a
+receipt can be edited and resealed with its own digest. Prepared publication
+accepts the seal's admission and restoration only when two things hold: the
+operator supplies the receipt digest from the preparing run's own output, and
+the seal's admission key (generation pin plus validator code, SpicyDocs code,
+runtime and platform) equals the publisher's. Otherwise it repeats the full
+checks. Either way the original seal and candidate bytes stay unchanged.
 
 Conversion uses one `ConversionReadOperation` for the complete native family.
 It admits the subject and receipt members once, holds their checked processing
@@ -202,7 +206,8 @@ on main.
    `native-family-bill-subjects` artifact: `tables.bill_subjects` has no rows or
    columns only on one side, and `lineage.inputs` names one evidence artifact.
 3. Dispatch again with `publish=true`, `expected_bucket`, `source_run_id` of
-   step 2 and `expected_producer` its full commit. The job reads the family back
+   step 2, `expected_producer` its full commit and `expected_receipt_digest`
+   from its job log's `prepared receipt digest` line. The job reads the family back
    anonymously.
 4. Check the pointer: the index entry for `bill-subjects` carries `etlReceipts`
    listing `bill_subjects`, and its evidence input reads (`publication.load_evidence_journal`
@@ -280,6 +285,7 @@ SPICY_REGS_REQUIRE_BULK=true R2_PUBLIC_URL=https://data.spicygov.ai \
   --expect-spicy-docs "$WHEEL" --remote fork --require-bulk \
   --retained-member-map "$COURT_INPUT_MAP"
 PRODUCER="$MAIN"  # write it down with the preparation; main may move before publication
+# Copy the "prepared receipt digest sha256:..." line the command printed into RECEIPT_DIGEST.
 ```
 
 Publish the sealed receipt with the producer pin, from the clean main current
@@ -290,7 +296,7 @@ MAIN=$(git rev-parse HEAD)
 R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py \
   --publish-prepared "$COURT_WORK/conversion.json" --allow court-opinion-clusters \
   --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --expect-producer "$PRODUCER" --remote fork \
-  --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
+  --expect-receipt-digest "$RECEIPT_DIGEST" --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
 ```
 
 ### Families the nightly refreshes wait on (historical audit of 2026-10-17)
@@ -452,11 +458,14 @@ Publish those same bytes once the package is qualified:
 R2_PUBLIC_URL=https://data.spicygov.ai $UV run --frozen python scripts/convert_family_to_native.py \
   --publish-prepared "$RUN/bill-family/conversion.json" --allow bill-family \
   --expect-main "$MAIN" --expect-spicy-docs "$WHEEL" --expect-producer "$PRODUCER" --remote fork \
-  --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
+  --expect-receipt-digest "$RECEIPT_DIGEST" --env-file <file with the R2 settings> --expect-bucket "$BUCKET"
 ```
 
 `MAIN` names the current clean publisher; `PRODUCER` is the full commit in
-that sealed receipt's `source.checkout` and `source.main`. For an earlier
+that sealed receipt's `source.checkout` and `source.main`. `RECEIPT_DIGEST`
+is the `prepared receipt digest` line the preparation printed (its terminal,
+log or job output). Never copy it from `conversion.json`: a digest read from
+the receipt it covers checks nothing. For an earlier
 producer, the command verifies its commit and ancestry in the same repository,
 hashes historical Python Git blobs using the generation's path ordering,
 and compares both producer and verifier implementation identities. Its
@@ -470,8 +479,20 @@ and the pin is what keeps a sealed receipt publishable from a later main. On
 an unmoved main the pin costs nothing (the producer is its own ancestor and
 the lock is identical). Only same-revision API callers, such as tests, omit it.
 
-Prepared publication reruns byte checks, native admission and exact input
-restoration; it never runs the source writer. It refuses an altered or
+Prepared publication never runs the source writer. It always re-hashes every
+generation member and retained original (decoding the originals) and reruns
+the structural, membership, policy, lineage and handed-on-journal checks. Row
+admission (bundle validation, key-index check) and original restoration run
+again only when the seal's admission key differs from the publisher's, for a
+version-1 seal, for `fec-query` with staged observations (its parent's
+admission is not in the seal), or with `--full-verification`; the receipt's
+`publish_attempt.verification` records which mode ran and how long it took.
+After any commit to `src/spicy_regs` the key differs, so a publish from a
+moved main takes the full path. On 2026-10-30 the comment-attributes publish
+spent 25.0 minutes re-checking locally and 24.1 minutes downloading and
+re-admitting the public copy; the sealed path skips the first, and the digest
+read-back above replaces the second. It refuses an operator digest that
+differs from the seal (an edited and resealed receipt), an altered or
 incomplete receipt, unproved producer or changed publisher/runtime, missing
 or altered members,
 different restoration results, or a changed captured family entry.
@@ -560,8 +581,13 @@ The runner, disk floor, thread limits and acceptance checks remain unchanged.
 Hosted limits do not establish that a larger family fits the runner.
 
 After checks against the actual reader, dispatch with `publish=true`, the
-explicit `expected_bucket`, `source_run_id` naming that preparation run, and
-`expected_producer` naming its full producer commit.
+explicit `expected_bucket`, `source_run_id` naming that preparation run,
+`expected_producer` naming its full producer commit, and
+`expected_receipt_digest` copied from that run's `prepare.log` (the
+`prepared receipt digest` line, as shown in the job log). The downloaded
+artifact cannot supply its own digest. A single dispatch that prepares and
+publishes hands the digest from the prepare step to the publish step; that
+guards against a stale or edited receipt, not against a compromised job.
 The workflow downloads those same bytes and calls `--publish-prepared`;
 it does not rerun the writer. The runner records whether retained output
 exists before downloading the missing official archive. It retains the original

@@ -185,3 +185,35 @@ def test_resume_invocation_preserves_the_explicit_producer_and_current_verifier(
                                    "expected_main": "a" * 40, "expected_spicy_docs": "0.56.0",
                                    "expected_producer": "b" * 40, "remote": "fork"})]
     assert "not published" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("source_run, publish, digest, refusal", [
+    ("123", "true", "", "Require expected_receipt_digest"),
+    ("123", "true", "sha256:" + "AB" * 32, "Require expected_receipt_digest"),
+    ("", "true", "sha256:" + "ab" * 32, "belongs to publishing a retained source_run_id"),
+    ("123", "true", "sha256:" + "ab" * 32, None),
+    ("", "true", "", None),
+])
+def test_retained_publication_requires_the_operator_receipt_digest(tmp_path, source_run, publish, digest, refusal):
+    """A downloaded receipt publishes only under a digest the operator supplies; the preflight step enforces it."""
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/convert-native-family.yml").read_text())
+    steps = workflow["jobs"]["convert"]["steps"]
+    preflight = next(step for step in steps if step.get("name") == "Check and retain the complete selected prior")
+    publish_step = next(step for step in steps if "--publish-prepared" in step.get("run", ""))
+    assert '--expect-receipt-digest "$DIGEST"' in publish_step["run"]
+    assert publish_step["env"]["PREPARED_DIGEST"] == "${{ steps.prepare.outputs.receipt_digest }}"
+    assert next(step for step in steps if step.get("id") == "prepare")["if"] == "inputs.source_run_id == ''"
+    # Stand-ins for git and uv: the guard under test runs before anything they would do matters.
+    for name in ("git", "uv"):
+        (tmp_path / name).write_text("#!/bin/bash\nexit 0\n")
+        (tmp_path / name).chmod(0o755)
+    env = os.environ | {"PATH": str(tmp_path) + os.pathsep + os.environ["PATH"], "FAMILY": "dockets",
+                        "ENTRY_SHA256": "sha256:" + "0" * 64, "PUBLISH": publish, "SOURCE_RUN_ID": source_run,
+                        "EXPECTED_PRODUCER": "ab" * 20 if source_run else "", "EXPECTED_RECEIPT_DIGEST": digest,
+                        "EXPECTED_BUCKET": "named"}
+    result = subprocess.run(["bash", "-c", preflight["run"]], cwd=tmp_path, env=env, capture_output=True, text=True)
+    if refusal is None:
+        assert "expected_receipt_digest" not in result.stdout + result.stderr
+    else:
+        assert result.returncode != 0 and refusal in result.stdout + result.stderr

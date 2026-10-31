@@ -694,6 +694,7 @@ class ConversionReadOperation:
         self._generations = {}
         self._guards = {}
         self._reader_stacks = {}
+        self._policies = {}
         self.active = False
 
     def __enter__(self):
@@ -706,8 +707,13 @@ class ConversionReadOperation:
         finally:
             self.active = False
 
-    def admit_generation(self, directory, *, expected_pin=None):
-        """Hash every member once and retain the same product receipt admission."""
+    def admit_generation(self, directory, *, expected_pin=None, semantic=True):
+        """Hash every member once and retain the same product receipt admission.
+
+        ``semantic=False`` is the sealed-publication admission: every byte, structural and installed-policy check
+        still runs, but no family reader opens (no bundle validation, no row joins), and the held reader is ``None``.
+        Only a caller whose sealed semantic admission matches this process's ``admission_key`` may ask for it.
+        """
         from rulespec_artifacts import ArtifactPin, LocalFileState, LocalMemberSource
         from spicy_regs.generations import _verify_generation_source
         from spicy_regs.local_data import file_signature
@@ -722,7 +728,10 @@ class ConversionReadOperation:
         held = self._generations.get(directory)
         if held is not None:
             artifact, reader, source = held
-            reader.check()
+            if reader is None and semantic:
+                raise ValueError("Conversion generation was admitted by bytes only; its rows were not admitted here")
+            if reader is not None:
+                reader.check()
             if expected_pin is not None and artifact.pin != expected_pin:
                 raise ValueError("Conversion generation differs from its expected pin")
             return held
@@ -751,7 +760,7 @@ class ConversionReadOperation:
                     [str(directory / key)]).fetchall()
             return {"columns": [[name, kind] for name, kind, *_ in columns], "rows": rows}
 
-        readers = []
+        readers, registered = [], []
         reader_stack = ExitStack()
         self._stack.enter_context(reader_stack)
 
@@ -765,14 +774,16 @@ class ConversionReadOperation:
                 if current is None or not any(
                         policy.descriptor() == candidate.descriptor() for candidate in receipt_policies(current)):
                     raise ValueError("Conversion generation policy descriptor is not an exact shipped policy")
-            reader = reader_stack.enter_context(_open_family_reader(
-                subjects, receipts, policies, generation_id=generation_id, guard=guard))
-            readers.append(reader)
+            registered.append(_bundle_policies(subjects, receipts, policies))
+            if semantic:
+                readers.append(reader_stack.enter_context(_open_family_reader(
+                    subjects, receipts, policies, generation_id=generation_id, guard=guard)))
 
         artifact = None
         try:
-            artifact = _verify_generation_source(source, footer, expected_pin=expected_pin, admit_receipts=admit)
-            if len(readers) != 1:
+            artifact = _verify_generation_source(source, footer, expected_pin=expected_pin, admit_receipts=admit,
+                                                 semantic=semantic)
+            if len(registered) != 1 or len(readers) != int(semantic):
                 raise ValueError("Conversion generation requires one complete receipt admission")
             guard()
             # Consume the platform's actual byte-pass receipts, not just a saved
@@ -789,9 +800,12 @@ class ConversionReadOperation:
                     artifact.local_member_states.close()
             raise
         self._stack.callback(artifact.local_member_states.close)
-        held = (artifact, readers[0], source)
-        readers[0].family = artifact.root['spec']['family']
+        reader = readers[0] if semantic else None
+        if reader is not None:
+            reader.family = artifact.root['spec']['family']
+        held = (artifact, reader, source)
         self._generations[directory] = held
+        self._policies[directory] = registered[0]
         self._guards[directory] = guard
         self._reader_stacks[directory] = reader_stack
         return held
@@ -804,6 +818,11 @@ class ConversionReadOperation:
         self._guards[directory]()
         artifact, _, source = self._generations[directory]
         return artifact, source
+
+    def policies(self, directory):
+        """The receipt policies this operation admitted for ``directory``, by dataset, whether or not a reader opened."""
+        self.verified_source(directory)
+        return self._policies[Path(directory).absolute()]
 
     def release_generation(self, directory):
         """Release bounded replay state before admitting another source; retain guarded byte proof."""

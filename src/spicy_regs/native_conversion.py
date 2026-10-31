@@ -48,6 +48,8 @@ NOTHING_PUBLISHED = "nothing was published; the family's pointer is unchanged"
 INHERITED_EVENTS = ("congress-index-selection", "scorecard-source-attempt")
 #: The receipt outcomes of a row or observation that converted; any other outcome stops the conversion.
 CONVERTED_OUTCOMES = frozenset({"accepted", "observed"})
+#: The shape of a sealed prepared receipt's digest, as the preparation prints it for the operator.
+RECEIPT_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 def _now() -> str:
@@ -429,11 +431,16 @@ def _convert_rollup(cls, old: Mapping, retained: Mapping[str, Path], base: str, 
 
 def _native_built(generation: Path, retained: Mapping[str, Path], base: str,
                   evidence: tuple[Path, ...], read_operation: ConversionReadOperation,
-                  original_pins: Mapping | None = None) -> _Built:
-    """Use the exact admitted policies and one family reader for every comparison."""
-    artifact, reader, _ = read_operation.admit_generation(generation)
+                  original_pins: Mapping | None = None, *, semantic: bool = True) -> _Built:
+    """Use the exact admitted policies and one family reader for every comparison.
+
+    ``semantic=False`` builds on a byte-only admission (sealed publication): it has no reader, so it cannot compare
+    originals; its restoration evidence is the seal's.
+    """
+    artifact, reader, _ = read_operation.admit_generation(generation, semantic=semantic)
     spec = artifact.root["spec"]
-    receipt_only = frozenset(name + ".parquet" for name, policy in reader.policies.items() if policy.receipt_only)
+    policies = read_operation.policies(generation)
+    receipt_only = frozenset(name + ".parquet" for name, policy in policies.items() if policy.receipt_only)
     added = frozenset(spec["tables"]) - set(retained)
     pinned_originals = _original_states(retained) if original_pins is None else original_pins
 
@@ -445,6 +452,8 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str,
     check_originals()
 
     def compare_original(dataset: str, original: Path) -> dict:
+        if reader is None:
+            raise ConversionRefused("A byte-only admission cannot compare originals; take the full verification")
         check_originals(dataset + ".parquet")
         # Only maintained base-family conversion explicitly restores the captured source schema.
         schema = ({"source_schema": pq.read_schema(original)} if _regulatory_base_class(spec["family"]) is not None
@@ -463,7 +472,7 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str,
                 "qualified_original_rows": {name.removesuffix(".parquet"): _table_rows(path)
                                             for name, path in retained.items()}}
 
-    return _Built(generation, {name: policy.policy_version for name, policy in reader.policies.items()},
+    return _Built(generation, {name: policy.policy_version for name, policy in policies.items()},
                   compare_original, read_published, evidence, added, receipt_only,
                   read_operation=read_operation, check_originals=check_originals)
 
@@ -746,15 +755,27 @@ def _prepared_digest(receipt: Mapping) -> str:
 
 
 def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
+    """Seal a qualified preparation: its pin, captured index, evidence, and the identity its admission ran under.
+
+    The admission key binds the semantic admission and restoration this process just completed to this validator
+    identity, so a publisher under the same key may rely on them (:func:`publish_prepared`). The receipt digest
+    covers all of it; the operator carries it to publication from this run's output, never from the receipt.
+    """
+    from spicy_regs.generations import admission_key, validation_identity
+
     if built.read_operation is None:
         raise ConversionRefused("Preparation seal requires its active admitted operation")
     if built.check_originals:
         built.check_originals()
     admitted, _ = built.read_operation.verified_source(built.generation)
     artifact = admitted.root
+    pin = {key: artifact[key] for key in ("logicalId", "artifactDigest")}
+    identity = validation_identity()
     receipt["prepared"] = {
-        "format": "spicy-regs-native-conversion-prepared", "version": 1,
-        "generationPin": {key: artifact[key] for key in ("logicalId", "artifactDigest")},
+        "format": "spicy-regs-native-conversion-prepared", "version": 2,
+        "generationPin": pin,
+        "validationIdentity": identity,
+        "admissionKey": admission_key(pin, identity),
         "capturedIndexSha256": _file_digest(work / "captured-publication.v2.json"),
         "evidenceDirectories": [path.resolve().relative_to(work.resolve()).as_posix() for path in built.evidence],
     }
@@ -965,35 +986,90 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
         raise ConversionRefused(f"Retained conversion cannot be verified: {type(failure).__name__}: {failure}") from failure
 
 
-def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
-                     expect_bucket: str, remote: str = "origin", state: Callable[[str], dict] | None = None,
-                     expected_producer: str | None = None,
-                     read_operation: ConversionReadOperation | None = None) -> dict:
-    """Publish one completed official dry run after rechecking its bytes and restoring its exact inputs again.
+def _sealed_admission(receipt: Mapping, full_verification: bool) -> bool:
+    """Whether this publisher may rely on the seal's semantic admission and restoration instead of repeating them.
 
-    The source writer never runs here. Separate field, server and coverage qualifications in the release package
-    must name this receipt's exact artifact; their reports do not replace native admission or restoration.
+    Only a version-2 seal under this process's admission key qualifies (the same key an owner process uses in memory:
+    generations.admission_key). Staged FEC observations keep the full path: their parent generation's admission and
+    restoration are not part of this seal.
+    """
+    from spicy_regs.generations import admission_key, validation_identity
+
+    sealed = receipt["prepared"]
+    return (not full_verification and sealed["version"] == 2 and "staged_observations" not in receipt
+            and sealed["admissionKey"] == admission_key(sealed["generationPin"], validation_identity()))
+
+
+def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
+                     expect_bucket: str, expected_receipt_digest: str, remote: str = "origin",
+                     state: Callable[[str], dict] | None = None, expected_producer: str | None = None,
+                     full_verification: bool = False,
+                     read_operation: ConversionReadOperation | None = None) -> dict:
+    """Publish one completed official dry run after rechecking its bytes against the seal the operator names.
+
+    ``expected_receipt_digest`` comes from the preparation run's own output, never from the receipt it covers: it
+    is what makes the seal's recorded proof the operator's, not the receipt's word for itself. Every member and
+    retained original is hashed again, and every byte, structural, membership, lineage and policy check runs. Row
+    admission and original restoration are repeated only when the seal's admission key differs from this process's
+    (other code, runtime or platform), for a version-1 seal, for staged FEC observations, or with
+    ``full_verification``. The source writer never runs here. Separate field, server and coverage qualifications in
+    the release package must name this receipt's exact artifact.
     """
     if read_operation is None:
         with ConversionReadOperation() as operation:
             return publish_prepared(receipt_path, allowed=allowed, expected_main=expected_main,
                                     expected_spicy_docs=expected_spicy_docs, expect_bucket=expect_bucket,
-                                    remote=remote, state=state, expected_producer=expected_producer,
+                                    expected_receipt_digest=expected_receipt_digest, remote=remote, state=state,
+                                    expected_producer=expected_producer, full_verification=full_verification,
                                     read_operation=operation)
     state = state or source_state
+    verified = _verify_prepared(receipt_path, allowed=allowed, expected_main=expected_main,
+                                expected_spicy_docs=expected_spicy_docs, expect_bucket=expect_bucket,
+                                expected_receipt_digest=expected_receipt_digest, remote=remote, state=state,
+                                expected_producer=expected_producer, full_verification=full_verification,
+                                read_operation=read_operation)
+    return _publish_conversion(verified.receipt, verified.built, verified.captured, receipt_path.parent,
+                               expected_main=expected_main, expected_spicy_docs=expected_spicy_docs, remote=remote,
+                               state=state, exact_prior=True, publisher_source=verified.publisher,
+                               conversion_proof=verified.conversion_proof, verification=verified.verification)
+
+
+@dataclass(frozen=True)
+class _VerifiedPrepared:
+    """A prepared receipt that passed every pre-publication check in this operation, ready for the pointer write."""
+
+    receipt: dict
+    built: _Built
+    captured: Mapping
+    publisher: Mapping
+    conversion_proof: publication.NativeConversionProof | None
+    verification: Mapping
+
+
+def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
+                     expect_bucket: str, expected_receipt_digest: str, remote: str, state: Callable[[str], dict],
+                     expected_producer: str | None, full_verification: bool,
+                     read_operation: ConversionReadOperation) -> _VerifiedPrepared:
+    """Every check :func:`publish_prepared` makes before it writes; nothing here writes to the bucket or receipt."""
     work = receipt_path.parent
+    started = time.monotonic()
     try:
         now = state(remote)
         _refuse_moved(now, main=expected_main, spicy_docs=expected_spicy_docs)
+        if not RECEIPT_DIGEST.fullmatch(expected_receipt_digest or ""):
+            raise ConversionRefused("--expect-receipt-digest must be the sha256: digest the preparation printed")
         if receipt_path.name != RECEIPT or receipt_path.is_symlink() or not receipt_path.is_file():
             raise ConversionRefused("--publish-prepared needs an existing official conversion.json")
         receipt = json.loads(receipt_path.read_bytes())
         sealed = receipt.get("prepared", {})
-        if (sealed.get("format") != "spicy-regs-native-conversion-prepared" or sealed.get("version") != 1
+        if (sealed.get("format") != "spicy-regs-native-conversion-prepared" or sealed.get("version") not in (1, 2)
                 or sealed.get("receiptDigest") != _prepared_digest(receipt)
                 or "published" not in receipt or receipt["published"] is not None
                 or any(key in receipt for key in ("refused", "publish_attempt", "rollback_attempt", "rolled_back"))):
             raise ConversionRefused("Prepared receipt is incomplete, altered, refused, or already attempted")
+        if sealed["receiptDigest"] != expected_receipt_digest:
+            raise ConversionRefused("Prepared receipt is not the one the operator named: its digest differs from "
+                                    "--expect-receipt-digest")
         family, base = receipt["family"], receipt["public_url"]
         if family not in allowed:
             raise ConversionRefused(f"{family} is not in this run's allow-list")
@@ -1013,7 +1089,8 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         replaced, handed_on = _replaced_evidence(base, old)
         retained, original_pins = _retained_inputs(captured, old, work)
         generation = _prepared_path(work, receipt["generation"]["directory"])
-        artifact, _, _ = read_operation.admit_generation(generation)
+        semantic = not _sealed_admission(receipt, full_verification)
+        artifact, _, _ = read_operation.admit_generation(generation, semantic=semantic)
         spec = artifact.root["spec"]
         if (artifact.pin.as_dict() != sealed["generationPin"]
                 or artifact.pin.artifact_digest != receipt["generation"]["artifactDigest"]
@@ -1029,23 +1106,23 @@ def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         from spicy_regs.pipelines.rollups.base import RollupPipeline
 
         _check_prepared_membership(family, old, spec)
-        built = _native_built(generation, retained, base, evidence, read_operation, original_pins)
+        built = _native_built(generation, retained, base, evidence, read_operation, original_pins, semantic=semantic)
         scheduled = _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
         proof, problems, conversion_proof = _qualify_conversion(
-            family, built, old, retained, replaced, retains, handed_on
+            family, built, old, retained, replaced, retains, handed_on, sealed=None if semantic else receipt
         )
         if problems or any(receipt.get(key) != value for key, value in proof.items()):
             raise ConversionRefused(f"Prepared restoration proof differs: {problems}")
+        verification = {"mode": "full" if semantic else "sealed-admission",
+                        "seconds": round(time.monotonic() - started, 1)}
     except (ConversionRefused, publication.PublicationError) as failure:
         raise ConversionRefused(str(failure), state=_prepared_refusal_state(receipt_path)) from failure
     except (KeyError, TypeError, ValueError, OSError) as failure:
         raise ConversionRefused(f"Prepared conversion cannot be verified: {type(failure).__name__}: {failure}",
                                 state=_prepared_refusal_state(receipt_path)) from failure
     receipt["target"] = target
-    return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
-                               expected_spicy_docs=expected_spicy_docs, remote=remote, state=state, exact_prior=True,
-                               publisher_source=now, conversion_proof=conversion_proof)
+    return _VerifiedPrepared(receipt, built, captured, now, conversion_proof, verification)
 
 
 def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: str, expected_spicy_docs: str,
@@ -1209,20 +1286,40 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                                conversion_proof=conversion_proof)
 
 
+#: Fields of a sealed ``tables`` entry derived from the bytes here, not from the reader's restoration.
+_RECOUNTED = ("retained_rows", "subject_rows", "preserved_refused_rows")
+
+
 def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapping[str, Path],
                         replaced: Mapping, retains: bool, handed_on: Sequence[Mapping],
+                        sealed: Mapping | None = None,
                         ) -> tuple[dict, list[str], publication.NativeConversionProof | None]:
+    """Qualify ``built`` against its retained originals; return the receipt's proof fields, problems, and the proof.
+
+    The reader part (receipt outcomes, preserved page refusals, original restoration) comes from the admitted reader,
+    or, with ``sealed``, from that prepared receipt, whose semantic admission ran under this process's admission key.
+    Everything else (subject counts, membership, physical tables, lineage, handed-on journal) is recomputed here
+    either way, so the caller's comparison with the seal still checks it.
+    """
     if built.read_operation is None:
         raise ConversionRefused("Conversion qualification requires its active admitted reader")
-    admitted, reader, _ = built.read_operation.admit_generation(built.generation)
-    artifact = admitted.root
-    outcomes = reader.outcome_counts()
+    artifact = built.read_operation.verified_source(built.generation)[0].root
     tables, problems = {}, []
-    preserved_pages = 0
-    try:
-        preserved_pages = reader.preserved_source_page_refusals()
-    except ValueError as invalid_refusal:
-        problems.append(f"source page refusals do not qualify: {invalid_refusal}")
+    if sealed is None:
+        _, reader, _ = built.read_operation.admit_generation(built.generation)
+        outcomes = reader.outcome_counts()
+        preserved_pages = 0
+        try:
+            preserved_pages = reader.preserved_source_page_refusals()
+        except ValueError as invalid_refusal:
+            problems.append(f"source page refusals do not qualify: {invalid_refusal}")
+        restore = built.compare_original
+    else:
+        outcomes = dict(sealed["receipt_outcomes"])
+        preserved_pages = sealed["tables"].get("fec_research_source_pages", {}).get("preserved_refused_rows", 0)
+
+        def restore(dataset: str, _original: Path) -> dict:
+            return {name: value for name, value in sealed["tables"][dataset].items() if name not in _RECOUNTED}
     unconverted = {name: count - (preserved_pages if name == 'refused' else 0)
                    for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES}
     if unconverted := {name: count for name, count in unconverted.items() if count}:
@@ -1231,7 +1328,7 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         dataset = key.removesuffix(".parquet")
         subject = built.generation / (dataset if "members" in table else key)
         try:
-            check = built.compare_original(dataset, retained[key]) | {"retained_rows": table["rows"]}
+            check = restore(dataset, retained[key]) | {"retained_rows": table["rows"]}
         except ValueError as unreadable:
             problems.append(f"{dataset} does not restore: {unreadable}")
             continue
@@ -1297,7 +1394,8 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
 def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: Path, *,
                         expected_main: str, expected_spicy_docs: str, remote: str, state: Callable[[str], dict],
                         exact_prior: bool = False, publisher_source: Mapping | None = None,
-                        conversion_proof: publication.NativeConversionProof | None = None) -> dict:
+                        conversion_proof: publication.NativeConversionProof | None = None,
+                        verification: Mapping | None = None) -> dict:
     exact_prior = exact_prior or conversion_proof is not None
     family, base, target = (receipt[name] for name in ("family", "public_url", "target"))
     started = publisher_source if publisher_source is not None else receipt["source"]
@@ -1321,7 +1419,8 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
     from spicy_regs.generations import implementation_id
 
     attempt: dict = {"at": _now(), "outcome": "attempted", "error": None,
-                     "publisher": {"source": now, "implementationId": implementation_id()}}
+                     "publisher": {"source": now, "implementationId": implementation_id()},
+                     **({"verification": dict(verification)} if verification is not None else {})}
     receipt |= {"published": None, "publish_attempt": attempt}
     save()
     try:
@@ -1508,6 +1607,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--resume-generation", type=Path, metavar="GENERATION",
                         help="Verify and seal a retained complete generation without restarting its writer")
     parser.add_argument("--expect-producer", help="Full retained producer commit for preparation or publication")
+    parser.add_argument("--expect-receipt-digest", metavar="SHA256",
+                        help="With --publish-prepared: the 'prepared receipt digest' line the preparation printed "
+                             "(its log or job output), never a value read from the receipt itself")
+    parser.add_argument("--full-verification", action="store_true",
+                        help="With --publish-prepared: repeat row admission and restoration even under the seal's "
+                             "admission key")
     parser.add_argument("--expect-bucket", help="The bucket --publish or --rollback may write to; any other is refused")
     parser.add_argument("--rollback", type=Path, metavar="RECEIPT", help="Restore the entry a conversion receipt captured")
     parser.add_argument("--discard-newer", action="store_true",
@@ -1531,6 +1636,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--resume-generation needs --work, --allow, --expect-main, --expect-spicy-docs and --expect-producer")
     if args.publish_prepared and (args.family or args.work or args.publish):
         parser.error("--publish-prepared cannot rebuild a family; omit FAMILY, --work and --publish")
+    if bool(args.publish_prepared) != bool(args.expect_receipt_digest) or (
+            args.full_verification and not args.publish_prepared):
+        parser.error("--publish-prepared needs --expect-receipt-digest, and both it and --full-verification "
+                     "belong only to --publish-prepared")
+    if args.expect_receipt_digest and not RECEIPT_DIGEST.fullmatch(args.expect_receipt_digest):
+        parser.error("--expect-receipt-digest must be sha256: followed by 64 lowercase hex digits")
     if (args.publish or args.publish_prepared or args.rollback) and not args.expect_bucket:
         parser.error("publication and rollback need --expect-bucket: the bucket this run may write to")
     if args.discard_newer and not args.rollback:
@@ -1575,7 +1686,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             done = publish_prepared(
                 args.publish_prepared, allowed=[name for value in args.allow for name in value.split(",") if name],
                 expected_main=args.expect_main, expected_spicy_docs=args.expect_spicy_docs,
-                remote=args.remote, expect_bucket=args.expect_bucket, expected_producer=args.expect_producer)
+                remote=args.remote, expect_bucket=args.expect_bucket, expected_producer=args.expect_producer,
+                expected_receipt_digest=args.expect_receipt_digest, full_verification=args.full_verification)
         elif not (args.family and args.work and args.expect_main and args.expect_spicy_docs):
             parser.error("a conversion needs FAMILY, --allow, --work, --expect-main and --expect-spicy-docs")
         else:
@@ -1616,6 +1728,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"{done['family']}: receipts {done['receipt_outcomes']}, generation {done['generation']['artifactDigest']}")
     print(f"published and read back; receipt {args.publish_prepared or args.work / RECEIPT}" if done["published"]
           else f"not published (no --publish); receipt {args.work / RECEIPT}")
+    if not done["published"] and "prepared" in done:
+        # The operator's publication channel: --expect-receipt-digest is copied from here, not from the receipt.
+        print(f"prepared receipt digest {done['prepared']['receiptDigest']}")
     return 0
 
 

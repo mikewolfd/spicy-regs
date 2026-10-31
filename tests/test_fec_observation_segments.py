@@ -209,11 +209,13 @@ def test_outer_conversion_resumes_checkpoint_with_new_work_and_complete_admissio
     with pytest.raises(conversion.ConversionRefused, match='not main'):
         conversion.publish_prepared(tmp_path / 'second' / conversion.RECEIPT,
             allowed=['fec-observations'], expected_main=advanced['main'], expected_spicy_docs=WHEEL,
-            expected_producer=MAIN, expect_bucket=BUCKET, state=lambda _: dict(advanced))
+            expected_producer=MAIN, expect_bucket=BUCKET, state=lambda _: dict(advanced),
+            expected_receipt_digest=receipt['prepared']['receiptDigest'])
     assert (tmp_path / 'second' / conversion.RECEIPT).read_bytes() == sealed_bytes
     published = conversion.publish_prepared(tmp_path / 'second' / conversion.RECEIPT,
         allowed=['fec-observations'], expected_main=advanced['main'], expected_spicy_docs=WHEEL,
-        expected_producer=MAIN, expect_bucket=BUCKET, state=lambda _: dict(publisher))
+        expected_producer=MAIN, expect_bucket=BUCKET, state=lambda _: dict(publisher),
+        expected_receipt_digest=receipt['prepared']['receiptDigest'])
     assert published['published']
     assert published['source'] == advanced
     assert published['producer']['commit'] == MAIN

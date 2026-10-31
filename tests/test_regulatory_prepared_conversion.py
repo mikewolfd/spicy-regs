@@ -61,6 +61,7 @@ def test_regulatory_preparation_batches_and_publishes_exact_artifact_once(tmp_pa
     published = conversion.publish_prepared(
         work / conversion.RECEIPT, allowed=[dataset], expected_main=MAIN, expected_spicy_docs=WHEEL,
         expect_bucket=BUCKET, state=lambda _: dict(STATE),
+        expected_receipt_digest=prepared["prepared"]["receiptDigest"],
     )
     assert published["generation"] == prepared["generation"]
     assert published["read_back"]["qualified_original_rows"][dataset] == len(original_rows)

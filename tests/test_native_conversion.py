@@ -2,6 +2,7 @@
 
 import json
 from contextlib import contextmanager
+from pathlib import Path
 
 import duckdb
 import httpx
@@ -98,11 +99,23 @@ def publish_old(store, monkeypatch, directory, family, tables):
     return index["families"][family]
 
 
+#: The operator's channel in these tests: the digest each preparation returned, by receipt path. It is never read
+#: back from the receipt it covers, so a receipt changed after preparation cannot vouch for itself.
+PREPARED: dict = {}
+
+
+def prepared_digest(receipt_path):
+    return PREPARED[Path(receipt_path).resolve()]
+
+
 def convert(family, work, **options):
     options.setdefault("allowed", [family])
     options.setdefault("state", lambda remote: dict(STATE))
     options.setdefault("expect_bucket", BUCKET)
-    return conversion.convert(family, work=work, expected_main=MAIN, expected_spicy_docs=WHEEL, **options)
+    done = conversion.convert(family, work=work, expected_main=MAIN, expected_spicy_docs=WHEEL, **options)
+    if done.get("prepared"):
+        PREPARED[(Path(work) / conversion.RECEIPT).resolve()] = done["prepared"]["receiptDigest"]
+    return done
 
 
 def refused_read(tmp_path, dataset):
@@ -1328,7 +1341,8 @@ def test_checkpoint_source_rows_convert_and_restore_in_their_declared_main_shape
     assert not any(prepared["tables"][read_dataset][name] for name in
                    ("type_changes", "metadata_changes", "rows_only_in_restored", "rows_only_in_retained"))
     conversion.publish_prepared(tmp_path / "work" / conversion.RECEIPT, allowed=[family], expected_main=MAIN,
-                                expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE))
+                                expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE),
+                                expected_receipt_digest=prepared["prepared"]["receiptDigest"])
     current = publication.current_index(BASE)
     entry = current["families"][family]
     assert (reads_key not in entry["tables"]) == processing_only

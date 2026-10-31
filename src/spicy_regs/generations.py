@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import platform
 import re
 import shutil
 import stat
@@ -35,15 +36,31 @@ _OWNER_ADMISSIONS: OrderedDict[str, None] = OrderedDict()
 
 
 def validation_identity() -> dict:
-    """Exact validator/policy sources and runtime; restart owner processes after code changes."""
+    """Exact validator/policy sources and runtime; restart owner processes after code changes.
+
+    A prepared conversion seals it, so a publisher with the same identity can trust the seal's semantic admission
+    instead of repeating it: SpicyDocs is held by its code bytes, not only its release string, and the platform
+    by system and machine (not the OS point release, which would refuse a minor update for no reason).
+    """
     import rulespec_artifacts
 
     return {
         "spicy_regs": source_digest(Path(__file__).parent, (".py", ".json", ".xsd")),
         "rulespec_artifacts": source_digest(Path(rulespec_artifacts.__file__).parent, (".py", ".json")),
+        "spicy_docs_code": spicy_docs_code(),
         "runtime": sys.version,
+        "platform": {"system": platform.system(), "machine": platform.machine()},
         "packages": {name: version(name) for name in ("spicy-regs", "spicy-docs", "rulespec-artifacts", "duckdb", "pyarrow")},
     }
+
+
+def admission_key(pin: Mapping, validator: Mapping) -> str:
+    """The one key under which a completed semantic admission of ``pin`` may stand in for another.
+
+    In memory for this owner process (:func:`admit_generation_for_publication`) and in a prepared conversion's seal.
+    """
+    return hashlib.sha256(json.dumps([dict(pin), dict(validator)], sort_keys=True,
+                                     separators=(",", ":")).encode()).hexdigest()
 
 
 def admit_generation_for_publication(directory: Path, *, expected_pin=None):
@@ -59,8 +76,7 @@ def admit_generation_for_publication(directory: Path, *, expected_pin=None):
     validator = validation_identity()
     source = LocalMemberSource(directory)
     artifact = admit_artifact(source, expected_pin=expected_pin)
-    identity = hashlib.sha256(json.dumps([artifact.pin.as_dict(), validator],
-                                        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    identity = admission_key(artifact.pin.as_dict(), validator)
     require_registered_receipts(artifact.root["spec"]["tables"], artifact.root["spec"].get("etlReceipts"))
     if identity not in _OWNER_ADMISSIONS:
         from spicy_regs.etl_receipts import validate_receipt_bundle
@@ -161,13 +177,18 @@ def verify_generation_source(source, table_info: Callable[[str], dict], *, expec
                                      admit_receipts=validate_receipt_bundle)
 
 
-def _verify_generation_source(source, table_info, *, expected_pin, admit_receipts):
-    """Same product checks with admission retained only by an explicit conversion owner."""
+def _verify_generation_source(source, table_info, *, expected_pin, admit_receipts, semantic=True):
+    """Same product checks with admission retained only by an explicit conversion owner.
+
+    ``semantic=False`` keeps every byte and structural check but leaves row content to ``admit_receipts`` and skips
+    the receipt key index's row check: for a caller holding an earlier semantic admission under the same
+    :func:`admission_key`.
+    """
     from rulespec_artifacts import admit_artifact
 
     artifact = admit_artifact(source, expected_pin=expected_pin)
     try:
-        return _verify_admitted_generation(artifact, source, table_info, admit_receipts)
+        return _verify_admitted_generation(artifact, source, table_info, admit_receipts, semantic=semantic)
     except BaseException:
         if artifact.local_member_states is not None:
             close = getattr(artifact.local_member_states, 'close', None)
@@ -176,7 +197,7 @@ def _verify_generation_source(source, table_info, *, expected_pin, admit_receipt
         raise
 
 
-def _verify_admitted_generation(artifact, source, table_info, admit_receipts):
+def _verify_admitted_generation(artifact, source, table_info, admit_receipts, *, semantic=True):
     from rulespec_artifacts import iter_member_descriptors
 
     root = artifact.root
@@ -233,8 +254,9 @@ def _verify_admitted_generation(artifact, source, table_info, admit_receipts):
         if (member.sha256, member.byte_size, member.record_count) != (
                 index_spec["sha256"], index_spec["byteSize"], index_spec["rows"]):
             raise ValueError("Generation receipt key index differs from its declared member")
-        verify_key_index(lambda: source.open("etl_receipts.parquet"), lambda: source.open(RECEIPT_INDEX_KEY),
-                         index_spec, receipt_pin)
+        if semantic:
+            verify_key_index(lambda: source.open("etl_receipts.parquet"), lambda: source.open(RECEIPT_INDEX_KEY),
+                             index_spec, receipt_pin)
     table_members_only = [member for member in members
                           if member.object_key not in {"etl_receipts.parquet", RECEIPT_INDEX_KEY}]
     if tables or table_members_only:
