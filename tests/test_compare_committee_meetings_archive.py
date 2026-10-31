@@ -36,17 +36,17 @@ def _two_chamber_fixture(tmp_path: Path) -> dict[str, Path]:
         ('118', 'house', '1', 'T', 'Hearing', 'Scheduled', '2024-01-10T15:00:00Z', 1, 1, 2,
          ['{DOC}', '{UNHELD}'], [{doc_struct.replace('?', repr(DOC))}], []::STRUCT(documentType VARCHAR,
          format VARCHAR, url VARCHAR)[],
-         [{{'name': 'Approps', 'systemCode': 'HSAP00', 'url': NULL}}], ['CHRG-1', 'CHRG-2'],
+         [{{'name': 'Approps', 'systemCode': 'HSAP00', 'url': NULL}}], ['1', '2'],
          [{{'name': 'Ann Lee', 'position': 'Director', 'organization': 'GAO'}}],
-         [{{'name': 'Video', 'url': 'https://youtu.be/x'}}], ['hr1-118']),
+         [{{'name': 'Video', 'url': 'https://youtu.be/x'}}], ['118-hr-1']),
         ('118', 'senate', '2', 'S', 'Hearing', 'Scheduled', '2024-02-10T15:00:00Z', 0, 0, 0, [], [], [],
          [], [], [], [], []))
         AS t(congress, chamber, event_id, title, meeting_type, meeting_status, meeting_date, witness_count,
              witness_document_count, meeting_document_count, document_urls, meeting_documents, witness_documents,
              committees, hearing_jackets, witnesses, videos, bill_ids)""")
     _write(paths, "meetings", """SELECT * FROM (VALUES (1::BIGINT, 'house', 'T', DATE '2024-01-10', 'HHRG',
-        'Scheduled', [{'package_id': 'CHRG-1', 'list_row': 0}], [{'system_code': 'hsap00', 'role': 'host'}],
-        [{'name': 'Video', 'url': 'https://youtu.be/x', 'video_key': 'yt:x'}], ['bill:118-hr-1']),
+        'Scheduled', [{'package_id': 'CHRG-118hhrg1', 'list_row': 0}], [{'system_code': 'hsap00', 'role': 'host'}],
+        [{'name': 'Video', 'url': 'https://youtu.be/x', 'video_key': 'yt:x'}], ['118-hr-1', '118-pn-5-1', '118-treaty-2']),
         (3::BIGINT, 'senate', 'Old', DATE '2015-01-01', 'Hearing', 'Scheduled', [], [], [], []))
         AS t(event_id, chamber, title, meeting_date, meeting_type, status, transcripts, committees, videos,
              subject_keys)""")
@@ -81,7 +81,7 @@ def test_mapped_columns_are_compared_by_value_on_matched_meetings(tmp_path):
     counts = {name: {k: v for k, v in row.items() if k != "examples"} for name, row in agreement.items()}
     one = {"either_nonempty": 1, "equal": 0, "archive_superset": 0, "committee_meetings_superset": 0, "differ": 0,
            "only_committee_meetings": 0, "only_archive": 0}
-    # System codes agree once case is normalized; the archive holds one of two jackets.
+    # System codes agree once case is normalized; the archive holds one of two jackets, spelled as a package id.
     assert counts["committees"] == {**one, "equal": 1}
     assert counts["hearing_jackets"] == {**one, "committee_meetings_superset": 1}
     assert counts["videos"] == {**one, "equal": 1}
@@ -89,9 +89,10 @@ def test_mapped_columns_are_compared_by_value_on_matched_meetings(tmp_path):
     assert counts["witness_name_position"] == {**one, "equal": 1}
     # A spelling difference is a disagreement with an example, never silent agreement.
     assert counts["witness_name_organization"] == {**one, "differ": 1}
-    assert counts["bill_ids"] == {**one, "differ": 1}
-    assert agreement["bill_ids"]["examples"] == [{"event_id": 1, "committee_meetings": ["hr1-118"],
-                                                  "archive": ["bill:118-hr-1"]}]
+    # Nominations and treaties in subject_keys are not bills, so they do not make the archive a superset.
+    assert counts["bill_ids"] == {**one, "equal": 1}
+    assert agreement["hearing_jackets"]["examples"] == [{"event_id": 1, "committee_meetings": ["1", "2"],
+                                                         "archive": ["1"]}]
 
 
 def test_offered_urls_resolve_by_the_lookup_key_not_only_by_exact_spelling(tmp_path):

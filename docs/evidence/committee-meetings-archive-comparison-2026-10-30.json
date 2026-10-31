@@ -97,6 +97,258 @@
     "status": 1,
     "meeting_date_vs_utc_date": 7
   },
+  "mapped_value_agreement": {
+    "committees": {
+      "either_nonempty": 6088,
+      "equal": 6060,
+      "archive_superset": 9,
+      "committee_meetings_superset": 0,
+      "differ": 18,
+      "only_committee_meetings": 1,
+      "only_archive": 0,
+      "examples": [
+        {
+          "event_id": 115511,
+          "committee_meetings": [
+            "hsfa06"
+          ],
+          "archive": [
+            "hsfa06",
+            "hsfa07"
+          ]
+        },
+        {
+          "event_id": 115781,
+          "committee_meetings": [
+            "hlzs00"
+          ],
+          "archive": [
+            "hszs00"
+          ]
+        },
+        {
+          "event_id": 115974,
+          "committee_meetings": [
+            "hlzs00"
+          ],
+          "archive": [
+            "hszs00"
+          ]
+        }
+      ]
+    },
+    "hearing_jackets": {
+      "either_nonempty": 3352,
+      "equal": 3237,
+      "archive_superset": 0,
+      "committee_meetings_superset": 52,
+      "differ": 3,
+      "only_committee_meetings": 60,
+      "only_archive": 0,
+      "examples": [
+        {
+          "event_id": 114229,
+          "committee_meetings": [
+            "46179",
+            "56769"
+          ],
+          "archive": [
+            "56769"
+          ]
+        },
+        {
+          "event_id": 115337,
+          "committee_meetings": [
+            "52490",
+            "52838"
+          ],
+          "archive": [
+            "52838"
+          ]
+        },
+        {
+          "event_id": 115351,
+          "committee_meetings": [
+            "52490",
+            "52838"
+          ],
+          "archive": [
+            "52838"
+          ]
+        }
+      ]
+    },
+    "videos": {
+      "either_nonempty": 4425,
+      "equal": 4421,
+      "archive_superset": 0,
+      "committee_meetings_superset": 0,
+      "differ": 0,
+      "only_committee_meetings": 3,
+      "only_archive": 1,
+      "examples": [
+        {
+          "event_id": 119569,
+          "committee_meetings": [
+            "https://www.congress.gov/event/119th-congress/house-event/119569",
+            "https://www.youtube.com/watch?v=_c1kaiqbbgi"
+          ],
+          "archive": []
+        },
+        {
+          "event_id": 119575,
+          "committee_meetings": [
+            "https://www.congress.gov/event/119th-congress/house-event/119575",
+            "https://www.youtube.com/watch?v=r2jxs4fxjhw"
+          ],
+          "archive": []
+        },
+        {
+          "event_id": 119583,
+          "committee_meetings": [
+            "https://www.congress.gov/event/119th-congress/house-event/119583",
+            "https://www.youtube.com/watch?v=slcybiainwy"
+          ],
+          "archive": []
+        }
+      ]
+    },
+    "bill_ids": {
+      "either_nonempty": 839,
+      "equal": 838,
+      "archive_superset": 0,
+      "committee_meetings_superset": 0,
+      "differ": 0,
+      "only_committee_meetings": 1,
+      "only_archive": 0,
+      "examples": [
+        {
+          "event_id": 338792,
+          "committee_meetings": [
+            "119-s-5289"
+          ],
+          "archive": []
+        }
+      ]
+    },
+    "witness_names": {
+      "either_nonempty": 3485,
+      "equal": 2470,
+      "archive_superset": 2,
+      "committee_meetings_superset": 10,
+      "differ": 252,
+      "only_committee_meetings": 1,
+      "only_archive": 750,
+      "examples": [
+        {
+          "event_id": 115293,
+          "committee_meetings": [],
+          "archive": [
+            "admiral harry b. harris jr. (ret.)",
+            "dr. melanie w. sisson"
+          ]
+        },
+        {
+          "event_id": 115299,
+          "committee_meetings": [],
+          "archive": [
+            "jamie ward",
+            "mr. tom plaugher",
+            "ms. ashley bachman",
+            "wiley mcdade"
+          ]
+        },
+        {
+          "event_id": 115355,
+          "committee_meetings": [],
+          "archive": [
+            "mr. edwin oshiba",
+            "the honorable brendan owens",
+            "the honorable meredith berger",
+            "the honorable rachel jacobson"
+          ]
+        }
+      ]
+    },
+    "witness_name_position": {
+      "either_nonempty": 3485,
+      "equal": 2455,
+      "archive_superset": 2,
+      "committee_meetings_superset": 23,
+      "differ": 254,
+      "only_committee_meetings": 1,
+      "only_archive": 750,
+      "examples": [
+        {
+          "event_id": 115293,
+          "committee_meetings": [],
+          "archive": [
+            "admiral harry b. harris jr. (ret.)|former commander",
+            "dr. melanie w. sisson|foreign policy fellow"
+          ]
+        },
+        {
+          "event_id": 115299,
+          "committee_meetings": [],
+          "archive": [
+            "jamie ward|itmann prep plant manager",
+            "mr. tom plaugher|vice president of operations",
+            "ms. ashley bachman|owner/operator",
+            "wiley mcdade|co-owner"
+          ]
+        },
+        {
+          "event_id": 115355,
+          "committee_meetings": [],
+          "archive": [
+            "mr. edwin oshiba|acting assistant secretary of the air force, energy, installations and environment",
+            "the honorable brendan owens|assistant secretary of defense for energy, installations, and environment",
+            "the honorable meredith berger|assistant secretary of the navy, energy, installations, and environment",
+            "the honorable rachel jacobson|assistant secretary of the army, installations, energy and environment"
+          ]
+        }
+      ]
+    },
+    "witness_name_organization": {
+      "either_nonempty": 3485,
+      "equal": 2458,
+      "archive_superset": 2,
+      "committee_meetings_superset": 20,
+      "differ": 254,
+      "only_committee_meetings": 1,
+      "only_archive": 750,
+      "examples": [
+        {
+          "event_id": 115293,
+          "committee_meetings": [],
+          "archive": [
+            "admiral harry b. harris jr. (ret.)",
+            "dr. melanie w. sisson"
+          ]
+        },
+        {
+          "event_id": 115299,
+          "committee_meetings": [],
+          "archive": [
+            "jamie ward|consol energy inc",
+            "mr. tom plaugher|allegheny wood products, inc.",
+            "ms. ashley bachman|cheetah b\u2019s restaurant",
+            "wiley mcdade|devil\u2019s due distillery"
+          ]
+        },
+        {
+          "event_id": 115355,
+          "committee_meetings": [],
+          "archive": [
+            "mr. edwin oshiba",
+            "the honorable brendan owens",
+            "the honorable meredith berger",
+            "the honorable rachel jacobson"
+          ]
+        }
+      ]
+    }
+  },
   "meeting_type_pairs": [
     {
       "chamber": "house",
@@ -209,11 +461,11 @@
     "committee_system_code": "meetings.committees[].system_code",
     "committee_count": "len(meetings.committees)",
     "committees": "meetings.committees[].system_code; name and url through the committees table by system code",
-    "hearing_jacket": "meetings.transcripts[].package_id",
+    "hearing_jacket": "meetings.transcripts[].package_id (the jacket is its trailing digits: CHRG-118hhrg56769 -> 56769)",
     "hearing_jacket_count": "len(meetings.transcripts)",
-    "hearing_jackets": "meetings.transcripts[].package_id",
-    "bill_count": "count(DISTINCT list.measure_keys) on the meeting's documents (document-level)",
-    "bill_ids": "list.measure_keys on the meeting's documents (document-level, not meeting-level)",
+    "hearing_jackets": "meetings.transcripts[].package_id (the jacket is its trailing digits)",
+    "bill_count": "len(meetings.subject_keys) less nominations and treaties",
+    "bill_ids": "meetings.subject_keys less nominations (-pn-) and treaties (-treaty-); list.measure_keys per document",
     "witness_count": "count(witnesses) by event_id",
     "witnesses": "witnesses (name, position, organization)",
     "witness_document_count": "count(list rows) by witnesses.witness_key in list.witness_keys",

@@ -40,11 +40,11 @@ DESTINATIONS = {
     "committee_system_code": "meetings.committees[].system_code",
     "committee_count": "len(meetings.committees)",
     "committees": "meetings.committees[].system_code; name and url through the committees table by system code",
-    "hearing_jacket": "meetings.transcripts[].package_id",
+    "hearing_jacket": "meetings.transcripts[].package_id (the jacket is its trailing digits: CHRG-118hhrg56769 -> 56769)",
     "hearing_jacket_count": "len(meetings.transcripts)",
-    "hearing_jackets": "meetings.transcripts[].package_id",
+    "hearing_jackets": "meetings.transcripts[].package_id (the jacket is its trailing digits)",
     "bill_count": "len(meetings.subject_keys) less nominations and treaties",
-    "bill_ids": "meetings.subject_keys (with nominations and treaties); list.measure_keys per document",
+    "bill_ids": "meetings.subject_keys less nominations (-pn-) and treaties (-treaty-); list.measure_keys per document",
     "witness_count": "count(witnesses) by event_id",
     "witnesses": "witnesses (name, position, organization)",
     "witness_document_count": "count(list rows) by witnesses.witness_key in list.witness_keys",
@@ -117,11 +117,17 @@ def _rows(connection, sql: str) -> list[dict]:
 
 #: Each mapped list column on a matched meeting as two normalized sets (committee_meetings, archive).
 #: Values are compared as trimmed lowercase text; a spelling difference shows up in ``examples``, not as agreement.
+#: Two columns are brought to one key first, as each side spells it on live data: committee_meetings states the
+#: GPO jacket number ('56769') where the archive states the package id ('CHRG-118hhrg56769'), and the archive's
+#: subject_keys also carry nominations ('119-pn-12', '119-pn-12-1') and treaties ('119-treaty-3'), which bill_ids
+#: never holds (committee_meetings states those in nomination/treaty_references_json).
+_JACKET = "regexp_extract({}, '([0-9]+)$', 1)"
 VALUE_PAIRS = {
     "committees": ("[c.systemCode FOR c IN cm.committees]", "[c.system_code FOR c IN m.committees]"),
-    "hearing_jackets": ("cm.hearing_jackets", "[t.package_id FOR t IN m.transcripts]"),
+    "hearing_jackets": (f"[{_JACKET.format('j')} FOR j IN cm.hearing_jackets]",
+                        f"[{_JACKET.format('t.package_id')} FOR t IN m.transcripts]"),
     "videos": ("[v.url FOR v IN cm.videos]", "[v.url FOR v IN m.videos]"),
-    "bill_ids": ("cm.bill_ids", "m.subject_keys"),
+    "bill_ids": ("cm.bill_ids", "list_filter(m.subject_keys, k -> NOT regexp_matches(k, '-(pn|treaty)-'))"),
     "witness_names": ("[x.name FOR x IN cm.witnesses]", "a.names"),
     "witness_name_position": ("[concat_ws('|', x.name, x.position) FOR x IN cm.witnesses]", "a.name_positions"),
     "witness_name_organization": ("[concat_ws('|', x.name, x.organization) FOR x IN cm.witnesses]",
