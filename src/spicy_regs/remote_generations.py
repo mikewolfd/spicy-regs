@@ -309,5 +309,5 @@ def publish_remote_generation(
     return _publish_verified_generation(
         artifact, source, upload_member=upload, client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
-        before_pointer=before_pointer,
+        before_pointer=before_pointer, local=directory,
     )

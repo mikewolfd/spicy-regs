@@ -1489,7 +1489,7 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         index = publication._publish_verified_generation(
             admitted, source, client=client, bucket=bucket, prior_index=captured, evidence_directories=built.evidence,
             added_tables=built.added_tables, receipt_only_tables=built.receipt_only_tables, exact_prior=exact_prior,
-            conversion_proof=conversion_proof,
+            conversion_proof=conversion_proof, local=built.generation,
             upload_member=lambda prefix, key: publication._put_immutable(
                 client, bucket, prefix + "/" + key, built.generation / key))
         entry = index["families"][family]

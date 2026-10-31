@@ -307,6 +307,19 @@ def cmd_agencies(args):
     print("No data downloaded yet. Run: spicy-regs download")
 
 
+def cmd_mirror(args):
+    """Bring a local mirror in the R2 key layout up to the current publication index, fetching only absent files."""
+    from spicy_regs.sources.publication import load_index, mirror_generation
+
+    base_url = resolve_r2_base_url()
+    families = load_index(base_url)["families"]
+    if unknown := sorted(set(args.family or ()) - set(families)):
+        sys.exit(f"Not a published family: {', '.join(unknown)}")
+    for family in args.family or sorted(families):
+        counts = mirror_generation(Path(args.root), families[family], base_url=base_url)
+        print(json.dumps({"family": family, "prefix": families[family]["prefix"], **counts}))
+
+
 def main():
     load_dotenv()
     parser = argparse.ArgumentParser(
@@ -350,6 +363,13 @@ def main():
     # Agencies command
     agencies_parser = subparsers.add_parser("agencies", help="List all agencies")
     agencies_parser.set_defaults(func=cmd_agencies)
+
+    # Mirror command
+    mirror_parser = subparsers.add_parser(
+        "mirror", help="Fetch the selected generations into a local mirror in the R2 key layout")
+    mirror_parser.add_argument("root", help="Mirror root, e.g. corpora/spicyregs/output/publication")
+    mirror_parser.add_argument("--family", action="append", type=_table_name, help="Only this family (repeatable)")
+    mirror_parser.set_defaults(func=cmd_mirror)
 
     args = parser.parse_args()
 

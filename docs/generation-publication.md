@@ -63,6 +63,19 @@ keeps the previous published family intact.
 If the connection fails after submitting the pointer update, reread the index:
 the complete new family may already be current even though the caller saw an error.
 
+With `SPICYGOV_PUBLICATION_MIRROR` set to a local root (the operator's
+`corpora/spicyregs/output/publication`; unset in CI), every publisher, once its
+pointer write succeeds, also places the generation at
+`<root>/generations/<family>/<digest>/<key>`: the keys the family entry names
+(`publication.generation_files`), cloned copy-on-write from the build directory,
+never hardlinked. The hook sits in `_publish_verified_generation` and
+`publish_fec_release`, so rollups, native conversion and remote promotion are
+covered too. A mirror failure is logged and does not fail the publish. Keys the
+publishing host never held (a remote promotion), and generations published from
+CI, reach the mirror through `spicy-regs mirror <root> [--family F]`, which
+fetches only absent files through the resuming, pin-checked `fetch_member` and
+keeps a file already present at its pinned size without rehashing it.
+
 A family cannot silently change its table membership or take another family's
 table. Those changes need an explicit migration. Successful empty tables still
 face the existing shrink guard; an intentional destructive replacement requires

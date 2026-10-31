@@ -302,7 +302,7 @@ class RollupPipeline(Pipeline):
             if read_operation is not None:
                 artifact, source = read_operation.verified_source(destination)
                 publish = publication._publish_verified_generation
-                arguments = {"artifact": artifact, "source": source,
+                arguments = {"artifact": artifact, "source": source, "local": destination,
                              "upload_member": lambda prefix, key: publication._put_immutable(
                                  r2.get_r2_client(), getenv("R2_BUCKET_NAME", "spicy-regs"),
                                  prefix + "/" + key, destination / key)}

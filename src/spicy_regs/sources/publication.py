@@ -1319,9 +1319,101 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
     return _publish_verified_generation(
         artifact, LocalMemberSource(directory), client=client, bucket=bucket, prior_index=prior_index,
         evidence_directories=evidence_directories, added_tables=added_tables, receipt_only_tables=receipt_only_tables,
-        exact_prior=exact_prior, conversion_proof=conversion_proof,
+        exact_prior=exact_prior, conversion_proof=conversion_proof, local=directory,
         upload_member=lambda prefix, key: _put_immutable(client, bucket, prefix + "/" + key, directory / key),
     )
+
+
+#: Opt-in local mirror root (the operator's ``corpora/spicyregs/output/publication``); unset in CI.
+PUBLICATION_MIRROR = "SPICYGOV_PUBLICATION_MIRROR"
+_ROOT_FILES = ("artifact.json", "members.json")
+
+
+def generation_files(entry: Mapping) -> dict[str, Member]:
+    """Every file under a published family entry's generation prefix, by key.
+
+    The tables' members, the receipt member and its key index carry their pins; the artifact root and member list
+    are unpinned here (``artifactDigest`` pins the root). This is the key set ``_stage_verified_generation`` uploads.
+    """
+    prefix = entry["prefix"]
+    files = {name: Member(f"{prefix}/{name}", None, None, None) for name in _ROOT_FILES}
+    described = [m for key, table in entry["tables"].items() for m in table.get("members", [{"key": key, **table}])]
+    if receipt := entry.get("etlReceipts"):
+        described += [receipt, *([receipt["keyIndex"]] if "keyIndex" in receipt else [])]
+    for m in described:
+        files[m["key"]] = Member(f"{prefix}/{m['key']}", m["sha256"], m["byteSize"], m.get("rows"))
+    return files
+
+
+def mirror_generation(root: Path, entry: Mapping, *, local: Path | None = None,
+                      base_url: str | None = None) -> dict[str, int]:
+    """Place one published generation under ``root`` in the R2 key layout, ``<root>/<prefix>/<key>``; return counts.
+
+    A file already present at its pinned size is kept without rehashing: the prefix is content-addressed and this
+    function, like the sync it replaces, only ever renames a checked file into place. Otherwise a key held in
+    ``local`` is cloned (copy-on-write ``cp -c`` on APFS, a byte copy elsewhere; never a hardlink, so a later edit of
+    the build directory cannot reach the mirror), and any other key is fetched from ``base_url`` by ``fetch_member``,
+    which checks it against its pin. With neither, the key is counted ``missing``. The artifact root is then checked
+    against the entry's ``artifactDigest``.
+    """
+    counts = {"kept": 0, "cloned": 0, "fetched": 0, "missing": 0}
+    for key, member in sorted(generation_files(entry).items()):
+        target = root / member.path
+        if target.is_file() and (member.byte_size is None or target.stat().st_size == member.byte_size):
+            counts["kept"] += 1
+        elif local is not None and (local / key).is_file():
+            _clone_into(local / key, target, member.byte_size)
+            counts["cloned"] += 1
+        elif base_url is not None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if fetch_member(base_url, member, target) is False:
+                raise PublicationError(f"{member.path} is absent from {base_url}")
+            counts["fetched"] += 1
+        else:
+            counts["missing"] += 1
+    if (held := root / entry["prefix"] / "artifact.json").is_file():
+        family_root(held.read_bytes(), entry)
+    return counts
+
+
+def _mirror_published(index: Mapping, family: str, local: Path | None) -> None:
+    """After the pointer moved, mirror ``family``'s generation when ``PUBLICATION_MIRROR`` is set; never raises.
+
+    The publish has already succeeded, so a mirror failure is logged and left to ``spicy-regs mirror``, which also
+    brings in generations published elsewhere (CI) and keys a remote promotion never held locally.
+    """
+    if not (root := os.environ.get(PUBLICATION_MIRROR)):
+        return
+    entry = index["families"][family]
+    try:
+        counts = mirror_generation(Path(root), entry, local=local)
+    except Exception as error:
+        logger.warning("publication: {} is published but its local mirror failed: {!r}", entry["prefix"], error)
+        return
+    logger.info("publication: mirrored {} under {}: {}", entry["prefix"], root, counts)
+    if counts["missing"]:
+        logger.warning("publication: {} file(s) of {} are not held locally; run `spicy-regs mirror {} --family {}`",
+                       counts["missing"], entry["prefix"], root, family)
+
+
+def _clone_into(source: Path, target: Path, size: int | None) -> None:
+    import shutil
+    import subprocess
+    import sys
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    temporary.unlink(missing_ok=True)
+    try:
+        if sys.platform != "darwin" or subprocess.run(["cp", "-c", str(source), str(temporary)],
+                                                      capture_output=True).returncode != 0:
+            shutil.copyfile(source, temporary)
+        if temporary.stat().st_size != (source.stat().st_size if size is None else size):
+            raise PublicationError(f"Mirror copy of {source.name} is incomplete")
+        temporary.replace(target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def _generation_scoped_tables() -> frozenset[str]:
@@ -1460,9 +1552,12 @@ def _publish_verified_generation(
     evidence_directories: tuple[Path, ...] = (), added_tables: frozenset[str] = frozenset(),
     receipt_only_tables: frozenset[str] = frozenset(), exact_prior: bool = False,
     conversion_proof: NativeConversionProof | None = None,
-    before_pointer=None,
+    before_pointer=None, local: Path | None = None,
 ) -> dict:
-    """Shared publication gates; both callers fully verify their source first."""
+    """Shared publication gates; both callers fully verify their source first.
+
+    ``local`` is the directory ``upload_member`` reads, for the opt-in local mirror once the pointer moves.
+    """
     family = artifact.root["spec"]["family"]
     index, etag = _stored_index(client, bucket)
     exact_prior = exact_prior or conversion_proof is not None
@@ -1484,6 +1579,7 @@ def _publish_verified_generation(
         if before_pointer is not None:
             before_pointer()
         if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            _mirror_published(updated, family, local)
             return updated
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag = _stored_index(client, bucket)
@@ -1582,6 +1678,7 @@ def publish_fec_release(
         updated, raw = _merge_family(updated, "fec-query", compatibility.entry)
         check()
         if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
+            _mirror_published(updated, "fec-observations", directory)
             return updated
         index, etag = _stored_index(client, bucket)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
