@@ -6020,7 +6020,7 @@
       "kind": "complete",
       "reason": "",
       "measured_via": null,
-      "baseline_keys": 1181,
+      "baseline_keys": 712,
       "baseline_missing": 0,
       "floor_pct": 100.0,
       "expected_cardinality": "one",

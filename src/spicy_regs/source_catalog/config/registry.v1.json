@@ -1797,13 +1797,13 @@
     {
       "id": "dataset:fec-research-source-pages",
       "title": "FEC source documentation pages",
-      "publisher": "Federal Election Commission",
+      "publisher": "Federal Election Commission; Council of the Inspectors General on Integrity and Efficiency (Oversight.gov)",
       "description": "Original pages behind fec_reference_source_pages. Captured by the 2026-09-11 FEC research capture; its capture metadata was imported as acquisition receipts (ss-wfop)."
     },
     {
       "id": "dataset:fec-research-documentcloud-search",
       "title": "DocumentCloud search results for the FEC",
-      "publisher": "Federal Election Commission",
+      "publisher": "DocumentCloud",
       "description": "Retained originals of a retired table (ss-j4vz B10). Captured by the 2026-09-11 FEC research capture; its capture metadata was imported as acquisition receipts (ss-wfop)."
     },
     {
@@ -5341,16 +5341,15 @@
     {
       "collection_id": "family:fec-query",
       "conditions": [
-        "Generation-matching parent receipts and tables",
-        "Explicit mapper coverage",
-        "Versioned filing definitions",
-        "Preserve unmapped dispositions and quality notices",
+        "Retained originals with acquisition receipts in the raw archive",
+        "Committed original selection with expected row counts",
+        "Refused originals listed by reason",
         "No implied population completeness or current money"
       ],
       "family": "fec-query",
       "id": "fec-qualified-policy:fec_historical_ie_statistics",
       "publication_changed": false,
-      "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
+      "reason": "Rebuilt from the four FEC historical independent-expenditure workbooks retained in the raw archive (transforms/fec_original_selection.json), not from fec_collections, fec_relationships or fec_source_records parents (ss-j4vz B7-B9, identity fec-original-tables/1). Each row carries its original's SHA-256 and native position; an original without an admitted acquisition receipt or a supported body is refused, not published.",
       "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
       "route_id": "family:fec-query:retained-source-tables",
       "status": "selected-policy",
@@ -5360,7 +5359,7 @@
         "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
       },
       "policy_version": 1,
-      "historical_lineage_unchanged": true
+      "historical_lineage_unchanged": false
     },
     {
       "collection_id": "family:fec-query",
@@ -5821,16 +5820,15 @@
     {
       "collection_id": "family:fec-query",
       "conditions": [
-        "Generation-matching parent receipts and tables",
-        "Explicit mapper coverage",
-        "Versioned filing definitions",
-        "Preserve unmapped dispositions and quality notices",
+        "Retained originals with acquisition receipts in the raw archive",
+        "Committed original selection with expected row counts",
+        "Refused originals listed by reason",
         "No implied population completeness or current money"
       ],
       "family": "fec-query",
       "id": "fec-qualified-policy:fec_reference_filing_feed_items",
       "publication_changed": false,
-      "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
+      "reason": "Rebuilt from the FEC electronic filing RSS feed retained in the raw archive (transforms/fec_original_selection.json), not from fec_collections, fec_relationships or fec_source_records parents (ss-j4vz B7-B9, identity fec-original-tables/1). Each row carries its original's SHA-256 and native position; an original without an admitted acquisition receipt or a supported body is refused, not published.",
       "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
       "route_id": "family:fec-query:retained-source-tables",
       "status": "selected-policy",
@@ -5840,21 +5838,20 @@
         "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
       },
       "policy_version": 1,
-      "historical_lineage_unchanged": true
+      "historical_lineage_unchanged": false
     },
     {
       "collection_id": "family:fec-query",
       "conditions": [
-        "Generation-matching parent receipts and tables",
-        "Explicit mapper coverage",
-        "Versioned filing definitions",
-        "Preserve unmapped dispositions and quality notices",
+        "Retained originals with acquisition receipts in the raw archive",
+        "Committed original selection with expected row counts",
+        "Refused originals listed by reason",
         "No implied population completeness or current money"
       ],
       "family": "fec-query",
       "id": "fec-qualified-policy:fec_research_meeting_observations",
       "publication_changed": false,
-      "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
+      "reason": "Rebuilt from the FEC meetings page retained in the raw archive (transforms/fec_original_selection.json), not from fec_collections, fec_relationships or fec_source_records parents (ss-j4vz B7-B9, identity fec-original-tables/1). Each row carries its original's SHA-256 and native position; an original without an admitted acquisition receipt or a supported body is refused, not published.",
       "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
       "route_id": "family:fec-query:retained-source-tables",
       "status": "selected-policy",
@@ -5864,21 +5861,20 @@
         "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
       },
       "policy_version": 1,
-      "historical_lineage_unchanged": true
+      "historical_lineage_unchanged": false
     },
     {
       "collection_id": "family:fec-query",
       "conditions": [
-        "Generation-matching parent receipts and tables",
-        "Explicit mapper coverage",
-        "Versioned filing definitions",
-        "Preserve unmapped dispositions and quality notices",
+        "Retained originals with acquisition receipts in the raw archive",
+        "Committed original selection with expected row counts",
+        "Refused originals listed by reason",
         "No implied population completeness or current money"
       ],
       "family": "fec-query",
       "id": "fec-qualified-policy:fec_reference_source_pages",
       "publication_changed": false,
-      "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
+      "reason": "Rebuilt from the FEC and Oversight.gov source documentation pages retained in the raw archive (transforms/fec_original_selection.json), not from fec_collections, fec_relationships or fec_source_records parents (ss-j4vz B7-B9, identity fec-original-tables/1). Each row carries its original's SHA-256 and native position; an original without an admitted acquisition receipt or a supported body is refused, not published.",
       "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
       "route_id": "family:fec-query:retained-source-tables",
       "status": "selected-policy",
@@ -5888,7 +5884,7 @@
         "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
       },
       "policy_version": 1,
-      "historical_lineage_unchanged": true
+      "historical_lineage_unchanged": false
     },
     {
       "collection_id": "family:fec-source-catalog",

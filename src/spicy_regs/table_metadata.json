@@ -19373,7 +19373,7 @@
       {
         "column_name": "text",
         "column_type": "VARCHAR",
-        "description": "Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference."
+        "description": "Build-extracted body text of the page. Original page text and context remain at the evidence reference."
       },
       {
         "column_name": "content_scope",
@@ -19413,7 +19413,7 @@
       {
         "column_name": "content_status",
         "column_type": "VARCHAR",
-        "description": "Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer."
+        "description": "Page body disposition; always body_extracted, because only pages whose body was extracted are published. Failed, empty and unsupported pages are refused and listed by reason in the conversion proof's refused_originals."
       }
     ],
     "subject": "campaign_finance",

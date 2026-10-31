@@ -18,7 +18,7 @@ One source-documentation page, read from the whole retained original, with build
 | `record_id` | `VARCHAR` | Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event. |
 | `page_type` | `VARCHAR` | Supported type of retained source documentation page, such as a form page or statutory filing reference. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
-| `text` | `VARCHAR` | Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference. |
+| `text` | `VARCHAR` | Build-extracted body text of the page. Original page text and context remain at the evidence reference. |
 | `content_scope` | `VARCHAR` | Scope of retained page content; text, headings and links are source documentation rather than inferred transactions. |
 | `links` | `STRUCT(url VARCHAR, href VARCHAR, "label" VARCHAR)[]` | Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `mapping_version` | `VARCHAR` | Named, versioned rule that built this row from its retained original. |
@@ -26,4 +26,4 @@ One source-documentation page, read from the whole retained original, with build
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
 | `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
-| `content_status` | `VARCHAR` | Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer. |
+| `content_status` | `VARCHAR` | Page body disposition; always body_extracted, because only pages whose body was extracted are published. Failed, empty and unsupported pages are refused and listed by reason in the conversion proof's refused_originals. |

@@ -30,7 +30,12 @@ Base CLI and MCP installs do not require them.
   and SD bill files, the private-law version code, the CBO Common Crawl archive
   reader, FEC filing encoding decisions, `literal_sheets` number formats,
   `congress_sessions` party control and every CBO letter. Its `acquisition`
-  extra adds `warcio`. See [package receipt](spicy_docs-0.67.0.json).
+  extra adds `warcio`. See [package receipt](spicy_docs-0.67.0.json). Over the 13
+  retained workbooks in the raw archive (the FEC IE tables among them), its
+  `literal_sheets` equals the 0.66.9 gating build of the same reader change on
+  every field of all 449,956 cells (number formats and date typing included; no
+  refusals), and the FEC IE statistics, meetings, feed and source pages rebuild
+  from their originals as they did under 0.66.9 (ss-j4vz).
 
 - `spicy_docs-0.66.8+centralraw.02cc4431e606`: the previous overlay over
   `0.66.8`; SHA-256

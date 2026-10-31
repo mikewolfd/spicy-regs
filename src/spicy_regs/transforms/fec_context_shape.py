@@ -141,19 +141,3 @@ def source_page_body(title, text, url):
             return title + "\n" + text.split(marker, 1)[1].split("\nGenerated ", 1)[0], "body_extracted"
     return None, "unsupported_body_boundaries"
 
-
-COL_DESCRIPTIONS = {
-    "reported_filer_id": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label.",
-    "source_label_status": "Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling.",
-    "filing_link_status": "Source feed assertion only; the value does not qualify a filing match or establish the target exists.",
-    "coverage_start_raw": "Literal CoverageFrom value from the feed's explicitly labelled metadata.",
-    "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
-    "coverage_start_date": "Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
-    "coverage_end_date": "Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
-    "published_at": "Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status.",
-    "content_status": "Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer.",
-    "capture_disposition": "Distinguishes a provider refusal from an empty or present held payload. No value asserts successful source coverage.",
-    "source_fact_count": "Number of held native facts or events processed in this collection context, stored as an integer.",
-    "observed_count": "Number of results in the held API response array; the array remains source evidence and is not copied into this row.",
-    "query_completeness_status": "Whether the aggregated controls agree on their declared completeness; agreement does not verify completeness.",
-}
