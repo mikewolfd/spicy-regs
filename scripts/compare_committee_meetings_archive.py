@@ -43,8 +43,8 @@ DESTINATIONS = {
     "hearing_jacket": "meetings.transcripts[].package_id",
     "hearing_jacket_count": "len(meetings.transcripts)",
     "hearing_jackets": "meetings.transcripts[].package_id",
-    "bill_count": "count(DISTINCT list.measure_keys) on the meeting's documents (document-level)",
-    "bill_ids": "list.measure_keys on the meeting's documents (document-level, not meeting-level)",
+    "bill_count": "len(meetings.subject_keys) less nominations and treaties",
+    "bill_ids": "meetings.subject_keys (with nominations and treaties); list.measure_keys per document",
     "witness_count": "count(witnesses) by event_id",
     "witnesses": "witnesses (name, position, organization)",
     "witness_document_count": "count(list rows) by witnesses.witness_key in list.witness_keys",
@@ -79,22 +79,32 @@ def _held(cache: Path, name: str, url: str, sha256: str) -> Path:
     return path
 
 
-def inputs(cache: Path) -> tuple[dict, dict[str, Path]]:
-    index = publication.load_index(PUBLICATION)
-    family = index["families"][FAMILY]
-    table = family["tables"][TABLE]
-    release = archive_release.load_pins()["bound"]
+def inputs(cache: Path, pinned: dict | None = None) -> tuple[dict, dict[str, Path]]:
+    """The input pins and local paths: the live generation and bound release, or exactly ``pinned``.
+
+    ``pinned`` is the ``inputs`` block of an earlier report, so that report can be regenerated from the
+    same bytes after live moves on (the generation must still be served or held in ``--cache``).
+    """
+    if pinned is None:
+        family = publication.load_index(PUBLICATION)["families"][FAMILY]
+        meetings = {"artifactDigest": family["artifactDigest"], "sha256": family["tables"][TABLE]["sha256"],
+                    "publishedAt": family["publishedAt"]}
+        release = archive_release.load_pins()["bound"]
+    else:
+        meetings, release = pinned["committee_meetings"], pinned["archive"]["release_id"]
+    digest = meetings["artifactDigest"].removeprefix("sha256:")
     manifest = archive_release.read_manifest(release)
     entries = {item["name"]: item for item in manifest["files"]}
+    if pinned is not None and any(entries[f"{stem}.parquet"]["sha256"] != sha for stem, sha in pinned["archive"]["files"].items()):
+        raise SystemExit(f"Release {release[:8]} files differ from the pinned report")
     cache = cache / release
     cache.mkdir(parents=True, exist_ok=True)
-    paths = {"committee_meetings": _held(cache, f"{family['artifactDigest'][7:]}-{TABLE}",
-                                         f"{PUBLICATION}/{family['prefix']}/{TABLE}", table["sha256"].removeprefix("sha256:"))}
+    paths = {"committee_meetings": _held(cache, f"{digest}-{TABLE}", f"{PUBLICATION}/generations/{FAMILY}/{digest}/{TABLE}",
+                                         meetings["sha256"].removeprefix("sha256:"))}
     for stem in ARCHIVE:
         name = f"{stem}.parquet"
         paths[stem] = _held(cache, name, f"{archive_release.ORIGIN}/releases/{release}/{name}", entries[name]["sha256"])
-    pins = {"committee_meetings": {"artifactDigest": family["artifactDigest"], "sha256": table["sha256"],
-                                   "publishedAt": family["publishedAt"]},
+    pins = {"committee_meetings": meetings,
             "archive": {"release_id": release, "files": {stem: entries[f"{stem}.parquet"]["sha256"] for stem in ARCHIVE}}}
     return pins, paths
 
@@ -105,6 +115,47 @@ def _rows(connection, sql: str) -> list[dict]:
     return [dict(zip(names, row)) for row in cursor.fetchall()]
 
 
+#: Each mapped list column on a matched meeting as two normalized sets (committee_meetings, archive).
+#: Values are compared as trimmed lowercase text; a spelling difference shows up in ``examples``, not as agreement.
+VALUE_PAIRS = {
+    "committees": ("[c.systemCode FOR c IN cm.committees]", "[c.system_code FOR c IN m.committees]"),
+    "hearing_jackets": ("cm.hearing_jackets", "[t.package_id FOR t IN m.transcripts]"),
+    "videos": ("[v.url FOR v IN cm.videos]", "[v.url FOR v IN m.videos]"),
+    "bill_ids": ("cm.bill_ids", "m.subject_keys"),
+    "witness_names": ("[x.name FOR x IN cm.witnesses]", "a.names"),
+    "witness_name_position": ("[concat_ws('|', x.name, x.position) FOR x IN cm.witnesses]", "a.name_positions"),
+    "witness_name_organization": ("[concat_ws('|', x.name, x.organization) FOR x IN cm.witnesses]",
+                                  "a.name_organizations"),
+}
+
+
+def mapped_value_agreement(c) -> dict:
+    """Per mapped list column, matched meetings whose sets agree, are contained either way, or are one-sided."""
+    norm = "list_sort(list_distinct(list_filter([lower(trim(CAST(v AS VARCHAR))) FOR v IN coalesce({}, [])], v -> v <> '')))"
+    columns = ", ".join(f"{norm.format(left)} AS {name}_cm, {norm.format(right)} AS {name}_archive"
+                        for name, (left, right) in VALUE_PAIRS.items())
+    c.execute(f"""CREATE TEMP TABLE agreement AS
+        WITH a AS (SELECT event_id, list(name) AS names, list(concat_ws('|', name, position)) AS name_positions,
+                   list(concat_ws('|', name, organization)) AS name_organizations FROM w WHERE event_id IS NOT NULL GROUP BY 1)
+        SELECT cm.event_id, {columns} FROM cm JOIN m USING (event_id) LEFT JOIN a USING (event_id)""")
+    report = {}
+    for name in VALUE_PAIRS:
+        x, y = f"{name}_cm", f"{name}_archive"
+        report[name] = _rows(c, f"""SELECT
+            count(*) FILTER (WHERE len({x}) > 0 OR len({y}) > 0) AS either_nonempty,
+            count(*) FILTER (WHERE len({x}) > 0 AND {x} = {y}) AS equal,
+            count(*) FILTER (WHERE len({x}) > 0 AND {x} <> {y} AND list_has_all({y}, {x})) AS archive_superset,
+            count(*) FILTER (WHERE len({y}) > 0 AND {x} <> {y} AND list_has_all({x}, {y})) AS committee_meetings_superset,
+            count(*) FILTER (WHERE len({x}) > 0 AND len({y}) > 0 AND NOT list_has_all({y}, {x})
+                AND NOT list_has_all({x}, {y})) AS differ,
+            count(*) FILTER (WHERE len({x}) > 0 AND len({y}) = 0) AS only_committee_meetings,
+            count(*) FILTER (WHERE len({x}) = 0 AND len({y}) > 0) AS only_archive,
+            (SELECT list({{'event_id': event_id, 'committee_meetings': {x}, 'archive': {y}}} ORDER BY event_id)[:3]
+                FROM agreement WHERE {x} <> {y}) AS examples
+            FROM agreement""")[0]
+    return report
+
+
 def compare(paths: dict[str, Path]) -> dict:
     c = duckdb.connect()
     c.execute("SET memory_limit='2GB'")
@@ -112,11 +163,12 @@ def compare(paths: dict[str, Path]) -> dict:
     # One projected pass per file into temp tables; every measure below reads these.
     c.execute(f"""CREATE TEMP TABLE cm AS SELECT congress, chamber, try_cast(event_id AS BIGINT) AS event_id, event_id AS
         event_text, title, meeting_type, meeting_status, meeting_date, witness_count, witness_document_count,
-        meeting_document_count, document_urls, meeting_documents, witness_documents
-        FROM read_parquet('{p['committee_meetings']}')""")
+        meeting_document_count, document_urls, meeting_documents, witness_documents, committees, hearing_jackets,
+        witnesses, videos, bill_ids FROM read_parquet('{p['committee_meetings']}')""")
     c.execute(f"""CREATE TEMP TABLE m AS SELECT event_id, chamber, title, meeting_type, status, meeting_date,
-        len(transcripts) AS transcripts FROM read_parquet('{p['meetings']}')""")
-    c.execute(f"CREATE TEMP TABLE w AS SELECT witness_key, event_id FROM read_parquet('{p['witnesses']}')")
+        committees, transcripts, videos, subject_keys FROM read_parquet('{p['meetings']}')""")
+    c.execute(f"""CREATE TEMP TABLE w AS SELECT witness_key, event_id, name, position, organization
+        FROM read_parquet('{p['witnesses']}')""")
     # list_row is virtual: the zero-based row position (DATA-MODEL 8.4); the file is unsharded.
     c.execute(f"""CREATE TEMP TABLE l AS SELECT file_row_number::INTEGER AS list_row, meeting_keys, witness_keys,
         document_kind, format, title, congress FROM read_parquet('{p['list']}', file_row_number=true)""")
@@ -151,6 +203,7 @@ def compare(paths: dict[str, Path]) -> dict:
         count(*) FILTER (WHERE m.meeting_date IS DISTINCT FROM try_cast(cm.meeting_date AS TIMESTAMPTZ)::DATE)
             AS meeting_date_vs_utc_date
         FROM cm JOIN m USING (event_id)""")[0]
+    report["mapped_value_agreement"] = mapped_value_agreement(c)
     report["meeting_type_pairs"] = _rows(c, """SELECT cm.chamber, cm.meeting_type AS committee_meetings,
         m.meeting_type AS archive, count(*) AS rows FROM cm JOIN m USING (event_id)
         WHERE m.meeting_type IS DISTINCT FROM cm.meeting_type GROUP BY ALL ORDER BY rows DESC""")
@@ -223,8 +276,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--cache", type=Path, required=True, help="Directory holding (or to receive) the inputs")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--inputs-from", type=Path,
+                        help="An earlier report whose committee_meetings generation and archive release to re-read")
     args = parser.parse_args(argv)
-    pins, paths = inputs(args.cache)
+    pins, paths = inputs(args.cache, json.loads(args.inputs_from.read_text())["inputs"] if args.inputs_from else None)
     report = {"inputs": pins, **compare(paths)}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, default=str) + "\n")
