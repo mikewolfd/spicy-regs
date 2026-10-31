@@ -766,7 +766,12 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path, identity: Mapping) 
     ``identity`` is the one taken when the run started: the process ran the modules it imported then, so a
     checkout, pull or SpicyDocs re-sync on disk since then refuses the seal rather than naming code that did not run.
     The receipt stays unsealed and resumable.
+    ``closure`` records the code this process loaded (:mod:`spicy_regs.code_closure`) so a later rule can rebind the
+    seal on it. It is hashed from disk at seal; the start-identity check covers its module bytes but not SpicyRegs
+    data files other than ``.json`` and ``.xsd``. No publication reads it yet (ss-5tt8: the rebind awaits the
+    owner's closure-scope answer).
     """
+    from spicy_regs import code_closure
     from spicy_regs.generations import admission_key, validation_identity
 
     if built.read_operation is None:
@@ -784,6 +789,7 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path, identity: Mapping) 
         "generationPin": pin,
         "validationIdentity": dict(identity),
         "admissionKey": admission_key(pin, identity),
+        "closure": code_closure.record(),
         "capturedIndexSha256": _file_digest(work / "captured-publication.v2.json"),
         "evidenceDirectories": [path.resolve().relative_to(work.resolve()).as_posix() for path in built.evidence],
     }

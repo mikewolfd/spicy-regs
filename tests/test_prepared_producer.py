@@ -169,6 +169,29 @@ def test_distinct_producer_refusals_do_not_write_or_modify_the_sealed_receipt(tm
     assert "publish_attempt" not in json.loads(path.read_bytes())
 
 
+def test_the_seal_records_the_code_it_loaded(tmp_path, monkeypatch, bucket):
+    """The seal holds the bytes of the loaded mapper, the package data files and loaded distributions (ss-5tt8)."""
+    import hashlib
+
+    from spicy_regs import code_closure
+
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    convert("cfr-sections", work)
+    closure = json.loads((work / conversion.RECEIPT).read_text())["prepared"]["closure"]
+    mapper = "spicy_regs/pipelines/rollups/cfr_sections.py"
+    # Derived independently of code_closure: hash the file the import system names for the mapper module.
+    import spicy_regs.pipelines.rollups.cfr_sections as module
+    expected = "sha256:" + hashlib.sha256(open(module.__file__, "rb").read()).hexdigest()
+    assert closure["modules"][mapper] == expected
+    assert "spicy_regs/native_conversion.py" in closure["modules"]
+    assert closure["data"] and all(not key.endswith(".py") for key in closure["data"])
+    assert "duckdb" in closure["distributions"] and closure["python"]
+    # sys.modules is process-wide; which builders a fresh conversion loads is checked in a subprocess below.
+    assert set(closure) == {"modules", "data", "distributions", "python", "platform"}
+    assert code_closure.record()["modules"][mapper] == expected
+
+
 def test_the_conversion_path_imports_no_unrelated_builders_or_spicy_docs():
     """Loading one transform no longer loads every builder; the publish entry point loads no SpicyDocs."""
     import subprocess
