@@ -194,11 +194,11 @@ def test_a_corrupted_upload_fails_read_back_and_keeps_the_rollback_record(tmp_pa
     old, path, digest = prepare(tmp_path, monkeypatch, bucket)
     real = ConversionReadOperation.verify_public_generation
 
-    def corrupted(operation, base, index, family, directory):
+    def corrupted(operation, base, index, family, directory, *storage):
         key = f"{index['families'][family]['prefix']}/cfr_sections.parquet"
         raw = bucket.objects[key]
         bucket.objects[key] = raw[:100] + bytes([raw[100] ^ 1]) + raw[101:]
-        return real(operation, base, index, family, directory)
+        return real(operation, base, index, family, directory, *storage)
 
     monkeypatch.setattr(ConversionReadOperation, "verify_public_generation", corrupted)
     with pytest.raises(conversion.ConversionRefused, match="could not be read back") as refusal:

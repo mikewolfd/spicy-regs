@@ -24,8 +24,8 @@ class RemoteStore(Store):
         self.copied = []
         self.aborted = []
 
-    def head_object(self, *, Bucket, Key):
-        result = super().head_object(Bucket=Bucket, Key=Key)
+    def head_object(self, *, Bucket, Key, ChecksumMode=None):
+        result = super().head_object(Bucket=Bucket, Key=Key, ChecksumMode=ChecksumMode)
         result["ETag"] = self.get_object(Bucket=Bucket, Key=Key)["ETag"]
         return result
 

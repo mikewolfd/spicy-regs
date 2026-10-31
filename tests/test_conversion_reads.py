@@ -1,6 +1,7 @@
 """Actual admitted operation lifetime, exact reconstruction, and changed-source refusals."""
 from contextlib import contextmanager
 from dataclasses import replace
+from io import BytesIO
 
 import httpx
 import pyarrow as pa
@@ -187,33 +188,54 @@ def test_failed_admission_cleanup_closes_platform_index_even_if_reader_cleanup_r
         len(captured[0].local_member_states)
 
 
-@pytest.mark.parametrize('damage', [None, 'root', 'manifest', 'subject', 'receipt', 'missing', 'oversize', 'binding'])
-def test_public_bytes_match_live_candidate_without_copy_or_second_admission(tmp_path, monkeypatch, damage):
-    """Read-back streams the public objects against the admitted descriptors; any differing byte refuses."""
+@pytest.mark.parametrize('upload, damage, verified_by', [
+    ('checksummed', None, {'sha256': 2, 'md5': 0, 'streamed': 0}),
+    ('multipart', None, {'sha256': 2, 'md5': 0, 'streamed': 0}),
+    ('etag-only', None, {'sha256': 0, 'md5': 2, 'streamed': 0}),
+    ('multipart-etag-only', None, {'sha256': 0, 'md5': 0, 'streamed': 2}),
+    *(('checksummed', damage, None) for damage in
+      ('root', 'manifest', 'subject', 'receipt', 'missing', 'oversize', 'binding')),
+    ('multipart', 'subject', None), ('etag-only', 'subject', None), ('multipart-etag-only', 'subject', None),
+])
+def test_public_bytes_match_live_candidate_without_copy_or_second_admission(tmp_path, monkeypatch, upload, damage,
+                                                                            verified_by):
+    """Each member is held to its admitted pin by storage's own hash, one HEAD and no body; a member storage holds no
+    comparable hash for streams from the public URL instead. Any differing byte refuses, and nothing is written."""
     from rulespec_artifacts import iter_member_descriptors
     from spicy_regs.sources import publication
+    from tests.generation_fakes import Store
 
     directory, _, _ = build(tmp_path)
+    store = Store()
+    if upload.startswith('multipart'):
+        monkeypatch.setattr(publication, 'PART_BYTES', 2048)  # several parts per member
     with ConversionReadOperation() as operation:
         artifact, reader, source = operation.admit_generation(directory)
         entry = publication.generation_entry(artifact, list(iter_member_descriptors(artifact, source)))
         index = {'families': {'members': entry}}
-        prefix = 'https://test.invalid/' + entry['prefix'] + '/'
-        objects = {prefix + key: (directory / key).read_bytes() for key in source.keys()}
+        stored = {entry['prefix'] + '/' + key: (directory / key).read_bytes() for key in source.keys()}
+        for key, raw in stored.items():
+            publication._put_immutable_stream(store, 'bucket', key, lambda raw=raw: BytesIO(raw), len(raw))
+            if upload.endswith('etag-only'):  # stored before the uploader sent checksums
+                store.checksums.pop(key)
+        assert all(len(store.objects[key]) > publication.PART_BYTES * 2 for key in stored
+                   if key.endswith('.parquet')) == upload.startswith('multipart')
         if damage == 'binding':
             entry['tables']['members.parquet']['rows'] += 1
         elif damage:
-            key = {'root': 'artifact.json', 'manifest': artifact.root['memberManifests'][0]['objectKey'],
-                   'subject': 'members.parquet', 'receipt': 'etl_receipts.parquet',
-                   'missing': 'etl_receipts.parquet', 'oversize': 'members.parquet'}[damage]
+            key = entry['prefix'] + '/' + {
+                'root': 'artifact.json', 'manifest': artifact.root['memberManifests'][0]['objectKey'],
+                'subject': 'members.parquet', 'receipt': 'etl_receipts.parquet', 'missing': 'etl_receipts.parquet',
+                'oversize': 'members.parquet'}[damage]
             if damage == 'missing':
-                del objects[prefix + key]
+                del store.objects[key]
             elif damage == 'oversize':
-                objects[prefix + key] += b'additional bytes'
+                store.objects[key] += b'additional bytes'
             else:
-                raw = objects[prefix + key]
-                objects[prefix + key] = bytes([raw[0] ^ 1]) + raw[1:]
-        monkeypatch.setattr(publication, '_bounded_get', lambda url, **kwargs: objects.get(url))
+                raw = store.objects[key]
+                store.objects[key] = raw[:100] + bytes([raw[100] ^ 1]) + raw[101:]
+        base = 'https://test.invalid'
+        monkeypatch.setattr(publication, '_bounded_get', lambda url, **kwargs: store.objects.get(url.removeprefix(base + '/')))
         streamed = []
 
         @contextmanager
@@ -221,20 +243,24 @@ def test_public_bytes_match_live_candidate_without_copy_or_second_admission(tmp_
             assert kwargs['headers']['Accept-Encoding'] == 'identity'
             assert not reader.active  # Validation scratch is released before the network pass.
             streamed.append(url)
-            raw = objects.get(url)
+            raw = store.objects.get(url.removeprefix(base + '/'))
             yield httpx.Response(404 if raw is None else 200, content=raw or b'', request=httpx.Request(method, url))
 
         monkeypatch.setattr(httpx, 'stream', stream)
         operation.release_generation(directory)
         before = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob('*'))
+        reads = sum(store.reads.values())
         if damage:
             with pytest.raises((ValueError, RuntimeError), match='Public generation|Published generation'):
-                operation.verify_public_generation('https://test.invalid', index, 'members', directory)
+                operation.verify_public_generation(base, index, 'members', directory, store, 'bucket')
         else:
-            checked = operation.verify_public_generation('https://test.invalid', index, 'members', directory)
+            checked = operation.verify_public_generation(base, index, 'members', directory, store, 'bucket')
+            members = [entry['prefix'] + '/' + key for key in ('members.parquet', 'etl_receipts.parquet')]
             assert checked == {'artifactDigest': artifact.pin.artifact_digest, 'members': 2,
-                               'bytes': sum(len(objects[prefix + key]) for key in ('members.parquet', 'etl_receipts.parquet')),
+                               'bytes': sum(len(store.objects[key]) for key in members), 'verified_by': verified_by,
+                               'streamed_bytes': sum(len(store.objects[key]) for key in members) if streamed else 0,
                                'root_and_manifests': 'exact', 'retained_payload_copies': 0}
-            assert set(streamed) == {prefix + 'members.parquet', prefix + 'etl_receipts.parquet'}
+            assert sorted(streamed) == (sorted(base + '/' + key for key in members) if verified_by['streamed'] else [])
+        assert sum(store.reads.values()) == reads  # storage bodies are never read: HEAD only
         # Nothing is written: no public copy is kept on disk.
         assert sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob('*')) == before

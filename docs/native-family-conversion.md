@@ -74,13 +74,20 @@ It admits the subject and receipt members once, holds their checked processing
 rows, and compares them directly with each retained original. Qualification
 does not write disposable restored Parquet files. The operation checks that
 members remain unchanged before reuse and rejects readers after it closes.
-Publication in the same process reuses the admitted bytes. Anonymous readback
-then streams every published member from the public URL through a SHA-256 and
-holds it, the root and every manifest to the admitted candidate's bytes; it keeps
-no copy on disk and does not admit the same bytes a second time, because
-identical bytes admit identically. A missing or differing public byte fails
-the readback with the family published and the rollback record intact. The
-receipt's `read_back.public_bytes` records the members and bytes streamed.
+Publication in the same process reuses the admitted bytes. Readback then
+holds the public root and every manifest to the admitted candidate's bytes,
+and each member to its admitted digest by one HEAD against the hash storage
+computed when it took the bytes: the SHA-256 checksum every upload now sends,
+or a single-part object's MD5 ETag. A member with neither (a multipart object
+stored without a checksum, such as one copied from an older generation)
+streams from the public URL through a SHA-256 instead. Readback keeps no copy
+on disk and does not admit the same bytes a second time, because identical
+bytes admit identically. Storage hashes cover transfer and the object a key
+names, not later decay at rest. A missing or differing member fails the
+readback with the family published and the rollback record intact. The
+receipt's `read_back.public_bytes` records the members and bytes checked,
+`verified_by` (members per hash: `sha256`, `md5`, `streamed`) and
+`streamed_bytes`.
 
 If a writer completed its immutable generation but stopped before saving
 `conversion.json`, `--resume-generation` can qualify that generation without

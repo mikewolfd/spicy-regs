@@ -3,7 +3,7 @@
 import base64
 from collections import Counter
 from datetime import datetime, timezone
-from hashlib import md5
+from hashlib import md5, sha256
 from io import BytesIO
 
 from botocore.exceptions import ClientError
@@ -21,6 +21,10 @@ def _md5(raw: bytes) -> bytes:
     return md5(raw, usedforsecurity=False).digest()
 
 
+def _sha256_b64(raw: bytes) -> str:
+    return base64.b64encode(sha256(raw).digest()).decode()
+
+
 class Store:
     """Records successful put keys in order; ``before_put`` and ``corrupt_key`` are fault-injection hooks.
 
@@ -28,12 +32,17 @@ class Store:
     part MD5s and appends the part count. ``reads`` counts full GETs per key and
     ``sent`` counts request-body bytes per key, so tests can assert transfer volume.
     ``modified`` holds each key's last write time, which listings report.
+    ``checksums`` holds, for each key uploaded with a SHA-256 checksum, its part sizes (``None`` for a single put);
+    HEAD with ``ChecksumMode="ENABLED"`` reports the checksum of the stored bytes over that layout, composite with a
+    ``-N`` suffix for multipart, as S3 does. A copy keeps no checksum, as R2's CopyObject.
     """
 
     def __init__(self):
         self.objects = {}
         self.modified = {}
         self.etags = {}  # multipart ETags only; others derive from the stored bytes
+        self.checksums = {}
+        self.algorithms = {}
         self.writes = []
         self.deletes = []
         self.copies = []
@@ -43,10 +52,21 @@ class Store:
         self.before_put = None
         self.corrupt_key = None
 
-    def head_object(self, *, Bucket, Key):
+    def head_object(self, *, Bucket, Key, ChecksumMode=None):
         if Key not in self.objects:
             raise error("NoSuchKey")
-        return {"ContentLength": len(self.objects[Key]), "ETag": self._etag(Key)}
+        head = {"ContentLength": len(self.objects[Key]), "ETag": self._etag(Key)}
+        if ChecksumMode == "ENABLED" and Key in self.checksums:
+            raw, parts = self.objects[Key], self.checksums[Key]
+            if parts is None:
+                head["ChecksumSHA256"] = _sha256_b64(raw)
+            else:
+                digests, start = [], 0
+                for size in parts:
+                    digests.append(sha256(raw[start:start + size]).digest())
+                    start += size
+                head["ChecksumSHA256"] = f"{_sha256_b64(b''.join(digests))}-{len(parts)}"
+        return head
 
     def _etag(self, key):
         return self.etags.get(key) or '"' + _md5(self.objects[key]).hex() + '"'
@@ -59,6 +79,7 @@ class Store:
             raise error("PreconditionFailed")
         self.objects[Key] = self.objects[source_key]
         self.etags.pop(Key, None)
+        self.checksums.pop(Key, None)
         if source_key in self.etags:
             self.etags[Key] = self.etags[source_key]
         self.modified[Key] = datetime.now(timezone.utc)
@@ -73,12 +94,14 @@ class Store:
         return {"Body": BytesIO(self.objects[Key]), "ETag": self._etag(Key)}
 
     def put_object(self, *, Bucket, Key, Body, IfMatch=None, IfNoneMatch=None, ContentMD5=None, etag=None,
-                   **kwargs):
+                   ChecksumSHA256=None, parts=None, **kwargs):
         if self.before_put:
             self.before_put(Key)
         raw = Body.read() if hasattr(Body, "read") else Body
         self.sent[Key] += len(raw)
         if ContentMD5 is not None and ContentMD5 != base64.b64encode(_md5(raw)).decode():
+            raise error("BadDigest")
+        if ChecksumSHA256 is not None and ChecksumSHA256 != _sha256_b64(raw):
             raise error("BadDigest")
         if IfNoneMatch == "*" and Key in self.objects:
             raise error("PreconditionFailed")
@@ -90,6 +113,9 @@ class Store:
         self.etags.pop(Key, None)
         if etag:
             self.etags[Key] = etag
+        self.checksums.pop(Key, None)
+        if parts is not None or ChecksumSHA256 is not None:
+            self.checksums[Key] = parts
         self.modified[Key] = datetime.now(timezone.utc)
         self.writes.append(Key)
         return {}
@@ -115,24 +141,34 @@ class Store:
         yield {"Contents": listed[:1]}
         yield {"Contents": listed[1:]}
 
-    def create_multipart_upload(self, *, Bucket, Key, **kwargs):
+    def create_multipart_upload(self, *, Bucket, Key, ChecksumAlgorithm=None, **kwargs):
         self.uploads[Key] = []
+        self.algorithms[Key] = ChecksumAlgorithm
         return {"UploadId": Key}
 
-    def upload_part(self, *, Bucket, Key, UploadId, PartNumber, Body, ContentMD5):
+    def upload_part(self, *, Bucket, Key, UploadId, PartNumber, Body, ContentMD5, ChecksumSHA256=None):
         assert PartNumber == len(self.uploads[Key]) + 1
         self.sent[Key] += len(Body)
         if ContentMD5 != base64.b64encode(_md5(Body)).decode():
+            raise error("BadDigest")
+        if (ChecksumSHA256 is None) != (self.algorithms[Key] is None) or (
+                ChecksumSHA256 is not None and ChecksumSHA256 != _sha256_b64(Body)):
             raise error("BadDigest")
         self.uploads[Key].append(Body)
         return {"ETag": str(PartNumber)}
 
     def complete_multipart_upload(self, *, Bucket, Key, UploadId, MultipartUpload, IfNoneMatch):
         parts = self.uploads[Key]
+        if self.algorithms.pop(Key) == "SHA256" and [item.get("ChecksumSHA256") for item in MultipartUpload["Parts"]] != [
+                _sha256_b64(part) for part in parts]:
+            raise error("InvalidPart")
         etag = f'"{md5(b"".join(_md5(part) for part in parts), usedforsecurity=False).hexdigest()}-{len(parts)}"'
         self.sent[Key] -= sum(map(len, parts))  # put_object below recounts the assembled bytes
-        self.put_object(Bucket=Bucket, Key=Key, Body=b"".join(parts), IfNoneMatch=IfNoneMatch, etag=etag)
+        checksummed = [len(part) for part in parts] if any("ChecksumSHA256" in item for item in MultipartUpload["Parts"]) else None
+        self.put_object(Bucket=Bucket, Key=Key, Body=b"".join(parts), IfNoneMatch=IfNoneMatch, etag=etag,
+                        parts=checksummed)
         del self.uploads[Key]
 
     def abort_multipart_upload(self, *, Bucket, Key, UploadId):
         self.uploads.pop(Key, None)
+        self.algorithms.pop(Key, None)

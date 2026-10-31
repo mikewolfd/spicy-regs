@@ -830,12 +830,13 @@ class ConversionReadOperation:
         self.verified_source(directory)
         self._reader_stacks[directory].close()
 
-    def verify_public_generation(self, base, index, family, directory):
-        """Hold the anonymous public bytes to this operation's admitted candidate: no copy, no second admission.
+    def verify_public_generation(self, base, index, family, directory, client, bucket):
+        """Hold the published generation to this operation's admitted candidate: no copy, no second admission.
 
-        The root and every manifest must equal the admitted bytes, and every member streams through a SHA-256 against
-        its admitted descriptor. Identical bytes admit identically, so admitting the downloaded copy again (and
-        keeping it on disk) proved nothing more; this is what a consumer of the public URL receives.
+        The public root and every manifest must equal the admitted bytes. Each member is held to its admitted
+        descriptor by one HEAD against the hash storage computed (:func:`publication.verify_stored_member`); only a
+        member with no comparable server hash streams through a SHA-256 from the public URL. Identical bytes admit
+        identically, so admitting a downloaded copy again proved nothing more.
         """
         from rulespec_artifacts import iter_member_descriptors
         from spicy_regs.sources import publication
@@ -852,9 +853,18 @@ class ConversionReadOperation:
             with source.open(key) as local:
                 if raw is None or raw != local.read(publication.EVIDENCE_CONTROL_LIMIT + 1):
                     raise ValueError("Public generation root or manifest differs from its qualified bytes")
-        total = sum(publication.verify_member(base, publication.Member(
-            f"{entry['prefix']}/{member.object_key}", member.sha256, member.byte_size, member.record_count))
-            for member in members)
+        verified_by = {'sha256': 0, 'md5': 0, 'streamed': 0}
+        streamed = 0
+        for member in members:
+            pinned = publication.Member(f"{entry['prefix']}/{member.object_key}", member.sha256, member.byte_size,
+                                        member.record_count)
+            how = publication.verify_stored_member(client, bucket, pinned,
+                                                   lambda key=member.object_key: source.open(key))
+            if how is None:
+                streamed += publication.verify_member(base, pinned)
+                how = 'streamed'
+            verified_by[how] += 1
         self.verified_source(directory)
-        return {'artifactDigest': artifact.pin.artifact_digest, 'members': len(members), 'bytes': total,
-                'root_and_manifests': 'exact', 'retained_payload_copies': 0}
+        return {'artifactDigest': artifact.pin.artifact_digest, 'members': len(members),
+                'bytes': sum(member.byte_size for member in members), 'verified_by': verified_by,
+                'streamed_bytes': streamed, 'root_and_manifests': 'exact', 'retained_payload_copies': 0}

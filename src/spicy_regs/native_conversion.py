@@ -32,6 +32,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.metadata import distribution, version
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -284,7 +285,7 @@ class _Built:
     generation: Path
     policies: Mapping[str, str]
     compare_original: Callable[[str, Path], dict]
-    read_published: Callable[[Mapping], dict]
+    read_published: Callable[[Mapping, Any, str], dict]
     evidence: tuple[Path, ...] = ()
     added_tables: frozenset[str] = frozenset()
     receipt_only_tables: frozenset[str] = frozenset()
@@ -483,11 +484,11 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str,
         check_originals(dataset + ".parquet")
         return checked
 
-    def read_published(index: Mapping) -> dict:
-        # Local proof is finished: release the admitted reader's processing state before streaming the public bytes.
+    def read_published(index: Mapping, client, bucket: str) -> dict:
+        # Local proof is finished: release the admitted reader's processing state before checking the public bytes.
         check_originals()
         read_operation.release_generation(generation)
-        verified = read_operation.verify_public_generation(base, index, spec["family"], generation)
+        verified = read_operation.verify_public_generation(base, index, spec["family"], generation, client, bucket)
         check_originals()
         return {"public_bytes": verified}
 
@@ -1535,7 +1536,7 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         purge_urls([f"{base}/{publication.INDEX_V2_KEY}"])
         read_index = publication.current_index(base)
         entry = read_index["families"].get(family) or {}
-        read = built.read_published(read_index)
+        read = built.read_published(read_index, client, bucket)
         # Past any cached snapshot: the public pointer must still name the entry whose bytes were just verified.
         if publication.load_index(base)["families"].get(family) != entry:
             raise ConversionRefused("Public family pointer moved during conversion read-back")

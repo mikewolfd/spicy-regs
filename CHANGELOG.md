@@ -63,10 +63,18 @@ Entries link to the pull request that introduced the change.
   `--full-verification` forces them, and any other key takes the full path.
   Version-1 seals still publish, always through the full path. A preparation
   whose code or checkout changed while it ran refuses to seal and resumes
-  with `--resume-generation`. Publication reads the public copy back by
-  streamed member digest instead of downloading and admitting it again; the
-  receipt's `read_back.anonymous_read_rows` is replaced by
-  `read_back.public_bytes` (members and bytes streamed per table);
+  with `--resume-generation` from a clean checkout of current main plus
+  `--expect-producer` naming the preparation's checkout. Publication reads
+  the published generation back without downloading or admitting it again
+  (owner decision, 2026-10-31): the public root and manifests are compared
+  byte for byte, and each member by one HEAD against the hash storage
+  computed, its SHA-256 checksum or, for a single-part object, its MD5 ETag.
+  A member with neither (a multipart object stored without a checksum)
+  streams through a SHA-256 from the public URL instead. Every upload now
+  sends a SHA-256 checksum (`ChecksumAlgorithm=SHA256` and a checksum per
+  part for multipart) beside Content-MD5. The receipt's
+  `read_back.anonymous_read_rows` is replaced by `read_back.public_bytes`
+  (members, bytes, `verified_by` counts per hash and `streamed_bytes`);
   `read_back.table_rows` still records the public pointer's counts.
 
 - Native family conversion reads the replaced generation's source evidence

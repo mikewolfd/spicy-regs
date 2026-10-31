@@ -1226,7 +1226,7 @@ def test_split_public_readback_checks_empty_member_and_reports_published_state(t
     old, _ = publish_split_sections(tmp_path, monkeypatch, bucket)
     real = ConversionReadOperation.verify_public_generation
 
-    def damaged(operation, base, index, family, directory):
+    def damaged(operation, base, index, family, directory, *storage):
         entry = index["families"][family]
         empty = next(member for member in entry["tables"]["bill_sections.parquet"]["members"] if member["rows"] == 0)
         key = f"{entry['prefix']}/{empty['key']}"
@@ -1235,7 +1235,7 @@ def test_split_public_readback_checks_empty_member_and_reports_published_state(t
         else:
             raw = bucket.objects[key]
             bucket.objects[key] = bytes([raw[0] ^ 1]) + raw[1:]
-        return real(operation, base, index, family, directory)
+        return real(operation, base, index, family, directory, *storage)
 
     monkeypatch.setattr(ConversionReadOperation, "verify_public_generation", damaged)
     with pytest.raises(conversion.ConversionRefused, match="could not be read back") as refusal:

@@ -38,7 +38,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkstemp
-from typing import TYPE_CHECKING, BinaryIO, Callable, NamedTuple
+from typing import TYPE_CHECKING, BinaryIO, Callable, ContextManager, NamedTuple
 
 from spicy_regs.runtime_bounds import checkpoint, remaining_timeout
 
@@ -843,12 +843,12 @@ def _precondition(error: ClientError) -> bool:
     return error.response.get("Error", {}).get("Code") in {"412", "PreconditionFailed", "ConditionalRequestConflict"}
 
 
-def _head(client, bucket: str, key: str) -> dict | None:
+def _head(client, bucket: str, key: str, **options) -> dict | None:
     """HEAD one object; only absence is ``None``, so permission and 5xx errors propagate."""
     from botocore.exceptions import ClientError
 
     try:
-        return client.head_object(Bucket=bucket, Key=key)
+        return client.head_object(Bucket=bucket, Key=key, **options)
     except ClientError as exc:
         if _missing(exc):
             return None
@@ -945,16 +945,17 @@ def _copy_unchanged_member(client, bucket: str, source_key: str, destination_key
         client.copy_object(Bucket=bucket, Key=destination_key, CopySource={"Bucket": bucket, "Key": source_key})
 
 
-def _create_multipart(client, bucket: str, key: str, upload_parts: Callable[[str], list[dict]]) -> None:
+def _create_multipart(client, bucket: str, key: str, upload_parts: Callable[[str], list[dict]], **create) -> None:
     """Create-only multipart lifecycle: any failure aborts; a refused completion means the key already exists.
 
     The caller admits the destination bytes afterwards, so an existing object is
-    only reused once it proves to hold the expected bytes.
+    only reused once it proves to hold the expected bytes. ``create`` adds request
+    options, such as the checksum algorithm, to the upload's creation.
     """
     from botocore.exceptions import ClientError
 
     args = {"Bucket": bucket, "Key": key}
-    upload_id = client.create_multipart_upload(**args, **_IMMUTABLE_HEADERS)["UploadId"]
+    upload_id = client.create_multipart_upload(**args, **_IMMUTABLE_HEADERS, **create)["UploadId"]
     completing = False
     try:
         parts = upload_parts(upload_id)
@@ -970,9 +971,11 @@ def _create_multipart(client, bucket: str, key: str, upload_parts: Callable[[str
 def _put_immutable(client, bucket: str, key: str, path: Path, *, sha256: str | None = None) -> None:
     """Conditional creation, including multipart completion for large tables.
 
-    Every request carries Content-MD5, so storage refuses bytes damaged in
-    transit. With ``sha256``, the bytes actually sent must hash to it before the
-    object is created, so a content-addressed key never holds other bytes.
+    Every request carries Content-MD5 and a SHA-256 checksum, so storage refuses
+    bytes damaged in transit and keeps a SHA-256 a later HEAD can compare
+    (:func:`verify_stored_member`; composite over ``PART_BYTES`` parts for a
+    multipart object). With ``sha256``, the bytes actually sent must hash to it
+    before the object is created, so a content-addressed key never holds other bytes.
     """
     _put_immutable_stream(client, bucket, key, lambda: path.open("rb"), path.stat().st_size, sha256=sha256)
 
@@ -987,7 +990,8 @@ def _put_immutable_stream(client, bucket, key, open_body, size, *, sha256=None) 
 
     def checked(chunk: bytes) -> dict:
         digest.update(chunk)
-        return {"Body": chunk, "ContentMD5": base64.b64encode(hashlib.md5(chunk, usedforsecurity=False).digest()).decode()}
+        return {"Body": chunk, "ContentMD5": base64.b64encode(hashlib.md5(chunk, usedforsecurity=False).digest()).decode(),
+                "ChecksumSHA256": base64.b64encode(hashlib.sha256(chunk).digest()).decode()}
 
     def assert_content_address() -> None:
         if sha256 is not None and "sha256:" + digest.hexdigest() != sha256:
@@ -1017,15 +1021,64 @@ def _put_immutable_stream(client, bucket, key, open_body, size, *, sha256=None) 
                 if observed > size:
                     raise PublicationError(f"Bytes sent for {key} exceed their declared size")
                 part = len(parts) + 1
-                result = client.upload_part(Bucket=bucket, Key=key, UploadId=upload_id, PartNumber=part,
-                                            **checked(chunk))
-                parts.append({"PartNumber": part, "ETag": result["ETag"]})
+                body = checked(chunk)
+                result = client.upload_part(Bucket=bucket, Key=key, UploadId=upload_id, PartNumber=part, **body)
+                parts.append({"PartNumber": part, "ETag": result["ETag"], "ChecksumSHA256": body["ChecksumSHA256"]})
         if observed != size:
             raise PublicationError(f"Bytes sent for {key} differ from their declared size")
         assert_content_address()
         return parts
 
-    _create_multipart(client, bucket, key, upload_parts)
+    _create_multipart(client, bucket, key, upload_parts, ChecksumAlgorithm="SHA256")
+
+
+def verify_stored_member(client, bucket: str, member: Member, open_local: Callable[[], ContextManager[BinaryIO]]
+                         ) -> str | None:
+    """Hold one stored member to its pin by a hash storage computed itself: one HEAD, no body read.
+
+    Returns the hash that matched: ``"sha256"``, the SHA-256 checksum the uploader sent and storage checked, or
+    ``"md5"``, a single-part ETag, which is the MD5 storage computed. ``None`` when neither is comparable (no
+    checksum and a multipart ETag, or a composite checksum over another part layout):
+    the caller then streams the bytes (:func:`verify_member`). A missing object, another size, a full-object checksum
+    or single-part ETag that differs, or a local candidate that no longer matches its pin raises.
+
+    Composite checksums and ETags are compared with one local pass over ``open_local``, the admitted candidate's
+    bytes. Storage computes these hashes when it accepts the bytes, so they cover transfer and the object the key
+    names, not later decay at rest.
+    """
+    if member.sha256 is None or member.byte_size is None:
+        raise ValueError(f"Read-back needs a pinned member: {member.path}")
+    head = _head(client, bucket, member.path, ChecksumMode="ENABLED")
+    if head is None:
+        raise RuntimeError(f"Published generation member is missing: {member.path}")
+    differs = RuntimeError(f"Published generation member differs from its pin: {member.path}")
+    if head["ContentLength"] != member.byte_size:
+        raise differs
+    checksum, etag = head.get("ChecksumSHA256"), str(head.get("ETag") or "").strip('"')
+    # The uploader puts an object of at most PART_BYTES whole, so its checksum is the SHA-256 the pin names.
+    if checksum and "-" not in checksum and member.byte_size <= PART_BYTES:
+        if checksum != base64.b64encode(bytes.fromhex(member.sha256.removeprefix("sha256:"))).decode():
+            raise differs
+        return "sha256"
+    if not checksum and (not etag or "-" in etag):
+        return None
+    digest, whole_md5, parts = hashlib.sha256(), hashlib.md5(usedforsecurity=False), []
+    with open_local() as stream:
+        while chunk := stream.read(PART_BYTES):
+            checkpoint()
+            digest.update(chunk)
+            if checksum:
+                parts.append(hashlib.sha256(chunk).digest())
+            else:
+                whole_md5.update(chunk)
+    if "sha256:" + digest.hexdigest() != member.sha256:
+        raise RuntimeError(f"Local candidate differs from its pin: {member.path}")
+    if checksum:  # composite over PART_BYTES parts; storage may omit the part-count suffix
+        composite = base64.b64encode(hashlib.sha256(b"".join(parts)).digest()).decode()
+        return "sha256" if checksum in (composite, f"{composite}-{len(parts)}") else None
+    if etag != whole_md5.hexdigest():
+        raise differs
+    return "md5"
 
 
 class _S3Members:

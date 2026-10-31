@@ -111,7 +111,7 @@ def test_blob_requests_run_concurrently(tmp_path):
     both, arrivals, lock = threading.Barrier(2, timeout=5), [], threading.Lock()
 
     class Overlapping(Store):
-        def head_object(self, *, Bucket, Key):
+        def head_object(self, *, Bucket, Key, ChecksumMode=None):
             with lock:
                 arrivals.append(Key)
                 first_two = "/blobs/" in Key and len([k for k in arrivals if "/blobs/" in k]) <= 2
@@ -120,7 +120,7 @@ def test_blob_requests_run_concurrently(tmp_path):
                     both.wait()
                 except threading.BrokenBarrierError:
                     pass
-            return super().head_object(Bucket=Bucket, Key=Key)
+            return super().head_object(Bucket=Bucket, Key=Key, ChecksumMode=ChecksumMode)
 
     store = Overlapping()
     publish(store, directory, evidence)
