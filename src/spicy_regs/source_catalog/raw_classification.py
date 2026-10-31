@@ -124,14 +124,15 @@ def retained_content_metadata(body: bytes) -> dict:
     if result := generated_content_metadata(body):
         return result
     from io import BytesIO
-    from spicy_docs.sources.fec.filings import filing_records_from_stream
+    from spicy_docs.sources.fec.filings import filing_encoding, filing_records_from_stream
     from spicy_docs.sources.fec.metadata import api_page, parse_api
 
     kind, records = None, None
     if body.startswith((b"HDR", b"/*")):
-        try:
+        try:  # the maintained choice (strict UTF-8, then cp1252, else refuse), not an assumed latin-1
+            encoding = filing_encoding(BytesIO(body))
             records = sum(1 for _ in filing_records_from_stream(
-                BytesIO(body), sha256="verified-by-caller", encoding="latin-1"))
+                BytesIO(body), sha256="verified-by-caller", encoding=encoding))
             kind = "fec-filing"
         except ValueError:
             pass
