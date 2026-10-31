@@ -291,7 +291,9 @@ def _identity_value(column: str, row: Mapping[str, Any]) -> str | None:
 def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:
     """Map one qualified source-owner row; keep the untouched input for its receipt."""
     spec = field_registry()[dataset]
-    allowed = {f["name"] for f in spec["fields"]}
+    # ``retired_fields`` are columns an earlier policy version's source rows carry and this one no longer maps; they
+    # stay in the receipt's original row (committee_reports' per-letter columns, legislative-documents/1).
+    allowed = {f["name"] for f in spec["fields"]} | set(spec.get("retired_fields", ()))
     if set(row) - allowed:
         raise LegislativeShapeError(f"{dataset}: unreviewed input columns: {sorted(set(row) - allowed)}")
     if spec["processing_only"]:
@@ -347,6 +349,15 @@ def map_subject(dataset: str, row: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 @cache
+def _earlier_legislative_schema(dataset: str) -> pa.Schema | None:
+    """The exact subject schema an earlier ``legislative_policy_history.json`` policy declared, if one is recorded."""
+    from spicy_regs.etl_receipts import DatasetPolicy
+
+    history = json.loads(files("spicy_regs").joinpath("legislative_policy_history.json").read_text())
+    return DatasetPolicy.from_descriptor(history[dataset]).subject_schema if dataset in history else None
+
+
+@cache
 def _earlier_native_schema() -> pa.Schema:
     from spicy_regs.etl_receipts import DatasetPolicy
 
@@ -378,6 +389,14 @@ def recorded_subject(dataset: str, raw: Mapping[str, Any], subject: Mapping[str,
                     return {f.name: historical(value.get(f.name), f.type) for f in dtype}
                 return value
             mapped = {f.name: historical(mapped.get(f.name), f.type) for f in earlier}
+    earlier_shape = _earlier_legislative_schema(dataset)
+    if (mapped is not None and earlier_shape is not None
+            and set(subject) - {"raw_source_row"} == set(earlier_shape.names)):
+        # A subject written under the earlier policy: verify it in that exact shape. A column the current policy
+        # retired is typed from the original row, the way the earlier mapping typed it; the rest map as today.
+        current = mapped
+        mapped = {f.name: current[f.name] if f.name in current else _typed(raw.get(f.name), f.type, f.name)
+                  for f in earlier_shape}
     if mapped is not None and dataset == "document_citations":
         history = json.loads(files("spicy_regs").joinpath("citation_navigation_policy_history.json").read_text())
         from spicy_regs.etl_receipts import DatasetPolicy

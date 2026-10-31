@@ -34,6 +34,7 @@ from spicy_docs.reading.paged_json import PagedJsonBudget
 from spicy_docs.schemas.committee_report_tables import (
     CHAMBER_BY_DOCUMENT_TYPE,
     shape_committee_report,
+    shape_committee_report_cbo_letter,
     shape_hearing_transcript,
     shape_report_section,
 )
@@ -469,7 +470,7 @@ def build_committee_reports(
     evidence: CaptureEvidence | None = None,
     reread: Collection[str] = (),
 ) -> tuple[Path, ...]:
-    """Build four contract tables and the acquisition checkpoint, with one owner.
+    """Build five contract tables and the acquisition checkpoint, with one owner.
 
     ``reread`` names hearings to read again whatever their checkpoints say, and
     nothing else: discovery is skipped, so every other row and checkpoint is
@@ -513,6 +514,7 @@ def build_committee_reports(
     evaluated_hearings: set[str] = set()
     evaluated_reports: set[str] = set()
     report_rows: list[dict] = []
+    letter_rows: list[dict] = []
     section_rows: list[dict] = []
     hearing_rows: list[dict] = []
     renditions: Counter[str] = Counter()
@@ -599,6 +601,9 @@ def build_committee_reports(
                     report_rows.append(shape_committee_report(
                         body, bill_id=bill, estimate=estimate,
                         recital_bill_id=recital_bill_id(estimate, body.identity.congress), **common))
+                    letter_rows.extend(shape_committee_report_cbo_letter(
+                        letter, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
+                    ) for seq, letter in enumerate(estimate.letters))
                     section_rows.extend(shape_report_section(
                         block, package_id=package_id, part_id=body.part.part_id, seq=seq, last_modified=modified
                     ) for seq, block in enumerate(parse_agency_blocks(_section_input(derived))))
@@ -611,8 +616,9 @@ def build_committee_reports(
         # retries, and a refused hearing detail would drop the prior event_id.
         raise RuntimeError(f"reread did not complete, so nothing is merged: {unfinished}")
     logger.info(
-        "Committee reports: {:,} reports, {:,} sections, {:,} hearings, {:,} already held, {:,} refused",
+        "Committee reports: {:,} reports, {:,} CBO letters, {:,} sections, {:,} hearings, {:,} already held, {:,} refused",
         len(report_rows),
+        len(letter_rows),
         len(section_rows),
         len(hearing_rows),
         unchanged,
@@ -640,13 +646,15 @@ def build_committee_reports(
     # one row here that spelling gets wrong is CRPT-119hrpt811's, whose one part
     # is ``-pt1``; the ``parts=`` rule version re-reads it to replace it.
     replaced = {"committee_reports": evaluated_reports, "report_sections": evaluated_reports,
+                "committee_report_cbo_letters": evaluated_reports,
                 "hearing_bill_links": evaluated_hearings, "hearing_transcripts": evaluated_hearings}
     paths = {name: merge_contract_table(output_dir, name, rows, download_prior=download_prior,
                                         replace_parents=("package_id", replaced[name]) if name in replaced else None,
                                         backfill_prior=PART_BACKFILL if name in ("committee_reports", "report_sections") else None,
                                         prior_present=(prior_files[name] is not None) if name in prior_files else None)
              for name, rows in (("committee_reports", report_rows), ("report_sections", section_rows),
-                                ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows))}
+                                ("hearing_transcripts", hearing_rows), ("hearing_bill_links", link_rows),
+                                ("committee_report_cbo_letters", letter_rows))}
     relinked = _link_committee_codes(paths["hearing_bill_links"], paths["hearing_transcripts"])
     logger.info("Committee reports: {:,} hearing links take their hearing's committee code", relinked)
     return (*paths.values(), merge_table(output_dir, name=READS_TABLE, columns=READ_COLUMNS,

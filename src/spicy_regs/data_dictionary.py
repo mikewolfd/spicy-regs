@@ -409,6 +409,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "member_terms",
     "member_party_affiliations",
     "committee_reports",
+    "committee_report_cbo_letters",
     "report_sections",
     "hearing_transcripts",
     "hearing_bill_links",

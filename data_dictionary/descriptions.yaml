@@ -2624,11 +2624,15 @@ tables:
       keyed `(package_id, part_id)`. `bill_id` is the measure the report accompanies,
       read from the package's own MODS metadata.
     data_quality: >-
-      Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs
+      Only the MODS PRIMARY bill fills bill_id. The CBO columns come from spicy-docs
       read_cbo_estimate on the same body already acquired. The cover recital gates publication
       of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records
-      an absent recital; NULL means the rule has not run. A positive recital with no resolved
-      letter span remains distinct from an extracted letter. recital_bill_id comes from the
+      an absent recital; NULL means the rule has not run. cbo_letter_count counts the letters
+      located in the part, each a committee_report_cbo_letters row; a positive recital with a
+      count of 0 is a declared estimate no letter was located for, distinct from an extracted
+      letter. The seven per-letter columns this table carried until committee_reports
+      legislative-documents/2 (the first letter's heading, span, digest, end rule and
+      signatory) are on committee_report_cbo_letters, one row per letter (ss-uep5). recital_bill_id comes from the
       printed recital and is retained beside the MODS bill_id. bill_id is the part's own PRIMARY
       bill: a multi-part package's root states none, so each part of CRPT-119hrpt494 carries the
       H.R. 3495 its constituent record names, where its row read before parts were keyed has
@@ -2674,6 +2678,30 @@ tables:
       spelling, so the parent's row count tells a lone part from Part 1 of several. A block
       published before part_id existed carries its package id there until its report is read
       again, which replaces every block of the package.
+    columns_from: spicy_docs
+
+  committee_report_cbo_letters:
+    label: "CBO letters in committee reports"
+    subject: congress
+    coverage: >-
+      Sampled. Every CBO cost-estimate letter located in the report parts of committee_reports
+      whose cover declares the estimate; an omnibus report reprints several (CRPT-105hrpt149
+      has 11). A declared part with no located letter has no row here and cbo_letter_count 0 on
+      its committee_reports row.
+    measured_on: "2026-10-31"
+    summary: >-
+      One row per CBO cost-estimate letter reprinted in one committee report part, keyed
+      `(package_id, part_id, letter_seq)`. The span indexes into the text the parent row's
+      text_sha256 digests; letter_date is the letterhead's dateline.
+    data_quality: >-
+      (package_id, part_id) names the committee_reports row the letter was read from and
+      letter_seq counts from zero in reading order within that part. A 1997-2011 letter's span
+      runs from its heading or CBO letterhead through the enclosed estimate's "Estimate approved
+      by ... Analysis." line; 118th-Congress letters end at the Director's attribution.
+      letter_date is NULL where the letter prints no dateline, as every 118th-Congress letter does
+      (its date is cbo_cost_estimates' publication date). Census 2026-10-31 over the 202
+      retained PDF and 199 committee-reports HTM bodies: 117 and 24 letters, 113 and 3 of them
+      dated, 5 PDF letters a bare transmittal whose enclosure prints no approval line.
     columns_from: spicy_docs
 
   hearing_transcripts:

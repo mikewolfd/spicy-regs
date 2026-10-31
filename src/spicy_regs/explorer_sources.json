@@ -819,6 +819,11 @@
         "govinfo-reports"
       ]
     },
+    "committee_report_cbo_letters": {
+      "sources": [
+        "govinfo-reports"
+      ]
+    },
     "hearing_transcripts": {
       "sources": [
         "govinfo-hearings"

@@ -1,6 +1,6 @@
-"""Rollup pipeline: committee_reports, report_sections and hearing_transcripts.
+"""Rollup pipeline: committee_reports, committee_report_cbo_letters, report_sections and hearing_transcripts.
 
-Three outputs from one pass: the two GovInfo collections share an acquirer and
+Every output from one pass: the two GovInfo collections share an acquirer and
 its pacing budget, and the agency blocks are parsed from a report body that is
 only in hand during the pass that fetched it.
 """
@@ -20,12 +20,13 @@ class CommitteeReportsRollup(LegislativeReceiptRollup):
     name: ClassVar[str] = "committee-reports"
     retain_source_evidence: ClassVar[bool] = True
     inputs: ClassVar[tuple[str, ...]] = ()
-    receipt_policies = family_policies('committee_reports', 'report_sections', 'hearing_transcripts', 'hearing_bill_links', 'committee_report_reads')
+    receipt_policies = family_policies('committee_reports', 'report_sections', 'hearing_transcripts', 'hearing_bill_links', 'committee_report_cbo_letters', 'committee_report_reads')
     outputs: ClassVar[tuple[str, ...]] = (
         "committee_reports.parquet",
         "report_sections.parquet",
         "hearing_transcripts.parquet",
         "hearing_bill_links.parquet",
+        "committee_report_cbo_letters.parquet",
         "committee_report_reads.parquet",
     )
 

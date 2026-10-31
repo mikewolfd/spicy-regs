@@ -134,6 +134,7 @@ nav:
       - member_terms: tables/member_terms.md
       - member_vote_terms: tables/member_vote_terms.md
       - committee_reports: tables/committee_reports.md
+      - committee_report_cbo_letters: tables/committee_report_cbo_letters.md
       - report_sections: tables/report_sections.md
       - hearing_transcripts: tables/hearing_transcripts.md
       - hearing_bill_links: tables/hearing_bill_links.md

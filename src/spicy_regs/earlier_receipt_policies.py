@@ -82,6 +82,12 @@ def earlier_policies(policy):
         if earlier.policy_version != "legislative-documents/1" or earlier.identity_fields != policy.identity_fields:
             raise ValueError("Citation namespace promotion changes a historical observation identity")
         return (earlier,)
+    if policy.dataset == "committee_reports" and policy.policy_version == "legislative-documents/2":
+        history = json.loads(files("spicy_regs").joinpath("legislative_policy_history.json").read_text())
+        earlier = DatasetPolicy.from_descriptor(history[policy.dataset])
+        if earlier.policy_version != "legislative-documents/1" or earlier.identity_fields != policy.identity_fields:
+            raise ValueError("Committee report letter move changes a historical observation identity")
+        return (earlier,)
     if policy.policy_version == "legislative-documents/2" and policy.dataset in {
         "native_legal_references", "native_legal_reference_reads",
     }:

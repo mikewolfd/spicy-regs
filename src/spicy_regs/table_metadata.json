@@ -24128,7 +24128,7 @@
     "coverage": "Sampled. Selected committee report packages from GovInfo, a mixed-Congress selection that grows as packages are added; not complete historical or constituent-granule coverage. committee_report_reads records each package read and its outcome.",
     "kind": "sampled",
     "measured_on": "2026-09-28",
-    "data_quality": "Only the MODS PRIMARY bill fills bill_id. The thirteen CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. A positive recital with no resolved letter span remains distinct from an extracted letter. recital_bill_id comes from the printed recital and is retained beside the MODS bill_id. bill_id is the part's own PRIMARY bill: a multi-part package's root states none, so each part of CRPT-119hrpt494 carries the H.R. 3495 its constituent record names, where its row read before parts were keyed has NULL; its separate recital_bill_id is a text interpretation. Every part a record states is read, all or none: a package whose parts cannot all be read is refused in committee_report_reads and keeps its prior rows. Parts, by decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`): a report published in one part is one row whose part_id is its package id and whose part_number is NULL; a report published as parts is one row per part, part_id the part's granule id (CRPT-119hrpt455-pt2) and part_number 1 to N, except that a Part 1 the publisher left unsuffixed (CRPT-119hrpt494) has part_id equal to the package id and part_number 1. A package whose one part is spelled -pt1 (CRPT-119hrpt811; spicy-docs `docs/tables.md` names the others it measured) is (package-pt1, 1), the same shape as Part 1 of two, so a reader counts a package's rows to tell a lone part from Part 1 of several. title, date_issued and last_modified are the package's and repeat on every part row. A row published before part_id existed is kept as its package's one part (part_id the package id, part_number NULL) until the package is read again, which replaces its rows as a set; the committee_report_reads rule version re-reads every report once for this, which is what re-keys the CRPT-119hrpt811 row published 2026-09-24 as (CRPT-119hrpt811-pt1, 1).",
+    "data_quality": "Only the MODS PRIMARY bill fills bill_id. The CBO columns come from spicy-docs read_cbo_estimate on the same body already acquired. The cover recital gates publication of a letter: a CBO heading alone is not an estimate. report_states_estimate=false records an absent recital; NULL means the rule has not run. cbo_letter_count counts the letters located in the part, each a committee_report_cbo_letters row; a positive recital with a count of 0 is a declared estimate no letter was located for, distinct from an extracted letter. The seven per-letter columns this table carried until committee_reports legislative-documents/2 (the first letter's heading, span, digest, end rule and signatory) are on committee_report_cbo_letters, one row per letter (ss-uep5). recital_bill_id comes from the printed recital and is retained beside the MODS bill_id. bill_id is the part's own PRIMARY bill: a multi-part package's root states none, so each part of CRPT-119hrpt494 carries the H.R. 3495 its constituent record names, where its row read before parts were keyed has NULL; its separate recital_bill_id is a text interpretation. Every part a record states is read, all or none: a package whose parts cannot all be read is refused in committee_report_reads and keeps its prior rows. Parts, by decision 29 (`docs/research/fork-delivery-decisions-2026-09-22.md`): a report published in one part is one row whose part_id is its package id and whose part_number is NULL; a report published as parts is one row per part, part_id the part's granule id (CRPT-119hrpt455-pt2) and part_number 1 to N, except that a Part 1 the publisher left unsuffixed (CRPT-119hrpt494) has part_id equal to the package id and part_number 1. A package whose one part is spelled -pt1 (CRPT-119hrpt811; spicy-docs `docs/tables.md` names the others it measured) is (package-pt1, 1), the same shape as Part 1 of two, so a reader counts a package's rows to tell a lone part from Part 1 of several. title, date_issued and last_modified are the package's and repeat on every part row. A row published before part_id existed is kept as its package's one part (part_id the package id, part_number NULL) until the package is read again, which replaces its rows as a set; the committee_report_reads rule version re-reads every report once for this, which is what re-keys the CRPT-119hrpt811 row published 2026-09-24 as (CRPT-119hrpt811-pt1, 1).",
     "columns": [
       {
         "column_name": "package_id",
@@ -24196,26 +24196,6 @@
         "description": "The measure the cover states this report accompanies, keyed the way congress_bills.bill_id is, with the Congress taken from this package's own identity because the cover states none.  The print's own answer to the report-to-bill join, which is what cbo_cost_estimates.bill_id joins against; bill_id beside it stays whatever index record the caller read."
       },
       {
-        "column_name": "estimate_heading",
-        "column_type": "VARCHAR",
-        "description": "The section heading the located span opens on, as the committee spelled it, collapsed to one line where GPO wrapped it across two.  Committee-specific prose no index states."
-      },
-      {
-        "column_name": "letter_span_start",
-        "column_type": "BIGINT",
-        "description": "Character offset of the reprinted letter in the extracted text text_sha256 digests, counted from zero.  The letter is not carried in the row, so the span is how it is re-read."
-      },
-      {
-        "column_name": "letter_span_end",
-        "column_type": "BIGINT",
-        "description": "Offset just past the letter, so text[letter_span_start:letter_span_end] is it."
-      },
-      {
-        "column_name": "letter_signatory",
-        "column_type": "VARCHAR",
-        "description": "The Director as the letter names them; NULL where the attribution states no name, which the one table-shaped estimate does."
-      },
-      {
         "column_name": "estimate_absence_reason",
         "column_type": "VARCHAR",
         "description": "The publisher's own paragraph saying why the estimate is not here, verbatim, where the cover declares none.  Carried whole rather than as a span, unlike the letter: it is a paragraph, and a row that holds the words needs no offset to read them."
@@ -24229,6 +24209,11 @@
         "column_name": "part_number",
         "column_type": "VARCHAR",
         "description": "The part's number as the publisher states it (its `partNumber`, or the `-pt{N}` its id carries, which must agree).  NULL on a report published in one part at the package id, whose record numbers none; a report the publisher issued as a lone `-pt1` is (`{package}-pt1`, 1), so a reader counts rows per package to tell it from Part 1 of several."
+      },
+      {
+        "column_name": "cbo_letter_count",
+        "column_type": "BIGINT",
+        "description": "How many reprinted CBO letters were located in this part, each a committee_report_cbo_letters row keyed (package_id, part_id, letter_seq).  0 where the cover declares an estimate and no letter's both ends were found, or where it declares none; NULL where no estimate rule was run, which is not the same as a count of zero."
       }
     ],
     "subject": "congress",
@@ -24236,6 +24221,69 @@
     "identity_columns": [
       "package_id",
       "part_id"
+    ]
+  },
+  "committee_report_cbo_letters": {
+    "table": "committee_report_cbo_letters",
+    "label": "CBO letters in committee reports",
+    "summary": "One row per CBO cost-estimate letter reprinted in one committee report part, keyed `(package_id, part_id, letter_seq)`. The span indexes into the text the parent row's text_sha256 digests; letter_date is the letterhead's dateline.",
+    "coverage": "Sampled. Every CBO cost-estimate letter located in the report parts of committee_reports whose cover declares the estimate; an omnibus report reprints several (CRPT-105hrpt149 has 11). A declared part with no located letter has no row here and cbo_letter_count 0 on its committee_reports row.",
+    "kind": "sampled",
+    "measured_on": "2026-10-31",
+    "data_quality": "(package_id, part_id) names the committee_reports row the letter was read from and letter_seq counts from zero in reading order within that part. A 1997-2011 letter's span runs from its heading or CBO letterhead through the enclosed estimate's \"Estimate approved by ... Analysis.\" line; 118th-Congress letters end at the Director's attribution. letter_date is NULL where the letter prints no dateline, as every 118th-Congress letter does (its date is cbo_cost_estimates' publication date). Census 2026-10-31 over the 202 retained PDF and 199 committee-reports HTM bodies: 117 and 24 letters, 113 and 3 of them dated, 5 PDF letters a bare transmittal whose enclosure prints no approval line.",
+    "columns": [
+      {
+        "column_name": "package_id",
+        "column_type": "VARCHAR",
+        "description": "The report package the letter was read from."
+      },
+      {
+        "column_name": "part_id",
+        "column_type": "VARCHAR",
+        "description": "The report part the letter was read from, spelled as `committee_reports.part_id`, so (package_id, part_id) is the parent row."
+      },
+      {
+        "column_name": "letter_seq",
+        "column_type": "BIGINT",
+        "description": "Zero-based position of this letter in its part, in reading order."
+      },
+      {
+        "column_name": "estimate_heading",
+        "column_type": "VARCHAR",
+        "description": "The section heading the letter opens on, as the committee spelled it, collapsed to one line where GPO wrapped it across two.  NULL where the letter opens on its CBO letterhead because no vocabulary heading precedes it (CRPT-111hrpt385-pt1 prints its heading after the letter)."
+      },
+      {
+        "column_name": "letter_span_start",
+        "column_type": "BIGINT",
+        "description": "Character offset of the letter in the extracted text the parent row's text_sha256 digests, counted from zero.  The letter is not carried in the row, so the span is how it is re-read."
+      },
+      {
+        "column_name": "letter_span_end",
+        "column_type": "BIGINT",
+        "description": "Offset just past the letter, so text[letter_span_start:letter_span_end] is it."
+      },
+      {
+        "column_name": "letter_signatory",
+        "column_type": "VARCHAR",
+        "description": "The Director as the letter names them; NULL where the attribution states no name, which the one table-shaped estimate does."
+      },
+      {
+        "column_name": "letter_date",
+        "column_type": "VARCHAR",
+        "description": "The date the letter's CBO letterhead prints (`Washington, DC, June 16, 1997.`), as YYYY-MM-DD.  NULL where the letter prints no dateline, which every 118th-Congress letter is: their date is cbo_cost_estimates' publication date, not repeated here."
+      },
+      {
+        "column_name": "last_modified",
+        "column_type": "VARCHAR",
+        "description": "The parent report's last_modified, carried so this table versions with the package it came from."
+      }
+    ],
+    "subject": "congress",
+    "grain": "One row per CBO cost-estimate letter reprinted in one committee report part whose cover declares the estimate.",
+    "identity_columns": [
+      "package_id",
+      "part_id",
+      "letter_seq"
     ]
   },
   "report_sections": {
@@ -31713,6 +31761,19 @@
         ]
       },
       {
+        "dataset": "committee_report_cbo_letters",
+        "receipt_only": false,
+        "policy_version": "legislative-documents/1",
+        "identity_columns": [
+          "package_id",
+          "part_id",
+          "letter_seq"
+        ],
+        "processing_fields": [
+          "raw_source_row"
+        ]
+      },
+      {
         "dataset": "committee_report_read_outcomes",
         "receipt_only": false,
         "policy_version": "navigation-read-outcomes/1",
@@ -31736,7 +31797,7 @@
       {
         "dataset": "committee_reports",
         "receipt_only": false,
-        "policy_version": "legislative-documents/1",
+        "policy_version": "legislative-documents/2",
         "identity_columns": [
           "package_id",
           "part_id"

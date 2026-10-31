@@ -824,6 +824,29 @@
    ]
   },
   "committee_meetings_detail_reads": {},
+  "committee_report_cbo_letters": {
+   "containers": {
+    "raw_source_row": [
+     "package_id",
+     "part_id",
+     "letter_seq",
+     "estimate_heading",
+     "estimate_heading_rule",
+     "letter_span_start",
+     "letter_span_end",
+     "letter_text_sha256",
+     "letter_end_rule",
+     "letter_signatory",
+     "letter_date",
+     "last_modified"
+    ]
+   },
+   "meanings": {
+    "estimate_heading_rule": "Which entry of the heading vocabulary matched, or `letterhead` where the letter opens on the CBO letterhead itself rather than a heading. **That vocabulary is a floor**: it only ever locates a span the recital already declared.",
+    "letter_end_rule": "How the letter's end was found: the close CBO printed -- `director_attribution` (118th), `for_director`, `named_director`, `named_signature` or `for_director_unnamed_title` (1997-2011) -- or `next_heading_in_series` where the report prints a summary table with no close at all. A transmittal followed by `Enclosure.` runs on as `<close>+estimate_approval` through the enclosed estimate's approval line (`Estimate approved by ... Analysis.`), or `<close>+next_heading_in_series` where that estimate prints none, so a bare close name marks a span without its estimate. A letter whose end could not be found is no row rather than a guessed boundary.",
+    "letter_text_sha256": "Digest of exactly those characters, so a consumer can prove the span it re-read is the span that was measured. A re-extraction that moved one character moves every offset after it, which is why the parent's text_sha256 says which text these offsets index into."
+   }
+  },
   "committee_report_read_outcomes": {},
   "committee_reports": {
    "containers": {
@@ -851,31 +874,22 @@
      "estimate_rule_version",
      "report_states_estimate",
      "recital_bill_id",
-     "estimate_heading",
-     "estimate_heading_rule",
-     "letter_span_start",
-     "letter_span_end",
-     "letter_text_sha256",
-     "letter_end_rule",
-     "letter_signatory",
      "estimate_absence_reason",
      "estimate_absence_rule",
      "part_id",
      "part_number",
      "body_completeness",
-     "text_derivation"
+     "text_derivation",
+     "cbo_letter_count"
     ]
    },
    "meanings": {
     "body_completeness": "What the read text states about itself (`sources.govinfo.bodies.publisher_body_status`): `publisher_placeholder` where it is the publisher's own notice that the text is only in the PDF, so text_sha256 digests that notice, not the document; `pdf_extracted` for text extracted from a PDF, including one read in place of a placeholder; `not_flagged` otherwise. No value asserts the text is complete. NULL on a row not re-read since the column was added.",
     "byte_size": "Length in bytes of the captured body.",
     "estimate_absence_rule": "Which reason pattern matched: `not_available` (the estimate had not arrived when the report was filed) or `not_received` (the committee asked and CBO had not answered). NULL where the report gives no reason, which is not the same as having none to give.",
-    "estimate_heading_rule": "Which entry of the heading vocabulary matched. **That vocabulary is a floor**: it only ever locates a span the recital already declared, and one retained report uses a spelling the routes measurement's five patterns missed.",
     "estimate_rule": "Which rule read this report's cost-estimate statement. Named even though there is one today, for the reason document_citations names its own: a second reader over another rendition would have to say which one produced the span.",
     "estimate_rule_version": "That rule's version, a digest over all patterns, flags, rejects, heading thresholds and rule revision, so a re-read under a corrected rule is attributable.",
     "format": "Which rendition was read (htm, xml, txt, pdf).",
-    "letter_end_rule": "How the end was found: `director_attribution` on the letter's own close, or `next_heading_in_series` where the report prints a summary table with no attribution at all. A declared letter whose end could not be found publishes a NULL span rather than a guessed boundary.",
-    "letter_text_sha256": "Digest of exactly those characters, so a consumer can prove the span it re-read is the span that was measured. A re-extraction that moved one character moves every offset after it, which is why text_sha256 says which text these offsets index into.",
     "media_type": "The response media type, proved against the format before the body was accepted.",
     "observed_at": "When the body was captured.",
     "page_count": "How many pages the extraction read, where a page-based extractor ran.",

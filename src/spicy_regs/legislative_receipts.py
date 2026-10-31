@@ -55,7 +55,8 @@ def policy(dataset: str) -> DatasetPolicy:
         subject_schema(dataset),
         () if spec["processing_only"] else tuple(spec["identity_fields"]),
         (RAW,),
-        policy_version="legislative-documents/2" if dataset in {"native_legal_references", "native_legal_reference_reads", "document_citations"} else "legislative-documents/1",
+        # committee_reports/2: its seven per-letter columns moved to committee_report_cbo_letters (ss-uep5).
+        policy_version="legislative-documents/2" if dataset in {"native_legal_references", "native_legal_reference_reads", "document_citations", "committee_reports"} else "legislative-documents/1",
         receipt_only=spec["processing_only"],
     )
 

@@ -498,3 +498,85 @@ def test_reference_restore_loads_and_admits_receipts_once(tmp_path, monkeypatch,
     assert len(calls) == 1
     for source in sources:
         assert pq.read_table(source).equals(pq.read_table(restored[source.stem]), check_metadata=True)
+
+
+#: The seven per-letter columns committee_reports carried under legislative-documents/1 (ss-uep5 moved them).
+LETTER_COLUMNS = ("estimate_heading", "estimate_heading_rule", "letter_span_start", "letter_span_end",
+                  "letter_text_sha256", "letter_end_rule", "letter_signatory")
+
+
+def _committee_reports_v1_registry():
+    """The legislative-documents/1 committee_reports spec: today's fields with the seven letter columns where they were.
+
+    The letter columns kept their names, decisions and types when they moved, so the letters table's own spec is what
+    they were; the recorded /1 policy pins that this rebuild is the shape the earlier writer published.
+    """
+    registry = field_registry()
+    letters = {f["name"]: f for f in registry["committee_report_cbo_letters"]["fields"]}
+    fields = []
+    for field in registry["committee_reports"]["fields"]:
+        if field["name"] == "cbo_letter_count":
+            continue
+        fields.append(field)
+        if field["name"] == "recital_bill_id":
+            fields.extend(letters[name] for name in LETTER_COLUMNS)
+    spec = {k: v for k, v in registry["committee_reports"].items() if k != "retired_fields"} | {"fields": fields}
+    return registry | {"committee_reports": spec}
+
+
+def test_a_bundle_written_before_the_letters_moved_restores_under_the_new_policy(tmp_path, monkeypatch):
+    """A legislative-documents/1 committee_reports generation still restores its exact source rows after the bump.
+
+    Its subjects keep their /1 shape (the four letter columns that were native, no cbo_letter_count), the next run's
+    prior is the original row with the seven retired columns, and a /2 write of the same row drops them from the
+    subject while the receipt keeps the whole original.
+    """
+    import json
+    from importlib.resources import files
+
+    from spicy_regs import legislative_documents, legislative_receipts
+    from spicy_regs.etl_receipts import DatasetPolicy
+
+    current = policy("committee_reports")
+    assert current.policy_version == "legislative-documents/2"
+    old_registry = _committee_reports_v1_registry()
+    with monkeypatch.context() as patch:
+        patch.setattr(legislative_documents, "field_registry", lambda: old_registry)
+        patch.setattr(legislative_receipts, "field_registry", lambda: old_registry)
+        # The schema is cached per dataset; read it uncached while the earlier registry is in place.
+        uncached = legislative_documents.subject_schema.__wrapped__
+        for module in (legislative_documents, legislative_receipts):
+            patch.setattr(module, "subject_schema", uncached)
+        patch.setattr(legislative_receipts, "policy", lambda name, _p=policy: (
+            DatasetPolicy("committee_reports", legislative_documents.subject_schema(name), current.identity_fields,
+                          current.receipt_fields, policy_version="legislative-documents/1")
+            if name == "committee_reports" else _p(name)))
+        recorded = DatasetPolicy.from_descriptor(json.loads(
+            files("spicy_regs").joinpath("legislative_policy_history.json").read_text())["committee_reports"])
+        assert legislative_documents.subject_schema("committee_reports").equals(recorded.subject_schema)
+        source = {f["name"]: None for f in old_registry["committee_reports"]["fields"]} | dict(
+            package_id="CRPT-105hrpt149", part_id="CRPT-105hrpt149", report_states_estimate="true",
+            estimate_heading="COMMITTEE COST ESTIMATE", estimate_heading_rule="committee_cost_estimate",
+            letter_span_start="5402", letter_span_end="16376", letter_text_sha256="sha256:" + "a" * 64,
+            letter_end_rule="named_director+estimate_approval", letter_signatory="JUNE E. O'NEILL")
+        directory = tmp_path / "source"
+        directory.mkdir()
+        written = directory / "committee_reports.parquet"
+        pq.write_table(pa.Table.from_pylist([source], schema=pa.schema(
+            [(name, pa.string()) for name in source])), written)
+        write_legislative_outputs([written], tmp_path / "v1", generation_id="g1")
+    v1_subject = pq.read_table(tmp_path / "v1/committee_reports.parquet")
+    assert v1_subject.schema.equals(recorded.subject_schema)
+    assert v1_subject.to_pylist()[0]["letter_span_start"] == 5402
+    # Restoring under the bumped policy reproduces the /1 subject from its receipt and returns the original row.
+    restored = restore_prior(tmp_path / "v1", tmp_path / "prior")
+    assert pq.read_table(restored["committee_reports"]).to_pylist() == [source]
+    # The same original written now publishes the /2 shape: no letter columns, an unread count.
+    write_legislative_outputs([restored["committee_reports"]], tmp_path / "v2", generation_id="g2")
+    [published] = pq.read_table(tmp_path / "v2/committee_reports.parquet").to_pylist()
+    assert not set(LETTER_COLUMNS) & published.keys()
+    assert published["cbo_letter_count"] is None and published["report_states_estimate"] is True
+    receipts = select_receipts(tmp_path / "v2/etl_receipts.parquet", tmp_path / "selected.parquet",
+                               dataset="committee_reports")
+    [joined] = read_with_receipts([tmp_path / "v2/committee_reports.parquet"], [receipts], current, generation_id="g2")
+    assert joined[RAW] == source

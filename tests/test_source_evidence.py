@@ -357,7 +357,7 @@ def test_report_run_retains_used_listing_package_and_detail_then_unchanged_linea
         evidence=evidence,
     )
     events = journal(evidence)
-    assert len(outputs) == 5
+    assert len(outputs) == 6
     assert {row["stage"] for row in events if row["event"] == "capture"} >= {
         "CRPT:listing",
         "CHRG:listing",

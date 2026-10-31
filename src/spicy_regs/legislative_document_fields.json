@@ -1544,6 +1544,15 @@
       "part_id"
     ],
     "processing_only": false,
+    "retired_fields": [
+      "estimate_heading",
+      "estimate_heading_rule",
+      "letter_span_start",
+      "letter_span_end",
+      "letter_text_sha256",
+      "letter_end_rule",
+      "letter_signatory"
+    ],
     "fields": [
       {
         "name": "package_id",
@@ -1753,69 +1762,6 @@
         "reason": "Published domain value or stable subject key; preserve its literal meaning."
       },
       {
-        "name": "estimate_heading",
-        "source_type": "VARCHAR",
-        "meaning": "The section heading the located span opens on, as the committee spelled it, collapsed to one line where GPO wrapped it across two.  Committee-specific prose no index states.",
-        "decision": "keep",
-        "target": "estimate_heading",
-        "target_type": "string",
-        "reason": "Published domain value or stable subject key; preserve its literal meaning."
-      },
-      {
-        "name": "estimate_heading_rule",
-        "source_type": "VARCHAR",
-        "meaning": "Which entry of the heading vocabulary matched.  **That vocabulary is a floor**: it only ever locates a span the recital already declared, and one retained report uses a spelling the routes measurement's five patterns missed.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
-      },
-      {
-        "name": "letter_span_start",
-        "source_type": "VARCHAR",
-        "meaning": "Character offset of the reprinted letter in the extracted text text_sha256 digests, counted from zero.  The letter is not carried in the row, so the span is how it is re-read.",
-        "decision": "flatten",
-        "target": "letter_span_start",
-        "target_type": "int64",
-        "reason": "A declared count or ordinal; convert strict integer text without rounding and retain original input in the receipt."
-      },
-      {
-        "name": "letter_span_end",
-        "source_type": "VARCHAR",
-        "meaning": "Offset just past the letter, so text[letter_span_start:letter_span_end] is it.",
-        "decision": "flatten",
-        "target": "letter_span_end",
-        "target_type": "int64",
-        "reason": "A declared count or ordinal; convert strict integer text without rounding and retain original input in the receipt."
-      },
-      {
-        "name": "letter_text_sha256",
-        "source_type": "VARCHAR",
-        "meaning": "Digest of exactly those characters, so a consumer can prove the span it re-read is the span that was measured.  A re-extraction that moved one character moves every offset after it, which is why text_sha256 says which text these offsets index into.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
-      },
-      {
-        "name": "letter_end_rule",
-        "source_type": "VARCHAR",
-        "meaning": "How the end was found: `director_attribution` on the letter's own close, or `next_heading_in_series` where the report prints a summary table with no attribution at all.  A declared letter whose end could not be found publishes a NULL span rather than a guessed boundary.",
-        "decision": "move-to-receipt",
-        "target": null,
-        "target_type": "receipt exact typed value",
-        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
-      },
-      {
-        "name": "letter_signatory",
-        "source_type": "VARCHAR",
-        "meaning": "The Director as the letter names them; NULL where the attribution states no name, which the one table-shaped estimate does.",
-        "decision": "keep",
-        "target": "letter_signatory",
-        "target_type": "string",
-        "reason": "Published domain value or stable subject key; preserve its literal meaning."
-      },
-      {
         "name": "estimate_absence_reason",
         "source_type": "VARCHAR",
         "meaning": "The publisher's own paragraph saying why the estimate is not here, verbatim, where the cover declares none.  Carried whole rather than as a span, unlike the letter: it is a paragraph, and a row that holds the words needs no offset to read them.",
@@ -1868,6 +1814,133 @@
         "target": null,
         "target_type": "receipt exact typed value",
         "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+      },
+      {
+        "name": "cbo_letter_count",
+        "source_type": "VARCHAR",
+        "meaning": "How many reprinted CBO letters were located in this part, each a committee_report_cbo_letters row keyed (package_id, part_id, letter_seq).  0 where the cover declares an estimate and no letter's both ends were found, or where it declares none; NULL where no estimate rule was run, which is not the same as a count of zero.",
+        "decision": "flatten",
+        "target": "cbo_letter_count",
+        "target_type": "int64",
+        "reason": "A declared count or ordinal; convert strict integer text without rounding and retain original input in the receipt."
+      }
+    ]
+  },
+  "committee_report_cbo_letters": {
+    "identity_fields": [
+      "package_id",
+      "part_id",
+      "letter_seq"
+    ],
+    "processing_only": false,
+    "fields": [
+      {
+        "name": "package_id",
+        "source_type": "VARCHAR",
+        "meaning": "The report package the letter was read from.",
+        "decision": "keep",
+        "target": "package_id",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "part_id",
+        "source_type": "VARCHAR",
+        "meaning": "The report part the letter was read from, spelled as `committee_reports.part_id`, so (package_id, part_id) is the parent row.",
+        "decision": "keep",
+        "target": "part_id",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "letter_seq",
+        "source_type": "VARCHAR",
+        "meaning": "Zero-based position of this letter in its part, in reading order.",
+        "decision": "flatten",
+        "target": "letter_seq",
+        "target_type": "int64",
+        "reason": "A declared count or ordinal; convert strict integer text without rounding and retain original input in the receipt."
+      },
+      {
+        "name": "estimate_heading",
+        "source_type": "VARCHAR",
+        "meaning": "The section heading the letter opens on, as the committee spelled it, collapsed to one line where GPO wrapped it across two.  NULL where the letter opens on its CBO letterhead because no vocabulary heading precedes it (CRPT-111hrpt385-pt1 prints its heading after the letter).",
+        "decision": "keep",
+        "target": "estimate_heading",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "estimate_heading_rule",
+        "source_type": "VARCHAR",
+        "meaning": "Which entry of the heading vocabulary matched, or `letterhead` where the letter opens on the CBO letterhead itself rather than a heading.  **That vocabulary is a floor**: it only ever locates a span the recital already declared.",
+        "decision": "move-to-receipt",
+        "target": null,
+        "target_type": "receipt exact typed value",
+        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+      },
+      {
+        "name": "letter_span_start",
+        "source_type": "VARCHAR",
+        "meaning": "Character offset of the letter in the extracted text the parent row's text_sha256 digests, counted from zero.  The letter is not carried in the row, so the span is how it is re-read.",
+        "decision": "flatten",
+        "target": "letter_span_start",
+        "target_type": "int64",
+        "reason": "A declared count or ordinal; convert strict integer text without rounding and retain original input in the receipt."
+      },
+      {
+        "name": "letter_span_end",
+        "source_type": "VARCHAR",
+        "meaning": "Offset just past the letter, so text[letter_span_start:letter_span_end] is it.",
+        "decision": "flatten",
+        "target": "letter_span_end",
+        "target_type": "int64",
+        "reason": "A declared count or ordinal; convert strict integer text without rounding and retain original input in the receipt."
+      },
+      {
+        "name": "letter_text_sha256",
+        "source_type": "VARCHAR",
+        "meaning": "Digest of exactly those characters, so a consumer can prove the span it re-read is the span that was measured.  A re-extraction that moved one character moves every offset after it, which is why the parent's text_sha256 says which text these offsets index into.",
+        "decision": "move-to-receipt",
+        "target": null,
+        "target_type": "receipt exact typed value",
+        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+      },
+      {
+        "name": "letter_end_rule",
+        "source_type": "VARCHAR",
+        "meaning": "How the letter's end was found: the close CBO printed -- `director_attribution` (118th), `for_director`, `named_director`, `named_signature` or `for_director_unnamed_title` (1997-2011) -- or `next_heading_in_series` where the report prints a summary table with no close at all.  A transmittal followed by `Enclosure.` runs on as `<close>+estimate_approval` through the enclosed estimate's approval line (`Estimate approved by ... Analysis.`), or `<close>+next_heading_in_series` where that estimate prints none, so a bare close name marks a span without its estimate.  A letter whose end could not be found is no row rather than a guessed boundary.",
+        "decision": "move-to-receipt",
+        "target": null,
+        "target_type": "receipt exact typed value",
+        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
+      },
+      {
+        "name": "letter_signatory",
+        "source_type": "VARCHAR",
+        "meaning": "The Director as the letter names them; NULL where the attribution states no name, which the one table-shaped estimate does.",
+        "decision": "keep",
+        "target": "letter_signatory",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "letter_date",
+        "source_type": "VARCHAR",
+        "meaning": "The date the letter's CBO letterhead prints (`Washington, DC, June 16, 1997.`), as YYYY-MM-DD.  NULL where the letter prints no dateline, which every 118th-Congress letter is: their date is cbo_cost_estimates' publication date, not repeated here.",
+        "decision": "keep",
+        "target": "letter_date",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "last_modified",
+        "source_type": "VARCHAR",
+        "meaning": "The parent report's last_modified, carried so this table versions with the package it came from.",
+        "decision": "keep",
+        "target": "last_modified",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
       }
     ]
   },

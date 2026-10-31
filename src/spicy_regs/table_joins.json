@@ -879,6 +879,26 @@
       }
     },
     {
+      "child": "committee_report_cbo_letters",
+      "child_columns": [
+        "package_id",
+        "part_id"
+      ],
+      "parent": "committee_reports",
+      "parent_columns": [
+        "package_id",
+        "part_id"
+      ],
+      "kind": "empty",
+      "reason": "Written by the committee-reports family from the spicy-docs reader that reads every CBO letter (ss-uep5); no generation publishes it yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "unspecified",
+      "measurement": null
+    },
+    {
       "child": "law_sections",
       "child_columns": [
         "law_id"
@@ -9089,6 +9109,19 @@
       }
     ],
     "report_sections": [
+      {
+        "child_columns": [
+          "package_id",
+          "part_id"
+        ],
+        "parent_table": "committee_reports",
+        "parent_columns": [
+          "package_id",
+          "part_id"
+        ]
+      }
+    ],
+    "committee_report_cbo_letters": [
       {
         "child_columns": [
           "package_id",

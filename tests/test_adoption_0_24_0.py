@@ -69,7 +69,7 @@ def test_cover_links_use_mods_and_empty_covers_resume_without_body_requests(tmp_
     assert {r["relation"] for r in rows} == {"held_on"}
     assert all(r["held_date"] and r["committee_system_code"] for r in rows)
     assert all(r["bill_id"] is None for r in pq.read_table(paths[2]).to_pylist())
-    assert {r["outcome"] for r in pq.read_table(paths[4]).to_pylist()} == {"complete"}
+    assert {r["outcome"] for r in pq.read_table(paths[-1]).to_pylist()} == {"complete"}
     retain(paths)
     bodies.requested.clear()
     build_committee_reports(tmp_path, reader=Discovery(), acquirer=bodies,
@@ -93,7 +93,10 @@ def test_report_pass_runs_the_recital_gate_on_its_existing_body(tmp_path, fixtur
                                    hearings=StubHearings(), download_prior=_no_prior)
     row = pq.read_table(paths[0]).to_pylist()[0]
     assert row["report_states_estimate"] == states
-    assert (row["letter_text_sha256"] is not None) == has_span
+    assert row["cbo_letter_count"] == ("1" if has_span else "0")
+    letters = pq.read_table(paths[4]).to_pylist()
+    assert [letter["letter_text_sha256"] is not None for letter in letters] == ([True] if has_span else [])
+    assert all((letter["package_id"], letter["part_id"]) == (row["package_id"], row["part_id"]) for letter in letters)
     assert row["estimate_rule_version"]
 
 
@@ -113,7 +116,7 @@ def test_pending_packages_survive_an_advanced_window_and_the_cap(tmp_path):
     paths = build_committee_reports(tmp_path, reader=Discovery(), acquirer=bodies,
                                    hearings=StubHearings(), max_packages=1, download_prior=_no_prior)
     assert bodies.requested == [CRPT_ID]
-    assert {r["outcome"] for r in pq.read_table(paths[4]).to_pylist()} == {"refused", "pending"}
+    assert {r["outcome"] for r in pq.read_table(paths[-1]).to_pylist()} == {"refused", "pending"}
     retain(paths)
     discovery = Discovery()
     discovery.IDS = {"CRPT": [], "CHRG": []}
@@ -227,7 +230,7 @@ def test_hearing_correction_replaces_only_evaluated_parent_links(tmp_path, corre
     fresh = [row for row in rows if row["package_id"] == package_id]
     assert len(fresh) == {"empty": 0, "partial": 11, "refused": 12}[correction]
     assert [row for row in rows if row["package_id"] != package_id] == [untouched]
-    [checkpoint] = pq.read_table(paths[4]).to_pylist()
+    [checkpoint] = pq.read_table(paths[-1]).to_pylist()
     assert checkpoint["outcome"] == ("refused" if correction == "refused" else "complete")
     retain(paths)
     asked.clear()

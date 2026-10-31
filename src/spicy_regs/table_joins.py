@@ -262,6 +262,9 @@ JOINS: tuple[Join, ...] = (
           "meeting; CHRG-119hhrg60746's 417109 names none. Where Congress.gov's event_id also names one they agree "
           "21 of 21."),
     _join("report_sections", ("package_id", "part_id"), "committee_reports", ("package_id", "part_id"), 142, 0),
+    _join("committee_report_cbo_letters", ("package_id", "part_id"), "committee_reports", ("package_id", "part_id"),
+          0, 0, "empty", "Written by the committee-reports family from the spicy-docs reader that reads every CBO "
+          "letter (ss-uep5); no generation publishes it yet."),
     _join("law_sections", "law_id", "laws", "law_id", 0, 0, "empty",
           "Sections from the law's own XML; public population not yet baselined."),
     _join("law_code_sections", "law_id", "laws", "law_id", 70, 0),

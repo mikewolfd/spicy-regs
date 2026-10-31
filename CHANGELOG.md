@@ -9,6 +9,27 @@ Entries link to the pull request that introduced the change.
 
 ### Added
 
+- **`committee_report_cbo_letters`: every CBO letter a committee report
+  reprints, one row per letter** (ss-uep5; owner answers 2026-10-31, Q1-Q4).
+  - **Rows.** Keyed `(package_id, part_id, letter_seq)` and joined to
+    `committee_reports` on `(package_id, part_id)`, the shape of
+    `report_sections`. An omnibus report is one row per letter
+    (CRPT-105hrpt149 has 11); a 1997-2011 letter's span runs through its
+    enclosed estimate's "Estimate approved by ... Analysis." line, and
+    `letter_date` is the letterhead's dateline, NULL where none is printed
+    (every 118th-Congress letter).
+  - **`committee_reports` moves to `legislative-documents/2`.** Its seven
+    per-letter columns (`estimate_heading`, `estimate_heading_rule`,
+    `letter_span_start`, `letter_span_end`, `letter_text_sha256`,
+    `letter_end_rule`, `letter_signatory`) move to the new table, and it gains
+    `cbo_letter_count` (NULL where no rule ran). A prior published under `/1`
+    restores in its exact shape (`legislative_policy_history.json`); the
+    `cbo=` and `sections=` rule versions re-read every report once.
+  - **Needs the SpicyDocs release that carries the reader** (0.67.x, the
+    landing agent's). This branch was gated against a locally built wheel of
+    spicy-docs `wf/cbo-letters` substituted in the working tree only; the
+    vendored reader is unchanged here.
+
 - **`gao_reports`: GAO's major-rule reports from 1996, and what each report's
   letter states of its rule** (owner decisions 2026-10-04; SpicyDocs 0.57.0's
   readers).
