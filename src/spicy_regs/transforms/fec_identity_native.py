@@ -7,9 +7,15 @@ position. Candidate identifier validity never deletes a source-reported string.
 from __future__ import annotations
 
 from datetime import date, datetime
+from functools import cache
+from importlib.resources import files
 import json
 import re
 from typing import Any, cast
+
+#: Why a party code was changed or kept; the original value rides beside it in the receipt.
+PARTY_CASE_FOLDED = "party_case_folded_to_registry_code"
+PARTY_OFF_REGISTRY = "party_not_a_registry_code_kept"
 
 
 def _invalid_constant(value):
@@ -80,10 +86,38 @@ def native_list(raw, kind, *, candidate_ids=False):
     return output, diagnostics
 
 
+@cache
+def _party_codes() -> tuple[frozenset[str], dict[str, str]]:
+    """The FEC party registry and its unambiguous case folds.
+
+    Read from RefSpec's parse of the FEC party code page, vendored beside the
+    pinned page; ``tests/test_source_domain_drift.py`` holds that list to the
+    page's bytes. A fold exists only where one registry code has the spelling.
+    """
+    vendored = json.loads(files("spicy_regs").joinpath("reference/refspec/fec-committee-codes.json").read_text())
+    codes = frozenset(vendored["resources"]["party"]["codes"])
+    spellings: dict[str, list[str]] = {}
+    for code in codes:
+        spellings.setdefault(code.casefold(), []).append(code)
+    return codes, {folded: matches[0] for folded, matches in spellings.items() if len(matches) == 1}
+
+
 def native_scalar(value, kind):
-    """Convert reviewed exact spellings; never infer a missing year or timezone."""
+    """Convert reviewed exact spellings; never infer a missing year or timezone.
+
+    ``fec_party_code`` keeps a registry code as is and folds a case variant
+    (``Rep``, ``dem``) to the one code it spells; anything else (``GOP``,
+    ``N/A``, ``  0``) stays as the FEC wrote it. Both of those come back with
+    their reason, so the receipt keeps the original beside it.
+    """
     if value is None or value == "":
         return None, None
+    if kind == "fec_party_code" and isinstance(value, str):
+        codes, folds = _party_codes()
+        if value in codes:
+            return value, None
+        folded = folds.get(value.casefold())
+        return (folded, PARTY_CASE_FOLDED) if folded is not None else (value, PARTY_OFF_REGISTRY)
     if kind == "integer":
         if type(value) is int and -(2**31) <= value < 2**31:
             return value, None
@@ -107,6 +141,6 @@ def native_scalar(value, kind):
                     return parsed, None
             except ValueError:
                 pass
-    else:
+    elif kind != "fec_party_code":
         raise ValueError(f"Unsupported FEC scalar kind: {kind}")
     return None, "unsupported_" + kind

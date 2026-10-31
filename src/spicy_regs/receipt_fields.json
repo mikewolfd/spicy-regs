@@ -1765,7 +1765,8 @@
    "containers": {
     "conversion_inputs": [
      "cycle",
-     "election_year"
+     "election_year",
+     "party"
     ]
    }
   },
@@ -1774,7 +1775,8 @@
   "fec_committee_history": {
    "containers": {
     "conversion_inputs": [
-     "cycle"
+     "cycle",
+     "party"
     ]
    }
   },

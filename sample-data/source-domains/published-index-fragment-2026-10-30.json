@@ -3,65 +3,9 @@
   "version": 2,
   "families": {
     "bill-family": {
-      "artifactDigest": "sha256:f719442c6a814666c5747624ef8a52da002bc2982f4ebd7f2be990f86bc38d42",
-      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:f78022d0df3024e0061d4685322fb731504c6d609386406ef5ceba7865161a8e",
-      "prefix": "generations/bill-family/f719442c6a814666c5747624ef8a52da002bc2982f4ebd7f2be990f86bc38d42",
-      "publishedAt": "2026-10-30T05:07:28Z",
-      "tables": {
-        "bill_actions.parquet": {
-          "byteSize": 11506349,
-          "columns": [
-            [
-              "bill_id",
-              "VARCHAR"
-            ],
-            [
-              "action_index",
-              "BIGINT"
-            ],
-            [
-              "action_date",
-              "VARCHAR"
-            ],
-            [
-              "action_time",
-              "VARCHAR"
-            ],
-            [
-              "action_text",
-              "VARCHAR"
-            ],
-            [
-              "action_code",
-              "VARCHAR"
-            ],
-            [
-              "action_type",
-              "VARCHAR"
-            ],
-            [
-              "source_system_name",
-              "VARCHAR"
-            ],
-            [
-              "recorded_vote_count",
-              "BIGINT"
-            ],
-            [
-              "is_latest_action",
-              "BOOLEAN"
-            ],
-            [
-              "stage",
-              "VARCHAR"
-            ]
-          ],
-          "rows": 932877,
-          "sha256": "sha256:ded5f49598848192c847dd6e2b4ba0bd57b26209c0606a4d3d27f6dea32d78a9"
-        }
-      },
+      "artifactDigest": "sha256:513833795176bb5d80838f95ef425c1d9b627607254d5210081f9591d3e5e0c8",
       "etlReceipts": {
-        "byteSize": 3026562002,
+        "byteSize": 3027469434,
         "columns": [
           [
             "receipt_id",
@@ -140,14 +84,135 @@
           "bill_family_backfill_walks",
           "bill_family_document_file_outcomes"
         ],
-        "generationId": "7523c42415324c86a93543af8ea5665a",
+        "generationId": "d542f4b03eff461a93bb836ad62b1a2f",
         "key": "etl_receipts.parquet",
-        "rows": 10089926,
-        "sha256": "sha256:a767e2a3267a81df7469df28c6fc4b8bd43f93395a97a3b5c95b631229668899"
+        "rows": 10091424,
+        "sha256": "sha256:8a60ed0059ed4be79acb27d74e52460d6620dcb0e5c430f10e6ec7187fb6a6da"
+      },
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:c91ab06b10de4fb70cd28f19d0e149c0740f54e3a45e3e0af2a0af2a7a1f1b89",
+      "prefix": "generations/bill-family/513833795176bb5d80838f95ef425c1d9b627607254d5210081f9591d3e5e0c8",
+      "publishedAt": "2026-10-31T05:09:18Z",
+      "tables": {
+        "bill_actions.parquet": {
+          "byteSize": 11510282,
+          "columns": [
+            [
+              "bill_id",
+              "VARCHAR"
+            ],
+            [
+              "action_index",
+              "BIGINT"
+            ],
+            [
+              "action_date",
+              "VARCHAR"
+            ],
+            [
+              "action_time",
+              "VARCHAR"
+            ],
+            [
+              "action_text",
+              "VARCHAR"
+            ],
+            [
+              "action_code",
+              "VARCHAR"
+            ],
+            [
+              "action_type",
+              "VARCHAR"
+            ],
+            [
+              "source_system_name",
+              "VARCHAR"
+            ],
+            [
+              "recorded_vote_count",
+              "BIGINT"
+            ],
+            [
+              "is_latest_action",
+              "BOOLEAN"
+            ],
+            [
+              "stage",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 933056,
+          "sha256": "sha256:9837b2c29be390f2f0e2b357d7ec8969ca3aeba21d907af8c09448e4429303a9"
+        }
       }
     },
     "comments": {
       "artifactDigest": "sha256:08e42cccdb0a57ff5e9fb7c0e0a825ff578c2e349e308289acaab86f766266a1",
+      "etlReceipts": {
+        "byteSize": 3968509123,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "comments",
+          "comments_index"
+        ],
+        "generationId": "comments-v2-c2dd1f166abd441b80eb02373d625c88",
+        "key": "etl_receipts.parquet",
+        "rows": 26561684,
+        "sha256": "sha256:3a9a9cddb235d5055ae49d8fbe430c61dcce8bcfdec9e14023c7db5adcd9ea0d"
+      },
       "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:0c43821e17ebcb87e6ba88fed09447088337d072726c92a89c2f15078850c7a3",
       "prefix": "generations/comments/08e42cccdb0a57ff5e9fb7c0e0a825ff578c2e349e308289acaab86f766266a1",
       "publishedAt": "2026-10-10T15:45:23Z",
@@ -255,115 +320,10 @@
           "rows": 26418078,
           "sha256": "sha256:802a5e9a494b4be9add638c779e1994ed97582e1ea3c21627c77b4030b976ea4"
         }
-      },
-      "etlReceipts": {
-        "byteSize": 3968509123,
-        "columns": [
-          [
-            "receipt_id",
-            "VARCHAR"
-          ],
-          [
-            "dataset",
-            "VARCHAR"
-          ],
-          [
-            "policy_version",
-            "VARCHAR"
-          ],
-          [
-            "generation_id",
-            "VARCHAR"
-          ],
-          [
-            "record_id",
-            "VARCHAR"
-          ],
-          [
-            "subject_version",
-            "VARCHAR"
-          ],
-          [
-            "identity_json",
-            "VARCHAR"
-          ],
-          [
-            "attempt_id",
-            "VARCHAR"
-          ],
-          [
-            "outcome",
-            "VARCHAR"
-          ],
-          [
-            "processor",
-            "VARCHAR"
-          ],
-          [
-            "witnesses",
-            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
-          ],
-          [
-            "processing_json",
-            "VARCHAR"
-          ],
-          [
-            "diagnostic_json",
-            "VARCHAR"
-          ]
-        ],
-        "datasets": [
-          "comments",
-          "comments_index"
-        ],
-        "generationId": "comments-v2-c2dd1f166abd441b80eb02373d625c88",
-        "key": "etl_receipts.parquet",
-        "rows": 26561684,
-        "sha256": "sha256:3a9a9cddb235d5055ae49d8fbe430c61dcce8bcfdec9e14023c7db5adcd9ea0d"
       }
     },
     "dockets": {
       "artifactDigest": "sha256:6890875d7aaf081b6974df133d307bddc2b5e4c9fb9793dcfc33a49707a2a9d2",
-      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:0bd671f8b53e23ef6ea876a16df813bbb953acd020a71054987f40c29dbb3448",
-      "prefix": "generations/dockets/6890875d7aaf081b6974df133d307bddc2b5e4c9fb9793dcfc33a49707a2a9d2",
-      "publishedAt": "2026-10-06T10:21:34Z",
-      "tables": {
-        "dockets.parquet": {
-          "byteSize": 15480748,
-          "columns": [
-            [
-              "docket_id",
-              "VARCHAR"
-            ],
-            [
-              "agency_code",
-              "VARCHAR"
-            ],
-            [
-              "title",
-              "VARCHAR"
-            ],
-            [
-              "docket_type",
-              "VARCHAR"
-            ],
-            [
-              "modify_date",
-              "VARCHAR"
-            ],
-            [
-              "abstract",
-              "VARCHAR"
-            ],
-            [
-              "rin",
-              "VARCHAR"
-            ]
-          ],
-          "rows": 279719,
-          "sha256": "sha256:81dcc636e24666cab8ccf4b215e24e80d74a13e5a0780ad7690efaaaa6316a44"
-        }
-      },
       "etlReceipts": {
         "byteSize": 58573148,
         "columns": [
@@ -427,16 +387,120 @@
         "key": "etl_receipts.parquet",
         "rows": 279720,
         "sha256": "sha256:1bfc2b0d05b2f81bc39ee49633fd6560255652ec34f2567b02e45846b96c24c0"
+      },
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:0bd671f8b53e23ef6ea876a16df813bbb953acd020a71054987f40c29dbb3448",
+      "prefix": "generations/dockets/6890875d7aaf081b6974df133d307bddc2b5e4c9fb9793dcfc33a49707a2a9d2",
+      "publishedAt": "2026-10-06T10:21:34Z",
+      "tables": {
+        "dockets.parquet": {
+          "byteSize": 15480748,
+          "columns": [
+            [
+              "docket_id",
+              "VARCHAR"
+            ],
+            [
+              "agency_code",
+              "VARCHAR"
+            ],
+            [
+              "title",
+              "VARCHAR"
+            ],
+            [
+              "docket_type",
+              "VARCHAR"
+            ],
+            [
+              "modify_date",
+              "VARCHAR"
+            ],
+            [
+              "abstract",
+              "VARCHAR"
+            ],
+            [
+              "rin",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 279719,
+          "sha256": "sha256:81dcc636e24666cab8ccf4b215e24e80d74a13e5a0780ad7690efaaaa6316a44"
+        }
       }
     },
     "documents": {
-      "artifactDigest": "sha256:5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71",
-      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:ca0edadb4d17176175e546d0e16f12bb48db01fefda1c8121cf40266ec13886d",
-      "prefix": "generations/documents/5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71",
-      "publishedAt": "2026-10-07T06:51:54Z",
+      "artifactDigest": "sha256:9060b0b7eb9cec1b0627a02b1a09d2578b4cc466d15f6dca4e8f23119eb093fb",
+      "etlReceipts": {
+        "byteSize": 556266945,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "documents"
+        ],
+        "generationId": "dd428434868f4b2594d0a66ce416e6ef",
+        "key": "etl_receipts.parquet",
+        "rows": 2004457,
+        "sha256": "sha256:abe7ea7ba16b8755049e7210f103ba148c3feb06a3cc9af1efbfc460d22656cf"
+      },
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:705027e3ec9899ff3e5ecf9661191c78ee4880dec5814b1a86474cc6c02dec44",
+      "prefix": "generations/documents/9060b0b7eb9cec1b0627a02b1a09d2578b4cc466d15f6dca4e8f23119eb093fb",
+      "publishedAt": "2026-10-31T07:05:12Z",
       "tables": {
         "documents.parquet": {
-          "byteSize": 104974489,
+          "byteSize": 91086670,
           "columns": [
             [
               "document_id",
@@ -523,12 +587,15 @@
               "VARCHAR"
             ]
           ],
-          "rows": 2004396,
-          "sha256": "sha256:c9cc1d2decbcc66a91b51824b826501d8d70189affc0138fae53703bf495ad2b"
+          "rows": 2004456,
+          "sha256": "sha256:9125e2bbf167e415dcbfad992aa167cee67347b98e71ebccc3a292eaefd9666e"
         }
-      },
+      }
+    },
+    "fec-committee-history": {
+      "artifactDigest": "sha256:181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320",
       "etlReceipts": {
-        "byteSize": 929674726,
+        "byteSize": 36864113,
         "columns": [
           [
             "receipt_id",
@@ -584,16 +651,13 @@
           ]
         ],
         "datasets": [
-          "documents"
+          "fec_committee_history"
         ],
-        "generationId": "25eb36e5e4124e1e9c71abef4e676fc3",
+        "generationId": "0246f4cddd174ac3950e93809fc05386",
         "key": "etl_receipts.parquet",
-        "rows": 2004397,
-        "sha256": "sha256:ed863ed4115ea41faf360269d8880e1ebce8b4a7a4c36ad229cc47af8c967cbb"
-      }
-    },
-    "fec-committee-history": {
-      "artifactDigest": "sha256:181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320",
+        "rows": 298596,
+        "sha256": "sha256:0c2cdf7f088babb3ac4aa8a396ba2798093a6c3db9758e0c4c7a471a2336e68f"
+      },
       "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:60e8957193148dd4ab2866a4bd1d7e9306a28e3db791a0a696da762c389b3983",
       "prefix": "generations/fec-committee-history/181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320",
       "publishedAt": "2026-10-30T19:52:18Z",
@@ -669,9 +733,12 @@
           "rows": 298596,
           "sha256": "sha256:03a6f17fddd3f008b23e4e595d65945154994a8a935f046400f342198440c80d"
         }
-      },
+      }
+    },
+    "gao-recommendations": {
+      "artifactDigest": "sha256:c6075e12eda3936d5fb66ccfdfc86873cf7e7d471e9aeddc259e0fb26d320182",
       "etlReceipts": {
-        "byteSize": 36864113,
+        "byteSize": 3124146,
         "columns": [
           [
             "receipt_id",
@@ -727,16 +794,166 @@
           ]
         ],
         "datasets": [
-          "fec_committee_history"
+          "gao_recommendations"
         ],
-        "generationId": "0246f4cddd174ac3950e93809fc05386",
+        "generationId": "41112cb0c243485f9de92deb0963c41b",
         "key": "etl_receipts.parquet",
-        "rows": 298596,
-        "sha256": "sha256:0c2cdf7f088babb3ac4aa8a396ba2798093a6c3db9758e0c4c7a471a2336e68f"
+        "rows": 5500,
+        "sha256": "sha256:128e2c96cabae49f4055d8d44ff1b191c73dc1bd619cee516c98a8c38a95f533"
+      },
+      "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:7aa6556dfd11aff7c48267b123fbdd571fbcbe2a9ebdbb05bb6a7acd435268c9",
+      "prefix": "generations/gao-recommendations/c6075e12eda3936d5fb66ccfdfc86873cf7e7d471e9aeddc259e0fb26d320182",
+      "publishedAt": "2026-10-30T17:16:36Z",
+      "tables": {
+        "gao_recommendations.parquet": {
+          "byteSize": 1732305,
+          "columns": [
+            [
+              "recommendation_id",
+              "VARCHAR"
+            ],
+            [
+              "report_id",
+              "VARCHAR"
+            ],
+            [
+              "publication_number",
+              "VARCHAR"
+            ],
+            [
+              "publication_title",
+              "VARCHAR"
+            ],
+            [
+              "publication_date",
+              "DATE"
+            ],
+            [
+              "director_name",
+              "VARCHAR"
+            ],
+            [
+              "agency",
+              "VARCHAR"
+            ],
+            [
+              "recommendation",
+              "VARCHAR"
+            ],
+            [
+              "recommendation_kind",
+              "VARCHAR"
+            ],
+            [
+              "recommendation_number",
+              "VARCHAR"
+            ],
+            [
+              "status",
+              "VARCHAR"
+            ],
+            [
+              "priority",
+              "BOOLEAN"
+            ],
+            [
+              "comments",
+              "VARCHAR"
+            ],
+            [
+              "topics",
+              "VARCHAR"
+            ],
+            [
+              "first_seen",
+              "DATE"
+            ],
+            [
+              "last_seen",
+              "DATE"
+            ],
+            [
+              "listed_open",
+              "BOOLEAN"
+            ],
+            [
+              "status_as_of",
+              "VARCHAR"
+            ]
+          ],
+          "rows": 5500,
+          "sha256": "sha256:97d99f64f8f052d2e3bd64edbb051bf7fd7a0fc032d225ce2633b9b9ba3201d5"
+        }
       }
     },
     "lobbying-filings": {
       "artifactDigest": "sha256:eb88eb812bec81a5028c8be59e71a470efeb7a397dfc79c33a457865fd1d9923",
+      "etlReceipts": {
+        "byteSize": 2993835029,
+        "columns": [
+          [
+            "receipt_id",
+            "VARCHAR"
+          ],
+          [
+            "dataset",
+            "VARCHAR"
+          ],
+          [
+            "policy_version",
+            "VARCHAR"
+          ],
+          [
+            "generation_id",
+            "VARCHAR"
+          ],
+          [
+            "record_id",
+            "VARCHAR"
+          ],
+          [
+            "subject_version",
+            "VARCHAR"
+          ],
+          [
+            "identity_json",
+            "VARCHAR"
+          ],
+          [
+            "attempt_id",
+            "VARCHAR"
+          ],
+          [
+            "outcome",
+            "VARCHAR"
+          ],
+          [
+            "processor",
+            "VARCHAR"
+          ],
+          [
+            "witnesses",
+            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
+          ],
+          [
+            "processing_json",
+            "VARCHAR"
+          ],
+          [
+            "diagnostic_json",
+            "VARCHAR"
+          ]
+        ],
+        "datasets": [
+          "lobbying_filings",
+          "lobbying_activities",
+          "lobbying_activity_lobbyists"
+        ],
+        "generationId": "b3507aaad2ef4a87aa35dab6947b0158",
+        "key": "etl_receipts.parquet",
+        "rows": 15882805,
+        "sha256": "sha256:aee767327b134e92965e886b16164bc3448d1213af303eae5e4366ec2159dc1a"
+      },
       "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:fa6c1ebe2d449a61e5eb3b391a8d5c5744c6905f44b0be43330adc9658655984",
       "prefix": "generations/lobbying-filings/eb88eb812bec81a5028c8be59e71a470efeb7a397dfc79c33a457865fd1d9923",
       "publishedAt": "2026-10-19T17:50:17Z",
@@ -835,9 +1052,12 @@
           "rows": 1965087,
           "sha256": "sha256:25b015cb5cdb235045727e760bba0170b45ff60f2131303b92f7c4a3482b4b54"
         }
-      },
+      }
+    },
+    "unified-agenda": {
+      "artifactDigest": "sha256:d562881f25c54d8c403e9969a05a42b17196926949bc3645b35432072522d645",
       "etlReceipts": {
-        "byteSize": 2993835029,
+        "byteSize": 113234866,
         "columns": [
           [
             "receipt_id",
@@ -893,18 +1113,13 @@
           ]
         ],
         "datasets": [
-          "lobbying_filings",
-          "lobbying_activities",
-          "lobbying_activity_lobbyists"
+          "unified_agenda"
         ],
-        "generationId": "b3507aaad2ef4a87aa35dab6947b0158",
+        "generationId": "5afcfd25afbd428c96d3ec0a6438c513",
         "key": "etl_receipts.parquet",
-        "rows": 15882805,
-        "sha256": "sha256:aee767327b134e92965e886b16164bc3448d1213af303eae5e4366ec2159dc1a"
-      }
-    },
-    "unified-agenda": {
-      "artifactDigest": "sha256:d562881f25c54d8c403e9969a05a42b17196926949bc3645b35432072522d645",
+        "rows": 241727,
+        "sha256": "sha256:f4ad0d10ecf6b9d13b7bd2930e281a999a601b78c5a815d9057d50aab2440d34"
+      },
       "logicalId": "urn:spicy:artifact:spicy-regs-rollup-generation:300871e2a2b2ef5a2e9988a64cb3db9e6707e53b76aca4d664a51ab9ae453129",
       "prefix": "generations/unified-agenda/d562881f25c54d8c403e9969a05a42b17196926949bc3645b35432072522d645",
       "publishedAt": "2026-10-30T20:17:42Z",
@@ -980,70 +1195,6 @@
           "rows": 241726,
           "sha256": "sha256:aa4f83bc0219d3e8eb1cf025f551bd3e17202a0b48968746931125ad0feb2b15"
         }
-      },
-      "etlReceipts": {
-        "byteSize": 113234866,
-        "columns": [
-          [
-            "receipt_id",
-            "VARCHAR"
-          ],
-          [
-            "dataset",
-            "VARCHAR"
-          ],
-          [
-            "policy_version",
-            "VARCHAR"
-          ],
-          [
-            "generation_id",
-            "VARCHAR"
-          ],
-          [
-            "record_id",
-            "VARCHAR"
-          ],
-          [
-            "subject_version",
-            "VARCHAR"
-          ],
-          [
-            "identity_json",
-            "VARCHAR"
-          ],
-          [
-            "attempt_id",
-            "VARCHAR"
-          ],
-          [
-            "outcome",
-            "VARCHAR"
-          ],
-          [
-            "processor",
-            "VARCHAR"
-          ],
-          [
-            "witnesses",
-            "STRUCT(source_id VARCHAR, source_uri VARCHAR, sha256 VARCHAR, locator VARCHAR, body_version VARCHAR)[]"
-          ],
-          [
-            "processing_json",
-            "VARCHAR"
-          ],
-          [
-            "diagnostic_json",
-            "VARCHAR"
-          ]
-        ],
-        "datasets": [
-          "unified_agenda"
-        ],
-        "generationId": "5afcfd25afbd428c96d3ec0a6438c513",
-        "key": "etl_receipts.parquet",
-        "rows": 241727,
-        "sha256": "sha256:f4ad0d10ecf6b9d13b7bd2930e281a999a601b78c5a815d9057d50aab2440d34"
       }
     }
   }

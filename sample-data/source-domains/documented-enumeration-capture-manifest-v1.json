@@ -95,6 +95,30 @@
       "publisher_revision": "the page states no revision",
       "source_url": "https://www.fec.gov/campaign-finance-data/party-code-descriptions/",
       "states": "the party code descriptions"
+    },
+    {
+      "byte_length": 122070,
+      "bytes_digest": "sha256:9aa9e7f185b9433236f512a6f694f6c9cf57f109bba3e9ea99ac42de19180096",
+      "key": "gao-topics-listing",
+      "media_type": "text/html",
+      "observed_at": "2026-08-15T13:56:14Z",
+      "path": "gao-topics-2026-08-15.html",
+      "publisher": "gao",
+      "publisher_revision": "the page states no revision",
+      "source_url": "https://www.gao.gov/topics",
+      "states": "GAO's Browse Topics Alphabetically listing: 30 published topics with their descriptions"
+    },
+    {
+      "byte_length": 148620,
+      "bytes_digest": "sha256:98391cad16eba43e48017782765088d8720116ba988e1591d85215804906d0cd",
+      "key": "gao-science-and-technology",
+      "media_type": "text/html",
+      "observed_at": "2026-09-01T23:33:02Z",
+      "path": "gao-science-and-technology-2026-09-01.html",
+      "publisher": "gao",
+      "publisher_revision": "the page states no revision",
+      "source_url": "https://www.gao.gov/topics/science-and-technology",
+      "states": "GAO's Science and Technology topic page, a live topic term the browse listing omits"
     }
   ],
   "format_version": "spicyregs-source-domains/capture-v1"

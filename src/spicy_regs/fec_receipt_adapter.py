@@ -206,9 +206,12 @@ class ReceiptAdapter:
                   pa.ipc.read_schema(pa.BufferReader(base64.b64decode(declaration["arrow_schema"]))))
         if current and source_schema is not None:
             raise ValueError("Current FEC interpretation requires its maintained processing schema")
+        # A party fold keeps a string a string, and receipts written before it carry no party original, because
+        # their subject value was the original; only a type-changing scalar must have its original retained.
         identity_scalars = ({} if policy.policy_version.startswith("fec-subject-receipts/") else
-                            json.loads(files("spicy_regs").joinpath("fec_identity_context_fields.json").read_text())
-                            [table]["native_scalars"])
+                            {name: kind for name, kind in json.loads(files("spicy_regs").joinpath(
+                                "fec_identity_context_fields.json").read_text())[table]["native_scalars"].items()
+                             if kind != "fec_party_code"})
 
         def original(row):
             if policy.policy_version.startswith("fec-subject-receipts/"):

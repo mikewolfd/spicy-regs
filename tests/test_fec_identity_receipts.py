@@ -492,7 +492,7 @@ def test_committee_history_parent_restores_the_rows_its_builder_wrote(tmp_path, 
     blank = dict.fromkeys(REGISTRY["fec_committee_history"]["input_fields"])
     written = [
         {**blank, "committee_id": "C00030718", "cycle": "2026", "name": "REALTORS PAC", "connected_organization_name": ""},
-        {**blank, "committee_id": "C00030718", "cycle": "2024", "zip": "060111"},
+        {**blank, "committee_id": "C00030718", "cycle": "2024", "zip": "060111", "party": "Rep"},
     ]
     bundle = tmp_path / "bundle"
     with IdentityReceiptWriter(bundle, generation_id="g1", tables=["fec_committee_history", "fec_candidate_history"]) as writer:
@@ -501,7 +501,10 @@ def test_committee_history_parent_restores_the_rows_its_builder_wrote(tmp_path, 
         candidate = dict.fromkeys(REGISTRY["fec_candidate_history"]["input_fields"])
         candidate.update({key: "2024" if key == "cycle" else key for key in REGISTRY["fec_candidate_history"]["identity_fields"]})
         writer.emit("fec_candidate_history", candidate, input_witness=WITNESS)
-    assert pq.read_table(bundle / "fec_committee_history.parquet")["cycle"].to_pylist() == [2026, 2024]
+    published = pq.read_table(bundle / "fec_committee_history.parquet")
+    assert published["cycle"].to_pylist() == [2026, 2024]
+    # The published party is folded; the restored parent below is the FEC's own spelling.
+    assert published["party"].to_pylist() == [None, "REP"]
     remember_selection(tmp_path, [
         SelectedDataset(name, (bundle / (name + ".parquet"),), bundle / "etl_receipts.parquet", "g1")
         for name in ("fec_committee_history", "fec_candidate_history")

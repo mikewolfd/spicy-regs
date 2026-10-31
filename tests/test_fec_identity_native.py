@@ -42,6 +42,29 @@ def test_scalar_never_guesses_century_or_timezone():
     assert native_scalar("2026", "integer") == (2026, None)
 
 
+def test_party_folds_only_an_unambiguous_case_variant_and_keeps_the_rest_with_a_reason():
+    """Owner answer 2026-10-31 (Q6): Rep/dem fold to their registry codes; GOP, N/A and junk stay as written."""
+    from spicy_regs.transforms.fec_identity_native import PARTY_CASE_FOLDED, PARTY_OFF_REGISTRY
+
+    assert native_scalar("REP", "fec_party_code") == ("REP", None)
+    assert native_scalar("Rep", "fec_party_code") == ("REP", PARTY_CASE_FOLDED)
+    assert native_scalar("dem", "fec_party_code") == ("DEM", PARTY_CASE_FOLDED)
+    for kept in ("GOP", "N/A", "  0", "d"):
+        assert native_scalar(kept, "fec_party_code") == (kept, PARTY_OFF_REGISTRY)
+    assert native_scalar(None, "fec_party_code") == (None, None)
+
+
+def test_a_folded_party_keeps_its_original_and_reason_in_the_receipt_fields():
+    from spicy_regs.transforms.fec_identity_context_fields import REGISTRY, normalize_record
+
+    for table in ("fec_committee_history", "fec_candidate_history"):
+        row = {**dict.fromkeys(REGISTRY[table]["input_fields"]), "cycle": "2024", "party": "Rep"}
+        mapped = normalize_record(table, row)
+        assert mapped["party"] == "REP"
+        assert mapped["conversion_inputs"]["party"] == "Rep"
+        assert mapped["conversion_diagnostics"]["party"] == [{"reason": "party_case_folded_to_registry_code", "value": "Rep"}]
+
+
 def test_all_owned_fields_have_an_explicit_destination_and_native_schemas():
     from spicy_regs.transforms.fec_identity_context_fields import REGISTRY, subject_schema
 

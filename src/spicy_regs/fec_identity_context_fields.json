@@ -291,7 +291,8 @@
     "native_lists": {},
     "native_scalars": {
       "cycle": "integer",
-      "election_year": "integer"
+      "election_year": "integer",
+      "party": "fec_party_code"
     },
     "receipt_only": false
   },
@@ -433,7 +434,8 @@
     ],
     "native_lists": {},
     "native_scalars": {
-      "cycle": "integer"
+      "cycle": "integer",
+      "party": "fec_party_code"
     },
     "receipt_only": false
   },

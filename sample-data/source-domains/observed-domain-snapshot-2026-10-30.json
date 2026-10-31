@@ -4,12 +4,12 @@
       "column": "action_type",
       "key": "billstatus-action-type",
       "null_count": 1093,
-      "row_count": 932877,
+      "row_count": 933056,
       "table": "bill_actions",
       "value_counts": [
         [
           "IntroReferral",
-          524726
+          524863
         ],
         [
           "Floor",
@@ -17,11 +17,11 @@
         ],
         [
           "Committee",
-          159939
+          159967
         ],
         [
           "Calendars",
-          19251
+          19265
         ],
         [
           "President",
@@ -222,6 +222,135 @@
         [
           "I",
           20
+        ]
+      ]
+    },
+    {
+      "column": "topics",
+      "key": "gao-recommendation-topic",
+      "null_count": 2,
+      "row_count": 5500,
+      "table": "gao_recommendations",
+      "value_counts": [
+        [
+          "National Defense",
+          808
+        ],
+        [
+          "Government Operations",
+          436
+        ],
+        [
+          "Health Care",
+          435
+        ],
+        [
+          "Homeland Security",
+          388
+        ],
+        [
+          "Information Technology",
+          333
+        ],
+        [
+          "Natural Resources and Environment",
+          255
+        ],
+        [
+          "Auditing and Financial Management",
+          246
+        ],
+        [
+          "Human Capital",
+          216
+        ],
+        [
+          "Justice and Law Enforcement",
+          194
+        ],
+        [
+          "Business Regulation and Consumer Protection",
+          187
+        ],
+        [
+          "Information Security",
+          187
+        ],
+        [
+          "Energy",
+          173
+        ],
+        [
+          "Tax Policy and Administration",
+          165
+        ],
+        [
+          "International Affairs",
+          153
+        ],
+        [
+          "Transportation",
+          137
+        ],
+        [
+          "Education",
+          117
+        ],
+        [
+          "Veterans",
+          113
+        ],
+        [
+          "Equal Opportunity",
+          109
+        ],
+        [
+          "Agriculture and Food",
+          107
+        ],
+        [
+          "Telecommunications",
+          91
+        ],
+        [
+          "Housing",
+          87
+        ],
+        [
+          "Financial Markets and Institutions",
+          85
+        ],
+        [
+          "Information Management",
+          83
+        ],
+        [
+          "Retirement Security",
+          75
+        ],
+        [
+          "Employment",
+          74
+        ],
+        [
+          "Science and Technology",
+          61
+        ],
+        [
+          "Worker and Family Assistance",
+          61
+        ],
+        [
+          "Economic Development",
+          56
+        ],
+        [
+          "Budget and Spending",
+          55
+        ],
+        [
+          "Space",
+          11
         ]
       ]
     },
@@ -801,7 +930,7 @@
       "column": "document_type",
       "key": "regulations-gov-document-type",
       "null_count": 0,
-      "row_count": 2004396,
+      "row_count": 2004456,
       "table": "documents",
       "value_counts": [
         [
@@ -810,19 +939,19 @@
         ],
         [
           "Supporting & Related Material",
-          719029
+          719048
         ],
         [
           "Notice",
-          398993
+          399025
         ],
         [
           "Rule",
-          104011
+          104014
         ],
         [
           "Proposed Rule",
-          52134
+          52140
         ],
         [
           "Public Submission",
@@ -832,15 +961,15 @@
     }
   ],
   "format_version": "spicyregs-source-domains/observed-v1",
-  "observed_at": "2026-10-31T01:59:08Z",
-  "producer_revision": "publication.v2.json sha256:74157933fbcbeb9b54adae90442b24af81601abe330bc92a9e104e58666f1fb5",
+  "observed_at": "2026-10-31T07:37:10Z",
+  "producer_revision": "publication.v2.json sha256:72977cb667a8bd16fe014c08230b051da77da014d7b60c692d84c924cce1acc0",
   "sources": [
     {
-      "byte_length": 11506349,
-      "bytes_digest": "sha256:ded5f49598848192c847dd6e2b4ba0bd57b26209c0606a4d3d27f6dea32d78a9",
+      "byte_length": 11510282,
+      "bytes_digest": "sha256:9837b2c29be390f2f0e2b357d7ec8969ca3aeba21d907af8c09448e4429303a9",
       "digest_basis": "publication-index",
-      "publisher_url": "https://data.spicygov.ai/generations/bill-family/f719442c6a814666c5747624ef8a52da002bc2982f4ebd7f2be990f86bc38d42/bill_actions.parquet",
-      "row_count": 932877,
+      "publisher_url": "https://data.spicygov.ai/generations/bill-family/513833795176bb5d80838f95ef425c1d9b627607254d5210081f9591d3e5e0c8/bill_actions.parquet",
+      "row_count": 933056,
       "table": "bill_actions"
     },
     {
@@ -860,11 +989,11 @@
       "table": "dockets"
     },
     {
-      "byte_length": 104974489,
-      "bytes_digest": "sha256:c9cc1d2decbcc66a91b51824b826501d8d70189affc0138fae53703bf495ad2b",
+      "byte_length": 91086670,
+      "bytes_digest": "sha256:9125e2bbf167e415dcbfad992aa167cee67347b98e71ebccc3a292eaefd9666e",
       "digest_basis": "publication-index",
-      "publisher_url": "https://data.spicygov.ai/generations/documents/5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71/documents.parquet",
-      "row_count": 2004396,
+      "publisher_url": "https://data.spicygov.ai/generations/documents/9060b0b7eb9cec1b0627a02b1a09d2578b4cc466d15f6dca4e8f23119eb093fb/documents.parquet",
+      "row_count": 2004456,
       "table": "documents"
     },
     {
@@ -874,6 +1003,14 @@
       "publisher_url": "https://data.spicygov.ai/generations/fec-committee-history/181d3de811f1ef06928fb5a89e7932d265556c8abbe86144cf59d65eb4cb0320/fec_committee_history.parquet",
       "row_count": 298596,
       "table": "fec_committee_history"
+    },
+    {
+      "byte_length": 1732305,
+      "bytes_digest": "sha256:97d99f64f8f052d2e3bd64edbb051bf7fd7a0fc032d225ce2633b9b9ba3201d5",
+      "digest_basis": "publication-index",
+      "publisher_url": "https://data.spicygov.ai/generations/gao-recommendations/c6075e12eda3936d5fb66ccfdfc86873cf7e7d471e9aeddc259e0fb26d320182/gao_recommendations.parquet",
+      "row_count": 5500,
+      "table": "gao_recommendations"
     },
     {
       "byte_length": 276852510,

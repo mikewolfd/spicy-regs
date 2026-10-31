@@ -98,7 +98,7 @@
             "value": "Nonrulemaking"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": []
       }
@@ -301,7 +301,7 @@
             "value": "Other"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [
           {
             "value": "Public Submission",
@@ -513,7 +513,7 @@
             "value": "Other"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [
           {
             "value": "Public Submission",
@@ -2666,7 +2666,7 @@
             "label": "Year-End Termination Amendment (No Activity)"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": []
       }
@@ -3047,7 +3047,7 @@
             "label": "Welfare"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": []
       }
@@ -24475,7 +24475,7 @@
             "value": "VARIES"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [
           {
             "value": "Veto",
@@ -28020,7 +28020,7 @@
             "label": "National party nonfederal account"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": []
       },
@@ -28055,7 +28055,7 @@
             "label": "Unauthorized"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": []
       },
@@ -28090,7 +28090,7 @@
             "label": "Waived"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [],
         "unobserved": [
           "W"
@@ -28127,7 +28127,7 @@
             "label": "Corporation without capital stock"
           }
         ],
-        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_at": "2026-10-31T07:37:10Z",
         "observed_off_list": [
           {
             "value": "H",
@@ -31156,7 +31156,145 @@
     "later_policy_columns": [
       "first_seen",
       "last_seen"
-    ]
+    ],
+    "documented_values": {
+      "topics": {
+        "domain": "gao-recommendation-topic",
+        "checked": true,
+        "source_url": "https://www.gao.gov/topics",
+        "locator": "gao-topics-2026-08-15.html Browse Topics Alphabetically listing, read by RefSpec parse_gao_published_topics; plus gao-science-and-technology-2026-09-01.html, read by RefSpec parse_gao_topic_page",
+        "values": [
+          {
+            "value": "Agriculture and Food",
+            "label": "Agricultural industry, markets, and food production (e.g., farm animals and crops). Food-related issues such as safety, nutrition, and domestic and international assistance."
+          },
+          {
+            "value": "Auditing and Financial Management",
+            "label": "Auditing how-to, including methodologies, tools, techniques, and standards. Financial, forensic, and programmatic audits of federal agencies and the U.S. government."
+          },
+          {
+            "value": "Budget and Spending",
+            "label": "The federal budget, budget projections, and agency budget systems. Government appropriations; federal, state, and local finance."
+          },
+          {
+            "value": "Business Regulation and Consumer Protection",
+            "label": "Domestic and international business, small business programs, federal regulations. Consumer protection, (e.g., identity theft, insurance, regulation, and credit markets)."
+          },
+          {
+            "value": "Economic Development",
+            "label": "Domestic and international development initiatives, including loans and grants. Construction and disaster relief."
+          },
+          {
+            "value": "Education",
+            "label": "Educational programs ranging from preschool to adult/continuing education, including educational facilities, standards, and funding. Student loans and grants."
+          },
+          {
+            "value": "Employment",
+            "label": "Labor statistics and trends, employment demographics. Workforce development, benefits and compensation, worker safety and protection, and unemployment assistance."
+          },
+          {
+            "value": "Energy",
+            "label": "The energy industry and the government agencies that regulate it. Nuclear waste, oil and gas resources, alternative fuels, emissions, and other energy-related topics."
+          },
+          {
+            "value": "Equal Opportunity",
+            "label": "Civil rights and equal protection under the law in matters of age, color, disability, etc. Representation and discrimination in the workplace."
+          },
+          {
+            "value": "Financial Markets and Institutions",
+            "label": "Credit and lending; stocks, bonds, and other securities. Consumer financial protection and financial regulatory agencies."
+          },
+          {
+            "value": "GAO Mission and Operations",
+            "label": "The history and mission of GAO and its programs and services. GAO publications and guidance, including GAO’s policies, protocols, and practices."
+          },
+          {
+            "value": "Government Operations",
+            "label": "Federal government organization, management, and regulation, plus intergovernmental issues. Census and elections, as well as government efficiency and effectiveness."
+          },
+          {
+            "value": "Health Care",
+            "label": "Health care services, facilities, personnel, costs, insurance, and reform. Federal programs such as Medicare, Medicaid, and the military and veterans’ health systems."
+          },
+          {
+            "value": "Homeland Security",
+            "label": "National security policy and practice (e.g., transportation security, immigration, emergency response). Preventing terrorism and preparing for weapons of mass destruction."
+          },
+          {
+            "value": "Housing",
+            "label": "Housing finance, such as mortgages, insurance, and related regulations. Federally-assisted housing, housing types (e.g., rental, public, or low-income), and homelessness."
+          },
+          {
+            "value": "Human Capital",
+            "label": "Diversity and EEO; employment demographics. Federal and private pay and benefits; performance management; employee development and retention; workforce issues."
+          },
+          {
+            "value": "Information Management",
+            "label": "Data collection, document disposal, records management. Laws regulating access to information, such as the Freedom of Information Act and the DATA Act."
+          },
+          {
+            "value": "Information Security",
+            "label": "Cybersecurity, privacy, IT systems, and federal laws and policies on collecting, storing, sharing, and using sensitive, classified, or personally identifiable information."
+          },
+          {
+            "value": "Information Technology",
+            "label": "Federal information technology (IT) policy, laws, investment, and strategy. Acquisition, enterprise architecture, integration, and security of civilian and military systems."
+          },
+          {
+            "value": "International Affairs",
+            "label": "Government interests in international politics, law, finance, economics, trade, commerce, and immigration. International treaties, foreign aid, investments, and diplomacy."
+          },
+          {
+            "value": "Justice and Law Enforcement",
+            "label": "The justice system, including courts, crime, corrections, immigration, lawsuits, trials, judges, and attorneys. Law enforcement agencies and officers."
+          },
+          {
+            "value": "National Defense",
+            "label": "Military readiness, including people and infrastructure; weapons, defense, space systems, and technology. DOD internal operations and budget; the military health system."
+          },
+          {
+            "value": "Natural Resources and Environment",
+            "label": "Environmental protection, cleanup, and the associated policies, laws, and agencies. Natural resources such as land, water, minerals, wildlife, and energy resources."
+          },
+          {
+            "value": "Retirement Security",
+            "label": "Federal, state, local, military, and veterans retirement systems. Private retirement plans, savings rates, and Social Security."
+          },
+          {
+            "value": "Space",
+            "label": "Space-related research and development, space exploration, transportation, and support personnel and facilities. Defense and communications satellites."
+          },
+          {
+            "value": "Tax Policy and Administration",
+            "label": "Tax administration, enforcement, laws, policies, and reform. The IRS and other agencies involved in tax issues."
+          },
+          {
+            "value": "Telecommunications",
+            "label": "Internet and data services and privacy, broadband access, public safety communications, communication security, television and radio, and voice services."
+          },
+          {
+            "value": "Transportation",
+            "label": "Modes of travel, transportation laws and policies, transportation safety and security. Transit systems, pipelines, and freight and shipping."
+          },
+          {
+            "value": "Veterans",
+            "label": "The Department of Veterans Affairs and its work in employment and training, education, benefits, home loans, insurance, and health care for veterans and retired military."
+          },
+          {
+            "value": "Worker and Family Assistance",
+            "label": "Social welfare programs and services focusing on economic assistance, faith-based and community initiatives, child and family issues, nutrition and unemployment assistance."
+          },
+          {
+            "value": "Science and Technology"
+          }
+        ],
+        "observed_at": "2026-10-31T07:37:10Z",
+        "observed_off_list": [],
+        "unobserved": [
+          "GAO Mission and Operations"
+        ]
+      }
+    }
   },
   "bill_vote_references": {
     "table": "bill_vote_references",

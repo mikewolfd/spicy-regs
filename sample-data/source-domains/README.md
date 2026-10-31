@@ -1,10 +1,11 @@
 # Documented column domains
 
-GSA, reginfo.gov, GPO (BILLSTATUS), the Senate LDA office and the FEC decide
-what a set of published columns may hold — `document_type`, `docket_type`, the
+GSA, reginfo.gov, GPO (BILLSTATUS), the Senate LDA office, the FEC and GAO
+decide what a set of published columns may hold — `document_type`, `docket_type`, the
 Unified Agenda's `rule_stage`, `priority_category`, `rin_status` and `major`,
 `bill_actions.action_type`, LDA `general_issue_code` and `filing_type`, and the
-FEC committee type, designation, filing frequency and organization type codes;
+FEC committee type, designation, filing frequency and organization type codes,
+and GAO's topics on `gao_recommendations.topics`;
 our builders copy those strings through untouched. So this directory keeps both halves of the claim: the
 publishers' own documents, byte for byte, and one dated observation of what our
 published tables actually hold. `scripts/check_source_domain_drift.py` compares
@@ -47,6 +48,8 @@ nothing exercises is a claim nobody checked.
 | `fec-committee-master-file-description-2026-08-03.html` | 29,343 | `dda49be2e360d39bb1b7dcbc53239e627109a26fbaefe172688aca84abc4ff66` | `https://www.fec.gov/campaign-finance-data/committee-master-file-description/` |
 | `fec-committee-type-code-descriptions-2026-08-03.html` | 28,121 | `84e9f16628fd2475750cd89a3947f2c737a5f66c8ced04aea6b1118ac2aecaa4` | `https://www.fec.gov/campaign-finance-data/committee-type-code-descriptions/` |
 | `fec-party-code-descriptions-2026-08-03.html` | 29,578 | `e17420381df0e5709449a8c9702600fde97503ea378ef357beef4c40ed6a6b09` | `https://www.fec.gov/campaign-finance-data/party-code-descriptions/` |
+| `gao-topics-2026-08-15.html` | 122,070 | `9aa9e7f185b9433236f512a6f694f6c9cf57f109bba3e9ea99ac42de19180096` | `https://www.gao.gov/topics` |
+| `gao-science-and-technology-2026-09-01.html` | 148,620 | `98391cad16eba43e48017782765088d8720116ba988e1591d85215804906d0cd` | `https://www.gao.gov/topics/science-and-technology` |
 
 The six added on 2026-10-30 are copied byte for byte from RefSpec's pinned test
 fixtures at `f8857c86` (the digests above equal RefSpec's own pins). The guide
@@ -55,6 +58,18 @@ plain JSON. The FEC pages are prose HTML tables, so they are read through
 RefSpec's parser rather than a second one: RefSpec's parse is vendored as
 `src/spicy_regs/reference/refspec/fec-committee-codes.json`, and each list in it
 is used only when the source digest RefSpec recorded equals the pinned page's.
+
+The two GAO pages (added 2026-10-31, owner answer Q8) are copied byte for byte
+from RefSpec's `tests/fixtures/gao_published_topics/` at `f8857c86`, whose pins
+they equal. RefSpec's `parse_gao_published_topics` and `parse_gao_topic_page`
+read them, and their output is vendored the same way as
+`src/spicy_regs/reference/refspec/gao-published-topics.json`. The domain is
+both pages together: the browse listing names 30 topics, and GAO's own
+Science and Technology page states a 31st live term the listing omits (61
+recommendations carry it). `GAO Mission and Operations` is listed but carried
+by no recommendation; the ledger records it. `gao_reports.topics` (topics mixed
+with keywords) and `gao_decisions.topics` (decision types) are not this list;
+CBO and CRS taxonomies wait for their archive routes.
 
 `documented-enumeration-capture-manifest-v1.json` binds each capture to its
 digest, byte length, publisher URL and capture time.
@@ -122,6 +137,11 @@ codes were reused over the years (164 distinct live codes, 32 of the guide's 36,
 on 529,762 of 694,998 coded rows); every label carries that caveat. FEC `party`
 on both history tables because 141 and 139 off-list values (0.29% and 0.30% of
 rows) are case variants and junk, so a gate would be a ledger of exceptions.
+Since 2026-10-31 the history builders fold a case variant of exactly one code
+(`Rep`, `Dem`, `dem`, `rep`: 92 committee and 13 candidate rows) to that code and
+keep every other off-list value as filed; each receipt keeps the original in
+`conversion_inputs` and the reason in `conversion_diagnostics`. Published rows
+change at the next build of those families.
 LDA covered government entities have no captured list at all.
 
 Every documented list, gated or not, reaches `describe_table` as the table's
@@ -143,7 +163,10 @@ so the code that writes it is the code that reads it back.
 
 It names its inputs: the published tables it read at
 `https://data.spicygov.ai`, as of publication index
-`sha256:74157933fbcbeb9b54adae90442b24af81601abe330bc92a9e104e58666f1fb5`. It read
+`sha256:72977cb667a8bd16fe014c08230b051da77da014d7b60c692d84c924cce1acc0`
+(2026-10-31T07:37:10Z; re-observed whole when `gao_recommendations` joined, since
+`bill_actions` and `documents` had advanced a generation; every finding but the
+new GAO one, and its row support, came back unchanged). It read
 them remotely, one column per query, so nothing was downloaded (`comments` alone
 is 9.7 GB); each source therefore records the index's pin for that member
 (`"digest_basis": "publication-index"`), and the observation refused to proceed
@@ -154,12 +177,14 @@ row count is the only independent binding between the two. A fragment of
 that index (`published-index-fragment-2026-10-30.json`) is checked in beside the
 snapshot so the recorded URLs stay verifiable offline. The per-value counts were
 re-derived for every table but `comments` with the DuckDB CLI over the same URLs
-and agreed exactly, and `comments.document_type` with a separate CLI run. It
-superseded the 2026-09-22 file (`documents` and `dockets` from the fork's r2.dev
-bucket; git history keeps it), and its `unified_agenda` read was dropped when
-that table's own dated file below landed, so each table is pinned by one digest.
+and agreed exactly, and `comments.document_type` with a separate CLI run (both on
+the 2026-10-31T01:59Z observation); `gao_recommendations.topics` was re-derived
+the same way on this one and agreed. It superseded the 2026-09-22 file
+(`documents` and `dockets` from the fork's r2.dev bucket; git history keeps it),
+and its `unified_agenda` read was dropped in favour of that table's own dated
+file below, so each table is pinned by one digest.
 
-The observation run took 172 s and 0.94 GB peak resident memory. This is a dated
+The observation run took 167 s and 0.94 GB peak resident memory. This is a dated
 lock, not live validation: a value a later generation adds fails nothing until
 someone re-observes.
 

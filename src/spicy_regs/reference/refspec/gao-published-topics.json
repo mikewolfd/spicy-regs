@@ -1,0 +1,53 @@
+{
+  "refspec_commit": "f8857c8669a412bd6c254aa0b3a23cf05a52e04d",
+  "producer": "refspec.registry.gao_published_topics parse_gao_published_topics and parse_gao_topic_page over the pinned tests/fixtures/gao_published_topics captures; the topic page states a name and no description, so its one code carries no label",
+  "resources": {
+    "topicsListing": {
+      "source_url": "https://www.gao.gov/topics",
+      "source_sha256": "sha256:9aa9e7f185b9433236f512a6f694f6c9cf57f109bba3e9ea99ac42de19180096",
+      "source_byte_length": 122070,
+      "retrieved_at": "2026-08-15T13:56:14Z",
+      "codes": {
+        "Agriculture and Food": "Agricultural industry, markets, and food production (e.g., farm animals and crops). Food-related issues such as safety, nutrition, and domestic and international assistance.",
+        "Auditing and Financial Management": "Auditing how-to, including methodologies, tools, techniques, and standards. Financial, forensic, and programmatic audits of federal agencies and the U.S. government.",
+        "Budget and Spending": "The federal budget, budget projections, and agency budget systems. Government appropriations; federal, state, and local finance.",
+        "Business Regulation and Consumer Protection": "Domestic and international business, small business programs, federal regulations. Consumer protection, (e.g., identity theft, insurance, regulation, and credit markets).",
+        "Economic Development": "Domestic and international development initiatives, including loans and grants. Construction and disaster relief.",
+        "Education": "Educational programs ranging from preschool to adult/continuing education, including educational facilities, standards, and funding. Student loans and grants.",
+        "Employment": "Labor statistics and trends, employment demographics. Workforce development, benefits and compensation, worker safety and protection, and unemployment assistance.",
+        "Energy": "The energy industry and the government agencies that regulate it. Nuclear waste, oil and gas resources, alternative fuels, emissions, and other energy-related topics.",
+        "Equal Opportunity": "Civil rights and equal protection under the law in matters of age, color, disability, etc. Representation and discrimination in the workplace.",
+        "Financial Markets and Institutions": "Credit and lending; stocks, bonds, and other securities. Consumer financial protection and financial regulatory agencies.",
+        "GAO Mission and Operations": "The history and mission of GAO and its programs and services. GAO publications and guidance, including GAO’s policies, protocols, and practices.",
+        "Government Operations": "Federal government organization, management, and regulation, plus intergovernmental issues. Census and elections, as well as government efficiency and effectiveness.",
+        "Health Care": "Health care services, facilities, personnel, costs, insurance, and reform. Federal programs such as Medicare, Medicaid, and the military and veterans’ health systems.",
+        "Homeland Security": "National security policy and practice (e.g., transportation security, immigration, emergency response). Preventing terrorism and preparing for weapons of mass destruction.",
+        "Housing": "Housing finance, such as mortgages, insurance, and related regulations. Federally-assisted housing, housing types (e.g., rental, public, or low-income), and homelessness.",
+        "Human Capital": "Diversity and EEO; employment demographics. Federal and private pay and benefits; performance management; employee development and retention; workforce issues.",
+        "Information Management": "Data collection, document disposal, records management. Laws regulating access to information, such as the Freedom of Information Act and the DATA Act.",
+        "Information Security": "Cybersecurity, privacy, IT systems, and federal laws and policies on collecting, storing, sharing, and using sensitive, classified, or personally identifiable information.",
+        "Information Technology": "Federal information technology (IT) policy, laws, investment, and strategy. Acquisition, enterprise architecture, integration, and security of civilian and military systems.",
+        "International Affairs": "Government interests in international politics, law, finance, economics, trade, commerce, and immigration. International treaties, foreign aid, investments, and diplomacy.",
+        "Justice and Law Enforcement": "The justice system, including courts, crime, corrections, immigration, lawsuits, trials, judges, and attorneys. Law enforcement agencies and officers.",
+        "National Defense": "Military readiness, including people and infrastructure; weapons, defense, space systems, and technology. DOD internal operations and budget; the military health system.",
+        "Natural Resources and Environment": "Environmental protection, cleanup, and the associated policies, laws, and agencies. Natural resources such as land, water, minerals, wildlife, and energy resources.",
+        "Retirement Security": "Federal, state, local, military, and veterans retirement systems. Private retirement plans, savings rates, and Social Security.",
+        "Space": "Space-related research and development, space exploration, transportation, and support personnel and facilities. Defense and communications satellites.",
+        "Tax Policy and Administration": "Tax administration, enforcement, laws, policies, and reform. The IRS and other agencies involved in tax issues.",
+        "Telecommunications": "Internet and data services and privacy, broadband access, public safety communications, communication security, television and radio, and voice services.",
+        "Transportation": "Modes of travel, transportation laws and policies, transportation safety and security. Transit systems, pipelines, and freight and shipping.",
+        "Veterans": "The Department of Veterans Affairs and its work in employment and training, education, benefits, home loans, insurance, and health care for veterans and retired military.",
+        "Worker and Family Assistance": "Social welfare programs and services focusing on economic assistance, faith-based and community initiatives, child and family issues, nutrition and unemployment assistance."
+      }
+    },
+    "scienceAndTechnology": {
+      "source_url": "https://www.gao.gov/topics/science-and-technology",
+      "source_sha256": "sha256:98391cad16eba43e48017782765088d8720116ba988e1591d85215804906d0cd",
+      "source_byte_length": 148620,
+      "retrieved_at": "2026-09-01T23:33:02Z",
+      "codes": {
+        "Science and Technology": null
+      }
+    }
+  }
+}

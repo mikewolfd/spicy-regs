@@ -38,7 +38,7 @@ from spicy_regs.sources.source_domains import (
     documented_domains,
     documented_values,
     domain_findings,
-    fec_code_values,
+    vendored_code_values,
     label_only_domains,
     lda_constant_values,
     load_capture_manifest,
@@ -143,6 +143,7 @@ def test_the_findings_are_the_ones_this_snapshot_carries(findings):
         "fec-filing-frequency/unobserved-value/W",
         "fec-organization-type/undocumented-value/H",
         "fec-organization-type/undocumented-value/I",
+        "gao-recommendation-topic/unobserved-value/GAO Mission and Operations",
         "regulations-gov-comment-document-type/undocumented-value/Public Submission",
         "regulations-gov-comment-document-type/unobserved-value/Notice",
         "regulations-gov-comment-document-type/unobserved-value/Proposed Rule",
@@ -269,6 +270,8 @@ def test_captures_verify_against_their_pins():
         "fec-committee-master-file",
         "fec-committee-type-codes",
         "fec-party-codes",
+        "gao-science-and-technology",
+        "gao-topics-listing",
         "lda-filing-types",
         "lda-general-issue-codes",
         "reginfo-rin-data-xsd",
@@ -435,7 +438,7 @@ def test_action_codes_are_labels_only_and_carry_the_guides_own_caveat(labels_onl
 
 
 def test_lda_lists_are_the_publishers_json_read_directly(documented):
-    """Re-derived from the pinned bytes with ``json`` alone: 79 issue codes (not the ticket's 80), 50 filing types."""
+    """Re-derived from the pinned bytes with ``json`` alone: 79 issue codes (the ticket text now says 79 too), 50 filing types."""
 
     for key, filename, count in (
         ("lda-general-issue-code", "lda-general-issue-codes-2026-07-30.json", 79),
@@ -464,10 +467,13 @@ def test_fec_lists_come_from_refspecs_parse_of_the_pinned_pages(documented, labe
     assert labels_only["fec-candidate-party"].labels["REP"] == "Republican Party"
 
 
-def test_every_vendored_fec_code_and_label_is_on_its_pinned_page(documented, labels_only):
+def test_every_vendored_value_and_label_is_on_its_pinned_page(documented, labels_only):
     """The digest match is the vendored file's own claim; this reads the pinned bytes themselves.
 
-    A one-way presence check (each code and label occurs in the page's text), not a second parser.
+    Not a second parser: in the page's tag-stripped text, each FEC code must stand directly before its own
+    label (a lone letter like ``A`` occurs everywhere, so a code found anywhere would prove nothing), and each
+    GAO topic name and description must occur. One direction only: a value the page states and RefSpec's
+    parse dropped is caught by the pinned counts, not here.
     """
 
     def page_text(capture) -> str:
@@ -475,14 +481,30 @@ def test_every_vendored_fec_code_and_label_is_on_its_pinned_page(documented, lab
         return " ".join(text.split())
 
     captures = load_capture_manifest(DOMAIN_DIR)
-    fec = [domain for domain in (*documented.values(), *labels_only.values()) if domain.capture_key.startswith("fec-")]
+    domains = (*documented.values(), *labels_only.values())
+    fec = [domain for domain in domains if domain.capture_key.startswith("fec-")]
     assert len(fec) == 6
     for domain in fec:
         text = page_text(captures[domain.capture_key])
         for code in domain.values:
-            label = " ".join(domain.labels[code].split())
-            assert re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", text), (domain.key, code)
-            assert label in text, (domain.key, code, label)
+            label = re.escape(" ".join(domain.labels[code].split()))
+            pair = rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])[\s:=\-–—]{{0,5}}{label}"
+            assert re.search(pair, text), (domain.key, code, domain.labels[code])
+    gao = documented["gao-recommendation-topic"]
+    text = page_text(captures["gao-topics-listing"]) + " " + page_text(captures["gao-science-and-technology"])
+    for name in gao.values:
+        assert name in text, name
+        if name in gao.labels:
+            assert " ".join(gao.labels[name].split()) in text, name
+
+
+def test_gao_topics_are_the_listing_plus_science_and_technology(documented):
+    """Owner answer 2026-10-31 (Q8): the 30 listed topics and the S&T page's term, each from its own pinned page."""
+
+    gao = documented["gao-recommendation-topic"]
+    assert (gao.table, gao.column, len(gao.values)) == ("gao_recommendations", "topics", 31)
+    assert gao.values[-1] == "Science and Technology" and "Science and Technology" not in gao.labels
+    assert gao.values[:30] == tuple(sorted(gao.values[:30], key=str.casefold))
 
 
 def test_a_vendored_fec_list_parsed_from_other_bytes_is_refused(tmp_path):
@@ -494,7 +516,7 @@ def test_a_vendored_fec_list_parsed_from_other_bytes_is_refused(tmp_path):
     lists = tmp_path / "fec-committee-codes.json"
     lists.write_text(json.dumps(vendored), encoding="utf-8")
     with pytest.raises(SourceDomainError, match="not the pinned capture"):
-        fec_code_values(capture, "committeeDesignation", lists=lists)
+        vendored_code_values(capture, "committeeDesignation", lists=lists)
 
 
 def test_documented_values_mark_which_lists_gate():
@@ -544,9 +566,9 @@ def test_every_domain_names_a_real_published_column(documented, labels_only):
 
 
 def test_the_snapshot_states_where_its_rows_came_from(snapshot):
-    assert snapshot.observed_at == "2026-10-31T01:59:08Z"
+    assert snapshot.observed_at == "2026-10-31T07:37:10Z"
     assert snapshot.producer_revision == (
-        "publication.v2.json sha256:74157933fbcbeb9b54adae90442b24af81601abe330bc92a9e104e58666f1fb5"
+        "publication.v2.json sha256:72977cb667a8bd16fe014c08230b051da77da014d7b60c692d84c924cce1acc0"
     )
     sources = {str(one["table"]): one for one in snapshot.sources}
     # unified_agenda is observed whole in its own dated file.
@@ -556,6 +578,7 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
         "dockets",
         "documents",
         "fec_committee_history",
+        "gao_recommendations",
         "lobbying_activities",
         "lobbying_filings",
     ]
@@ -575,8 +598,9 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
             member.byte_size,
             member.rows,
         )
-    assert sources["documents"]["row_count"] == 2_004_396
-    assert sources["bill_actions"]["row_count"] == 932_877
+    assert sources["documents"]["row_count"] == 2_004_456
+    assert sources["bill_actions"]["row_count"] == 933_056
+    assert sources["gao_recommendations"]["row_count"] == 5_500
 
 
 @pytest.mark.parametrize("filename", OBSERVED_SNAPSHOT_FILENAMES)
@@ -605,6 +629,7 @@ def test_the_nullable_domains_are_the_measured_ones(snapshot):
         "fec-committee-designation": 79,
         "fec-committee-type": 42,
         "fec-organization-type": 209_616,
+        "gao-recommendation-topic": 2,
     }
 
 
@@ -685,8 +710,8 @@ def test_the_snapshot_file_is_small_enough_to_read():
 def test_the_tool_passes_on_the_committed_inputs():
     result = subprocess.run([sys.executable, str(TOOL)], capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr
-    assert "15 documented domains" in result.stdout
-    assert "37 findings" in result.stdout
+    assert "16 documented domains" in result.stdout
+    assert "38 findings" in result.stdout
     assert "UNRECORDED" not in result.stdout
 
 
@@ -706,7 +731,7 @@ def test_the_recorded_urls_resolve_through_the_pinned_index(snapshot):
     urls = table_urls(index, FORK_PUBLIC_URL, sorted({str(one["table"]) for one in snapshot.sources}))
     assert urls["documents"] == (
         f"{FORK_PUBLIC_URL}/generations/documents/"
-        "5b9f0a4a28786da6672edee9be79b0a4872e5e629f311640895f0ea6207e2f71/documents.parquet"
+        "9060b0b7eb9cec1b0627a02b1a09d2578b4cc466d15f6dca4e8f23119eb093fb/documents.parquet"
     )
 
 

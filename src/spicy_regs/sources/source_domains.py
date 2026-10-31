@@ -3,8 +3,9 @@
 A *source domain* is the controlled value list a publisher documents for one
 column of one published table: regulations.gov's ``documentType`` enum, the
 Unified Agenda's ``RULE_STAGE`` list, the BILLSTATUS guide's action types, the
-LDA constants endpoints, the FEC committee master file's codes. GSA,
-reginfo.gov, GPO, the Senate LDA office and the FEC decide those lists. This module holds their half of the claim and the machinery to
+LDA constants endpoints, the FEC committee master file's codes, GAO's published
+topics. GSA, reginfo.gov, GPO, the Senate LDA office, the FEC and GAO decide
+those lists. This module holds their half of the claim and the machinery to
 hold our data to it.
 
 Why it exists. ``build_federal_register`` and ``build_unified_agenda`` copy the
@@ -58,15 +59,15 @@ says the list is incomplete, or the off-list share is noise, so a gate would be
 a ledger of exceptions that gates nothing. Those are neither observed nor
 diffed.
 
-The FEC states its codes only as prose HTML tables. Those pages are pinned
+The FEC and GAO state their lists only as HTML pages. Those pages are pinned
 here as exact bytes like every other capture, but they are read through
-RefSpec's parser rather than a second one written here: the code lists RefSpec
-parsed from the same bytes are vendored at
-``spicy_regs/reference/refspec/fec-committee-codes.json``, and each list is
-used only when the digest RefSpec recorded for its source equals the pinned
-capture's. That digest is the vendored file's own statement, so a test also
-reads the pinned bytes and requires every vendored code and label to occur in
-the page's text.
+RefSpec's parsers rather than second ones written here: the lists RefSpec
+parsed from the same bytes are vendored under ``spicy_regs/reference/refspec/``
+(:data:`VENDORED_LISTS`, one file per publisher), and each list is used only
+when the digest RefSpec recorded for its source equals the pinned capture's.
+That digest is the vendored file's own statement, so a test also reads the
+pinned bytes and requires every vendored value to occur in the page's text,
+each FEC code directly beside its own label.
 
 Parsers here are pure — bytes in, values out, no network and no I/O beyond the
 manifest, snapshot and vendored-list reads — and every document parse is
@@ -101,8 +102,12 @@ OBSERVED_SNAPSHOT_FILENAMES = (
     OBSERVED_SNAPSHOT_FILENAME,
     "observed-domain-snapshot-2026-10-30-unified-agenda.json",
 )
-#: RefSpec's parse of the FEC HTML captures; see the module docstring.
-FEC_CODE_LISTS = Path(__file__).resolve().parents[1] / "reference" / "refspec" / "fec-committee-codes.json"
+_REFSPEC_LISTS = Path(__file__).resolve().parents[1] / "reference" / "refspec"
+#: RefSpec's parse of each publisher's HTML captures, by capture ``publisher``; see the module docstring.
+VENDORED_LISTS = {
+    "fec": _REFSPEC_LISTS / "fec-committee-codes.json",
+    "gao": _REFSPEC_LISTS / "gao-published-topics.json",
+}
 
 CAPTURE_MANIFEST_FORMAT_VERSION = "spicyregs-source-domains/capture-v1"
 OBSERVED_SNAPSHOT_FORMAT_VERSION = "spicyregs-source-domains/observed-v1"
@@ -285,7 +290,7 @@ def xsd_documented_options(payload: bytes, element_name: str) -> tuple[tuple[str
     return tuple(folded), len(raw)
 
 
-# --- parsing the BILLSTATUS user guide, the LDA constants and the FEC lists ---
+# --- parsing the BILLSTATUS user guide, the LDA constants and the vendored lists ---
 
 
 @lru_cache(maxsize=2)
@@ -334,25 +339,31 @@ def lda_constant_values(payload: bytes) -> tuple[tuple[str, ...], dict[str, str]
     return values, {item["value"]: item["name"] for item in items}
 
 
-def fec_code_values(
-    capture: DocumentedEnumerationCapture, resource: str, *, lists: Path = FEC_CODE_LISTS
+def vendored_code_values(
+    capture: DocumentedEnumerationCapture, resource: str, *, lists: Path | None = None
 ) -> tuple[tuple[str, ...], dict[str, str]]:
-    """RefSpec's parse of one FEC code list, accepted only from the exact capture pinned here."""
+    """RefSpec's parse of one list in a publisher's HTML page, accepted only from the exact capture pinned here.
 
+    A value whose vendored label is ``null`` has none: GAO's topic page states a name and no description.
+    """
+
+    lists = lists or VENDORED_LISTS.get(capture.publisher)
+    if lists is None:
+        raise SourceDomainError(f"capture {capture.key}: no vendored RefSpec list for publisher {capture.publisher!r}")
     try:
         vendored = json.loads(lists.read_bytes())
         entry = vendored["resources"][resource]
         codes = entry["codes"]
     except (OSError, ValueError, KeyError, TypeError) as error:
-        raise SourceDomainError(f"vendored FEC code lists {lists} do not state {resource!r}: {error}") from error
+        raise SourceDomainError(f"vendored lists {lists} do not state {resource!r}: {error}") from error
     if (entry.get("source_sha256"), entry.get("source_byte_length")) != (capture.bytes_digest, capture.byte_length):
         raise SourceDomainError(
-            f"vendored FEC list {resource!r} was parsed from {entry.get('source_sha256')}, "
+            f"vendored list {resource!r} was parsed from {entry.get('source_sha256')}, "
             f"not the pinned capture {capture.key} ({capture.bytes_digest})"
         )
     if not isinstance(codes, Mapping) or not codes:
-        raise SourceDomainError(f"vendored FEC list {resource!r} states no codes")
-    return tuple(codes), dict(codes)
+        raise SourceDomainError(f"vendored list {resource!r} states no codes")
+    return tuple(codes), {code: label for code, label in codes.items() if label is not None}
 
 
 # --- the register -----------------------------------------------------------
@@ -391,6 +402,8 @@ class _DomainDeclaration:
     expected_values: int
     expected_raw_options: int
     caveat: str | None = None
+    #: Further ``(capture_key, element)`` lists whose values complete the domain, when one page does not state it all.
+    also_from: tuple[tuple[str, str], ...] = ()
 
 
 # The gated domains: each is observed, diffed both ways, and held to the ledger.
@@ -422,6 +435,10 @@ class _DomainDeclaration:
 #   the BILLSTATUS guide's chamber column belongs to its summary-version table.
 # * LDA covered government entities: no capture states their list (live data
 #   holds 255 distinct ids), so there is nothing to check them against.
+# * ``gao_reports.topics`` mixes published topics with free keywords (12,100
+#   distinct values), and ``gao_decisions.topics`` holds decision-type labels,
+#   not topics; neither is GAO's topic list. CBO and CRS taxonomies wait for
+#   their archive routes.
 _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
     _DomainDeclaration(
         key="regulations-gov-document-type",
@@ -573,6 +590,20 @@ _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
         expected_values=6,
         expected_raw_options=6,
     ),
+    # GAO's /topics browse listing names 30 topics; Science and Technology is a
+    # live 31st term the listing omits (RefSpec REF-060), stated by its own page.
+    _DomainDeclaration(
+        key="gao-recommendation-topic",
+        table="gao_recommendations",
+        column="topics",
+        capture_key="gao-topics-listing",
+        locator="Browse Topics Alphabetically listing, read by RefSpec parse_gao_published_topics; "
+        "plus gao-science-and-technology-2026-09-01.html, read by RefSpec parse_gao_topic_page",
+        element="topicsListing",
+        expected_values=31,
+        expected_raw_options=31,
+        also_from=(("gao-science-and-technology", "scienceAndTechnology"),),
+    ),
 )
 
 #: The guide's own words on its action-code table (lines 453-455), carried beside every label.
@@ -596,7 +627,12 @@ _ACTION_CODE_CAVEAT = (
 # * FEC ``party`` on both history tables: 141 distinct off-list values on
 #   fec_committee_history (857 of 298,596 rows, 0.29%) and 139 on
 #   fec_candidate_history (393 of 130,885): case variants (Rep, Dem, dem), GOP,
-#   NAT and junk ('  0', '.'). Folding case is an owner decision, not a gate.
+#   NAT and junk ('  0', '.'). The builder now folds the case variants of one
+#   code (owner, 2026-10-31: 4 values on 92 committee rows, 2 on 13 candidate
+#   rows, measured on the same generations) and keeps the rest as filed, each
+#   with its original and reason in the receipt
+#   (``transforms/fec_identity_native.py``). What stays off-list is still
+#   noise, so the list stays labels only.
 _LABEL_ONLY_DECLARATIONS: tuple[_DomainDeclaration, ...] = (
     _DomainDeclaration(
         key="billstatus-action-code",
@@ -657,29 +693,39 @@ def _parse_declarations(
     captures = load_capture_manifest(root)
     payloads: dict[str, bytes] = {}
     domains: dict[str, DocumentedDomain] = {}
-    for declaration in declarations:
-        capture = captures.get(declaration.capture_key)
+
+    def parse(capture_key: str, element: str) -> tuple[DocumentedEnumerationCapture, tuple[str, ...], int, dict]:
+        capture = captures.get(capture_key)
         if capture is None:
-            raise SourceDomainError(f"domain {declaration.key} names unpinned capture {declaration.capture_key!r}")
+            raise SourceDomainError(f"domain {declaration.key} names unpinned capture {capture_key!r}")
         if capture.key not in payloads:
             payloads[capture.key] = read_capture(capture, root=root)
         payload = payloads[capture.key]
         labels: dict[str, str] = {}
         if capture.media_type == "application/yaml":
-            values = openapi_schema_enum(payload, declaration.element)
+            values = openapi_schema_enum(payload, element)
             raw_options = len(values)
         elif capture.media_type == "application/xml":
-            values, raw_options = xsd_documented_options(payload, declaration.element)
+            values, raw_options = xsd_documented_options(payload, element)
         else:
             if capture.media_type == "text/markdown":
-                values, labels = guide_table_values(payload, declaration.element)
+                values, labels = guide_table_values(payload, element)
             elif capture.media_type == "application/json":
                 values, labels = lda_constant_values(payload)
             elif capture.media_type == "text/html":
-                values, labels = fec_code_values(capture, declaration.element)
+                values, labels = vendored_code_values(capture, element)
             else:
                 raise SourceDomainError(f"capture {capture.key} has unsupported media type {capture.media_type!r}")
             raw_options = len(values)
+        return capture, values, raw_options, labels
+
+    for declaration in declarations:
+        capture, values, raw_options, labels = parse(declaration.capture_key, declaration.element)
+        for capture_key, element in declaration.also_from:
+            _, more, more_options, more_labels = parse(capture_key, element)
+            if set(more) & set(values):
+                raise SourceDomainError(f"domain {declaration.key} states {sorted(set(more) & set(values))} twice")
+            values, raw_options, labels = (*values, *more), raw_options + more_options, {**labels, **more_labels}
         if len(values) != declaration.expected_values or raw_options != declaration.expected_raw_options:
             raise SourceDomainError(
                 f"domain {declaration.key} parses {len(values)} values from {raw_options} options, "
@@ -894,8 +940,9 @@ class AcceptedFinding:
 _GUIDE_ACTION_TYPE_UNOBSERVED = (
     "The guide's section 4 lists 26 type strings: older descriptive ones (Chamber Actions, House Actions, "
     "Introduced in Senate, ...) beside Congress.gov's condensed ones (IntroReferral, Floor, Committee, ...). The "
-    "2026-10-30 observation of bill family f719442c carries 10 types, 9 of them listed and all condensed; a listed "
-    "type no action in this corpus carries is the list's breadth, not a retired value."
+    "observations of bill families f719442c (2026-10-31T01:59Z) and 51383379 (07:37Z) each carry 10 types, 9 of "
+    "them listed and all condensed; a listed type no action in this corpus carries is the list's breadth, not a "
+    "retired value."
 )
 _UNOBSERVED_ACTION_TYPES = (
     "Actions by the President",
@@ -1087,6 +1134,17 @@ ACCEPTED_DOMAIN_FINDINGS: tuple[AcceptedFinding, ...] = (
             ),
         )
         for value, rows, cycles in (("H", 26, "cycles 2014-2020"), ("I", 20, "cycles 2014-2026"))
+    ),
+    AcceptedFinding(
+        domain_key="gao-recommendation-topic",
+        kind=UNOBSERVED,
+        value="GAO Mission and Operations",
+        reason=(
+            "GAO's browse listing names this topic, but no gao_recommendations row carries it. GAO describes it as "
+            "'the history and mission of GAO and its programs and services. GAO publications and guidance', i.e. "
+            "GAO about itself, not an area of agency recommendations; a listed topic no recommendation carries is "
+            "the list's breadth, not a retired value (owner, 2026-10-31)."
+        ),
     ),
 )
 
