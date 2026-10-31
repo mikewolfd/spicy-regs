@@ -344,7 +344,7 @@ def test_frozen_producer_and_prepared_source_refuse_drift(monkeypatch, damage):
     receipt = {'family': 'fec-observations', 'source': source, 'producer': producer,
                'checkpoint_admission': {'observed_remote_main': source['main'], 'remote': source['remote'],
                                         'producer_commit': MAIN}}
-    assert conversion._receipt_producer_implementation(receipt, publisher, MAIN) == identity
+    assert conversion._receipt_producer_implementation(receipt, publisher, MAIN) == (identity, False)
     if damage == 'checkout':
         source['checkout'] = 'd1' * 20
     elif damage == 'dirty':

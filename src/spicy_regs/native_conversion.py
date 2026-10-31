@@ -161,8 +161,12 @@ def _refuse_moved(state: Mapping, *, main: str, spicy_docs: str) -> None:
         raise ConversionRefused("Main or the pinned wheel moved: " + "; ".join(problems))
 
 
-def _historical_producer(root: Path, revision: str, publisher: str) -> tuple[str, Mapping]:
-    """Read retained Git blobs, with the same path ordering and bytes as generations.source_digest."""
+def _historical_producer(root: Path, revision: str, publisher: str, *, same_lock: bool = True) -> tuple[str, Mapping]:
+    """Read retained Git blobs, with the same path ordering and bytes as generations.source_digest.
+
+    ``same_lock=False`` drops the identical-``uv.lock`` requirement, for a producer whose loaded code the caller
+    holds to the publisher's byte for byte instead (:mod:`spicy_regs.code_closure`).
+    """
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ConversionRefused("--expect-producer requires a full lowercase Git commit")
 
@@ -178,7 +182,7 @@ def _historical_producer(root: Path, revision: str, publisher: str) -> tuple[str
         raise ConversionRefused("Prepared producer pin is not a commit in this repository")
     git("merge-base", "--is-ancestor", revision, publisher)
     historical_lock = git("show", f"{revision}:uv.lock")
-    if historical_lock != git("show", f"{publisher}:uv.lock"):
+    if same_lock and historical_lock != git("show", f"{publisher}:uv.lock"):
         raise ConversionRefused("Prepared producer and publisher require the same locked runtime")
     locked = next((package for package in tomllib.loads(historical_lock.decode())["package"]
                    if package["name"] == "spicy-docs"), None)
@@ -239,26 +243,38 @@ def _checkpoint_producer(started: Mapping, producer: str, spicy_docs: str) -> di
     return {"commit": producer, "implementationId": identity, "lockedSpicyDocs": locked}
 
 
-def _prepared_implementation(source: Mapping, publisher: Mapping, expected_producer: str | None) -> str:
-    """Keep the sealed producer distinct from the current publisher, within the same locked runtime."""
+def _prepared_implementation(source: Mapping, publisher: Mapping, expected_producer: str | None,
+                             closure: Mapping | None = None) -> tuple[str, bool]:
+    """Keep the sealed producer distinct from the current publisher; return its identity and whether code rebound it.
+
+    An earlier producer needs its full commit, ancestry, its wheel matching its own lock, and its Git blobs hashing to
+    the generation's implementation. Then either the whole locked runtime is the publisher's (identical ``uv.lock``
+    and installed wheel), or, for a seal that recorded its loaded code, that code is byte-identical here
+    (:mod:`spicy_regs.code_closure`): a lock or wheel move that changed nothing the preparation ran no longer refuses.
+    """
+    from spicy_regs import code_closure
     from spicy_regs.generations import implementation_id
 
     # Preserve same-revision callers. Reusing an earlier producer always needs an explicit full pin and Git proof.
     if expected_producer is None:
         if source != publisher:
             raise ConversionRefused("An earlier prepared producer requires --expect-producer")
-        return implementation_id()
+        return implementation_id(), False
     if (source["checkout"] != expected_producer or source["main"] != expected_producer
             or source["remote"] != publisher["remote"]):
         raise ConversionRefused("Prepared producer pin or repository differs from its sealed source")
-    _refuse_moved(source, main=expected_producer, spicy_docs=publisher["spicy_docs"])
+    rebind = closure is not None and expected_producer != publisher["checkout"]
+    _refuse_moved(source, main=expected_producer, spicy_docs=source["spicy_docs"] if rebind else publisher["spicy_docs"])
     identity, locked = _historical_producer(Path(__file__).resolve().parents[2], expected_producer,
-                                          publisher["checkout"])
+                                          publisher["checkout"], same_lock=not rebind)
     if (locked["version"] != source["pinned_spicy_docs"]
             or locked["wheels"][0]["hash"] != source["spicy_docs_wheel"]["locked_sha256"]
-            or source["spicy_docs_wheel"] != publisher["spicy_docs_wheel"]):
+            or not rebind and source["spicy_docs_wheel"] != publisher["spicy_docs_wheel"]):
         raise ConversionRefused("Prepared producer runtime differs from the current installed locked wheel")
-    return identity
+    if rebind and (changed := code_closure.differences(closure)):
+        raise ConversionRefused(f"Prepared producer's loaded code differs from this publisher's ({len(changed)}): "
+                                + ", ".join(changed[:10]))
+    return identity, rebind
 
 
 @dataclass(frozen=True)
@@ -766,10 +782,9 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path, identity: Mapping) 
     ``identity`` is the one taken when the run started: the process ran the modules it imported then, so a
     checkout, pull or SpicyDocs re-sync on disk since then refuses the seal rather than naming code that did not run.
     The receipt stays unsealed and resumable.
-    ``closure`` records the code this process loaded (:mod:`spicy_regs.code_closure`) so a later rule can rebind the
-    seal on it. It is hashed from disk at seal; the start-identity check covers its module bytes but not SpicyRegs
-    data files other than ``.json`` and ``.xsd``. No publication reads it yet (ss-5tt8: the rebind awaits the
-    owner's closure-scope answer).
+    ``closure`` records the code this process loaded (:mod:`spicy_regs.code_closure`); a publisher on a later main
+    may rebind the seal on it (:func:`_prepared_implementation`). It is hashed from disk at seal; the
+    start-identity check covers its module bytes but not SpicyRegs data files other than ``.json`` and ``.xsd``.
     """
     from spicy_regs import code_closure
     from spicy_regs.generations import admission_key, validation_identity
@@ -905,10 +920,15 @@ def _prepared_evidence(generation_root: Mapping, family: str, evidence: tuple[Pa
         raise ConversionRefused("Prepared source evidence differs from the generation")
 
 
-def _receipt_producer_implementation(receipt: Mapping, now: Mapping, expected_producer: str | None) -> str:
+def _receipt_producer_implementation(receipt: Mapping, now: Mapping, expected_producer: str | None) -> tuple[str, bool]:
+    """The sealed producer's implementation identity, and whether its loaded code (not its lock) rebound it here.
+
+    A resumed or checkpointed receipt names a ``producer`` whose writer ran in another process than the seal, so its
+    seal's loaded code does not cover the writer: it keeps the identical-lock rule.
+    """
     producer = receipt.get("producer")
     if producer is None:
-        return _prepared_implementation(receipt["source"], now, expected_producer)
+        return _prepared_implementation(receipt["source"], now, expected_producer, receipt["prepared"].get("closure"))
     if expected_producer is None or producer.get("commit") != expected_producer:
         raise ConversionRefused("Resumed producer requires its exact --expect-producer commit")
     admission = receipt.get("checkpoint_admission")
@@ -928,7 +948,7 @@ def _receipt_producer_implementation(receipt: Mapping, now: Mapping, expected_pr
             or locked["version"] != now["pinned_spicy_docs"]
             or locked["wheels"][0]["hash"] != now["spicy_docs_wheel"]["locked_sha256"]):
         raise ConversionRefused("Resumed producer source or locked runtime differs")
-    return identity
+    return identity, False
 
 
 def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], expected_main: str,
@@ -1001,18 +1021,20 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
         raise ConversionRefused(f"Retained conversion cannot be verified: {type(failure).__name__}: {failure}") from failure
 
 
-def _sealed_admission(receipt: Mapping, full_verification: bool) -> bool:
+def _sealed_admission(receipt: Mapping, full_verification: bool, closure_bound: bool) -> bool:
     """Whether this publisher may rely on the seal's semantic admission and restoration instead of repeating them.
 
-    Only a version-2 seal under this process's admission key qualifies (the same key an owner process uses in memory:
-    generations.admission_key). Staged FEC observations keep the full path: their parent generation's admission and
-    restoration are not part of this seal.
+    A version-2 seal qualifies under this process's admission key (the key an owner process uses in memory:
+    generations.admission_key), or when ``closure_bound``: everything the sealing process loaded, validators
+    included, is byte-identical here. Staged FEC observations keep the full path: their parent generation's
+    admission and restoration are not part of this seal.
     """
     from spicy_regs.generations import admission_key, validation_identity
 
     sealed = receipt["prepared"]
     return (not full_verification and sealed["version"] == 2 and "staged_observations" not in receipt
-            and sealed["admissionKey"] == admission_key(sealed["generationPin"], validation_identity()))
+            and (closure_bound or sealed["admissionKey"] == admission_key(sealed["generationPin"],
+                                                                         validation_identity())))
 
 
 def publish_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_main: str, expected_spicy_docs: str,
@@ -1088,7 +1110,7 @@ def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         family, base = receipt["family"], receipt["public_url"]
         if family not in allowed:
             raise ConversionRefused(f"{family} is not in this run's allow-list")
-        producer_implementation = _receipt_producer_implementation(receipt, now, expected_producer)
+        producer_implementation, closure_bound = _receipt_producer_implementation(receipt, now, expected_producer)
         if base != (os.getenv("R2_PUBLIC_URL") or "").rstrip("/"):
             raise ConversionRefused("Prepared public URL differs from R2_PUBLIC_URL")
         capture_path = _prepared_path(work, "captured-publication.v2.json")
@@ -1104,7 +1126,7 @@ def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         replaced, handed_on = _replaced_evidence(base, old)
         retained, original_pins = _retained_inputs(captured, old, work)
         generation = _prepared_path(work, receipt["generation"]["directory"])
-        semantic = not _sealed_admission(receipt, full_verification)
+        semantic = not _sealed_admission(receipt, full_verification, closure_bound)
         artifact, _, _ = read_operation.admit_generation(generation, semantic=semantic)
         spec = artifact.root["spec"]
         if (artifact.pin.as_dict() != sealed["generationPin"]
@@ -1114,7 +1136,9 @@ def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
                 or spec["etlReceipts"]["generationId"] != receipt["generation"]["receiptGenerationId"]
                 or artifact.root["producer"]["implementationId"] != producer_implementation
                 or artifact.root["producer"]["verifierImplementationId"] != producer_implementation
-                or any(version(name) != value for name, value in spec["packages"].items())):
+                # A closure-bound producer's SpicyDocs is held by the bytes it loaded, not its release string.
+                or any(version(name) != value for name, value in spec["packages"].items()
+                       if not (closure_bound and name == "spicy-docs"))):
             raise ConversionRefused("Prepared generation, captured inputs, or implementation differs")
         evidence = tuple(_prepared_path(work, value) for value in sealed["evidenceDirectories"])
         _prepared_evidence(artifact.root, family, evidence)
@@ -1129,7 +1153,7 @@ def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
         )
         if problems or any(receipt.get(key) != value for key, value in proof.items()):
             raise ConversionRefused(f"Prepared restoration proof differs: {problems}")
-        verification = {"mode": "full" if semantic else "sealed-admission",
+        verification = {"mode": "full" if semantic else "sealed-admission", "rebound_by_loaded_code": closure_bound,
                         "seconds": round(time.monotonic() - started, 1)}
     except (ConversionRefused, publication.PublicationError) as failure:
         raise ConversionRefused(str(failure), state=_prepared_refusal_state(receipt_path)) from failure

@@ -162,8 +162,8 @@ def test_production_query_prepares_with_official_staged_parent_and_rejects_stale
     # The parent's admission and restoration are not in this seal: staged FEC query always verifies in full,
     # although the same receipt without its staged parent would qualify for the sealed path.
     sealed = json.loads((work / 'conversion.json').read_bytes())
-    assert 'staged_observations' in sealed and not conversion._sealed_admission(sealed, False)
-    assert conversion._sealed_admission({k: v for k, v in sealed.items() if k != 'staged_observations'}, False)
+    assert 'staged_observations' in sealed and not conversion._sealed_admission(sealed, False, False)
+    assert conversion._sealed_admission({k: v for k, v in sealed.items() if k != 'staged_observations'}, False, False)
 
 
 def test_nonempty_complete_query_links_filing_source_and_retained_history(tmp_path, monkeypatch, bucket):

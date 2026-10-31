@@ -12,7 +12,7 @@ from spicy_regs import native_conversion as conversion
 from tests.test_native_conversion import (
     BUCKET, CFR, MAIN, STATE, WHEEL,
     bucket as _bucket,
-    convert, prepared_digest, publish_old, stored,
+    PREPARED, convert, prepared_digest, publish_old, stored,
 )
 
 bucket = _bucket
@@ -92,7 +92,7 @@ def test_historical_pin_runtime_and_wheel_refuse(history, damage):
 def _historical_fixture(monkeypatch, identity=None):
     calls = []
 
-    def historical(root, producer, publisher):
+    def historical(root, producer, publisher, **_):
         calls.append((producer, publisher))
         assert producer == MAIN and publisher == PUBLISHER
         return identity or generations.implementation_id(), {
@@ -142,11 +142,18 @@ def test_distinct_producer_refusals_do_not_write_or_modify_the_sealed_receipt(tm
     convert("cfr-sections", work)
     path = work / conversion.RECEIPT
     _historical_fixture(monkeypatch, identity="wrong" if damage == "identity" else None)
+    if damage == "runtime":
+        # A seal without recorded loaded code keeps the identical-runtime rule (resumed producers, older seals).
+        receipt = json.loads(path.read_text())
+        del receipt["prepared"]["closure"]
+        receipt["prepared"]["receiptDigest"] = conversion._prepared_digest(receipt)
+        path.write_text(json.dumps(receipt))
+        PREPARED[path.resolve()] = receipt["prepared"]["receiptDigest"]
     overrides = {}
     if damage in {"missing-pin", "wrong-pin"}:
         overrides["expected_producer"] = None if damage == "missing-pin" else "af" * 20
     elif damage == "history":
-        def unavailable(*args):
+        def unavailable(*args, **_):
             raise conversion.ConversionRefused("Unavailable retained history")
         monkeypatch.setattr(conversion, "_historical_producer", unavailable)
     elif damage in {"runtime", "dirty"}:
@@ -190,6 +197,92 @@ def test_the_seal_records_the_code_it_loaded(tmp_path, monkeypatch, bucket):
     # sys.modules is process-wide; which builders a fresh conversion loads is checked in a subprocess below.
     assert set(closure) == {"modules", "data", "distributions", "python", "platform"}
     assert code_closure.record()["modules"][mapper] == expected
+def _moved_runtime():
+    """A publisher on a later main whose lock and SpicyDocs wheel moved: the old rule refused this outright."""
+    state = STATE | {"checkout": PUBLISHER, "main": PUBLISHER}
+    state["spicy_docs_wheel"] = STATE["spicy_docs_wheel"] | {
+        "locked_sha256": "sha256:" + "ca" * 32, "file_sha256": "sha256:" + "ca" * 32}
+    return lambda _: dict(state)
+
+
+def _installed_copy(tmp_path, monkeypatch, package):
+    """This process's ``package`` as a separate tree the closure reads, so one file can change without touching it."""
+    import shutil
+
+    from spicy_regs import code_closure
+
+    real = code_closure._root
+    copy = tmp_path / "installed" / package
+    shutil.copytree(real(package), copy, ignore=shutil.ignore_patterns("__pycache__"))
+    monkeypatch.setattr(code_closure, "_root", lambda name: copy if name == package else real(name))
+    return copy
+
+
+def _sealed_closure(path):
+    return json.loads(path.read_text())["prepared"]["closure"]
+
+
+@pytest.mark.parametrize("change", [None, "spicy-regs-outside", "spicy-docs-outside"])
+def test_a_moved_runtime_rebinds_on_byte_identical_loaded_code(tmp_path, monkeypatch, bucket, change):
+    """A lock or wheel move, or an edit to code the preparation never loaded, publishes from the later main."""
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    convert("cfr-sections", work)
+    path = work / conversion.RECEIPT
+    closure = _sealed_closure(path)
+    if change is not None:
+        package = "spicy_regs" if change == "spicy-regs-outside" else "spicy_docs"
+        copy = _installed_copy(tmp_path, monkeypatch, package)
+        outside = next(name for name in sorted(copy.rglob("*.py"))
+                       if f"{package}/{name.relative_to(copy).as_posix()}" not in closure["modules"])
+        outside.write_text(outside.read_text() + "\n# an unrelated edit\n")
+    calls = []
+    real = conversion._historical_producer
+
+    def historical(root, producer, publisher, **options):
+        calls.append(options)
+        return generations.implementation_id(), {"version": WHEEL, "wheels": [{"hash": STATE["spicy_docs_wheel"]["locked_sha256"]}]}
+
+    monkeypatch.setattr(conversion, "_historical_producer", historical)
+    assert real is not historical
+    done = _publish(path, state=_moved_runtime())
+    assert calls == [{"same_lock": False}]
+    assert done["publish_attempt"]["verification"]["rebound_by_loaded_code"] is True
+    assert done["publish_attempt"]["verification"]["mode"] == "sealed-admission"
+    conversion.rollback(path, expect_bucket=BUCKET)
+    assert stored(bucket) == old
+
+
+@pytest.mark.parametrize("change", ["lossless-mapper", "data-file", "distribution"])
+def test_a_change_to_loaded_code_refuses_the_rebind(tmp_path, monkeypatch, bucket, change):
+    """Even a change that restores every row the same (a comment) refuses: the rule is bytes, not outcomes."""
+    from importlib import metadata
+
+    old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    convert("cfr-sections", work)
+    path = work / conversion.RECEIPT
+    closure = _sealed_closure(path)
+    if change == "distribution":
+        held = next(iter(closure["distributions"]))
+        real_version = metadata.version
+        from spicy_regs import code_closure
+        monkeypatch.setattr(code_closure, "version", lambda name: "0.0.0" if name == held else real_version(name))
+    else:
+        copy = _installed_copy(tmp_path, monkeypatch, "spicy_regs")
+        if change == "lossless-mapper":
+            mapper = "spicy_regs/pipelines/rollups/cfr_sections.py"
+            assert mapper in closure["modules"]
+            target = copy / mapper.removeprefix("spicy_regs/")
+            target.write_text(target.read_text() + "\n# a comment-only mapper change\n")
+        else:
+            target = next(copy.rglob("*.json"))
+            target.write_bytes(target.read_bytes() + b" ")
+    _historical_fixture(monkeypatch)
+    before = list(bucket.writes), path.read_bytes()
+    with pytest.raises(conversion.ConversionRefused, match="loaded code differs"):
+        _publish(path, state=_moved_runtime())
+    assert (bucket.writes, path.read_bytes()) == before and stored(bucket) == old
 
 
 def test_the_conversion_path_imports_no_unrelated_builders_or_spicy_docs():

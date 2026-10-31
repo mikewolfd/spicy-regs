@@ -473,15 +473,21 @@ below, so an edited receipt still meets every row check. For an earlier
 producer, the command verifies its commit and ancestry in the same repository,
 hashes historical Python Git blobs using the generation's path ordering,
 and compares both producer and verifier implementation identities. Its
-historical vendored wheel must match its lock, the sealed wheel, and the
-current installed wheel. This path requires identical historical and current
-`uv.lock` bytes. Missing history, a different locked runtime, or an unproved
-producer refuses. A version-2 seal also records the code its process loaded
-(`prepared.closure`: bytes of every loaded SpicyRegs, SpicyDocs and Rulespec
-module and every data file in those packages, loaded third-party versions,
-Python and platform). No publish reads it yet; it is held for a rule that
-would rebind a seal on byte-identical loaded code when `uv.lock` or the wheel
-moved, pending the owner's decision. Every operator `--publish-prepared` passes
+historical vendored wheel must match its lock. Then one of two rules binds
+the runtime. A seal that recorded its loaded code (`prepared.closure`: the
+bytes of every SpicyRegs, SpicyDocs and Rulespec module the preparing process
+loaded, every data file in those packages, the versions of the third-party
+distributions it loaded, Python and the platform) publishes from a later main
+when all of that is byte-identical in the publisher; `uv.lock`, the SpicyDocs
+wheel and its version may have moved. Even a comment-only change to a loaded
+module refuses. A seal without it (older seals, resumed or checkpointed
+producers, whose writer ran in another process) requires identical historical
+and current `uv.lock` bytes and the same installed wheel. A publish rebound by
+loaded code also relies on the seal's admission instead of repeating it,
+because the validators it ran are among the identical bytes;
+`publish_attempt.verification.rebound_by_loaded_code` records this. Missing
+history, a different locked runtime or loaded code, or an unproved producer
+refuses. Every operator `--publish-prepared` passes
 `--expect-producer` with that receipt's `source.checkout`, even when main has
 not moved: peers land on main while a publication is prepared and qualified,
 and the pin is what keeps a sealed receipt publishable from a later main. On
@@ -497,18 +503,19 @@ version-1 seal, for `fec-query` with staged observations (its parent's
 admission is not in the seal), or with `--full-verification`; the receipt's
 `publish_attempt.verification` records which mode ran and how long it took.
 After any commit to `src/spicy_regs`, or any change to the SpicyDocs or
-Rulespec code bytes, the key differs, so a publish from a moved main takes the
-full path. Such commits are frequent: about a third of 3-hour windows on fork
-main from 2026-09-30 to 028736f3 cross a `src/spicy_regs` commit (653
-commits; 34.2% of windows started every 10 minutes, by commit time). To get
-the skip for a Mac preparation, publish from a clean worktree at `PRODUCER`
+Rulespec code bytes, the key differs; a publish from a moved main then skips
+row admission only when it is rebound by loaded code (above). Such commits are
+frequent: about a third of 3-hour windows on fork main from 2026-09-30 to
+028736f3 cross a `src/spicy_regs` commit (653 commits; 34.2% of windows
+started every 10 minutes, by commit time). To get the skip for a Mac
+preparation without a rebind, publish from a clean worktree at `PRODUCER`
 itself. On 2026-10-30 the comment-attributes publish spent 25.0 minutes
 re-checking locally and 24.1 minutes downloading and re-admitting the public
 copy. The digest read-back above replaces the second on every publish (an
 estimate of about 13.6 minutes of re-admission and a 4.5 GB copy); the sealed
-path skips the first only when no validator code moved. Replace these
-estimates with `publish_attempt.verification.seconds` from the next approved
-publish. Prepared publication refuses an operator digest that
+path skips the first only when no validator code moved or a rebind applies.
+Replace these estimates with `publish_attempt.verification.seconds` from the
+next approved publish. Prepared publication refuses an operator digest that
 differs from the seal (an edited and resealed receipt), an altered or
 incomplete receipt, unproved producer or changed publisher/runtime, missing
 or altered members,

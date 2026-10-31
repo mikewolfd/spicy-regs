@@ -4,8 +4,7 @@ A prepared conversion is sealed in the process that ran its writer, admission an
 the bytes of every first-party module in ``sys.modules`` (SpicyRegs, SpicyDocs, Rulespec artifacts), the bytes of
 every first-party data file whether or not it was read (DuckDB and pyarrow read package files Python never sees, and
 a cached read made before recording would be invisible to any tracer), the versions of every third-party distribution
-loaded, Python and the platform. Nothing compares it yet: rebinding a seal on byte-identical loaded code, instead
-of an identical ``uv.lock`` and wheel, waits on the owner's answer on closure scope (ss-5tt8).
+loaded, Python and the platform. :func:`differences` re-hashes the same set in the current process.
 
 ``generations.spicy_docs_code`` digests the whole SpicyDocs package rather than the modules a caller imports,
 "because a missed transitive module would leave stale rows silently". ``sys.modules`` holds every module imported,
@@ -21,7 +20,8 @@ import hashlib
 import importlib
 import platform
 import sys
-from importlib.metadata import packages_distributions, version
+from collections.abc import Mapping
+from importlib.metadata import PackageNotFoundError, packages_distributions, version
 from pathlib import Path
 
 #: First-party packages whose bytes are recorded; every other loaded package is recorded by distribution version.
@@ -66,3 +66,24 @@ def record() -> dict:
     return {"modules": dict(sorted(modules.items())), "data": _data_files(),
             "distributions": dict(sorted(distributions.items())), **_runtime()}
 
+
+def differences(recorded: Mapping) -> list[str]:
+    """What differs between ``recorded`` and this process's installed code, named; empty when byte-identical."""
+    found = []
+    for key, digest in recorded["modules"].items():
+        package, _, relative = key.partition("/")
+        path = _root(package) / relative
+        if not path.is_file() or _digest(path) != digest:
+            found.append(f"module {key}")
+    data = _data_files()
+    found += [f"data {key}" for key in sorted(data.keys() | recorded["data"].keys())
+              if data.get(key) != recorded["data"].get(key)]
+    for name, held in recorded["distributions"].items():
+        try:
+            current = version(name)
+        except PackageNotFoundError:
+            current = None
+        if current != held:
+            found.append(f"distribution {name} {held} -> {current}")
+    found += [f"runtime {key}" for key, value in _runtime().items() if recorded.get(key) != value]
+    return found
