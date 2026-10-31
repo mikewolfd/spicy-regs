@@ -31,12 +31,10 @@ CONTEXT_ONLY = (
     "fec_collection_selection",
     "fec_historical_ie_statistics",
     "fec_research_context_dispositions",
-    "fec_research_document_observations",
     "fec_research_filing_feed_items",
     "fec_research_meeting_observations",
     "fec_research_response_outcomes",
     "fec_research_source_pages",
-    "fec_retained_csv_observations",
     "fec_filing_definition_evidence",
 )
 
@@ -254,7 +252,7 @@ def test_context_anchors_require_existing_column_and_pointer(route, change):
 
 
 def test_collection_observation_anchor_requires_context_evidence_without_record_identity():
-    target = recipe("receipt_fec_retained_csv_observations_collection_id_fec_collections")["targets"][0]
+    target = recipe("receipt_fec_research_meeting_observations_collection_id_fec_collections")["targets"][0]
     row = {"collection_id": "csv", "source_context_pointer": "/facts/4", "context_sha256": "sha256:" + "d" * 64}
     assert target_keys(target, {}, row) == ["csv"]
     for field in ("source_context_pointer", "context_sha256"):

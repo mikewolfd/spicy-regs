@@ -245,103 +245,22 @@ def csv_context():
     )
 
 
-def test_csv_maps_only_complete_rows_and_preserves_partial_scope():
-    result = run(csv_context())
-    rows = result.tables["fec_retained_csv_observations"]
-    assert len(rows) == 1 and rows[0]["amount"] == Decimal(".01")
-    assert rows[0]["reported_date"] == date(2024, 2, 17)
-    assert rows[0]["coverage_status"] == "complete_records_of_truncated_capture"
-    assert rows[0]["current_total_status"] == "unqualified_partial_capture"
-    assert "native_fields_json" not in rows[0]
-    assert rows[0]["source_context_pointer"] == ROOT + "/parsing/complete_records/1"
-
-
-@pytest.mark.parametrize("change", ["duplicate_header", "short_row"])
-def test_ambiguous_csv_prefix_is_not_mapped(change):
-    row = csv_context()
-    if change == "duplicate_header":
-        row = modify(row, lambda p: p["complete_records"][0]["fields"].append("committee_id"))
-    else:
-        row = modify(row, lambda p: p["complete_records"][1]["fields"].pop())
-    result = run(row)
-    assert not result.tables["fec_retained_csv_observations"]
-    assert result.tables["fec_research_context_dispositions"][0]["mapping_status"] == "unsupported"
-
-
-def test_documentcloud_retains_third_party_search_observations_without_legal_joins():
-    native = dict(
-        id="4433332",
-        title="FEC vs. John Swallow ruling",
-        original_extension="pdf",
-        canonical_url="https://www.documentcloud.org/documents/4433332/",
-        created_at="2018-04-06T20:59:28.891Z",
-    )
-    row = context(
-        dict(status="literal-json", facts=[dict(kind="json-field", field="results", value=[native, deepcopy(native)])]),
+def documentcloud_context():
+    native = dict(id="4433332", title="FEC vs. John Swallow ruling", original_extension="pdf")
+    return context(
+        dict(status="literal-json", facts=[dict(kind="json-field", field="results", value=[native])]),
         url="https://api.www.documentcloud.org/api/documents/search/?q=Federal+Election+Commission",
     )
-    docs = run(row).tables["fec_research_document_observations"]
-    assert len(docs) == 2 and docs[0]["record_id"] != docs[1]["record_id"]
-    assert all(r["body_status"] == "deferred_pdf" for r in docs)
-    assert docs[0]["source_authority"] == "api.www.documentcloud.org"
-    assert docs[0]["fec_relationship_status"] == "search_result_only_no_verified_matter_join"
 
 
-@pytest.mark.parametrize('count, expected, status', [
-    (0, 0, 'parsed'), (12, 12, 'parsed'), (None, None, 'missing'),
-    (True, None, 'invalid_count'), (-1, None, 'invalid_count'),
-    (2**63, None, 'invalid_count'), ('12', None, 'invalid_count'),
-])
-def test_shared_document_interpretation_preserves_count_refusals_and_timezone(count, expected, status):
-    from datetime import datetime, timezone
-    from spicy_regs.transforms.fec_context_shape import document_context_fields
-    native = dict(language='en', page_count=count, created_at='2024-01-02T05:04:05+02:00',
-                  updated_at='2024-01-02T03:04:05', publisher_unmapped=[False,1.0])
-    original = deepcopy(native)
-    values, diagnostics = document_context_fields(native)
-    assert native == original
-    assert values['page_count'] == expected and type(values['page_count']) is type(expected)
-    assert values['page_count_status'] == status and values['language']=='en'
-    assert values['created_at']==datetime(2024,1,2,3,4,5,tzinfo=timezone.utc)
-    assert values['updated_at'] is None and diagnostics['updated_at']=='invalid_or_unzoned_timestamp'
-    assert values['evidence_use']=='discovery_only'
-
-
-@pytest.mark.parametrize('raw, expected, status', [
-    ('2026', 2026, 'parsed'), ('0202', None, 'unsupported_year'),
-    ('+2026', None, 'unsupported_year'), (' 2026 ', None, 'unsupported_year'),
-    (str(2**63), None, 'unsupported_year'), ('', None, 'missing'), (None, None, 'missing'),
-])
-def test_shared_csv_interpretation_preserves_exact_year_spelling(raw, expected, status):
-    from spicy_regs.transforms.fec_context_shape import csv_context_fields
-    native = dict(report_year=raw, amendment_indicator='A', memo_text=' literal ',
-                  file_number='0171', publisher_unmapped={'raw':[False,1.0]})
-    original = deepcopy(native)
-    values, diagnostics = csv_context_fields(native)
-    assert native == original
-    assert values['report_year']==expected and type(values['report_year']) is type(expected)
-    assert values['report_year_status']==status and diagnostics['report_year']==status
-    assert values['memo_text']==' literal ' and values['file_number']=='0171'
-
-
-def test_shared_context_unavailable_objects_and_malformed_selected_fields_are_explicit():
-    from spicy_regs.transforms.fec_context_shape import csv_context_fields, document_context_fields
-    values, diagnostics = document_context_fields(None, source_created_at='2024-01-02T03:04:05Z')
-    assert values['page_count_status']=='unavailable_retained_metadata' and values['language'] is None
-    assert diagnostics['language']=='unavailable_retained_metadata' and diagnostics['created_at']=='parsed'
-    values, diagnostics = csv_context_fields(None)
-    assert values['report_year_status']=='unavailable_retained_fields' and values['report_year'] is None
-    assert diagnostics['memo_code']=='unavailable_retained_fields'
-    for native in ([], 'opaque', 1):
-        with pytest.raises(ValueError, match='named source object'):
-            document_context_fields(native)
-        with pytest.raises(ValueError, match='named source object'):
-            csv_context_fields(native)
-    with pytest.raises(ValueError, match='language'):
-        document_context_fields({'language':True})
-    for native in ({'report_year':2026}, {'memo_code':False}, {'file_number':1.0}):
-        with pytest.raises(ValueError, match='native text'):
-            csv_context_fields(native)
+@pytest.mark.parametrize("make", [csv_context, documentcloud_context])
+def test_retired_csv_and_documentcloud_contexts_emit_no_table_rows(make):
+    """Owner decision 2026-10-30 (ss-j4vz B10): both tables are dropped; the context keeps a disposition."""
+    result = run(make())
+    assert not {"fec_retained_csv_observations", "fec_research_document_observations"} & set(SCHEMAS)
+    assert [t for t, rows in result.tables.items() if rows] == ["fec_research_context_dispositions"]
+    assert result.tables["fec_research_context_dispositions"][0]["mapping_status"] == "retired_output"
+    assert not result.evidence
 
 
 @pytest.mark.parametrize('refusal, shape, expected', [

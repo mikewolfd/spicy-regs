@@ -12,8 +12,6 @@ FEC_SOURCE_CATEGORIES = {
     "fec_api_response_controls": "diagnostics",
     "fec_research_context_dispositions": "diagnostics",
     "fec_research_response_outcomes": "diagnostics",
-    "fec_research_document_observations": "discovery_leads",
-    "fec_retained_csv_observations": "bounded_samples",
 }
 
 

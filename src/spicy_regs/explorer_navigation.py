@@ -188,8 +188,8 @@ def _recorded_source_navigation() -> list[dict]:
 # These retained context mappers have no individual source-record identity.
 _FEC_CONTEXT_SOURCES = frozenset({
     "fec_collection_selection", "fec_historical_ie_statistics", "fec_research_context_dispositions",
-    "fec_research_document_observations", "fec_research_filing_feed_items", "fec_research_meeting_observations",
-    "fec_research_response_outcomes", "fec_research_source_pages", "fec_retained_csv_observations",
+    "fec_research_filing_feed_items", "fec_research_meeting_observations",
+    "fec_research_response_outcomes", "fec_research_source_pages",
     "fec_filing_definition_evidence",
 })
 _FEC_DIGEST = r"sha256:[a-f0-9]{64}"

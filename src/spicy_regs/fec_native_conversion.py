@@ -98,8 +98,14 @@ def family_tables(family):
     raise ValueError('Unsupported FEC conversion family')
 
 
+# Published tables the owner retired (ss-j4vz B10, 2026-10-30): a captured prior still
+# holds them, the converted generation omits them, and their originals stay in the raw store.
+RETIRED_TABLES = {'fec-query': frozenset({'fec_research_document_observations.parquet',
+                                          'fec_retained_csv_observations.parquet'})}
+
+
 def check_membership(family, old):
-    if set(old['tables']) != family_tables(family):
+    if set(old['tables']) - RETIRED_TABLES.get(family, frozenset()) != family_tables(family):
         raise ValueError('FEC conversion requires the complete registered family membership')
     for key, table in old['tables'].items():
         if 'members' in table and [member['key'] for member in table['members']] != sorted(member['key'] for member in table['members']):
@@ -297,32 +303,6 @@ def retained_identity_row(table, original, *, diagnostics=None, source_schema=No
             from spicy_regs.transforms.fec_identity_observations import _scalar
             row.update(array_values(native, 'sponsor_candidate_list'))
             row.update({name: _scalar(native.get(name)) for name in ('affiliated_committee_name', 'organization_type', *AGENT_FIELDS)})
-    elif table == 'fec_research_document_observations' and 'native_metadata_json' in original:
-        from spicy_regs.transforms.fec_context_shape import document_context_fields
-        if original.get('mapping_version') != 'fec-research-context/1':
-            raise ValueError('Retained document metadata requires its captured /1 mapping')
-        native = node('native_metadata_json')
-        if native is not None:
-            if not {'id','title'} <= native.keys():
-                raise ValueError('Retained document metadata lacks native identity/title')
-            for field, source in (('document_native_id','id'), ('title','title'),
-                                  ('source_created_at','created_at'), ('source_updated_at','updated_at')):
-                value = str(native[source]) if source == 'id' else native.get(source)
-                if original.get(field) != value:
-                    raise ValueError('Retained document metadata differs from its reported '+field)
-        values, statuses = document_context_fields(native, source_created_at=original.get('source_created_at'),
-                                                    source_updated_at=original.get('source_updated_at'))
-        row.update(values)
-        if diagnostics is not None:
-            diagnostics.update(field_statuses=statuses, legacy_bridge='document-context/1')
-    elif table == 'fec_retained_csv_observations' and 'native_fields_json' in original:
-        from spicy_regs.transforms.fec_context_shape import csv_context_fields
-        if original.get('mapping_version') != 'fec-research-context/1':
-            raise ValueError('Retained CSV fields require their captured /1 mapping')
-        values, statuses = csv_context_fields(node('native_fields_json'))
-        row.update(values)
-        if diagnostics is not None:
-            diagnostics.update(field_statuses=statuses, legacy_bridge='csv-context/1')
     elif table == 'fec_research_response_outcomes' and 'native_payload_json' in original:
         from spicy_regs.transforms.fec_context_shape import response_capture_disposition
         if original.get('mapping_version') != 'fec-research-context/1':
@@ -647,6 +627,8 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
             receipt_writer = stack.enter_context(pq.ParquetWriter(stream, RECEIPT_SCHEMA, compression='zstd'))
         for key, original in sorted(retained.items()):
             check_resources()
+            if key in RETIRED_TABLES.get(family, ()):
+                continue
             table = key.removesuffix('.parquet')
             published_members = publication.table_members(captured, key)
             members = [original / pin.key.removeprefix(table + '/') if original.is_dir() else original

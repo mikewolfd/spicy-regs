@@ -2653,14 +2653,6 @@
     "outputs_json": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
    }
   },
-  "fec_research_document_observations": {
-   "meanings": {
-    "evidence_use": "Discovery-only research lead; does not establish a verified FEC matter relationship or fetched document body.",
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
-    "source_created_at": "Creation time stated by the research publisher; not a date of the underlying FEC event.",
-    "source_updated_at": "Update time stated by the research publisher; not a current-version selection rule."
-   }
-  },
   "fec_research_filing_feed_items": {
    "meanings": {
     "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
@@ -2694,15 +2686,6 @@
    "meanings": {
     "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
     "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures."
-   }
-  },
-  "fec_retained_csv_observations": {
-   "meanings": {
-    "amount_raw": "Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate.",
-    "date_raw": "Literal date field of the retained CSV context row before source-specific interpretation.",
-    "native_row_locator_json": "Exact original CSV row and field coordinates retained by the source context.",
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
-    "source_row_ordinal": "Native row ordinal supplied by the retained CSV context."
    }
   },
   "fec_source_catalog": {

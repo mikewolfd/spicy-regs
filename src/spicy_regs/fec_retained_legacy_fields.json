@@ -79,9 +79,6 @@
     "filing_link_status",
     "native_field_states_json"
   ],
-  "fec_research_document_observations": [
-    "native_metadata_json"
-  ],
   "fec_research_filing_feed_items": [
     "description",
     "native_fields_json",
@@ -96,8 +93,5 @@
   "fec_research_source_pages": [
     "headings_json",
     "times_json"
-  ],
-  "fec_retained_csv_observations": [
-    "native_fields_json"
   ]
 }

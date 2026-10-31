@@ -35,7 +35,7 @@ SOURCE_NAMESPACE_TABLES = frozenset(
 )
 AMOUNT_STATUS_TABLES = frozenset(
     "fec_communication_costs fec_historical_ie_statistics fec_inaugural_donations fec_legal_events "
-    "fec_receipts fec_retained_csv_observations".split()
+    "fec_receipts".split()
 )
 RETURNED = {"source_namespace": SOURCE_NAMESPACE_TABLES, "amount_status": AMOUNT_STATUS_TABLES}
 

@@ -33,7 +33,6 @@ accessible through exact evidence references.
 | `fec_research_filing_feed_items` | Feed identifiers, labels, dates and timestamp interpreted at build time. Candidate IDs incorrectly labelled CommitteeId by the source retain that distinction. |
 | `fec_research_source_pages` | Body text, content scope and a native list of links. The extraction status (`content_status`) is in the receipt. |
 | `fec_research_meeting_observations` | Meeting facts with native lists of dates and links; `date_kind` says whether the dates are one date, separately listed dates or the two endpoints of a range. |
-| `fec_research_document_observations`, `fec_retained_csv_observations` | Discovery leads and bounded samples, with their explicit source and financial-use limitations. |
 
 ## Receipt-only datasets
 

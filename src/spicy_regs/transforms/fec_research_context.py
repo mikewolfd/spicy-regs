@@ -2,8 +2,8 @@
 
 Inputs are native facts in fec_collections, not files at workstation paths.
 Context witnesses never become fictional fec_source_records. Historical workbook
-rows, complete CSV prefixes, public research metadata and meeting listings retain
-separate grains and do not qualify current financial totals or legal identities.
+rows and meeting listings retain separate grains and do not qualify current
+financial totals or legal identities.
 """
 
 from dataclasses import dataclass, field
@@ -18,10 +18,7 @@ import pyarrow as pa
 
 from .fec_query import AMOUNT_TYPE, _digest, exact_amount
 from .fec_context_shape import (
-    CSV_FIELDS,
     filing_announcement,
-    csv_context_fields,
-    document_context_fields,
     response_capture_disposition,
     source_page_body,
 )
@@ -43,28 +40,6 @@ HISTORICAL_SCHEMA = pa.schema(
         ("reported_date", pa.date32()),
         ("period_start", pa.date32()),
         ("period_end", pa.date32()),
-    ]
-)
-CSV_SCHEMA = pa.schema(
-    [
-        (n, pa.string())
-        for n in COMMON
-        + "observation_type reporting_committee_id reporting_committee_name counterparty_name transaction_id native_sub_id amount_raw amount_status date_raw date_status native_row_locator_json coverage_status current_total_status".split()
-    ]
-    + [(n, pa.string()) for n in CSV_FIELDS]
-    + [("report_year", pa.int32()), ("report_year_status", pa.string())]
-    + [("amount", AMOUNT_TYPE), ("reported_date", pa.date32()), ("source_row_ordinal", pa.int32())]
-)
-RESEARCH_DOCUMENT_SCHEMA = pa.schema(
-    [
-        (n, pa.string())
-        for n in COMMON
-        + "document_native_id title description canonical_url source_publisher source_created_at source_updated_at original_extension body_status fec_relationship_status language evidence_use page_count_status".split()
-    ]
-    + [
-        ("page_count", pa.int64()),
-        ("created_at", pa.timestamp("us", tz="UTC")),
-        ("updated_at", pa.timestamp("us", tz="UTC")),
     ]
 )
 MEETING_SCHEMA = pa.schema(
@@ -108,8 +83,6 @@ SCHEMAS = {
     "fec_research_response_outcomes": RESPONSE_SCHEMA,
     "fec_research_filing_feed_items": RSS_SCHEMA,
     "fec_historical_ie_statistics": HISTORICAL_SCHEMA,
-    "fec_retained_csv_observations": CSV_SCHEMA,
-    "fec_research_document_observations": RESEARCH_DOCUMENT_SCHEMA,
     "fec_research_meeting_observations": MEETING_SCHEMA,
     "fec_research_context_dispositions": DISPOSITION_SCHEMA,
 }
@@ -357,113 +330,6 @@ def _workbooks(ctx):
     return ctx.disposition(
         "mapped",
         "Historical published worksheet detail and source totals retained separately; header, period and methodology cells linked; no transaction/current-total adoption",
-    )
-
-
-def _csv(ctx):
-    records = ctx.parsing["complete_records"]
-    if not records or len(records) != ctx.parsing["complete_record_count"]:
-        return ctx.disposition("unsupported", "CSV complete-record count does not match retained records")
-    header = records[0]["fields"]
-    if len(set(header)) != len(header):
-        return ctx.disposition("unsupported", "CSV header contains duplicate names")
-    if "contribution_receipt_amount" in header and "contribution_receipt_date" in header:
-        kind, amount_field, date_field, party_field = (
-            "receipt_preview",
-            "contribution_receipt_amount",
-            "contribution_receipt_date",
-            "contributor_name",
-        )
-    elif "disbursement_amount" in header and "disbursement_date" in header:
-        kind, amount_field, date_field, party_field = (
-            "disbursement_preview",
-            "disbursement_amount",
-            "disbursement_date",
-            "recipient_name",
-        )
-    else:
-        return ctx.disposition("unsupported", "CSV prefix lacks a qualified receipt or disbursement header")
-    if any(len(r["fields"]) != len(header) for r in records[1:]):
-        return ctx.disposition("unsupported", "Complete CSV record has a different width than its header")
-    for i, native in enumerate(records[1:], 1):
-        if _sha(native["source"]["sha256"]) != ctx.source_sha:
-            raise ValueError("CSV row witness has a different capture digest")
-        values = dict(zip(header, native["fields"], strict=True))
-        amount, status = exact_amount(values[amount_field])
-        raw_date = values[date_field]
-        try:
-            dt, ds = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S").date(), "source_date"
-        except (ValueError, TypeError):
-            dt, ds = (
-                None,
-                "source_empty" if raw_date == "" else "source_null" if raw_date is None else "unsupported_spelling",
-            )
-        ctx.emit(
-            "fec_retained_csv_observations",
-            f"/parsing/complete_records/{i}",
-            dict(
-                observation_type=kind,
-                reporting_committee_id=values.get("committee_id"),
-                reporting_committee_name=values.get("committee_name"),
-                counterparty_name=values.get(party_field),
-                transaction_id=values.get("transaction_id"),
-                native_sub_id=values.get("sub_id"),
-                amount_raw=values[amount_field],
-                amount=amount,
-                amount_status=status,
-                date_raw=raw_date,
-                reported_date=dt,
-                date_status=ds,
-                **csv_context_fields(values)[0],
-                native_row_locator_json=_json(native["source"]),
-                source_row_ordinal=i,
-                coverage_status="complete_records_of_truncated_capture",
-                current_total_status="unqualified_partial_capture",
-            ),
-            context=("/parsing/complete_records/0",),
-        )
-    return ctx.disposition(
-        "mapped_partial_capture",
-        "Only provider-confirmed complete CSV rows mapped; unconfirmed trailing bytes and parser refusal remain source context, not data rows",
-    )
-
-
-def _documents(ctx):
-    matched = False
-    for fi, fact in enumerate(ctx.parsing.get("facts", [])):
-        if (
-            fact.get("kind") != "json-field"
-            or fact.get("field") != "results"
-            or not isinstance(fact.get("value"), list)
-        ):
-            continue
-        matched = True
-        for i, native in enumerate(fact["value"]):
-            if not isinstance(native, dict) or not {"id", "title"} <= native.keys():
-                raise ValueError("DocumentCloud result lacks native document identity/title")
-            extension = native.get("original_extension")
-            ctx.emit(
-                "fec_research_document_observations",
-                f"/parsing/facts/{fi}/value/{i}",
-                dict(
-                    document_native_id=str(native["id"]),
-                    title=native["title"],
-                    description=native.get("description"),
-                    canonical_url=native.get("canonical_url"),
-                    source_publisher=native.get("source"),
-                    source_created_at=native.get("created_at"),
-                    source_updated_at=native.get("updated_at"),
-                    original_extension=extension,
-                    body_status="deferred_pdf" if extension and extension.lower() == "pdf" else "body_not_qualified",
-                    fec_relationship_status="search_result_only_no_verified_matter_join",
-                    **document_context_fields(native)[0],
-                ),
-            )
-    return ctx.disposition(
-        "mapped" if matched else "unsupported",
-        "DocumentCloud source search-result metadata; PDF bodies deferred and FEC legal identity not inferred"
-        if matched
-        else "No DocumentCloud results array in native JSON fields",
     )
 
 
@@ -830,10 +696,10 @@ def map_research_context(collection, source_generation_pin):
     path = urlsplit(ctx.url or "").path
     if ctx.collection_id.startswith("retained-ie-workbook-"):
         return _workbooks(ctx)
-    if "complete_records" in ctx.parsing:
-        return _csv(ctx)
-    if host == "api.www.documentcloud.org" and path == "/api/documents/search/":
-        return _documents(ctx)
+    if "complete_records" in ctx.parsing or (host == "api.www.documentcloud.org" and path == "/api/documents/search/"):
+        # Owner decision 2026-10-30 (ss-j4vz B10): truncated CSV previews and DocumentCloud
+        # search results are not published as tables; their originals stay in the raw store.
+        return ctx.disposition("retired_output", "Truncated CSV preview or third-party search results; no table output")
     if host == "www.fec.gov" and path == "/meetings/":
         return _meetings(ctx)
     if (

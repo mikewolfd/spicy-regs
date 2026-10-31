@@ -379,29 +379,10 @@ def test_retained_legacy_context_bridges_reach_production_admission(tmp_path, mo
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy
     original = dict(record_id='legacy-form2', mapping_version='fec-identity-observations/1',
                     election_year='0202', report_year='2025', source_namespace='fec-bulk-form2')
-    from datetime import datetime, timezone
-    from decimal import Decimal
-    native_document = dict(id=7, title='Synthetic discovery', language='en', page_count=12,
-                           created_at='2024-01-02T03:04:05Z', updated_at='2024-01-03T03:04:05+00:00',
-                           publisher_unmapped={'ordered':[False,1.0,'raw']})
-    document = dict(record_id='legacy-document', mapping_version='fec-research-context/1', document_native_id='7',
-                    title=native_document['title'], source_created_at=native_document['created_at'],
-                    source_updated_at=native_document['updated_at'], native_metadata_json=json.dumps(native_document),
-                    body_status='deferred_pdf', fec_relationship_status='search_result_only_no_verified_matter_join')
-    unavailable_document = dict(record_id='unavailable-document', mapping_version='fec-research-context/1',
-                               source_created_at='2024-01-02T03:04:05Z', source_updated_at='2024-01-02T03:04:05',
-                               native_metadata_json=None, body_status='body_not_qualified')
-    csv = dict(record_id='legacy-csv', mapping_version='fec-research-context/1', amount=Decimal('5.00'),
-               amount_raw='5.00', amount_status='parsed', coverage_status='complete_records_of_truncated_capture',
-               current_total_status='unqualified_partial_capture', source_row_ordinal=1,
-               native_fields_json=json.dumps(dict(amendment_indicator='A', memo_code='X', memo_text=' Literal memo ',
-                   file_number='0171', filing_form='F3', report_year='2026', publisher_unmapped=[False,1.0])))
-    unavailable_csv = {**csv, 'record_id':'unavailable-csv', 'source_row_ordinal':2, 'native_fields_json':None}
     response = dict(record_id='legacy-response', mapping_version='fec-research-context/1', profile_refusal='provider refused',
                     payload_shape='other_native_payload', outcome_status='refused_native_observation_not_qualified_empty_success',
                     native_payload_json=json.dumps([1,False,{'publisher_unmapped':'raw'}]))
-    rows_by_table = {'fec_registration_statements':[original], 'fec_research_document_observations':[document,unavailable_document],
-                     'fec_retained_csv_observations':[csv,unavailable_csv], 'fec_research_response_outcomes':[response]}
+    rows_by_table = {'fec_registration_statements':[original], 'fec_research_response_outcomes':[response]}
     _, source_paths = old_family(tmp_path/'source', monkeypatch, bucket, 'fec-observations')
     snapshot, retained = old_family(tmp_path/'query', monkeypatch, bucket, 'fec-query',
         rows_by_table=rows_by_table, legacy_tables=tuple(rows_by_table))
@@ -423,24 +404,8 @@ def test_retained_legacy_context_bridges_reach_production_admission(tmp_path, mo
             assert comparison['type_changes'] == {}
         [statement] = reader.read_subjects('fec_registration_statements')
         assert statement['election_year']==202 and statement['report_year']==2025
-        first, unavailable = reader.read_subjects('fec_research_document_observations')
-        assert first['language']=='en' and first['page_count']==12 and first['page_count_status']=='parsed'
-        assert first['created_at']==datetime(2024,1,2,3,4,5,tzinfo=timezone.utc)
-        assert first['body_status']=='deferred_pdf' and first['fec_relationship_status']==document['fec_relationship_status']
-        assert unavailable['page_count'] is None and unavailable['page_count_status']=='unavailable_retained_metadata'
-        assert unavailable['created_at']==datetime(2024,1,2,3,4,5,tzinfo=timezone.utc) and unavailable['updated_at'] is None
-        first, unavailable = reader.read_subjects('fec_retained_csv_observations')
-        assert first['amendment_indicator']=='A' and first['memo_code']=='X' and first['memo_text']==' Literal memo '
-        assert first['file_number']=='0171' and first['report_year']==2026 and first['report_year_status']=='parsed'
-        assert first['coverage_status']==csv['coverage_status'] and first['current_total_status']==csv['current_total_status']
-        assert unavailable['report_year'] is None and unavailable['report_year_status']=='unavailable_retained_fields'
         [outcome] = reader.read_subjects('fec_research_response_outcomes')
         assert outcome['capture_disposition']=='refused' and outcome['outcome_status']==response['outcome_status']
-        held = list(reader.processing('fec_research_document_observations'))
-        diagnostics = held[1]['processing_fields']['source_input']['fec_retained_interpretation']
-        assert diagnostics['field_statuses']['updated_at']=='invalid_or_unzoned_timestamp'
-        assert diagnostics['field_statuses']['language']=='unavailable_retained_metadata'
-
 
 
 @pytest.mark.parametrize('payload', [{'publisher_unmapped':[False,1.0]}, [1,False], 'opaque', 17, None])
@@ -460,20 +425,15 @@ def test_retained_response_arbitrary_payload_is_preserved_without_object_coercio
     assert internal['source_input']['fec_retained_overrides']['native_payload_json']==original['native_payload_json']
 
 
-@pytest.mark.parametrize('table, extra, native', [
-    ('fec_research_document_observations','native_metadata_json', []),
-    ('fec_retained_csv_observations','native_fields_json', []),
-    ('fec_retained_csv_observations','native_fields_json', {'memo_code':False}),
-])
-def test_retained_context_malformed_named_shapes_refuse(table, extra, native):
-    from spicy_regs.fec_native_conversion import retained_identity_row
-    original = dict(record_id='malformed', mapping_version='fec-research-context/1', **{extra:json.dumps(native)})
-    before = dict(original)
-    with pytest.raises(ValueError):
-        retained_identity_row(table, original)
-    assert original == before
-    with pytest.raises(ValueError, match='captured /1 mapping'):
-        retained_identity_row(table, {**original,'mapping_version':'fec-research-context/2'})
+def test_retired_query_tables_may_remain_in_a_captured_prior_but_nothing_else_may_be_missing():
+    from spicy_regs.fec_native_conversion import RETIRED_TABLES, check_membership, family_tables
+    registered = family_tables('fec-query')
+    retired = RETIRED_TABLES['fec-query']
+    assert not retired & registered
+    check_membership('fec-query', {'tables': {key: {} for key in registered | retired}})
+    check_membership('fec-query', {'tables': {key: {} for key in registered}})
+    with pytest.raises(ValueError, match='complete registered family membership'):
+        check_membership('fec-query', {'tables': {key: {} for key in sorted(registered)[1:]}})
 
 
 def test_foreign_generation_pin_is_never_rebound():

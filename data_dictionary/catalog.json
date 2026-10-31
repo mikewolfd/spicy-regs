@@ -2061,23 +2061,6 @@
         ]
       },
       {
-        "dataset": "fec_research_document_observations",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "record_id"
-        ],
-        "processing_fields": [
-          "observed_at_json",
-          "source_created_at",
-          "source_updated_at",
-          "evidence_use",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
         "dataset": "fec_research_filing_feed_items",
         "receipt_only": false,
         "policy_version": "fec-identity-context-receipts/2",
@@ -2136,24 +2119,6 @@
         "processing_fields": [
           "observed_at_json",
           "links_json",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_retained_csv_observations",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "record_id"
-        ],
-        "processing_fields": [
-          "observed_at_json",
-          "amount_raw",
-          "date_raw",
-          "native_row_locator_json",
-          "source_row_ordinal",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -6936,39 +6901,6 @@
       ]
     },
     {
-      "table": "fec_research_document_observations",
-      "label": "FEC research document and case references",
-      "category": "discovery_leads",
-      "summary": "One source document/case-reference metadata occurrence in retained context. Preserves publisher, authority, native document reference, dates and URL without inferring an FEC matter join. Bodies remain explicitly deferred or reference-only as supported by the retained evidence. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-      "coverage": "Sampled. Supported observations from retained court-case/report references and third-party DocumentCloud metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-      "kind": "sampled",
-      "measured_on": "2026-10-01",
-      "data_quality": null,
-      "columns": [
-        "record_id",
-        "document_native_id",
-        "title",
-        "description",
-        "canonical_url",
-        "source_publisher",
-        "original_extension",
-        "language",
-        "page_count",
-        "created_at",
-        "updated_at",
-        "mapping_version",
-        "collection_id",
-        "source_authority",
-        "source_url",
-        "source_sha256",
-        "context_sha256",
-        "source_context_pointer",
-        "body_status",
-        "fec_relationship_status",
-        "page_count_status"
-      ]
-    },
-    {
       "table": "fec_research_filing_feed_items",
       "label": "FEC filing feed items",
       "category": "query_data",
@@ -7083,52 +7015,6 @@
         "context_sha256",
         "source_context_pointer",
         "content_status"
-      ]
-    },
-    {
-      "table": "fec_retained_csv_observations",
-      "label": "FEC CSV context observations",
-      "category": "bounded_samples",
-      "summary": "One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id. Every row has the amount status `exact`.",
-      "coverage": "Sampled. Supported observations from supported retained CSV context rows with exact native fields and addresses. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-      "kind": "sampled",
-      "measured_on": "2026-10-01",
-      "data_quality": null,
-      "columns": [
-        "record_id",
-        "observation_type",
-        "reporting_committee_id",
-        "reporting_committee_name",
-        "counterparty_name",
-        "transaction_id",
-        "native_sub_id",
-        "amendment_indicator",
-        "amendment_indicator_desc",
-        "memo_code",
-        "memo_text",
-        "file_number",
-        "filing_form",
-        "report_type",
-        "line_number",
-        "schedule_type",
-        "image_number",
-        "back_reference_transaction_id",
-        "back_reference_schedule_name",
-        "report_year",
-        "amount",
-        "reported_date",
-        "mapping_version",
-        "collection_id",
-        "source_authority",
-        "source_url",
-        "source_sha256",
-        "context_sha256",
-        "source_context_pointer",
-        "amount_status",
-        "date_status",
-        "coverage_status",
-        "current_total_status",
-        "report_year_status"
       ]
     },
     {

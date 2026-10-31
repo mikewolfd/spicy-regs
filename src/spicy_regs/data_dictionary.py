@@ -527,12 +527,10 @@ FEC_TYPED_TABLES: tuple[str, ...] = (
     "fec_report_metrics",
     "fec_reported_financial_summaries",
     "fec_research_context_dispositions",
-    "fec_research_document_observations",
     "fec_research_filing_feed_items",
     "fec_research_meeting_observations",
     "fec_research_response_outcomes",
     "fec_research_source_pages",
-    "fec_retained_csv_observations",
 )
 
 
