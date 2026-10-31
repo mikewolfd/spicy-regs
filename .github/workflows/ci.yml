@@ -36,7 +36,9 @@ jobs:
     # Run 38487097199 exceeded this bound with two file partitions.
     # Main and shared changes run the full suite. Independent test-only PRs
     # retain complete collection manifests and execute only the changed files.
-    timeout-minutes: 25
+    # Partition 3 reached 97% on main in run 41238221217 before the former
+    # 25-minute deadline. Preserve full selection and allow it to finish.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
