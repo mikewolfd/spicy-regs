@@ -472,7 +472,12 @@ and compares both producer and verifier implementation identities. Its
 historical vendored wheel must match its lock, the sealed wheel, and the
 current installed wheel. This path requires identical historical and current
 `uv.lock` bytes. Missing history, a different locked runtime, or an unproved
-producer refuses. Every operator `--publish-prepared` passes
+producer refuses. A version-2 seal also records the code its process loaded
+(`prepared.closure`: bytes of every loaded SpicyRegs, SpicyDocs and Rulespec
+module and every data file in those packages, loaded third-party versions,
+Python and platform). No publish reads it yet; it is held for a rule that
+would rebind a seal on byte-identical loaded code when `uv.lock` or the wheel
+moved, pending the owner's decision. Every operator `--publish-prepared` passes
 `--expect-producer` with that receipt's `source.checkout`, even when main has
 not moved: peers land on main while a publication is prepared and qualified,
 and the pin is what keeps a sealed receipt publishable from a later main. On

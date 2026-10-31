@@ -758,7 +758,10 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
     The admission key binds the semantic admission and restoration this process just completed to this validator
     identity, so a publisher under the same key may rely on them (:func:`publish_prepared`). The receipt digest
     covers all of it; the operator carries it to publication from this run's output, never from the receipt.
+    ``closure`` records the code this process loaded (:mod:`spicy_regs.code_closure`) so a later rule can rebind the
+    seal on it; no publication reads it yet (ss-5tt8: the rebind awaits the owner's closure-scope answer).
     """
+    from spicy_regs import code_closure
     from spicy_regs.generations import admission_key, validation_identity
 
     if built.read_operation is None:
@@ -774,6 +777,7 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
         "generationPin": pin,
         "validationIdentity": identity,
         "admissionKey": admission_key(pin, identity),
+        "closure": code_closure.record(),
         "capturedIndexSha256": _file_digest(work / "captured-publication.v2.json"),
         "evidenceDirectories": [path.resolve().relative_to(work.resolve()).as_posix() for path in built.evidence],
     }
@@ -964,7 +968,7 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
                              if json.loads(path.read_bytes()).get("artifactDigest") in pins)
             _prepared_evidence(artifact.root, family, evidence)
             built = _native_built(generation, retained, base, evidence, operation, original_pins)
-            scheduled = _rollup_class(family, RollupPipeline)
+            scheduled = _regulatory_base_class(family) or _rollup_class(family, RollupPipeline)
             retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
             proof, problems, _ = _qualify_conversion(family, built, old, retained, replaced, retains, handed_on)
             if problems:
@@ -1105,7 +1109,7 @@ def _verify_prepared(receipt_path: Path, *, allowed: Sequence[str], expected_mai
 
         _check_prepared_membership(family, old, spec)
         built = _native_built(generation, retained, base, evidence, read_operation, original_pins, semantic=semantic)
-        scheduled = _rollup_class(family, RollupPipeline)
+        scheduled = _regulatory_base_class(family) or _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
         proof, problems, conversion_proof = _qualify_conversion(
             family, built, old, retained, replaced, retains, handed_on, sealed=None if semantic else receipt
@@ -1242,7 +1246,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
             owned = {key.removesuffix(".parquet") for key in entry["tables"]} | set(entry.get("etlReceipts", {}).get("datasets", ()))
             if other != family and (shared := sorted(claimed & owned)):
                 raise ConversionRefused(f"{family}: its receipts would hold {shared}, which already belongs to family {other}")
-        scheduled = _rollup_class(family, RollupPipeline)
+        scheduled = _regulatory_base_class(family) or _rollup_class(family, RollupPipeline)
         retains = bool(replaced["inputs"]) or bool(scheduled and scheduled.retain_source_evidence)
         _write_receipt(work / RECEIPT, receipt)
         elapsed = time.monotonic()

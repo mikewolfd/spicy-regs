@@ -159,6 +159,11 @@ def test_production_query_prepares_with_official_staged_parent_and_rejects_stale
             expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE),
             expected_receipt_digest=done['prepared']['receiptDigest'])
     assert publication.current_index(BASE) == snapshot
+    # The parent's admission and restoration are not in this seal: staged FEC query always verifies in full,
+    # although the same receipt without its staged parent would qualify for the sealed path.
+    sealed = json.loads((work / 'conversion.json').read_bytes())
+    assert 'staged_observations' in sealed and not conversion._sealed_admission(sealed, False)
+    assert conversion._sealed_admission({k: v for k, v in sealed.items() if k != 'staged_observations'}, False)
 
 
 def test_nonempty_complete_query_links_filing_source_and_retained_history(tmp_path, monkeypatch, bucket):
