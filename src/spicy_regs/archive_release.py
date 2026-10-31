@@ -27,7 +27,7 @@ import re
 from functools import cache
 from hashlib import sha256
 from importlib.resources import files
-from typing import Any
+from typing import Any, NamedTuple
 
 from spicy_regs.sources import publication
 
@@ -88,13 +88,23 @@ def verify_manifest(release_id: str, manifest: dict[str, Any]) -> dict[str, Any]
     return manifest
 
 
+def _get(url: str) -> bytes:
+    """One control document, bounded like the archive's own reader; a local path reads the file."""
+    if not url.startswith(("https://", "http://")):
+        with open(url, "rb") as stream:
+            raw = stream.read(CONTROL_BYTES + 1)
+        if len(raw) > CONTROL_BYTES:
+            raise ArchiveReleaseError(f"{url} exceeds its byte limit")
+        return raw
+    raw = publication._bounded_get(url, allow_missing=False, limit=CONTROL_BYTES)
+    assert raw is not None
+    return raw
+
+
 @cache
 def read_manifest(release_id: str, origin: str = ORIGIN) -> dict[str, Any]:
     """Fetch and verify one release manifest, once per process: a release prefix is immutable."""
-    raw = publication._bounded_get(f"{origin}/releases/{release_id}/manifest.json",
-                                   allow_missing=False, limit=CONTROL_BYTES)
-    assert raw is not None
-    return verify_manifest(release_id, json.loads(raw))
+    return verify_manifest(release_id, json.loads(_get(f"{origin}/releases/{release_id}/manifest.json")))
 
 
 def bound_files(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -127,3 +137,117 @@ def lookup_key(url: str) -> bytes | None:
     scheme, host = match[1].lower(), re.sub(r"^www\.", "", match[2].lower())
     host = re.sub(r":80$", "", host) if scheme == "http" else re.sub(r":443$", "", host) if scheme == "https" else host
     return sha256(f"lookup:{host}{re.sub(r'/$', '', match[3])}{match[4] or ''}".encode()).digest()[:8]
+
+
+#: SQL view name per bound stem: flat ``main`` names, since the MCP's relation scoping reads only ``main``.
+VIEWS = {f"archive_{stem}": stem for stem in BOUND_FILES}
+#: What the archive's integrity rests on in a reader that does not hash served bytes; describe_table states it.
+REMOTE_TRUST = ("The manifest's release id is recomputed from its files[] and schema.json is checked against its "
+                "manifest digest; Parquet bytes read by HTTPS range are not hashed, and rest on the release prefix "
+                "being create-only.")
+LOCAL_TRUST = "Every bound file and schema.json was hashed against the verified manifest when the connection was built."
+
+
+class Binding(NamedTuple):
+    """One verified archive release as the MCP reads it: where, which files, and the published schema."""
+
+    release_id: str
+    origin: str
+    files: dict[str, dict[str, Any]]
+    schema: dict[str, Any]
+    #: schema.json as published: per-file entries, relationships and recipes.
+    document: dict[str, Any]
+    hashed: bool
+
+    def url(self, stem: str) -> str:
+        return f"{self.origin}/releases/{self.release_id}/{stem}.parquet"
+
+    def view_sql(self, stem: str) -> str:
+        """The view body: the published columns by name, plus ``list_row`` where the schema declares it virtual.
+
+        Naming each column makes a file that lost one fail at bind time; a column the schema does not
+        publish stays hidden. ``list_row`` is the zero-based physical row (DATA-MODEL §8.4); ``bound_files``
+        refuses shards, so no offset applies.
+        """
+        entry = self.schema[stem]
+        virtual = [column["name"] for column in entry.get("virtual_columns", [])]
+        if virtual not in ([], ["list_row"]):
+            raise ArchiveReleaseError(f"Archive {stem}.parquet declares unsupported virtual columns {virtual}")
+        names = ", ".join('"' + column["name"].replace('"', '""') + '"' for column in entry["columns"])
+        location = self.url(stem).replace("'", "''")
+        if virtual:
+            return f"SELECT {names}, file_row_number AS list_row FROM read_parquet('{location}', file_row_number = true)"
+        return f"SELECT {names} FROM read_parquet('{location}')"
+
+
+@cache
+def _read_schema(release_id: str, origin: str, digest: str) -> dict[str, Any]:
+    """schema.json, once per process, when its bytes match the digest the verified manifest states."""
+    raw = _get(f"{origin}/releases/{release_id}/schema.json")
+    if sha256(raw).hexdigest() != digest:
+        raise ArchiveReleaseError(f"Archive schema.json does not match release {release_id[:8]}")
+    return json.loads(raw)
+
+
+def bind(release_id: str, origin: str, *, hash_files: bool) -> Binding:
+    """Verify one pinned release: manifest id recomputed, schema.json against its digest, bytes too when local.
+
+    A remote reader passes ``hash_files=False``: hashing would download every file per process.
+    """
+    manifest = read_manifest(release_id, origin)
+    found = bound_files(manifest)
+    entries = {item["name"]: item for item in manifest["files"]}
+    if "schema.json" not in entries:
+        raise ArchiveReleaseError(f"Archive release {release_id[:8]} lists no schema.json")
+    document = _read_schema(release_id, origin, entries["schema.json"]["sha256"])
+    schema = {item["name"].removesuffix(".parquet"): item for item in document["files"]}
+    if missing := [stem for stem in found if stem not in schema]:
+        raise ArchiveReleaseError(f"Archive schema.json describes no {missing}")
+    if hash_files:
+        for stem, entry in found.items():
+            digest = sha256()
+            with open(f"{origin}/releases/{release_id}/{stem}.parquet", "rb") as stream:
+                while chunk := stream.read(1 << 20):
+                    digest.update(chunk)
+            if digest.hexdigest() != entry["sha256"]:
+                raise ArchiveReleaseError(f"Local archive {stem}.parquet does not match release {release_id[:8]}")
+    return Binding(release_id, origin, found, schema, document, hash_files)
+
+
+def relationship_tables(item: dict[str, Any]) -> list[str]:
+    """The release tables a published relationship joins; an external side names none."""
+    return [side["table"] for side in (item["source"], item["target"]) if "table" in side]
+
+
+def description(binding: Binding) -> dict[str, Any]:
+    """What list_sources and describe_table state about the bound release, pinned with the connection.
+
+    Relationships and recipes are shown as published, with a name map from the release's table names to
+    these views; one whose tables are not all bound here (spicy-regs' own committees, members, rosters,
+    bills, nominations) is marked ``available_here: false`` rather than rewritten.
+    """
+    document = binding.document
+    bound = set(binding.files)
+
+    def here(tables: list[str]) -> bool:
+        return set(tables) <= bound
+
+    return {
+        "status": "bound",
+        "release_id": binding.release_id,
+        "origin": binding.origin if binding.origin.startswith(("https://", "http://")) else "local",
+        "pins_url": PINS_URL,
+        "trust": LOCAL_TRUST if binding.hashed else REMOTE_TRUST,
+        "name_map": {stem: view for view, stem in VIEWS.items()},
+        "views": {
+            view: {"file": f"{stem}.parquet", **{key: binding.files[stem][key] for key in ("sha256", "size", "rows")},
+                   **{key: binding.schema[stem][key] for key in
+                      ("purpose", "row_meaning", "identity", "gaps", "notes", "columns", "virtual_columns")
+                      if key in binding.schema[stem]}}
+            for view, stem in VIEWS.items()
+        },
+        # A relationship's target can be ``{"external": ...}`` (an identifier resolved outside the release).
+        "relationships": [{**item, "available_here": here(relationship_tables(item))}
+                          for item in document.get("relationships", [])],
+        "recipes": [{**item, "available_here": here(item["requires"])} for item in document.get("recipes", [])],
+    }

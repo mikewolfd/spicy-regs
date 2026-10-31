@@ -622,6 +622,8 @@ class _RemoteSourceView(NamedTuple):
     columns: list[list[str]] | None
     required: bool
     export: bool
+    #: The view body when it is not ``SELECT *`` over ``urls`` (archive views name columns and add list_row).
+    select: str | None = None
 
 
 def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
@@ -630,7 +632,8 @@ def _admit_remote_source_view(cursor, source: _RemoteSourceView) -> bool:
 
     try:
         with _diagnostic_phase("view_registration", source.name):
-            cursor.execute(f'CREATE VIEW "{source.name}" AS SELECT * FROM {parquet_scan(source.urls)}')
+            cursor.execute(f'CREATE VIEW "{source.name}" AS '
+                           + (source.select or f"SELECT * FROM {parquet_scan(source.urls)}"))
         if source.columns is not None or source.required:
             with _diagnostic_phase("view_schema", source.name):
                 actual = cursor.execute(f'DESCRIBE "{source.name}"').fetchall()
@@ -701,8 +704,12 @@ def _admit_remote_source_views(con, sources: list[_RemoteSourceView]) -> list[bo
     return admitted
 
 
-def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, str] | None:
-    """Classify every admitted SQL URL from validated records, or retain cache defaults."""
+def _immutable_metadata_inputs(index, rulemaking, allowed_paths, archive=None) -> dict[str, str] | None:
+    """Classify every admitted SQL URL from validated records, or retain cache defaults.
+
+    ``archive`` is the connection's verified archive binding: its release prefix is create-only, so its
+    files are immutable inputs too, and admitting them must not turn the cache off for every query.
+    """
     from spicy_regs.sources.publication import (
         PublicationError, SNAPSHOT_POINTER, load_rulemaking_snapshot, parse_index,
         receipt_key_members, receipt_members, rulemaking_receipt, table_members,
@@ -736,6 +743,8 @@ def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, st
             # The build admits the snapshot's declared receipt member too; it sits under the same snapshot prefix.
             if (receipt := rulemaking_receipt(validated)) is not None:
                 owned[f"{base}/{receipt['remote_key']}"] = "rulemaking_snapshot"
+        if archive is not None and urlsplit(archive.origin).scheme == "https":
+            owned.update({archive.url(stem): "archive_release" for stem in archive.files})
         if any(path not in owned for path in allowed_paths):
             return None
         return {path: owned[path] for path in allowed_paths}
@@ -743,13 +752,13 @@ def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, st
         return None
 
 
-def _enable_immutable_metadata_cache(con, index, rulemaking, allowed_paths):
+def _enable_immutable_metadata_cache(con, index, rulemaking, allowed_paths, archive=None):
     """Reuse HTTP headers and parsed Parquet metadata after fresh immutable-input admission.
 
     Rulemaking immutability is the maintained source-owner policy, weaker than
     managed generation create-only writes. Neither premise covers legacy mirrors.
     """
-    inputs = _immutable_metadata_inputs(index, rulemaking, allowed_paths)
+    inputs = _immutable_metadata_inputs(index, rulemaking, allowed_paths, archive)
     if inputs is not None:
         con.execute("SET enable_http_metadata_cache=true")
         con.execute("SET GLOBAL parquet_metadata_cache=true")
@@ -828,6 +837,44 @@ def _remote_query_scope(con, available_names):
         if not added:
             return selected
         selected.update(added)
+
+
+def _archive_views(query_scope) -> list[tuple[str, str]]:
+    """The archive views a build admits: all of them for an unscoped build, else only those the query names."""
+    from spicy_regs.archive_release import VIEWS
+
+    return [(view, stem) for view, stem in VIEWS.items() if query_scope is None or view in query_scope]
+
+
+@_diagnostic_phase('archive_release')
+def _bind_archive(query_scope):
+    """The pinned archive release and its connection record; neither when the query names no archive view.
+
+    Remote: the verified manifest and schema are read once per process. Local: the release is read only from
+    ``<SPICY_REGS_DATA_DIR>/archive/releases/<release_id>/`` and every bound file is hashed; a missing copy
+    is reported unavailable and never fetched. An unscoped remote build (discovery, catalog SQL) reports an
+    unreachable archive as unavailable rather than taking every table down; a query that names an archive
+    view, or a corrupt local copy, refuses.
+    """
+    from spicy_regs import archive_release
+    from spicy_regs.sources.publication import PublicationError
+
+    if query_scope is not None and not query_scope & set(archive_release.VIEWS):
+        return None, None
+    release = archive_release.load_pins()["bound"]
+    origin = str(DATA_DIR / "archive") if DATA_DIR is not None else archive_release.ORIGIN
+    if DATA_DIR is not None and not Path(origin, "releases", release, "manifest.json").is_file():
+        return None, {"status": "unavailable", "release_id": release,
+                      "reason": "No local copy under SPICY_REGS_DATA_DIR/archive/releases/<release_id>/; "
+                                "a local reader never falls back to the network."}
+    try:
+        binding = archive_release.bind(release, origin, hash_files=DATA_DIR is not None)
+    except (PublicationError, httpx.HTTPError, OSError, ValueError, KeyError, TypeError) as exc:
+        if query_scope is not None or DATA_DIR is not None:
+            raise RuntimeError(f"Archive release {release[:8]} unavailable: {exc}") from exc
+        logger.warning("archive release %s unavailable; its views are not bound: %s", release, exc)
+        return None, {"status": "unavailable", "release_id": release, "reason": str(exc)}
+    return binding, archive_release.description(binding)
 
 
 @_diagnostic_phase('connection_build')
@@ -941,6 +988,21 @@ def _build_connection_inputs(con, publication):
         con.execute("INSERT INTO _spicy_query_scope VALUES (?)", [json.dumps({"relations": sorted(query_scope)})])
     exports: list[str] = []
     remote_sources: list[_RemoteSourceView] = []
+    archive, archive_record = _bind_archive(query_scope)
+    if archive_record is not None:
+        con.execute("CREATE TABLE _spicy_archive (snapshot VARCHAR)")
+        con.execute("INSERT INTO _spicy_archive VALUES (?)", [json.dumps(archive_record)])
+    for view, stem in (_archive_views(query_scope) if archive is not None else ()):
+        if local is None:
+            remote_sources.append(_RemoteSourceView(view, [archive.url(stem)], None, True, False, archive.view_sql(stem)))
+            continue
+        try:
+            with _diagnostic_phase("view_registration", view):
+                con.execute(f'CREATE VIEW "{view}" AS {archive.view_sql(stem)}')
+        except duckdb.Error as exc:
+            con.close()
+            raise RuntimeError(f"Archive release file unavailable: {view}") from exc
+        allowed_paths.append(archive.url(stem))
     for name in source_names:
         if query_scope is not None and name not in query_scope:
             continue
@@ -1085,10 +1147,10 @@ def _build_connection_inputs(con, publication):
             # the connection's captured subjects before external access is locked.
             allowed_paths.append(f"{R2_BASE_URL.rstrip('/')}/{snapshot_receipt['remote_key']}")
     try:
-        immutable_inputs = _enable_immutable_metadata_cache(con, publication_index, rulemaking, allowed_paths)
+        immutable_inputs = _enable_immutable_metadata_cache(con, publication_index, rulemaking, allowed_paths, archive)
         _install_relationship_views(con)
         if immutable_inputs is not None and immutable_inputs != _immutable_metadata_inputs(
-                publication_index, rulemaking, allowed_paths):
+                publication_index, rulemaking, allowed_paths, archive):
             raise RuntimeError("Immutable SQL inputs changed before the security lock")
         from spicy_regs.relationship_views.reference import reference_paths
 
@@ -1323,11 +1385,15 @@ def _publication_status(cursor: duckdb.DuckDBPyConnection) -> dict:
         }
         for name, value in _connection_relationships(cursor).items() if value["status"] == "available"
     }
+    archive = _pinned_record(cursor, "_spicy_archive") or {}
+    archived = {name: {"status": "archive_release", "release_id": archive["release_id"],
+                       **{key: view[key] for key in ("file", "sha256", "rows")}}
+                for name, view in archive.get("views", {}).items()}
     return {
         "tables": available,
         "declared_tables": list(TABLES),
         "publication": {
-            name: derived.get(name) or managed.get(name) or snapshot.get(name, {"status": fallback})
+            name: derived.get(name) or managed.get(name) or archived.get(name) or snapshot.get(name, {"status": fallback})
             for name in available
         },
         "verification": (
@@ -2069,6 +2135,47 @@ def _table_qualification(rows: list[dict], live: dict[str, str], statements: boo
     return result
 
 
+def _archive_summary(archive: dict | None, available: list[str]) -> dict[str, Any] | None:
+    """list_sources' archive group: the pinned release, each view's file pin and purpose, and recipe availability."""
+    if archive is None or archive["status"] != "bound":
+        return archive
+    return {
+        **{key: archive[key] for key in ("status", "release_id", "origin", "pins_url", "trust", "name_map")},
+        "views": [{"table": name, "available": name in available, "purpose": view.get("purpose"), "rows": view["rows"]}
+                  for name, view in archive["views"].items()],
+        "recipes": [{"id": item["id"], "title": item["title"], "available_here": item["available_here"]}
+                    for item in archive["recipes"]],
+        "details": "describe_table on an archive_* view gives columns, identity, notes, relationships and recipes "
+                   "as published; recipe SQL names release tables, which name_map maps to these views.",
+    }
+
+
+def _describe_archive_view(cursor, archive: dict, table: str, *, available: bool) -> dict[str, Any]:
+    """describe_table for one archive view: the published file entry, its relationships and recipes, as published."""
+    from spicy_regs.archive_release import relationship_tables
+
+    view = archive["views"][table]
+    stem = view["file"].removesuffix(".parquet")
+    meanings = {column["name"]: column.get("meaning")
+                for column in (*view.get("columns", []), *view.get("virtual_columns", []))}
+    actual = cursor.execute(f'DESCRIBE "{table}"').fetchall() if available else []
+    return {
+        "table": table,
+        **_source_details(cursor),
+        "available": available,
+        "publication": {"status": "archive_release", "release_id": archive["release_id"], "origin": archive["origin"],
+                        "pins_url": archive["pins_url"], "trust": archive["trust"],
+                        **{key: view[key] for key in ("file", "sha256", "size", "rows")}},
+        "metadata": {key: view[key] for key in ("purpose", "row_meaning", "identity", "gaps", "notes") if key in view},
+        "name_map": archive["name_map"],
+        "relationships": [item for item in archive["relationships"] if stem in relationship_tables(item)],
+        "recipes": [item for item in archive["recipes"] if stem in item["requires"]],
+        "columns": ([{"column_name": name, "column_type": dtype, "description": meanings.get(name)}
+                     for name, dtype, *_ in actual] if available else
+                    [{"column_name": name, "column_type": None, "description": meaning} for name, meaning in meanings.items()]),
+    }
+
+
 def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     """Tables/views registered in this connection, in declared display order."""
     rows = cursor.execute(
@@ -2085,8 +2192,10 @@ def _available_tables(cursor: duckdb.DuckDBPyConnection) -> list[str]:
     local = _connection_local_selection(cursor) if DATA_DIR is not None else None
     selected = local["selected_tables"] if local is not None else []
     relationships = _connection_relationships(cursor)
+    archive = (_pinned_record(cursor, "_spicy_archive") or {}).get("views", {})
     return [
-        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships, "etl_receipts")) if name in registered
+        name for name in dict.fromkeys((*TABLES, *managed, *snapshot, *selected, *relationships, "etl_receipts", *archive))
+        if name in registered
     ]
 
 
@@ -2509,7 +2618,10 @@ def _tools() -> list[Tool]:
         # dictionary gives no subject yet is in the last group. Two personas could not find the rulemaking tables
         # among 158 listed in one run (round 6, L10).
         subjects: dict[str | None, list[dict[str, Any]]] = {}
+        archive = _pinned_record(cursor, "_spicy_archive")
         for name in available:
+            if name in (archive or {}).get("views", {}):
+                continue
             relationship = relationships.get(name, {})
             view = relationship.get("metadata", {})
             if not relationship or view.get("view_role") == "child_query":
@@ -2541,6 +2653,7 @@ def _tools() -> list[Tool]:
                 "selection": "Receipt and subject versions must belong to the same selected generation; absence does not mean no processing history.",
             },
             "fec_release": _fec_release_reply(cursor),
+            "archive": _archive_summary(archive, available),
         }
 
     @tool
@@ -2580,6 +2693,10 @@ def _tools() -> list[Tool]:
         with _statement_timeout(cursor):
             status = _publication_status(cursor)
         relationships = _connection_relationships(cursor)
+        archive = _pinned_record(cursor, "_spicy_archive")
+        if archive is not None and table in archive.get("views", {}):
+            with _statement_timeout(cursor):
+                return _describe_archive_view(cursor, archive, table, available=table in status["tables"])
         if table not in TABLES and table != "etl_receipts" and table not in status["tables"] and table not in relationships:
             known = list(dict.fromkeys((*TABLES, *status["tables"], *relationships)))
             close = difflib.get_close_matches(table, known, n=5, cutoff=0.6)

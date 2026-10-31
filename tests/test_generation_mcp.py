@@ -471,8 +471,8 @@ def test_each_rulemaking_view_describes_as_the_dictionary_declares(tmp_path, mon
         assert actual == declared[table]
         assert all(column["description"] for column in described["columns"]), table
         assert described["publication"]["status"] == "rulemaking_snapshot"
-    # Source selection, rulemaking selection and the relationship registry are each parsed once.
-    assert mcp_server._parsed_pin.cache_info().misses == 3
+    # Source selection, rulemaking selection, the relationship registry and the archive record are each parsed once.
+    assert mcp_server._parsed_pin.cache_info().misses == 4
     typed = dict(declared["rulemaking_lifecycles"])
     assert (typed["proposal_date"], typed["duration_days"], typed["pre_2008_coverage"]) == (
         "DATE",

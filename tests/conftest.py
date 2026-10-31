@@ -118,6 +118,29 @@ class _ObjectsListingClient:
         yield {"CommonPrefixes": [{"Prefix": prefix} for prefix in prefixes]}
 
 
+def _no_archive_network(url: str) -> bytes:
+    from spicy_regs.archive_release import ArchiveReleaseError
+
+    if url.startswith(("https://", "http://")):
+        raise ArchiveReleaseError(f"no archive release in a hermetic test ({url})")
+    with open(url, "rb") as stream:
+        return stream.read()
+
+
+@pytest.fixture(autouse=True)
+def no_archive_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the MCP's archive binding off the network: a remote release reads as unavailable, a local path reads.
+
+    An unscoped remote connection then reports the archive unavailable; a test of the binding points
+    ``archive_release.ORIGIN`` at a fixture release directory.
+    """
+    from spicy_regs import archive_release
+
+    monkeypatch.setattr(archive_release, "_get", _no_archive_network)
+    archive_release.read_manifest.cache_clear()
+    archive_release._read_schema.cache_clear()
+
+
 @pytest.fixture(autouse=True)
 def list_mirrulations_through_fake_resources(monkeypatch: pytest.MonkeyPatch) -> None:
     """SpicyDocs lists Mirrulations with its own botocore client; fake resources list through their objects."""

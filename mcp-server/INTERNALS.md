@@ -328,6 +328,42 @@ second view path.
   per tool call; `_parsed_pin` parses each distinct document once and shares the
   result, which callers must not mutate.
 
+## The congressional-tech archive release (`_spicy_archive`, L2-A4)
+
+The archive's documents, meetings and witnesses are bound as nine flat views,
+`archive_list` … `archive_recordings`, read from the release
+`archive_release_pins.json` names as `bound` (see `archive_release.py` for the
+pin's lifetime rule and why it is served from GitHub main).
+
+- **Same admission path.** Archive views are `_RemoteSourceView`s admitted by
+  `_admit_remote_source_views`, so `_remote_query_scope` decides: a query that
+  names no `archive_*` view reads nothing from the archive, not even the
+  manifest; one that names `archive_meetings` opens only that footer. Names are
+  flat in `main` because `_tables_named` admits only `main`.
+- **Read once.** The manifest (release id recomputed from `files[]`) and
+  `schema.json` (checked against the manifest digest) are cached per process:
+  a release prefix is create-only. TTL rebuilds re-read neither.
+- **Columns by name.** Each view selects the columns `schema.json` publishes,
+  so a file that lost one refuses at bind time; `list` and `detail` add
+  `list_row` as `file_row_number` (DATA-MODEL §8.4). Sharded files refuse in
+  `bound_files` until the archive publishes an offset rule.
+- **Metadata cache stays on.** Archive URLs are classified `archive_release` in
+  `_immutable_metadata_inputs`; without that, any unowned URL turns the HTTP
+  and Parquet metadata caches off for the whole connection.
+- **Blast radius.** Unlike the rulemaking pointer, an unreachable archive in an
+  unscoped build (discovery) is recorded `unavailable` in `_spicy_archive` and
+  the build proceeds: it is another host, and spicy-regs tables do not depend
+  on it. A query naming an archive view refuses instead.
+- **Trust.** Remote bytes read by HTTPS range are not hashed; `describe_table`
+  states this (`publication.trust`). Local mode reads only
+  `$SPICY_REGS_DATA_DIR/archive/releases/<release_id>/`, hashes every bound
+  file at each build, and never falls back to the network.
+- **Recipes as published.** `describe_table` shows `schema.json` relationships
+  and recipes unchanged, with `name_map` from release table names to views;
+  those needing the producer=`spicy-regs` files (rosters, committees, members,
+  bills, nominations) carry `available_here: false`, since spicy-regs serves
+  those facts from its own tables.
+
 ## Declared joins (`_table_joins`)
 
 `describe_table` lists the cross-table joins the table makes (`outgoing`) and

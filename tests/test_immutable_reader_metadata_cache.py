@@ -162,11 +162,11 @@ def test_cache_enable_occurs_after_actual_admission_and_before_binding_and_lock(
     order = []
     enable = server._enable_immutable_metadata_cache
 
-    def checked_enable(con, captured, rulemaking, admitted):
+    def checked_enable(con, captured, rulemaking, admitted, archive):
         assert con.inner.execute("DESCRIBE s").fetchall()[0][:2] == ("id", "INTEGER")
         assert admitted == [server.R2_BASE_URL + "/" + location]
         order.append("admitted-cache")
-        return enable(con, captured, rulemaking, admitted)
+        return enable(con, captured, rulemaking, admitted, archive)
 
     monkeypatch.setattr(server, "_enable_immutable_metadata_cache", checked_enable)
     monkeypatch.setattr(server, "_install_relationship_views", lambda con: order.append("relationships"))
@@ -190,9 +190,9 @@ def test_allowlist_change_after_enable_refuses_before_security(tmp_path, monkeyp
     captured_paths = []
     enable = server._enable_immutable_metadata_cache
 
-    def capture(con, index, rulemaking, admitted):
+    def capture(con, index, rulemaking, admitted, archive):
         captured_paths.append(admitted)
-        return enable(con, index, rulemaking, admitted)
+        return enable(con, index, rulemaking, admitted, archive)
 
     monkeypatch.setattr(server, "_enable_immutable_metadata_cache", capture)
     monkeypatch.setattr(server, "_install_relationship_views",
