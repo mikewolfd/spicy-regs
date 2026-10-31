@@ -2,7 +2,9 @@
 
 import json
 
-from spicy_regs.source_catalog.raw_mapping import SourceMapper
+import pytest
+
+from spicy_regs.source_catalog.raw_mapping import REGISTRY, SourceMapper
 from spicy_regs.source_catalog.raw_content import extract_metadata
 
 
@@ -461,3 +463,30 @@ def test_generic_journal_name_does_not_establish_acquisition_evidence():
                      "/research/" + "a" * 64 + "/journal.jsonl"):
         result = mapper.map_source({"original_location": location, "receipt_context": {"member": "journal.jsonl"}})
         assert result["role"] == "original-response"
+
+
+def test_registry_object_binding_narrows_only_its_declared_family():
+    digest = "a" * 64
+    registry = {"object_datasets": [{"dataset_id": "dataset:narrow", "family": "fec-query", "sha256": [digest]}]}
+    mapper = SourceMapper(registry)
+    held = {"sha256": digest, "receipt_context": {"family": "fec-query"}}
+    assert mapper.map_source(held)["dataset_id"] == "dataset:narrow"
+    # Another digest of the family, and the same digest under another family, keep the family dataset.
+    assert mapper.map_source({**held, "sha256": "b" * 64})["dataset_id"] == "family:fec-query"
+    assert mapper.map_source({**held, "receipt_context": {"family": "other"}})["dataset_id"] == "family:other"
+    # A receipt that names a dataset of its own still conflicts with the registry rather than being overridden.
+    both = {**held, "receipt_context": {"family": "fec-query", "dataset_id": "dataset:own"}}
+    assert mapper.map_source(both)["mapping_status"] == "conflict"
+    with pytest.raises(ValueError, match="Ambiguous object dataset binding"):
+        SourceMapper({"object_datasets": registry["object_datasets"] * 2})
+
+
+def test_fec_research_originals_have_one_dataset_per_collection():
+    """ss-wfop Q4: the imported FEC research receipts map to six datasets, one per collection."""
+    registry = json.loads(REGISTRY.read_text())
+    bindings = registry["object_datasets"]
+    assert len(bindings) == 6 and {b["family"] for b in bindings} == {"fec-query"}
+    declared = {c["id"] for c in registry["collections"]}
+    assert {b["dataset_id"] for b in bindings} <= declared
+    digests = [d for b in bindings for d in b["sha256"]]
+    assert len(digests) == len(set(digests)) == 418

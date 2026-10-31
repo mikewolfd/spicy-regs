@@ -179,6 +179,15 @@ class SourceMapper:
         self.names: dict[str, set[str]] = {}
         self.prefixes: list[tuple[str, str]] = []
         self.families: dict[str, str] = {}
+        # (family, sha256) -> dataset: exact originals of one family that the registry assigns to a narrower
+        # dataset than the family a receipt already declares (receipts are immutable; ss-wfop Q4).
+        self.objects: dict[tuple[str, str], str] = {}
+        for binding in registry.get("object_datasets", []):
+            for digest in binding["sha256"]:
+                key = (binding["family"], digest)
+                if key in self.objects:
+                    raise ValueError(f"Ambiguous object dataset binding: {digest}")
+                self.objects[key] = binding["dataset_id"]
         for collection in registry.get("collections", []):
             identity = collection["id"]
             for family in collection.get("families", []):
@@ -246,6 +255,9 @@ class SourceMapper:
                 bind(identity, f"{label}.dataset_id", identity, "explicit-dataset", 0)
             if family := _text(owner.get("family")):
                 bind(self.family_id(family), f"{label}.family", family, "explicit-family", 1)
+                digest = str(record.get("sha256", "")).removeprefix("sha256:")
+                if identity := self.objects.get((family, digest)):
+                    bind(identity, f"{label}.family", family, "registry-family-object", 0)
             for key in ("source_name", "source_system", "collection"):
                 if name := _text(owner.get(key)):
                     for identity in sorted(self.names.get(name, set())):
