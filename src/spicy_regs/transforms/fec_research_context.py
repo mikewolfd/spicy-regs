@@ -470,7 +470,7 @@ def _meetings(ctx):
     )
 
 
-def _source_page(ctx, page_type):
+def _source_page(ctx, page_type, *, scope="retained_native_context_part"):
     events = ctx.parsing.get("facts", ctx.parsing.get("native_events", []))
     if not any(e.get("kind") in {"start", "end", "text"} and "name" in e for e in events):
         return ctx.disposition(
@@ -548,7 +548,7 @@ def _source_page(ctx, page_type):
             title=title,
             text=body,
             content_status=content_status,
-            content_scope="retained_native_context_part",
+            content_scope=scope,
             links_json=_json(body_links),
         ),
     )

@@ -1,0 +1,335 @@
+"""FEC historical and reference tables rebuilt from their retained originals (ss-j4vz B7-B9).
+
+The receipt mapper (fec_research_context) parses one-off receipt JSON; these builders
+read the original bytes from the shared raw archive instead, through the committed
+selection (fec_original_selection.json). An original is admitted only when its
+acquisition receipt shows a complete response with HTTP status below 400; an original
+without a receipt is refused, never admitted on its content. Each row is its own witness:
+record_id hashes the original's digest and the row's native position, so no collection
+context pointer or receipt digest is carried.
+
+Row rules (worksheet grain, meeting tables, page body boundaries, feed labels) stay in
+fec_research_context and fec_context_shape and are shared by both routes until the
+retained conversion builds these tables from here and the receipt route is deleted.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+import hashlib
+import json
+from pathlib import Path
+import re
+
+from .fec_context_shape import filing_announcement
+from .fec_query import exact_amount
+from .fec_research_context import _json, _meetings, _source_page
+
+IDENTITY_VERSION = "fec-original-tables/1"
+VERSION = "fec-original-tables/1"
+SELECTION_PATH = Path(__file__).with_name("fec_original_selection.json")
+TABLES = (
+    "fec_historical_ie_statistics",
+    "fec_research_meeting_observations",
+    "fec_research_filing_feed_items",
+    "fec_research_source_pages",
+)
+# Native position that identifies a row within its original.
+IDENTITY_FIELDS = {
+    "fec_historical_ie_statistics": ("worksheet_name", "worksheet_row"),
+    "fec_research_meeting_observations": ("table_ordinal", "table_row"),
+    "fec_research_filing_feed_items": ("guid",),
+    "fec_research_source_pages": (),
+}
+IE_TABLE1 = ["ID #", "Committee/Individual", "Filer", "Date", "Amount", "Image", "Support / Oppose", "Candidate"]
+IE_TABLE2 = IE_TABLE1[:6] + ["Report", "Amendment"] + IE_TABLE1[6:]
+
+
+@dataclass
+class Rebuilt:
+    rows: list = field(default_factory=list)
+    # (source_sha256, reason) for every selected original or row that was not published.
+    refusals: list = field(default_factory=list)
+
+
+def selection(path=SELECTION_PATH):
+    document = json.loads(Path(path).read_text())
+    if document.get("format") != "fec-original-selection/1":
+        raise ValueError("Unsupported FEC originals selection")
+    return document["originals"]
+
+
+def receipt_context(store, entry):
+    """The original's transport facts from its own acquisition receipt, rehashed; None without one."""
+    key = entry.get("acquisition_receipt")
+    if key is None:
+        return None
+    with store.open_member(key) as stream:
+        payload = stream.read(1024 * 1024 + 1)
+    if hashlib.sha256(payload).hexdigest() != key.rsplit("/", 1)[-1]:
+        raise ValueError(f"Acquisition receipt differs from its identity: {key}")
+    digest = entry["source_sha256"].removeprefix("sha256:")
+    files = [f for f in json.loads(payload)["files"] if f["sha256"] == digest]
+    if len(files) != 1:
+        raise ValueError(f"Acquisition receipt does not name exactly one {entry['source_sha256']}")
+    return files[0].get("receipt_context") or {}
+
+
+def receipt_refusal(context):
+    """Why an original is not admitted; None when its receipt shows a complete, successful response."""
+    if context is None:
+        return "no_acquisition_receipt"
+    status = context.get("http_status")
+    if type(status) is not int:
+        return "no_http_status"
+    if status >= 400:
+        return f"http_status_{status}"
+    if context.get("response_complete") is not True:
+        return "incomplete_response"
+    return None
+
+
+def read_original(store, entry):
+    """Whole original bytes, rehashed and size-checked; refuses any drift from the selection."""
+    with store.open(entry["source_sha256"].removeprefix("sha256:")) as stream:
+        body = stream.read(entry["bytes"] + 1)
+    if len(body) != entry["bytes"] or "sha256:" + hashlib.sha256(body).hexdigest() != entry["source_sha256"]:
+        raise ValueError(f"Original differs from its selection: {entry['source_sha256']}")
+    return body
+
+
+class _Original:
+    """The emit/disposition interface the shared row rules use, bound to one original."""
+
+    def __init__(self, table, entry, observed_at):
+        self.table = table
+        self.entry = entry
+        self.url = entry["source_url"]
+        self.parsing = {}
+        self.observed_at_json = _json(observed_at)
+        self.rows = []
+        self.disposition_status = None
+
+    def emit(self, table, _pointer, values, *, context=()):
+        if table != self.table:
+            raise ValueError(f"Original selected for {self.table} emitted {table}")
+        position = [values[name] for name in IDENTITY_FIELDS[table]]
+        identity = [IDENTITY_VERSION, table, self.entry["source_sha256"], *position]
+        row = dict(
+            record_id="sha256:" + hashlib.sha256(_json(identity).encode()).hexdigest(),
+            mapping_version=VERSION,
+            collection_id=self.entry["collection_ids"][0],
+            source_authority=self.entry["source_authority"],
+            source_url=self.url,
+            source_sha256=self.entry["source_sha256"],
+            observed_at_json=self.observed_at_json,
+            **values,
+        )
+        self.rows.append(row)
+        return row
+
+    def disposition(self, status, reason):
+        self.disposition_status = (status, reason)
+        return self
+
+
+def _events(body):
+    from spicy_docs.reading.markup import read_html_events
+
+    return [asdict(event) for event in read_html_events(body).events]
+
+
+def _ie_number(cell):
+    """Literal workbook number; never a float. Dates and non-numeric cells are not amounts."""
+    if cell is None or cell.value is None:
+        return None, "native_value_absent", None, None if cell is None else cell.formula
+    if cell.kind != "n" or cell.is_date:
+        return None, "unsupported_native_numeric_type", cell.value, cell.formula
+    value, status = exact_amount(cell.value)
+    if cell.formula is not None and status == "exact":
+        status = "source_formula_cache"
+    return value, status, cell.value, cell.formula
+
+
+def _ie_text(cell):
+    if cell is None or cell.value is None:
+        return None
+    if cell.kind in {"s", "str", "inlineStr"}:
+        return cell.value
+    if cell.kind == "n" and not cell.is_date:
+        # Native numeric IDs (including image numbers) keep their XML spelling.
+        return cell.value if exact_amount(cell.value)[1] == "exact" else None
+    return None
+
+
+def _ie_date(cell):
+    if cell is None or cell.value is None:
+        return None, "source_null"
+    if cell.is_date:
+        return (cell.date_value, "native_typed_date") if cell.date_value is not None else (None, "invalid_native_date")
+    return None, "unsupported_native_date"
+
+
+def historical_ie_rows(ctx, body):
+    """Published IE worksheet detail and total rows; header, period and methodology qualify each sheet."""
+    from datetime import datetime
+
+    from spicy_docs.sources.scorecards.workbooks import literal_sheets
+
+    prepared = []
+    for ordinal, (name, cells) in enumerate(literal_sheets(body).items()):
+        grid = {}
+        for coordinate, cell in cells.items():
+            match = re.fullmatch(r"([A-Z]+)([1-9][0-9]*)", coordinate)
+            if not match:
+                raise ValueError("Historical cell has an unsupported worksheet address")
+            grid.setdefault(int(match[2]), {})[match[1]] = cell
+        header_row = grid.get(6, {})
+        header = [_ie_text(header_row.get(chr(ord("A") + i))) for i in range(len(header_row))]
+        if header not in (IE_TABLE1, IE_TABLE2):
+            return ctx.disposition("unsupported", "Historical independent-expenditure worksheet header is not qualified")
+        period = re.fullmatch(r"from (.+) through (.+)", _ie_text(grid.get(3, {}).get("A")) or "")
+        if not period:
+            return ctx.disposition("unsupported", "Worksheet period lacks the qualified explicit date range")
+        try:
+            start, end = (datetime.strptime(period[i], "%B %d, %Y").date() for i in (1, 2))
+        except ValueError:
+            return ctx.disposition("unsupported", "Worksheet period has invalid dates")
+        prepared.append((ordinal, name, grid, header, start, end))
+    for ordinal, name, grid, header, start, end in prepared:
+        population = _ie_text(grid.get(2, {}).get("A"))
+        methodology = _ie_text(grid.get(5, {}).get("A"))
+        support_ix = header.index("Support / Oppose")
+        for row_number, row in sorted(grid.items()):
+            if row_number <= 6 or all(cell.value is None for cell in row.values()):
+                continue
+
+            def column(n, row=row):
+                return row.get(chr(ord("A") + n))
+
+            amount, status, raw, formula = _ie_number(column(4))
+            total = _ie_text(column(3)) in {"Total", "Total "}
+            if not total and _ie_text(column(0)) is None:
+                raise ValueError("Nonempty historical worksheet row has no admitted detail or total grain")
+            reported_date, date_status = (None, "not_applicable_total") if total else _ie_date(column(3))
+            amount_format = (column(4).number_format if column(4) is not None else None) or ""
+            ctx.emit(
+                "fec_historical_ie_statistics",
+                None,
+                dict(
+                    worksheet_name=name,
+                    worksheet_ordinal=ordinal,
+                    worksheet_row=row_number,
+                    row_grain="published_total" if total else "published_detail",
+                    population=population,
+                    methodology_text=methodology,
+                    current_total_status="not_qualified_source_total"
+                    if total
+                    else "not_qualified_originals_and_amendments"
+                    if header == IE_TABLE2
+                    else "publisher_amendment_methodology_only",
+                    reporting_native_id=_ie_text(column(0)),
+                    reporting_name=_ie_text(column(1)),
+                    filer_type=_ie_text(column(2)),
+                    candidate_native_id=_ie_text(column(support_ix + 1)),
+                    support_oppose=_ie_text(column(support_ix)),
+                    report_type=_ie_text(column(6)) if header == IE_TABLE2 else None,
+                    amendment_indicator=_ie_text(column(7)) if header == IE_TABLE2 else None,
+                    image_number=_ie_text(column(5)),
+                    amount_raw=raw,
+                    amount=amount,
+                    amount_status=status,
+                    amount_formula=formula,
+                    unit="USD" if "$" in amount_format else "currency_not_stated",
+                    reported_date=reported_date,
+                    reported_date_status=date_status,
+                    period_start=start,
+                    period_end=end,
+                ),
+            )
+    return ctx.disposition("mapped", "Historical published worksheet detail and source totals")
+
+
+def meeting_rows(ctx, body):
+    ctx.parsing = {"facts": _events(body)}
+    return _meetings(ctx)
+
+
+def source_page_rows(ctx, body):
+    ctx.parsing = {"facts": _events(body)}
+    return _source_page(ctx, ctx.entry["page_type"], scope="whole_original")
+
+
+def feed_rows(ctx, body):
+    """Every RSS item of the whole original, keyed by guid (unique within the capture)."""
+    from spicy_docs.reading.rss import read_rss2_channel
+
+    _, items = read_rss2_channel(body, max_bytes=len(body), error_type=ValueError, label="FEC filing RSS", max_items=100_000)
+    for item in items:
+        fields = {}
+        for child in item:
+            fields.setdefault(child.tag, []).append(child.text or "")
+
+        def single(name, fields=fields):
+            values = fields.get(name, [])
+            return values[0] if len(values) == 1 else None
+
+        if single("guid") is None:
+            raise ValueError("Filing feed item has no single guid")
+        ctx.emit(
+            "fec_research_filing_feed_items",
+            None,
+            dict(
+                title=single("title"),
+                link=single("link"),
+                guid=single("guid"),
+                published_at_raw=single("pubDate"),
+                **filing_announcement(single("description"), single("pubDate")),
+                current_record_status="source_feed_observation_only",
+            ),
+        )
+    guids = [row["guid"] for row in ctx.rows]
+    if len(set(guids)) != len(guids):
+        raise ValueError("Filing feed guid repeats within one capture")
+    return ctx.disposition("mapped", "Complete RSS item metadata from the whole original")
+
+
+BUILDERS = {
+    "fec_historical_ie_statistics": historical_ie_rows,
+    "fec_research_meeting_observations": meeting_rows,
+    "fec_research_filing_feed_items": feed_rows,
+    "fec_research_source_pages": source_page_rows,
+}
+
+
+def rebuild(table, *, store=None, originals=None):
+    """Rows of one table from its selected originals: one receipt and one original read each."""
+    if table not in BUILDERS:
+        raise ValueError(f"No originals builder for {table}")
+    if store is None:
+        from spicy_docs.storage.raw_archive import CentralRawArchiveStore
+
+        store = CentralRawArchiveStore(create=False)
+    result = Rebuilt()
+    for entry in originals if originals is not None else selection():
+        if entry["table"] != table:
+            continue
+        context = receipt_context(store, entry)
+        refusal = receipt_refusal(context)
+        if refusal is not None:
+            result.refusals.append((entry["source_sha256"], refusal))
+            continue
+        ctx = _Original(table, entry, context.get("acquired_at"))
+        BUILDERS[table](ctx, read_original(store, entry))
+        status, reason = ctx.disposition_status or ("unsupported", "No disposition")
+        if not status.startswith("mapped"):
+            result.refusals.append((entry["source_sha256"], f"{status}: {reason}"))
+            continue
+        if table == "fec_research_source_pages":
+            # Second check behind the receipt: a page whose own title says it failed is not a page.
+            kept = [row for row in ctx.rows if row["content_status"] != "failed_page"]
+            if len(kept) != len(ctx.rows):
+                result.refusals.append((entry["source_sha256"], "failed_page"))
+            ctx.rows = kept
+        result.rows.extend(ctx.rows)
+    return result
