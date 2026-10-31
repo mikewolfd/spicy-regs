@@ -25385,6 +25385,9 @@
     "identity_columns": [
       "package_id",
       "part_id"
+    ],
+    "later_policy_columns": [
+      "cbo_letter_count"
     ]
   },
   "committee_report_cbo_letters": {
