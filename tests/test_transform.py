@@ -11,13 +11,11 @@ import polars as pl
 import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.transforms import (
-    build_agency_rollups,
-    build_feed_summary,
-    merge_staging_files,
-    partition_comments,
-    write_staging,
-)
+from spicy_regs.transforms.build_agency_rollups import build_agency_rollups
+from spicy_regs.transforms.build_feed_summary import build_feed_summary
+from spicy_regs.transforms.merge_staging_files import merge_staging_files
+from spicy_regs.transforms.partition_comments import partition_comments
+from spicy_regs.transforms.write_staging import write_staging
 from spicy_regs.schemas import DOCUMENT
 from tests.conftest import (
     COMMENT_SCHEMA,

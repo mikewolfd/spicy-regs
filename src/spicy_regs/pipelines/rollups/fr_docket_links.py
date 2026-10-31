@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
-from spicy_regs.transforms import build_fr_docket_links
+from spicy_regs.transforms.build_fr_docket_links import build_fr_docket_links
 
 
 class FrDocketLinksRollup(RollupPipeline):

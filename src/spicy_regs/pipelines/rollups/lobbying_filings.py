@@ -13,7 +13,7 @@ from typing import ClassVar
 from spicy_regs.env_values import date_env, int_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
-from spicy_regs.transforms import build_lobbying_filings
+from spicy_regs.transforms.build_lobbying_filings import build_lobbying_filings
 
 
 class LobbyingFilingsRollup(GovernmentReceiptRollup):

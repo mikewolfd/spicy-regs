@@ -23,7 +23,7 @@ from loguru import logger
 from spicy_docs.sources.mirrulations import download_and_parse
 from spicy_regs.schemas import DOCUMENT
 from spicy_regs.sources.parquet import StagingWriter
-from spicy_regs.transforms import merge_staging_files
+from spicy_regs.transforms.merge_staging_files import merge_staging_files
 
 BUCKET = "mirrulations"
 

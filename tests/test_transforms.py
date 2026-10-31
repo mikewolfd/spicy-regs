@@ -7,7 +7,8 @@ order is preserved.
 import pytest
 
 from spicy_regs.schemas import COMMENT, DOCKET
-from spicy_regs.transforms import ExtractRecords, Transform
+from spicy_regs.transforms.extract import ExtractRecords
+from spicy_regs.transforms.base import Transform
 
 
 def test_transform_is_abstract() -> None:

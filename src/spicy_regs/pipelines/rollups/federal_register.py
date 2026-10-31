@@ -16,7 +16,7 @@ from typing import ClassVar
 from spicy_regs.env_values import date_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
-from spicy_regs.transforms import build_federal_register
+from spicy_regs.transforms.build_federal_register import build_federal_register
 
 
 class FederalRegisterRollup(RollupPipeline):

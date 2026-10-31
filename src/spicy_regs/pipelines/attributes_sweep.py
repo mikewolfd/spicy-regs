@@ -29,7 +29,8 @@ from spicy_regs.pipelines.regulations_state import source_record_type
 from spicy_regs.pipelines.staging import stage_agencies
 from spicy_regs.schemas import RECORD_TYPES
 from spicy_regs.sources import r2
-from spicy_regs.transforms import Chain, ExtractRecords
+from spicy_regs.transforms.chain import Chain
+from spicy_regs.transforms.extract import ExtractRecords
 from spicy_regs.transforms.regulations_attributes import ATTRIBUTE_TABLES, TeeAttributes, merge_attribute_parts
 
 #: The tables this sweep seeds. comment_attributes is seeded by the comment re-read (fill-comment-fields), which reads

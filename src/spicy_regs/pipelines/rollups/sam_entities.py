@@ -27,7 +27,7 @@ from spicy_regs.env_values import int_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
 from spicy_regs.transforms.build_sam_entities import MIN_REGISTRATION_YEAR as _MIN_REGISTRATION_YEAR
-from spicy_regs.transforms import build_sam_entities
+from spicy_regs.transforms.build_sam_entities import build_sam_entities
 
 
 def _rotating_year(today: date) -> int:

@@ -38,14 +38,12 @@ from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 from spicy_regs.transforms.regulations_attributes import ATTRIBUTE_TABLES, TeeAttributes, merge_attribute_parts
 from spicy_regs.transforms.comment_partitions import validate_staged_comments
 from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
-from spicy_regs.transforms import (
-    Chain,
-    EnrichCommentText,
-    ExtractRecords,
-    Transform,
-    merge_staging_files,
-    write_staging,
-)
+from spicy_regs.transforms.chain import Chain
+from spicy_regs.transforms.enrich_derived_text import EnrichCommentText
+from spicy_regs.transforms.extract import ExtractRecords
+from spicy_regs.transforms.base import Transform
+from spicy_regs.transforms.merge_staging_files import merge_staging_files
+from spicy_regs.transforms.write_staging import write_staging
 
 # With ``batch_count``, a batch's size is derived from the discovered agencies so
 # none falls off the end: a fixed ``--batch-size 22`` over 15 batches (330 slots)

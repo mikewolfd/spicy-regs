@@ -18,7 +18,7 @@ from typing import ClassVar
 from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
-from spicy_regs.transforms import build_cfr_sections
+from spicy_regs.transforms.build_cfr_sections import build_cfr_sections
 
 
 class CfrSectionsRollup(RollupPipeline):

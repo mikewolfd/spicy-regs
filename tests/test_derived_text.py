@@ -25,7 +25,9 @@ from spicy_regs.sources.derived_text import (
     DerivedCommentText,
     DerivedTextUnavailable,
 )
-from spicy_regs.transforms import Chain, EnrichCommentText, ExtractRecords
+from spicy_regs.transforms.chain import Chain
+from spicy_regs.transforms.enrich_derived_text import EnrichCommentText
+from spicy_regs.transforms.extract import ExtractRecords
 from spicy_regs.transforms.base import Transform
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool
 

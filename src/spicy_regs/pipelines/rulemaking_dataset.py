@@ -15,14 +15,12 @@ from spicy_regs.ontology.common import RunContext
 from spicy_regs.ontology.federal_register import FederalRegisterIndex
 from spicy_regs.pipelines.materialized import DatasetStage, MaterializedDatasetPipeline
 from spicy_regs.transforms.regulations_receipts import policy
-from spicy_regs.transforms import (
-    build_agency_lifecycle_stats,
-    build_comment_periods,
-    build_lifecycles,
-    build_proceedings,
-    build_regulatory_agenda,
-    build_rule_targets,
-)
+from spicy_regs.transforms.build_agency_lifecycle_stats import build_agency_lifecycle_stats
+from spicy_regs.transforms.build_comment_periods import build_comment_periods
+from spicy_regs.transforms.build_lifecycles import build_lifecycles
+from spicy_regs.transforms.build_proceedings import build_proceedings
+from spicy_regs.transforms.build_regulatory_agenda import build_regulatory_agenda
+from spicy_regs.transforms.build_rule_targets import build_rule_targets
 
 
 class RulemakingDatasetPipeline(MaterializedDatasetPipeline):

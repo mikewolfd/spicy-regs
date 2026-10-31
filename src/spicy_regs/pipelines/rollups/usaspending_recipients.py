@@ -14,7 +14,7 @@ from typing import ClassVar
 from spicy_regs.env_values import flag_env
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
-from spicy_regs.transforms import build_usaspending_recipients
+from spicy_regs.transforms.build_usaspending_recipients import build_usaspending_recipients
 
 
 class UsaSpendingRecipientsRollup(GovernmentReceiptRollup):

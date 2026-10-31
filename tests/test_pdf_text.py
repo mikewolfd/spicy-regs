@@ -6,7 +6,8 @@ import pytest
 
 from tests.pdf_fixtures import make_pdf, make_textless_pdf
 
-from spicy_regs.transforms import PdfTextStatus, extract_pdf_text
+from spicy_regs.transforms.pdf_text import PdfTextStatus
+from spicy_regs.transforms.pdf_text import extract_pdf_text
 
 SAMPLE_DATA = Path(__file__).resolve().parents[1] / "sample-data" / "mirrulations"
 

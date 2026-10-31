@@ -9,7 +9,7 @@ import pytest
 
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
-from spicy_regs.transforms import write_staging
+from spicy_regs.transforms.write_staging import write_staging
 from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
 
 

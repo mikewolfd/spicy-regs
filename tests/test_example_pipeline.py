@@ -23,7 +23,8 @@ import pytest
 from spicy_regs.pipelines import Pipeline
 from spicy_regs.schemas import RecordType
 from spicy_regs.sources import Reader, Writer
-from spicy_regs.transforms import ExtractRecords, Transform
+from spicy_regs.transforms.extract import ExtractRecords
+from spicy_regs.transforms.base import Transform
 
 # A RecordType describes one data shape: its schema, primary key, and how to
 # flatten a raw payload into a row. ``path_pattern`` is S3-specific, so an HTTP

@@ -39,7 +39,8 @@ from spicy_regs.pipelines.regulatory_publication import finish_dataset
 from spicy_regs.schemas.regulations import RECORD_TYPES
 from spicy_regs.selected_generations import SelectedInputs, unique_build_directory
 from spicy_regs.sources import iceberg, r2
-from spicy_regs.transforms import ExtractRecords, write_staging
+from spicy_regs.transforms.extract import ExtractRecords
+from spicy_regs.transforms.write_staging import write_staging
 
 OUTCOMES = "docket_gap_outcomes.parquet"
 OUTCOME_SCHEMA = {"docket_id": pl.Utf8, "outcome": pl.Utf8, "http_status": pl.Int64,

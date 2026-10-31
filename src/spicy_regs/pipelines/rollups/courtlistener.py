@@ -11,7 +11,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.court_receipts import CourtReceiptRollup as RollupPipeline
-from spicy_regs.transforms import build_courtlistener
+from spicy_regs.transforms.build_courtlistener import build_courtlistener
 
 
 class CourtListenerRollup(RollupPipeline):

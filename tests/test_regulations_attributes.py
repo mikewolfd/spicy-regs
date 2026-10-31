@@ -297,7 +297,8 @@ def test_a_reviewed_exclusion_gets_no_comment_attributes_row(tmp_path):
     import hashlib
     import json
 
-    from spicy_regs.transforms import Chain, ExtractRecords
+    from spicy_regs.transforms.chain import Chain
+    from spicy_regs.transforms.extract import ExtractRecords
     from spicy_regs.transforms.reviewed_comments import ExcludeReviewedComments
 
     kept = {"data": {"id": "EPA-1-0001", "attributes": {"trackingNbr": "t", "withdrawn": False}}}

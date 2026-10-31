@@ -13,7 +13,7 @@ from tests.test_gao_listing import _decision, _run
 
 
 def test_caption_survives_native_etl_and_listing_only_refresh(tmp_path, monkeypatch):
-    from spicy_regs.transforms import build_gao_reports as builder
+    from spicy_regs.transforms.build_gao_reports import build_gao_reports as builder
     from importlib import import_module
     module = import_module(builder.__module__)
     monkeypatch.setattr(module.r2, "download", lambda *_: False)

@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms import INDEX_FILENAME, build_search_index
+from spicy_regs.transforms.build_search_index import INDEX_FILENAME
+from spicy_regs.transforms.build_search_index import build_search_index
 
 
 class DocketSearchRollup(RollupPipeline):

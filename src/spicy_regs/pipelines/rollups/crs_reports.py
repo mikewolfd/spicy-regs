@@ -11,7 +11,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
-from spicy_regs.transforms import build_crs_reports
+from spicy_regs.transforms.build_crs_reports import build_crs_reports
 
 
 class CrsReportsRollup(GovernmentReceiptRollup):

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms import build_feed_summary
+from spicy_regs.transforms.build_feed_summary import build_feed_summary
 
 
 class FeedSummaryRollup(RollupPipeline):

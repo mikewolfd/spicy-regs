@@ -8,7 +8,7 @@ import pytest
 from spicy_regs.comments_health import check_comments
 from spicy_regs.schemas import COMMENT, DOCKET
 from spicy_regs.sources import iceberg
-from spicy_regs.transforms import write_staging
+from spicy_regs.transforms.write_staging import write_staging
 from spicy_regs.transforms.comment_partitions import validate_staged_comments
 from spicy_regs.transforms.partition_comments import partition_comments
 from spicy_regs.transforms.build_feed_summary import build_feed_summary

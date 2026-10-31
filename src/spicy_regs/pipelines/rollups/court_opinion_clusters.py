@@ -16,7 +16,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.court_receipts import CourtReceiptRollup as RollupPipeline
-from spicy_regs.transforms import build_court_opinion_clusters
+from spicy_regs.transforms.build_court_opinion_clusters import build_court_opinion_clusters
 
 
 class CourtOpinionClustersRollup(RollupPipeline):

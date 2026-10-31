@@ -378,7 +378,7 @@ def test_export_public_comments_rebuilds_mirror(tmp_path, local_catalog, monkeyp
     """export_public_comments writes the public monolith + index straight from the
     catalog, and that monolith feeds partition_comments to produce the per-agency
     tree the UI reads."""
-    from spicy_regs.transforms import partition_comments
+    from spicy_regs.transforms.partition_comments import partition_comments
 
     con = local_catalog
     iceberg._ensure_table(con, COMMENT)

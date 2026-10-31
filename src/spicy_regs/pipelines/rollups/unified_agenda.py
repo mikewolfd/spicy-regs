@@ -11,7 +11,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
-from spicy_regs.transforms import build_unified_agenda
+from spicy_regs.transforms.build_unified_agenda import build_unified_agenda
 
 
 class UnifiedAgendaRollup(RollupPipeline):

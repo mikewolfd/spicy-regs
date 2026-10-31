@@ -27,7 +27,9 @@ from loguru import logger
 from spicy_docs.sources.mirrulations import download_and_parse
 from spicy_regs.schemas import COMMENT
 from spicy_regs.transforms.derived_text_pool import DerivedTextPool
-from spicy_regs.transforms import Chain, EnrichCommentText, ExtractRecords
+from spicy_regs.transforms.chain import Chain
+from spicy_regs.transforms.enrich_derived_text import EnrichCommentText
+from spicy_regs.transforms.extract import ExtractRecords
 
 BUCKET = "mirrulations"
 

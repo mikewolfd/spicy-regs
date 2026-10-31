@@ -18,7 +18,7 @@ from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
 from spicy_regs.pipelines.rollups.subject_receipts import SubjectReceiptRollup as RollupPipeline
-from spicy_regs.transforms import enrich_bill_subjects
+from spicy_regs.transforms.enrich_bill_subjects import enrich_bill_subjects
 from spicy_regs.transforms.enrich_bill_subjects import DEADLINE_SECONDS
 
 

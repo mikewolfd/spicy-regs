@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import RollupPipeline, make_rollup_app
-from spicy_regs.transforms import build_agency_monthly_volume
+from spicy_regs.transforms.build_agency_monthly_volume import build_agency_monthly_volume
 
 
 class AgencyMonthlyVolumeRollup(RollupPipeline):
