@@ -272,6 +272,9 @@ def _native(dataset, field, value):
                 "part": _text_number(item.get("part"), field),
                 "chapter": _text_number(item.get("chapter"), field),
             }
+        elif dataset == "unified_agenda" and field == "related_rins_json":
+            # Arrow would drop an unknown member silently; refuse it instead.
+            _object(item, RELATED_RINS.value_type.names, field)
         elif dataset == "proceedings" and field == "stage_events_json":
             _object(item, ("stage", "event_kind", "effective_date", "evidence_id", "joined_by", "source"), field)
             item = {k: item.get(k) for k in ("stage", "event_kind", "effective_date")} | {

@@ -119,7 +119,8 @@ snapshot so the recorded URLs stay verifiable offline. Those digests are
 provenance, not verification — nothing recomputes them later, because the tables
 run to 90 MB and stay out of the repository. That is the whole reason a few-KB
 summary of 2,280,655 rows exists. Its `unified_agenda` domains and source were
-removed when that table moved to its own dated file; the rest is unchanged.
+removed when that table moved to its own dated file (git history keeps that
+202510-only observation); the rest is unchanged.
 
 `observed-domain-snapshot-2026-10-30-unified-agenda.json` observes
 `unified_agenda` whole: its five domains, `RIN_RELATION` included, over all 60
@@ -131,8 +132,12 @@ so its `row_count` is elements and its source's `row_count` table rows. It was
 observed from the source-only replay built on the branch that added the column,
 before that generation was published, so it records no publisher URL
 (`--unpublished`); its digest names that local build, whose other columns equal
-the live table's both ways. Re-pin it from the published generation once it is
-live:
+the live table's both ways. Its `producer_revision` names the rebased commit; the
+build ran at the pre-rebase `ad3fc0e7`, whose tree differs only in
+generation-retention files. The pin holds only if that exact replay (two builds,
+byte-identical) is what ships; an incremental rollup writes different bytes and
+counts. Nothing in the gate re-reads published bytes, so re-pin it as part of
+publishing whichever generation ships:
 
 ```
 scripts/check_source_domain_drift.py --observe --data-dir <dir with unified_agenda.parquet> \

@@ -39,6 +39,11 @@ def test_unknown_nested_fields_refuse_instead_of_arrow_dropping_them():
         shape_record("documents", {"attachments_json": '[{"url":"u","unexpected":"source value"}]'})
     with pytest.raises(RegulationsShapeError):
         shape_record("dockets", {"unexpected": "source value"})
+    agenda = {"rin": "1000-AA00", "agenda_edition": "202604"}
+    related = [{"rin": "1000-AA01", "rin_relation": "Related to"}]
+    assert shape_record("unified_agenda", agenda | {"related_rins_json": json.dumps(related)})["related_rins"] == related
+    with pytest.raises(RegulationsShapeError):
+        shape_record("unified_agenda", agenda | {"related_rins_json": json.dumps([related[0] | {"note": "x"}])})
 
 
 def test_attachment_order_repeated_url_sizes_and_restrictions_survive():
