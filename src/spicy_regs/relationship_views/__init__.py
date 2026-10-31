@@ -124,9 +124,16 @@ def install_relationship_views(
     import json
     declared = descriptors()
     metadata = json.loads(files("spicy_regs").joinpath("table_metadata.json").read_text())
+
+    def native_columns(table):
+        # A generation written under an earlier admitted policy (columns short of today's) is still native; views
+        # that need a newer column report it missing themselves (install_sql_views) instead of the whole table
+        # falling back to the legacy receipt-column views (ss-cdaa).
+        entry = metadata[table]
+        return {column["column_name"] for column in entry["columns"]} - set(entry.get("later_policy_columns", ()))
+
     native = {table for table in available if table in declared and not declared[table]["receipt_only"]
-              and {column["column_name"] for column in metadata[table]["columns"]} <=
-              {row[0] for row in connection.execute(f'DESCRIBE "{table}"').fetchall()}}
+              and native_columns(table) <= {row[0] for row in connection.execute(f'DESCRIBE "{table}"').fetchall()}}
     def requested(spec):
         return selected_names is None or spec.name in selected_names
 

@@ -139,12 +139,12 @@ def test_agenda_related_rins_is_unsupported_without_the_column():
 
 @pytest.mark.parametrize(('related_rins', 'expected'), [
     (True, {'agenda_item_editions': 'available', 'agenda_related_rins': 'available'}),
-    # Deploy order (ss-cdaa): the server's table metadata now lists related_rins, so a regulations-native-v1
-    # unified_agenda (the live 16 columns) no longer counts as native, and the legacy agenda_item_editions it
-    # falls back to needs unified_agenda.url, which only receipts carry. Publish the replayed generation first.
-    (False, {'agenda_item_editions': 'unsupported'}),
+    # No deploy order (ss-cdaa): a regulations-native-v1 unified_agenda (the live 16 columns) holds an admitted
+    # earlier subject schema, so it stays native and keeps agenda_item_editions; only the view that reads the
+    # new column reports it missing.
+    (False, {'agenda_item_editions': 'available', 'agenda_related_rins': 'unsupported'}),
 ])
-def test_agenda_views_need_the_related_rins_generation_live_before_the_server(related_rins, expected):
+def test_agenda_views_survive_a_server_deployed_before_the_related_rins_generation(related_rins, expected):
     import json
     from importlib.resources import files
 

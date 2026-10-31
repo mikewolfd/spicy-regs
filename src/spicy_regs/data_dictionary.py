@@ -1791,6 +1791,19 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
         }
         if description.get("legacy_column_descriptions"):
             result[table]["legacy_column_descriptions"] = description["legacy_column_descriptions"]
+        if policy is not None and not policy.receipt_only:
+            # Earlier admitted subject schemas are nested subsets of the current one, so a generation written
+            # under any of them holds the oldest. Serving (no pyarrow) reads the columns the oldest lacks to
+            # count such a generation native.
+            from spicy_regs.etl_receipts import receipt_policies
+
+            admitted = [set(p.subject_schema.names) for p in receipt_policies(policy) if not p.receipt_only]
+            oldest = set.intersection(*admitted)
+            if oldest not in admitted:
+                raise ValueError(f"[{table}] earlier admitted subject schemas are not nested")
+            if oldest != admitted[0]:
+                result[table]["later_policy_columns"] = [
+                    name for name in policy.subject_schema.names if name not in oldest]
         checks = [{"name": check.name, "role": "output" if table == check.output else "input",
                    "grain": list(check.grain), "population": check.population,
                    "selection_policy": "Matching declared input bytes or one materialized/catalog export snapshot; "

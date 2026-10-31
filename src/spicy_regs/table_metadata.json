@@ -205,6 +205,11 @@
     "identity_columns": [
       "document_id"
     ],
+    "later_policy_columns": [
+      "file_url",
+      "text_extraction_status",
+      "pdf_extraction_results_json"
+    ],
     "aggregate_checks": [
       {
         "name": "agency-document",
@@ -389,6 +394,11 @@
     "grain": null,
     "identity_columns": [
       "comment_id"
+    ],
+    "later_policy_columns": [
+      "comment_reference_values_json",
+      "text_extraction_status",
+      "pdf_extraction_results_json"
     ],
     "aggregate_checks": [
       {
@@ -1265,6 +1275,9 @@
     "identity_columns": [
       "rin",
       "agenda_edition"
+    ],
+    "later_policy_columns": [
+      "related_rins"
     ]
   },
   "rule_targets": {
@@ -1346,6 +1359,11 @@
     "grain": "One observed docket, CFR and RIN edge per evidence source class.",
     "identity_columns": [
       "rule_target_id"
+    ],
+    "later_policy_columns": [
+      "source",
+      "evidence_id",
+      "fr_references_json"
     ]
   },
   "proceedings": {
@@ -1437,6 +1455,10 @@
     "grain": "One rulemaking proceeding: the dockets and Register documents that are one action.",
     "identity_columns": [
       "proceeding_id"
+    ],
+    "later_policy_columns": [
+      "fr_document_joins_json",
+      "unresolved_fr_references_json"
     ]
   },
   "regulatory_agenda_items": {
@@ -1498,6 +1520,9 @@
     "grain": "One durable Regulatory Agenda item per RIN.",
     "identity_columns": [
       "agenda_item_id"
+    ],
+    "later_policy_columns": [
+      "unresolved_fr_references_json"
     ]
   },
   "agenda_item_proceedings": {
@@ -1559,6 +1584,12 @@
     "grain": "One evidence record linking one agenda item (RIN) to one proceeding.",
     "identity_columns": [
       "relationship_id"
+    ],
+    "later_policy_columns": [
+      "source",
+      "evidence_id",
+      "evidence_uri",
+      "evidence_date"
     ]
   },
   "comment_periods": {
@@ -1645,6 +1676,11 @@
     "grain": "One rule-derived group of source-reported date windows for a notice and its candidate extensions; not a legally adjudicated comment period.",
     "identity_columns": [
       "comment_period_id"
+    ],
+    "later_policy_columns": [
+      "source",
+      "evidence_occurrences",
+      "unresolved_fr_references_json"
     ]
   },
   "rulemaking_lifecycles": {
@@ -1852,6 +1888,12 @@
     "grain": "One stage event per document of one docketed proceeding.",
     "identity_columns": [
       "lifecycle_event_id"
+    ],
+    "later_policy_columns": [
+      "source",
+      "dated_by",
+      "evidence_id",
+      "joined_by"
     ]
   },
   "agency_lifecycle_stats": {
@@ -2654,6 +2696,9 @@
       "source_record_id",
       "source_sha256",
       "observation_ordinal"
+    ],
+    "later_policy_columns": [
+      "observation_ordinal"
     ]
   },
   "fec_relationships": {
@@ -2808,7 +2853,24 @@
       "value_status": "Whether the source reported a value or an explicit absence such as missing_field, null, empty_string, empty_list or reported_none. Inspect before treating a row as an edge.",
       "cycle": "Election cycle supplied for a bulk observation; current API observations may have no cycle.",
       "candidate_election_year": "Candidate election year reported by the source when available."
-    }
+    },
+    "later_policy_columns": [
+      "subject_id_status",
+      "object_id_status",
+      "source_sha256",
+      "source_url",
+      "source_locator_json",
+      "source_family",
+      "observed_at",
+      "collection_id",
+      "source_record_id",
+      "subrecord_pointer",
+      "source_ordinal",
+      "companion_status",
+      "subject_endpoint_status",
+      "object_endpoint_status",
+      "subrecord_ordinal"
+    ]
   },
   "fec_account_transfers": {
     "table": "fec_account_transfers",
@@ -3114,7 +3176,35 @@
       "voter_id_amount": "Exact decimal for reported voter-identification activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "gotv_amount": "Exact decimal for reported get-out-the-vote activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "generic_campaign_amount": "Exact decimal for reported generic campaign activity. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_agency_mapping_dispositions": {
     "table": "fec_agency_mapping_dispositions",
@@ -3172,6 +3262,9 @@
     "grain": "One explicit mapping disposition for one native agency source record.",
     "identity_columns": [
       "observation_ordinal"
+    ],
+    "later_policy_columns": [
+      "source_sha256"
     ]
   },
   "fec_agency_report_documents": {
@@ -3266,7 +3359,18 @@
       "url": "Source-reported document or reference URL; consult body_status before assuming retained readable content.",
       "label": "Literal text of the source's document/reference label.",
       "relation_type": "Source-supported directed relationship type between the identified records; not inferred from matching names."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_url"
+    ]
   },
   "fec_agency_report_text": {
     "table": "fec_agency_report_text",
@@ -3360,7 +3464,18 @@
       "text_kind": "Kind of retained source text, such as a Word paragraph or source narrative; not a metric classification.",
       "text": "Literal supported source text at the stated locator, without inferring a legal conclusion or numerical measure.",
       "text_ordinal": "Original order of this text fragment within its report, preserving gaps and repetition."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_url"
+    ]
   },
   "fec_agency_reports": {
     "table": "fec_agency_reports",
@@ -3634,7 +3749,18 @@
       "published_report_field_sarc_end_date": "Publisher report field field-sarc-end-date, retained as substantive report data.",
       "published_report_field_sarc_start_date": "Publisher report field field-sarc-start-date, retained as substantive report data.",
       "published_report_field_title_full": "Publisher report field field-title-full, retained as substantive report data."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_url"
+    ]
   },
   "fec_allocated_disbursements": {
     "table": "fec_allocated_disbursements",
@@ -4276,7 +4402,35 @@
       "financial_grain": "Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations.",
       "levin_share": "Exact decimal for the reported Levin-fund component of the payment. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "account_event_identifier": "Source identifier for the reported account/event used by this schedule."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_allocation_bases": {
     "table": "fec_allocation_bases",
@@ -4756,7 +4910,35 @@
       "exempt_activity_indicator": "Literal source flag for exempt activity. Interpret using the pinned layout definition; no automatic total eligibility.",
       "direct_candidate_support_indicator": "Literal source flag for direct candidate support. Interpret using the pinned layout definition; no automatic total eligibility.",
       "ratio_code": "Native allocation-ratio code, resolved only under the pinned layout definitions."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_api_response_controls": {
     "table": "fec_api_response_controls",
@@ -5087,7 +5269,20 @@
       "currency": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.",
       "supporting_document_record_id": "Typed legal-document observation explicitly supporting this audit finding.",
       "amount": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_pointer",
+      "source_authority",
+      "selection_evidence_sha256",
+      "query_completeness"
+    ]
   },
   "fec_bundled_contributions": {
     "table": "fec_bundled_contributions",
@@ -5573,7 +5768,35 @@
       "bundled_amount": "Exact decimal for bundled contributions reported for this bundler/recipient period. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "semiannual_bundled_amount": "Exact decimal for the reported semiannual bundling aggregate. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "transaction_date": "Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_candidate_api_observations": {
     "table": "fec_candidate_api_observations",
@@ -5886,7 +6109,39 @@
       "election_districts": "Literal Native list of election district values supplied for this candidate observation. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "inactive_election_years": "Literal Native list of inactive election years supplied by the API. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "district_number": "District number stated for the candidate, parsed as an integer without inferring a district."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "cycles_status",
+      "election_years_status",
+      "election_districts_status",
+      "inactive_election_years_status",
+      "source_url",
+      "source_pointer",
+      "original_result_pointer",
+      "candidate_id_status",
+      "query_completeness",
+      "active_through_status",
+      "candidate_inactive_status",
+      "has_raised_funds_status",
+      "federal_funds_flag_status",
+      "first_file_date_status",
+      "last_file_date_status",
+      "last_f2_date_status",
+      "source_cycle",
+      "district_number_status"
+    ]
   },
   "fec_collection_selection": {
     "table": "fec_collection_selection",
@@ -6203,7 +6458,25 @@
       "organization_type": "Literal source organization-type code; interpretation follows the source namespace.",
       "connected_organization_name": "Name of the connected organization reported by the committee source; not a resolved corporate identity.",
       "candidate_id": "Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_url",
+      "history_scope_status",
+      "source_cycle",
+      "cycle_status"
+    ]
   },
   "fec_committee_observations": {
     "table": "fec_committee_observations",
@@ -6573,7 +6846,36 @@
       "designated_agent_title": "Committee-designated agent title, exactly as stated by the source.",
       "designated_agent_zip": "Committee-designated agent zip, exactly as stated by the source.",
       "sponsor_candidate_list": "Source-listed sponsor candidate identifiers and names serialized in source order, preserving repetitions. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_url",
+      "source_pointer",
+      "original_result_pointer",
+      "query_completeness",
+      "registry_scope_status",
+      "committee_id_status",
+      "cycles_status",
+      "candidate_ids_status",
+      "sponsor_candidate_ids_status",
+      "first_file_date_status",
+      "last_file_date_status",
+      "first_f1_date_status",
+      "last_f1_date_status",
+      "source_cycle",
+      "sponsor_candidate_list_status"
+    ]
   },
   "fec_communication_costs": {
     "table": "fec_communication_costs",
@@ -6921,7 +7223,32 @@
       "source_cycle": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year.",
       "amount": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "transaction_date": "Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_contribution_aggregates": {
     "table": "fec_contribution_aggregates",
@@ -7203,7 +7530,32 @@
       "contributor_state": "Source contributor state qualifying this aggregate.",
       "state_name": "Publisher state name qualifying this aggregate.",
       "zip_3": "Three-digit postal prefix qualifying this aggregate."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "query_completeness",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_coordinated_party_expenditures": {
     "table": "fec_coordinated_party_expenditures",
@@ -7839,7 +8191,35 @@
       "source_amendment_code": "Literal native amendment code; it does not establish replacement scope from the retained filing layout.",
       "source_unlimited_spending": "Literal native unlimited-spending flag from the retained filing layout.",
       "transaction_code": "Literal transaction code from the selected filing layout; its meaning is distinct from unrelated families' codes."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_debts": {
     "table": "fec_debts",
@@ -8361,7 +8741,35 @@
       "source_amendment_code": "Literal native amendment code; it does not establish replacement scope from the retained filing layout.",
       "source_original_transaction_id": "Literal native original-transaction reference from the retained filing layout.",
       "source_supr_transaction_id": "Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_disbursements": {
     "table": "fec_disbursements",
@@ -9003,7 +9411,34 @@
       "communication_date": "Date parsed from the source communication date. NULL requires the source value and conversion status; capture time is not substituted.",
       "financial_grain": "Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations.",
       "reported_account_form": "Source-stated form associated with the reported account; not an inferred account identity."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_electioneering_communications": {
     "table": "fec_electioneering_communications",
@@ -9315,7 +9750,32 @@
       "disbursement_date": "The disbursement date the electioneering source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `disbursement_date_raw` keeps the date as filed. NULL has its reason in `disbursement_date_status`; capture time is never substituted.",
       "communication_date": "The communication date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `communication_date_raw` keeps the date as filed. NULL has its reason in `communication_date_status`; capture time is never substituted.",
       "public_disbursement_date": "The public disbursement date the source states. A two-digit year (FEC's electioneering file writes `21-FEB-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`10` is 2010; the range is `date_year_bounds` in `mapping_reason_json`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `public_disbursement_date_raw` keeps the date as filed. NULL has its reason in `public_disbursement_date_status`; capture time is never substituted."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_filing_definition_evidence": {
     "table": "fec_filing_definition_evidence",
@@ -9702,7 +10162,10 @@
       "filing_association_referenced_key": "Qualified filing key stated by a supported source reference, before checking retained targets. Null when the reference cannot be qualified.",
       "filing_association_target_count": "Number of observed filing-metadata witnesses for the qualified reference. Null means the target population is not established; no witness is selected as latest.",
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "filing_association_target_generation_scope"
+    ]
   },
   "fec_filing_links": {
     "table": "fec_filing_links",
@@ -9859,7 +10322,26 @@
       "target_filing_key": "Qualified target filing-version key when the native reference has a supported namespace.",
       "native_target_file_number": "Literal source file number referenced by the filing link; not an image or transaction number.",
       "relation_type": "Source-supported directed relationship type between the identified records; not inferred from matching names."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_pointer",
+      "filing_link_status",
+      "target_resolution_status",
+      "reference_status",
+      "source_cycle"
+    ]
   },
   "fec_filing_report_observations": {
     "table": "fec_filing_report_observations",
@@ -10195,7 +10677,34 @@
       "source_amendment_date": "Date parsed from the date of amendment stated in the source form. NULL requires the source value and conversion status; capture time is not substituted.",
       "effective_date": "Date parsed from the effective date stated on the source form. NULL requires the source value and conversion status; capture time is not substituted.",
       "reported_measures": "Ordered measure structs: native_position, native_label, definition_cell, raw_value, exact decimal value, value_status, quantity_kind, measure_role and period_basis. Parent totals/subtotals are not added to itemized children. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_filing_text_observations": {
     "table": "fec_filing_text_observations",
@@ -10406,7 +10915,33 @@
       "text_record_kind": "Source layout's narrative/text record kind, retained independently from transaction rows.",
       "source_cycle": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year.",
       "text_fragments": "Ordered fragment structs: field_position, source_column, source_pointer, text, text_status and body_reference_json. Retains exact native addresses and missing/null states; no inferred money or PDF extraction. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_filings": {
     "table": "fec_filings",
@@ -10893,7 +11428,43 @@
       "is_amended": "Literal API amendment state at capture time; it does not establish a complete retained amendment chain.",
       "most_recent": "Literal publisher most-recent flag captured for this observation; not an independently qualified current selection.",
       "amendment_chain": "Native amendment-chain references as retained; completeness and replacement meaning are separate qualifications. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_pointer",
+      "filing_link_status",
+      "filer_id_status",
+      "candidate_id_status",
+      "pdf_body_status",
+      "linked_original_body_status",
+      "query_completeness",
+      "amendment_scope_status",
+      "financial_fields_status",
+      "receipt_date_status",
+      "filed_date_status",
+      "coverage_start_date_status",
+      "coverage_end_date_status",
+      "update_date_status",
+      "load_timestamp_status",
+      "source_cycle",
+      "pages_status",
+      "report_year_status",
+      "reported_cycle_status",
+      "election_year_status",
+      "is_amended_status",
+      "most_recent_status"
+    ]
   },
   "fec_historical_ie_statistics": {
     "table": "fec_historical_ie_statistics",
@@ -11067,7 +11638,16 @@
       "reported_date": "Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted.",
       "period_start": "Date parsed from the start of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted.",
       "period_end": "Date parsed from the end of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted."
-    }
+    },
+    "later_policy_columns": [
+      "mapping_version",
+      "collection_id",
+      "source_authority",
+      "source_url",
+      "source_sha256",
+      "context_sha256",
+      "source_context_pointer"
+    ]
   },
   "fec_inaugural_donations": {
     "table": "fec_inaugural_donations",
@@ -11427,7 +12007,34 @@
       "reported_aggregate_amount": "Exact decimal for the source-stated aggregate accompanying this expenditure. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "transaction_date": "Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted.",
       "image_number": "Literal FEC image reference; it is not a transaction ID or filing number."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_independent_expenditures": {
     "table": "fec_independent_expenditures",
@@ -11985,7 +12592,34 @@
       "disbursement_date": "Date parsed from the source-reported disbursement date, including Schedule E for original-filing rows. NULL requires the source value and conversion status; capture time is not substituted.",
       "signed_date": "Date parsed from the signature date on the reported form. NULL requires the source value and conversion status; capture time is not substituted.",
       "financial_grain": "Explicit financial row meaning selected for this layout, separating reported activity, balances, allocations and other observations."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_intercommittee_transactions": {
     "table": "fec_intercommittee_transactions",
@@ -12321,7 +12955,31 @@
       "amount": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "transaction_date": "Date parsed from the transaction date reported by the source. NULL requires the source value and conversion status; capture time is not substituted.",
       "candidate_id": "Literal FEC candidate identifier when the source reports one. Syntax checks do not prove identity resolution or a target match."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_legal_documents": {
     "table": "fec_legal_documents",
@@ -12491,7 +13149,20 @@
       "source_association_kind": "Source basis for this document's association with a matter or parent document.",
       "document_date": "Date parsed from the date supplied for the legal document. NULL requires the source value and conversion status; capture time is not substituted.",
       "document_length": "Document length stated by the source."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_pointer",
+      "source_authority",
+      "selection_evidence_sha256",
+      "query_completeness"
+    ]
   },
   "fec_legal_events": {
     "table": "fec_legal_events",
@@ -12655,7 +13326,20 @@
       "currency": "Currency explicitly assigned by the source-specific mapping; agency measure units are stated separately.",
       "event_date": "Date parsed from the source-stated legal event date. NULL requires the source value and conversion status; capture time is not substituted.",
       "amount": "Exact decimal for this event's source-reported amount and amount_kind; signs are preserved. Respondent dispositions can repeat a shared penalty (MUR 8074 reports 19000 for each of two respondents). Neither SUM(amount) nor SUM(DISTINCT amount) establishes liability, allocation or payment: equal amounts can also belong to separate obligations. Read amount_status and the source's disposition/agreement context; NULL is unknown, not zero."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_pointer",
+      "source_authority",
+      "selection_evidence_sha256",
+      "query_completeness"
+    ]
   },
   "fec_legal_matters": {
     "table": "fec_legal_matters",
@@ -12998,7 +13682,21 @@
       "subjects": "Publisher subject identifiers in source order, preserving repeated entries. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "non_monetary_terms": "Nonmonetary terms stated in the legal matter. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "non_monetary_terms_respondents": "Respondents associated with the source-stated nonmonetary terms. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_pointer",
+      "source_authority",
+      "selection_evidence_sha256",
+      "query_completeness",
+      "source_url"
+    ]
   },
   "fec_legal_parties": {
     "table": "fec_legal_parties",
@@ -13126,7 +13824,20 @@
       "entity_namespace": "Native identifier namespace of the reported party/entity.",
       "entity_type": "Source entity-type code or namespace-specific type expected for the reported party.",
       "document_record_id": "Exact typed legal-document observation cited by this party or other source assertion."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_pointer",
+      "source_authority",
+      "selection_evidence_sha256",
+      "query_completeness"
+    ]
   },
   "fec_loan_guarantors": {
     "table": "fec_loan_guarantors",
@@ -13456,7 +14167,35 @@
       "occupation": "Occupation reported by the source for the named person.",
       "source_cycle": "Election cycle established by the selected source evidence. Distinct from transaction year, candidate election year and agency fiscal year.",
       "guaranteed_amount": "Exact decimal for the amount guaranteed by this source-named guarantor. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_loan_terms": {
     "table": "fec_loan_terms",
@@ -13960,7 +14699,35 @@
       "depository_authorization_date": "Date parsed from the stated depository authorization date. NULL requires the source value and conversion status; capture time is not substituted.",
       "treasurer_signed_date": "Date parsed from the date of the treasurer signature. NULL requires the source value and conversion status; capture time is not substituted.",
       "authorized_signed_date": "Date parsed from the date of the authorized signature. NULL requires the source value and conversion status; capture time is not substituted."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "source_namespace",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_loans": {
     "table": "fec_loans",
@@ -14518,7 +15285,35 @@
       "source_amendment_code": "Literal native amendment code; it does not establish replacement scope from the retained filing layout.",
       "source_original_transaction_id": "Literal native original-transaction reference from the retained filing layout.",
       "source_supr_transaction_id": "Literal native superseded-transaction reference; a proven replacement scope is still required from the retained filing layout."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_lobbyist_registrations": {
     "table": "fec_lobbyist_registrations",
@@ -14669,7 +15464,27 @@
       "lobbyist_indicator": "Literal source lobbyist flag before boolean interpretation; inspect lobbyist_status.",
       "filed_date": "The filing date the source states. A two-digit year (FEC's lobbyist file writes `11-SEP-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `filed_date_raw` keeps the date as filed. NULL has its reason in `filed_date_status`; capture time is never substituted.",
       "is_lobbyist": "Boolean mapped only from a supported source lobbyist flag; NULL retains the adjacent status."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_pointer",
+      "committee_id_status",
+      "lobbyist_status",
+      "image_body_status",
+      "filed_date_status",
+      "source_cycle"
+    ]
   },
   "fec_oversight_recommendations": {
     "table": "fec_oversight_recommendations",
@@ -14817,7 +15632,18 @@
       "status_date": "Date associated with the source-stated recommendation status.",
       "report_number": "Source-stated report number, not an independently qualified report match.",
       "additional_details": "Additional substantive details supplied by the publisher."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_url"
+    ]
   },
   "fec_postgres_committee_history_observations": {
     "table": "fec_postgres_committee_history_observations",
@@ -15423,7 +16249,40 @@
       "sponsor_candidate_ids": "Independent ordered array of source sponsor-candidate references; never pair positions with cycles or candidate_ids. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "cycles_has_financial": "Ordered source array of cycles marked as having financial activity; not independently verified completeness. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "cycles_has_activity": "Ordered source array of cycles marked as having activity; not independently verified completeness. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_url",
+      "history_scope_status",
+      "source_cycle",
+      "cycle_status",
+      "qualifying_date_status",
+      "first_file_date_status",
+      "last_file_date_status",
+      "last_f1_date_status",
+      "last_cycle_has_financial_status",
+      "last_cycle_has_activity_status",
+      "is_active_status",
+      "convert_to_pac_flag_status",
+      "former_candidate_election_year_status",
+      "first_f1_date_status",
+      "cycles_status",
+      "candidate_ids_status",
+      "cycles_has_financial_status",
+      "cycles_has_activity_status",
+      "sponsor_candidate_ids_status"
+    ]
   },
   "fec_quality_notices": {
     "table": "fec_quality_notices",
@@ -15575,7 +16434,26 @@
       "notice_kind": "Source classification of the quality notice; it is not an independently proved allegation.",
       "notice_scope": "Population or filing scope actually stated by the source notice; no inferred donor identity or broader affected set.",
       "first_receipt_date": "The first receipt date the quality notice states. A two-digit year (FEC's false and fictitious filings list writes `31-DEC-76`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`76` is 1976, not 2076; the capture instant is in `fec_collections`, by `collection_id`). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `first_receipt_date_raw` keeps the date as filed. NULL has its reason in `first_receipt_date_status`; capture time is never substituted."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_namespace",
+      "source_pointer",
+      "committee_id_status",
+      "exclusion_status",
+      "first_receipt_date_status",
+      "source_cycle"
+    ]
   },
   "fec_receipts": {
     "table": "fec_receipts",
@@ -16307,7 +17185,35 @@
       "contributor_candidate_state": "The contributor candidate's reported state value.",
       "contributor_candidate_district": "The contributor candidate's reported district, preserving source spelling.",
       "reported_account_form": "Source-stated form associated with the reported account; not an inferred account identity."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "query_completeness",
+      "definition_set_id",
+      "filing_header_record_id",
+      "filing_header_locator_json",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_record_evidence": {
     "table": "fec_record_evidence",
@@ -16729,7 +17635,28 @@
       "receipt_date": "The day FEC received the statement, as the source states it. On a Form 2 (candidate) row the year must be the row's own `report_year`; on a Form 1 (committee) row, a two-digit year (FEC's file writes `31-DEC-24`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`24` is 2024). A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; capture time is never substituted.",
       "election_year": "Election year stated by the source, distinct from source cycle, fiscal year and capture time.",
       "report_year": "Year reported for the filing/report, preserved independently of cycle and transaction date."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "current_record_status",
+      "source_pointer",
+      "committee_id_status",
+      "candidate_id_status",
+      "affiliation_status",
+      "receipt_date_status",
+      "source_cycle",
+      "election_year_status",
+      "report_year_status"
+    ]
   },
   "fec_report_metrics": {
     "table": "fec_report_metrics",
@@ -16911,7 +17838,20 @@
       "definition_schema_version": "Version of the source metric-definition schema, part of the metric meaning.",
       "dimension_context": "Source-reported dimensions that qualify this metric value. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "report_number": "Source-stated report number, not an independently qualified report match."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_url",
+      "value_status",
+      "mapping_status"
+    ]
   },
   "fec_reported_financial_summaries": {
     "table": "fec_reported_financial_summaries",
@@ -17367,7 +18307,31 @@
       "sponsor_name": "Publisher financial-summary field Sponsor_Name; its literal value qualifies the reported summary.",
       "tres_nm": "Publisher financial-summary field TRES_NM; its literal value qualifies the reported summary.",
       "measures": "Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "identity_version",
+      "mapping_version",
+      "mapping_status",
+      "collection_id",
+      "source_record_id",
+      "source_sha256",
+      "source_locator_json",
+      "source_authority",
+      "selection_evidence_sha256",
+      "source_representation_role",
+      "correction_applicability_status",
+      "current_record_status",
+      "filing_link_status",
+      "filing_association_status",
+      "filing_association_policy",
+      "filing_association_source_generation_pin",
+      "filing_association_target_generation_pin",
+      "filing_association_record_id",
+      "filing_association_referenced_key",
+      "filing_association_target_generation_scope",
+      "filing_association_target_count",
+      "filing_association_target_record_ids"
+    ]
   },
   "fec_research_context_dispositions": {
     "table": "fec_research_context_dispositions",
@@ -17555,7 +18519,19 @@
       "page_count": "Nonnegative exact page count reported by the discovery provider; no document-body acquisition is implied.",
       "created_at": "Provider-reported creation timestamp; distinct from source capture time.",
       "updated_at": "Provider-reported update timestamp; distinct from source capture time."
-    }
+    },
+    "later_policy_columns": [
+      "mapping_version",
+      "collection_id",
+      "source_authority",
+      "source_url",
+      "source_sha256",
+      "context_sha256",
+      "source_context_pointer",
+      "body_status",
+      "fec_relationship_status",
+      "page_count_status"
+    ]
   },
   "fec_research_filing_feed_items": {
     "table": "fec_research_filing_feed_items",
@@ -17707,7 +18683,20 @@
       "coverage_start_date": "Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
       "coverage_end_date": "Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
       "published_at": "Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status."
-    }
+    },
+    "later_policy_columns": [
+      "mapping_version",
+      "collection_id",
+      "source_authority",
+      "source_url",
+      "source_sha256",
+      "context_sha256",
+      "source_context_pointer",
+      "current_record_status",
+      "source_label_status",
+      "parsing_status",
+      "filing_link_status"
+    ]
   },
   "fec_research_meeting_observations": {
     "table": "fec_research_meeting_observations",
@@ -17808,7 +18797,17 @@
       "dates": "Literal date cells and available date interpretations for the meeting row; multiple dates remain separate. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "links": "Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "date_kind": "Whether the meeting dates represent one date, separately listed dates, or the two endpoints of a range."
-    }
+    },
+    "later_policy_columns": [
+      "mapping_version",
+      "collection_id",
+      "source_authority",
+      "source_url",
+      "source_sha256",
+      "context_sha256",
+      "source_context_pointer",
+      "date_status"
+    ]
   },
   "fec_research_response_outcomes": {
     "table": "fec_research_response_outcomes",
@@ -17996,7 +18995,17 @@
       "text": "Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference.",
       "content_scope": "Scope of retained page content; text, headings and links are source documentation rather than inferred transactions.",
       "links": "Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
-    }
+    },
+    "later_policy_columns": [
+      "mapping_version",
+      "collection_id",
+      "source_authority",
+      "source_url",
+      "source_sha256",
+      "context_sha256",
+      "source_context_pointer",
+      "content_status"
+    ]
   },
   "fec_retained_csv_observations": {
     "table": "fec_retained_csv_observations",
@@ -18207,7 +19216,21 @@
       "report_year": "Year reported for the filing/report, preserved independently of cycle and transaction date.",
       "amount": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
       "reported_date": "Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted."
-    }
+    },
+    "later_policy_columns": [
+      "mapping_version",
+      "collection_id",
+      "source_authority",
+      "source_url",
+      "source_sha256",
+      "context_sha256",
+      "source_context_pointer",
+      "amount_status",
+      "date_status",
+      "coverage_status",
+      "current_total_status",
+      "report_year_status"
+    ]
   },
   "org_committee_links": {
     "table": "org_committee_links",
@@ -18445,6 +19468,14 @@
     "grain": null,
     "identity_columns": [
       "report_id"
+    ],
+    "later_policy_columns": [
+      "url",
+      "source",
+      "major_rule_agency",
+      "major_rule_rins",
+      "major_rule_fr_citations",
+      "citation_product_id"
     ]
   },
   "crs_reports": {
@@ -19034,6 +20065,10 @@
     "grain": "One CourtListener opinion (a majority, concurrence or dissent) of one decision.",
     "identity_columns": [
       "opinion_id"
+    ],
+    "later_policy_columns": [
+      "sha1",
+      "download_url"
     ]
   },
   "court_opinion_pdf_extractions": {
@@ -19145,6 +20180,23 @@
     "grain": "One retained PDF extraction per opinion and exact observed body.",
     "identity_columns": [
       "opinion_body_id"
+    ],
+    "later_policy_columns": [
+      "source_url",
+      "resolved_url",
+      "source_sha256",
+      "native_sha1",
+      "actual_sha1",
+      "pdf_extraction_results_json",
+      "observed_at",
+      "extractor",
+      "extractor_version",
+      "parent_opinion_publication_json",
+      "sha1_matches",
+      "parent_artifact_digest",
+      "parent_generation_id",
+      "parent_member_sha256",
+      "parent_member_byte_size"
     ]
   },
   "member_vote_terms": {
@@ -19207,6 +20259,9 @@
     "identity_columns": [
       "vote_id",
       "member_key"
+    ],
+    "later_policy_columns": [
+      "term_match"
     ]
   },
   "scorecard_member_links": {
@@ -19339,6 +20394,28 @@
     "identity_columns": [
       "scorecard_id",
       "publisher_member_key"
+    ],
+    "later_policy_columns": [
+      "source_snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path",
+      "normalized_state",
+      "state_status",
+      "normalized_district",
+      "district_status",
+      "correction_evidence_json",
+      "term_candidates_json",
+      "geography_evidence_json",
+      "override_version",
+      "resolution_status",
+      "resolution_rule",
+      "rule_version",
+      "candidate_count",
+      "candidates_json",
+      "reason",
+      "source_context_json",
+      "input_pins_json"
     ]
   },
   "scorecard_item_links": {
@@ -19472,6 +20549,20 @@
       "scorecard_id",
       "item_id",
       "reference_id"
+    ],
+    "later_policy_columns": [
+      "source_snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path",
+      "resolution_status",
+      "resolution_rule",
+      "rule_version",
+      "candidate_count",
+      "candidates_json",
+      "reason",
+      "source_context_json",
+      "input_pins_json"
     ]
   },
   "scorecard_action_comparisons": {
@@ -21372,6 +22463,10 @@
     "grain": null,
     "identity_columns": [
       "id_submission"
+    ],
+    "later_policy_columns": [
+      "generation_id",
+      "extraction_results"
     ]
   },
   "scorecard_publishers": {
@@ -21433,6 +22528,11 @@
     "grain": "One stable publisher identity; historical names remain on edition observations.",
     "identity_columns": [
       "publisher_id"
+    ],
+    "later_policy_columns": [
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecards": {
@@ -21549,6 +22649,12 @@
     "grain": "One publisher-defined edition, with a series_id for continuity; a live series is not itself an edition.",
     "identity_columns": [
       "scorecard_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_snapshots": {
@@ -21727,6 +22833,12 @@
     "identity_columns": [
       "scorecard_id",
       "methodology_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_metrics": {
@@ -21824,6 +22936,12 @@
     "identity_columns": [
       "scorecard_id",
       "metric_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_items": {
@@ -21931,6 +23049,12 @@
     "identity_columns": [
       "scorecard_id",
       "item_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_metric_items": {
@@ -22020,6 +23144,12 @@
       "metric_id",
       "item_id",
       "participation_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_metric_components": {
@@ -22088,6 +23218,12 @@
       "scorecard_id",
       "parent_metric_id",
       "component_metric_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_members": {
@@ -22185,6 +23321,12 @@
     "identity_columns": [
       "scorecard_id",
       "publisher_member_key"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_member_ratings": {
@@ -22263,6 +23405,12 @@
       "scorecard_id",
       "metric_id",
       "publisher_member_key"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "scorecard_member_item_results": {
@@ -22372,6 +23520,12 @@
       "item_id",
       "publisher_member_key",
       "result_id"
+    ],
+    "later_policy_columns": [
+      "snapshot_id",
+      "capture_id",
+      "source_url",
+      "source_path"
     ]
   },
   "bill_actions": {
@@ -24731,6 +25885,11 @@
     "identity_columns": [
       "decision_number",
       "url"
+    ],
+    "later_policy_columns": [
+      "listing_page",
+      "source",
+      "b_numbers_truncated"
     ]
   },
   "laws": {
@@ -25607,6 +26766,11 @@
     "identity_columns": [
       "document_number",
       "publication_date"
+    ],
+    "later_policy_columns": [
+      "president_json",
+      "disposition_notes",
+      "executive_order_notes"
     ]
   },
   "fec_committee_history": {
@@ -26498,6 +27662,12 @@
     "grain": "One row per House executive communication: the Congress.gov house-communication routes where the publisher decomposes it, the Congressional Record entry it printed where the publisher does not.",
     "identity_columns": [
       "communication_id"
+    ],
+    "later_policy_columns": [
+      "source_route",
+      "record_package_id",
+      "record_granule_id",
+      "record_entry_text"
     ]
   },
   "committee_meetings": {
@@ -26656,6 +27826,10 @@
       "congress",
       "chamber",
       "event_id"
+    ],
+    "later_policy_columns": [
+      "nomination_references_json",
+      "treaty_references_json"
     ]
   },
   "record_issues": {
@@ -26951,6 +28125,11 @@
     "identity_columns": [
       "congress",
       "citation"
+    ],
+    "later_policy_columns": [
+      "nomination_id",
+      "committees_json",
+      "hearings_json"
     ]
   },
   "house_activity_reports": {
@@ -27469,6 +28648,9 @@
       "cite_kind",
       "target_key",
       "span_start"
+    ],
+    "later_policy_columns": [
+      "target_table"
     ]
   },
   "senate_expenditures": {
@@ -27738,6 +28920,13 @@
       "scope_id",
       "body_version_id",
       "occurrence_index"
+    ],
+    "later_policy_columns": [
+      "source_locator",
+      "source_path",
+      "element_tag",
+      "interpretation_status",
+      "rule_version"
     ]
   },
   "native_legal_reference_reads": {
@@ -27932,6 +29121,10 @@
     "grain": "One row per recommendation per agency that GAO's open-recommendations export has listed, with its status as last listed.",
     "identity_columns": [
       "recommendation_id"
+    ],
+    "later_policy_columns": [
+      "first_seen",
+      "last_seen"
     ]
   },
   "bill_vote_references": {
@@ -29421,6 +30614,13 @@
     "identity_columns": [
       "generation_id",
       "attempt_id"
+    ],
+    "later_policy_columns": [
+      "communication_type",
+      "stated_communication_id",
+      "communication_key_status",
+      "communication_key_rule",
+      "communication_key_reason"
     ]
   },
   "house_record_enrichment_results": {
@@ -29550,6 +30750,12 @@
     "identity_columns": [
       "generation_id",
       "attempt_id"
+    ],
+    "later_policy_columns": [
+      "stated_communication_id",
+      "communication_key_status",
+      "communication_key_rule",
+      "communication_key_reason"
     ]
   },
   "inspectors_general_report_metadata": {
