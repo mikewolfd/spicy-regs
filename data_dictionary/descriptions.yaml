@@ -1904,9 +1904,10 @@ tables:
       whose court_opinion_texts entry lists each file with its opinion_block,
       and read that one file (4 HTTP range requests measured). A filter on
       opinion_id alone over every file is the slow path: it opens each file's
-      footer. opinion_id is text, so filter it with a quoted literal
-      (opinion_id = '123'); an unquoted number casts every row and skips no
-      file. Rows are in numeric id order within a file; ORDER BY opinion_id
+      footer (154 requests over 75 files measured). opinion_id is text, so
+      filter it with a quoted literal (opinion_id = '123'); an unquoted number
+      casts every row, so no row group is skipped (105 requests against 4 on
+      one file of 102 row groups). Rows are in numeric id order within a file; ORDER BY opinion_id
       sorts as text, so order by CAST(opinion_id AS BIGINT). Receipts point at
       the export (its SHA-256), the opinion id, the export column converted and
       the SHA-256 of that column's value, not a copy of it.
