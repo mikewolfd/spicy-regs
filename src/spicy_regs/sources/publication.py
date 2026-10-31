@@ -584,7 +584,7 @@ def _resumable_body(url: str, label: str, headers: Mapping[str, str] | None,
                 if resuming and status in (200, 412):
                     logger.warning("{} changed or ignored the range at byte {}; restarting", label, held)
                     yield None
-                    etag, source, held, resuming = None, None, 0, False
+                    etag, source, held, start, resuming = None, None, 0, 0, False
                     if status == 412:
                         stalls += 1
                         if stalls >= RESUME_STALLS:

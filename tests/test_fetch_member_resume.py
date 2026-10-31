@@ -121,6 +121,16 @@ def test_reconnects_without_progress_stop_at_the_cap(tmp_path, host):
     assert len(host.calls) == 1 + publication.RESUME_STALLS and no_temp(tmp_path)
 
 
+def test_a_restart_that_progresses_is_not_a_stall(tmp_path, host):
+    """Progress after a restart is measured from byte 0, not from the abandoned resume offset."""
+    host.script += [Reply(200, DATA, {'etag': ETAG}, fail_after=8000)]
+    host.script += [Reply(200, DATA, {'etag': ETAG}, fail_after=1000) for _ in range(publication.RESUME_STALLS)]
+    host.script.append(partial(1000))
+    target = tmp_path / 't.parquet'
+    publication.fetch_member('https://fixture.invalid', pinned(), target)
+    assert target.read_bytes() == DATA and host.script == []
+
+
 @pytest.mark.parametrize('headers', [{}, {'etag': 'W/"v1"'}, {'etag': ETAG, 'content-encoding': 'gzip'}])
 def test_unresumable_response_raises_the_transport_error(tmp_path, host, headers):
     host.script += [Reply(200, DATA, headers, fail_after=100)]
