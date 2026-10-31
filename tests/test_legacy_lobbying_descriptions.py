@@ -17,7 +17,7 @@ LEGACY = json.loads((Path(__file__).parent / 'fixtures/lobbying_filings_legacy_p
 HISTORICAL = {'url', 'lobbying_activities_json', 'government_entities_json'}
 
 
-def describe(monkeypatch, *, native=False, extra_url=False, local_native=False):
+def describe(monkeypatch, *, native=False, extra_url=False, local_native=False, detail=False):
     con = duckdb.connect()
     index = copy.deepcopy(LEGACY)
     entry = index['families']['lobbying-filings']
@@ -39,7 +39,7 @@ def describe(monkeypatch, *, native=False, extra_url=False, local_native=False):
         monkeypatch.setattr(mcp_server, '_connection_local_selection',
                             lambda cursor: {'native': {'lobbying_filings': {}}})
     mcp_server._table_metadata.cache_clear()
-    result = asyncio.run(mcp_server.build_server().call_tool('describe_table', {'table': 'lobbying_filings'}))
+    result = asyncio.run(mcp_server.build_server().call_tool('describe_table', {'table': 'lobbying_filings', 'detail': detail}))
     con.close()
     assert isinstance(result, CallToolResult)
     assert not result.is_error
@@ -75,3 +75,25 @@ def test_historical_meaning_is_withheld_when_selected_native_has_extra_column(mo
     result = describe(monkeypatch, native=layout == 'published-native', extra_url=layout == 'published-native',
                       local_native=layout == 'local-native')
     assert next(c for c in result['columns'] if c['column_name'] == 'url')['description'] is None
+
+
+def test_documented_filing_types_are_detail_only(monkeypatch):
+    """The LDA filing-type labels reach describe_table with detail=true and stay out of the compact reply."""
+    compact = describe(monkeypatch)
+    assert 'documented_values' not in compact['metadata']
+    assert 'metadata.documented_values' in compact['detail']['omitted']
+    full = describe(monkeypatch, detail=True)
+    filing_type = full['metadata']['documented_values']['filing_type']
+    assert filing_type['checked'] is True
+    assert {'value': 'RR', 'label': 'Registration'} in filing_type['values']
+    assert len(filing_type['values']) == 50
+
+
+def test_labels_only_lists_say_they_gate_nothing():
+    """The generated dictionary marks FEC party and BILLSTATUS action codes as unchecked, with the guide's caveat."""
+    mcp_server._table_metadata.cache_clear()
+    metadata = mcp_server._table_metadata()
+    assert metadata['fec_candidate_history']['documented_values']['party']['checked'] is False
+    action_code = metadata['bill_actions']['documented_values']['action_code']
+    assert action_code['checked'] is False
+    assert 'does not exist' in action_code['caveat']

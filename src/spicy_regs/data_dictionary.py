@@ -1812,6 +1812,13 @@ def build_mcp_metadata(descriptions: dict, schemas: dict[str, list[tuple[str, st
                   for check in AGGREGATES if table in (check.output, *check.inputs)]
         if checks:
             result[table]["aggregate_checks"] = checks
+    # The publisher's documented values and labels, parsed from the pinned captures; describe_table shows them
+    # only with detail=true, since the LDA and FEC lists alone run to several kilobytes.
+    from spicy_regs.sources.source_domains import DEFAULT_SOURCE_DOMAIN_DIR, documented_values
+
+    for table, columns in documented_values(REPO_ROOT / DEFAULT_SOURCE_DOMAIN_DIR).items():
+        if table in result:
+            result[table]["documented_values"] = columns
     result.update(build_fec_child_metadata(descriptions, schemas))
     # describe_table('etl_receipts') is the receipts page for a reader who asks the server, so it carries the guide.
     result["etl_receipts"] = {

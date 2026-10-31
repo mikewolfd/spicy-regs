@@ -83,7 +83,23 @@
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
       }
-    ]
+    ],
+    "documented_values": {
+      "docket_type": {
+        "domain": "regulations-gov-docket-type",
+        "checked": true,
+        "source_url": "https://open.gsa.gov/api/regulationsgov/v4/openapi.yaml",
+        "locator": "regulations-gov-openapi-v4-2026-08-03.yaml components.schemas.DocketType.enum (lines 902-904)",
+        "values": [
+          {
+            "value": "Rulemaking"
+          },
+          {
+            "value": "Nonrulemaking"
+          }
+        ]
+      }
+    }
   },
   "documents": {
     "table": "documents",
@@ -258,7 +274,32 @@
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
       }
-    ]
+    ],
+    "documented_values": {
+      "document_type": {
+        "domain": "regulations-gov-document-type",
+        "checked": true,
+        "source_url": "https://open.gsa.gov/api/regulationsgov/v4/openapi.yaml",
+        "locator": "regulations-gov-openapi-v4-2026-08-03.yaml components.schemas.DocumentType.enum (lines 893-898)",
+        "values": [
+          {
+            "value": "Notice"
+          },
+          {
+            "value": "Rule"
+          },
+          {
+            "value": "Proposed Rule"
+          },
+          {
+            "value": "Supporting & Related Material"
+          },
+          {
+            "value": "Other"
+          }
+        ]
+      }
+    }
   },
   "comments": {
     "table": "comments",
@@ -437,7 +478,32 @@
         "command": "uv run --frozen python scripts/check_table_joins.py --aggregate feed-comments",
         "status": "available_check_not_a_live_measurement"
       }
-    ]
+    ],
+    "documented_values": {
+      "document_type": {
+        "domain": "regulations-gov-comment-document-type",
+        "checked": true,
+        "source_url": "https://open.gsa.gov/api/regulationsgov/v4/openapi.yaml",
+        "locator": "regulations-gov-openapi-v4-2026-08-03.yaml components.schemas.DocumentType.enum (lines 893-898)",
+        "values": [
+          {
+            "value": "Notice"
+          },
+          {
+            "value": "Rule"
+          },
+          {
+            "value": "Proposed Rule"
+          },
+          {
+            "value": "Supporting & Related Material"
+          },
+          {
+            "value": "Other"
+          }
+        ]
+      }
+    }
   },
   "comments_index": {
     "table": "comments_index",
@@ -1278,7 +1344,115 @@
     ],
     "later_policy_columns": [
       "related_rins"
-    ]
+    ],
+    "documented_values": {
+      "rule_stage": {
+        "domain": "unified-agenda-rule-stage",
+        "checked": true,
+        "source_url": "https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd",
+        "locator": "reginfo-rin-data-ver10262011.xsd RIN_INFOType/RULE_STAGE xs:documentation (line 66)",
+        "values": [
+          {
+            "value": "Prerule Stage"
+          },
+          {
+            "value": "Proposed Rule Stage"
+          },
+          {
+            "value": "Final Rule Stage"
+          },
+          {
+            "value": "Long-Term Actions"
+          },
+          {
+            "value": "Completed Actions"
+          },
+          {
+            "value": "No Stage"
+          }
+        ]
+      },
+      "priority_category": {
+        "domain": "unified-agenda-priority-category",
+        "checked": true,
+        "source_url": "https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd",
+        "locator": "reginfo-rin-data-ver10262011.xsd RIN_INFOType/PRIORITY_CATEGORY xs:documentation (line 50)",
+        "values": [
+          {
+            "value": "Economically Significant"
+          },
+          {
+            "value": "Other Significant"
+          },
+          {
+            "value": "Substantive, Nonsignificant"
+          },
+          {
+            "value": "Routine and Frequent"
+          },
+          {
+            "value": "Info./Admin./Other"
+          },
+          {
+            "value": "Not Major"
+          }
+        ]
+      },
+      "rin_status": {
+        "domain": "unified-agenda-rin-status",
+        "checked": true,
+        "source_url": "https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd",
+        "locator": "reginfo-rin-data-ver10262011.xsd RIN_INFOType/RIN_STATUS xs:documentation (line 58)",
+        "values": [
+          {
+            "value": "First time published in the Unified Agenda"
+          },
+          {
+            "value": "Previously published in the Unified Agenda"
+          }
+        ]
+      },
+      "major": {
+        "domain": "unified-agenda-major",
+        "checked": true,
+        "source_url": "https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd",
+        "locator": "reginfo-rin-data-ver10262011.xsd RIN_INFOType/MAJOR xs:documentation (line 74)",
+        "values": [
+          {
+            "value": "Yes"
+          },
+          {
+            "value": "No"
+          },
+          {
+            "value": "Undetermined"
+          }
+        ]
+      },
+      "related_rins.rin_relation": {
+        "domain": "unified-agenda-rin-relation",
+        "checked": true,
+        "source_url": "https://www.reginfo.gov/public/xml/REGINFO_XML_Ver10262011.xsd",
+        "locator": "reginfo-rin-data-ver10262011.xsd RELATED_RINType/RIN_RELATION xs:documentation (line 526)",
+        "values": [
+          {
+            "value": "Merge with"
+          },
+          {
+            "value": "Split from"
+          },
+          {
+            "value": "Previously reported as"
+          },
+          {
+            "value": "Duplicate of"
+          },
+          {
+            "value": "Related to"
+          }
+        ]
+      }
+    }
   },
   "rule_targets": {
     "table": "rule_targets",
@@ -2209,6 +2383,216 @@
       "lobbying_activities_json": "JSON array of lobbying activities, each `{general_issue_code, general_issue_code_display, description}` — the issue areas lobbied and their free-text descriptions.",
       "government_entities_json": "JSON array of the distinct government entities lobbied (`{id, name}`) — the agencies and chambers (e.g. `HOUSE OF REPRESENTATIVES`, `SENATE`) named across the filing's activities.",
       "url": "URL of the filing's printable document page on lda.gov (`filing_document_url`; lda.senate.gov redirects there)."
+    },
+    "documented_values": {
+      "filing_type": {
+        "domain": "lda-filing-type",
+        "checked": true,
+        "source_url": "https://lda.gov/api/v1/constants/filing/filingtypes/",
+        "locator": "lda-filing-types-2026-07-30.json constants/filing/filingtypes/ (value, name)",
+        "values": [
+          {
+            "value": "RR",
+            "label": "Registration"
+          },
+          {
+            "value": "RA",
+            "label": "Registration - Amendment"
+          },
+          {
+            "value": "Q1",
+            "label": "1st Quarter - Report"
+          },
+          {
+            "value": "Q1Y",
+            "label": "1st Quarter - Report (No Activity)"
+          },
+          {
+            "value": "1T",
+            "label": "1st Quarter - Termination"
+          },
+          {
+            "value": "1TY",
+            "label": "1st Quarter - Termination (No Activity)"
+          },
+          {
+            "value": "1A",
+            "label": "1st Quarter - Amendment"
+          },
+          {
+            "value": "1AY",
+            "label": "1st Quarter - Amendment (No Activity)"
+          },
+          {
+            "value": "1@",
+            "label": "1st Quarter - Termination Amendment"
+          },
+          {
+            "value": "1@Y",
+            "label": "1st Quarter - Termination Amendment (No Activity)"
+          },
+          {
+            "value": "Q2",
+            "label": "2nd Quarter - Report"
+          },
+          {
+            "value": "Q2Y",
+            "label": "2nd Quarter - Report (No Activity)"
+          },
+          {
+            "value": "2T",
+            "label": "2nd Quarter - Termination"
+          },
+          {
+            "value": "2TY",
+            "label": "2nd Quarter - Termination (No Activity)"
+          },
+          {
+            "value": "2A",
+            "label": "2nd Quarter - Amendment"
+          },
+          {
+            "value": "2AY",
+            "label": "2nd Quarter - Amendment (No Activity)"
+          },
+          {
+            "value": "2@",
+            "label": "2nd Quarter - Termination Amendment"
+          },
+          {
+            "value": "2@Y",
+            "label": "2nd Quarter - Termination Amendment (No Activity)"
+          },
+          {
+            "value": "Q3",
+            "label": "3rd Quarter - Report"
+          },
+          {
+            "value": "Q3Y",
+            "label": "3rd Quarter - Report (No Activity)"
+          },
+          {
+            "value": "3T",
+            "label": "3rd Quarter - Termination"
+          },
+          {
+            "value": "3TY",
+            "label": "3rd Quarter - Termination (No Activity)"
+          },
+          {
+            "value": "3A",
+            "label": "3rd Quarter - Amendment"
+          },
+          {
+            "value": "3AY",
+            "label": "3rd Quarter - Amendment (No Activity)"
+          },
+          {
+            "value": "3@",
+            "label": "3rd Quarter - Termination Amendment"
+          },
+          {
+            "value": "3@Y",
+            "label": "3rd Quarter - Termination Amendment (No Activity)"
+          },
+          {
+            "value": "Q4",
+            "label": "4th Quarter - Report"
+          },
+          {
+            "value": "Q4Y",
+            "label": "4th Quarter - Report (No Activity)"
+          },
+          {
+            "value": "4T",
+            "label": "4th Quarter - Termination"
+          },
+          {
+            "value": "4TY",
+            "label": "4th Quarter - Termination (No Activity)"
+          },
+          {
+            "value": "4A",
+            "label": "4th Quarter - Amendment"
+          },
+          {
+            "value": "4AY",
+            "label": "4th Quarter - Amendment (No Activity)"
+          },
+          {
+            "value": "4@",
+            "label": "4th Quarter - Termination Amendment"
+          },
+          {
+            "value": "4@Y",
+            "label": "4th Quarter - Termination Amendment (No Activity)"
+          },
+          {
+            "value": "MM",
+            "label": "Mid-Year Report"
+          },
+          {
+            "value": "MMY",
+            "label": "Mid-Year Report (No Activity)"
+          },
+          {
+            "value": "MT",
+            "label": "Mid-Year Termination"
+          },
+          {
+            "value": "MTY",
+            "label": "Mid-Year Termination (No Activity)"
+          },
+          {
+            "value": "MA",
+            "label": "Mid-Year Amendment"
+          },
+          {
+            "value": "MAY",
+            "label": "Mid-Year Amendment (No Activity)"
+          },
+          {
+            "value": "M@",
+            "label": "Mid-Year Termination Amendment"
+          },
+          {
+            "value": "M@Y",
+            "label": "Mid-Year Termination Amendment (No Activity)"
+          },
+          {
+            "value": "YY",
+            "label": "Year-End Report"
+          },
+          {
+            "value": "YYY",
+            "label": "Year-End Report (No Activity)"
+          },
+          {
+            "value": "YT",
+            "label": "Year-End Termination"
+          },
+          {
+            "value": "YTY",
+            "label": "Year-End Termination (No Activity)"
+          },
+          {
+            "value": "YA",
+            "label": "Year-End Amendment"
+          },
+          {
+            "value": "YAY",
+            "label": "Year-End Amendment (No Activity)"
+          },
+          {
+            "value": "Y@",
+            "label": "Year-End Termination Amendment"
+          },
+          {
+            "value": "Y@Y",
+            "label": "Year-End Termination Amendment (No Activity)"
+          }
+        ]
+      }
     }
   },
   "lobbying_activities": {
@@ -2261,7 +2645,333 @@
     "identity_columns": [
       "filing_uuid",
       "activity_index"
-    ]
+    ],
+    "documented_values": {
+      "general_issue_code": {
+        "domain": "lda-general-issue-code",
+        "checked": true,
+        "source_url": "https://lda.gov/api/v1/constants/filing/lobbyingactivityissues/",
+        "locator": "lda-general-issue-codes-2026-07-30.json constants/filing/lobbyingactivityissues/ (value, name)",
+        "values": [
+          {
+            "value": "ACC",
+            "label": "Accounting"
+          },
+          {
+            "value": "ADV",
+            "label": "Advertising"
+          },
+          {
+            "value": "AER",
+            "label": "Aerospace"
+          },
+          {
+            "value": "AGR",
+            "label": "Agriculture"
+          },
+          {
+            "value": "ALC",
+            "label": "Alcohol and Drug Abuse"
+          },
+          {
+            "value": "ANI",
+            "label": "Animals"
+          },
+          {
+            "value": "APP",
+            "label": "Apparel/Clothing Industry/Textiles"
+          },
+          {
+            "value": "ART",
+            "label": "Arts/Entertainment"
+          },
+          {
+            "value": "AUT",
+            "label": "Automotive Industry"
+          },
+          {
+            "value": "AVI",
+            "label": "Aviation/Airlines/Airports"
+          },
+          {
+            "value": "BAN",
+            "label": "Banking"
+          },
+          {
+            "value": "BNK",
+            "label": "Bankruptcy"
+          },
+          {
+            "value": "BEV",
+            "label": "Beverage Industry"
+          },
+          {
+            "value": "BUD",
+            "label": "Budget/Appropriations"
+          },
+          {
+            "value": "CIV",
+            "label": "Civil Rights/Civil Liberties"
+          },
+          {
+            "value": "CHM",
+            "label": "Chemicals/Chemical Industry"
+          },
+          {
+            "value": "CAW",
+            "label": "Clean Air and Water (quality)"
+          },
+          {
+            "value": "CDT",
+            "label": "Commodities (big ticket)"
+          },
+          {
+            "value": "COM",
+            "label": "Communications/Broadcasting/Radio/TV"
+          },
+          {
+            "value": "CPI",
+            "label": "Computer Industry"
+          },
+          {
+            "value": "CON",
+            "label": "Constitution"
+          },
+          {
+            "value": "CSP",
+            "label": "Consumer Issues/Safety/Products"
+          },
+          {
+            "value": "CPT",
+            "label": "Copyright/Patent/Trademark"
+          },
+          {
+            "value": "DEF",
+            "label": "Defense"
+          },
+          {
+            "value": "DIS",
+            "label": "Disaster Planning/Emergencies"
+          },
+          {
+            "value": "DOC",
+            "label": "District of Columbia"
+          },
+          {
+            "value": "ECN",
+            "label": "Economics/Economic Development"
+          },
+          {
+            "value": "EDU",
+            "label": "Education"
+          },
+          {
+            "value": "ENG",
+            "label": "Energy/Nuclear"
+          },
+          {
+            "value": "ENV",
+            "label": "Environment/Superfund"
+          },
+          {
+            "value": "FAM",
+            "label": "Family issues/Abortion/Adoption"
+          },
+          {
+            "value": "FIN",
+            "label": "Financial Institutions/Investments/Securities"
+          },
+          {
+            "value": "FIR",
+            "label": "Firearms/Guns/Ammunition"
+          },
+          {
+            "value": "FOO",
+            "label": "Food Industry (safety, labeling, etc.)"
+          },
+          {
+            "value": "FOR",
+            "label": "Foreign Relations"
+          },
+          {
+            "value": "FUE",
+            "label": "Fuel/Gas/Oil"
+          },
+          {
+            "value": "GAM",
+            "label": "Gaming/Gambling/Casino"
+          },
+          {
+            "value": "GOV",
+            "label": "Government Issues"
+          },
+          {
+            "value": "HCR",
+            "label": "Health Issues"
+          },
+          {
+            "value": "HOM",
+            "label": "Homeland Security"
+          },
+          {
+            "value": "HOU",
+            "label": "Housing"
+          },
+          {
+            "value": "IMM",
+            "label": "Immigration"
+          },
+          {
+            "value": "IND",
+            "label": "Indian/Native American Affairs"
+          },
+          {
+            "value": "INS",
+            "label": "Insurance"
+          },
+          {
+            "value": "INT",
+            "label": "Intelligence"
+          },
+          {
+            "value": "LBR",
+            "label": "Labor Issues/Antitrust/Workplace"
+          },
+          {
+            "value": "LAW",
+            "label": "Law Enforcement/Crime/Criminal Justice"
+          },
+          {
+            "value": "MAN",
+            "label": "Manufacturing"
+          },
+          {
+            "value": "MAR",
+            "label": "Marine/Maritime/Boating/Fisheries"
+          },
+          {
+            "value": "MIA",
+            "label": "Media (information/publishing)"
+          },
+          {
+            "value": "MED",
+            "label": "Medical/Disease Research/Clinical Labs"
+          },
+          {
+            "value": "MMM",
+            "label": "Medicare/Medicaid"
+          },
+          {
+            "value": "MON",
+            "label": "Minting/Money/Gold Standard"
+          },
+          {
+            "value": "NAT",
+            "label": "Natural Resources"
+          },
+          {
+            "value": "PHA",
+            "label": "Pharmacy"
+          },
+          {
+            "value": "POS",
+            "label": "Postal"
+          },
+          {
+            "value": "RRR",
+            "label": "Railroads"
+          },
+          {
+            "value": "RES",
+            "label": "Real Estate/Land Use/Conservation"
+          },
+          {
+            "value": "REL",
+            "label": "Religion"
+          },
+          {
+            "value": "RET",
+            "label": "Retirement"
+          },
+          {
+            "value": "ROD",
+            "label": "Roads/Highway"
+          },
+          {
+            "value": "SCI",
+            "label": "Science/Technology"
+          },
+          {
+            "value": "SMB",
+            "label": "Small Business"
+          },
+          {
+            "value": "SPO",
+            "label": "Sports/Athletics"
+          },
+          {
+            "value": "TAR",
+            "label": "Tariff (miscellaneous tariff bills)"
+          },
+          {
+            "value": "TAX",
+            "label": "Taxation/Internal Revenue Code"
+          },
+          {
+            "value": "TEC",
+            "label": "Telecommunications"
+          },
+          {
+            "value": "TOB",
+            "label": "Tobacco"
+          },
+          {
+            "value": "TOR",
+            "label": "Torts"
+          },
+          {
+            "value": "TRD",
+            "label": "Trade (domestic/foreign)"
+          },
+          {
+            "value": "TRA",
+            "label": "Transportation"
+          },
+          {
+            "value": "TOU",
+            "label": "Travel/Tourism"
+          },
+          {
+            "value": "TRU",
+            "label": "Trucking/Shipping"
+          },
+          {
+            "value": "URB",
+            "label": "Urban Development/Municipalities"
+          },
+          {
+            "value": "UNM",
+            "label": "Unemployment"
+          },
+          {
+            "value": "UTI",
+            "label": "Utilities"
+          },
+          {
+            "value": "VET",
+            "label": "Veterans"
+          },
+          {
+            "value": "WAS",
+            "label": "Waste (hazardous/solid/interstate/nuclear)"
+          },
+          {
+            "value": "WEL",
+            "label": "Welfare"
+          }
+        ]
+      }
+    }
   },
   "lobbying_activity_lobbyists": {
     "table": "lobbying_activity_lobbyists",
@@ -23598,7 +24308,248 @@
     "identity_columns": [
       "bill_id",
       "action_index"
-    ]
+    ],
+    "documented_values": {
+      "action_type": {
+        "domain": "billstatus-action-type",
+        "checked": true,
+        "source_url": "https://raw.githubusercontent.com/usgpo/bill-status/master/BILLSTATUS-XML_User_User-Guide.md",
+        "locator": "billstatus-xml-user-guide-2026-08-03.md section 4, Actions Type Element Possible Values (lines 498-532)",
+        "values": [
+          {
+            "value": "Actions by the President"
+          },
+          {
+            "value": "Actions Related to President"
+          },
+          {
+            "value": "Actions Related to Veto"
+          },
+          {
+            "value": "Amending Actions"
+          },
+          {
+            "value": "BecameLaw"
+          },
+          {
+            "value": "Calendars"
+          },
+          {
+            "value": "Chamber Actions"
+          },
+          {
+            "value": "Chamber Consideration Actions"
+          },
+          {
+            "value": "Committee"
+          },
+          {
+            "value": "Committee Actions"
+          },
+          {
+            "value": "Conference Actions"
+          },
+          {
+            "value": "Discharge"
+          },
+          {
+            "value": "Floor"
+          },
+          {
+            "value": "ForwardY-N"
+          },
+          {
+            "value": "House Actions"
+          },
+          {
+            "value": "Introduced in House"
+          },
+          {
+            "value": "Introduced in Senate"
+          },
+          {
+            "value": "IntroReferral"
+          },
+          {
+            "value": "NotUsed"
+          },
+          {
+            "value": "President"
+          },
+          {
+            "value": "Procedural"
+          },
+          {
+            "value": "ResolvingDifferences"
+          },
+          {
+            "value": "Senate Actions"
+          },
+          {
+            "value": "Significant Actions"
+          },
+          {
+            "value": "Unknown"
+          },
+          {
+            "value": "VARIES"
+          }
+        ]
+      },
+      "action_code": {
+        "domain": "billstatus-action-code",
+        "checked": false,
+        "source_url": "https://raw.githubusercontent.com/usgpo/bill-status/master/BILLSTATUS-XML_User_User-Guide.md",
+        "locator": "billstatus-xml-user-guide-2026-08-03.md section 3, Action Code Element Possible Values (lines 449-497)",
+        "caveat": "The publisher calls this list representational and 'provided as a courtesy; a complete, authoritative list of action codes does not exist. In general, expect action codes when source system is 2 (House floor) or 9 (Library of Congress).' It adds that 'some codes may have been used and re-used over the years for different purposes', so a label is the guide's current text for the code, not a statement of what an older action meant.",
+        "values": [
+          {
+            "value": "B00100",
+            "label": "Sponsor introductory remarks on measure"
+          },
+          {
+            "value": "E20000",
+            "label": "Presented to President"
+          },
+          {
+            "value": "E30000",
+            "label": "Signed by President"
+          },
+          {
+            "value": "E40000",
+            "label": "Became Public Law No: 114-47"
+          },
+          {
+            "value": "H11100",
+            "label": "Referred to the Committee"
+          },
+          {
+            "value": "H11200",
+            "label": "Sequential committee referral"
+          },
+          {
+            "value": "H12100",
+            "label": "Committee report of an original measure"
+          },
+          {
+            "value": "H12200",
+            "label": "Committee reported"
+          },
+          {
+            "value": "H12300",
+            "label": "Committee discharged"
+          },
+          {
+            "value": "H12410",
+            "label": "Union Calendar assignment"
+          },
+          {
+            "value": "H14000",
+            "label": "Received in the House"
+          },
+          {
+            "value": "H15000",
+            "label": "Held at the desk"
+          },
+          {
+            "value": "H17000",
+            "label": "Motion to Discharge Committee"
+          },
+          {
+            "value": "H1L210",
+            "label": "Rule provides for consideration of"
+          },
+          {
+            "value": "H1L220",
+            "label": "Rule passed/agreed in House"
+          },
+          {
+            "value": "H35000",
+            "label": "The previous question was ordered pursuant to the rule"
+          },
+          {
+            "value": "H25200",
+            "label": "Conference report [free text] filed"
+          },
+          {
+            "value": "H37300",
+            "label": "Final Passage Under Suspension of the Rules Results"
+          },
+          {
+            "value": "H38310",
+            "label": "Motion To Reconsider Results"
+          },
+          {
+            "value": "H30000",
+            "label": "Consideration by House"
+          },
+          {
+            "value": "H8D000",
+            "label": "DEBATE"
+          },
+          {
+            "value": "H81000",
+            "label": "Point of order against a motion"
+          },
+          {
+            "value": "1000",
+            "label": "Introduced in House"
+          },
+          {
+            "value": "2000",
+            "label": "Referred to House committee"
+          },
+          {
+            "value": "5000",
+            "label": "Reported to House"
+          },
+          {
+            "value": "8000",
+            "label": "Passed/agreed to in House"
+          },
+          {
+            "value": "10000",
+            "label": "Introduced in Senate"
+          },
+          {
+            "value": "11000",
+            "label": "Referred to Senate committee"
+          },
+          {
+            "value": "13100",
+            "label": "Senate committee/subcommittee hearings"
+          },
+          {
+            "value": "13200",
+            "label": "Senate committee/subcommittee markups"
+          },
+          {
+            "value": "14000",
+            "label": "Reported to Senate"
+          },
+          {
+            "value": "14500",
+            "label": "Senate committee discharged"
+          },
+          {
+            "value": "14900",
+            "label": "Senate committee report filed after reporting"
+          },
+          {
+            "value": "17000",
+            "label": "Passed/agreed to in Senate"
+          },
+          {
+            "value": "28000",
+            "label": "Presented to President."
+          },
+          {
+            "value": "36000",
+            "label": "Became Public Law"
+          }
+        ]
+      }
+    }
   },
   "bill_committees": {
     "table": "bill_committees",
@@ -26890,6 +27841,564 @@
       "organization_type": "The interest-group category code (`ORG_TP`); NULL when blank.",
       "connected_organization_name": "The connected organization's name (`CONNECTED_ORG_NM`) as the committee filed it; NULL when blank. Committees often file a placeholder instead (`NONE`, `N/A`, `-`, and until 2016 `BLANK`), kept verbatim as FEC's own committee master carries it: read one as no connected organization (schemas.fec_committee_history.is_placeholder_name says which values are).",
       "candidate_id": "The candidate the committee is linked to that cycle (`CAND_ID`); NULL when none."
+    },
+    "documented_values": {
+      "committee_type": {
+        "domain": "fec-committee-type",
+        "checked": true,
+        "source_url": "https://www.fec.gov/campaign-finance-data/committee-type-code-descriptions/",
+        "locator": "fec-committee-type-code-descriptions-2026-08-03.html committee type code table, read by RefSpec parse_committee_type_codes",
+        "values": [
+          {
+            "value": "C",
+            "label": "Communication cost"
+          },
+          {
+            "value": "D",
+            "label": "Delegate committee"
+          },
+          {
+            "value": "E",
+            "label": "Electioneering communication"
+          },
+          {
+            "value": "H",
+            "label": "House"
+          },
+          {
+            "value": "I",
+            "label": "Independent expenditor (person or group)"
+          },
+          {
+            "value": "N",
+            "label": "PAC - nonqualified"
+          },
+          {
+            "value": "O",
+            "label": "Independent expenditure-only (Super PACs)"
+          },
+          {
+            "value": "P",
+            "label": "Presidential"
+          },
+          {
+            "value": "Q",
+            "label": "PAC - qualified"
+          },
+          {
+            "value": "S",
+            "label": "Senate"
+          },
+          {
+            "value": "U",
+            "label": "Single-candidate independent expenditure"
+          },
+          {
+            "value": "V",
+            "label": "Hybrid PAC (with Non-Contribution Account) - Nonqualified"
+          },
+          {
+            "value": "W",
+            "label": "Hybrid PAC (with Non-Contribution Account) - Qualified"
+          },
+          {
+            "value": "X",
+            "label": "Party - nonqualified"
+          },
+          {
+            "value": "Y",
+            "label": "Party - qualified"
+          },
+          {
+            "value": "Z",
+            "label": "National party nonfederal account"
+          }
+        ]
+      },
+      "designation": {
+        "domain": "fec-committee-designation",
+        "checked": true,
+        "source_url": "https://www.fec.gov/campaign-finance-data/committee-master-file-description/",
+        "locator": "fec-committee-master-file-description-2026-08-03.html CMTE_DSGN row, read by RefSpec parse_committee_designation_codes",
+        "values": [
+          {
+            "value": "A",
+            "label": "Authorized by a candidate"
+          },
+          {
+            "value": "B",
+            "label": "Lobbyist/Registrant PAC"
+          },
+          {
+            "value": "D",
+            "label": "Leadership PAC"
+          },
+          {
+            "value": "J",
+            "label": "Joint fundraiser"
+          },
+          {
+            "value": "P",
+            "label": "Principal campaign committee of a candidate"
+          },
+          {
+            "value": "U",
+            "label": "Unauthorized"
+          }
+        ]
+      },
+      "filing_frequency": {
+        "domain": "fec-filing-frequency",
+        "checked": true,
+        "source_url": "https://www.fec.gov/campaign-finance-data/committee-master-file-description/",
+        "locator": "fec-committee-master-file-description-2026-08-03.html CMTE_FILING_FREQ row, read by RefSpec parse_filing_frequency_codes",
+        "values": [
+          {
+            "value": "A",
+            "label": "Administratively terminated"
+          },
+          {
+            "value": "D",
+            "label": "Debt"
+          },
+          {
+            "value": "M",
+            "label": "Monthly filer"
+          },
+          {
+            "value": "Q",
+            "label": "Quarterly filer"
+          },
+          {
+            "value": "T",
+            "label": "Terminated"
+          },
+          {
+            "value": "W",
+            "label": "Waived"
+          }
+        ]
+      },
+      "organization_type": {
+        "domain": "fec-organization-type",
+        "checked": true,
+        "source_url": "https://www.fec.gov/campaign-finance-data/committee-master-file-description/",
+        "locator": "fec-committee-master-file-description-2026-08-03.html ORG_TP row, read by RefSpec parse_organization_type_codes",
+        "values": [
+          {
+            "value": "C",
+            "label": "Corporation"
+          },
+          {
+            "value": "L",
+            "label": "Labor organization"
+          },
+          {
+            "value": "M",
+            "label": "Membership organization"
+          },
+          {
+            "value": "T",
+            "label": "Trade association"
+          },
+          {
+            "value": "V",
+            "label": "Cooperative"
+          },
+          {
+            "value": "W",
+            "label": "Corporation without capital stock"
+          }
+        ]
+      },
+      "party": {
+        "domain": "fec-committee-party",
+        "checked": false,
+        "source_url": "https://www.fec.gov/campaign-finance-data/party-code-descriptions/",
+        "locator": "fec-party-code-descriptions-2026-08-03.html party code table, read by RefSpec parse_party_codes",
+        "values": [
+          {
+            "value": "ACE",
+            "label": "Ace Party"
+          },
+          {
+            "value": "AKI",
+            "label": "Alaskan Independence Party"
+          },
+          {
+            "value": "AIC",
+            "label": "American Independent Conservative"
+          },
+          {
+            "value": "AIP",
+            "label": "American Independent Party"
+          },
+          {
+            "value": "AMP",
+            "label": "American Party"
+          },
+          {
+            "value": "APF",
+            "label": "American People's Freedom Party"
+          },
+          {
+            "value": "AE",
+            "label": "Americans Elect"
+          },
+          {
+            "value": "CIT",
+            "label": "Citizens' Party"
+          },
+          {
+            "value": "CMD",
+            "label": "Commandments Party"
+          },
+          {
+            "value": "CMP",
+            "label": "Commonwealth Party of the U.S."
+          },
+          {
+            "value": "COM",
+            "label": "Communist Party"
+          },
+          {
+            "value": "CNC",
+            "label": "Concerned Citizens Party Of Connecticut"
+          },
+          {
+            "value": "CRV",
+            "label": "Conservative Party"
+          },
+          {
+            "value": "CON",
+            "label": "Constitution Party"
+          },
+          {
+            "value": "CST",
+            "label": "Constitutional"
+          },
+          {
+            "value": "COU",
+            "label": "Country"
+          },
+          {
+            "value": "DCG",
+            "label": "D.C. Statehood Green Party"
+          },
+          {
+            "value": "DNL",
+            "label": "Democratic -Nonpartisan League"
+          },
+          {
+            "value": "DEM",
+            "label": "Democratic Party"
+          },
+          {
+            "value": "D/C",
+            "label": "Democratic/Conservative"
+          },
+          {
+            "value": "DFL",
+            "label": "Democratic-Farmer-Labor"
+          },
+          {
+            "value": "DGR",
+            "label": "Desert Green Party"
+          },
+          {
+            "value": "FED",
+            "label": "Federalist"
+          },
+          {
+            "value": "FLP",
+            "label": "Freedom Labor Party"
+          },
+          {
+            "value": "FRE",
+            "label": "Freedom Party"
+          },
+          {
+            "value": "GWP",
+            "label": "George Wallace Party"
+          },
+          {
+            "value": "GRT",
+            "label": "Grassroots"
+          },
+          {
+            "value": "GRE",
+            "label": "Green Party"
+          },
+          {
+            "value": "GR",
+            "label": "Green-Rainbow"
+          },
+          {
+            "value": "HRP",
+            "label": "Human Rights Party"
+          },
+          {
+            "value": "IDP",
+            "label": "Independence Party"
+          },
+          {
+            "value": "IND",
+            "label": "Independent"
+          },
+          {
+            "value": "IAP",
+            "label": "Independent American Party"
+          },
+          {
+            "value": "ICD",
+            "label": "Independent Conservative Democratic"
+          },
+          {
+            "value": "IGR",
+            "label": "Independent Green"
+          },
+          {
+            "value": "IP",
+            "label": "Independent Party"
+          },
+          {
+            "value": "IDE",
+            "label": "Independent Party of Delaware"
+          },
+          {
+            "value": "IGD",
+            "label": "Industrial Government Party"
+          },
+          {
+            "value": "JCN",
+            "label": "Jewish/Christian National"
+          },
+          {
+            "value": "JUS",
+            "label": "Justice Party"
+          },
+          {
+            "value": "LRU",
+            "label": "La Raza Unida"
+          },
+          {
+            "value": "LBR",
+            "label": "Labor Party"
+          },
+          {
+            "value": "LFT",
+            "label": "Less Federal Taxes"
+          },
+          {
+            "value": "LBL",
+            "label": "Liberal Party"
+          },
+          {
+            "value": "LIB",
+            "label": "Libertarian Party"
+          },
+          {
+            "value": "LBU",
+            "label": "Liberty Union Party"
+          },
+          {
+            "value": "MTP",
+            "label": "Mountain Party"
+          },
+          {
+            "value": "NDP",
+            "label": "National Democratic Party"
+          },
+          {
+            "value": "NLP",
+            "label": "Natural Law Party"
+          },
+          {
+            "value": "NA",
+            "label": "New Alliance"
+          },
+          {
+            "value": "NJC",
+            "label": "New Jersey Conservative Party"
+          },
+          {
+            "value": "NPP",
+            "label": "New Progressive Party"
+          },
+          {
+            "value": "NPA",
+            "label": "No Party Affiliation"
+          },
+          {
+            "value": "NOP",
+            "label": "No Party Preference"
+          },
+          {
+            "value": "NNE",
+            "label": "None"
+          },
+          {
+            "value": "N",
+            "label": "Nonpartisan"
+          },
+          {
+            "value": "NON",
+            "label": "Non-Party"
+          },
+          {
+            "value": "OE",
+            "label": "One Earth Party"
+          },
+          {
+            "value": "OTH",
+            "label": "Other"
+          },
+          {
+            "value": "PG",
+            "label": "Pacific Green"
+          },
+          {
+            "value": "PSL",
+            "label": "Party for Socialism and Liberation"
+          },
+          {
+            "value": "PAF",
+            "label": "Peace And Freedom"
+          },
+          {
+            "value": "PFP",
+            "label": "Peace And Freedom Party"
+          },
+          {
+            "value": "PFD",
+            "label": "Peace Freedom Party"
+          },
+          {
+            "value": "POP",
+            "label": "People Over Politics"
+          },
+          {
+            "value": "PPY",
+            "label": "People's Party"
+          },
+          {
+            "value": "PCH",
+            "label": "Personal Choice Party"
+          },
+          {
+            "value": "PPD",
+            "label": "Popular Democratic Party"
+          },
+          {
+            "value": "PRO",
+            "label": "Progressive Party"
+          },
+          {
+            "value": "NAP",
+            "label": "Prohibition Party"
+          },
+          {
+            "value": "PRI",
+            "label": "Puerto Rican Independence Party"
+          },
+          {
+            "value": "RUP",
+            "label": "Raza Unida Party"
+          },
+          {
+            "value": "REF",
+            "label": "Reform Party"
+          },
+          {
+            "value": "REP",
+            "label": "Republican Party"
+          },
+          {
+            "value": "RES",
+            "label": "Resource Party"
+          },
+          {
+            "value": "RTL",
+            "label": "Right To Life"
+          },
+          {
+            "value": "SEP",
+            "label": "Socialist Equality Party"
+          },
+          {
+            "value": "SLP",
+            "label": "Socialist Labor Party"
+          },
+          {
+            "value": "SUS",
+            "label": "Socialist Party"
+          },
+          {
+            "value": "SOC",
+            "label": "Socialist Party U.S.A."
+          },
+          {
+            "value": "SWP",
+            "label": "Socialist Workers Party"
+          },
+          {
+            "value": "TX",
+            "label": "Taxpayers"
+          },
+          {
+            "value": "TWR",
+            "label": "Taxpayers Without Representation"
+          },
+          {
+            "value": "TEA",
+            "label": "Tea Party"
+          },
+          {
+            "value": "THD",
+            "label": "Theo-Democratic"
+          },
+          {
+            "value": "LAB",
+            "label": "U.S. Labor Party"
+          },
+          {
+            "value": "USP",
+            "label": "U.S. People's Party"
+          },
+          {
+            "value": "UST",
+            "label": "U.S. Taxpayers Party"
+          },
+          {
+            "value": "UN",
+            "label": "Unaffiliated"
+          },
+          {
+            "value": "UC",
+            "label": "United Citizen"
+          },
+          {
+            "value": "UNI",
+            "label": "United Party"
+          },
+          {
+            "value": "UNK",
+            "label": "Unknown"
+          },
+          {
+            "value": "VET",
+            "label": "Veterans Party"
+          },
+          {
+            "value": "WTP",
+            "label": "We the People"
+          },
+          {
+            "value": "W",
+            "label": "Write-In"
+          }
+        ]
+      }
     }
   },
   "fec_candidate_history": {
@@ -27006,6 +28515,396 @@
       "city": "The address city (`CAND_CITY`); NULL when blank.",
       "state": "The address state (`CAND_ST`); NULL when blank.",
       "zip": "The address ZIP code as filed (`CAND_ZIP`); NULL when blank."
+    },
+    "documented_values": {
+      "party": {
+        "domain": "fec-candidate-party",
+        "checked": false,
+        "source_url": "https://www.fec.gov/campaign-finance-data/party-code-descriptions/",
+        "locator": "fec-party-code-descriptions-2026-08-03.html party code table, read by RefSpec parse_party_codes",
+        "values": [
+          {
+            "value": "ACE",
+            "label": "Ace Party"
+          },
+          {
+            "value": "AKI",
+            "label": "Alaskan Independence Party"
+          },
+          {
+            "value": "AIC",
+            "label": "American Independent Conservative"
+          },
+          {
+            "value": "AIP",
+            "label": "American Independent Party"
+          },
+          {
+            "value": "AMP",
+            "label": "American Party"
+          },
+          {
+            "value": "APF",
+            "label": "American People's Freedom Party"
+          },
+          {
+            "value": "AE",
+            "label": "Americans Elect"
+          },
+          {
+            "value": "CIT",
+            "label": "Citizens' Party"
+          },
+          {
+            "value": "CMD",
+            "label": "Commandments Party"
+          },
+          {
+            "value": "CMP",
+            "label": "Commonwealth Party of the U.S."
+          },
+          {
+            "value": "COM",
+            "label": "Communist Party"
+          },
+          {
+            "value": "CNC",
+            "label": "Concerned Citizens Party Of Connecticut"
+          },
+          {
+            "value": "CRV",
+            "label": "Conservative Party"
+          },
+          {
+            "value": "CON",
+            "label": "Constitution Party"
+          },
+          {
+            "value": "CST",
+            "label": "Constitutional"
+          },
+          {
+            "value": "COU",
+            "label": "Country"
+          },
+          {
+            "value": "DCG",
+            "label": "D.C. Statehood Green Party"
+          },
+          {
+            "value": "DNL",
+            "label": "Democratic -Nonpartisan League"
+          },
+          {
+            "value": "DEM",
+            "label": "Democratic Party"
+          },
+          {
+            "value": "D/C",
+            "label": "Democratic/Conservative"
+          },
+          {
+            "value": "DFL",
+            "label": "Democratic-Farmer-Labor"
+          },
+          {
+            "value": "DGR",
+            "label": "Desert Green Party"
+          },
+          {
+            "value": "FED",
+            "label": "Federalist"
+          },
+          {
+            "value": "FLP",
+            "label": "Freedom Labor Party"
+          },
+          {
+            "value": "FRE",
+            "label": "Freedom Party"
+          },
+          {
+            "value": "GWP",
+            "label": "George Wallace Party"
+          },
+          {
+            "value": "GRT",
+            "label": "Grassroots"
+          },
+          {
+            "value": "GRE",
+            "label": "Green Party"
+          },
+          {
+            "value": "GR",
+            "label": "Green-Rainbow"
+          },
+          {
+            "value": "HRP",
+            "label": "Human Rights Party"
+          },
+          {
+            "value": "IDP",
+            "label": "Independence Party"
+          },
+          {
+            "value": "IND",
+            "label": "Independent"
+          },
+          {
+            "value": "IAP",
+            "label": "Independent American Party"
+          },
+          {
+            "value": "ICD",
+            "label": "Independent Conservative Democratic"
+          },
+          {
+            "value": "IGR",
+            "label": "Independent Green"
+          },
+          {
+            "value": "IP",
+            "label": "Independent Party"
+          },
+          {
+            "value": "IDE",
+            "label": "Independent Party of Delaware"
+          },
+          {
+            "value": "IGD",
+            "label": "Industrial Government Party"
+          },
+          {
+            "value": "JCN",
+            "label": "Jewish/Christian National"
+          },
+          {
+            "value": "JUS",
+            "label": "Justice Party"
+          },
+          {
+            "value": "LRU",
+            "label": "La Raza Unida"
+          },
+          {
+            "value": "LBR",
+            "label": "Labor Party"
+          },
+          {
+            "value": "LFT",
+            "label": "Less Federal Taxes"
+          },
+          {
+            "value": "LBL",
+            "label": "Liberal Party"
+          },
+          {
+            "value": "LIB",
+            "label": "Libertarian Party"
+          },
+          {
+            "value": "LBU",
+            "label": "Liberty Union Party"
+          },
+          {
+            "value": "MTP",
+            "label": "Mountain Party"
+          },
+          {
+            "value": "NDP",
+            "label": "National Democratic Party"
+          },
+          {
+            "value": "NLP",
+            "label": "Natural Law Party"
+          },
+          {
+            "value": "NA",
+            "label": "New Alliance"
+          },
+          {
+            "value": "NJC",
+            "label": "New Jersey Conservative Party"
+          },
+          {
+            "value": "NPP",
+            "label": "New Progressive Party"
+          },
+          {
+            "value": "NPA",
+            "label": "No Party Affiliation"
+          },
+          {
+            "value": "NOP",
+            "label": "No Party Preference"
+          },
+          {
+            "value": "NNE",
+            "label": "None"
+          },
+          {
+            "value": "N",
+            "label": "Nonpartisan"
+          },
+          {
+            "value": "NON",
+            "label": "Non-Party"
+          },
+          {
+            "value": "OE",
+            "label": "One Earth Party"
+          },
+          {
+            "value": "OTH",
+            "label": "Other"
+          },
+          {
+            "value": "PG",
+            "label": "Pacific Green"
+          },
+          {
+            "value": "PSL",
+            "label": "Party for Socialism and Liberation"
+          },
+          {
+            "value": "PAF",
+            "label": "Peace And Freedom"
+          },
+          {
+            "value": "PFP",
+            "label": "Peace And Freedom Party"
+          },
+          {
+            "value": "PFD",
+            "label": "Peace Freedom Party"
+          },
+          {
+            "value": "POP",
+            "label": "People Over Politics"
+          },
+          {
+            "value": "PPY",
+            "label": "People's Party"
+          },
+          {
+            "value": "PCH",
+            "label": "Personal Choice Party"
+          },
+          {
+            "value": "PPD",
+            "label": "Popular Democratic Party"
+          },
+          {
+            "value": "PRO",
+            "label": "Progressive Party"
+          },
+          {
+            "value": "NAP",
+            "label": "Prohibition Party"
+          },
+          {
+            "value": "PRI",
+            "label": "Puerto Rican Independence Party"
+          },
+          {
+            "value": "RUP",
+            "label": "Raza Unida Party"
+          },
+          {
+            "value": "REF",
+            "label": "Reform Party"
+          },
+          {
+            "value": "REP",
+            "label": "Republican Party"
+          },
+          {
+            "value": "RES",
+            "label": "Resource Party"
+          },
+          {
+            "value": "RTL",
+            "label": "Right To Life"
+          },
+          {
+            "value": "SEP",
+            "label": "Socialist Equality Party"
+          },
+          {
+            "value": "SLP",
+            "label": "Socialist Labor Party"
+          },
+          {
+            "value": "SUS",
+            "label": "Socialist Party"
+          },
+          {
+            "value": "SOC",
+            "label": "Socialist Party U.S.A."
+          },
+          {
+            "value": "SWP",
+            "label": "Socialist Workers Party"
+          },
+          {
+            "value": "TX",
+            "label": "Taxpayers"
+          },
+          {
+            "value": "TWR",
+            "label": "Taxpayers Without Representation"
+          },
+          {
+            "value": "TEA",
+            "label": "Tea Party"
+          },
+          {
+            "value": "THD",
+            "label": "Theo-Democratic"
+          },
+          {
+            "value": "LAB",
+            "label": "U.S. Labor Party"
+          },
+          {
+            "value": "USP",
+            "label": "U.S. People's Party"
+          },
+          {
+            "value": "UST",
+            "label": "U.S. Taxpayers Party"
+          },
+          {
+            "value": "UN",
+            "label": "Unaffiliated"
+          },
+          {
+            "value": "UC",
+            "label": "United Citizen"
+          },
+          {
+            "value": "UNI",
+            "label": "United Party"
+          },
+          {
+            "value": "UNK",
+            "label": "Unknown"
+          },
+          {
+            "value": "VET",
+            "label": "Veterans Party"
+          },
+          {
+            "value": "WTP",
+            "label": "We the People"
+          },
+          {
+            "value": "W",
+            "label": "Write-In"
+          }
+        ]
+      }
     }
   },
   "document_attributes": {
