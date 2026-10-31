@@ -566,13 +566,13 @@ def _member(url, payload, mime):
     return stream.getvalue()
 
 
-def _archive():
+def _archive(pdf=PDF_BYTES):
     """A tiny Common Crawl: one WARC file holding a card page, a notice page and a PDF; its index; its pages."""
     warc, rows = b"", []
     for url, payload, mime in (
         ("https://www.cbo.gov/publication/62720", CARD, "text/html"),
         ("https://www.cbo.gov/publication/62589", NOTICE, "text/html"),
-        ("https://www.cbo.gov/system/files/2026-09/s4429.pdf", PDF_BYTES, "application/pdf"),
+        ("https://www.cbo.gov/system/files/2026-09/s4429.pdf", pdf, "application/pdf"),
     ):
         member = _member(url, payload, mime)
         rows.append({"url": url, "timestamp": "20261017051839", "status": "200", "mime": mime,
@@ -637,6 +637,28 @@ def test_archived_cards_are_gated_and_every_capture_receipt_names_its_archive_co
         assert receipt["publisher_id"] == "cbo-web-archive" and receipt["policy_decision_id"] == "cbo-archive-route-q21/1"
     assert {r["native_id"] for r in records} == {"62720", "62589"}
     assert gzip.decompress(warc).count(b"WARC/1.0") == 3
+
+
+def test_an_archived_pdf_that_is_not_a_pdf_is_retained_and_refused_and_a_spent_budget_is_named(tmp_path):
+    warc, rows = _archive(pdf=b"<html><body>Access denied</body></html>")
+    calls = []
+    evidence = CaptureEvidence(tmp_path / "run", "bill-family")
+    bound = cbo.cbo_archive_evidence(evidence)
+    items = [CboEstimateItem(0, "62720", "S. 4429", "Wed, 16 Sep 2026 17:00:00 -0400",
+                             "https://www.cbo.gov/publication/62720", None, "S. 4429"),
+             CboEstimateItem(1, "62589", "Suspension", "Fri, 11 Sep 2026 17:00:00 -0400",
+                             "https://www.cbo.gov/publication/62589", None, None)]
+    with WebArchiveAcquirer(max_requests=12, min_request_interval_seconds=0,
+                            transport=_transport(warc, rows, calls)) as acquirer:
+        sweep = cbo.sweep_cbo_archive_index([CRAWL], acquirer=acquirer, evidence=bound, reserve=3)
+        cards = cbo.read_cbo_archive_cards(items, 119, sweep, acquirer=acquirer, evidence=bound, max_pages=1)
+    evidence.finish()
+    assert [(card.publication_id, card.outcome) for card in cards] == [("62720", "card"), ("62589", "not-fetched")]
+    assert cards[0].pdf is None and cards[0].match_rule == "page_pdf"
+    receipts = [document["receipt"] for _, document in iter_acquisition_receipts(tmp_path / "central-raw")]
+    # The spent request's bytes are kept: the refused "PDF" is retained beside the page.
+    assert sorted(r["stage"] for r in receipts if r.get("stage") in {"cbo-archive-page", "cbo-archive-pdf"}) == [
+        "cbo-archive-page", "cbo-archive-pdf"]
 
 
 def test_the_sweep_keeps_its_reserve_and_lists_what_it_left_unread(tmp_path):

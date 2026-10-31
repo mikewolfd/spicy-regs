@@ -304,7 +304,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
 
     One dict join of the sweep's rows by publication id and by PDF path, so the cost is linear in index rows plus
     sampled items. Each outcome is ``card``, ``absent`` (a genuine page without a card), ``refused`` (the gate or
-    a digest check said no) or ``unarchived``; a refusal is retained as evidence and never becomes a card.
+    a digest check said no), ``unarchived`` or ``not-fetched`` (archived, past ``max_pages``); a refusal is retained as evidence and never becomes a card.
     """
     import httpx
     from spicy_docs.reading.pdf_bytes import check_pdf_bytes
@@ -335,7 +335,8 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
             results.append(ArchivedCard(item.publication_id, "unarchived"))
             continue
         if fetched_pages >= max_pages:
-            break
+            results.append(ArchivedCard(item.publication_id, "not-fetched", "page budget spent"))
+            continue
         fetched_pages += 1
         captures = sum(1 for c in pages[item.publication_id] if c.status == 200)
         try:
@@ -363,13 +364,20 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
             fetched_pdfs += 1
             try:
                 pdf = acquirer.acquire_cc_record(latest_capture(pdfs[chosen_pdf[0]]))
-                check_pdf_bytes(pdf.response.payload, error_type=CboSourceError, label="archived CBO estimate PDF")
                 evidence.capture(pdf.capture, stage="cbo-archive-pdf",
                                  **_receipt(pdf, sweep, native_id=item.publication_id, dataset_id="cbo-estimate-pdf"),
                                  match_rule=chosen_pdf[1])
-            except (WebArchiveError, CboSourceError, httpx.HTTPError, OSError) as error:
+            except (WebArchiveError, httpx.HTTPError, OSError) as error:
                 evidence.refusal(error, stage="cbo-archive-pdf")
                 pdf = None
+            else:
+                # Retained before the check, as the page is: the spent request's bytes are the refusal's evidence.
+                try:
+                    check_pdf_bytes(pdf.response.payload, error_type=CboSourceError, label="archived CBO estimate PDF")
+                except CboSourceError as refused:
+                    evidence.event("source-validation", stage="cbo-archive-pdf", native_id=item.publication_id,
+                                   outcome="refused", message=str(refused))
+                    pdf = None
         results.append(ArchivedCard(item.publication_id, "card", card=card, page=page, pdf=pdf,
                                     pdf_path=None if chosen_pdf is None else chosen_pdf[0],
                                     match_rule=None if chosen_pdf is None else chosen_pdf[1], captures=captures))
