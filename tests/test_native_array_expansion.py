@@ -135,3 +135,27 @@ def test_agenda_related_rins_is_unsupported_without_the_column():
         result = install_sql_views(con, ['unified_agenda'], specs)
     assert result['agenda_related_rins']['status'] == 'unsupported'
     assert 'unified_agenda.related_rins' in result['agenda_related_rins']['reason']
+
+
+@pytest.mark.parametrize(('related_rins', 'expected'), [
+    (True, {'agenda_item_editions': 'available', 'agenda_related_rins': 'available'}),
+    # Deploy order (ss-cdaa): the server's table metadata now lists related_rins, so a regulations-native-v1
+    # unified_agenda (the live 16 columns) no longer counts as native, and the legacy agenda_item_editions it
+    # falls back to needs unified_agenda.url, which only receipts carry. Publish the replayed generation first.
+    (False, {'agenda_item_editions': 'unsupported'}),
+])
+def test_agenda_views_need_the_related_rins_generation_live_before_the_server(related_rins, expected):
+    import json
+    from importlib.resources import files
+
+    from spicy_regs.relationship_views import install_relationship_views
+
+    metadata = json.loads(files('spicy_regs').joinpath('table_metadata.json').read_text())
+    with duckdb.connect() as con:
+        for table in ('unified_agenda', 'regulatory_agenda_items'):
+            columns = [column for column in metadata[table]['columns']
+                       if related_rins or column['column_name'] != 'related_rins']
+            con.execute(f'CREATE TABLE "{table}" AS SELECT ' + ', '.join(
+                f'NULL::{column["column_type"]} AS "{column["column_name"]}"' for column in columns) + ' LIMIT 0')
+        results = install_relationship_views(con, ['unified_agenda', 'regulatory_agenda_items'])
+    assert {name: results[name]['status'] for name in expected} == expected
