@@ -7343,7 +7343,7 @@
       "coverage": "Not a range. The complete 2026-06-30 CourtListener parentheticals export, none with empty text; some have no group. Described and describing opinion ids resolve through court_opinions of the same edition except a small residue (see data_quality).",
       "kind": "not_a_range",
       "measured_on": "2026-09-22",
-      "data_quality": "On 2026-09-22 every described opinion id and all but 618 describing ids resolved through court_opinions of the same edition. The text is the citing court's own words, extracted automatically by the publisher, so it can describe a holding, a fact or a procedural point, and score is a model estimate, not a review. Several parentheticals can summarize the same point; group_id links those the publisher grouped.",
+      "data_quality": "On 2026-09-22 every described opinion id and all but 618 describing ids resolved through court_opinions of the same edition. The text is the citing court's own words, extracted automatically by the publisher, so it can describe a holding, a fact or a procedural point, and score is a model estimate, not a review. Several parentheticals can summarize the same point; group_id links those the publisher grouped. The groups themselves are not available: the publisher's schema declares search_parentheticalgroup (schema-2026-06-30.sql), but no bulk listing exports it (0 of 1,076 keys on 2026-09-22), so group_id has no lookup table here.",
       "columns": [
         "parenthetical_id",
         "described_opinion_id",

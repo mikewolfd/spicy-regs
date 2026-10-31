@@ -1828,13 +1828,17 @@ tables:
       citing court's own words, extracted automatically by the publisher, so it can describe a holding, a fact or a procedural point, and
       score is a model estimate, not a review. Several parentheticals can
       summarize the same point; group_id links those the publisher grouped.
+      The groups themselves are not available: the publisher's schema declares
+      search_parentheticalgroup (schema-2026-06-30.sql), but no bulk listing
+      exports it (0 of 1,076 keys on 2026-09-22), so group_id has no lookup
+      table here.
     columns:
       parenthetical_id: "CourtListener parenthetical ID. Primary key within one export."
       described_opinion_id: "CourtListener opinion ID of the opinion the parenthetical summarizes. Joins court_opinions.opinion_id."
       describing_opinion_id: "CourtListener opinion ID of the opinion that wrote the parenthetical. Joins court_opinions.opinion_id."
       text: "The parenthetical as the describing opinion wrote it."
       score: "Publisher's 0-to-1 estimate of how descriptive the text is, as text."
-      group_id: "Publisher's group of parentheticals making the same point; NULL when ungrouped."
+      group_id: "Publisher's group label for parentheticals making the same point; NULL when ungrouped. Compare within this table only: the publisher declares but never exports its group table."
       dump_date: "The CourtListener bulk export the row was copied from (ISO date)."
   court_opinions:
     label: "Court opinions (index, no text)"
