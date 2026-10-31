@@ -14,6 +14,7 @@ from rulespec_artifacts import ArtifactPin
 
 from spicy_regs import mcp_server
 from spicy_regs.pipelines import treasury_fiscal as pipeline
+from spicy_regs.source_evidence import JOURNAL
 from spicy_regs.sources import publication
 from spicy_regs.transforms import build_treasury_fiscal as module
 from tests.generation_fakes import Store
@@ -202,6 +203,8 @@ def test_table2_release_needs_one_reconciling_table1_release_of_its_issue(tmp_pa
     assert summary[0]["table1_cells_evaluated"] == 9
     with pytest.raises(ValueError, match="every Table 1 release"):
         write([debt(), first, revised, table2(receipt="1.21")], tmp_path / "refused")
+    with pytest.raises(ValueError, match="carries the periods Table 2 is checked against"):
+        write([debt(), statement(fiscal_years=(2026,)), table2()], tmp_path / "missing-prior-year")
 
 
 def _table2_cell(reader, line, field, literal):
@@ -259,12 +262,22 @@ def test_refusal_preserves_prior_tables(tmp_path, defect):
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
 
 
+#: Page-reviewed marker tallies and identity counts per retained issue (visual review 2026-10-31).
+RETAINED_EDITIONS = {
+    # 2015: a literal "null" in line 14 next_year and fractional-million estimates.
+    date(2015, 3, 31): ({"value": 64, "publisher_null": 11}, {"evaluated": 39, "skipped": 1}),
+    # 2025-10: every estimate is a reviewed No Transactions cell (zero_estimates ffd92cf3).
+    date(2025, 10, 31): ({"value": 39, "no_transactions": 26, "publisher_null": 10}, {"evaluated": 24, "skipped": 16}),
+    date(2026, 3, 31): ({"value": 51, "no_transactions": 14, "publisher_null": 10}, {"evaluated": 28, "skipped": 12}),
+    date(2026, 9, 30): ({"value": 51, "no_transactions": 14, "publisher_null": 10}, {"evaluated": 28, "skipped": 12}),
+}
+
+
 def test_retained_editions_type_every_cell_with_reviewed_markers(tmp_path):
-    """Real 2026-09-30 and 2026-03-31 responses: 75 cells each, page-5 marker tallies, units and years."""
-    issues = (date(2026, 3, 31), date(2026, 9, 30))
-    readers = [Reader.retained(name) for name in (
-        "debt_to_penny-2026-10-16", "mts_table_1-2026-03-31", "mts_table_2-2026-03-31",
-        "mts_table_1-2026-09-30", "mts_table_2-2026-09-30")]
+    """Real retained responses: 75 cells each, page-reviewed marker tallies, identities, units and years."""
+    issues = tuple(RETAINED_EDITIONS)
+    readers = [Reader.retained("debt_to_penny-2026-10-16")] + [
+        Reader.retained(f"mts_table_{table}-{issue.isoformat()}") for issue in issues for table in (1, 2)]
     for reader in readers:
         assert "sha256:" + hashlib.sha256(reader.body).hexdigest() in (FIXTURES / "README.md").read_text().replace(
             "| ", "| sha256:")
@@ -272,12 +285,18 @@ def test_retained_editions_type_every_cell_with_reviewed_markers(tmp_path):
         readers, tmp_path, debt_dates=(date(2026, 10, 16),), report_dates=issues,
         qualifications={issue: QUALIFICATION for issue in issues})
     rows = pq.read_table(tmp_path / (module.CELLS + ".parquet")).to_pylist()
-    for issue in issues:
+    for issue, (expected, _) in RETAINED_EDITIONS.items():
         cells = [row for row in rows if row["report_date"] == issue]
         tally = {kind: sum(row["marker_kind"] == kind for row in cells) for kind in {row["marker_kind"] for row in cells}}
-        assert len(cells) == 75 and tally == {"value": 51, "no_transactions": 14, "publisher_null": 10}
-    assert {entry["identities"]["evaluated"] for entry in summary} == {28}
-    september = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[1]}
+        assert len(cells) == 75 and tally == expected
+    assert {date.fromisoformat(entry["report_date"]): entry["identities"] for entry in summary} == {
+        issue: identities for issue, (_, identities) in RETAINED_EDITIONS.items()}
+    assert {entry["table1_cells_evaluated"] for entry in summary} == {9}
+    march_2015 = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[0]}
+    literal_null = march_2015[14, "next_year_budget_est_amt"]
+    assert (literal_null["amount"], literal_null["amount_literal"], literal_null["marker_kind"]) == (
+        None, "null", "publisher_null")
+    september = {(row["src_line_nbr"], row["measure"]): row for row in rows if row["report_date"] == issues[3]}
     estimate = september[2, "current_year_budget_est_amt"]
     assert (estimate["amount"], estimate["amount_unit"], estimate["measure_fiscal_year"]) == (
         Decimal("5475705.00"), "usd_millions", 2026)
@@ -378,7 +397,8 @@ def test_acquire_records_receipt_scopes_and_rebuilds_identical_releases_from_raw
         if request.url.path.endswith(".pdf"):
             return httpx.Response(200, content=report, headers={"content-type": "application/pdf"})
         if request.url.path.endswith("/publishedfiles"):
-            return httpx.Response(200, json=listing)
+            return httpx.Response(200, content=json.dumps(listing).encode(),
+                                  headers={"content-type": "application/json"})
         dataset = request.url.path.rsplit("/", 1)[-1]
         name = bodies[dataset, request.url.params["filter"].removeprefix("record_date:eq:")]
         return httpx.Response(200, content=(FIXTURES / (name + ".json")).read_bytes(),
@@ -391,6 +411,13 @@ def test_acquire_records_receipt_scopes_and_rebuilds_identical_releases_from_raw
     assert [scope["captures"][0]["response_sha256"] for scope in selection["releases"]] == [
         "sha256:" + hashlib.sha256((FIXTURES / (name + ".json")).read_bytes()).hexdigest() for name in bodies.values()]
     assert selection["reports"]["2026-09-30"]["sha256"] == "sha256:" + hashlib.sha256(report).hexdigest()
+    (journal,) = (tmp_path / "acquire").glob("source-evidence/*/artifact/" + JOURNAL)
+    events = [json.loads(line) for line in journal.read_text().splitlines()]
+    (listing_capture,) = [event for event in events
+                          if event["event"] == "capture" and event["stage"] == pipeline.LISTING_STAGE]
+    (stated,) = [event for event in events if event["event"] == "treasury-report-listing"]
+    assert stated["listing_sha256"] == listing_capture["sha256"] == (
+        "sha256:" + hashlib.sha256(json.dumps(listing).encode()).hexdigest())
     digests = []
     for run in ("first", "second"):
         artifact, _, summary = pipeline.build_from_captures(selection, tmp_path / run)

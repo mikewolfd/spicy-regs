@@ -182,8 +182,9 @@ def _source(reader, item):
 def _statement_rows(reader, items, report, qualification):
     """Support complete prior FYs and current October–report-month rows plus FYTD.
 
-    This shape is qualified against the retained September 2026 issue. Other
-    layouts refuse; these date rules are not a claim about every historical MTS.
+    This shape is qualified against the retained 2015-03-31, 2025-10-31,
+    2026-03-31 and 2026-09-30 issues. Other layouts refuse; these date rules
+    are not a claim about every historical MTS.
     """
     parents, children = {}, {}
     for item in items:
@@ -407,6 +408,8 @@ def build_treasury_fiscal(readers, output_dir: Path, *, debt_dates, report_dates
             pairs = [_table1_failures(cells, periods, report) for periods in table1[report]]
             matched = [pair for pair in pairs if pair is not None and pair[0] == 0]
             if not matched:
+                if all(pair is None for pair in pairs):
+                    raise ValueError("No Treasury Table 1 release of the issue carries the periods Table 2 is checked against")
                 raise ValueError("Treasury Table 2 actuals differ from every Table 1 release of the issue")
             summary.append({"report_date": report.isoformat(), "source_release_digest": pin.artifact_digest,
                             "identities": _check_identities(cells), "table1_cells_evaluated": matched[0][1]})

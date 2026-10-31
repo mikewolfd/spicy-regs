@@ -108,7 +108,9 @@ python -m spicy_regs.pipelines.treasury_fiscal acquire \
 ```
 
 The report URL is read from the publisher's own listing
-(`services/dtg/publishedfiles`, report group 5), never constructed. The command
+(`services/dtg/publishedfiles`, report group 5), never constructed. The listing
+is captured into the raw archive like the pages and PDFs, and its digest is
+journaled beside each report URL it stated. The command
 writes a capture selection: each source release as its Fiscal Data scope (the
 selection and the descriptors of every page, copied from the receipts) plus
 each report's URL and digest.

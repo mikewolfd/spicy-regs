@@ -27,7 +27,7 @@ MAX_REPORT_BYTES = 8 * 1024 * 1024
 PAGE_SIZES = {"debt_to_penny": 1, "mts_table_1": 50, "mts_table_2": 20}
 PUBLISHED_FILES = "https://api.fiscaldata.treasury.gov/services/dtg/publishedfiles?dataset_id=015-BFS-2014Q1-13"
 REPORT_HOST = "https://fiscaldata.treasury.gov"
-API_STAGE, REPORT_STAGE = "treasury-api-page", "treasury-report-pdf"
+API_STAGE, REPORT_STAGE, LISTING_STAGE = "treasury-api-page", "treasury-report-pdf", "treasury-report-listing"
 
 
 def _stated_report_url(listing, report_date: date) -> str:
@@ -56,15 +56,17 @@ def acquire(selections, report_dates, output_dir: Path, *, transport=None) -> di
                 for _ in reader.read(selection):
                     pass
         if report_dates:
-            # The listing only states the PDF path; it is read, not retained.
-            with httpx.Client(transport=transport, timeout=60) as client:
-                listing = client.get(PUBLISHED_FILES).raise_for_status().json()
+            # The listing is retained too, so each PDF path can later be shown to be the publisher's statement.
+            listed = evidence.transport(transport, stage=LISTING_STAGE, max_bytes=MAX_BYTES)
+            with httpx.Client(transport=listed, timeout=60) as client:
+                response = client.get(PUBLISHED_FILES).raise_for_status()
+            listing, listing_sha256 = response.json(), "sha256:" + hashlib.sha256(response.content).hexdigest()
             pdf = evidence.transport(transport, stage=REPORT_STAGE, max_bytes=MAX_REPORT_BYTES)
             with httpx.Client(transport=pdf, timeout=120) as client:
                 for report_date in report_dates:
                     url = _stated_report_url(listing, report_date)
-                    evidence.event("treasury-report-listing", listing_url=PUBLISHED_FILES, report_url=url,
-                                   report_date=report_date.isoformat())
+                    evidence.event("treasury-report-listing", listing_url=PUBLISHED_FILES, listing_sha256=listing_sha256,
+                                   report_url=url, report_date=report_date.isoformat())
                     response = client.get(url).raise_for_status()
                     if response.headers.get("content-type", "").split(";")[0] != "application/pdf":
                         raise ValueError("Treasury report response is not a PDF")
