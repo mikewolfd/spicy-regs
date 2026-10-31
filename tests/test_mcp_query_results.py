@@ -7,7 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from spicy_regs import mcp_server
-from tests.test_mcp_server import _listed, _records
+from tests.test_mcp_server import _records
 
 
 @pytest.fixture
@@ -107,11 +107,14 @@ def test_discovery_lists_tables_without_per_table_pins_or_audits(client):
     result = call(client, "list_sources", {})
     assert result["isError"] is False
     data = result["structuredContent"]
-    assert {entry["table"] for entry in _listed(data)} == {"fcc_filings", "fcc_proceedings"}
-    assert set(_listed(data)[0]) == {"table", "label", "coverage", "rows"}
-    assert not {"publication", "qualification", "datasets", "declared_tables"} & set(data)
-    assert "views" not in data["fec_release"]
-    assert data["fec_release"]["raw_query_financial_qualification"] == "not_inferred"
+    pages = [call(client, "list_sources", {"subject": group["subject"]})["structuredContent"] for group in data["subjects"]]
+    listed = [entry for page in pages for entry in page["subjects"][0]["tables"]]
+    assert {entry["table"] for entry in listed} == {"fcc_filings", "fcc_proceedings"}
+    assert set(listed[0]) == {"table", "label", "coverage", "rows"}
+    assert not {"publication", "qualification", "datasets", "declared_tables"} & {key for page in (data, *pages) for key in page}
+    views = call(client, "list_sources", {"subject": "views"})["structuredContent"]
+    assert "views" not in views["fec_release"]
+    assert views["fec_release"]["raw_query_financial_qualification"] == "not_inferred"
 
 
 def test_an_unparseable_statement_is_refused_with_the_parsers_message(client):

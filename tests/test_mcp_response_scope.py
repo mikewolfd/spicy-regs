@@ -22,17 +22,20 @@ def test_discovery_summarizes_mixed_release_states_and_names_each_view(tmp_path,
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         mcp = server.build_server()
         discovery = _tool_data(mcp, "list_sources", {})
-        summary = discovery["fec_release"]
+        assert discovery["fec_release"] == {"status_counts": {"compatible": 1, "disabled": 1}}
+        views = _tool_data(mcp, "list_sources", {"subject": "views"})
+        summary = views["fec_release"]
         assert summary["status_counts"] == {"compatible": 1, "disabled": 1}
         assert "views" not in summary
         assert summary["consumer"] == consumer
         assert summary["raw_query_financial_qualification"] == "not_inferred"
         assert "describe_table" in summary["details"]
-        available = {name for group in discovery["relationship_views"] for name in group["views"]}
+        available = {name for group in views["relationship_views"] for name in group["views"]}
         assert specs[1].view.name in available
         assert specs[0].view.name not in available
-        assert specs[0].view.name in discovery["unavailable_tables"]
-        assert "fec_receipts" in {entry["table"] for entry in _listed(discovery)}
+        assert specs[0].view.name in views["unavailable_views"]
+        assert discovery["unavailable_views"] == len(views["unavailable_views"])
+        assert "fec_receipts" in {entry["table"] for entry in _listed(mcp)}
         selected = _tool_data(mcp, "describe_table", {"table": specs[0].view.name})
         assert selected["relationship"]["release_compatibility"]["reasons"]
         assert selected["relationship"]["release_compatibility"]["receipt_sha256"] == summary["receipt_sha256"]
@@ -88,8 +91,7 @@ def test_selected_description_carries_evidence_once_without_changing_pinned_stat
 def test_empty_release_summary_does_not_infer_qualification(monkeypatch):
     with duckdb.connect() as con:
         monkeypatch.setattr(server, "_get_connection", lambda: con)
-        discovery = _tool_data(server.build_server(), "list_sources", {})
-        summary = discovery["fec_release"]
+        summary = _tool_data(server.build_server(), "list_sources", {"subject": "views"})["fec_release"]
         assert summary["status_counts"] == {}
         assert summary["receipt_sha256"] is None and summary["consumer"] is None
         assert summary["raw_query_financial_qualification"] == "not_inferred"

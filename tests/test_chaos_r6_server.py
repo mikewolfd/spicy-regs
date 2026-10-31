@@ -69,8 +69,14 @@ def test_a_misspelled_argument_is_refused_naming_the_arguments(monkeypatch):
 
 
 def test_a_tool_with_no_arguments_says_it_takes_none(monkeypatch):
+    message = _refusal(monkeypatch, "connection_status", {"detail": True})
+    assert message == ("Error executing tool connection_status: detail is not an argument. "
+                       "connection_status takes no arguments.")
+
+
+def test_list_sources_names_its_one_argument(monkeypatch):
     message = _refusal(monkeypatch, "list_sources", {"detail": True})
-    assert message == "Error executing tool list_sources: detail is not an argument. list_sources takes no arguments."
+    assert message == "Error executing tool list_sources: detail is not an argument. list_sources takes subject."
 
 
 def test_a_bound_is_stated_in_plain_words(monkeypatch):
@@ -396,6 +402,8 @@ def test_a_file_without_a_same_as_field_is_not_given_one():
     assert "target_rule" not in fields["same_as"]
 
 
+#: The default list_sources reply's bound (ss-ehe5 acceptance): subjects and counts, never table entries.
+DEFAULT_REPLY_CHARS = 2_000
 #: What a live connection adds to a description that the dictionary-typed fixture lacks: pins with inputs (a
 #: snapshot table's are about 1,600 characters, round 6) and release summaries. Measured 2026-10-03 on the live
 #: bucket: list_sources 34,243 characters, the largest default description congress_bills' 27,748 (27,476 here).
@@ -416,31 +424,45 @@ def test_the_catalog_replies_stay_under_the_budget_so_none_is_ever_refused_or_cu
         mcp = server.build_server()
         listed = _tool_data(mcp, "list_sources", {})
         # Discovery contains row counts and a compact release identity, not describe_table's parent inventories.
-        # Exercise these fields with a 500-character growth reserve (2,000 until the ten 2026-10-30 tables used
-        # about 1,400; 1,000 until the 2026-10-31 landings reached 39,135); descriptions retain their 5,000.
+        # Paged by subject (owner decision 2026-10-31, ss-ehe5): the whole catalog had reached 39,135 characters, its
+        # reserve cut from 2,000 to 1,000 to 500; each page now keeps 1,000, and descriptions retain their 5,000.
         # A signed 64-bit row count uses 19 characters versus NULL's 4, for every table at once. The two fixed-URL
         # exports also state their count basis. Both release statuses are included at their maximum count width.
-        for subject in listed["subjects"]:
-            for table in subject["tables"]:
-                table["rows"] = (1 << 63) - 1
-                if table["table"] in {"comments", "comments_index"}:
-                    table["rows_basis"] = "export_receipt_does_not_match_object"
-        from spicy_regs.fec_release import runtime_consumer
+        # Cold discovery can defer every qualified view: names remain complete on the views page while the common
+        # admission reason is stated once per group, and the default reply states its count.
+        widest, qualified = (1 << 63) - 1, [spec.view.name for spec in server.FEC_QUALIFIED_VIEWS]
+        statuses = {"compatible": len(qualified), "disabled": len(qualified)}
+        reason = "Release pins match; exact receipt row and output schema admission remains pending."
+        for group in listed["subjects"]:
+            group["rows"] = widest
+        listed["fec_release"]["status_counts"] = statuses
+        listed["deferred_views"] = [{"count": len(qualified), "query_admission": "pending_receipt_rows", "reason": reason}]
+        # The fixture loads every declared table; live, ten were unloaded (2026-10-31). Widen to the longest names.
+        assert listed["unavailable_tables"] == [] and listed["unavailable_table_count"] == 0
+        listed["unavailable_tables"] = sorted(server.TABLES, key=len, reverse=True)[:server.UNAVAILABLE_TABLES_LISTED]
+        listed["unavailable_table_count"] = len(server.TABLES)
+        listed["unavailable_views"] = 1 << 20
+        # The fixture binds no archive; the default carries its status and view count (the archive test bounds the page).
+        listed["archive"] = {"status": "unavailable", "views": 1 << 20}
+        pages, listed["pages"] = listed["pages"], ["views", "archive"]
+        assert _size(listed) <= DEFAULT_REPLY_CHARS
+        assert pages == ["views"]
+        for page in [*(group["subject"] for group in listed["subjects"]), *pages]:
+            reply = _tool_data(mcp, "list_sources", {"subject": page})
+            for group in reply.get("subjects", []):
+                for table in group["tables"]:
+                    table["rows"] = widest
+                    if table["table"] in {"comments", "comments_index"}:
+                        table["rows_basis"] = "export_receipt_does_not_match_object"
+            if page == "views":
+                from spicy_regs.fec_release import runtime_consumer
 
-        listed["fec_release"].update(
-            receipt_sha256="sha256:" + "a" * 64,
-            consumer=runtime_consumer("sha256:" + "b" * 64),
-            status_counts={"compatible": len(server.FEC_QUALIFIED_VIEWS), "disabled": len(server.FEC_QUALIFIED_VIEWS)},
-        )
-        assert _size(listed) <= server.REPLY_CHARS - 500
-        # Cold discovery can defer every qualified view. Names remain complete
-        # while the common admission reason is stated once per group.
-        qualified = [spec.view.name for spec in server.FEC_QUALIFIED_VIEWS]
-        listed["unavailable_tables"] = [name for name in listed["unavailable_tables"] if name not in qualified]
-        listed["deferred_views"] = [{"views": qualified, "query_admission": "pending_receipt_rows",
-                                    "reason": "Release pins match; exact receipt row and output schema admission remains pending."}]
-        listed["etl_receipts"]["members"] = [{"family": f"fixture-native-receipt-family-{n}"} for n in range(35)]
-        assert _size(listed) <= server.REPLY_CHARS - 500
+                reply["fec_release"].update(receipt_sha256="sha256:" + "a" * 64, status_counts=statuses,
+                                            consumer=runtime_consumer("sha256:" + "b" * 64))
+                reply["deferred_views"].append({"views": qualified, "query_admission": "pending_receipt_rows",
+                                                "reason": reason})
+                reply["unavailable_tables"] = list(server.TABLES)
+            assert _size(reply) <= server.REPLY_CHARS - 1_000, page
         sizes = {}
         for name in [*server.TABLES, *server._connection_relationships(con.cursor())]:
             for detail in (False, True):
@@ -488,11 +510,69 @@ def test_list_sources_groups_tables_by_subject_with_unassigned_tables_last(monke
         for name in ("laws", "documents", "dockets", "comments"):
             con.execute(f'CREATE TABLE "{name}" (id VARCHAR)')
         monkeypatch.setattr(server, "_get_connection", lambda: con)
-        listed = _tool_data(server.build_server(), "list_sources", {})
+        mcp = server.build_server()
+        listed = _tool_data(mcp, "list_sources", {})
+        pages = {name: _tool_data(mcp, "list_sources", {"subject": name})
+                 for name in [*(group["subject"] for group in listed["subjects"]), *listed["pages"]]}
+        with pytest.raises(ToolError) as refused:
+            _tool_data(mcp, "list_sources", {"subject": "rulemakng"})
+        # A declared subject with no loaded table is empty, not unknown.
+        spending = _tool_data(mcp, "list_sources", {"subject": "spending"})
     assert "tables" not in listed
-    assert [(group["subject"], [row["table"] for row in group["tables"]]) for group in listed["subjects"]] == [
+    # No table here is pinned, so no subject claims a row total; 0 would read as an empty publication.
+    assert listed["subjects"] == [{"subject": "rulemaking", "table_count": 2, "rows": None},
+                                  {"subject": "congress", "table_count": 1, "rows": None},
+                                  {"subject": "unassigned", "table_count": 1, "rows": None}]
+    assert spending["subjects"] == [{"subject": "spending", "tables": []}]
+    assert {reply["generation"] for reply in (listed, spending, *pages.values())} == {listed["generation"]}
+    assert listed["pages"] == ["views"]
+    assert [(group["subject"], [row["table"] for row in group["tables"]])
+            for name in ("rulemaking", "congress", "unassigned") for group in pages[name]["subjects"]] == [
         ("rulemaking", ["dockets", "documents"]), ("congress", ["laws"]), (None, ["comments"])]
-    assert set(listed["subjects"][0]["tables"][0]) == {"table", "label", "coverage", "rows"}
+    assert set(pages["rulemaking"]["subjects"][0]["tables"][0]) == {"table", "label", "coverage", "rows"}
+    assert str(refused.value).startswith("Error executing tool list_sources: Unknown subject 'rulemakng'. "
+                                         "list_sources takes one of: rulemaking, congress, unassigned, ")
+    assert ", spending, " in str(refused.value) and str(refused.value).endswith(", views.")
+
+
+def test_a_subject_page_carries_exactly_the_entries_the_whole_catalog_listed(monkeypatch):
+    """ss-ehe5: a consumer that passes the subject loses nothing; the whole reply is rebuilt from the pages."""
+    from tests.test_chaos_r3_server import _typed_tables
+
+    with duckdb.connect() as con:
+        metadata = server._table_metadata()
+        _typed_tables(con, [table for table in server.TABLES if table in metadata])
+        server._install_relationship_views(con)
+        monkeypatch.setattr(server, "_get_connection", lambda: con)
+        mcp = server.build_server()
+        listed = _tool_data(mcp, "list_sources", {})
+        names = [*(group["subject"] for group in listed["subjects"]), *listed["pages"]]
+        pages = {name: _tool_data(mcp, "list_sources", {"subject": name}) for name in names}
+        relationships = server._connection_relationships(con.cursor())
+    groups = [group for name in names for group in pages[name].get("subjects", [])]
+    assert [(group["subject"] or "unassigned", len(group["tables"])) for group in groups] == [
+        (group["subject"], group["table_count"]) for group in listed["subjects"]]
+    assert [sum(pinned) if (pinned := [table["rows"] for table in group["tables"] if table["rows"] is not None])
+            else None for group in groups] == [group["rows"] for group in listed["subjects"]]
+    # Every available table is on exactly one subject page, every relationship view on the views page.
+    tables = [table["table"] for group in groups for table in group["tables"]]
+    views = [name for group in pages["views"]["relationship_views"] for name in group["views"]]
+    assert len(tables) == len(set(tables)) and not set(tables) & set(views)
+    assert sum(len(group["views"]) for group in pages["views"]["deferred_views"]) == sum(
+        group["count"] for group in listed["deferred_views"])
+    assert listed["relationship_views"] == {"available": len(views)}
+    assert listed["unavailable_views"] == len(pages["views"]["unavailable_views"])
+    assert listed["unavailable_tables"] == pages["views"]["unavailable_tables"][:server.UNAVAILABLE_TABLES_LISTED]
+    assert listed["unavailable_table_count"] == len(pages["views"]["unavailable_tables"])
+    assert {name for name, entry in relationships.items()
+            if entry["metadata"].get("view_role") != "child_query" and entry["status"] == "available"} <= set(views)
+    assert listed["etl_receipts"]["dataset_count"] == len(metadata["etl_receipts"]["datasets"])
+    assert listed["fec_release"]["status_counts"] == pages["views"]["fec_release"]["status_counts"]
+
+
+def test_no_dictionary_subject_takes_a_page_name_list_sources_reserves():
+    subjects = {entry.get("subject") for entry in server._table_metadata().values()}
+    assert not subjects & {server.UNASSIGNED_SUBJECT, "views", "archive"}
 
 
 def test_discovery_keeps_special_categories_and_descriptions_keep_exact_declarations(monkeypatch):
@@ -510,10 +590,12 @@ def test_discovery_keeps_special_categories_and_descriptions_keep_exact_declarat
             con.execute(f'CREATE TABLE "{name}" (id VARCHAR)')
         monkeypatch.setattr(server, "_get_connection", lambda: con)
         mcp = server.build_server()
-        listed = _tool_data(mcp, "list_sources", {})
-        rows = {row["table"]: row for group in listed["subjects"] for row in group["tables"]}
+        listed = [_tool_data(mcp, "list_sources", {"subject": group["subject"]})
+                  for group in _tool_data(mcp, "list_sources", {})["subjects"]]
+        rows = {row["table"]: row for page in listed for row in page["subjects"][0]["tables"]}
         assert set(rows) == set(categories)
-        assert "query_data" in listed["category_details"] and "undeclared" in listed["category_details"]
+        assert all("query_data" in page["category_details"] and "undeclared" in page["category_details"]
+                   for page in listed)
         for name, category in categories.items():
             described = _tool_data(mcp, "describe_table", {"table": name})
             assert described["metadata"].get("category") == category

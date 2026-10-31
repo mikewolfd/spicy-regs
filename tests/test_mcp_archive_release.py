@@ -251,11 +251,16 @@ def test_tools_describe_the_release_and_pin_query_replies(release, monkeypatch):
         return asyncio.run(tools.call_tool(name, arguments)).structured_content
 
     try:
-        listed = call("list_sources", {})["archive"]
+        listed = call("list_sources", {"subject": "archive"})["archive"]
         assert listed["release_id"] == release[1] and listed["status"] == "bound"
         assert {item["id"]: item["available_here"] for item in listed["recipes"]} == {
             "hearing_documents": True, "committee_roster": False}
         assert {item["table"] for item in listed["views"] if item["available"]} == set(archive_release.VIEWS)
+        # The archive page is held 1,000 characters under the reply budget, as every list_sources page is (ss-ehe5).
+        for item in listed["views"]:
+            item["rows"] = (1 << 63) - 1
+        assert len(json.dumps(listed, separators=(",", ":"), ensure_ascii=False)) <= server.REPLY_CHARS - 1_000
+        assert call("list_sources", {})["archive"] == {"status": "bound", "views": len(archive_release.VIEWS)}
         described = call("describe_table", {"table": "archive_list"})
         assert described["publication"]["rows"] == 3 and described["publication"]["trust"] == archive_release.REMOTE_TRUST
         assert [c["column_name"] for c in described["columns"]][-1] == "list_row"

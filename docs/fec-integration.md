@@ -67,7 +67,8 @@ See [reported relationships](fec-relationships.md) for manifest details and
 supported profiles. The default commands keep outputs local.
 
 Read metadata through MCP's `list_sources` and `describe_table`. The former
-distinguishes loaded tables from declared outputs. The latter returns field
+lists subjects, then a subject's tables, and distinguishes loaded tables from
+declared outputs. The latter returns field
 meanings, row identity, coverage notes and differences between declared and
 loaded columns. These descriptions travel with the installed server; querying
 public tables does not require installing SpicyDocs.

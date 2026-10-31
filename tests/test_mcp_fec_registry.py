@@ -42,14 +42,14 @@ def test_missing_release_disables_actual_registry_but_keeps_raw_and_unrelated_vi
         mcp_server._apply_security_settings(con)
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
         server = mcp_server.build_server()
-        discovery = _tool_data(server, "list_sources", {})
-        release = discovery["fec_release"]
+        views = _tool_data(server, "list_sources", {"subject": "views"})
+        release = views["fec_release"]
         assert release["receipt_sha256"] is None
         assert release["consumer"]["image_digest"] is None
         assert release["status_counts"] == {"disabled": len(mcp_server.FEC_QUALIFIED_VIEWS)}
         assert "views" not in release
         for spec in mcp_server.FEC_QUALIFIED_VIEWS:
-            assert spec.view.name in discovery["unavailable_tables"]
+            assert spec.view.name in views["unavailable_views"]
             selected = _tool_data(server, "describe_table", {"table": spec.view.name})
             state = selected["relationship"]["release_compatibility"]
             assert state["status"] == "disabled"

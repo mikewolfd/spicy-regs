@@ -131,8 +131,11 @@ def test_another_identity_or_an_older_seal_runs_the_full_path(tmp_path, monkeypa
         options["full_verification"] = True
     else:
         identity = generations.validation_identity()
-        changed = ({"platform": {"system": "Linux", "machine": "x86_64"}} if difference == "platform"
-                   else {"spicy_docs_code": "0" * 64})
+        # Any platform other than the one running the test; a literal would equal the real identity on a
+        # runner that happens to be that platform (GitHub's Linux x86_64 runners), and the seal would then
+        # correctly be trusted instead of exercising the full path.
+        other_platform = {"system": identity["platform"]["system"] + "-other", "machine": "other"}
+        changed = {"platform": other_platform} if difference == "platform" else {"spicy_docs_code": "0" * 64}
         monkeypatch.setattr(generations, "validation_identity", lambda: identity | changed)
     calls = count_validators(monkeypatch)
     done = publish(path, digest, **options)

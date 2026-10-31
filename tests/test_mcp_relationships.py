@@ -20,7 +20,7 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         mcp_server._apply_security_settings(con)
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
         server = mcp_server.build_server()
-        discovered = _tool_data(server, "list_sources", {})
+        discovered = _tool_data(server, "list_sources", {"subject": "views"})
         registry = mcp_server._connection_relationships(con.cursor())
         member_views = [name for name, value in registry.items() if value["dependencies"] == ["members"]]
         available = [name for name in member_views if registry[name]["status"] == "available"]
@@ -31,7 +31,7 @@ def test_discovery_exposes_derived_dependencies_and_unsupported_old_schema(monke
         assert set(group["views"]) == set(available)
         assert set(group) == {"views"}
         assert "labels" in discovered["relationship_view_details"]
-        assert name not in [entry["table"] for entry in _listed(discovered)]
+        assert name not in [entry["table"] for entry in _listed(server)]
         described = _tool_data(server, "describe_table", {"table": name})
         assert described["metadata"]["summary"] == registry[name]["metadata"]["summary"]
         assert described["metadata"]["label"] == registry[name]["metadata"]["label"]

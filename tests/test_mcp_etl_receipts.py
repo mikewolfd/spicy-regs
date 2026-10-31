@@ -81,7 +81,7 @@ def test_remote_generic_mcp_lists_queries_and_pins_processing_receipts(tmp_path,
     monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
     server = mcp_server.build_server()
     try:
-        assert "etl_receipts" in {row["table"] for row in _listed(_tool_data(server, "list_sources", {}))}
+        assert "etl_receipts" in {row["table"] for row in _listed(server)}
         described = _tool_data(server, "describe_table", {"table": "etl_receipts"})
         assert described["available"]
         # The reply is the receipts page for a reader who asks the server: it carries the guide a table's note points at.
@@ -152,7 +152,7 @@ def test_local_receipt_pin_and_schema_check_cover_only_selected_families(tmp_pat
         pin = _tool_data(server, "describe_table", {"table": "etl_receipts"})["publication"]
         assert pin["status"] == "managed_receipts"
         assert set(pin["families"]) == {"members"}
-        listed = {row["table"]: row for row in _listed(_tool_data(server, "list_sources", {}))}
+        listed = {row["table"]: row for row in _listed(server)}
         assert listed["etl_receipts"]["rows"] == 2
     finally:
         con.close()

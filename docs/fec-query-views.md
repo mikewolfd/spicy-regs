@@ -65,10 +65,11 @@ receipt, and are not registered against these tables.
 
 ## Discovery and field meanings
 
-MCP `list_sources` lists the primary tables and the useful child views by
-subject. A child entry declares `role: child_query` and `source_tables`. Ordinary
-relationship navigation remains in `relationship_views`; there is no separate
-FEC mirror-table discovery list.
+MCP `list_sources(subject)` lists the primary tables and the useful child views
+of a subject (`campaign_finance` for FEC). A child entry declares `role:
+child_query` and `source_tables`. Ordinary relationship navigation remains in
+`relationship_views` on the `views` page; there is no separate FEC mirror-table
+discovery list.
 
 `describe_table` returns field meanings, types, row identity, publication pins
 and coverage limitations. Child fields inherit unchanged meanings from the

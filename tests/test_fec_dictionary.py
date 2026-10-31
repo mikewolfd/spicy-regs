@@ -167,7 +167,7 @@ def test_mcp_describes_all_retained_declarations_without_claiming_availability(m
         monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
         mcp_server._table_metadata.cache_clear()
         server = mcp_server.build_server()
-        listed = tool_data(server, "list_sources", {})
+        listed = tool_data(server, "list_sources", {"subject": "views"})
         assert set(dd.FEC_TYPED_TABLES) & set(dd.TABLES) <= set(listed["unavailable_tables"])
         for table in set(dd.FEC_TYPED_TABLES) & set(dd.TABLES):
             result = tool_data(server, "describe_table", {"table": table})
