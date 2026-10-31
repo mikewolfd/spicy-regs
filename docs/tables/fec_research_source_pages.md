@@ -4,9 +4,9 @@
 
 **FEC source documentation pages**
 
-One source-documentation page observation with build-extracted body text, content status and retained links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+One source-documentation page, read from the whole retained original, with build-extracted body text, content status and links contained in that body. Source documentation explains forms and access routes without becoming financial transactions or legal events. Only captures whose acquisition receipt shows a complete response below HTTP 400 are admitted.
 
-**Coverage.** Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+**Coverage.** Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_research_source_pages.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,17 +15,15 @@ One source-documentation page observation with build-extracted body text, conten
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `record_id` | `VARCHAR` | Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event. |
 | `page_type` | `VARCHAR` | Supported type of retained source documentation page, such as a form page or statutory filing reference. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
 | `text` | `VARCHAR` | Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference. |
 | `content_scope` | `VARCHAR` | Scope of retained page content; text, headings and links are source documentation rather than inferred transactions. |
 | `links` | `STRUCT(url VARCHAR, href VARCHAR, "label" VARCHAR)[]` | Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `mapping_version` | `VARCHAR` | Named, versioned rule that built this row from its retained original. |
+| `collection_id` | `VARCHAR` | Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row. |
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
 | `content_status` | `VARCHAR` | Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer. |

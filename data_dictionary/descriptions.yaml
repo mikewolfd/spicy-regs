@@ -6834,32 +6834,27 @@ tables:
     identity_columns:
     - record_id
     coverage: Sampled. Supported observations from retained historical independent-expenditure statistical workbooks.
-      The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
+      The retained originals are named in
+      fec_original_selection.json with their acquisition receipts; this declaration does
       not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One native statistical worksheet row with its stated row grain. Preserves detail rows, headings/subtotals,
-      methodology, formula text, periods and exact cell evidence. Select row_grain and compatible population before
-      arithmetic; historical statistics do not qualify a current transaction total. Resolve collection_id to fec_collections
-      in the captured source generation and source_context_pointer into its retained context. Context witnesses use
-      their own digest and native coordinates; they do not require a fictional source_record_id.
+    summary: One native statistical worksheet row with its stated row grain, read from the retained original workbook.
+      Preserves detail rows, headings/subtotals, methodology, formula text and periods. Select row_grain and
+      compatible population before arithmetic; historical statistics do not qualify a current transaction total. Each
+      row is its own witness; source_sha256 names the original and worksheet_name and worksheet_row its cell row.
     columns:
-      record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
-        remain distinct from a single economic event.
-      mapping_version: Named, versioned source-to-field mapping used for this observation.
-      collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
-        label alone is not a globally unique source identity.
+      record_id: Deterministic key from the retained original's SHA-256 and this row's native position in it
+        (fec-original-tables/1); repeated captures remain distinct from a single economic event.
+      mapping_version: Named, versioned rule that built this row from its retained original.
+      collection_id: Capture collection that retained the original, the lowest id when one original was captured in
+        several parts. Join fec_collections in the selected source generation; it is not the part that held this row.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
-      context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
-        bytes and typed output.
-      source_context_pointer: Exact JSON pointer into the retained collection context to the native fact represented
-        by this observation.
-      observed_at_json: Retained capture time value(s) as JSON without collapsing separately observed captures.
+      source_sha256: SHA-256 of the retained original this row was read from; with the row's native position it is the
+        row's own witness.
+      observed_at_json: Acquisition time from the original's acquisition receipt in the raw archive, as JSON.
       worksheet_name: Literal worksheet title that supplies this historical statistical observation.
-      worksheet_member: Exact ZIP member name of the worksheet source, preserving its address within the workbook.
-      worksheet_sha256: Digest of the retained worksheet member bytes.
       row_grain: Source-defined statistical row meaning, such as a detail row, subtotal or group heading; controls
         whether values are additive.
       population: Source-described population covered by the statistical worksheet or summary, preserving its historical
@@ -6890,8 +6885,6 @@ tables:
         explicit.
       reported_date_status: Source-presence or conversion state for reported_date, distinguishing supported values
         from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.
-      native_cells_json: Exact retained source cells and addresses supporting this row; includes literal text and
-        available worksheet/formula context.
       worksheet_ordinal: Zero-based worksheet ordinal supplied by the native workbook context.
       worksheet_row: Native worksheet row number retained with worksheet identity; not a financial transaction identifier.
       amount: Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved;
@@ -9055,30 +9048,25 @@ tables:
     grain: One RSS item occurrence in a captured source feed.
     identity_columns:
     - record_id
-    coverage: Sampled. Supported observations from retained FEC filing RSS item metadata. The retained selection is
-      explicit in fec_collections and its source-generation evidence; this declaration does not establish complete
+    coverage: Sampled. Supported observations from retained FEC filing RSS item metadata. The retained originals are named in
+      fec_original_selection.json with their acquisition receipts; this declaration does not establish complete
       FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text
-      and native fields. A feed item is not a resolved filing submission or a complete current filing population.
-      Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its
-      retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional
-      source_record_id.
+    summary: One RSS item of the retained original FEC filing feed, keyed by guid within that capture. Inspect literal
+      title, link, GUID and publication text. A feed item is not a resolved filing submission or a complete current
+      filing population. Each row is its own witness; source_sha256 names the original and guid the item in it.
     columns:
-      record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
-        remain distinct from a single economic event.
-      mapping_version: Named, versioned source-to-field mapping used for this observation.
-      collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
-        label alone is not a globally unique source identity.
+      record_id: Deterministic key from the retained original's SHA-256 and this row's native position in it
+        (fec-original-tables/1); repeated captures remain distinct from a single economic event.
+      mapping_version: Named, versioned rule that built this row from its retained original.
+      collection_id: Capture collection that retained the original, the lowest id when one original was captured in
+        several parts. Join fec_collections in the selected source generation; it is not the part that held this row.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
-      context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
-        bytes and typed output.
-      source_context_pointer: Exact JSON pointer into the retained collection context to the native fact represented
-        by this observation.
-      observed_at_json: Retained capture time value(s) as JSON without collapsing separately observed captures.
+      source_sha256: SHA-256 of the retained original this row was read from; with the row's native position it is the
+        row's own witness.
+      observed_at_json: Acquisition time from the original's acquisition receipt in the raw archive, as JSON.
       title: Source title or explicitly labeled mapper title; consult title_basis or title_status when present.
       link: Literal RSS item link retained from the source feed.
       guid: Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity.
@@ -9118,29 +9106,26 @@ tables:
     identity_columns:
     - record_id
     coverage: Sampled. Supported observations from the retained FEC meetings HTML table and its exact cells/links.
-      The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
+      The retained originals are named in
+      fec_original_selection.json with their acquisition receipts; this declaration does
       not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One native HTML table row describing a meeting listing. Keeps meeting type, title, source date cells,
-      links and explicit reported cancellation status. Repeated listings remain source observations, and no meeting-to-matter
-      relation is inferred. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer
-      into its retained context. Context witnesses use their own digest and native coordinates; they do not require
-      a fictional source_record_id.
+    summary: One native HTML table row describing a meeting listing, read from the retained original page. Keeps
+      meeting type, title, source date cells, links and explicit reported cancellation status. Repeated listings
+      remain source observations, and no meeting-to-matter relation is inferred. Each row is its own witness;
+      source_sha256 names the original and table_ordinal and table_row its table row.
     columns:
-      record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
-        remain distinct from a single economic event.
-      mapping_version: Named, versioned source-to-field mapping used for this observation.
-      collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
-        label alone is not a globally unique source identity.
+      record_id: Deterministic key from the retained original's SHA-256 and this row's native position in it
+        (fec-original-tables/1); repeated captures remain distinct from a single economic event.
+      mapping_version: Named, versioned rule that built this row from its retained original.
+      collection_id: Capture collection that retained the original, the lowest id when one original was captured in
+        several parts. Join fec_collections in the selected source generation; it is not the part that held this row.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
-      context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
-        bytes and typed output.
-      source_context_pointer: Exact JSON pointer into the retained collection context to the native fact represented
-        by this observation.
-      observed_at_json: Retained capture time value(s) as JSON without collapsing separately observed captures.
+      source_sha256: SHA-256 of the retained original this row was read from; with the row's native position it is the
+        row's own witness.
+      observed_at_json: Acquisition time from the original's acquisition receipt in the raw archive, as JSON.
       meeting_type: Meeting classification explicitly stated by the retained HTML table.
       title_raw: Meeting title exactly as retained in the source row, including cancellation language.
       reported_status: Status explicitly stated in the source, including cancellation where the meeting table reports
@@ -9193,33 +9178,30 @@ tables:
   fec_research_source_pages:
     label: FEC source documentation pages
     subject: campaign_finance
-    grain: One supported source-documentation page observation from retained context.
+    grain: One supported source-documentation page from its retained original.
     identity_columns:
     - record_id
     coverage: Sampled. Supported observations from retained form pages and other useful structured source documentation.
-      The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
+      The retained originals are named in
+      fec_original_selection.json with their acquisition receipts; this declaration does
       not establish complete FEC history or current publication.
     measured_on: '2026-10-01'
-    summary: One source-documentation page observation with build-extracted body text, content status and retained
-      links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without
-      becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source
-      generation and source_context_pointer into its retained context. Context witnesses use their own digest and
-      native coordinates; they do not require a fictional source_record_id.
+    summary: One source-documentation page, read from the whole retained original, with build-extracted body text,
+      content status and links contained in that body. Source documentation explains forms and access routes without
+      becoming financial transactions or legal events. Only captures whose acquisition receipt shows a complete
+      response below HTTP 400 are admitted.
     columns:
-      record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
-        remain distinct from a single economic event.
-      mapping_version: Named, versioned source-to-field mapping used for this observation.
-      collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
-        label alone is not a globally unique source identity.
+      record_id: Deterministic key from the retained original's SHA-256 and this row's native position in it
+        (fec-original-tables/1); repeated captures remain distinct from a single economic event.
+      mapping_version: Named, versioned rule that built this row from its retained original.
+      collection_id: Capture collection that retained the original, the lowest id when one original was captured in
+        several parts. Join fec_collections in the selected source generation; it is not the part that held this row.
       source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
         third-party research distinctions.
       source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
-      context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
-        bytes and typed output.
-      source_context_pointer: Exact JSON pointer into the retained collection context to the native fact represented
-        by this observation.
-      observed_at_json: Retained capture time value(s) as JSON without collapsing separately observed captures.
+      source_sha256: SHA-256 of the retained original this row was read from; with the row's native position it is the
+        row's own witness.
+      observed_at_json: Acquisition time from the original's acquisition receipt in the raw archive, as JSON.
       page_type: Supported type of retained source documentation page, such as a form page or statutory filing reference.
       title: Source title or explicitly labeled mapper title; consult title_basis or title_status when present.
       text: Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported

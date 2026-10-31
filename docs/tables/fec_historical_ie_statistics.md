@@ -4,9 +4,9 @@
 
 **Historical independent-expenditure statistics**
 
-One native statistical worksheet row with its stated row grain. Preserves detail rows, headings/subtotals, methodology, formula text, periods and exact cell evidence. Select row_grain and compatible population before arithmetic; historical statistics do not qualify a current transaction total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+One native statistical worksheet row with its stated row grain, read from the retained original workbook. Preserves detail rows, headings/subtotals, methodology, formula text and periods. Select row_grain and compatible population before arithmetic; historical statistics do not qualify a current transaction total. Each row is its own witness; source_sha256 names the original and worksheet_name and worksheet_row its cell row.
 
-**Coverage.** Sampled. Supported observations from retained historical independent-expenditure statistical workbooks. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+**Coverage.** Sampled. Supported observations from retained historical independent-expenditure statistical workbooks. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_historical_ie_statistics.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,14 +15,12 @@ One native statistical worksheet row with its stated row grain. Preserves detail
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `record_id` | `VARCHAR` | Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event. |
+| `mapping_version` | `VARCHAR` | Named, versioned rule that built this row from its retained original. |
+| `collection_id` | `VARCHAR` | Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row. |
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
 | `worksheet_name` | `VARCHAR` | Literal worksheet title that supplies this historical statistical observation. |
 | `row_grain` | `VARCHAR` | Source-defined statistical row meaning, such as a detail row, subtotal or group heading; controls whether values are additive. |
 | `population` | `VARCHAR` | Source-described population covered by the statistical worksheet or summary, preserving its historical scope. |
@@ -38,6 +36,7 @@ One native statistical worksheet row with its stated row grain. Preserves detail
 | `image_number` | `VARCHAR` | Literal FEC image reference; it is not a transaction ID or filing number. |
 | `amount_status` | `VARCHAR` | Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility. |
 | `unit` | `VARCHAR` | Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit. |
+| `worksheet_row` | `INTEGER` | Native worksheet row number retained with worksheet identity; not a financial transaction identifier. |
 | `amount` | `DECIMAL(38,9)` | Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations. |
 | `reported_date` | `DATE` | Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted. |
 | `period_start` | `DATE` | Date parsed from the start of the source-defined reporting period. NULL requires the source value and conversion status; capture time is not substituted. |

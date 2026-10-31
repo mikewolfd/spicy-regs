@@ -1,29 +1,35 @@
-"""FEC historical and reference tables rebuilt from their retained originals (ss-j4vz B7-B9).
+"""FEC historical and reference tables built from their retained originals (ss-j4vz B7-B9).
 
-The receipt mapper (fec_research_context) parses one-off receipt JSON; these builders
-read the original bytes from the shared raw archive instead, through the committed
-selection (fec_original_selection.json). An original is admitted only when its
-acquisition receipt shows a complete response with HTTP status below 400; an original
-without a receipt is refused, never admitted on its content. Each row is its own witness:
-record_id hashes the original's digest and the row's native position, so no collection
-context pointer or receipt digest is carried.
+The retained fec-query conversion builds these four tables here (REBUILT_TABLES in
+fec_native_conversion), reading the original bytes from the shared raw archive
+through the committed selection (fec_original_selection.json). An original is
+admitted only when its acquisition receipt shows a complete response with HTTP
+status below 400; an original without a receipt is refused, never admitted on its
+content. Each row is its own witness: record_id hashes the original's digest and the
+row's native position, so no collection context pointer or receipt digest is carried
+(owner decision Q7, one identity bump: fec-original-tables/1).
 
-Row rules (worksheet grain, meeting tables, page body boundaries, feed labels) stay in
-fec_research_context and fec_context_shape and are shared by both routes until the
-retained conversion builds these tables from here and the receipt route is deleted.
+collection_id is the capture collection that retained the original, the lowest id
+when one original was captured in several parts (the RSS feed's nine parts, one
+two-part page); it is a join key to fec_collections, not the part that held a row.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
 import re
+from typing import NotRequired, TypedDict
+from urllib.parse import urljoin, urlsplit
 
-from .fec_context_shape import filing_announcement
-from .fec_query import exact_amount
-from .fec_research_context import _json, _meetings, _source_page
+import pyarrow as pa
+
+from .fec_context_shape import filing_announcement, source_page_body
+from .fec_query import AMOUNT_TYPE, exact_amount
+from .fec_research_context import _json
 
 IDENTITY_VERSION = "fec-original-tables/1"
 VERSION = "fec-original-tables/1"
@@ -40,6 +46,50 @@ IDENTITY_FIELDS = {
     "fec_research_meeting_observations": ("table_ordinal", "table_row"),
     "fec_research_filing_feed_items": ("guid",),
     "fec_research_source_pages": (),
+}
+COMMON = "record_id mapping_version collection_id source_authority source_url source_sha256 observed_at_json".split()
+
+
+def _strings(names):
+    return [(name, pa.string()) for name in names.split()]
+
+
+SCHEMAS = {
+    "fec_historical_ie_statistics": pa.schema(
+        _strings(" ".join(COMMON))
+        + _strings(
+            "worksheet_name row_grain population methodology_text current_total_status reporting_native_id "
+            "reporting_name filer_type candidate_native_id support_oppose report_type amendment_indicator image_number "
+            "amount_raw amount_status amount_formula unit reported_date_status"
+        )
+        + [
+            ("worksheet_ordinal", pa.int32()),
+            ("worksheet_row", pa.int32()),
+            ("amount", AMOUNT_TYPE),
+            ("reported_date", pa.date32()),
+            ("period_start", pa.date32()),
+            ("period_end", pa.date32()),
+        ]
+    ),
+    "fec_research_meeting_observations": pa.schema(
+        _strings(" ".join(COMMON) + " meeting_type title_raw reported_status dates_json date_status links_json")
+        + [("table_ordinal", pa.int32()), ("table_row", pa.int32())]
+    ),
+    "fec_research_filing_feed_items": pa.schema(
+        _strings(
+            " ".join(COMMON) + " title link guid published_at_raw current_record_status reported_filer_id committee_id "
+            "candidate_id source_label_status filing_id form_type report_type coverage_start_raw coverage_end_raw "
+            "parsing_status filing_link_status"
+        )
+        + [
+            ("coverage_start_date", pa.date32()),
+            ("coverage_end_date", pa.date32()),
+            ("published_at", pa.timestamp("us", tz="UTC")),
+        ]
+    ),
+    "fec_research_source_pages": pa.schema(
+        _strings(" ".join(COMMON) + " page_type title text content_scope content_status links_json")
+    ),
 }
 IE_TABLE1 = ["ID #", "Committee/Individual", "Filer", "Date", "Amount", "Image", "Support / Oppose", "Candidate"]
 IE_TABLE2 = IE_TABLE1[:6] + ["Report", "Amendment"] + IE_TABLE1[6:]
@@ -110,15 +160,13 @@ class _Original:
         self.rows = []
         self.disposition_status = None
 
-    def emit(self, table, _pointer, values, *, context=()):
-        if table != self.table:
-            raise ValueError(f"Original selected for {self.table} emitted {table}")
-        position = [values[name] for name in IDENTITY_FIELDS[table]]
-        identity = [IDENTITY_VERSION, table, self.entry["source_sha256"], *position]
+    def emit(self, values):
+        position = [values[name] for name in IDENTITY_FIELDS[self.table]]
+        identity = [IDENTITY_VERSION, self.table, self.entry["source_sha256"], *position]
         row = dict(
             record_id="sha256:" + hashlib.sha256(_json(identity).encode()).hexdigest(),
             mapping_version=VERSION,
-            collection_id=self.entry["collection_ids"][0],
+            collection_id=min(self.entry["collection_ids"]),
             source_authority=self.entry["source_authority"],
             source_url=self.url,
             source_sha256=self.entry["source_sha256"],
@@ -214,8 +262,6 @@ def historical_ie_rows(ctx, body):
             reported_date, date_status = (None, "not_applicable_total") if total else _ie_date(column(3))
             amount_format = (column(4).number_format if column(4) is not None else None) or ""
             ctx.emit(
-                "fec_historical_ie_statistics",
-                None,
                 dict(
                     worksheet_name=name,
                     worksheet_ordinal=ordinal,
@@ -250,6 +296,210 @@ def historical_ie_rows(ctx, body):
     return ctx.disposition("mapped", "Historical published worksheet detail and source totals")
 
 
+def _meeting_dates(text):
+    match = re.match(r"^([A-Za-z]+) (\d{1,2})(?:( and |\-)(\d{1,2}))?, (\d{4})", " ".join(text.split()))
+    if not match:
+        return "[]", "unsupported_spelling"
+    try:
+        first = datetime.strptime(f"{match[1]} {match[2]} {match[5]}", "%B %d %Y").date()
+        if not match[3]:
+            return _json([first.isoformat()]), "source_single_date"
+        last = datetime.strptime(f"{match[1]} {match[4]} {match[5]}", "%B %d %Y").date()
+        return _json([first.isoformat(), last.isoformat()]), "source_listed_dates" if match[
+            3
+        ].strip() == "and" else "source_date_range"
+    except ValueError:
+        return "[]", "invalid_date"
+
+
+class _ContextLink(TypedDict):
+    href: str
+    url: str
+    source_fact_index: int
+    body_status: NotRequired[str]
+
+
+class _MeetingCell(TypedDict):
+    text: str
+    links: list[_ContextLink]
+    attributes: object
+    source_fact_indices: list[int]
+
+
+class _PageHeading(TypedDict):
+    tag: str
+    text: str
+    source_fact_index: int
+
+
+class _PageLink(_ContextLink):
+    label: str
+    label_status: str
+
+
+def _meetings(ctx):
+    events = ctx.parsing.get("facts", [])
+    table = -1
+    in_table = False
+    heading = None
+    heading_text = []
+    current_heading = None
+    cell: _MeetingCell | None = None
+    cells: list[_MeetingCell] = []
+    row_pointer = None
+    row_number = 0
+    count = 0
+    for i, e in enumerate(events):
+        kind, name = e.get("kind"), e.get("name")
+        if kind == "start" and name in {"h2", "h3"}:
+            heading, heading_text = name, []
+        if kind == "text" and heading:
+            heading_text.append(e.get("text") or "")
+        if kind == "end" and name == heading:
+            current_heading, heading = "".join(heading_text).strip(), None
+        if kind == "start" and name == "table":
+            if in_table:
+                raise ValueError("Nested meeting table is not qualified")
+            table, row_number, in_table = table + 1, 0, True
+            if current_heading not in {"Open meetings", "Public hearings", "Executive sessions"}:
+                raise ValueError("Meeting table has no qualified source heading")
+        if not in_table:
+            continue
+        if kind == "start" and name == "tr":
+            cells, row_pointer = [], i
+        if kind == "start" and name in {"td", "th"}:
+            cell = dict(text="", links=[], attributes=e.get("attributes"), source_fact_indices=[i])
+        if cell is not None and kind == "text":
+            cell["text"] += e.get("text") or ""
+            cell["source_fact_indices"].append(i)
+        if cell is not None and kind == "start" and name == "a":
+            attrs = dict(e.get("attributes", []))
+            if "href" in attrs:
+                link: _ContextLink = dict(href=attrs["href"], url=urljoin(ctx.url, attrs["href"]), source_fact_index=i)
+                link["body_status"] = (
+                    "deferred_pdf"
+                    if urlsplit(link["url"]).path.lower().endswith(".pdf")
+                    else "linked_body_not_qualified"
+                )
+                cell["links"].append(link)
+        if cell is not None and kind == "end" and name in {"td", "th"}:
+            cell["text"] = cell["text"].strip()
+            cells.append(cell)
+            cell = None
+        if kind == "end" and name == "tr":
+            if len(cells) != 2 or row_pointer is None:
+                raise ValueError("Meeting table row does not have the qualified date/link cell shape")
+            title = cells[0]["text"]
+            dates, date_status = _meeting_dates(title)
+            ctx.emit(
+                dict(
+                    meeting_type=current_heading,
+                    title_raw=title,
+                    reported_status="canceled" if "(Canceled)" in title else "not_stated",
+                    dates_json=dates,
+                    date_status=date_status,
+                    links_json=_json([link for c in cells for link in c["links"]]),
+                    table_ordinal=table,
+                    table_row=row_number,
+                )
+            )
+            row_number, count = row_number + 1, count + 1
+        if kind == "end" and name == "table":
+            in_table = False
+    if in_table or cell is not None:
+        raise ValueError("Meeting table is truncated")
+    return ctx.disposition(
+        "mapped" if count else "unsupported",
+        "Native dated meeting listings preserve cancellation, multiple dates, source table cells and linked notice body deferral"
+        if count
+        else "No qualified meeting rows",
+    )
+
+
+def _source_page(ctx, page_type):
+    events = ctx.parsing.get("facts", ctx.parsing.get("native_events", []))
+    if not any(e.get("kind") in {"start", "end", "text"} and "name" in e for e in events):
+        return ctx.disposition(
+            "requires_native_reader",
+            "Only original HTML bytes or non-markup facts retained; source-native parsing belongs to SpicyDocs",
+        )
+    headings: list[_PageHeading] = []
+    links: list[_PageLink] = []
+    times, texts = [], []
+    active_heading: _PageHeading | None = None
+    active_link: _PageLink | None = None
+    ignored = []
+    for i, event in enumerate(events):
+        kind, tag = event.get("kind"), event.get("name")
+        attrs = dict(event.get("attributes", []))
+        if kind == "start" and tag in {"script", "style"}:
+            ignored.append(tag)
+        if kind == "end" and ignored and tag == ignored[-1]:
+            ignored.pop()
+            continue
+        if ignored:
+            continue
+        if kind == "start" and tag in {"title", "h1", "h2", "h3"}:
+            active_heading = dict(tag=tag, text="", source_fact_index=i)
+        if kind == "start" and tag == "time":
+            times.append(dict(attributes=attrs, source_fact_index=i))
+        if kind == "start" and tag == "a" and "href" in attrs:
+            active_link = dict(
+                href=attrs["href"],
+                url=urljoin(ctx.url, attrs["href"]),
+                label="",
+                source_fact_index=i,
+                label_status="partial_context_part",
+            )
+            active_link["body_status"] = (
+                "deferred_pdf"
+                if urlsplit(active_link["url"]).path.lower().endswith(".pdf")
+                else "linked_body_not_qualified"
+            )
+            links.append(active_link)
+        if kind == "text":
+            text = event.get("text") or ""
+            if text.strip():
+                texts.append(text)
+            if active_heading is not None:
+                active_heading["text"] += text
+            if active_link is not None:
+                active_link["label"] += text
+        if kind == "end" and active_heading is not None and tag == active_heading["tag"]:
+            headings.append(active_heading)
+            active_heading = None
+        if kind == "end" and tag == "a" and active_link is not None:
+            active_link["label_status"] = "complete_anchor_text"
+            active_link = None
+    title = next((h["text"].strip() for h in headings if h["tag"] == "h1"), None)
+    title = title or next((h["text"].strip() for h in headings if h["tag"] == "title"), None)
+    body, content_status = source_page_body(title, "\n".join(texts), ctx.url)
+    # Only links visibly contained in the extracted body enter subject output.
+    body_links = [
+        link
+        for link in links
+        if body
+        and link["label"].strip()
+        and link["label"].strip() in body
+        and link["href"]
+        and not link["href"].startswith("#")
+    ]
+    ctx.emit(
+        dict(
+            page_type=page_type,
+            title=title,
+            text=body,
+            content_status=content_status,
+            content_scope="whole_original",
+            links_json=_json(body_links),
+        ),
+    )
+    return ctx.disposition(
+        "mapped_source_reference",
+        "Native source-page text, headings, stated times and links; no inferred legal matter, filing, publication date or current status",
+    )
+
+
 def meeting_rows(ctx, body):
     ctx.parsing = {"facts": _events(body)}
     return _meetings(ctx)
@@ -257,7 +507,7 @@ def meeting_rows(ctx, body):
 
 def source_page_rows(ctx, body):
     ctx.parsing = {"facts": _events(body)}
-    return _source_page(ctx, ctx.entry["page_type"], scope="whole_original")
+    return _source_page(ctx, ctx.entry["page_type"])
 
 
 def feed_rows(ctx, body):
@@ -277,8 +527,6 @@ def feed_rows(ctx, body):
         if single("guid") is None:
             raise ValueError("Filing feed item has no single guid")
         ctx.emit(
-            "fec_research_filing_feed_items",
-            None,
             dict(
                 title=single("title"),
                 link=single("link"),
@@ -319,6 +567,9 @@ def rebuild(table, *, store=None, originals=None):
         if refusal is not None:
             result.refusals.append((entry["source_sha256"], refusal))
             continue
+        if context.get("source_url", entry["source_url"]) != entry["source_url"]:
+            # The receipt records what was fetched; a selection URL copied from elsewhere must agree with it.
+            raise ValueError(f"Selected source_url differs from its acquisition receipt: {entry['source_sha256']}")
         ctx = _Original(table, entry, context.get("acquired_at"))
         BUILDERS[table](ctx, read_original(store, entry))
         status, reason = ctx.disposition_status or ("unsupported", "No disposition")

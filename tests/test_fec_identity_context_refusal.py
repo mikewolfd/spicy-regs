@@ -22,16 +22,19 @@ def evidence(table, record_id, role):
     return dict(target_table=table, target_record_id=record_id, role=role)
 
 
-def test_admitted_set_is_the_receipt_describing_tables_plus_those_awaiting_an_original_rebuild():
+def test_admitted_set_is_only_the_two_tables_that_describe_the_receipts():
     admitted = {table for table, rules in REGISTRY.items() if rules.get("admitted_from_receipts")}
-    describing = {"fec_research_context_dispositions", "fec_research_response_outcomes"}
-    # Each leaves this set when its originals producer lands (B8 meetings, B9 feed and pages).
-    pending_rebuild = {
-        "fec_research_meeting_observations",
-        "fec_research_filing_feed_items",
-        "fec_research_source_pages",
-    }
-    assert admitted == describing | pending_rebuild
+    assert admitted == {"fec_research_context_dispositions", "fec_research_response_outcomes"}
+
+
+@pytest.mark.parametrize(
+    "table", ["fec_research_meeting_observations", "fec_research_filing_feed_items", "fec_research_source_pages"]
+)
+def test_tables_built_from_originals_are_refused_from_receipt_context(table):
+    writer = RecordingWriter()
+    with pytest.raises(ValueError, match=f"Receipt-only input cannot produce table output: {table}"):
+        _emit_mapping(writer, {table: [dict(record_id="x")]}, [], {}, None, from_receipts=True)
+    assert writer.emitted == []
 
 
 def test_receipt_only_input_cannot_emit_a_subject_table_and_nothing_is_written():
@@ -53,16 +56,16 @@ def test_native_source_mapping_is_not_subject_to_the_receipt_rule():
 
 def test_evidence_is_attached_per_row_by_table_and_record_identity():
     writer = RecordingWriter()
-    tables = {"fec_research_source_pages": [dict(record_id="a"), dict(record_id="b")]}
+    tables = {"fec_research_response_outcomes": [dict(record_id="a"), dict(record_id="b")]}
     links = [
-        evidence("fec_research_source_pages", "a", "primary"),
-        evidence("fec_research_source_pages", "b", "primary"),
-        evidence("fec_research_source_pages", "a", "field_definition"),
-        evidence("fec_research_meeting_observations", "a", "other_table"),
+        evidence("fec_research_response_outcomes", "a", "primary"),
+        evidence("fec_research_response_outcomes", "b", "primary"),
+        evidence("fec_research_response_outcomes", "a", "field_definition"),
+        evidence("fec_research_context_dispositions", "a", "other_table"),
     ]
     _emit_mapping(writer, tables, links, {}, None, from_receipts=True)
     assert writer.emitted[:2] == [
-        ("fec_research_source_pages", "a", ["primary", "field_definition"]),
-        ("fec_research_source_pages", "b", ["primary"]),
+        ("fec_research_response_outcomes", "a", ["primary", "field_definition"]),
+        ("fec_research_response_outcomes", "b", ["primary"]),
     ]
     assert [e[0] for e in writer.emitted[2:]] == ["fec_record_evidence"] * 4

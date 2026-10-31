@@ -81,13 +81,10 @@ def map_identity_record(row, job):
     raise ValueError(f"Unsupported prepared FEC identity mapping job: {job.kind}")
 
 
-def map_context_rows(collections, *, source_generation_pin, filing_feed=False):
-    """Keep RSS parts together so one item retains all contributing witnesses."""
-    from .fec_research_context import map_filing_feed_contexts, map_research_context
+def map_context_rows(collections, *, source_generation_pin):
+    """Map each collection's context; the RSS feed is built from its original (fec_original_tables)."""
+    from .fec_research_context import map_research_context
 
     _digest(source_generation_pin)
-    if filing_feed:
-        yield map_filing_feed_contexts(collections, source_generation_pin)
-    else:
-        for collection in collections:
-            yield map_research_context(collection, source_generation_pin)
+    for collection in collections:
+        yield map_research_context(collection, source_generation_pin)

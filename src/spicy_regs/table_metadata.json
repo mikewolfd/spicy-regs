@@ -12260,8 +12260,8 @@
     "table": "fec_historical_ie_statistics",
     "label": "Historical independent-expenditure statistics",
     "category": "query_data",
-    "summary": "One native statistical worksheet row with its stated row grain. Preserves detail rows, headings/subtotals, methodology, formula text, periods and exact cell evidence. Select row_grain and compatible population before arithmetic; historical statistics do not qualify a current transaction total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from retained historical independent-expenditure statistical workbooks. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+    "summary": "One native statistical worksheet row with its stated row grain, read from the retained original workbook. Preserves detail rows, headings/subtotals, methodology, formula text and periods. Select row_grain and compatible population before arithmetic; historical statistics do not qualify a current transaction total. Each row is its own witness; source_sha256 names the original and worksheet_name and worksheet_row its cell row.",
+    "coverage": "Sampled. Supported observations from retained historical independent-expenditure statistical workbooks. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
     "data_quality": null,
@@ -12269,17 +12269,17 @@
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
+        "description": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event."
       },
       {
         "column_name": "mapping_version",
         "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
+        "description": "Named, versioned rule that built this row from its retained original."
       },
       {
         "column_name": "collection_id",
         "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
+        "description": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row."
       },
       {
         "column_name": "source_authority",
@@ -12294,17 +12294,7 @@
       {
         "column_name": "source_sha256",
         "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
+        "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
         "column_name": "worksheet_name",
@@ -12382,6 +12372,11 @@
         "description": "Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit."
       },
       {
+        "column_name": "worksheet_row",
+        "column_type": "INTEGER",
+        "description": "Native worksheet row number retained with worksheet identity; not a financial transaction identifier."
+      },
+      {
         "column_name": "amount",
         "column_type": "DECIMAL(38,9)",
         "description": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations."
@@ -12435,8 +12430,7 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer"
+      "worksheet_row"
     ]
   },
   "fec_inaugural_donations": {
@@ -19180,8 +19174,8 @@
     "table": "fec_research_filing_feed_items",
     "label": "FEC filing feed items",
     "category": "query_data",
-    "summary": "One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text and native fields. A feed item is not a resolved filing submission or a complete current filing population. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from retained FEC filing RSS item metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+    "summary": "One RSS item of the retained original FEC filing feed, keyed by guid within that capture. Inspect literal title, link, GUID and publication text. A feed item is not a resolved filing submission or a complete current filing population. Each row is its own witness; source_sha256 names the original and guid the item in it.",
+    "coverage": "Sampled. Supported observations from retained FEC filing RSS item metadata. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
     "data_quality": null,
@@ -19189,7 +19183,7 @@
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
+        "description": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event."
       },
       {
         "column_name": "title",
@@ -19254,12 +19248,12 @@
       {
         "column_name": "mapping_version",
         "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
+        "description": "Named, versioned rule that built this row from its retained original."
       },
       {
         "column_name": "collection_id",
         "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
+        "description": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row."
       },
       {
         "column_name": "source_authority",
@@ -19274,17 +19268,7 @@
       {
         "column_name": "source_sha256",
         "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
+        "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
         "column_name": "current_record_status",
@@ -19333,8 +19317,6 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
       "current_record_status",
       "source_label_status",
       "parsing_status",
@@ -19345,8 +19327,8 @@
     "table": "fec_research_meeting_observations",
     "label": "FEC meeting table observations",
     "category": "query_data",
-    "summary": "One native HTML table row describing a meeting listing. Keeps meeting type, title, source date cells, links and explicit reported cancellation status. Repeated listings remain source observations, and no meeting-to-matter relation is inferred. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from the retained FEC meetings HTML table and its exact cells/links. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+    "summary": "One native HTML table row describing a meeting listing, read from the retained original page. Keeps meeting type, title, source date cells, links and explicit reported cancellation status. Repeated listings remain source observations, and no meeting-to-matter relation is inferred. Each row is its own witness; source_sha256 names the original and table_ordinal and table_row its table row.",
+    "coverage": "Sampled. Supported observations from the retained FEC meetings HTML table and its exact cells/links. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
     "data_quality": null,
@@ -19354,7 +19336,7 @@
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
+        "description": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event."
       },
       {
         "column_name": "meeting_type",
@@ -19389,12 +19371,12 @@
       {
         "column_name": "mapping_version",
         "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
+        "description": "Named, versioned rule that built this row from its retained original."
       },
       {
         "column_name": "collection_id",
         "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
+        "description": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row."
       },
       {
         "column_name": "source_authority",
@@ -19409,17 +19391,7 @@
       {
         "column_name": "source_sha256",
         "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
+        "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
         "column_name": "date_status",
@@ -19447,8 +19419,6 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
       "date_status"
     ]
   },
@@ -19549,8 +19519,8 @@
     "table": "fec_research_source_pages",
     "label": "FEC source documentation pages",
     "category": "query_data",
-    "summary": "One source-documentation page observation with build-extracted body text, content status and retained links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
-    "coverage": "Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+    "summary": "One source-documentation page, read from the whole retained original, with build-extracted body text, content status and links contained in that body. Source documentation explains forms and access routes without becoming financial transactions or legal events. Only captures whose acquisition receipt shows a complete response below HTTP 400 are admitted.",
+    "coverage": "Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
     "kind": "sampled",
     "measured_on": "2026-10-01",
     "data_quality": null,
@@ -19558,7 +19528,7 @@
       {
         "column_name": "record_id",
         "column_type": "VARCHAR",
-        "description": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event."
+        "description": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event."
       },
       {
         "column_name": "page_type",
@@ -19588,12 +19558,12 @@
       {
         "column_name": "mapping_version",
         "column_type": "VARCHAR",
-        "description": "Named, versioned source-to-field mapping used for this observation."
+        "description": "Named, versioned rule that built this row from its retained original."
       },
       {
         "column_name": "collection_id",
         "column_type": "VARCHAR",
-        "description": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity."
+        "description": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row."
       },
       {
         "column_name": "source_authority",
@@ -19608,17 +19578,7 @@
       {
         "column_name": "source_sha256",
         "column_type": "VARCHAR",
-        "description": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest."
-      },
-      {
-        "column_name": "context_sha256",
-        "column_type": "VARCHAR",
-        "description": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output."
-      },
-      {
-        "column_name": "source_context_pointer",
-        "column_type": "VARCHAR",
-        "description": "Exact JSON pointer into the retained collection context to the native fact represented by this observation."
+        "description": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness."
       },
       {
         "column_name": "content_status",
@@ -19627,7 +19587,7 @@
       }
     ],
     "subject": "campaign_finance",
-    "grain": "One supported source-documentation page observation from retained context.",
+    "grain": "One supported source-documentation page from its retained original.",
     "identity_columns": [
       "record_id"
     ],
@@ -19645,8 +19605,6 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
       "content_status"
     ]
   },

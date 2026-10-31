@@ -1,7 +1,8 @@
 """Complete retained FEC families through their maintained receipt writers.
 
-This is representation conversion, not a publisher-source rebuild. Original
-member order and schemas remain the comparison authority.
+This is representation conversion, not a publisher-source rebuild: original member
+order and schemas remain the comparison authority, except for REBUILT_TABLES, which
+are built from their retained originals in the raw archive (fec_original_tables).
 """
 from contextlib import ExitStack, contextmanager, nullcontext
 from copy import deepcopy
@@ -102,6 +103,67 @@ def family_tables(family):
 # holds them, the converted generation omits them, and their originals stay in the raw store.
 RETIRED_TABLES = {'fec-query': frozenset({'fec_research_document_observations.parquet',
                                           'fec_retained_csv_observations.parquet'})}
+
+
+# Tables the owner moved off receipt context (ss-j4vz B7-B9, Q6-Q8, 2026-10-30): the
+# captured prior still holds them, but each generation builds them from the retained
+# originals the committed selection names, never from the captured rows.
+REBUILT_TABLES = {'fec-query': frozenset(f'{name}.parquet' for name in (
+    'fec_historical_ie_statistics', 'fec_research_meeting_observations',
+    'fec_research_filing_feed_items', 'fec_research_source_pages'))}
+# Stored evidence rows that target a retired or rebuilt table describe receipt context
+# that no published row carries any longer; a rebuilt row is its own witness.
+_UNREFERENCED_EVIDENCE = {family: RETIRED_TABLES.get(family, frozenset()) | REBUILT_TABLES.get(family, frozenset())
+                          for family in FAMILIES}
+
+
+def referenced_evidence(original, destination, family, *, check_resources=lambda: None):
+    """Copy a retained fec_record_evidence member without rows that target a retired or rebuilt table.
+
+    This is what the conversion publishes, so qualification compares against it.
+    Returns the number of rows left out. One streaming pass; schema and metadata kept.
+    """
+    unreferenced = {name.removesuffix('.parquet') for name in _UNREFERENCED_EVIDENCE[family]}
+    if original.is_dir():
+        raise ValueError('Evidence filtering supports only a flat retained member')
+    dropped = 0
+    with pq.ParquetFile(original) as source, pq.ParquetWriter(destination, source.schema_arrow, compression='zstd') as out:
+        for batch in source.iter_batches(batch_size=8192, use_threads=False):
+            check_resources()
+            keep = pa.array([name not in unreferenced for name in batch.column('target_table').to_pylist()])
+            kept = batch.filter(keep)
+            dropped += batch.num_rows - kept.num_rows
+            out.write_batch(kept)
+    return dropped
+
+
+def rebuilt_inputs(table, directory, *, store=None, check_resources=lambda: None):
+    """One declared-schema member and one raw-archive witness per admitted original.
+
+    Returns (members, witnesses, schema, refusals). Refused originals (failed or
+    receipt-less captures, unsupported bodies) write nothing and are listed by digest.
+    """
+    from spicy_regs.transforms import fec_original_tables as originals
+
+    schema = originals.SCHEMAS[table]
+    members, witnesses, refusals = [], [], []
+    directory.mkdir(parents=True, exist_ok=True)
+    for ordinal, entry in enumerate(e for e in originals.selection() if e['table'] == table):
+        check_resources()
+        result = originals.rebuild(table, store=store, originals=[entry])
+        refusals.extend(result.refusals)
+        if not result.rows:
+            continue
+        path = directory / f'{table}-{ordinal:04d}.parquet'
+        pq.write_table(pa.Table.from_pylist(result.rows, schema=schema), path, compression='zstd')
+        members.append(TypedInput(path, _sha(path), len(result.rows)))
+        digest = entry['source_sha256'].removeprefix('sha256:')
+        witnesses.append(dict(source_id=f'raw-archive:objects/sha256/{digest[:2]}/{digest}', source_uri=entry['source_url'],
+                              sha256=entry['source_sha256'], locator=None, body_version=entry['acquisition_receipt']))
+    if not members:
+        raise ValueError(f'{table}: no retained original was admitted')
+    (directory / f'{table}.refusals.json').write_text(json.dumps(sorted(refusals), indent=1) + '\n')
+    return members, witnesses, schema, refusals
 
 
 def check_membership(family, old):
@@ -312,13 +374,6 @@ def retained_identity_row(table, original, *, diagnostics=None, source_schema=No
         row['capture_disposition'] = response_capture_disposition(original.get('profile_refusal'), original.get('payload_shape'))
         if diagnostics is not None:
             diagnostics.update(legacy_bridge='response-context/1', capture_disposition=row['capture_disposition'])
-    elif table == 'fec_research_source_pages' and 'content_status' not in original:
-        from spicy_regs.transforms.fec_context_shape import source_page_body
-        body, status = source_page_body(original.get('title'), original.get('text'), original.get('source_url'))
-        row.update(text=body, content_status=status)
-    elif table == 'fec_research_filing_feed_items' and 'description' in original:
-        from spicy_regs.transforms.fec_context_shape import filing_announcement
-        row.update(filing_announcement(original['description'], original.get('published_at_raw')))
     if set(row) - set(registry['input_fields']):
         raise ValueError(f'{table}: maintained legacy interpretation produced undeclared fields')
     overrides = {name: value for name, value in original.items()
@@ -559,11 +614,46 @@ def _identity_conversion_row(table, original_row, schema, observation_rebinding,
     return rebound, source_input or None
 
 
+def _captured_inputs(captured, old, key, table, original):
+    """The captured prior's exact members for one table, checked against its publication pins."""
+    published_members = publication.table_members(captured, key)
+    members = [original / pin.key.removeprefix(table + '/') if original.is_dir() else original
+               for pin in published_members]
+    if set(members) != set(_members(original)):
+        raise ValueError('FEC retained member set differs from publication')
+    if original.is_dir() and members != sorted(members):
+        raise ValueError('Noncanonical captured FEC member order is unsupported; no reordered build is admitted')
+    schema = pq.read_schema(members[0])
+    if any(not pq.read_schema(p).equals(schema, check_metadata=True) for p in members):
+        raise ValueError('FEC retained split member schemas differ')
+    selected = []
+    witnesses = []
+    if len(members) != len(published_members):
+        raise ValueError('FEC retained member set differs from publication')
+    for path, pin in zip(members, published_members, strict=True):
+        namespace = None
+        if original.is_dir():
+            namespace = path.relative_to(original).parts[0].removeprefix('source_namespace=')
+        if pin.sha256 is None or pin.byte_size is None or pin.rows is None:
+            raise ValueError('FEC conversion requires exact digest, size and row membership')
+        if _sha(path) != pin.sha256 or path.stat().st_size != pin.byte_size or pq.ParquetFile(path).metadata.num_rows != pin.rows:
+            raise ValueError('FEC retained input differs from captured member bytes or rows')
+        selected.append(TypedInput(path, pin.sha256, pin.rows, namespace))
+        witnesses.append(dict(source_id=pin.path, source_uri=None, sha256=pin.sha256,
+                              locator=None, body_version=old['artifactDigest']))
+    return selected, witnesses, schema
+
+
 def build_retained_family(family, old, captured, retained, work, *, operation,
                           inputs=(), filing_associations=None, check_resources=lambda: None,
                           read_snapshot=None, observation_generation=None, observation_rebinding=None,
-                          observation_checkpoint=None, observation_source_pin=None, observation_hosted_main=None):
-    """Actual production call: identity writers and qualified financial assembly."""
+                          observation_checkpoint=None, observation_source_pin=None, observation_hosted_main=None,
+                          originals_store=None):
+    """Actual production call: identity writers and qualified financial assembly.
+
+    originals_store is the raw archive REBUILT_TABLES read (default: the shared
+    CentralRawArchiveStore, opened only when the family rebuilds a table).
+    """
     if observation_checkpoint is not None and (family != 'fec-observations' or observation_source_pin is None):
         raise ValueError('Observation checkpoint requires observations and exact producer source pins')
     check_membership(family, old)
@@ -609,7 +699,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
     generation_id = uuid4().hex
     build = work / 'build'
     build.mkdir(parents=True, exist_ok=True)
-    policies, subjects, partitioned, pending_partitions = [], [], {}, []
+    policies, subjects, partitioned, pending_partitions, rebuilt_members = [], [], {}, [], []
     shared = build / 'etl_receipts.parquet'
     observation_output = build / 'tables' / 'observations'
     with ExitStack() as stack:
@@ -630,31 +720,16 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
             if key in RETIRED_TABLES.get(family, ()):
                 continue
             table = key.removesuffix('.parquet')
-            published_members = publication.table_members(captured, key)
-            members = [original / pin.key.removeprefix(table + '/') if original.is_dir() else original
-                       for pin in published_members]
-            if set(members) != set(_members(original)):
-                raise ValueError('FEC retained member set differs from publication')
-            if original.is_dir() and members != sorted(members):
-                raise ValueError('Noncanonical captured FEC member order is unsupported; no reordered build is admitted')
-            schema = pq.read_schema(members[0])
-            if any(not pq.read_schema(p).equals(schema, check_metadata=True) for p in members):
-                raise ValueError('FEC retained split member schemas differ')
-            selected = []
-            witnesses = []
-            if len(members) != len(published_members):
-                raise ValueError('FEC retained member set differs from publication')
-            for path, pin in zip(members, published_members, strict=True):
-                namespace = None
-                if original.is_dir():
-                    namespace = path.relative_to(original).parts[0].removeprefix('source_namespace=')
-                if pin.sha256 is None or pin.byte_size is None or pin.rows is None:
-                    raise ValueError('FEC conversion requires exact digest, size and row membership')
-                if _sha(path) != pin.sha256 or path.stat().st_size != pin.byte_size or pq.ParquetFile(path).metadata.num_rows != pin.rows:
-                    raise ValueError('FEC retained input differs from captured member bytes or rows')
-                selected.append(TypedInput(path, pin.sha256, pin.rows, namespace))
-                witnesses.append(dict(source_id=pin.path, source_uri=None, sha256=pin.sha256,
-                                      locator=None, body_version=old['artifactDigest']))
+            if key in REBUILT_TABLES.get(family, ()):
+                if originals_store is None:
+                    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
+                    originals_store = CentralRawArchiveStore(create=False)
+                selected, witnesses, schema, _ = rebuilt_inputs(table, build / 'rebuilt' / table,
+                    store=originals_store, check_resources=check_resources)
+                rebuilt_members.extend(selected)
+                original = selected[0].path  # flat members: no captured source partitions apply
+            else:
+                selected, witnesses, schema = _captured_inputs(captured, old, key, table, original)
             output = observation_output if observation_writer is not None else build / 'tables' / table
             if table in FIELD_RULES:
                 from bisect import bisect_right
@@ -690,6 +765,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                 policy = dataset_policy(table)
             else:
                 validate_identity_schema(table, schema)
+                unreferenced = {name.removesuffix('.parquet') for name in _UNREFERENCED_EVIDENCE[family]}
                 def rows():
                     peak_arrow, peak_python, input_rows = 0, 0, 0
                     def report():
@@ -712,6 +788,8 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                                     peak_python = part.nbytes
                                     report()
                                 for row in part.to_pylist():
+                                    if table == 'fec_record_evidence' and row.get('target_table') in unreferenced:
+                                        continue
                                     yield row, witness
                     report()
                 with (filing_reference_subjects(selected, native_filings,
@@ -783,6 +861,11 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                 or path.stat().st_nlink != 1 or _sha(path) != item.sha256 or count != item.rows):
             raise ValueError('Owned header remap changed before disposal')
     for item in owned_headers:
+        item.path.unlink()
+    # Rebuilt members are consumed into the generation; their refusal lists stay beside it.
+    for item in rebuilt_members:
+        if item.path.is_symlink() or item.path.stat().st_nlink != 1 or _sha(item.path) != item.sha256:
+            raise ValueError('Rebuilt original member changed before disposal')
         item.path.unlink()
     if owned_headers:
         (build / 'rebound-filing-inputs').rmdir()

@@ -77,7 +77,7 @@ def build_fec_identity_context(manifest, output_dir):
 
     A mapped input names its exact table. A source input supplies explicit jobs
     (kind plus native entry and optional retained header_row). Context inputs
-    select collection IDs and explicitly request single or multipart RSS mapping.
+    select collection IDs; only receipt-describing tables may come from them.
     Unsupported native rows become refusal receipts; corrupt inputs abort the
     directory. No schema or namespace guessing is permitted.
     """
@@ -141,9 +141,10 @@ def build_fec_identity_context(manifest, output_dir):
             elif mode == "context":
                 if item["table"] != "fec_collections":
                     raise ValueError("Context mapping requires collections")
+                if "filing_feed" in item:
+                    raise ValueError("The filing feed is built from its original, not from context parts")
                 selected = set(item["collection_ids"])
                 seen = set()
-                feed_parts = []
                 for row in rows:
                     if row["collection_id"] not in selected:
                         continue
@@ -151,9 +152,6 @@ def build_fec_identity_context(manifest, output_dir):
                         raise ValueError("Repeated context collection identity")
                     seen.add(row["collection_id"])
                     writer.emit("fec_collections", row, input_witness=witness)
-                    if item.get("filing_feed", False):
-                        feed_parts.append(row)
-                        continue
                     try:
                         mappings = list(map_context_rows([row], source_generation_pin=item["source_generation_pin"]))
                     except (ValueError, KeyError, TypeError) as error:
@@ -169,25 +167,6 @@ def build_fec_identity_context(manifest, output_dir):
                         _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None, from_receipts=True)
                 if seen != selected:
                     raise ValueError("Selected context membership is incomplete")
-                if item.get("filing_feed", False):
-                    try:
-                        mappings = list(
-                            map_context_rows(
-                                feed_parts, source_generation_pin=item["source_generation_pin"], filing_feed=True
-                            )
-                        )
-                    except (ValueError, KeyError, TypeError) as error:
-                        for row in feed_parts:
-                            writer.emit(
-                                "fec_collections",
-                                row,
-                                input_witness=witness,
-                                outcome="refused",
-                                diagnostic={"error": str(error), "kind": type(error).__name__},
-                            )
-                        continue
-                    for mapped in mappings:
-                        _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None, from_receipts=True)
             else:
                 raise ValueError(f"Unsupported identity build mode: {mode}")
         if manifest.read_bytes() != original:

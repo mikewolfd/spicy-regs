@@ -1747,8 +1747,6 @@
       "source_authority": "VARCHAR",
       "source_url": "VARCHAR",
       "source_sha256": "VARCHAR",
-      "context_sha256": "VARCHAR",
-      "source_context_pointer": "VARCHAR",
       "current_record_status": "VARCHAR",
       "source_label_status": "VARCHAR",
       "parsing_status": "VARCHAR",
@@ -1773,8 +1771,6 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
       "observed_at_json",
       "title",
       "link",
@@ -1798,8 +1794,7 @@
     ],
     "native_lists": {},
     "native_scalars": {},
-    "receipt_only": false,
-    "admitted_from_receipts": true
+    "receipt_only": false
   },
   "fec_research_meeting_observations": {
     "subject_fields": {
@@ -1815,8 +1810,6 @@
       "source_authority": "VARCHAR",
       "source_url": "VARCHAR",
       "source_sha256": "VARCHAR",
-      "context_sha256": "VARCHAR",
-      "source_context_pointer": "VARCHAR",
       "date_status": "VARCHAR"
     },
     "identity_fields": [
@@ -1839,8 +1832,6 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
       "observed_at_json",
       "meeting_type",
       "title_raw",
@@ -1862,8 +1853,7 @@
       ]
     },
     "native_scalars": {},
-    "receipt_only": false,
-    "admitted_from_receipts": true
+    "receipt_only": false
   },
   "fec_research_response_outcomes": {
     "subject_fields": {
@@ -1928,8 +1918,6 @@
       "source_authority": "VARCHAR",
       "source_url": "VARCHAR",
       "source_sha256": "VARCHAR",
-      "context_sha256": "VARCHAR",
-      "source_context_pointer": "VARCHAR",
       "content_status": "VARCHAR"
     },
     "identity_fields": [
@@ -1949,8 +1937,6 @@
       "source_authority",
       "source_url",
       "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
       "observed_at_json",
       "page_type",
       "title",
@@ -1966,8 +1952,7 @@
       ]
     },
     "native_scalars": {},
-    "receipt_only": false,
-    "admitted_from_receipts": true
+    "receipt_only": false
   },
   "fec_source_catalog": {
     "subject_fields": {

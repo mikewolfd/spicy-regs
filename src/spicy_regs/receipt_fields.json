@@ -2117,26 +2117,18 @@
    "containers": {
     "fec_conversion_inputs": [
      "observed_at_json",
-     "worksheet_member",
-     "worksheet_sha256",
      "amount_raw",
      "amount_formula",
      "reported_date_status",
-     "native_cells_json",
-     "worksheet_ordinal",
-     "worksheet_row"
+     "worksheet_ordinal"
     ]
    },
    "meanings": {
     "amount_formula": "Source workbook formula associated with the amount cell, retained separately from its cached value.",
     "amount_raw": "Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate.",
-    "native_cells_json": "Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context.",
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
     "reported_date_status": "Source-presence or conversion state for reported_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.",
-    "worksheet_member": "Exact ZIP member name of the worksheet source, preserving its address within the workbook.",
-    "worksheet_ordinal": "Zero-based worksheet ordinal supplied by the native workbook context.",
-    "worksheet_row": "Native worksheet row number retained with worksheet identity; not a financial transaction identifier.",
-    "worksheet_sha256": "Digest of the retained worksheet member bytes."
+    "worksheet_ordinal": "Zero-based worksheet ordinal supplied by the native workbook context."
    }
   },
   "fec_inaugural_donations": {
@@ -2657,7 +2649,7 @@
    "meanings": {
     "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
     "coverage_start_raw": "Literal CoverageFrom value from the feed's explicitly labelled metadata.",
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
     "published_at_raw": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date."
    }
   },
@@ -2669,7 +2661,7 @@
    "meanings": {
     "dates_json": "Literal date cells and available date interpretations for the meeting row; multiple dates remain separate.",
     "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
     "table_ordinal": "Zero-based ordinal of the source HTML table containing this observation.",
     "table_row": "Native row address in the retained HTML table; use native_cells_json for exact cell evidence."
    }
@@ -2685,7 +2677,7 @@
    },
    "meanings": {
     "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures."
+    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
    }
   },
   "fec_source_catalog": {

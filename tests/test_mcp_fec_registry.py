@@ -15,7 +15,9 @@ from tests.test_mcp_server import _records, _tool_data
 def test_installed_registry_uses_retained_application_scope():
     scope = json.loads(files("spicy_regs").joinpath("fec_query_scope.json").read_text())
     specs = mcp_server.FEC_QUALIFIED_VIEWS
-    assert len(specs) == len({s.view.name for s in specs}) == 72
+    # 71 since ss-j4vz B7: historical IE rows carry their own original witness, so the stored-evidence view is gone.
+    assert len(specs) == len({s.view.name for s in specs}) == 71
+    assert "fec_historical_ie_statistics_evidence" not in {s.view.name for s in specs}
     assert set(scope) == {"source_generation_pin", "selected_observations_pin", "namespace_evidence", "population", "as_of"}
     assert scope["source_generation_pin"] == "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0"
     assert all(s.evidence_generations == {"fec-observations": scope["selected_observations_pin"]} for s in specs)

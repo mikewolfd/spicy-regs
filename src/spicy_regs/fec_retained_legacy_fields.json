@@ -79,19 +79,7 @@
     "filing_link_status",
     "native_field_states_json"
   ],
-  "fec_research_filing_feed_items": [
-    "description",
-    "native_fields_json",
-    "source_parts_json"
-  ],
-  "fec_research_meeting_observations": [
-    "native_cells_json"
-  ],
   "fec_research_response_outcomes": [
     "native_payload_json"
-  ],
-  "fec_research_source_pages": [
-    "headings_json",
-    "times_json"
   ]
 }

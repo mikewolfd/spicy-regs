@@ -17,7 +17,6 @@ from spicy_regs.fec_financial_rules import IDENTITY_VERSION, POLICY_VERSION as F
 from spicy_regs.fec_release import QualifiedView
 from spicy_regs.fec_versions import INDIVIDUAL_SNAPSHOT_POLICY
 
-from .core import literal
 from .fec_filing_associations import (
     FILE_NUMBER_FILER_FIELDS,
     HEADER_ASSOCIATION_COLUMNS,
@@ -74,7 +73,6 @@ _FINANCIAL_TABLES = (
     "fec_debts",
     "fec_disbursements",
     "fec_electioneering_communications",
-    "fec_historical_ie_statistics",
     "fec_inaugural_donations",
     "fec_independent_expenditures",
     "fec_intercommittee_transactions",
@@ -279,35 +277,10 @@ def fec_query_views(
     for table in _FINANCIAL_TABLES:
         columns = schemas.get(table, ())
         if not set(_EVIDENCE_COLUMNS) <= set(columns):
-            if table != "fec_historical_ie_statistics":
-                raise ValueError(
-                    f"{table}: source evidence requires receipt-validated processing inputs; "
-                    "refusing legacy stored-evidence fallback"
-                )
-            if "mapping_version" not in columns or "source_context_pointer" not in columns:
-                raise ValueError(f"{table}: context evidence requires receipt-validated processing inputs")
-            # Context-derived financial rows already have complete stored
-            # evidence, including worksheet header and methodology witnesses.
-            add(
-                table + "_evidence",
-                {"fec_record_evidence": schemas["fec_record_evidence"]},
-                "SELECT * FROM fec_record_evidence WHERE target_table = " + literal(table),
-                "Stored source-context and definition witnesses for retained financial observations. Endpoint existence and cardinality are verified by release acceptance.",
-                (
-                    "target_table",
-                    "target_record_id",
-                    "role",
-                    "endpoint_kind",
-                    "collection_id",
-                    "source_record_id",
-                    "context_pointer",
-                ),
-                "fec-stored-financial-evidence/1",
-                "relationship_views/fec_query_views.py",
-                definitions=("transforms/fec_research_context.py",),
-                identity_version="fec-research-context/1",
+            raise ValueError(
+                f"{table}: source evidence requires receipt-validated processing inputs; "
+                "refusing legacy stored-evidence fallback"
             )
-            continue
         filing = "filing_header_record_id" in columns
         needs: dict[str, tuple[str, ...]] = {table: _EVIDENCE_COLUMNS}
         if filing:

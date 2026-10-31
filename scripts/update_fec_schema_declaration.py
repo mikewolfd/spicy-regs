@@ -26,6 +26,7 @@ def refresh():
     for module_name in (
         "fec_agency",
         "fec_research_context",
+        "fec_original_tables",
         "fec_legal",
         "fec_identity_observations",
         "fec_committee_observations",

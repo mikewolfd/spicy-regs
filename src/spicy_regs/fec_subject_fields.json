@@ -1264,6 +1264,7 @@
     "keep": [
       "record_id",
       "worksheet_name",
+      "worksheet_row",
       "row_grain",
       "population",
       "methodology_text",
@@ -1286,20 +1287,14 @@
       "collection_id",
       "source_authority",
       "source_url",
-      "source_sha256",
-      "context_sha256",
-      "source_context_pointer"
+      "source_sha256"
     ],
     "receipt": [
       "observed_at_json",
-      "worksheet_member",
-      "worksheet_sha256",
       "amount_raw",
       "amount_formula",
       "reported_date_status",
-      "native_cells_json",
-      "worksheet_ordinal",
-      "worksheet_row"
+      "worksheet_ordinal"
     ],
     "mapped": []
   },

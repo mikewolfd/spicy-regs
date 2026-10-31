@@ -7506,27 +7506,11 @@
         "VARCHAR"
       ],
       [
-        "context_sha256",
-        "VARCHAR"
-      ],
-      [
-        "source_context_pointer",
-        "VARCHAR"
-      ],
-      [
         "observed_at_json",
         "VARCHAR"
       ],
       [
         "worksheet_name",
-        "VARCHAR"
-      ],
-      [
-        "worksheet_member",
-        "VARCHAR"
-      ],
-      [
-        "worksheet_sha256",
         "VARCHAR"
       ],
       [
@@ -7598,10 +7582,6 @@
         "VARCHAR"
       ],
       [
-        "native_cells_json",
-        "VARCHAR"
-      ],
-      [
         "worksheet_ordinal",
         "INTEGER"
       ],
@@ -7627,7 +7607,7 @@
       ]
     ],
     "subject": "campaign_finance",
-    "arrow_schema": "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",
+    "arrow_schema": "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",
     "descriptions": {
       "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
       "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
@@ -7635,12 +7615,8 @@
       "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
       "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
       "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
       "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
       "worksheet_name": "Literal worksheet title that supplies this historical statistical observation.",
-      "worksheet_member": "Exact ZIP member name of the worksheet source, preserving its address within the workbook.",
-      "worksheet_sha256": "Digest of the retained worksheet member bytes.",
       "row_grain": "Source-defined statistical row meaning, such as a detail row, subtotal or group heading; controls whether values are additive.",
       "population": "Source-described population covered by the statistical worksheet or summary, preserving its historical scope.",
       "methodology_text": "Retained source methodology or explanatory text used to interpret the statistical population.",
@@ -7658,7 +7634,6 @@
       "amount_formula": "Source workbook formula associated with the amount cell, retained separately from its cached value.",
       "unit": "Unit established by the source-specific definition, such as USD, count or days; unknown units must remain explicit.",
       "reported_date_status": "Source-presence or conversion state for reported_date, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.",
-      "native_cells_json": "Exact retained source cells and addresses supporting this row; includes literal text and available worksheet/formula context.",
       "worksheet_ordinal": "Zero-based worksheet ordinal supplied by the native workbook context.",
       "worksheet_row": "Native worksheet row number retained with worksheet identity; not a financial transaction identifier.",
       "amount": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
@@ -13342,14 +13317,6 @@
         "VARCHAR"
       ],
       [
-        "context_sha256",
-        "VARCHAR"
-      ],
-      [
-        "source_context_pointer",
-        "VARCHAR"
-      ],
-      [
         "observed_at_json",
         "VARCHAR"
       ],
@@ -13431,7 +13398,7 @@
       ]
     ],
     "subject": "campaign_finance",
-    "arrow_schema": "/////ygGAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABwAAADIBQAAhAUAAFAFAAAYBQAA6AQAALQEAACABAAARAQAAAwEAADgAwAAtAMAAIgDAABQAwAAFAMAANwCAACoAgAAdAIAADwCAAAMAgAA3AEAAKwBAAB0AQAAPAEAAAgBAADQAAAAjAAAAFAAAAAEAAAAuPr//wAAAQoQAAAAKAAAAAQAAAAAAAAADAAAAHB1Ymxpc2hlZF9hdAAAAAAIAAwABgAIAAgAAAAAAAIABAAAAAMAAABVVEMAAPv//wAAAQgQAAAAJAAAAAQAAAAAAAAAEQAAAGNvdmVyYWdlX2VuZF9kYXRlAAAAxv///wAAAAA4+///AAABCBAAAAAsAAAABAAAAAAAAAATAAAAY292ZXJhZ2Vfc3RhcnRfZGF0ZQAAAAYACAAGAAYAAAAAAAAAePv//wAAAQUQAAAAJAAAAAQAAAAAAAAAEgAAAGZpbGluZ19saW5rX3N0YXR1cwAAcPv//6z7//8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABwYXJzaW5nX3N0YXR1cwAAoPv//9z7//8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABjb3ZlcmFnZV9lbmRfcmF3AAAAANT7//8Q/P//AAABBRAAAAAkAAAABAAAAAAAAAASAAAAY292ZXJhZ2Vfc3RhcnRfcmF3AAAI/P//RPz//wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAHJlcG9ydF90eXBlADT8//9w/P//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAZm9ybV90eXBlAAAAYPz//5z8//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABmaWxpbmdfaWQAAACM/P//yPz//wAAAQUQAAAAJAAAAAQAAAAAAAAAEwAAAHNvdXJjZV9sYWJlbF9zdGF0dXMAwPz///z8//8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABjYW5kaWRhdGVfaWQAAAAA8Pz//yz9//8AAAEFEAAAACAAAAAEAAAAAAAAAAwAAABjb21taXR0ZWVfaWQAAAAAIP3//1z9//8AAAEFEAAAACQAAAAEAAAAAAAAABEAAAByZXBvcnRlZF9maWxlcl9pZAAAAFT9//+Q/f//AAABBRAAAAAoAAAABAAAAAAAAAAVAAAAY3VycmVudF9yZWNvcmRfc3RhdHVzAAAAjP3//8j9//8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABwdWJsaXNoZWRfYXRfcmF3AAAAAMD9///8/f//AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAZ3VpZAAAAADo/f//JP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAGxpbmsAAAAAEP7//0z+//8AAAEFEAAAABgAAAAEAAAAAAAAAAUAAAB0aXRsZQAAADj+//90/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAb2JzZXJ2ZWRfYXRfanNvbgAAAABs/v//qP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFgAAAHNvdXJjZV9jb250ZXh0X3BvaW50ZXIAAKT+///g/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGV4dF9zaGEyNTYAANT+//8Q////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAc291cmNlX3NoYTI1NgAAAAT///9A////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAc291cmNlX3VybAAAMP///2z///8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzb3VyY2VfYXV0aG9yaXR5AAAAAGT///+g////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAJT////Q////AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAbWFwcGluZ192ZXJzaW9uAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAA",
+    "arrow_schema": "/////7gFAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABoAAABYBQAAFAUAAOAEAACoBAAAeAQAAEQEAAAMBAAA4AMAALQDAACIAwAAUAMAABQDAADcAgAAqAIAAHQCAAA8AgAADAIAANwBAACsAQAAdAEAADwBAAAIAQAA0AAAAIwAAABQAAAABAAAACD7//8AAAEKEAAAACgAAAAEAAAAAAAAAAwAAABwdWJsaXNoZWRfYXQAAAAACAAMAAYACAAIAAAAAAACAAQAAAADAAAAVVRDAGj7//8AAAEIEAAAACQAAAAEAAAAAAAAABEAAABjb3ZlcmFnZV9lbmRfZGF0ZQAAAMb///8AAAAAoPv//wAAAQgQAAAALAAAAAQAAAAAAAAAEwAAAGNvdmVyYWdlX3N0YXJ0X2RhdGUAAAAGAAgABgAGAAAAAAAAAOD7//8AAAEFEAAAACQAAAAEAAAAAAAAABIAAABmaWxpbmdfbGlua19zdGF0dXMAANj7//8U/P//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAcGFyc2luZ19zdGF0dXMAAAj8//9E/P//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAY292ZXJhZ2VfZW5kX3JhdwAAAAA8/P//ePz//wAAAQUQAAAAJAAAAAQAAAAAAAAAEgAAAGNvdmVyYWdlX3N0YXJ0X3JhdwAAcPz//6z8//8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAAByZXBvcnRfdHlwZQCc/P//2Pz//wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAGZvcm1fdHlwZQAAAMj8//8E/f//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAZmlsaW5nX2lkAAAA9Pz//zD9//8AAAEFEAAAACQAAAAEAAAAAAAAABMAAABzb3VyY2VfbGFiZWxfc3RhdHVzACj9//9k/f//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY2FuZGlkYXRlX2lkAAAAAFj9//+U/f//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY29tbWl0dGVlX2lkAAAAAIj9///E/f//AAABBRAAAAAkAAAABAAAAAAAAAARAAAAcmVwb3J0ZWRfZmlsZXJfaWQAAAC8/f//+P3//wAAAQUQAAAAKAAAAAQAAAAAAAAAFQAAAGN1cnJlbnRfcmVjb3JkX3N0YXR1cwAAAPT9//8w/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAcHVibGlzaGVkX2F0X3JhdwAAAAAo/v//ZP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAGd1aWQAAAAAUP7//4z+//8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABsaW5rAAAAAHj+//+0/v//AAABBRAAAAAYAAAABAAAAAAAAAAFAAAAdGl0bGUAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
     "descriptions": {
       "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
       "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
@@ -13439,8 +13406,6 @@
       "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
       "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
       "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
       "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
       "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
       "link": "Literal RSS item link retained from the source feed.",
@@ -13490,14 +13455,6 @@
         "VARCHAR"
       ],
       [
-        "context_sha256",
-        "VARCHAR"
-      ],
-      [
-        "source_context_pointer",
-        "VARCHAR"
-      ],
-      [
         "observed_at_json",
         "VARCHAR"
       ],
@@ -13535,7 +13492,7 @@
       ]
     ],
     "subject": "campaign_finance",
-    "arrow_schema": "/////8gDAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABEAAABkAwAAIAMAAOwCAAC0AgAAhAIAAFACAAAcAgAA4AEAAKgBAAB0AQAARAEAABABAADgAAAAsAAAAIAAAAA8AAAABAAAAPD8//8AAAECEAAAABwAAAAEAAAAAAAAAAkAAAB0YWJsZV9yb3cAAADI////AAAAASAAAAAk/f//AAABAhAAAAAoAAAABAAAAAAAAAANAAAAdGFibGVfb3JkaW5hbAAAAAgADAAIAAcACAAAAAAAAAEgAAAAZP3//wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGxpbmtzX2pzb24AAFT9//+Q/f//AAABBRAAAAAcAAAABAAAAAAAAAALAAAAZGF0ZV9zdGF0dXMAgP3//7z9//8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABkYXRlc19qc29uAACs/f//6P3//wAAAQUQAAAAIAAAAAQAAAAAAAAADwAAAHJlcG9ydGVkX3N0YXR1cwDc/f//GP7//wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAHRpdGxlX3JhdwAAAAj+//9E/v//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAbWVldGluZ190eXBlAAAAADj+//90/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAb2JzZXJ2ZWRfYXRfanNvbgAAAABs/v//qP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFgAAAHNvdXJjZV9jb250ZXh0X3BvaW50ZXIAAKT+///g/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGV4dF9zaGEyNTYAANT+//8Q////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAc291cmNlX3NoYTI1NgAAAAT///9A////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAc291cmNlX3VybAAAMP///2z///8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzb3VyY2VfYXV0aG9yaXR5AAAAAGT///+g////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAJT////Q////AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAbWFwcGluZ192ZXJzaW9uAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAAAAAAAA==",
+    "arrow_schema": "/////1gDAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA8AAAD0AgAAsAIAAHwCAABEAgAAFAIAAOABAACoAQAAdAEAAEQBAAAQAQAA4AAAALAAAACAAAAAPAAAAAQAAABY/f//AAABAhAAAAAcAAAABAAAAAAAAAAJAAAAdGFibGVfcm93AAAAyP///wAAAAEgAAAAjP3//wAAAQIQAAAAKAAAAAQAAAAAAAAADQAAAHRhYmxlX29yZGluYWwAAAAIAAwACAAHAAgAAAAAAAABIAAAAMz9//8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABsaW5rc19qc29uAAC8/f//+P3//wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAGRhdGVfc3RhdHVzAOj9//8k/v//AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAZGF0ZXNfanNvbgAAFP7//1D+//8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAAByZXBvcnRlZF9zdGF0dXMARP7//4D+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAAB0aXRsZV9yYXcAAABw/v//rP7//wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAG1lZXRpbmdfdHlwZQAAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
     "descriptions": {
       "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
       "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
@@ -13543,8 +13500,6 @@
       "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
       "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
       "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
       "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
       "meeting_type": "Meeting classification explicitly stated by the retained HTML table.",
       "title_raw": "Meeting title exactly as retained in the source row, including cancellation language.",
@@ -13666,14 +13621,6 @@
         "VARCHAR"
       ],
       [
-        "context_sha256",
-        "VARCHAR"
-      ],
-      [
-        "source_context_pointer",
-        "VARCHAR"
-      ],
-      [
         "observed_at_json",
         "VARCHAR"
       ],
@@ -13703,7 +13650,7 @@
       ]
     ],
     "subject": "campaign_finance",
-    "arrow_schema": "/////0ADAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA8AAADgAgAAnAIAAGgCAAAwAgAAAAIAAMwBAACYAQAAXAEAACQBAAD0AAAAyAAAAJwAAABoAAAANAAAAAQAAABs/f//AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAbGlua3NfanNvbgAAXP3//5j9//8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABjb250ZW50X3N0YXR1cwAAjP3//8j9//8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb250ZW50X3Njb3BlAAAAvP3///j9//8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAAB0ZXh0AAAAAOT9//8g/v//AAABBRAAAAAYAAAABAAAAAAAAAAFAAAAdGl0bGUAAAAM/v//SP7//wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAHBhZ2VfdHlwZQAAADj+//90/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAb2JzZXJ2ZWRfYXRfanNvbgAAAABs/v//qP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFgAAAHNvdXJjZV9jb250ZXh0X3BvaW50ZXIAAKT+///g/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGV4dF9zaGEyNTYAANT+//8Q////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAc291cmNlX3NoYTI1NgAAAAT///9A////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAc291cmNlX3VybAAAMP///2z///8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzb3VyY2VfYXV0aG9yaXR5AAAAAGT///+g////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAJT////Q////AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAbWFwcGluZ192ZXJzaW9uAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAA",
+    "arrow_schema": "/////9ACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA0AAABwAgAALAIAAPgBAADAAQAAkAEAAFwBAAAkAQAA9AAAAMgAAACcAAAAaAAAADQAAAAEAAAA1P3//wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGxpbmtzX2pzb24AAMT9//8A/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGVudF9zdGF0dXMAAPT9//8w/v//AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29udGVudF9zY29wZQAAACT+//9g/v//AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAdGV4dAAAAABM/v//iP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHRpdGxlAAAAdP7//7D+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABwYWdlX3R5cGUAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
     "descriptions": {
       "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
       "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
@@ -13711,8 +13658,6 @@
       "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
       "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
       "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
       "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
       "page_type": "Supported type of retained source documentation page, such as a form page or statutory filing reference.",
       "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",

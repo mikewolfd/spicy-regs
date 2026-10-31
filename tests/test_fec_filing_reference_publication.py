@@ -9,7 +9,7 @@ from spicy_regs.transforms.assemble_fec_query import FilingAssociationInputs, Ty
 from spicy_regs.transforms.fec_identity_context_fields import normalize_record
 from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, dataset_policy
 from spicy_regs.transforms.fec_identity_observations import filing_key
-from tests.test_fec_native_conversion import old_family, fec_bucket
+from tests.test_fec_native_conversion import old_family, fec_bucket, selected_fec_originals  # noqa: F401 (autouse fixture)
 from tests.test_fec_filing_associations import filing, pin
 from tests.test_fec_identity_receipts import WITNESS
 

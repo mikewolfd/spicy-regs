@@ -4,9 +4,9 @@
 
 **FEC filing feed items**
 
-One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text and native fields. A feed item is not a resolved filing submission or a complete current filing population. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+One RSS item of the retained original FEC filing feed, keyed by guid within that capture. Inspect literal title, link, GUID and publication text. A feed item is not a resolved filing submission or a complete current filing population. Each row is its own witness; source_sha256 names the original and guid the item in it.
 
-**Coverage.** Sampled. Supported observations from retained FEC filing RSS item metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+**Coverage.** Sampled. Supported observations from retained FEC filing RSS item metadata. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_research_filing_feed_items.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,7 +15,7 @@ One RSS item occurrence in a captured source feed. Inspect literal title, link, 
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `record_id` | `VARCHAR` | Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event. |
 | `title` | `VARCHAR` | Source title or explicitly labeled mapper title; consult title_basis or title_status when present. |
 | `link` | `VARCHAR` | Literal RSS item link retained from the source feed. |
 | `guid` | `VARCHAR` | Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity. |
@@ -28,13 +28,11 @@ One RSS item occurrence in a captured source feed. Inspect literal title, link, 
 | `coverage_start_date` | `DATE` | Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
 | `coverage_end_date` | `DATE` | Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date. |
 | `published_at` | `TIMESTAMP WITH TIME ZONE` | Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `mapping_version` | `VARCHAR` | Named, versioned rule that built this row from its retained original. |
+| `collection_id` | `VARCHAR` | Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row. |
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
 | `current_record_status` | `VARCHAR` | Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record. |
 | `source_label_status` | `VARCHAR` | Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling. |
 | `parsing_status` | `VARCHAR` | Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause. |

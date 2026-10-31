@@ -4,9 +4,9 @@
 
 **FEC meeting table observations**
 
-One native HTML table row describing a meeting listing. Keeps meeting type, title, source date cells, links and explicit reported cancellation status. Repeated listings remain source observations, and no meeting-to-matter relation is inferred. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.
+One native HTML table row describing a meeting listing, read from the retained original page. Keeps meeting type, title, source date cells, links and explicit reported cancellation status. Repeated listings remain source observations, and no meeting-to-matter relation is inferred. Each row is its own witness; source_sha256 names the original and table_ordinal and table_row its table row.
 
-**Coverage.** Sampled. Supported observations from the retained FEC meetings HTML table and its exact cells/links. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
+**Coverage.** Sampled. Supported observations from the retained FEC meetings HTML table and its exact cells/links. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication. *(measured 2026-10-01)*
 
 - **Parquet file:** `fec_research_meeting_observations.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.
@@ -15,18 +15,16 @@ One native HTML table row describing a meeting listing. Keeps meeting type, titl
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `record_id` | `VARCHAR` | Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event. |
+| `record_id` | `VARCHAR` | Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event. |
 | `meeting_type` | `VARCHAR` | Meeting classification explicitly stated by the retained HTML table. |
 | `title_raw` | `VARCHAR` | Meeting title exactly as retained in the source row, including cancellation language. |
 | `reported_status` | `VARCHAR` | Status explicitly stated in the source, including cancellation where the meeting table reports it. |
 | `dates` | `DATE[]` | Literal date cells and available date interpretations for the meeting row; multiple dates remain separate. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `links` | `STRUCT(url VARCHAR, href VARCHAR)[]` | Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
 | `date_kind` | `VARCHAR` | Whether the meeting dates represent one date, separately listed dates, or the two endpoints of a range. |
-| `mapping_version` | `VARCHAR` | Named, versioned source-to-field mapping used for this observation. |
-| `collection_id` | `VARCHAR` | Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity. |
+| `mapping_version` | `VARCHAR` | Named, versioned rule that built this row from its retained original. |
+| `collection_id` | `VARCHAR` | Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row. |
 | `source_authority` | `VARCHAR` | Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions. |
 | `source_url` | `VARCHAR` | Captured source URL for this observation; it does not assert current availability or body retrieval. |
-| `source_sha256` | `VARCHAR` | SHA-256 of the original source witness bytes; distinct from the typed table's publication digest. |
-| `context_sha256` | `VARCHAR` | Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output. |
-| `source_context_pointer` | `VARCHAR` | Exact JSON pointer into the retained collection context to the native fact represented by this observation. |
+| `source_sha256` | `VARCHAR` | SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness. |
 | `date_status` | `VARCHAR` | Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling. |

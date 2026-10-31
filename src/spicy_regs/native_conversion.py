@@ -1362,6 +1362,8 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         raise ConversionRefused("Conversion qualification requires its active admitted reader")
     artifact = built.read_operation.verified_source(built.generation)[0].root
     tables, problems = {}, []
+    from spicy_regs.fec_native_conversion import REBUILT_TABLES, RETIRED_TABLES
+    retired, rebuilt = RETIRED_TABLES.get(family, frozenset()), REBUILT_TABLES.get(family, frozenset())
     if sealed is None:
         _, reader, _ = built.read_operation.admit_generation(built.generation)
         outcomes = reader.outcome_counts()
@@ -1370,7 +1372,18 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
             preserved_pages = reader.preserved_source_page_refusals()
         except ValueError as invalid_refusal:
             problems.append(f"source page refusals do not qualify: {invalid_refusal}")
-        restore = built.compare_original
+
+        def restore(dataset: str, original: Path) -> dict:
+            if dataset != "fec_record_evidence" or not (retired or rebuilt):
+                return built.compare_original(dataset, original)
+            # Evidence targeting retired or rebuilt tables is not carried; compare what is.
+            from tempfile import TemporaryDirectory
+
+            from spicy_regs.fec_native_conversion import referenced_evidence
+            with TemporaryDirectory(dir=built.generation.parent.parent, prefix="qualify-evidence-") as held:
+                kept = Path(held) / f"{dataset}.parquet"
+                dropped = referenced_evidence(original, kept, family)
+                return built.compare_original(dataset, kept) | {"unreferenced_evidence_rows": dropped}
     else:
         outcomes = dict(sealed["receipt_outcomes"])
         preserved_pages = sealed["tables"].get("fec_research_source_pages", {}).get("preserved_refused_rows", 0)
@@ -1384,8 +1397,19 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
     for key, table in old["tables"].items():
         dataset = key.removesuffix(".parquet")
         subject = built.generation / (dataset if "members" in table else key)
+        if key in retired:
+            # Owner-retired table (ss-j4vz B10): the captured prior holds it, the generation omits it.
+            tables[dataset] = {"retired": True, "retained_rows": table["rows"]}
+            continue
+        if key in rebuilt:
+            # Built from its retained originals (ss-j4vz B7-B9), not converted from the captured rows;
+            # build_retained_family checks those rows against the originals.
+            tables[dataset] = {"rebuilt_from_originals": True, "retained_rows": table["rows"],
+                               "subject_rows": _table_rows(subject) if subject.exists() else 0}
+            continue
         try:
             check = restore(dataset, retained[key]) | {"retained_rows": table["rows"]}
+            dropped = check.get("unreferenced_evidence_rows", 0)
         except ValueError as unreadable:
             problems.append(f"{dataset} does not restore: {unreadable}")
             continue
@@ -1404,9 +1428,9 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         preserved = preserved_pages if dataset == 'fec_research_source_pages' else 0
         if preserved:
             check['preserved_refused_rows'] = preserved
-        if check.get("subject_rows", table["rows"]) + preserved != table["rows"] or _has_differences(check):
+        if check.get("subject_rows", table["rows"]) + preserved + dropped != table["rows"] or _has_differences(check):
             problems.append(f"{dataset} does not restore to its retained table: {check}")
-    expected = (set(old["tables"]) | built.added_tables) - built.receipt_only_tables
+    expected = (set(old["tables"]) | built.added_tables) - built.receipt_only_tables - retired
     if (subjects := set(artifact["spec"]["tables"])) != expected:
         problems.append(f"the generation holds {sorted(subjects)}; publication expects {sorted(expected)}")
     # Keep the original physical-file guard as well as the logical membership check.

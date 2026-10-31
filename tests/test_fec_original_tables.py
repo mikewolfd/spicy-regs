@@ -10,7 +10,7 @@ from zipfile import ZipFile
 import pytest
 from spicy_docs.storage.raw_archive import CentralRawArchiveStore
 
-from spicy_regs.transforms.fec_original_tables import TABLES, rebuild, selection
+from spicy_regs.transforms.fec_original_tables import TABLES, _meetings, _Original, _source_page, rebuild, selection
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -207,3 +207,94 @@ def test_source_page_is_one_row_per_whole_original(archive):
         "whole_original",
         "official_legal_document_reference",
     )
+
+
+def facts_ctx(table, facts, url):
+    """Fixture: the shared row rules over native events of one selected original."""
+    entry = dict(source_url=url, source_sha256="sha256:" + "c" * 64, collection_ids=["capture"], source_authority="www.fec.gov")
+    ctx = _Original(table, entry, "2026-09-11T00:00:00Z")
+    ctx.parsing = {"facts": facts}
+    return ctx
+
+
+def event(kind, name=None, text=None, attrs=None):
+    return dict(kind=kind, name=name, text=text, attributes=attrs or [])
+
+
+def meetings(title="February 11 and 13, 2025  (Canceled)"):
+    facts = [
+        event("start", "h2"),
+        event("text", text="Executive sessions"),
+        event("end", "h2"),
+        event("start", "table"),
+        event("start", "tr"),
+        event("start", "td"),
+        event("start", "a", attrs=[["href", "/updates/session/"]]),
+        event("text", text=title),
+        event("end", "a"),
+        event("end", "td"),
+        event("start", "td"),
+        event("start", "a", attrs=[["href", "/notice.pdf"]]),
+        event("text", text="Sunshine Act Notice"),
+        event("end", "a"),
+        event("end", "td"),
+        event("end", "tr"),
+        event("end", "table"),
+    ]
+    return facts_ctx("fec_research_meeting_observations", facts, "https://www.fec.gov/meetings/")
+
+
+def test_meeting_listing_preserves_cancellation_multiple_dates_and_notice_deferral():
+    ctx = meetings()
+    _meetings(ctx)
+    (meeting,) = ctx.rows
+    assert meeting["reported_status"] == "canceled" and meeting["meeting_type"] == "Executive sessions"
+    assert json.loads(meeting["dates_json"]) == ["2025-02-11", "2025-02-13"]
+    assert meeting["date_status"] == "source_listed_dates"
+    assert json.loads(meeting["links_json"])[1]["body_status"] == "deferred_pdf"
+    assert json.loads(meeting["links_json"])[0]["url"] == "https://www.fec.gov/updates/session/"
+
+
+def test_meeting_date_range_is_not_collapsed_to_one_day():
+    ctx = meetings("June 27-28, 2018 Public Hearing")
+    _meetings(ctx)
+    (meeting,) = ctx.rows
+    assert meeting["date_status"] == "source_date_range"
+    assert json.loads(meeting["dates_json"]) == ["2018-06-27", "2018-06-28"]
+    assert meeting["reported_status"] == "not_stated"
+
+
+def test_truncated_meeting_table_refuses():
+    ctx = meetings()
+    ctx.parsing["facts"].pop()
+    with pytest.raises(ValueError, match="truncated"):
+        _meetings(ctx)
+
+
+def test_court_page_retains_native_text_and_deferred_links_without_legal_identity():
+    facts = [
+        event("text", text="Your web browser is not supported"),
+        event("text", text="Federal Election Commission | United States of America"),
+        event("text", text="Menu"),
+        event("text", text="Federal Election Commission | United States of America"),
+        event("start", "h1"),
+        event("text", text="Fieger v. FEC"),
+        event("end", "h1"),
+        event("start", "script"),
+        event("text", text="ignore this script"),
+        event("end", "script"),
+        event("start", "p"),
+        event("text", text="The court issued its opinion."),
+        event("end", "p"),
+        event("start", "a", attrs=[["href", "/opinion.pdf"]]),
+        event("text", text="Court opinion"),
+        event("end", "a"),
+        event("text", text="About\nCareers\nPress\nContact\nPrivacy and security policy"),
+    ]
+    ctx = facts_ctx("fec_research_source_pages", facts, "https://www.fec.gov/legal-resources/court-cases/fieger-v-fec/")
+    _source_page(ctx, "official_court_case_reference")
+    (page,) = ctx.rows
+    assert page["title"] == "Fieger v. FEC" and page["page_type"] == "official_court_case_reference"
+    assert "The court issued its opinion." in page["text"] and "ignore this script" not in page["text"]
+    assert json.loads(page["links_json"])[0]["body_status"] == "deferred_pdf"
+    assert page["content_scope"] == "whole_original"
