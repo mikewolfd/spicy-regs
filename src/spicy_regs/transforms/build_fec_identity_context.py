@@ -7,6 +7,7 @@ publication occurs. Input files are rehashed after complete bounded reads.
 
 from __future__ import annotations
 
+from collections import defaultdict
 import hashlib
 import json
 from pathlib import Path
@@ -41,17 +42,31 @@ def _input_rows(item, base):
         raise ValueError("FEC input changed during mapping")
 
 
-def _emit_mapping(writer, tables, evidence, input_witness, source_input):
-    for table, rows in tables.items():
-        if not rows:
-            continue
+def _emit_mapping(writer, tables, evidence, input_witness, source_input, *, from_receipts=False):
+    """Emit mapped rows with their evidence, grouped once: O(rows + evidence) per mapping.
+
+    Rows mapped from receipt context (fec_collections) are admitted only for tables the
+    registry flags admitted_from_receipts; any other table is refused before anything is
+    written for this mapping (ss-j4vz B11).
+    """
+    emitted = [table for table, rows in tables.items() if rows]
+    for table in emitted:
         if table not in REGISTRY:
             raise ValueError(f"Context emitted another owned family: {table}")
-        for row in rows:
-            links = [
-                e for e in evidence if e["target_table"] == table and e["target_record_id"] == row.get("record_id")
-            ]
-            writer.emit(table, row, input_witness=input_witness, evidence=links, source_input=source_input)
+        if from_receipts and not REGISTRY[table].get("admitted_from_receipts"):
+            raise ValueError(f"Receipt-only input cannot produce table output: {table}")
+    links = defaultdict(list)
+    for row in evidence:
+        links[row["target_table"], row["target_record_id"]].append(row)
+    for table in emitted:
+        for row in tables[table]:
+            writer.emit(
+                table,
+                row,
+                input_witness=input_witness,
+                evidence=links.get((table, row.get("record_id")), []),
+                source_input=source_input,
+            )
     if "fec_record_evidence" in writer.policies:
         for row in evidence:
             writer.emit("fec_record_evidence", row, input_witness=input_witness)
@@ -151,7 +166,7 @@ def build_fec_identity_context(manifest, output_dir):
                         )
                         continue
                     for mapped in mappings:
-                        _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None)
+                        _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None, from_receipts=True)
                 if seen != selected:
                     raise ValueError("Selected context membership is incomplete")
                 if item.get("filing_feed", False):
@@ -172,7 +187,7 @@ def build_fec_identity_context(manifest, output_dir):
                             )
                         continue
                     for mapped in mappings:
-                        _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None)
+                        _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None, from_receipts=True)
             else:
                 raise ValueError(f"Unsupported identity build mode: {mode}")
         if manifest.read_bytes() != original:

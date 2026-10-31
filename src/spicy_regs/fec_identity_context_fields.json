@@ -1724,7 +1724,8 @@
     "native_lists": {},
     "native_scalars": {},
     "receipt_only": false,
-    "observation_control": true
+    "observation_control": true,
+    "admitted_from_receipts": true
   },
   "fec_research_filing_feed_items": {
     "subject_fields": {
@@ -1797,7 +1798,8 @@
     ],
     "native_lists": {},
     "native_scalars": {},
-    "receipt_only": false
+    "receipt_only": false,
+    "admitted_from_receipts": true
   },
   "fec_research_meeting_observations": {
     "subject_fields": {
@@ -1860,7 +1862,8 @@
       ]
     },
     "native_scalars": {},
-    "receipt_only": false
+    "receipt_only": false,
+    "admitted_from_receipts": true
   },
   "fec_research_response_outcomes": {
     "subject_fields": {
@@ -1909,7 +1912,8 @@
     "native_lists": {},
     "native_scalars": {},
     "receipt_only": false,
-    "observation_control": true
+    "observation_control": true,
+    "admitted_from_receipts": true
   },
   "fec_research_source_pages": {
     "subject_fields": {
@@ -1962,7 +1966,8 @@
       ]
     },
     "native_scalars": {},
-    "receipt_only": false
+    "receipt_only": false,
+    "admitted_from_receipts": true
   },
   "fec_source_catalog": {
     "subject_fields": {
