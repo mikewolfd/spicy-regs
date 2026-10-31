@@ -222,6 +222,21 @@ def test_prepared_publication_of_a_family_whose_evidence_predates_version_2_hand
     assert done["published"]["entry"]["artifactDigest"] == dry["generation"]["artifactDigest"]
 
 
+def test_prepared_publication_reports_the_local_mirror_in_its_receipt(tmp_path, monkeypatch, bucket):
+    """Owner 2026-10-31: a mirror outcome is reported in the publish result; a failure never changes the exit."""
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    work = tmp_path / "work"
+    convert("cfr-sections", work)
+    root = tmp_path / "mirror"
+    root.write_bytes(b"not a directory")  # every mirror write fails
+    monkeypatch.setenv(publication.PUBLICATION_MIRROR, str(root))
+    done = publish_prepared(work / conversion.RECEIPT, "cfr-sections")
+    mirror = done["publish_attempt"]["mirror"]
+    assert done["publish_attempt"]["outcome"] == "published"
+    assert mirror["prefix"] == done["published"]["entry"]["prefix"] and "error" in mirror
+    assert json.loads((work / conversion.RECEIPT).read_bytes())["publish_attempt"]["mirror"] == mirror
+
+
 @pytest.mark.parametrize("when", ["before-upload", "pointer-retry"])
 def test_prepared_exact_prior_includes_timestamp_on_every_pointer_attempt(tmp_path, monkeypatch, bucket, when):
     old = publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})

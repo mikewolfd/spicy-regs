@@ -359,11 +359,16 @@ def _bounded_get(
     return bytes(raw)
 
 
-def load_index(base_url: str) -> dict:
-    """Read the publication pointer. Only a 404 permits legacy table resolution."""
-    raw = _bounded_get(
+def load_index_bytes(base_url: str) -> bytes | None:
+    """The publication pointer's bytes as served, unparsed; ``None`` when it is absent (HTTP 404)."""
+    return _bounded_get(
         f"{base_url.rstrip('/')}/{INDEX_V2_KEY}", allow_missing=True, headers={"Cache-Control": "no-cache"}
     )
+
+
+def load_index(base_url: str) -> dict:
+    """Read the publication pointer. Only a 404 permits legacy table resolution."""
+    raw = load_index_bytes(base_url)
     return empty_index() if raw is None else parse_index(raw)
 
 
@@ -1327,6 +1332,7 @@ def publish_generation(directory: Path, *, client, bucket: str, prior_index: Map
 #: Opt-in local mirror root (the operator's ``corpora/spicyregs/output/publication``); unset in CI.
 PUBLICATION_MIRROR = "SPICYGOV_PUBLICATION_MIRROR"
 _ROOT_FILES = ("artifact.json", "members.json")
+SNAPSHOT_DIRECTORY = "publication.v2"  # content-addressed copies of the pointer under a mirror root
 
 
 def generation_files(entry: Mapping) -> dict[str, Member]:
@@ -1403,24 +1409,62 @@ def prune_superseded(root: Path, entry: Mapping) -> list[Path]:
     return removed
 
 
-def _mirror_published(index: Mapping, family: str, local: Path | None) -> None:
-    """After the pointer moved, mirror ``family``'s generation when ``PUBLICATION_MIRROR`` is set; never raises.
+def mirror_index(root: Path, raw: bytes) -> Path:
+    """Keep the publication pointer ``raw`` that selects the mirrored generations as a content-addressed snapshot.
 
-    The publish has already succeeded, so a mirror failure is logged and left to ``spicy-regs mirror``, which also
-    brings in generations published elsewhere (CI) and keys a remote promotion never held locally.
+    The snapshot is ``<root>/publication.v2/<sha256 of raw>.json``, the exact bytes stored at ``INDEX_V2_KEY``, so a
+    mirrored generation can be traced to the selection that named it. Written once (an existing name already holds
+    these bytes) and renamed into place; ``<root>/publication.v2.json`` itself is never rewritten here, because a
+    mirror can lag the live pointer.
+    """
+    parse_index(raw)
+    target = root / SNAPSHOT_DIRECTORY / f"{hashlib.sha256(raw).hexdigest()}.json"
+    if not target.is_file():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        temporary.write_bytes(raw)
+        temporary.replace(target)
+    return target
+
+
+class PublishedIndex(dict):
+    """The index a publish wrote; ``mirror`` reports the opt-in local mirror (``None`` when it is not configured).
+
+    A ``dict`` so every caller that reads, copies or serializes the index is unchanged; the report is an attribute,
+    so it never enters a serialized index.
+    """
+
+    mirror: dict | None = None
+
+
+def _published(index: dict, raw: bytes, family: str, local: Path | None) -> PublishedIndex:
+    result = PublishedIndex(index)
+    result.mirror = _mirror_published(index, raw, family, local)
+    return result
+
+
+def _mirror_published(index: Mapping, raw: bytes, family: str, local: Path | None) -> dict | None:
+    """After the pointer moved, mirror ``family``'s generation and the pointer when ``PUBLICATION_MIRROR`` is set.
+
+    Never raises: the publish has already succeeded, so a failure is logged and returned as ``error`` (the caller's
+    exit status is unchanged) and left to ``spicy-regs mirror``, which also brings in generations published
+    elsewhere (CI) and keys a remote promotion never held locally.
     """
     if not (root := os.environ.get(PUBLICATION_MIRROR)):
-        return
+        return None
     entry = index["families"][family]
+    outcome: dict = {"root": root, "prefix": entry["prefix"]}
     try:
-        counts = mirror_generation(Path(root), entry, local=local)
+        outcome |= mirror_generation(Path(root), entry, local=local)
+        outcome["snapshot"] = str(mirror_index(Path(root), raw).relative_to(root))
     except Exception as error:
         logger.warning("publication: {} is published but its local mirror failed: {!r}", entry["prefix"], error)
-        return
-    logger.info("publication: mirrored {} under {}: {}", entry["prefix"], root, counts)
-    if counts["missing"]:
+        return outcome | {"error": f"{type(error).__name__}: {error}"}
+    logger.info("publication: mirrored {} under {}: {}", entry["prefix"], root, outcome)
+    if outcome["missing"]:
         logger.warning("publication: {} file(s) of {} are not held locally; run `spicy-regs mirror {} --family {}`",
-                       counts["missing"], entry["prefix"], root, family)
+                       outcome["missing"], entry["prefix"], root, family)
+    return outcome
 
 
 def _clone_into(source: Path, target: Path, size: int | None) -> None:
@@ -1583,7 +1627,8 @@ def _publish_verified_generation(
 ) -> dict:
     """Shared publication gates; both callers fully verify their source first.
 
-    ``local`` is the directory ``upload_member`` reads, for the opt-in local mirror once the pointer moves.
+    ``local`` is the directory ``upload_member`` reads, for the opt-in local mirror once the pointer moves; the
+    returned ``PublishedIndex.mirror`` reports that mirror's outcome.
     """
     family = artifact.root["spec"]["family"]
     index, etag = _stored_index(client, bucket)
@@ -1606,8 +1651,7 @@ def _publish_verified_generation(
         if before_pointer is not None:
             before_pointer()
         if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
-            _mirror_published(updated, family, local)
-            return updated
+            return _published(updated, raw, family, local)
         logger.info("publication: pointer moved concurrently; merging {} onto the reread index", family)
         index, etag = _stored_index(client, bucket)
         _assert_family_unchanged(index, prior_index, family, exact=exact_prior)
@@ -1705,8 +1749,7 @@ def publish_fec_release(
         updated, raw = _merge_family(updated, "fec-query", compatibility.entry)
         check()
         if _put_pointer(client, bucket, INDEX_V2_KEY, raw, etag):
-            _mirror_published(updated, "fec-observations", directory)
-            return updated
+            return _published(updated, raw, "fec-observations", directory)
         index, etag = _stored_index(client, bucket)
     raise PublicationError("Publication changed concurrently; retry from a fresh snapshot")
 

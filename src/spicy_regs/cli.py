@@ -311,27 +311,38 @@ def cmd_mirror(args):
     """Bring a local mirror in the R2 key layout up to the current publication index, fetching only absent files.
 
     Refuses before any write when the bytes still to fetch would leave less than ``--min-free-gib`` free on the
-    mirror's volume. ``--prune`` then deletes each mirrored family's superseded generations.
+    mirror's volume; nothing to fetch never refuses. The pointer read is kept as a content-addressed snapshot
+    (``publication.mirror_index``). ``--prune`` then deletes each mirrored family's superseded generations, judged
+    against a fresh read of the pointer: a family whose selection moved during the run is left unpruned.
     """
     import shutil
 
-    from spicy_regs.sources.publication import load_index, mirror_absent_bytes, mirror_generation, prune_superseded
+    from spicy_regs.sources import publication
 
     base_url = resolve_r2_base_url()
-    families = load_index(base_url)["families"]
+    if (raw := publication.load_index_bytes(base_url)) is None:
+        sys.exit(f"No publication index at {base_url}")
+    families = publication.parse_index(raw)["families"]
     if unknown := sorted(set(args.family or ()) - set(families)):
         sys.exit(f"Not a published family: {', '.join(unknown)}")
     root, selected = Path(args.root), args.family or sorted(families)
-    absent = sum(mirror_absent_bytes(root, families[family]) for family in selected)
-    volume = next(path for path in (root, *root.absolute().parents) if path.exists())
-    free = shutil.disk_usage(volume).free
-    if free - absent < args.min_free_gib * 2**30:
-        sys.exit(f"Mirroring needs {absent / 2**30:.1f} GiB and {free / 2**30:.1f} GiB is free on {volume}; "
-                 f"that would leave less than {args.min_free_gib} GiB")
+    if absent := sum(publication.mirror_absent_bytes(root, families[family]) for family in selected):
+        volume = next(path for path in (root, *root.absolute().parents) if path.exists())
+        free = shutil.disk_usage(volume).free
+        if free - absent < args.min_free_gib * 2**30:
+            sys.exit(f"Mirroring needs {absent / 2**30:.1f} GiB and {free / 2**30:.1f} GiB is free on {volume}; "
+                     f"that would leave less than {args.min_free_gib} GiB")
+    counts = {family: publication.mirror_generation(root, families[family], base_url=base_url) for family in selected}
+    snapshot = publication.mirror_index(root, raw)
+    current = publication.load_index(base_url)["families"] if args.prune else {}
     for family in selected:
-        counts = mirror_generation(root, families[family], base_url=base_url)
-        pruned = [path.name for path in prune_superseded(root, families[family])] if args.prune else []
-        print(json.dumps({"family": family, "prefix": families[family]["prefix"], **counts, "pruned": pruned}))
+        prefix, report = families[family]["prefix"], dict[str, object](counts[family])
+        if args.prune and (current.get(family) or {}).get("prefix") == prefix:
+            report |= {"pruned": [path.name for path in publication.prune_superseded(root, families[family])]}
+        elif args.prune:
+            report |= {"pruned": None, "selection_moved_to": (current.get(family) or {}).get("prefix")}
+        print(json.dumps({"family": family, "prefix": prefix, **report}))
+    print(json.dumps({"snapshot": str(snapshot.relative_to(root))}))
 
 
 def main():

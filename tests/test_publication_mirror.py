@@ -26,7 +26,13 @@ def publish(tmp_path, store, prior=None):
 
 
 def tree(root):
-    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    """The mirrored generation files, without the pointer snapshots."""
+    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*")
+            if p.is_file() and p.relative_to(root).parts[0] != pub.SNAPSHOT_DIRECTORY}
+
+
+def snapshots(root):
+    return {p.name: p.read_bytes() for p in (root / pub.SNAPSHOT_DIRECTORY).iterdir()}
 
 
 def uploaded(store, prefix):
@@ -55,8 +61,9 @@ def serve(monkeypatch, store):
 
 
 def test_mirror_is_off_unless_configured(tmp_path):
-    publish(tmp_path, Store())
+    _, index, _ = publish(tmp_path, Store())
     assert not (tmp_path / "mirror").exists()
+    assert index.mirror is None
 
 
 def test_publish_mirrors_exactly_the_uploaded_generation(tmp_path, monkeypatch):
@@ -73,6 +80,41 @@ def test_publish_mirrors_exactly_the_uploaded_generation(tmp_path, monkeypatch):
     assert (directory / member).stat().st_ino != (root / prefix / member).stat().st_ino
     (directory / member).write_bytes(b"edited later")
     assert (root / prefix / member).read_bytes() == remote[member]
+
+
+def test_publish_snapshots_the_pointer_that_selected_the_generation(tmp_path, monkeypatch):
+    """The owner's "selection manifest": the exact publication.v2.json bytes written, content-addressed."""
+    import hashlib
+
+    root = tmp_path / "mirror"
+    monkeypatch.setenv(pub.PUBLICATION_MIRROR, str(root))
+    store = Store()
+    _, index, _ = publish(tmp_path, store)
+    stored = store.objects[pub.INDEX_V2_KEY]
+    name = f"{hashlib.sha256(stored).hexdigest()}.json"
+    assert snapshots(root) == {name: stored}
+    assert pub.parse_index(stored) == index
+    assert not (root / pub.INDEX_V2_KEY).exists()  # the mutable pointer copy is never rewritten
+    assert index.mirror == {"root": str(root), "prefix": index["families"]["test"]["prefix"], "kept": 0,
+                            "cloned": len(pub.generation_files(index["families"]["test"])), "fetched": 0,
+                            "missing": 0, "snapshot": f"{pub.SNAPSHOT_DIRECTORY}/{name}"}
+
+
+def test_the_mirror_report_never_enters_a_serialized_index(tmp_path, monkeypatch):
+    import copy
+    import json
+
+    monkeypatch.setenv(pub.PUBLICATION_MIRROR, str(tmp_path / "mirror"))
+    _, index, _ = publish(tmp_path, Store())
+    assert index.mirror is not None
+    assert pub.parse_index(json.dumps(index).encode()) == index
+    assert copy.deepcopy(index).mirror == index.mirror
+
+
+def test_snapshot_refuses_bytes_that_are_not_an_index(tmp_path):
+    with pytest.raises(pub.PublicationError):
+        pub.mirror_index(tmp_path, b"{}")
+    assert not (tmp_path / pub.SNAPSHOT_DIRECTORY).exists()
 
 
 def test_republishing_the_same_generation_keeps_the_tree(tmp_path, monkeypatch):
@@ -94,6 +136,8 @@ def test_mirror_failure_keeps_the_published_pointer(tmp_path, monkeypatch):
     store = Store()
     _, index, _ = publish(tmp_path, store)
     assert pub.parse_index(store.objects[pub.INDEX_V2_KEY]) == index
+    assert index.mirror["prefix"] == index["families"]["test"]["prefix"]
+    assert index.mirror["error"].startswith(("FileExistsError", "NotADirectoryError"))  # reported, not raised
 
 
 def test_the_shared_seam_mirrors_for_every_publisher(tmp_path, monkeypatch):
@@ -155,30 +199,38 @@ def test_conftest_isolates_the_mirror_root():
     assert pub.PUBLICATION_MIRROR not in os.environ
 
 
-def run_mirror_command(tmp_path, monkeypatch, index, *arguments, free=2**50):
+def run_mirror_command(tmp_path, monkeypatch, index, *arguments, free=2**50, reread=None):
+    """Run `spicy-regs mirror` over ``index`` without the network; ``reread`` is the pointer seen before pruning."""
     import shutil
     import sys
     from types import SimpleNamespace
 
     from spicy_regs import cli
 
-    calls = []
-    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(free=free))
-    monkeypatch.setattr(pub, "load_index", lambda base: index)
+    calls, floors = [], []
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: floors.append(path) or SimpleNamespace(free=free))
+    monkeypatch.setattr(pub, "load_index_bytes", lambda base: b"pointer")
+    monkeypatch.setattr(pub, "parse_index", lambda raw: index)
+    monkeypatch.setattr(pub, "load_index", lambda base: reread or index)
     monkeypatch.setattr(pub, "mirror_generation", lambda root, entry, base_url: calls.append(entry) or {"kept": 1})
+    monkeypatch.setattr(pub, "mirror_index", lambda root, raw: root / pub.SNAPSHOT_DIRECTORY / "digest.json")
     monkeypatch.setattr(sys, "argv", ["spicy-regs", "mirror", str(tmp_path), *arguments])
     cli.main()
-    return calls
+    return calls, floors
+
+
+def lines(capsys):
+    import json
+
+    return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
 
 
 def test_mirror_command_mirrors_each_named_family(tmp_path, monkeypatch, capsys):
-    import json
-
     index = {"families": {"a": {"prefix": "generations/a/x", "tables": {}},
                           "b": {"prefix": "generations/b/y", "tables": {}}}}
-    assert run_mirror_command(tmp_path, monkeypatch, index, "--family", "b") == [index["families"]["b"]]
-    assert json.loads(capsys.readouterr().out) == {"family": "b", "prefix": "generations/b/y", "kept": 1,
-                                                   "pruned": []}
+    assert run_mirror_command(tmp_path, monkeypatch, index, "--family", "b")[0] == [index["families"]["b"]]
+    assert lines(capsys) == [{"family": "b", "prefix": "generations/b/y", "kept": 1},
+                             {"snapshot": f"{pub.SNAPSHOT_DIRECTORY}/digest.json"}]
 
 
 def test_mirror_command_refuses_below_the_free_space_floor(tmp_path, monkeypatch):
@@ -187,7 +239,30 @@ def test_mirror_command_refuses_below_the_free_space_floor(tmp_path, monkeypatch
     with pytest.raises(SystemExit, match="needs 3.0 GiB and 5.0 GiB is free"):
         run_mirror_command(tmp_path, monkeypatch, index, "--min-free-gib", "4", free=5 * 2**30)
     assert run_mirror_command(tmp_path, monkeypatch, index, "--min-free-gib", "1",
-                              free=5 * 2**30) == [index["families"]["a"]]
+                              free=5 * 2**30)[0] == [index["families"]["a"]]
+
+
+def test_nothing_to_fetch_is_never_refused_by_the_floor(tmp_path, monkeypatch, capsys):
+    """`--prune` on a complete mirror deletes, so it must run on a volume already below the floor."""
+    index = {"families": {"a": {"prefix": "generations/a/" + "a" * 64, "tables": {}}}}
+    for name in ("a" * 64, "b" * 64):
+        (tmp_path / "generations/a" / name).mkdir(parents=True)
+    calls, floors = run_mirror_command(tmp_path, monkeypatch, index, "--prune", free=2**30)  # 1 GiB < 30
+    assert calls == [index["families"]["a"]] and floors == []
+    assert lines(capsys)[0]["pruned"] == ["b" * 64]
+    assert sorted(p.name for p in (tmp_path / "generations/a").iterdir()) == ["a" * 64]
+
+
+def test_prune_leaves_a_family_whose_selection_moved_during_the_run(tmp_path, monkeypatch, capsys):
+    old, new = "a" * 64, "c" * 64
+    index = {"families": {"a": {"prefix": f"generations/a/{old}", "tables": {}}}}
+    moved = {"families": {"a": {"prefix": f"generations/a/{new}", "tables": {}}}}
+    for name in (old, new):
+        (tmp_path / "generations/a" / name).mkdir(parents=True)
+    run_mirror_command(tmp_path, monkeypatch, index, "--prune", reread=moved)
+    assert lines(capsys)[0] == {"family": "a", "prefix": f"generations/a/{old}", "kept": 1, "pruned": None,
+                                     "selection_moved_to": f"generations/a/{new}"}
+    assert sorted(p.name for p in (tmp_path / "generations/a").iterdir()) == [old, new]
 
 
 def test_prune_keeps_only_the_selected_generation(tmp_path):

@@ -1527,6 +1527,8 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         save()
     else:
         attempt["outcome"] = "published"
+        if (mirror := getattr(index, "mirror", None)) is not None:
+            attempt["mirror"] = mirror  # reported, never a refusal: the pointer has already moved
     receipt["published"] = {"entry": entry}
     save()
     published = _published_state(family, entry, work / RECEIPT, bucket)

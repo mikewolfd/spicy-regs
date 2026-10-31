@@ -68,20 +68,25 @@ With `SPICYGOV_PUBLICATION_MIRROR` set to a local root (the operator's
 pointer write succeeds, also places the generation at
 `<root>/generations/<family>/<digest>/<key>`: the keys the family entry names
 (`publication.generation_files`), cloned copy-on-write from the build directory,
-never hardlinked. The hook sits in `_publish_verified_generation` and
-`publish_fec_release`, so rollups, native conversion and remote promotion are
-covered too. A mirror failure is logged and does not fail the publish. Keys the
-publishing host never held (a remote promotion), and generations published from
-CI, reach the mirror through `spicy-regs mirror <root> [--family F]`, which
-fetches only absent files through the resuming, pin-checked `fetch_member` and
-keeps a file already present at its pinned size without rehashing it. It
-refuses before writing when the bytes still to fetch would leave less than
-`--min-free-gib` (default 30) free on the mirror's volume. The mirror keeps only
-the selected generation per family: R2 retains every published generation for
-rollback, so `spicy-regs mirror <root> --prune` deletes each mirrored family's
-superseded generation directories after the selected one is complete. The
-publish hook never deletes; run the command with `--prune` to retire what local
-publishes superseded. `.env.example` sets the variable for a local checkout.
+never hardlinked. Beside it the mirror keeps the selection that named the
+generation: the exact `publication.v2.json` bytes the publish wrote, as the
+content-addressed snapshot `<root>/publication.v2/<sha256>.json`. The hook sits
+in `_publish_verified_generation` and `publish_fec_release`, so rollups, native
+conversion and remote promotion are covered too. A mirror failure does not fail
+the publish: it is logged and reported on the returned index
+(`PublishedIndex.mirror`, with `error`), and native conversion copies that
+report into its receipt's `publish_attempt.mirror`. Keys the publishing host
+never held (a remote promotion), and generations published from CI, reach the
+mirror through `spicy-regs mirror <root> [--family F]`, which fetches only
+absent files through the resuming, pin-checked `fetch_member`, keeps a file
+already present at its pinned size without rehashing it, and snapshots the
+pointer it read. When there is anything to fetch, it refuses before writing if
+those bytes would leave less than `--min-free-gib` (default 30) free on the
+mirror's volume. R2 retains every published generation for rollback; the
+mirror accumulates superseded generations until `spicy-regs mirror <root>
+--prune` deletes, for each mirrored family whose selection did not move during
+the run, every generation directory but the selected one. The publish hook
+never deletes. `.env.example` sets the variable for a local checkout.
 
 A family cannot silently change its table membership or take another family's
 table. Those changes need an explicit migration. Successful empty tables still
