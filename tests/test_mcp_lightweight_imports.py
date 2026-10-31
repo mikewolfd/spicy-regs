@@ -26,7 +26,7 @@ assert citation_resolution.normalize_rin is normalize_rin
 assert acquisition_queue.QUEUE_RULE
 assert relationship_views.install_relationship_views
 from spicy_regs import mcp_server
-assert len(mcp_server.FEC_QUALIFIED_VIEWS) == 72
+assert len(mcp_server.FEC_QUALIFIED_VIEWS) == 71
 assert not any(name.startswith("spicy_regs.transforms") for name in sys.modules)
 assert 'spicy_regs.ontology' not in sys.modules
 from spicy_regs.vocabulary_mapping import lookup_agency

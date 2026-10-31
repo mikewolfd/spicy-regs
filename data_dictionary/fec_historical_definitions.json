@@ -12332,6 +12332,124 @@
         "outputs_json": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
       }
     },
+    "fec_research_document_observations": {
+      "columns": [
+        [
+          "record_id",
+          "VARCHAR"
+        ],
+        [
+          "mapping_version",
+          "VARCHAR"
+        ],
+        [
+          "collection_id",
+          "VARCHAR"
+        ],
+        [
+          "source_authority",
+          "VARCHAR"
+        ],
+        [
+          "source_url",
+          "VARCHAR"
+        ],
+        [
+          "source_sha256",
+          "VARCHAR"
+        ],
+        [
+          "context_sha256",
+          "VARCHAR"
+        ],
+        [
+          "source_context_pointer",
+          "VARCHAR"
+        ],
+        [
+          "observed_at_json",
+          "VARCHAR"
+        ],
+        [
+          "document_native_id",
+          "VARCHAR"
+        ],
+        [
+          "title",
+          "VARCHAR"
+        ],
+        [
+          "description",
+          "VARCHAR"
+        ],
+        [
+          "canonical_url",
+          "VARCHAR"
+        ],
+        [
+          "source_publisher",
+          "VARCHAR"
+        ],
+        [
+          "source_created_at",
+          "VARCHAR"
+        ],
+        [
+          "source_updated_at",
+          "VARCHAR"
+        ],
+        [
+          "original_extension",
+          "VARCHAR"
+        ],
+        [
+          "body_status",
+          "VARCHAR"
+        ],
+        [
+          "fec_relationship_status",
+          "VARCHAR"
+        ],
+        [
+          "native_metadata_json",
+          "VARCHAR"
+        ]
+      ],
+      "columnDescriptions": {
+        "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
+        "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
+        "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
+        "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
+        "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
+        "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
+        "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
+        "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
+        "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+        "document_native_id": "Literal identifier in the research publisher's document system; it is not automatically an FEC matter/document key.",
+        "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
+        "description": "Literal source description or narrative associated with this observation.",
+        "canonical_url": "Source-supplied canonical research document URL; no inferred FEC case association.",
+        "source_publisher": "Publisher named by the retained research metadata, kept distinct from source_authority.",
+        "source_created_at": "Creation time stated by the research publisher; not a date of the underlying FEC event.",
+        "source_updated_at": "Update time stated by the research publisher; not a current-version selection rule.",
+        "original_extension": "Original file extension reported in research metadata, without body parsing or format validation.",
+        "body_status": "Explicit body availability or processing status. A PDF link remains deferred; metadata does not imply extracted content.",
+        "fec_relationship_status": "Explicit resolution state of any FEC relationship; third-party metadata does not establish an FEC matter join.",
+        "native_metadata_json": "Complete native metadata object retained for this observation, including fields outside the typed mapping."
+      },
+      "description": {
+        "label": "FEC research document and case references",
+        "subject": "campaign_finance",
+        "grain": "One source document/case-reference metadata occurrence in retained context.",
+        "identity_columns": [
+          "record_id"
+        ],
+        "coverage": "Sampled. Supported observations from retained court-case/report references and third-party DocumentCloud metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+        "measured_on": "2026-10-01",
+        "summary": "One source document/case-reference metadata occurrence in retained context. Preserves publisher, authority, native document reference, dates and URL without inferring an FEC matter join. Bodies remain explicitly deferred or reference-only as supported by the retained evidence. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
+        "retired": "Owner decision 2026-10-30 (ss-j4vz B10): no longer built; described here only for the earlier generations that hold it."
+      }
+    },
     "fec_research_filing_feed_items": {
       "columns": [
         [
@@ -12684,6 +12802,154 @@
         "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
         "times_json": "Literal time elements and native attributes retained from the source page.",
         "headings_json": "Ordered source headings with their native context, preserving document structure."
+      }
+    },
+    "fec_retained_csv_observations": {
+      "columns": [
+        [
+          "record_id",
+          "VARCHAR"
+        ],
+        [
+          "mapping_version",
+          "VARCHAR"
+        ],
+        [
+          "collection_id",
+          "VARCHAR"
+        ],
+        [
+          "source_authority",
+          "VARCHAR"
+        ],
+        [
+          "source_url",
+          "VARCHAR"
+        ],
+        [
+          "source_sha256",
+          "VARCHAR"
+        ],
+        [
+          "context_sha256",
+          "VARCHAR"
+        ],
+        [
+          "source_context_pointer",
+          "VARCHAR"
+        ],
+        [
+          "observed_at_json",
+          "VARCHAR"
+        ],
+        [
+          "observation_type",
+          "VARCHAR"
+        ],
+        [
+          "reporting_committee_id",
+          "VARCHAR"
+        ],
+        [
+          "reporting_committee_name",
+          "VARCHAR"
+        ],
+        [
+          "counterparty_name",
+          "VARCHAR"
+        ],
+        [
+          "transaction_id",
+          "VARCHAR"
+        ],
+        [
+          "native_sub_id",
+          "VARCHAR"
+        ],
+        [
+          "amount_raw",
+          "VARCHAR"
+        ],
+        [
+          "amount_status",
+          "VARCHAR"
+        ],
+        [
+          "date_raw",
+          "VARCHAR"
+        ],
+        [
+          "date_status",
+          "VARCHAR"
+        ],
+        [
+          "native_fields_json",
+          "VARCHAR"
+        ],
+        [
+          "native_row_locator_json",
+          "VARCHAR"
+        ],
+        [
+          "coverage_status",
+          "VARCHAR"
+        ],
+        [
+          "current_total_status",
+          "VARCHAR"
+        ],
+        [
+          "amount",
+          "DECIMAL(38,9)"
+        ],
+        [
+          "reported_date",
+          "DATE"
+        ],
+        [
+          "source_row_ordinal",
+          "INTEGER"
+        ]
+      ],
+      "columnDescriptions": {
+        "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
+        "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
+        "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
+        "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
+        "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
+        "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
+        "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
+        "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
+        "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+        "observation_type": "Type of retained CSV context row, preserving its source-specific population and meaning.",
+        "reporting_committee_id": "Literal FEC ID of the reporting committee where that source field identifies a committee. It does not by itself identify the sender or recipient of money.",
+        "reporting_committee_name": "Reporting committee name exactly as supplied by the retained CSV source.",
+        "counterparty_name": "The counterparty's name as reported, without a name-based identity merge.",
+        "transaction_id": "Literal transaction identifier within its source filing/layout scope; not a globally unique transaction or economic-event key.",
+        "native_sub_id": "Literal source sub_id retained separately from typed identity and transaction ID.",
+        "amount_raw": "Literal source value before conversion for amount. Preserves spelling, signs and empty values; the typed value and its status are separate.",
+        "amount_status": "Source-presence or conversion state for amount, distinguishing supported values from NULL, empty, missing or refused interpretation; it does not establish financial eligibility.",
+        "date_raw": "Literal date field of the retained CSV context row before source-specific interpretation.",
+        "date_status": "Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling.",
+        "native_fields_json": "Retained native field values for the source row or feed item, including fields beyond the typed mapping.",
+        "native_row_locator_json": "Exact original CSV row and field coordinates retained by the source context.",
+        "coverage_status": "Explicit completeness/retention scope of the context rows; a retained prefix does not become complete source history.",
+        "current_total_status": "Explicit limitation or refusal for current financial totals; historical/context observations are not silently treated as a current population.",
+        "amount": "Exact decimal for the source-reported amount for this record and its amount_kind. Signs are preserved; use the corresponding status and source-specific financial policy before adding observations.",
+        "reported_date": "Date parsed from the date stated for this historical/context observation. NULL requires the source value and conversion status; capture time is not substituted.",
+        "source_row_ordinal": "Native row ordinal supplied by the retained CSV context."
+      },
+      "description": {
+        "label": "FEC CSV context observations",
+        "subject": "campaign_finance",
+        "grain": "One physical CSV row exposed by retained collection context.",
+        "identity_columns": [
+          "record_id"
+        ],
+        "coverage": "Sampled. Supported observations from supported retained CSV context rows with exact native fields and addresses. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+        "measured_on": "2026-10-01",
+        "summary": "One physical CSV row exposed by retained collection context. Preserves source values, amounts and dates under the context's actual coverage status. A complete retained prefix is still not an asserted complete source population or current financial total. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id. Every row has the amount status `exact`.",
+        "retired": "Owner decision 2026-10-30 (ss-j4vz B10): no longer built; described here only for the earlier generations that hold it."
       }
     },
     "fec_source_records": {

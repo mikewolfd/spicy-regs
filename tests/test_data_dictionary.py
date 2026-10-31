@@ -895,6 +895,10 @@ def test_retained_fec_historical_definitions_keep_native_and_strict_drift():
         prose, selected = dd.selected_dictionary_definitions(routed, live, dd.DEFAULT_DESCRIPTIONS)
         assert selected == native_schemas
         assert prose == native_prose
-        assert dd.check_schema_drift({table: selected[table] for table in live}, live)
+        # Retired tables (ss-j4vz B10) have no native declaration; only a receipt-free owner reads them.
+        retired = {"fec_research_document_observations", "fec_retained_csv_observations"}
+        assert live.keys() - selected.keys() == retired
+        current = {table: columns for table, columns in live.items() if table not in retired}
+        assert dd.check_schema_drift({table: selected[table] for table in current}, current)
     prose, selected = dd.selected_dictionary_definitions({"families": {}}, live, dd.DEFAULT_DESCRIPTIONS)
     assert selected == native_schemas and prose == native_prose

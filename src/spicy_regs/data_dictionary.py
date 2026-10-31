@@ -1191,6 +1191,12 @@ def selected_dictionary_definitions(index: dict, names: Iterable[str], descripti
                         or any(not isinstance(text, str) or not text.strip() for text in meanings.values())):
                     raise ValueError(f"Invalid historical FEC dictionary declaration: {name}")
                 schemas[name] = [tuple(pair) for pair in columns]
+                if name not in descriptions:
+                    # A retired table (ss-j4vz B10) keeps its table prose only here, for the
+                    # earlier generations that still hold it.
+                    if "description" not in entry:
+                        raise ValueError(f"Historical FEC table has no description: {name}")
+                    descriptions[name] = {key: value for key, value in entry["description"].items() if key != "retired"}
                 descriptions[name]["columns"] = meanings
     return descriptions, schemas
 
