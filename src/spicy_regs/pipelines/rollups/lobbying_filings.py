@@ -4,7 +4,8 @@ Unlike the derived rollups, this one *ingests* an external source rather than
 reading base tables from R2, so ``inputs`` is empty — the fetch + incremental
 merge with the prior published table happens inside ``build_lobbying_filings``.
 ``LDA_FILING_YEAR`` reads one whole filing year instead of the posted-date
-window, the unit of the history backfill.
+window, the unit of the history backfill. ``LDA_POOL_PASSES`` raises the walks pooled before
+a tied query refuses (``build_lobbying_filings._iter_filings``).
 """
 
 from pathlib import Path
@@ -35,6 +36,7 @@ class LobbyingFilingsRollup(GovernmentReceiptRollup):
             since=date_env("LDA_SINCE"),
             until=date_env("LDA_UNTIL"),
             filing_year=int_env("LDA_FILING_YEAR"),
+            max_passes=int_env("LDA_POOL_PASSES"),
         )
 
 

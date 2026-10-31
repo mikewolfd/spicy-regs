@@ -28,13 +28,14 @@ so this runs in CI with or without ``LDA_API_KEY``.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import shutil
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from datetime import date, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -112,26 +113,61 @@ def _filings_url(*, since: date | None, until: date | None, filing_year: int | N
     )
 
 
-def _iter_filings(reader: LdaFilingsReader, url: str, *, max_records: int | None) -> Iterator[dict]:
-    """Yield raw filing dicts from spicy-docs' page walk, bound by ``max_records``.
+def _identified(record: Mapping[str, Any]) -> dict:
+    """A copy of one raw filing, refused unless it carries a nonempty ``filing_uuid``, the merge identity."""
+    filing = dict(record)
+    identity = filing.get("filing_uuid")
+    if not isinstance(identity, str) or not identity.strip():
+        raise LobbyingFilingsError("LDA filings page has a row without a nonempty filing_uuid")
+    return filing
+
+
+def _iter_filings(reader: LdaFilingsReader, url: str, *, max_records: int | None,
+                  max_passes: int | None = None) -> Iterator[dict]:
+    """Yield raw filing dicts from spicy-docs' page walk: the whole query settled, or a ``max_records`` prefix.
 
     Every row must carry a nonempty ``filing_uuid`` — the merge identity — so a
     malformed row refuses instead of landing a NULL key in the published table.
     The owner's walk already refuses a changed declared count, an observed
     total disagreeing with it, or a page bound reached before the terminal
-    page; a ``max_records`` stop is an explicit prefix of that walk.
+    page; a ``max_records`` stop is an explicit prefix of that walk and claims
+    nothing about the rest.
+
+    Agreeing with the declared count is not completeness. Offset paging over
+    filings tied on ``dt_posted`` repeats one filing and skips another while
+    serving exactly the declared total: the retained 1999 walk served its
+    declared 31,498 records but 29,399 distinct filings, and lda.gov draws the
+    order inside a tie afresh per request, so repeat walks skip different
+    filings (ss-hqoi probe, 2026-10-30). A whole walk therefore goes through
+    spicy-docs' ``pool_walks`` keyed by ``filing_uuid``: a clean walk (every
+    walk since 2007 retained so far) settles in one pass, a tied one is walked
+    again and pooled until it holds the declared total, and one still short
+    after ``max_passes`` (default ``DEFAULT_POOL_PASSES``) raises
+    ``IncompleteWalkError`` rather than publishing a short year. A 1999-2006
+    year, whose filings are almost all posted on day-precision ties, lost 1.9%
+    (2000) to 6.7% (1999) of its filings in one walk; at that rate four passes
+    settle all eight years only about one time in five and six settle each
+    with 0.3% risk, so the re-walk sets ``LDA_POOL_PASSES=6`` (ss-hqoi). One
+    walk's filings are held in memory, as the whole-window read always was.
     """
-    yielded = 0
-    for page in reader.filings(url, max_pages=MAX_PAGES):
-        for record in page.records:
-            filing = dict(record)
-            identity = filing.get("filing_uuid")
-            if not isinstance(identity, str) or not identity.strip():
-                raise LobbyingFilingsError("LDA filings page has a row without a nonempty filing_uuid")
-            yield filing
-            yielded += 1
-            if max_records is not None and yielded >= max_records:
-                return
+    from dataclasses import replace
+
+    from spicy_docs.reading.paged_json import DEFAULT_POOL_PASSES, WalkPass, pool_walks
+
+    def pages():
+        for page in reader.filings(url, max_pages=MAX_PAGES):
+            yield replace(page, records=tuple(_identified(record) for record in page.records))
+
+    if max_records is not None:
+        prefix = (filing for page in pages() for filing in page.records)
+        yield from itertools.islice(prefix, max_records)
+        return
+    pooled = pool_walks(lambda _: WalkPass.from_pages(pages(), label="LDA filings"),
+                        key=lambda filing: filing["filing_uuid"], max_passes=max_passes or DEFAULT_POOL_PASSES,
+                        label="LDA filings")
+    if pooled.passes > 1:
+        logger.warning("LDA: {} walks of {} pooled to its declared {:,} filings", pooled.passes, url, pooled.declared)
+    yield from cast("tuple[dict, ...]", pooled.records)  # the records _identified copied
 
 
 # Literal processing columns used by the source mapper and incremental merge.
@@ -327,6 +363,7 @@ def build_lobbying_filings(
     until: date | None = None,
     filing_year: int | None = None,
     max_records: int | None = None,
+    max_passes: int | None = None,
 ) -> tuple[Path, Path, Path]:
     """Build the filings, activities and lobbyists tables, each merged with its prior table."""
     import duckdb
@@ -375,7 +412,7 @@ def build_lobbying_filings(
         evidence.event("selection", stage="lobbying", url=url, max_records=max_records)
         transport = evidence.transport(stage="lobbying-response", max_bytes=budget.max_page_bytes)
     with LdaFilingsReader(budget=budget, api_key=api_key, transport=transport) as reader:
-        filings = list(_iter_filings(reader, url, max_records=max_records))
+        filings = list(_iter_filings(reader, url, max_records=max_records, max_passes=max_passes))
     fresh = {
         OUTPUT: (COLUMNS, [_shape(f) for f in filings]),
         ACTIVITIES_OUTPUT: (ACTIVITY_COLUMNS, [row for f in filings for row in _activity_rows(f)]),

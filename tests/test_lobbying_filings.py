@@ -231,6 +231,60 @@ def test_max_records_stops_the_walk_mid_page(tmp_path, monkeypatch):
     assert [row["filing_uuid"] for row in pq.read_table(out).to_pylist()] == ["a", "b", "c"]
 
 
+def _tied_walks(walks: list[tuple[list[str], list[str]]]):
+    """Each pass of a two-page walk tied on dt_posted, declaring 4: ``(page 1, page 2)`` uuids per pass."""
+
+    def handler(request, number):
+        walk = walks[min((number - 1) // 2, len(walks) - 1)]
+        if "page=2" in str(request.url):
+            return _json_response(_page(walk[1], None, count=4))
+        return _json_response(_page(walk[0], f"{API}/filings/?page=2", count=4))
+
+    return handler
+
+
+def test_a_walk_that_keeps_repeating_one_filing_and_skipping_another_refuses(tmp_path, monkeypatch):
+    """Every pass serves the declared 4 records, but "b" twice and "c" never (the retained 1999 walk's shape)."""
+    from spicy_docs.reading.paged_json import DEFAULT_POOL_PASSES, IncompleteWalkError
+
+    _no_prior(monkeypatch)
+    monkeypatch.setattr(bld, "KEYLESS_INTERVAL_SECONDS", 0.0)
+    calls = _mock_http(monkeypatch, _tied_walks([(["a", "b"], ["b", "d"])]))
+    with pytest.raises(IncompleteWalkError, match="pooled 3 of 4 declared records after 4 passes"):
+        bld.build_lobbying_filings(tmp_path)
+    assert len(calls) == 2 * DEFAULT_POOL_PASSES
+    assert not list(tmp_path.rglob("lobbying_filings.parquet"))
+
+
+def test_walks_that_skip_different_filings_pool_to_the_declared_total(tmp_path, monkeypatch):
+    """lda.gov reorders a tie per request (ss-hqoi probe): a second walk serves the filing the first skipped."""
+    _no_prior(monkeypatch)
+    monkeypatch.setattr(bld, "KEYLESS_INTERVAL_SECONDS", 0.0)
+    calls = _mock_http(monkeypatch, _tied_walks([(["a", "b"], ["b", "d"]), (["c", "a"], ["d", "a"])]))
+    filings, *_ = bld.build_lobbying_filings(tmp_path)
+    assert sorted(pq.read_table(filings, columns=["filing_uuid"]).column(0).to_pylist()) == ["a", "b", "c", "d"]
+    assert len(calls) == 4
+
+
+def test_the_pass_budget_bounds_the_pooled_walks(tmp_path, monkeypatch):
+    """``LDA_POOL_PASSES`` reaches the walk: a tie that settles only on its fifth walk needs a budget above four."""
+    from spicy_docs.reading.paged_json import IncompleteWalkError
+
+    from spicy_regs.pipelines.rollups import lobbying_filings as rollup
+
+    _no_prior(monkeypatch)
+    monkeypatch.setattr(bld, "KEYLESS_INTERVAL_SECONDS", 0.0)
+    short = (["a", "b"], ["b", "d"])
+    _mock_http(monkeypatch, _tied_walks([short, short, short, short, (["c", "a"], ["d", "a"])]))
+    with pytest.raises(IncompleteWalkError, match="after 3 passes"):
+        bld.build_lobbying_filings(tmp_path, max_passes=3)
+    seen = {}
+    monkeypatch.setattr(rollup, "build_lobbying_filings", lambda output_dir, **kwargs: seen.update(kwargs) or ())
+    monkeypatch.setenv("LDA_POOL_PASSES", "8")
+    rollup.LobbyingFilingsRollup(output_dir=tmp_path).build(tmp_path)
+    assert seen["max_passes"] == 8
+
+
 @pytest.mark.parametrize(
     ("failure_page", "failure", "have_prior"),
     [(1, 400, False), (1, 400, True), (2, 400, False), (2, 400, True), (2, 503, True), (2, "transport", True)],
