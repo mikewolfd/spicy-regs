@@ -619,7 +619,7 @@ defaults and command arguments stay the same.
 - The command's last line is "published and read back", and
   `conversion.json` shows `rows_only_in_restored` and `rows_only_in_retained`
   both 0 for every table, no `type_changes` or `metadata_changes`, and
-  `read_back.qualified_original_rows` equal to the retained counts.
+  `read_back.public_bytes.members` equal to the generation's member count.
 - `conversion.json` records the bucket and endpoint host under `target`, and
   under `lineage` the inputs the converted generation names.
 - `publication.v2.json` carries `etlReceipts` for the family.

@@ -11,7 +11,7 @@ from spicy_regs.transforms import regulations_receipts
 from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS
 from tests.duckdb_faults import fail_streams_after
 from tests.test_native_conversion import (
-    BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, publish_old,
+    BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, public_rows, publish_old,
 )
 
 bucket = _bucket
@@ -64,7 +64,7 @@ def test_regulatory_preparation_batches_and_publishes_exact_artifact_once(tmp_pa
         expected_receipt_digest=prepared["prepared"]["receiptDigest"],
     )
     assert published["generation"] == prepared["generation"]
-    assert published["read_back"]["qualified_original_rows"][dataset] == len(original_rows)
+    assert public_rows(published)[dataset] == len(original_rows)
     assert {p.relative_to(generation): p.read_bytes() for p in generation.rglob("*") if p.is_file()} == sealed
     assert calls == [dataset]
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)
@@ -192,5 +192,5 @@ def test_attribute_families_convert_from_their_typed_published_shape(tmp_path, m
         publication.publish_generation(tmp_path / "generation", client=bucket, bucket=BUCKET,
                                        prior_index=publication.current_index(BASE))
     receipt = convert(family, tmp_path / "work", publish=True)
-    assert receipt["read_back"]["qualified_original_rows"][dataset] == 2
+    assert public_rows(receipt)[dataset] == 2
     assert dataset in publication.current_index(BASE)["families"][family]["etlReceipts"]["datasets"]

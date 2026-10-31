@@ -468,9 +468,7 @@ def _native_built(generation: Path, retained: Mapping[str, Path], base: str,
         read_operation.release_generation(generation)
         verified = read_operation.verify_public_generation(base, index, spec["family"], generation)
         check_originals()
-        return {"public_bytes": verified,
-                "qualified_original_rows": {name.removesuffix(".parquet"): _table_rows(path)
-                                            for name, path in retained.items()}}
+        return {"public_bytes": verified}
 
     return _Built(generation, {name: policy.policy_version for name, policy in policies.items()},
                   compare_original, read_published, evidence, added, receipt_only,
@@ -1493,15 +1491,14 @@ def _publish_conversion(receipt: dict, built: _Built, captured: Mapping, work: P
         **read,
     }
     save()
-    # Source rows were compared with the captured publication before admission.
+    # Source rows were compared with the captured publication before admission, and the retained originals were
+    # held to the captured entry's counts then (_retained_inputs); comparing them again here could only agree.
     # Added status tables have no old counterpart: read them back against the
     # exact admitted generation, rather than indexing an absent old table.
     expected_tables = artifact["spec"]["tables"]
     wrong = sorted(set(entry.get("tables", {})) ^ set(expected_tables))
     wrong += [key for key, table in entry.get("tables", {}).items()
               if key in expected_tables and table["rows"] != expected_tables[key]["rows"]]
-    wrong += [name for name, rows in read["qualified_original_rows"].items()
-              if rows != old["tables"][name + ".parquet"]["rows"]]
     if entry.get("artifactDigest") != artifact["artifactDigest"] or "etlReceipts" not in entry or wrong:
         raise ConversionRefused(f"{family} does not read back as converted ({wrong or entry.get('artifactDigest')})",
                                 state=published)

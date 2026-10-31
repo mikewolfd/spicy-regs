@@ -11,7 +11,7 @@ from spicy_regs.congress_subjects import INPUT_COLUMNS
 from spicy_regs.pipelines.rollups import subject_receipts
 from spicy_regs.sources import publication
 from tests.test_native_conversion import (
-    BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, publish_old,
+    BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, public_rows, publish_old,
 )
 
 bucket = _bucket
@@ -66,7 +66,7 @@ def test_maintained_vote_preparation_and_publication_reuse(tmp_path, monkeypatch
         expected_receipt_digest=prepared["prepared"]["receiptDigest"],
     )
     assert published["generation"] == prepared["generation"]
-    assert published["read_back"]["qualified_original_rows"] == {name: len(values) for name, values in original.items()}
+    assert public_rows(published) == {name: len(values) for name, values in original.items()}
     assert {p.relative_to(generation): p.read_bytes() for p in generation.rglob("*") if p.is_file()} == sealed
     assert calls == [(dataset, True) for dataset in datasets]
     conversion.rollback(work / conversion.RECEIPT, expect_bucket=BUCKET)

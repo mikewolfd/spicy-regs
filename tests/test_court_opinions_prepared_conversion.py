@@ -6,7 +6,7 @@ import pytest
 from spicy_regs import native_conversion as conversion
 from spicy_regs.sources import publication
 from tests.test_native_conversion import (
-    BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, prepared_digest, publish_old,
+    BASE, BUCKET, MAIN, STATE, WHEEL, bucket as _bucket, convert, prepared_digest, public_rows, publish_old,
 )
 
 bucket = _bucket
@@ -86,7 +86,7 @@ def test_original_court_opinions_prepare_and_publish_same_exact_native_artifact(
         expected_main=MAIN, expected_spicy_docs=WHEEL, expect_bucket=BUCKET, state=lambda _: dict(STATE),
         expected_receipt_digest=prepared_digest(work / conversion.RECEIPT))
     assert published['generation'] == prepared['generation']
-    assert published['read_back']['qualified_original_rows'] == {'court_opinions': 2}
+    assert public_rows(published) == {'court_opinions': 2}
     assert len(route[1]) == 1  # Only preparation restores: the seal's admission stands, public bytes are hashed.
     assert_restored(route, compared, opinions(), work)
     assert sealed == {p.relative_to(generation): p.read_bytes() for p in generation.rglob('*') if p.is_file()}
@@ -188,7 +188,7 @@ def test_complete_conversion_replaces_size_heuristic_with_exact_restoration(
     subject = pq.read_table(Path(receipt['generation']['directory']) / 'court_opinions.parquet')
     assert 'local_path' not in subject.column_names
     assert subject['download_url'].to_pylist() == [row['download_url'] for row in rows]
-    assert receipt['read_back']['qualified_original_rows'] == {'court_opinions': len(rows)}
+    assert public_rows(receipt) == {'court_opinions': len(rows)}
     assert len(route[1]) == 1  # Preparation or same-process publication restores once; nothing is replayed.
     assert_restored(route, compared, rows, work)
 

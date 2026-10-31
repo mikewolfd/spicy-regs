@@ -141,7 +141,7 @@ def test_a_rollup_family_converts_publishes_and_reads_back(tmp_path, monkeypatch
     assert receipt["tables"]["cfr_sections"] == {
         "retained_rows": 2, "subject_rows": 2, "rows_only_in_restored": 0, "rows_only_in_retained": 0,
         "columns_only_in_restored": [], "columns_only_in_retained": [], "type_changes": {}, "metadata_changes": []}
-    assert receipt["read_back"]["qualified_original_rows"] == {"cfr_sections": 2}
+    assert public_rows(receipt) == {"cfr_sections": 2}
     assert json.loads((tmp_path / "work" / conversion.RECEIPT).read_text()) == receipt
     # The read every scheduled run makes now restores exactly the rows the builder last wrote.
     restored = pq.read_table(SelectedPriors(tmp_path / "after", public_url=BASE).get("cfr_sections")).to_pylist()
@@ -178,7 +178,7 @@ def test_bill_subjects_converts_so_its_scheduled_rollup_can_read_its_prior(tmp_p
     entry = stored(bucket, "bill-subjects")
     assert entry == receipt["published"]["entry"] and "etlReceipts" not in old
     assert "bill_subjects" in entry["etlReceipts"]["datasets"] and entry["tables"]["bill_subjects.parquet"]["rows"] == 2
-    assert receipt["read_back"]["qualified_original_rows"]["bill_subjects"] == 2 and receipt["lineage"]["handed_on_events"] == 0
+    assert public_rows(receipt)["bill_subjects"] == 2 and receipt["lineage"]["handed_on_events"] == 0
     new_pin = published_evidence_pin(bucket, "bill-subjects")
     assert evidence_root(bucket, new_pin)["spec"]["evidence_version"] == EVIDENCE_VERSION
     assert publication.load_evidence_journal(BASE, new_pin)
@@ -242,7 +242,7 @@ def test_a_court_family_converts_through_the_court_writer(tmp_path, monkeypatch,
 
     entry = publication.current_index(BASE)["families"]["courtlistener"]
     assert entry["etlReceipts"]["datasets"] == ["court_dockets"] and receipt["policy_versions"] == {"court_dockets": "courts/1"}
-    assert receipt["read_back"]["qualified_original_rows"] == {"court_dockets": 1}
+    assert public_rows(receipt) == {"court_dockets": 1}
     (member,) = publication.table_members(publication.current_index(BASE), "court_dockets.parquet")
     subject = tmp_path / "published" / "court_dockets.parquet"
     subject.parent.mkdir()
@@ -423,6 +423,11 @@ V2 = publication.INDEX_V2_KEY
 COMMON = ["--allow", "cfr-sections", "--expect-main", MAIN, "--expect-spicy-docs", WHEEL, "--remote", "fork"]
 
 
+def public_rows(receipt):
+    """Row counts the public pointer names after read-back, by dataset."""
+    return {key.removesuffix(".parquet"): rows for key, rows in receipt["read_back"]["table_rows"].items()}
+
+
 def stored(store, family="cfr-sections"):
     return publication.parse_index(store.objects[V2])["families"][family]
 
@@ -450,7 +455,7 @@ def test_a_pointer_write_whose_response_was_lost_is_found_and_finished(tmp_path,
     assert lost and stored(bucket) == receipt["published"]["entry"] != old
     assert receipt["publish_attempt"]["outcome"] == "moved to this conversion's generation"
     assert "Family changed since the build read its inputs" in receipt["publish_attempt"]["error"]
-    assert receipt["read_back"]["qualified_original_rows"] == {"cfr_sections": 2}
+    assert public_rows(receipt) == {"cfr_sections": 2}
     assert "published and read back" in capsys.readouterr().out
 
 
@@ -709,7 +714,7 @@ def test_declared_native_court_conversion_keeps_original_processing_types(tmp_pa
     assert check["type_changes"] == {} and check["rows_only_in_retained"] == 0
     subject = pq.read_table(receipt["generation"]["directory"] + "/court_docket_groups.parquet")
     assert subject["group_size"].type == pa.int64() and subject["group_size"].to_pylist() == [3]
-    assert receipt["read_back"]["qualified_original_rows"] == {"court_docket_groups": 1}
+    assert public_rows(receipt) == {"court_docket_groups": 1}
 
 
 def test_file_metadata_a_later_run_reads_must_survive(tmp_path, monkeypatch, bucket):
@@ -1124,7 +1129,7 @@ def test_split_legislative_members_convert_and_restore_without_collapsing_partit
     assert table["partitionColumns"] == ["congress"]
     assert [(m["key"], m["rows"]) for m in table["members"]] == [
         (m["key"], m["rows"]) for m in old["tables"]["bill_sections.parquet"]["members"]]
-    assert receipt["read_back"]["qualified_original_rows"] == {"bill_sections": 3}
+    assert public_rows(receipt)["bill_sections"] == 3
     restored = SelectedPriors(tmp_path / "after", public_url=BASE).get("bill_sections")
     assert restored.is_dir()
     assert {p.relative_to(restored).as_posix() for p in restored.rglob("*.parquet")} == set(expected)
@@ -1406,7 +1411,7 @@ def test_conversion_compares_all_datasets_with_one_reader_per_actual_generation(
     assert len(admissions) == 1, "One receipt admission; public bytes are held to it by digest, not admitted again"
     assert sorted(dataset for reader, dataset in comparisons) == sorted(originals)
     assert not active
-    assert receipt["read_back"]["qualified_original_rows"] == {name: len(rows) for name, rows in originals.items()}
+    assert public_rows(receipt).items() >= {name: len(rows) for name, rows in originals.items()}.items()
 
 
 @pytest.mark.parametrize("interruption", ["absent", "unsealed"])
