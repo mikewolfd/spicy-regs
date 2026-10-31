@@ -160,20 +160,8 @@ def test_child_meetings_preserve_order_repetition_and_range(db):
     assert len(rows(db, "fec_meeting_links")) == 3
 
 
-def test_count_child_defends_against_old_untyped_sources(db):
-    install(
-        db,
-        "fec_research_context_dispositions",
-        [dict(collection_id="c", outputs_json='{"a":2.8,"b":true,"c":-1,"d":2}')],
-        "fec_context_output_counts",
-    )
-    result = {r["output_table"]: r for r in rows(db, "fec_context_output_counts")}
-    assert all(result[k]["output_count"] is None for k in ("a", "b", "c"))
-    assert result["d"]["output_count"] == 2
-
-
 def test_no_primary_mirror_views_and_installation_does_not_scan(db):
-    assert set(SPECS) == {"fec_api_responses", "fec_context_output_counts", "fec_meeting_dates", "fec_meeting_links"}
+    assert set(SPECS) == {"fec_api_responses", "fec_meeting_dates", "fec_meeting_links"}
     spec = SPECS["fec_meeting_dates"]
     db.execute(
         "CREATE VIEW fec_research_meeting_observations AS SELECT "

@@ -384,8 +384,8 @@ def test_published_fec_roles_and_count_units_survive_dictionary_fallback(monkeyp
     expected = {
         "fec_api_response_controls": ("diagnostics", "response fields"),
         "fec_agency_mapping_dispositions": ("diagnostics", "mapping results"),
-        "fec_research_context_dispositions": ("diagnostics", "processing results"),
-        "fec_research_response_outcomes": ("diagnostics", "response outcomes"),
+        "fec_reference_filing_feed_items": ("reference_data", "feed items"),
+        "fec_reference_source_pages": ("reference_data", "source pages"),
         "fec_collections": ("processing_evidence", "collections"),
         "fec_collection_selection": ("processing_evidence", "selection decisions"),
         "fec_record_evidence": ("source_evidence", "evidence links"),

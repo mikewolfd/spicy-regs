@@ -12330,6 +12330,19 @@
         "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
         "source_fact_count": "Count of native context facts examined for this disposition; not a source population count or an emitted transaction count.",
         "outputs_json": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
+      },
+      "description": {
+        "row_unit": "processing results",
+        "label": "FEC source processing results",
+        "subject": "campaign_finance",
+        "grain": "One explicit mapping disposition for a retained collection context.",
+        "identity_columns": [
+          "collection_id"
+        ],
+        "coverage": "Sampled. Supported observations from selected retained source documentation, response, research and statistical contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+        "measured_on": "2026-10-01",
+        "summary": "Records what processing a saved source file or request produced, including empty, refused and unsupported inputs.",
+        "retired": "Owner decision 2026-10-31 (ss-j4vz Q2): no longer built; described here only for the earlier generations that hold it."
       }
     },
     "fec_research_document_observations": {
@@ -12539,6 +12552,18 @@
         "native_fields_json": "Retained native field values for the source row or feed item, including fields beyond the typed mapping.",
         "source_parts_json": "Exact native RSS parts and addresses retained to locate each item field.",
         "current_record_status": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record."
+      },
+      "description": {
+        "label": "FEC filing feed items",
+        "subject": "campaign_finance",
+        "grain": "One RSS item occurrence in a captured source feed.",
+        "identity_columns": [
+          "record_id"
+        ],
+        "coverage": "Sampled. Supported observations from retained FEC filing RSS item metadata. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+        "measured_on": "2026-10-01",
+        "summary": "One RSS item occurrence in a captured source feed. Inspect literal title, link, GUID, publication text and native fields. A feed item is not a resolved filing submission or a complete current filing population. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
+        "retired": "Owner decision 2026-10-31 (ss-j4vz Q1): renamed fec_reference_filing_feed_items; described here only for the earlier generations that hold it."
       }
     },
     "fec_research_meeting_observations": {
@@ -12716,6 +12741,19 @@
         "outcome_status": "Explicit retained response outcome, including rejection or empty payload. Neither establishes a completed successful query by itself.",
         "native_payload_json": "Native response body facts already retained in collection context; no new request or fabricated entity row.",
         "observed_payload_records": "Count of result entries actually visible in the retained payload, distinct from a claimed complete query population."
+      },
+      "description": {
+        "row_unit": "response outcomes",
+        "label": "FEC API request outcomes",
+        "subject": "campaign_finance",
+        "grain": "One retained response/context outcome observation.",
+        "identity_columns": [
+          "record_id"
+        ],
+        "coverage": "Sampled. Supported observations from selected rejected, empty or otherwise limited OpenFEC contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+        "measured_on": "2026-10-01",
+        "summary": "Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected.",
+        "retired": "Owner decision 2026-10-31 (ss-j4vz Q2): no longer built; described here only for the earlier generations that hold it."
       }
     },
     "fec_research_source_pages": {
@@ -12802,6 +12840,18 @@
         "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
         "times_json": "Literal time elements and native attributes retained from the source page.",
         "headings_json": "Ordered source headings with their native context, preserving document structure."
+      },
+      "description": {
+        "label": "FEC source documentation pages",
+        "subject": "campaign_finance",
+        "grain": "One supported source-documentation page observation from retained context.",
+        "identity_columns": [
+          "record_id"
+        ],
+        "coverage": "Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
+        "measured_on": "2026-10-01",
+        "summary": "One source-documentation page observation with build-extracted body text, content status and retained links. Complete original page context remains available through exact context evidence. Source documentation explains forms and access routes without becoming financial transactions or legal events. Resolve collection_id to fec_collections in the captured source generation and source_context_pointer into its retained context. Context witnesses use their own digest and native coordinates; they do not require a fictional source_record_id.",
+        "retired": "Owner decision 2026-10-31 (ss-j4vz Q1): renamed fec_reference_source_pages; described here only for the earlier generations that hold it."
       }
     },
     "fec_retained_csv_observations": {

@@ -78,8 +78,5 @@
     "filing_key",
     "filing_link_status",
     "native_field_states_json"
-  ],
-  "fec_research_response_outcomes": [
-    "native_payload_json"
   ]
 }

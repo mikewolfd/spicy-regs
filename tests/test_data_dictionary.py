@@ -896,7 +896,10 @@ def test_retained_fec_historical_definitions_keep_native_and_strict_drift():
         assert selected == native_schemas
         assert prose == native_prose
         # Retired tables (ss-j4vz B10) have no native declaration; only a receipt-free owner reads them.
-        retired = {"fec_research_document_observations", "fec_retained_csv_observations"}
+        # Retired (B10, Q2) or renamed (Q1) since that generation (ss-j4vz).
+        retired = {"fec_research_document_observations", "fec_retained_csv_observations",
+                   "fec_research_response_outcomes", "fec_research_context_dispositions",
+                   "fec_research_filing_feed_items", "fec_research_source_pages"}
         assert live.keys() - selected.keys() == retired
         current = {table: columns for table, columns in live.items() if table not in retired}
         assert dd.check_schema_drift({table: selected[table] for table in current}, current)

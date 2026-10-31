@@ -9,9 +9,12 @@ content. Each row is its own witness: record_id hashes the original's digest and
 row's native position, so no collection context pointer or receipt digest is carried
 (owner decision Q7, one identity bump: fec-original-tables/1).
 
-collection_id is the capture collection that retained the original, the lowest id
+collection_id is the capture collection that retained the original, the first part
 when one original was captured in several parts (the RSS feed's nine parts, one
 two-part page); it is a join key to fec_collections, not the part that held a row.
+
+The selection also states how many rows its admitted originals hold per table; the
+conversion's qualification refuses a generation whose rebuilt table holds any other count.
 """
 
 from __future__ import annotations
@@ -29,7 +32,6 @@ import pyarrow as pa
 
 from .fec_context_shape import filing_announcement, source_page_body
 from .fec_query import AMOUNT_TYPE, exact_amount
-from .fec_research_context import _json
 
 IDENTITY_VERSION = "fec-original-tables/1"
 VERSION = "fec-original-tables/1"
@@ -37,15 +39,15 @@ SELECTION_PATH = Path(__file__).with_name("fec_original_selection.json")
 TABLES = (
     "fec_historical_ie_statistics",
     "fec_research_meeting_observations",
-    "fec_research_filing_feed_items",
-    "fec_research_source_pages",
+    "fec_reference_filing_feed_items",
+    "fec_reference_source_pages",
 )
 # Native position that identifies a row within its original.
 IDENTITY_FIELDS = {
     "fec_historical_ie_statistics": ("worksheet_name", "worksheet_row"),
     "fec_research_meeting_observations": ("table_ordinal", "table_row"),
-    "fec_research_filing_feed_items": ("guid",),
-    "fec_research_source_pages": (),
+    "fec_reference_filing_feed_items": ("guid",),
+    "fec_reference_source_pages": (),
 }
 COMMON = "record_id mapping_version collection_id source_authority source_url source_sha256 observed_at_json".split()
 
@@ -75,7 +77,7 @@ SCHEMAS = {
         _strings(" ".join(COMMON) + " meeting_type title_raw reported_status dates_json date_status links_json")
         + [("table_ordinal", pa.int32()), ("table_row", pa.int32())]
     ),
-    "fec_research_filing_feed_items": pa.schema(
+    "fec_reference_filing_feed_items": pa.schema(
         _strings(
             " ".join(COMMON) + " title link guid published_at_raw current_record_status reported_filer_id committee_id "
             "candidate_id source_label_status filing_id form_type report_type coverage_start_raw coverage_end_raw "
@@ -87,7 +89,7 @@ SCHEMAS = {
             ("published_at", pa.timestamp("us", tz="UTC")),
         ]
     ),
-    "fec_research_source_pages": pa.schema(
+    "fec_reference_source_pages": pa.schema(
         _strings(" ".join(COMMON) + " page_type title text content_scope content_status links_json")
     ),
 }
@@ -102,11 +104,35 @@ class Rebuilt:
     refusals: list = field(default_factory=list)
 
 
-def selection(path=SELECTION_PATH):
+def _json(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _document(path=SELECTION_PATH):
     document = json.loads(Path(path).read_text())
     if document.get("format") != "fec-original-selection/1":
         raise ValueError("Unsupported FEC originals selection")
-    return document["originals"]
+    if set(document.get("expected_rows", {})) != set(TABLES):
+        raise ValueError("FEC originals selection must state the expected rows of every rebuilt table")
+    return document
+
+
+def selection(path=SELECTION_PATH):
+    return _document(path)["originals"]
+
+
+def expected_rows(table, path=SELECTION_PATH):
+    """Rows the selected originals hold for one rebuilt table, as measured against live 784b23da."""
+    count = _document(path)["expected_rows"][table]
+    if type(count) is not int or count <= 0:
+        raise ValueError(f"{table}: the selection must expect a positive row count")
+    return count
+
+
+def _part_order(collection_id):
+    """Capture parts are numbered '<capture>-NNNN'; order by capture, then part number."""
+    stem, _, part = collection_id.rpartition("-")
+    return (stem, int(part)) if part.isdigit() else (collection_id, -1)
 
 
 def receipt_context(store, entry):
@@ -166,7 +192,7 @@ class _Original:
         row = dict(
             record_id="sha256:" + hashlib.sha256(_json(identity).encode()).hexdigest(),
             mapping_version=VERSION,
-            collection_id=min(self.entry["collection_ids"]),
+            collection_id=min(self.entry["collection_ids"], key=_part_order),
             source_authority=self.entry["source_authority"],
             source_url=self.url,
             source_sha256=self.entry["source_sha256"],
@@ -545,8 +571,8 @@ def feed_rows(ctx, body):
 BUILDERS = {
     "fec_historical_ie_statistics": historical_ie_rows,
     "fec_research_meeting_observations": meeting_rows,
-    "fec_research_filing_feed_items": feed_rows,
-    "fec_research_source_pages": source_page_rows,
+    "fec_reference_filing_feed_items": feed_rows,
+    "fec_reference_source_pages": source_page_rows,
 }
 
 
@@ -576,11 +602,13 @@ def rebuild(table, *, store=None, originals=None):
         if not status.startswith("mapped"):
             result.refusals.append((entry["source_sha256"], f"{status}: {reason}"))
             continue
-        if table == "fec_research_source_pages":
-            # Second check behind the receipt: a page whose own title says it failed is not a page.
-            kept = [row for row in ctx.rows if row["content_status"] != "failed_page"]
-            if len(kept) != len(ctx.rows):
-                result.refusals.append((entry["source_sha256"], "failed_page"))
+        if table == "fec_reference_source_pages":
+            # Second check behind the receipt: only a page whose body was extracted is a page
+            # (a title saying the request failed, an empty body, unknown body boundaries).
+            kept = [row for row in ctx.rows if row["content_status"] == "body_extracted"]
+            for row in ctx.rows:
+                if row["content_status"] != "body_extracted":
+                    result.refusals.append((entry["source_sha256"], row["content_status"]))
             ctx.rows = kept
         result.rows.extend(ctx.rows)
     return result

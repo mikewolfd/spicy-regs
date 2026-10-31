@@ -1992,6 +1992,38 @@
         ]
       },
       {
+        "dataset": "fec_reference_filing_feed_items",
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "record_id"
+        ],
+        "processing_fields": [
+          "observed_at_json",
+          "published_at_raw",
+          "coverage_start_raw",
+          "coverage_end_raw",
+          "conversion_inputs",
+          "conversion_diagnostics",
+          "source_input"
+        ]
+      },
+      {
+        "dataset": "fec_reference_source_pages",
+        "receipt_only": false,
+        "policy_version": "fec-identity-context-receipts/2",
+        "identity_columns": [
+          "record_id"
+        ],
+        "processing_fields": [
+          "observed_at_json",
+          "links_json",
+          "conversion_inputs",
+          "conversion_diagnostics",
+          "source_input"
+        ]
+      },
+      {
         "dataset": "fec_registration_statements",
         "receipt_only": false,
         "policy_version": "fec-identity-context-receipts/2",
@@ -2047,37 +2079,6 @@
         ]
       },
       {
-        "dataset": "fec_research_context_dispositions",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "observation_ordinal"
-        ],
-        "processing_fields": [
-          "outputs_json",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_research_filing_feed_items",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "record_id"
-        ],
-        "processing_fields": [
-          "observed_at_json",
-          "published_at_raw",
-          "coverage_start_raw",
-          "coverage_end_raw",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
         "dataset": "fec_research_meeting_observations",
         "receipt_only": false,
         "policy_version": "fec-identity-context-receipts/2",
@@ -2090,35 +2091,6 @@
           "links_json",
           "table_ordinal",
           "table_row",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_research_response_outcomes",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "observation_ordinal"
-        ],
-        "processing_fields": [
-          "observed_at_json",
-          "conversion_inputs",
-          "conversion_diagnostics",
-          "source_input"
-        ]
-      },
-      {
-        "dataset": "fec_research_source_pages",
-        "receipt_only": false,
-        "policy_version": "fec-identity-context-receipts/2",
-        "identity_columns": [
-          "record_id"
-        ],
-        "processing_fields": [
-          "observed_at_json",
-          "links_json",
           "conversion_inputs",
           "conversion_diagnostics",
           "source_input"
@@ -6880,29 +6852,10 @@
       ]
     },
     {
-      "table": "fec_research_context_dispositions",
-      "label": "FEC source processing results",
-      "row_unit": "processing results",
-      "category": "diagnostics",
-      "summary": "Records what processing a saved source file or request produced, including empty, refused and unsupported inputs.",
-      "coverage": "Sampled. Supported observations from selected retained source documentation, response, research and statistical contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-      "kind": "sampled",
-      "measured_on": "2026-10-01",
-      "data_quality": null,
-      "columns": [
-        "observation_ordinal",
-        "collection_id",
-        "mapping_status",
-        "mapping_reason",
-        "source_url",
-        "context_sha256",
-        "source_fact_count"
-      ]
-    },
-    {
-      "table": "fec_research_filing_feed_items",
+      "table": "fec_reference_filing_feed_items",
       "label": "FEC filing feed items",
-      "category": "query_data",
+      "row_unit": "feed items",
+      "category": "reference_data",
       "summary": "One RSS item of the retained original FEC filing feed, keyed by guid within that capture. Inspect literal title, link, GUID and publication text. A feed item is not a resolved filing submission or a complete current filing population. Each row is its own witness; source_sha256 names the original and guid the item in it.",
       "coverage": "Sampled. Supported observations from retained FEC filing RSS item metadata. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
       "kind": "sampled",
@@ -6959,37 +6912,10 @@
       ]
     },
     {
-      "table": "fec_research_response_outcomes",
-      "label": "FEC API request outcomes",
-      "row_unit": "response outcomes",
-      "category": "diagnostics",
-      "summary": "Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected.",
-      "coverage": "Sampled. Supported observations from selected rejected, empty or otherwise limited OpenFEC contexts. The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does not establish complete FEC history or current publication.",
-      "kind": "sampled",
-      "measured_on": "2026-10-01",
-      "data_quality": null,
-      "columns": [
-        "observation_ordinal",
-        "record_id",
-        "mapping_version",
-        "collection_id",
-        "source_authority",
-        "source_url",
-        "source_sha256",
-        "context_sha256",
-        "source_context_pointer",
-        "profile_refusal",
-        "query_completeness",
-        "payload_shape",
-        "outcome_status",
-        "capture_disposition",
-        "observed_payload_records"
-      ]
-    },
-    {
-      "table": "fec_research_source_pages",
+      "table": "fec_reference_source_pages",
       "label": "FEC source documentation pages",
-      "category": "query_data",
+      "row_unit": "source pages",
+      "category": "reference_data",
       "summary": "One source-documentation page, read from the whole retained original, with build-extracted body text, content status and links contained in that body. Source documentation explains forms and access routes without becoming financial transactions or legal events. Only captures whose acquisition receipt shows a complete response below HTTP 400 are admitted.",
       "coverage": "Sampled. Supported observations from retained form pages and other useful structured source documentation. The retained originals are named in fec_original_selection.json with their acquisition receipts; this declaration does not establish complete FEC history or current publication.",
       "kind": "sampled",

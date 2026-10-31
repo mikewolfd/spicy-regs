@@ -2013,21 +2013,6 @@
       "tres_nm": "Publisher financial-summary field TRES_NM; its literal value qualifies the reported summary.",
       "measures": "Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     },
-    "fec_research_filing_feed_items": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
-      "link": "Literal RSS item link retained from the source feed.",
-      "guid": "Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity.",
-      "reported_filer_id": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label.",
-      "committee_id": "OpenFEC committee identifier (e.g. `C00684373`). Committee join key; this feed row is identified separately. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization.",
-      "candidate_id": "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers.",
-      "filing_id": "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata.",
-      "form_type": "Literal filing form or record-type code from the source layout; does not prove submission conformance.",
-      "report_type": "Source-reported report classification, interpreted within its namespace rather than as a universal period code.",
-      "coverage_start_date": "Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
-      "coverage_end_date": "Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
-      "published_at": "Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status."
-    },
     "fec_research_meeting_observations": {
       "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
       "meeting_type": "Meeting classification explicitly stated by the retained HTML table.",
@@ -2036,14 +2021,6 @@
       "dates": "Literal date cells and available date interpretations for the meeting row; multiple dates remain separate. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "links": "Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct.",
       "date_kind": "Whether the meeting dates represent one date, separately listed dates, or the two endpoints of a range."
-    },
-    "fec_research_source_pages": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "page_type": "Supported type of retained source documentation page, such as a form page or statutory filing reference.",
-      "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
-      "text": "Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference.",
-      "content_scope": "Scope of retained page content; text, headings and links are source documentation rather than inferred transactions.",
-      "links": "Source links with their labels and exact native locations; metadata does not imply body retrieval. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     },
     "fec_committee_history": {
       "committee_id": "The FEC committee id (`CMTE_ID`).",

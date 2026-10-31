@@ -13,8 +13,6 @@ CONTEXT = (
     "source_authority",
     "source_url",
     "source_sha256",
-    "context_sha256",
-    "source_context_pointer",
     "observed_at_json",
 )
 API_KEY = ("collection_id", "source_sha256", "source_namespace", "source_url")
@@ -73,22 +71,6 @@ _api = _view(
     API_KEY,
 )
 
-_context_counts = _view(
-    "fec_context_output_counts",
-    "fec_research_context_dispositions",
-    ("collection_id", "context_sha256", "outputs_json"),
-    "SELECT collection_id, context_sha256, j.key AS output_table, "
-    "CASE WHEN json_type(j.value) IN ('BIGINT','UBIGINT') AND try_cast(j.value AS BIGINT)>=0 "
-    "THEN try_cast(j.value AS BIGINT) END AS output_count, "
-    "CASE WHEN json_type(j.value) IN ('BIGINT','UBIGINT') AND try_cast(j.value AS BIGINT)>=0 "
-    "THEN 'parsed' ELSE 'unsupported_count' END AS parsing_status, '" + VERSION + "' AS rule_version "
-    "FROM fec_research_context_dispositions, json_each(CASE WHEN json_type(try_cast(outputs_json AS JSON))='OBJECT' "
-    "THEN try_cast(outputs_json AS JSON) ELSE '{}'::JSON END) j",
-    "Emitted table counts from each build context; independent child rows preserve context identity.",
-    ("collection_id", "context_sha256", "output_table"),
-)
-
-
 def _meeting_child(name, field, expression, extra_columns=()):
     return _view(
         name,
@@ -128,4 +110,4 @@ _meeting_links = _meeting_child(
     "THEN 'parsed' ELSE 'unsupported_link' END AS parsing_status",
 )
 
-FEC_CONTEXT_QUERY_VIEWS = (_api, _context_counts, _meeting_dates, _meeting_links)
+FEC_CONTEXT_QUERY_VIEWS = (_api, _meeting_dates, _meeting_links)

@@ -877,7 +877,10 @@ def _check_prepared_membership(family: str, old: Mapping, spec: Mapping) -> None
     from spicy_regs.court_receipts import POLICIES as court_policies
 
     regulatory = _regulatory_base_class(family)
-    from spicy_regs.fec_native_conversion import FAMILIES, check_membership
+    from spicy_regs.fec_native_conversion import FAMILIES, check_membership, published_outputs
+    # Captured tables by the key the prepared generation publishes them under: FEC retires
+    # some captured tables and renames rebuilt ones (ss-j4vz B10, Q1, Q2).
+    outputs = published_outputs(family, old["tables"]) if family in FAMILIES else old["tables"]
     if family in FAMILIES:
         check_membership(family, old)
         allowed_added = frozenset()
@@ -899,15 +902,15 @@ def _check_prepared_membership(family: str, old: Mapping, spec: Mapping) -> None
     else:
         raise ConversionRefused("Prepared family has no maintained converter reader")
     descriptors = {value["dataset"]: value for value in spec["etlReceipts"]["policies"]}
-    if family in FAMILIES and set(descriptors) != {key.removesuffix(".parquet") for key in old["tables"]}:
+    if family in FAMILIES and set(descriptors) != {key.removesuffix(".parquet") for key in outputs}:
         raise ConversionRefused("Prepared FEC receipt membership differs from its complete registered siblings")
     receipt_only = {name + ".parquet" for name, value in descriptors.items() if value["receipt_only"]}
-    expected = set(old["tables"]) - receipt_only
+    expected = set(outputs) - receipt_only
     if not expected <= set(spec["tables"]) or set(spec["tables"]) - expected - allowed_added:
         raise ConversionRefused("Prepared subject membership differs from the family's declared outputs")
-    if not {key.removesuffix(".parquet") for key in old["tables"]} <= set(descriptors):
+    if not {key.removesuffix(".parquet") for key in outputs} <= set(descriptors):
         raise ConversionRefused("Prepared original output has no admitted receipt policy")
-    for key, table in old["tables"].items():
+    for key, table in outputs.items():
         if key in receipt_only:
             continue
         actual = spec["tables"][key]
@@ -1265,8 +1268,10 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
                                        or "members" in old["tables"][regulatory.output]):
             raise ConversionRefused("Regulatory family must contain its one maintained unsplit output")
         if fec:
+            from spicy_regs.fec_native_conversion import converted_tables
+
             check_membership(family, old)
-            claimed = {key.removesuffix(".parquet") for key in old["tables"]}
+            claimed = {key.removesuffix(".parquet") for key in converted_tables(family, old["tables"])}
         elif regulatory is not None:
             from spicy_regs.transforms.regulations_receipts import policy
 
@@ -1344,7 +1349,7 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
 
 
 #: Fields of a sealed ``tables`` entry derived from the bytes here, not from the reader's restoration.
-_RECOUNTED = ("retained_rows", "subject_rows", "preserved_refused_rows")
+_RECOUNTED = ("retained_rows", "subject_rows")
 
 
 def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapping[str, Path],
@@ -1353,7 +1358,7 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
                         ) -> tuple[dict, list[str], publication.NativeConversionProof | None]:
     """Qualify ``built`` against its retained originals; return the receipt's proof fields, problems, and the proof.
 
-    The reader part (receipt outcomes, preserved page refusals, original restoration) comes from the admitted reader,
+    The reader part (receipt outcomes, original restoration) comes from the admitted reader,
     or, with ``sealed``, from that prepared receipt, whose semantic admission ran under this process's admission key.
     Everything else (subject counts, membership, physical tables, lineage, handed-on journal) is recomputed here
     either way, so the caller's comparison with the seal still checks it.
@@ -1362,16 +1367,12 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         raise ConversionRefused("Conversion qualification requires its active admitted reader")
     artifact = built.read_operation.verified_source(built.generation)[0].root
     tables, problems = {}, []
-    from spicy_regs.fec_native_conversion import REBUILT_TABLES, RETIRED_TABLES
-    retired, rebuilt = RETIRED_TABLES.get(family, frozenset()), REBUILT_TABLES.get(family, frozenset())
+    from spicy_regs.fec_native_conversion import REBUILT_TABLES, RETIRED_TABLES, converted_tables
+    from spicy_regs.transforms.fec_original_tables import expected_rows
+    retired, rebuilt = RETIRED_TABLES.get(family, frozenset()), REBUILT_TABLES.get(family, {})
     if sealed is None:
         _, reader, _ = built.read_operation.admit_generation(built.generation)
         outcomes = reader.outcome_counts()
-        preserved_pages = 0
-        try:
-            preserved_pages = reader.preserved_source_page_refusals()
-        except ValueError as invalid_refusal:
-            problems.append(f"source page refusals do not qualify: {invalid_refusal}")
 
         def restore(dataset: str, original: Path) -> dict:
             if dataset != "fec_record_evidence" or not (retired or rebuilt):
@@ -1386,26 +1387,35 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
                 return built.compare_original(dataset, kept) | {"unreferenced_evidence_rows": dropped}
     else:
         outcomes = dict(sealed["receipt_outcomes"])
-        preserved_pages = sealed["tables"].get("fec_research_source_pages", {}).get("preserved_refused_rows", 0)
 
         def restore(dataset: str, _original: Path) -> dict:
             return {name: value for name, value in sealed["tables"][dataset].items() if name not in _RECOUNTED}
-    unconverted = {name: count - (preserved_pages if name == 'refused' else 0)
-                   for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES}
-    if unconverted := {name: count for name, count in unconverted.items() if count}:
+    if unconverted := {name: count for name, count in outcomes.items() if name not in CONVERTED_OUTCOMES and count}:
         problems.append(f"receipts hold {unconverted}; every retained row must convert")
     for key, table in old["tables"].items():
         dataset = key.removesuffix(".parquet")
         subject = built.generation / (dataset if "members" in table else key)
         if key in retired:
-            # Owner-retired table (ss-j4vz B10): the captured prior holds it, the generation omits it.
+            # Owner-retired table (ss-j4vz B10, Q2): the captured prior holds it, the generation omits it.
             tables[dataset] = {"retired": True, "retained_rows": table["rows"]}
             continue
         if key in rebuilt:
-            # Built from its retained originals (ss-j4vz B7-B9), not converted from the captured rows;
-            # build_retained_family checks those rows against the originals.
-            tables[dataset] = {"rebuilt_from_originals": True, "retained_rows": table["rows"],
-                               "subject_rows": _table_rows(subject) if subject.exists() else 0}
+            # Built from its retained originals (ss-j4vz B7-B9), not converted from the captured rows,
+            # so the captured row count is no witness. The committed selection states how many rows its
+            # admitted originals hold; any other count, zero included, refuses.
+            dataset = rebuilt[key]
+            subject = built.generation / f"{dataset}.parquet"
+            rows = _table_rows(subject) if subject.exists() else 0
+            # Originals the build did not admit stay countable here, by reason (receipt status, body boundaries).
+            listed = built.generation.parent / "rebuilt" / dataset / f"{dataset}.refusals.json"
+            refused: dict[str, int] = {}
+            for _, reason in (json.loads(listed.read_text()) if listed.exists() else ()):
+                refused[reason] = refused.get(reason, 0) + 1
+            tables[dataset] = {"rebuilt_from_originals": True, "captured_table": key.removesuffix(".parquet"),
+                               "retained_rows": table["rows"], "subject_rows": rows,
+                               "expected_rows": expected_rows(dataset), "refused_originals": refused}
+            if rows != expected_rows(dataset) or rows == 0:
+                problems.append(f"{dataset} holds {rows} rows; its selected originals hold {expected_rows(dataset)}")
             continue
         try:
             check = restore(dataset, retained[key]) | {"retained_rows": table["rows"]}
@@ -1425,12 +1435,9 @@ def _qualify_conversion(family: str, built: _Built, old: Mapping, retained: Mapp
         elif key not in built.receipt_only_tables:
             problems.append(f"{key} is neither a subject table nor a declared receipt-only table")
         tables[dataset] = check
-        preserved = preserved_pages if dataset == 'fec_research_source_pages' else 0
-        if preserved:
-            check['preserved_refused_rows'] = preserved
-        if check.get("subject_rows", table["rows"]) + preserved + dropped != table["rows"] or _has_differences(check):
+        if check.get("subject_rows", table["rows"]) + dropped != table["rows"] or _has_differences(check):
             problems.append(f"{dataset} does not restore to its retained table: {check}")
-    expected = (set(old["tables"]) | built.added_tables) - built.receipt_only_tables - retired
+    expected = (converted_tables(family, old["tables"]) | built.added_tables) - built.receipt_only_tables
     if (subjects := set(artifact["spec"]["tables"])) != expected:
         problems.append(f"the generation holds {sorted(subjects)}; publication expects {sorted(expected)}")
     # Keep the original physical-file guard as well as the logical membership check.

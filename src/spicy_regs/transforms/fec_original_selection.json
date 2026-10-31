@@ -1,5 +1,11 @@
 {
  "basis": "Originals of the receipt-derived FEC tables (live fec-query 784b23da) with their capture-import acquisition receipts (ss-wfop); written by work/fec-receipt-tables-validate-20261030/write_original_selection.py",
+ "expected_rows": {
+  "fec_historical_ie_statistics": 1086,
+  "fec_reference_filing_feed_items": 794,
+  "fec_reference_source_pages": 14,
+  "fec_research_meeting_observations": 60
+ },
  "format": "fec-original-selection/1",
  "originals": [
   {
@@ -63,18 +69,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:af6ba6c9eaa4dbec084014841bbeaf6f3e1ee018db1b0c4eb151b72be8179f6d",
    "source_url": "https://efilingapps.fec.gov/rss/generate?preDefinedFilingType=ALL",
-   "table": "fec_research_filing_feed_items"
-  },
-  {
-   "acquisition_receipt": "acquisitions/sha256/33/33cf3f3883ddfafb280ee30e9c2c2b0a177e478a81c64a4437513f3ae86d3ab7",
-   "bytes": 65138,
-   "collection_ids": [
-    "native-context-d1a220205d0d050987b4-0000"
-   ],
-   "source_authority": "www.fec.gov",
-   "source_sha256": "sha256:1284b9784a5a8a4c70098c581708640642f96143726f12594ca8f9281f9b41d5",
-   "source_url": "https://www.fec.gov/meetings/",
-   "table": "fec_research_meeting_observations"
+   "table": "fec_reference_filing_feed_items"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/00/001293883dc50ef40931f9596ef010b651bd8c6eb47c0e1c59df231ee4ff7479",
@@ -86,7 +81,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:0309c0d2b628db37f2af00d180ebce6984629bf1d1a5add8c2fc5b1cc7282738",
    "source_url": "https://www.fec.gov/legal-resources/court-cases/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/15/1552348c45c259edbb9b603fe27dafc501de9e527cf15ec75b582cf5a854cd5f",
@@ -98,7 +93,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:0693f1872f312a84f941df181e3509d47f50172484445ba63062728215cb7af5",
    "source_url": "https://www.fec.gov/legal-resources/court-cases/fieger-v-fec/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/fd/fd38f49bca5a6ff9e04a4f828862de29e020ca5df7ebc342b2d9abe0e2e2ad82",
@@ -110,7 +105,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:09a778d200e43b5ed6130cb4d664a8d43e4eadce7f3bc17eddcd21932ba005a5",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/2595/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/31/3148d4457f8ffbd9b01d24df35d5553e6c8230320da2972f2a640f080ef41711",
@@ -122,7 +117,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:22e0aad140aed5ea9e7828691bb342f1e463622c54c9f764b9731b424a20ccdf",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/4357/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/79/79057c62349f9a276baa8fb8e67f75d93628a795545d3cee515b2c6353512aef",
@@ -134,7 +129,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:3663392f47d5530a327911508b569f2533b2de70c08bddcff92ef228ca6d2690",
    "source_url": "https://www.fec.gov/legal-resources/court-cases/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/36/360cdd51f852596c70eca2c8e7630aba61dcbcf19630fcdd7825d4921c1000c6",
@@ -146,7 +141,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:37ba52bf7703b4bdcc66f1e0a923e81167b3bb49fdda453e47526e2f3e68a587",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00949545/1998706/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/a5/a57ebd662fa3c923470287be846c593fe14ae81c701e916f8845593b10bcc071",
@@ -158,7 +153,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:4914a80580141fcfbfa63cac556935b6656e3219293d75ac60e1e2982f41e72b",
    "source_url": "https://www.fec.gov/legal-resources/court-cases/citizens-united-v-fec/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/74/742d76cf3dddf2f0e45b9b7281222547f631d238b3bd6936e4377a75b4c44964",
@@ -170,7 +165,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:5398b365d1763a5dfc746530a9cfa76bc96755be517b40d176782c8ac3126d48",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/2189/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": null,
@@ -182,7 +177,7 @@
    "source_authority": "publisher-response-or-explicit-member",
    "source_sha256": "sha256:58bf2215b395dcac74c009aa98701854e43cbe54a1cd3a95fee6a647ca9910d4",
    "source_url": "https://docquery.fec.gov/cgi-bin/senate_forms/C00484683/1678/f6S",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/a4/a48b5988f4463032429ba0beac69081cb244229c82f3b11e4e2d8e468a378abe",
@@ -194,7 +189,7 @@
    "source_authority": "www.oversight.gov",
    "source_sha256": "sha256:5b146c6dfecdb4454aa699d4b4c2645b2041f3f430004a59c62bd74c54784795",
    "source_url": "https://www.oversight.gov/reports/recommendations",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/21/21af80ff4a48f5d6d3303dab2ffacbb1f82a7355f003dc466b66b458717d0e71",
@@ -206,7 +201,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:613e13652fdedea7e8170babfd7edc89b2a81d5598bba80e202a95fed954a833",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00341529/2761/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/84/84839686e89429f10cc69a2d35fa924c2efb0f1d6c8ab86aea35e37ee7477e43",
@@ -218,7 +213,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:721974ab3f9ce76575a35807b014ec4510a1a1c11711977a5159cd5f6e0b61ae",
    "source_url": "https://www.fec.gov/legal-resources/court-cases/emilys-list-v-fec/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/87/87cdfb74f20074ae126386718764033b50a8cb5863c1d03147dfb0c2978f8c59",
@@ -230,7 +225,7 @@
    "source_authority": "www.oversight.gov",
    "source_sha256": "sha256:7603682615cd9a23e4a9943aa2cb498eeb30b7610a0545a12e0e39654449faa4",
    "source_url": "https://www.oversight.gov/reports/recommendations?submitting_oig_rec%5B%5D=236",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/d9/d98bd91ae7db269f73ff6ddf74610a327319a9b6661c6780ace2926d9a4fa6c4",
@@ -242,7 +237,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:7777c3aba1990822596ac0c63f59d63207f3ef7c5fa01d120e8a7696309639c7",
    "source_url": "https://docquery.fec.gov/cgi-bin/fecimg/?202606089870450873",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/bb/bb92ac4cf0cbce7437cd4dfc97bf00b39144d702e1fbe3eefbe2ec1fb7d0283f",
@@ -254,7 +249,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:788ff84f0583c826e282c46e3bdf6769d984bd219b856974fc203efdee04afa1",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00554980/1987699/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/9e/9e558bc955c2967a3da1e03235864bef3b23ea3bd1abce7160b79d0f7c83d750",
@@ -266,7 +261,7 @@
    "source_authority": "www.oversight.gov",
    "source_sha256": "sha256:7c9e650a260305d313234a4bd40c18dbdcc9881153ccd3d103dd453f1fda1b33",
    "source_url": "https://www.oversight.gov/reports/recommendations?agency-reviewe-investigated-rec%5B%5D=77&items_per_page=50",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/e7/e7fc5811cf906d46cd234d3f1dac4b2a619b03a914dd4eb6e69ca09acf96faa8",
@@ -278,7 +273,7 @@
    "source_authority": "www.oversight.gov",
    "source_sha256": "sha256:85f89bc9151976bf4b4b95ddcf1f38f76da03758a403b40515e277344b811ccb",
    "source_url": "https://www.oversight.gov/reports/recommendations?submitting_oig_rec%5B%5D=236&items_per_page=50",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/95/95d5cd4d843a66de93b069f564d9d3571bf8fd38e8aa88f60c555ff20a5687f1",
@@ -290,7 +285,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:92c7fa7b68a766911d94835b9d5aef01bafbf9a64af11b9ee60c4e051cba6573",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00871426/1981956/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/66/665ddb112cb86295e68480e281537a7d976c57e0c7a7f07e8563f44e136be12a",
@@ -302,7 +297,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:973784748c2ff3fb2f3bf6ccb74a398d28dbe98072b06acc9a1957ca9ad5a79f",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/1366/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/71/719ee872c2c98f06bd08fc57d0203c7f18f89bfd6101908bc7cb88411859c922",
@@ -314,7 +309,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:99e1b387b82f405407a8d585c247bfcc00618c410ff22fa8cc9ffc6e9bd741c9",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/206/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/c3/c3c25af906bd34c7a0bc344c85d5fa31707302dcf26001b69bada78d52df7d92",
@@ -326,7 +321,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:9a7de2bb6377442cdabd035f36a2834cfac5fdbe8349d671f8e4475f8d4ae32e",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00949545/1998705/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/73/73f68868a22bf24e46a89ff9cb356222cad1e4529df4230c651d405117ea2cd8",
@@ -338,7 +333,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:9ece77a87ef396fe33d4121d5f52e266413a184562a492cfdec85e5a98e481a9",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/2243/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/cb/cb3720c9c373906969c79fa4e3c33974a1ec2ef25e38db247b97bd31cdd4193e",
@@ -351,7 +346,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:a2898228d9a542ff9ed855dafe9b42981ac81597afb51818a16960750e36db1a",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00341529/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/ee/ee379a68c760cfa693fc9d2553bd6b31058b176e649128a3134a7a2e51951da1",
@@ -363,7 +358,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:af750f5ceec7c5f72d017edb634cebf21574ffb602c915242f37fe9850d6c83c",
    "source_url": "https://docquery.fec.gov/cgi-bin/forms/C00871426/1981955/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/ec/ecbba8508772768eabc948a317d13b9d2dff1318d12f65e6d1f81368b1aff2c4",
@@ -375,7 +370,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:c2b497d112ceb07703dd3a5e73aeddf9fb57d11ae8caef0bb01ed717fe27af35",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/1616/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/8d/8dbb3839e7d510187b6e41d4eedd7c34634065891b8182af2c11fc2a8a3ef24e",
@@ -387,7 +382,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:c63374d0976837c1e0e402226e52df1e778ee391a665936afc1df8ea650cbcd2",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/763/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/0f/0f99bd931ef8956c0013bd308bbe3735826cbba4f32ae753d4ed5607547ad81c",
@@ -399,7 +394,7 @@
    "source_authority": "official-fec",
    "source_sha256": "sha256:d557c18b22fbfb472c50f55ce69d3de9bd68dfd812f7f3c597a241d2ab94b723",
    "source_url": "https://www.fec.gov/legal-resources/court-cases/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/ec/ec87cff6b13d58321b669e0ab7dd6813b62cb88433a3ab3274d3e808c3f2216f",
@@ -411,7 +406,7 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:e5cae72b45af791faac353211caa33ab408b0aeaa2bd3d59fa00261a6f6f1b97",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/4499/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
   },
   {
    "acquisition_receipt": "acquisitions/sha256/3c/3c8b806a42cedd9eb3c37b4aa1520b5854f2eb92822a96f6d47e016194166295",
@@ -423,7 +418,18 @@
    "source_authority": "www.fec.gov",
    "source_sha256": "sha256:eb8a9f50a033039638ff7fa2347fa598cf9f669bc59e7deb14d88ca0a2f72570",
    "source_url": "https://www.fec.gov/data/legal/matter-under-review/3000/",
-   "table": "fec_research_source_pages"
+   "table": "fec_reference_source_pages"
+  },
+  {
+   "acquisition_receipt": "acquisitions/sha256/33/33cf3f3883ddfafb280ee30e9c2c2b0a177e478a81c64a4437513f3ae86d3ab7",
+   "bytes": 65138,
+   "collection_ids": [
+    "native-context-d1a220205d0d050987b4-0000"
+   ],
+   "source_authority": "www.fec.gov",
+   "source_sha256": "sha256:1284b9784a5a8a4c70098c581708640642f96143726f12594ca8f9281f9b41d5",
+   "source_url": "https://www.fec.gov/meetings/",
+   "table": "fec_research_meeting_observations"
   }
  ],
  "raw_archive": "SPICYGOV_RAW_ROOT or ~/Work/corpora/spicyregs/raw"

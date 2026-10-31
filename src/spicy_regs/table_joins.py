@@ -167,9 +167,10 @@ _FEC_COLLECTION_KEYS = {
     "fec_loan_guarantors": 19, "fec_loan_terms": 9, "fec_loans": 127, "fec_lobbyist_registrations": 1,
     "fec_oversight_recommendations": 6, "fec_postgres_committee_history_observations": 1, "fec_quality_notices": 1,
     "fec_receipts": 824, "fec_record_evidence": 1_181, "fec_registration_statements": 4, "fec_report_metrics": 107,
-    "fec_reported_financial_summaries": 14, "fec_research_context_dispositions": 1_517,
-    "fec_research_filing_feed_items": 9,
-    "fec_research_meeting_observations": 1, "fec_research_response_outcomes": 42, "fec_research_source_pages": 30,
+    "fec_reported_financial_summaries": 14, "fec_research_meeting_observations": 1,
+    # Rebuilt from their originals (ss-j4vz B7-B9): one collection per original, the first capture part, measured
+    # 2026-10-31 on fec_original_tables.rebuild over the committed selection (live held 9 and 30).
+    "fec_reference_filing_feed_items": 1, "fec_reference_source_pages": 14,
 }
 #: Why a summary's literal ids are a scope join: the file's ids are copied, never looked up (entity_reference_status).
 _LITERAL_IDS = "The ids are copied as each summary file states them and are never looked up when a row is mapped. "

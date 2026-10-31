@@ -159,8 +159,8 @@ def rss(*items):
 
 
 def test_feed_rows_are_every_item_of_the_whole_original_keyed_by_guid(archive):
-    entry = admit(archive, "fec_research_filing_feed_items", rss(("A", "101"), ("B", "102")))
-    rows = rebuild("fec_research_filing_feed_items", store=archive, originals=[entry]).rows
+    entry = admit(archive, "fec_reference_filing_feed_items", rss(("A", "101"), ("B", "102")))
+    rows = rebuild("fec_reference_filing_feed_items", store=archive, originals=[entry]).rows
     assert [(r["guid"], r["filing_id"], r["committee_id"], r["parsing_status"]) for r in rows] == [
         ("101", "101", "C00000001", "parsed"),
         ("102", "102", "C00000001", "parsed"),
@@ -169,9 +169,9 @@ def test_feed_rows_are_every_item_of_the_whole_original_keyed_by_guid(archive):
 
 
 def test_feed_guid_repeated_within_one_capture_is_refused(archive):
-    entry = admit(archive, "fec_research_filing_feed_items", rss(("A", "101"), ("B", "101")))
+    entry = admit(archive, "fec_reference_filing_feed_items", rss(("A", "101"), ("B", "101")))
     with pytest.raises(ValueError, match="guid repeats"):
-        rebuild("fec_research_filing_feed_items", store=archive, originals=[entry])
+        rebuild("fec_reference_filing_feed_items", store=archive, originals=[entry])
 
 
 def test_meeting_rows_keep_table_position_dates_and_cancellation(archive):
@@ -192,21 +192,70 @@ def test_meeting_rows_keep_table_position_dates_and_cancellation(archive):
 
 def test_source_page_whose_title_says_it_failed_is_refused_even_with_a_successful_receipt(archive):
     page = b"<html><head><title>Server error</title></head><body><h1>Server error</h1></body></html>"
-    entry = admit(archive, "fec_research_source_pages", page, page_type="official_legal_document_reference")
-    result = rebuild("fec_research_source_pages", store=archive, originals=[entry])
+    entry = admit(archive, "fec_reference_source_pages", page, page_type="official_legal_document_reference")
+    result = rebuild("fec_reference_source_pages", store=archive, originals=[entry])
     assert result.rows == []
     assert result.refusals == [(entry["source_sha256"], "failed_page")]
 
 
+BANNER = b"<p>Federal Election Commission | United States of America</p>"
+FOOTER = b"<p>About\nCareers\nPress\nContact\nPrivacy and security policy</p>"
+
+
 def test_source_page_is_one_row_per_whole_original(archive):
-    page = b"<html><head><title>MUR 1</title></head><body><h1>MUR 1</h1><p>Text</p></body></html>"
-    entry = admit(archive, "fec_research_source_pages", page, page_type="official_legal_document_reference")
-    (row,) = rebuild("fec_research_source_pages", store=archive, originals=[entry]).rows
-    assert (row["title"], row["content_scope"], row["page_type"]) == (
+    page = b"<html><head><title>MUR 1</title></head><body>" + BANNER * 2 + b"<h1>MUR 1</h1><p>Text</p>" + FOOTER + b"</body></html>"
+    entry = admit(archive, "fec_reference_source_pages", page, page_type="official_legal_document_reference")
+    (row,) = rebuild("fec_reference_source_pages", store=archive, originals=[entry]).rows
+    assert (row["title"], row["content_scope"], row["page_type"], row["content_status"]) == (
         "MUR 1",
         "whole_original",
         "official_legal_document_reference",
+        "body_extracted",
     )
+
+
+def test_source_page_without_known_body_boundaries_is_refused_not_published(archive):
+    """Only an extracted body is a page; the writer never sees another status (ss-j4vz re-review low)."""
+    page = b"<html><head><title>MUR 1</title></head><body><h1>MUR 1</h1><p>Text</p></body></html>"
+    entry = admit(archive, "fec_reference_source_pages", page, page_type="official_legal_document_reference")
+    result = rebuild("fec_reference_source_pages", store=archive, originals=[entry])
+    assert result.rows == []
+    assert result.refusals == [(entry["source_sha256"], "unsupported_body_boundaries")]
+
+
+def test_committed_selection_states_a_positive_row_count_for_every_rebuilt_table():
+    from spicy_regs.transforms.fec_original_tables import expected_rows
+
+    assert {table: expected_rows(table) for table in TABLES} == {
+        "fec_historical_ie_statistics": 1086,
+        "fec_research_meeting_observations": 60,
+        "fec_reference_filing_feed_items": 794,
+        "fec_reference_source_pages": 14,
+    }
+
+
+@pytest.mark.parametrize("stated", [0, -1, "20", None])
+def test_selection_without_a_positive_expected_count_refuses(tmp_path, stated):
+    from spicy_regs.transforms.fec_original_tables import SELECTION_PATH, expected_rows
+
+    document = json.loads(SELECTION_PATH.read_text())
+    document["expected_rows"]["fec_reference_source_pages"] = stated
+    path = tmp_path / "selection.json"
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="positive row count"):
+        expected_rows("fec_reference_source_pages", path)
+    del document["expected_rows"]["fec_reference_source_pages"]
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="expected rows of every rebuilt table"):
+        expected_rows("fec_historical_ie_statistics", path)
+
+
+def test_collection_id_is_the_first_capture_part_by_number_not_by_spelling(archive):
+    page = b"<html><head><title>MUR 1</title></head><body>" + BANNER * 2 + b"<h1>MUR 1</h1>" + FOOTER + b"</body></html>"
+    entry = admit(archive, "fec_reference_source_pages", page, page_type="official_legal_document_reference")
+    entry["collection_ids"] = ["capture-10", "capture-9", "capture-0011"]
+    (row,) = rebuild("fec_reference_source_pages", store=archive, originals=[entry]).rows
+    assert row["collection_id"] == "capture-9"
 
 
 def facts_ctx(table, facts, url):
@@ -291,7 +340,7 @@ def test_court_page_retains_native_text_and_deferred_links_without_legal_identit
         event("end", "a"),
         event("text", text="About\nCareers\nPress\nContact\nPrivacy and security policy"),
     ]
-    ctx = facts_ctx("fec_research_source_pages", facts, "https://www.fec.gov/legal-resources/court-cases/fieger-v-fec/")
+    ctx = facts_ctx("fec_reference_source_pages", facts, "https://www.fec.gov/legal-resources/court-cases/fieger-v-fec/")
     _source_page(ctx, "official_court_case_reference")
     (page,) = ctx.rows
     assert page["title"] == "Fieger v. FEC" and page["page_type"] == "official_court_case_reference"

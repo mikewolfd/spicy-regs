@@ -15,7 +15,7 @@ from pathlib import Path
 import pyarrow.parquet as pq
 
 from .fec_identity_context_fields import REGISTRY
-from .fec_identity_dispatch import prepare_identity_job, map_identity_record, map_context_rows
+from .fec_identity_dispatch import prepare_identity_job, map_identity_record
 from .fec_identity_receipts import IdentityReceiptWriter
 
 
@@ -42,19 +42,12 @@ def _input_rows(item, base):
         raise ValueError("FEC input changed during mapping")
 
 
-def _emit_mapping(writer, tables, evidence, input_witness, source_input, *, from_receipts=False):
-    """Emit mapped rows with their evidence, grouped once: O(rows + evidence) per mapping.
-
-    Rows mapped from receipt context (fec_collections) are admitted only for tables the
-    registry flags admitted_from_receipts; any other table is refused before anything is
-    written for this mapping (ss-j4vz B11).
-    """
+def _emit_mapping(writer, tables, evidence, input_witness, source_input):
+    """Emit mapped rows with their evidence, grouped once: O(rows + evidence) per mapping."""
     emitted = [table for table, rows in tables.items() if rows]
     for table in emitted:
         if table not in REGISTRY:
             raise ValueError(f"Context emitted another owned family: {table}")
-        if from_receipts and not REGISTRY[table].get("admitted_from_receipts"):
-            raise ValueError(f"Receipt-only input cannot produce table output: {table}")
     links = defaultdict(list)
     for row in evidence:
         links[row["target_table"], row["target_record_id"]].append(row)
@@ -77,7 +70,9 @@ def build_fec_identity_context(manifest, output_dir):
 
     A mapped input names its exact table. A source input supplies explicit jobs
     (kind plus native entry and optional retained header_row). Context inputs
-    select collection IDs; only receipt-describing tables may come from them.
+    select collection IDs and are recorded as receipts only: no table is built
+    from receipt context (ss-j4vz B11; the tables that were are rebuilt from their
+    originals or retired).
     Unsupported native rows become refusal receipts; corrupt inputs abort the
     directory. No schema or namespace guessing is permitted.
     """
@@ -152,19 +147,6 @@ def build_fec_identity_context(manifest, output_dir):
                         raise ValueError("Repeated context collection identity")
                     seen.add(row["collection_id"])
                     writer.emit("fec_collections", row, input_witness=witness)
-                    try:
-                        mappings = list(map_context_rows([row], source_generation_pin=item["source_generation_pin"]))
-                    except (ValueError, KeyError, TypeError) as error:
-                        writer.emit(
-                            "fec_collections",
-                            row,
-                            input_witness=witness,
-                            outcome="refused",
-                            diagnostic={"error": str(error), "kind": type(error).__name__},
-                        )
-                        continue
-                    for mapped in mappings:
-                        _emit_mapping(writer, mapped.tables, mapped.evidence, witness, None, from_receipts=True)
                 if seen != selected:
                     raise ValueError("Selected context membership is incomplete")
             else:

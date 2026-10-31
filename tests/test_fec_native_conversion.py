@@ -31,13 +31,21 @@ def selected_fec_originals(tmp_path, monkeypatch):
     entries = [
         admit(store, 'fec_historical_ie_statistics', ie_workbook([DETAIL, TOTAL])),
         admit(store, 'fec_research_meeting_observations', meetings, source_url='https://www.fec.gov/meetings/'),
-        admit(store, 'fec_research_filing_feed_items', rss(('A', '101'), ('B', '102'))),
-        admit(store, 'fec_research_source_pages', page, page_type='official_legal_document_reference'),
-        admit(store, 'fec_research_source_pages', b'<html>error</html>', status=500,
+        admit(store, 'fec_reference_filing_feed_items', rss(('A', '101'), ('B', '102'))),
+        admit(store, 'fec_reference_source_pages', page, page_type='official_legal_document_reference'),
+        admit(store, 'fec_reference_source_pages', b'<html>error</html>', status=500,
               page_type='official_legal_document_reference'),
     ]
     monkeypatch.setattr(fec_original_tables, 'selection', lambda path=None: entries)
+    # Rows these fixture originals hold; qualification refuses any other count.
+    monkeypatch.setattr(fec_original_tables, 'expected_rows', lambda table, path=None: FIXTURE_ROWS[table])
     return entries
+
+
+FIXTURE_ROWS = {'fec_historical_ie_statistics': 2, 'fec_research_meeting_observations': 1,
+                'fec_reference_filing_feed_items': 2, 'fec_reference_source_pages': 1}
+# The captured name of each rebuilt table: a captured prior (live 784b23da) holds these.
+CAPTURED_NAMES = {table + '.parquet': key for key, table in REBUILT_TABLES['fec-query'].items()}
 
 
 @pytest.fixture(name="bucket")
@@ -55,7 +63,8 @@ def old_family(tmp, monkeypatch, store, family, *, populated=False, rows_by_tabl
                            (RECORD_SCHEMA, COLLECTION_SCHEMA, RELATIONSHIP_SCHEMA), strict=True))
     else:
         declared = json.loads((conversion.Path(conversion.__file__).resolve().parents[2] / 'data_dictionary/fec_typed_schemas.json').read_text())
-        schemas = {name: pa.ipc.read_schema(pa.BufferReader(base64.b64decode(v['arrow_schema_ipc_base64'])))
+        schemas = {CAPTURED_NAMES.get(name + '.parquet', name + '.parquet').removesuffix('.parquet'):
+                   pa.ipc.read_schema(pa.BufferReader(base64.b64decode(v['arrow_schema_ipc_base64'])))
                    for name, v in declared['tables'].items()}
     legacy=json.loads((conversion.Path(conversion.__file__).with_name('fec_retained_legacy_schemas.json')).read_text())
     for name in legacy_tables:
@@ -122,6 +131,9 @@ def test_query_requires_explicit_filing_inputs_and_exact_native_parent(tmp_path,
             observation_generation=native)
         artifact, reader, _ = operation.admit_generation(complete)
         assert set(artifact.root['spec']['tables']) == family_tables('fec-query')
+        # The moved tables publish under their reference names only (ss-j4vz Q1).
+        assert {'fec_reference_filing_feed_items.parquet', 'fec_reference_source_pages.parquet'} <= set(artifact.root['spec']['tables'])
+        assert not {'fec_research_filing_feed_items.parquet', 'fec_research_source_pages.parquet'} & set(artifact.root['spec']['tables'])
         assert artifact.root['spec']['readSnapshot'] == staged
         assert set(artifact.root['spec']['parents']) == family_tables('fec-observations')
         for key, original in retained.items():
@@ -129,17 +141,15 @@ def test_query_requires_explicit_filing_inputs_and_exact_native_parent(tmp_path,
                 assert reader.compare_original(key.removesuffix('.parquet'), original)['rows_only_in_restored'] == 0
         # Rebuilt tables come from the originals, not the (empty) captured rows; the failed capture is refused.
         from spicy_regs.transforms.fec_original_tables import rebuild
-        for key in REBUILT_TABLES['fec-query']:
-            table = key.removesuffix('.parquet')
+        for table in REBUILT_TABLES['fec-query'].values():
             published = list(reader.read_subjects(table))
-            # The page writer refuses a page without an extracted body (it stays a receipt).
-            expected = [r for r in rebuild(table).rows if r.get('content_status', 'body_extracted') == 'body_extracted']
-            assert published and len(published) == len(expected)
+            expected = rebuild(table).rows
+            assert published and len(published) == len(expected) == FIXTURE_ROWS[table]
             assert all(row[name] == want[name] for row, want in zip(published, expected, strict=True)
                        for name in row.keys() & want.keys())
             assert not {'context_sha256', 'source_context_pointer'} & set(published[0])
-        refusals = json.loads((tmp_path / 'complete-query/build/rebuilt/fec_research_source_pages'
-                               / 'fec_research_source_pages.refusals.json').read_text())
+        refusals = json.loads((tmp_path / 'complete-query/build/rebuilt/fec_reference_source_pages'
+                               / 'fec_reference_source_pages.refusals.json').read_text())
         assert [reason for _, reason in refusals] == ['http_status_500']
         conversion._check_prepared_membership('fec-query', snapshot['families']['fec-query'], artifact.root['spec'])
         with pytest.raises(ValueError, match='admitted filing association'):
@@ -204,6 +214,33 @@ def test_production_query_prepares_with_official_staged_parent_and_rejects_stale
     sealed = json.loads((work / 'conversion.json').read_bytes())
     assert 'staged_observations' in sealed and not conversion._sealed_admission(sealed, False, False)
     assert conversion._sealed_admission({k: v for k, v in sealed.items() if k != 'staged_observations'}, False, False)
+
+
+@pytest.mark.parametrize('table', sorted(FIXTURE_ROWS))
+@pytest.mark.parametrize('expected', ['more', 'fewer'])
+def test_query_qualification_refuses_a_rebuilt_table_whose_row_count_differs_from_its_selection(
+        tmp_path, monkeypatch, bucket, table, expected):
+    """A short, long or empty rebuilt table never qualifies: the selection, not the build, states the count."""
+    from spicy_regs.transforms import fec_original_tables
+    from spicy_regs.transforms.assemble_fec_query import FilingAssociationInputs, TypedInput, _sha
+    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
+    stated = FIXTURE_ROWS[table] + (1 if expected == 'more' else -1)
+    monkeypatch.setattr(fec_original_tables, 'expected_rows',
+                        lambda name, path=None: stated if name == table else FIXTURE_ROWS[name])
+    old_family(tmp_path / 'source', monkeypatch, bucket, 'fec-observations')
+    old_family(tmp_path / 'query', monkeypatch, bucket, 'fec-query')
+    source_work = tmp_path / 'source-conversion'
+    source = conversion.convert('fec-observations', allowed=['fec-observations'], work=source_work,
+        expected_main=MAIN, expected_spicy_docs=WHEEL, state=lambda _: dict(STATE))
+    target = tmp_path / 'filing-selection.parquet'
+    pq.write_table(pa.Table.from_batches([], schema=dataset_policy('fec_filings').subject_schema), target)
+    selection = FilingAssociationInputs(source['generation']['artifactDigest'], None,
+        [TypedInput(target, _sha(target), 0)], {}, filing_generation_scope='self')
+    with pytest.raises(conversion.ConversionRefused,
+                       match=f'{table} holds {FIXTURE_ROWS[table]} rows; its selected originals hold {stated}'):
+        conversion.convert('fec-query', allowed=['fec-query'], work=tmp_path / 'query-conversion',
+            staged_observations=source_work / 'build/generation', filing_associations=selection,
+            expected_main=MAIN, expected_spicy_docs=WHEEL, state=lambda _: dict(STATE))
 
 
 def test_nonempty_complete_query_links_filing_source_and_retained_history(tmp_path, monkeypatch, bucket):
@@ -280,7 +317,7 @@ def test_nonempty_complete_query_links_filing_source_and_retained_history(tmp_pa
     assert committee['name']=='TEST COMMITTEE' and committee['cycle']==2024
     assert result['tables']['fec_receipts']['retained_rows']==1
     assert result['tables']['fec_record_evidence']['unreferenced_evidence_rows']==1
-    assert result['tables']['fec_research_source_pages']['rebuilt_from_originals']
+    assert result['tables']['fec_reference_source_pages']['rebuilt_from_originals']
     assert _sha(headers) == selection.header_associations[0].sha256
     assert _sha(target) == selection.filings[0].sha256
     with ConversionReadOperation() as operation:
@@ -409,10 +446,7 @@ def test_retained_legacy_context_bridges_reach_production_admission(tmp_path, mo
     from spicy_regs.transforms.fec_identity_receipts import dataset_policy
     original = dict(record_id='legacy-form2', mapping_version='fec-identity-observations/1',
                     election_year='0202', report_year='2025', source_namespace='fec-bulk-form2')
-    response = dict(record_id='legacy-response', mapping_version='fec-research-context/1', profile_refusal='provider refused',
-                    payload_shape='other_native_payload', outcome_status='refused_native_observation_not_qualified_empty_success',
-                    native_payload_json=json.dumps([1,False,{'publisher_unmapped':'raw'}]))
-    rows_by_table = {'fec_registration_statements':[original], 'fec_research_response_outcomes':[response]}
+    rows_by_table = {'fec_registration_statements':[original]}
     _, source_paths = old_family(tmp_path/'source', monkeypatch, bucket, 'fec-observations')
     snapshot, retained = old_family(tmp_path/'query', monkeypatch, bucket, 'fec-query',
         rows_by_table=rows_by_table, legacy_tables=tuple(rows_by_table))
@@ -434,34 +468,22 @@ def test_retained_legacy_context_bridges_reach_production_admission(tmp_path, mo
             assert comparison['type_changes'] == {}
         [statement] = reader.read_subjects('fec_registration_statements')
         assert statement['election_year']==202 and statement['report_year']==2025
-        [outcome] = reader.read_subjects('fec_research_response_outcomes')
-        assert outcome['capture_disposition']=='refused' and outcome['outcome_status']==response['outcome_status']
-
-
-@pytest.mark.parametrize('payload', [{'publisher_unmapped':[False,1.0]}, [1,False], 'opaque', 17, None])
-def test_retained_response_arbitrary_payload_is_preserved_without_object_coercion(tmp_path, payload):
-    from spicy_regs.fec_native_conversion import retained_identity_row
-    from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter, read_identity_rows
-    from tests.test_fec_identity_receipts import WITNESS
-    original = dict(record_id='response', mapping_version='fec-research-context/1', profile_refusal=None,
-                    payload_shape='other_native_payload', native_payload_json=json.dumps(payload))
-    diagnostics = {}
-    row, overrides = retained_identity_row('fec_research_response_outcomes', original, diagnostics=diagnostics)
-    assert row['capture_disposition']=='captured_payload_not_verified_success'
-    with IdentityReceiptWriter(tmp_path/'response', generation_id='response', tables=['fec_research_response_outcomes']) as writer:
-        writer.emit('fec_research_response_outcomes', row, input_witness=WITNESS,
-                    source_input={'fec_retained_overrides':overrides, 'fec_retained_interpretation':diagnostics})
-    [internal] = read_identity_rows(tmp_path/'response','fec_research_response_outcomes',generation_id='response')
-    assert internal['source_input']['fec_retained_overrides']['native_payload_json']==original['native_payload_json']
 
 
 def test_retired_query_tables_may_remain_in_a_captured_prior_but_nothing_else_may_be_missing():
     from spicy_regs.fec_native_conversion import check_membership
     registered = family_tables('fec-query')
     retired = RETIRED_TABLES['fec-query']
+    rebuilt = REBUILT_TABLES['fec-query']
     assert not retired & registered
-    check_membership('fec-query', {'tables': {key: {} for key in registered | retired}})
+    # The captured prior (live 784b23da) names the moved tables by their earlier names (ss-j4vz Q1).
+    assert {'fec_research_filing_feed_items.parquet', 'fec_research_source_pages.parquet'} < rebuilt.keys()
+    prior = (registered - {table + '.parquet' for table in rebuilt.values()}) | rebuilt.keys()
+    check_membership('fec-query', {'tables': {key: {} for key in prior | retired}})
+    with pytest.raises(ValueError, match='complete registered family membership'):
+        check_membership('fec-query', {'tables': {key: {} for key in prior | {'fec_unknown.parquet'}}})
     check_membership('fec-query', {'tables': {key: {} for key in registered}})
+
     with pytest.raises(ValueError, match='complete registered family membership'):
         check_membership('fec-query', {'tables': {key: {} for key in sorted(registered)[1:]}})
 
@@ -595,7 +617,7 @@ CAPTURED_REMAINING_SCHEMAS_011 = {'fec_registration_statements': '//////ALAAAQAA
 
 # Retired tables (ss-j4vz B10) are omitted before any schema check, so their captured shapes are no longer admitted.
 @pytest.mark.parametrize('table', sorted(set(CAPTURED_REMAINING_SCHEMAS_011)
-                                         - {key.removesuffix('.parquet') for key in RETIRED_TABLES['fec-query'] | REBUILT_TABLES['fec-query']}))
+                                         - {key.removesuffix('.parquet') for key in RETIRED_TABLES['fec-query'] | REBUILT_TABLES['fec-query'].keys()}))
 def test_all_remaining_captured_schemas_admit_and_unknown_columns_refuse(table):
     from spicy_regs.fec_native_conversion import validate_identity_schema
     schema=pa.ipc.read_schema(pa.BufferReader(base64.b64decode(CAPTURED_REMAINING_SCHEMAS_011[table])))
@@ -610,7 +632,7 @@ def test_all_remaining_captured_schemas_admit_and_unknown_columns_refuse(table):
             validate_identity_schema(table,malformed)
 
 
-@pytest.mark.parametrize('table,field', [('fec_collections','record_count'),('fec_research_context_dispositions','source_fact_count')])
+@pytest.mark.parametrize('table,field', [('fec_collections','record_count')])
 @pytest.mark.parametrize('raw,native,status', [('0171',171,'parsed'),('0',0,'parsed'),
     ('9223372036854775807',2**63-1,'parsed'),('9223372036854775808',None,'unsupported_integer'),
     (None,None,'source_null'),('',None,'source_empty'),('+1',None,'unsupported_integer'),
@@ -624,10 +646,7 @@ def test_captured_legacy_counts_restore_raw_types_and_refusals(tmp_path,table,fi
     schema=pa.ipc.read_schema(pa.BufferReader(base64.b64decode(CAPTURED_REMAINING_SCHEMAS_011[table])))
     original=dict.fromkeys(schema.names)
     original.update(collection_id='synthetic',**{field:raw})
-    if table=='fec_collections':
-        original['relationship_count']='0002'
-    else:
-        original.update(mapping_status='raw-status',mapping_reason='raw-reason',outputs_json='{"raw":[false,1.0]}')
+    original['relationship_count']='0002'
     diagnostic={}
     row,overrides=retained_identity_row(table,original,diagnostics=diagnostic,source_schema=schema)
     assert type(row[field]) is type(native) and row[field]==native
@@ -644,13 +663,12 @@ def test_captured_legacy_counts_restore_raw_types_and_refusals(tmp_path,table,fi
     assert internal['source_input']['fec_retained_interpretation']==diagnostic
 
 
-@pytest.mark.parametrize('table,field', [('fec_collections','record_count'),('fec_research_context_dispositions','source_fact_count')])
+@pytest.mark.parametrize('table,field', [('fec_collections','record_count')])
 def test_current_count_schemas_keep_strict_badtype_refusal(tmp_path,table,field):
     from spicy_regs.fec_native_conversion import retained_identity_row,validate_identity_schema
-    from spicy_regs.transforms.fec_research_context import DISPOSITION_SCHEMA
     from spicy_regs.transforms.fec_identity_receipts import IdentityReceiptWriter
     from tests.test_fec_identity_receipts import WITNESS
-    schema=COLLECTION_SCHEMA if table=='fec_collections' else DISPOSITION_SCHEMA
+    schema=COLLECTION_SCHEMA
     validate_identity_schema(table,schema)
     original=dict.fromkeys(schema.names)
     original.update(collection_id='current',**{field:'0171'})
@@ -665,12 +683,9 @@ def test_current_count_schemas_keep_strict_badtype_refusal(tmp_path,table,field)
 
 
 def test_legacy_count_bridges_reach_full_production_admission(tmp_path,monkeypatch,bucket):
-    from spicy_regs.transforms.assemble_fec_query import FilingAssociationInputs,TypedInput,_sha
-    from spicy_regs.transforms.fec_identity_receipts import dataset_policy
     collection=dict(collection_id='legacy-count',source_family='fec',profile='synthetic',record_count='0171',relationship_count='0002')
-    disposition=dict(collection_id='legacy-count',mapping_status='synthetic',mapping_reason='raw-reason',source_fact_count='0171',outputs_json='{}')
     _,source=old_family(tmp_path/'source',monkeypatch,bucket,'fec-observations',rows_by_table={'fec_collections':[collection]},legacy_tables=['fec_collections'])
-    snapshot,retained=old_family(tmp_path/'query',monkeypatch,bucket,'fec-query',rows_by_table={'fec_research_context_dispositions':[disposition]},legacy_tables=['fec_research_context_dispositions'])
+    snapshot,_=old_family(tmp_path/'query',monkeypatch,bucket,'fec-query')
     with ConversionReadOperation() as operation:
         native=build_retained_family('fec-observations',snapshot['families']['fec-observations'],snapshot,source,tmp_path/'native-source',operation=operation)
         _,source_reader,_=operation.admit_generation(native)
@@ -678,20 +693,8 @@ def test_legacy_count_bridges_reach_full_production_admission(tmp_path,monkeypat
         assert comparison['rows_only_in_restored']==comparison['rows_only_in_retained']==0 and comparison['type_changes']=={}
         [held]=source_reader.read_subjects('fec_collections')
         assert held['record_count']==171 and held['relationship_count']==2
-        staged=staged_snapshot(snapshot,native,operation)
-        target=tmp_path/'empty-filings.parquet'
-        pq.write_table(pa.Table.from_batches([],schema=dataset_policy('fec_filings').subject_schema),target)
-        selection=FilingAssociationInputs(staged['families']['fec-observations']['artifactDigest'],None,[TypedInput(target,_sha(target),0)],{},filing_generation_scope='self')
-        complete=build_retained_family('fec-query',snapshot['families']['fec-query'],snapshot,retained,tmp_path/'native-query',operation=operation,read_snapshot=staged,filing_associations=selection,observation_generation=native)
-        _,reader,_=operation.admit_generation(complete)
-        comparison=reader.compare_original('fec_research_context_dispositions',retained['fec_research_context_dispositions.parquet'])
-        assert comparison['rows_only_in_restored']==comparison['rows_only_in_retained']==0 and comparison['type_changes']=={}
-        [held]=reader.read_subjects('fec_research_context_dispositions')
-        assert held['source_fact_count']==171 and held['mapping_reason']=='raw-reason'
-        [processing]=list(reader.processing('fec_research_context_dispositions'))
-        assert processing['processing_fields']['source_input']['fec_retained_interpretation']['field_statuses']['source_fact_count']=='parsed'
 
-@pytest.mark.parametrize('table,field', [('fec_collections','record_count'),('fec_research_context_dispositions','source_fact_count')])
+@pytest.mark.parametrize('table,field', [('fec_collections','record_count')])
 def test_captured_legacy_count_missing_field_has_explicit_diagnostics(table,field):
     # Synthetic missing key is a helper diagnostic, not a decoded Arrow row.
     from spicy_regs.fec_native_conversion import retained_identity_row

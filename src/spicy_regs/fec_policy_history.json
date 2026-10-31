@@ -193,31 +193,6 @@
     "receipt_only": false,
     "nullable_identity_fields": []
   },
-  "fec_research_source_pages": {
-    "dataset": "fec_research_source_pages",
-    "policy_version": "fec-identity-context-receipts/1",
-    "subject_schema": "/////wgCAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAYAAACkAQAAZAEAADgBAAAMAQAA2AAAAAQAAACE/v//AAABDBQAAAAcAAAABAAAAAEAAAAUAAAABQAAAGxpbmtzAAAAdP7//7D+//8AAAENHAAAACAAAAAEAAAAAwAAAGgAAAA8AAAAEAAAAAEAAABsAAAApP7//+D+//8AAAEFEAAAABgAAAAEAAAAAAAAAAUAAABsYWJlbAAAAMz+//8I////AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAaHJlZgAAAAD0/v//MP///wAAAQUQAAAAFAAAAAQAAAAAAAAAAwAAAHVybAAY////VP///wAAAQUQAAAAIAAAAAQAAAAAAAAADQAAAGNvbnRlbnRfc2NvcGUAAABI////hP///wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAHRleHQAAAAAcP///6z///8AAAEFEAAAABgAAAAEAAAAAAAAAAUAAAB0aXRsZQAAAJj////U////AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAcGFnZV90eXBlAAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
-    "identity_fields": [
-      "record_id"
-    ],
-    "receipt_fields": [
-      "mapping_version",
-      "collection_id",
-      "source_authority",
-      "source_url",
-      "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
-      "observed_at_json",
-      "content_status",
-      "links_json",
-      "conversion_inputs",
-      "conversion_diagnostics",
-      "source_input"
-    ],
-    "receipt_only": false,
-    "nullable_identity_fields": []
-  },
   "fec_intercommittee_transactions": {
     "dataset": "fec_intercommittee_transactions",
     "policy_version": "fec-subject-receipts/1",
@@ -414,56 +389,6 @@
       "fec_input_columns"
     ],
     "receipt_only": false,
-    "nullable_identity_fields": []
-  },
-  "fec_research_filing_feed_items": {
-    "dataset": "fec_research_filing_feed_items",
-    "policy_version": "fec-identity-context-receipts/1",
-    "subject_schema": "//////gCAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA0AAACUAgAAWAIAACwCAAAAAgAAyAEAAJQBAABgAQAAMAEAAAABAADQAAAAjAAAAFAAAAAEAAAAsP3//wAAAQoQAAAAKAAAAAQAAAAAAAAADAAAAHB1Ymxpc2hlZF9hdAAAAAAIAAwABgAIAAgAAAAAAAIABAAAAAMAAABVVEMA+P3//wAAAQgQAAAAJAAAAAQAAAAAAAAAEQAAAGNvdmVyYWdlX2VuZF9kYXRlAAAAxv///wAAAAAw/v//AAABCBAAAAAsAAAABAAAAAAAAAATAAAAY292ZXJhZ2Vfc3RhcnRfZGF0ZQAAAAYACAAGAAYAAAAAAAAAcP7//wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAHJlcG9ydF90eXBlAGD+//+c/v//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAZm9ybV90eXBlAAAAjP7//8j+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABmaWxpbmdfaWQAAAC4/v//9P7//wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAGNhbmRpZGF0ZV9pZAAAAADo/v//JP///wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAGNvbW1pdHRlZV9pZAAAAAAY////VP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEQAAAHJlcG9ydGVkX2ZpbGVyX2lkAAAATP///4j///8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABndWlkAAAAAHT///+w////AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAbGluawAAAACc////2P///wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHRpdGxlAAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
-    "identity_fields": [
-      "record_id"
-    ],
-    "receipt_fields": [
-      "mapping_version",
-      "collection_id",
-      "source_authority",
-      "source_url",
-      "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
-      "observed_at_json",
-      "published_at_raw",
-      "current_record_status",
-      "source_label_status",
-      "coverage_start_raw",
-      "coverage_end_raw",
-      "parsing_status",
-      "filing_link_status",
-      "conversion_inputs",
-      "conversion_diagnostics",
-      "source_input"
-    ],
-    "receipt_only": false,
-    "nullable_identity_fields": []
-  },
-  "fec_research_context_dispositions": {
-    "dataset": "fec_research_context_dispositions",
-    "policy_version": "fec-identity-context-receipts/1",
-    "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-    "identity_fields": [],
-    "receipt_fields": [
-      "collection_id",
-      "mapping_status",
-      "mapping_reason",
-      "source_url",
-      "context_sha256",
-      "outputs_json",
-      "source_fact_count",
-      "conversion_inputs",
-      "conversion_diagnostics",
-      "source_input"
-    ],
-    "receipt_only": true,
     "nullable_identity_fields": []
   },
   "fec_candidate_history": {
@@ -776,34 +701,6 @@
       "fec_input_columns"
     ],
     "receipt_only": false,
-    "nullable_identity_fields": []
-  },
-  "fec_research_response_outcomes": {
-    "dataset": "fec_research_response_outcomes",
-    "policy_version": "fec-identity-context-receipts/1",
-    "subject_schema": "/////zAAAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAAAAAA=",
-    "identity_fields": [],
-    "receipt_fields": [
-      "record_id",
-      "mapping_version",
-      "collection_id",
-      "source_authority",
-      "source_url",
-      "source_sha256",
-      "context_sha256",
-      "source_context_pointer",
-      "observed_at_json",
-      "profile_refusal",
-      "query_completeness",
-      "payload_shape",
-      "outcome_status",
-      "capture_disposition",
-      "observed_payload_records",
-      "conversion_inputs",
-      "conversion_diagnostics",
-      "source_input"
-    ],
-    "receipt_only": true,
     "nullable_identity_fields": []
   },
   "fec_electioneering_communications": {

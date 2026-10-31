@@ -99,22 +99,40 @@ def family_tables(family):
     raise ValueError('Unsupported FEC conversion family')
 
 
-# Published tables the owner retired (ss-j4vz B10, 2026-10-30): a captured prior still
-# holds them, the converted generation omits them, and their originals stay in the raw store.
+# Published tables the owner retired (ss-j4vz B10, 2026-10-30; Q2, 2026-10-31): a captured
+# prior still holds them, the converted generation omits them, and their originals stay in the raw store.
 RETIRED_TABLES = {'fec-query': frozenset({'fec_research_document_observations.parquet',
-                                          'fec_retained_csv_observations.parquet'})}
+                                          'fec_retained_csv_observations.parquet',
+                                          'fec_research_response_outcomes.parquet',
+                                          'fec_research_context_dispositions.parquet'})}
 
 
-# Tables the owner moved off receipt context (ss-j4vz B7-B9, Q6-Q8, 2026-10-30): the
-# captured prior still holds them, but each generation builds them from the retained
-# originals the committed selection names, never from the captured rows.
-REBUILT_TABLES = {'fec-query': frozenset(f'{name}.parquet' for name in (
-    'fec_historical_ie_statistics', 'fec_research_meeting_observations',
-    'fec_research_filing_feed_items', 'fec_research_source_pages'))}
-# Stored evidence rows that target a retired or rebuilt table describe receipt context
-# that no published row carries any longer; a rebuilt row is its own witness.
-_UNREFERENCED_EVIDENCE = {family: RETIRED_TABLES.get(family, frozenset()) | REBUILT_TABLES.get(family, frozenset())
+# Tables the owner moved off receipt context (ss-j4vz B7-B9, Q6-Q8, 2026-10-30): the captured
+# prior still holds them under the key on the left, but each generation builds the table on the
+# right from the retained originals the committed selection names, never from the captured rows.
+# The filing feed and source pages move to the reference namespace (Q1, 2026-10-31).
+REBUILT_TABLES = {'fec-query': {
+    'fec_historical_ie_statistics.parquet': 'fec_historical_ie_statistics',
+    'fec_research_meeting_observations.parquet': 'fec_research_meeting_observations',
+    'fec_research_filing_feed_items.parquet': 'fec_reference_filing_feed_items',
+    'fec_research_source_pages.parquet': 'fec_reference_source_pages',
+}}
+# Stored evidence rows that target a retired or rebuilt table (by its captured name) describe
+# receipt context that no published row carries any longer; a rebuilt row is its own witness.
+_UNREFERENCED_EVIDENCE = {family: RETIRED_TABLES.get(family, frozenset()) | REBUILT_TABLES.get(family, {}).keys()
                           for family in FAMILIES}
+
+
+def published_outputs(family, captured_tables):
+    """A captured prior's table entries keyed by the member a converted generation publishes them as."""
+    rebuilt = REBUILT_TABLES.get(family, {})
+    return {(rebuilt[key] + '.parquet' if key in rebuilt else key): table
+            for key, table in captured_tables.items() if key not in RETIRED_TABLES.get(family, frozenset())}
+
+
+def converted_tables(family, captured_tables):
+    """The member keys a converted generation publishes for a captured prior's tables."""
+    return set(published_outputs(family, captured_tables))
 
 
 def referenced_evidence(original, destination, family, *, check_resources=lambda: None):
@@ -167,7 +185,7 @@ def rebuilt_inputs(table, directory, *, store=None, check_resources=lambda: None
 
 
 def check_membership(family, old):
-    if set(old['tables']) - RETIRED_TABLES.get(family, frozenset()) != family_tables(family):
+    if converted_tables(family, old['tables']) != family_tables(family):
         raise ValueError('FEC conversion requires the complete registered family membership')
     for key, table in old['tables'].items():
         if 'members' in table and [member['key'] for member in table['members']] != sorted(member['key'] for member in table['members']):
@@ -305,8 +323,7 @@ def retained_identity_row(table, original, *, diagnostics=None, source_schema=No
         if value is not None and not isinstance(value, dict):
             raise ValueError(f'{table}: retained {name} must be a named source object')
         return value
-    count_fields = {'fec_research_context_dispositions': ('source_fact_count',),
-                    'fec_collections': ('record_count', 'relationship_count')}.get(table)
+    count_fields = {'fec_collections': ('record_count', 'relationship_count')}.get(table)
     if count_fields and source_schema is not None:
         # These historic producers emitted textual counts. Only the exact
         # admitted captured schema proves that path; current rows remain strict.
@@ -365,15 +382,6 @@ def retained_identity_row(table, original, *, diagnostics=None, source_schema=No
             from spicy_regs.transforms.fec_identity_observations import _scalar
             row.update(array_values(native, 'sponsor_candidate_list'))
             row.update({name: _scalar(native.get(name)) for name in ('affiliated_committee_name', 'organization_type', *AGENT_FIELDS)})
-    elif table == 'fec_research_response_outcomes' and 'native_payload_json' in original:
-        from spicy_regs.transforms.fec_context_shape import response_capture_disposition
-        if original.get('mapping_version') != 'fec-research-context/1':
-            raise ValueError('Retained response payload requires its captured /1 mapping')
-        # The payload may be a dict/list/scalar/null; reported shape/refusal is
-        # sufficient and the exact opaque payload remains in original overrides.
-        row['capture_disposition'] = response_capture_disposition(original.get('profile_refusal'), original.get('payload_shape'))
-        if diagnostics is not None:
-            diagnostics.update(legacy_bridge='response-context/1', capture_disposition=row['capture_disposition'])
     if set(row) - set(registry['input_fields']):
         raise ValueError(f'{table}: maintained legacy interpretation produced undeclared fields')
     overrides = {name: value for name, value in original.items()
@@ -720,7 +728,8 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
             if key in RETIRED_TABLES.get(family, ()):
                 continue
             table = key.removesuffix('.parquet')
-            if key in REBUILT_TABLES.get(family, ()):
+            if key in REBUILT_TABLES.get(family, {}):
+                table = REBUILT_TABLES[family][key]
                 if originals_store is None:
                     from spicy_docs.storage.raw_archive import CentralRawArchiveStore
                     originals_store = CentralRawArchiveStore(create=False)
@@ -814,7 +823,7 @@ def build_retained_family(family, old, captured, retained, work, *, operation,
                     if native_links is not None and next(native_links, None) is not None:
                         raise ValueError('Filing reference resolution added selected observations')
                 policy = writer.policies[table]
-                subject = None if policy.receipt_only else output / key
+                subject = None if policy.receipt_only else output / f'{table}.parquet'
                 receipts = output / 'etl_receipts.parquet'
             policies.append(policy)
             if receipt_writer is not None:

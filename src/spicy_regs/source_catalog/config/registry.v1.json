@@ -541,14 +541,12 @@
         "fec_quality_notices",
         "fec_receipts",
         "fec_record_evidence",
+        "fec_reference_filing_feed_items",
+        "fec_reference_source_pages",
         "fec_registration_statements",
         "fec_report_metrics",
         "fec_reported_financial_summaries",
-        "fec_research_context_dispositions",
-        "fec_research_filing_feed_items",
-        "fec_research_meeting_observations",
-        "fec_research_response_outcomes",
-        "fec_research_source_pages"
+        "fec_research_meeting_observations"
       ]
     },
     {
@@ -5794,37 +5792,13 @@
         "No implied population completeness or current money"
       ],
       "family": "fec-query",
-      "id": "fec-qualified-policy:fec_research_context_dispositions",
+      "id": "fec-qualified-policy:fec_reference_filing_feed_items",
       "publication_changed": false,
       "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
       "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
       "route_id": "family:fec-query:retained-source-tables",
       "status": "selected-policy",
-      "table": "fec_research_context_dispositions",
-      "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/fec/proposed-registry.json",
-        "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
-      },
-      "policy_version": 1,
-      "historical_lineage_unchanged": true
-    },
-    {
-      "collection_id": "family:fec-query",
-      "conditions": [
-        "Generation-matching parent receipts and tables",
-        "Explicit mapper coverage",
-        "Versioned filing definitions",
-        "Preserve unmapped dispositions and quality notices",
-        "No implied population completeness or current money"
-      ],
-      "family": "fec-query",
-      "id": "fec-qualified-policy:fec_research_filing_feed_items",
-      "publication_changed": false,
-      "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
-      "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
-      "route_id": "family:fec-query:retained-source-tables",
-      "status": "selected-policy",
-      "table": "fec_research_filing_feed_items",
+      "table": "fec_reference_filing_feed_items",
       "qualification_input": {
         "path": "metadata/catalog-relationships/20261010/fec/proposed-registry.json",
         "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
@@ -5866,37 +5840,13 @@
         "No implied population completeness or current money"
       ],
       "family": "fec-query",
-      "id": "fec-qualified-policy:fec_research_response_outcomes",
+      "id": "fec-qualified-policy:fec_reference_source_pages",
       "publication_changed": false,
       "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
       "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
       "route_id": "family:fec-query:retained-source-tables",
       "status": "selected-policy",
-      "table": "fec_research_response_outcomes",
-      "qualification_input": {
-        "path": "metadata/catalog-relationships/20261010/fec/proposed-registry.json",
-        "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"
-      },
-      "policy_version": 1,
-      "historical_lineage_unchanged": true
-    },
-    {
-      "collection_id": "family:fec-query",
-      "conditions": [
-        "Generation-matching parent receipts and tables",
-        "Explicit mapper coverage",
-        "Versioned filing definitions",
-        "Preserve unmapped dispositions and quality notices",
-        "No implied population completeness or current money"
-      ],
-      "family": "fec-query",
-      "id": "fec-qualified-policy:fec_research_source_pages",
-      "publication_changed": false,
-      "reason": "Build from pinned fec_collections, fec_relationships and fec_source_records parents, not a new direct OpenFEC acquisition. Preserve original API/bulk/filing/legacy provenance and mapper refusal/evidence. Current parent artifact sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0; individual snapshot ordered equivalence failed in fec-individual-retained-qualification/1. No qualified current-money/correction selection is implied. https://api.open.fec.gov/developers/",
-      "retained_generation": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
-      "route_id": "family:fec-query:retained-source-tables",
-      "status": "selected-policy",
-      "table": "fec_research_source_pages",
+      "table": "fec_reference_source_pages",
       "qualification_input": {
         "path": "metadata/catalog-relationships/20261010/fec/proposed-registry.json",
         "sha256": "015f47fc4f2f646d30f0e3615ff74d3b2432db9ec0bc6f5168d746037fcc5880"

@@ -2576,6 +2576,23 @@
    }
   },
   "fec_record_evidence": {},
+  "fec_reference_filing_feed_items": {
+   "meanings": {
+    "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
+    "coverage_start_raw": "Literal CoverageFrom value from the feed's explicitly labelled metadata.",
+    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
+    "published_at_raw": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date."
+   }
+  },
+  "fec_reference_source_pages": {
+   "renamed": {
+    "links_json": "links"
+   },
+   "meanings": {
+    "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
+    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
+   }
+  },
   "fec_registration_statements": {
    "meanings": {
     "election_year_raw": "Literal source value for election_year before conversion; consult election_year_status for interpretation.",
@@ -2640,19 +2657,6 @@
     "value_mapping_version": "Version of the exact monetary and date conversion rules used for supported values."
    }
   },
-  "fec_research_context_dispositions": {
-   "meanings": {
-    "outputs_json": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason."
-   }
-  },
-  "fec_research_filing_feed_items": {
-   "meanings": {
-    "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
-    "coverage_start_raw": "Literal CoverageFrom value from the feed's explicitly labelled metadata.",
-    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
-    "published_at_raw": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date."
-   }
-  },
   "fec_research_meeting_observations": {
    "renamed": {
     "dates_json": "dates",
@@ -2664,20 +2668,6 @@
     "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
     "table_ordinal": "Zero-based ordinal of the source HTML table containing this observation.",
     "table_row": "Native row address in the retained HTML table; use native_cells_json for exact cell evidence."
-   }
-  },
-  "fec_research_response_outcomes": {
-   "meanings": {
-    "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures."
-   }
-  },
-  "fec_research_source_pages": {
-   "renamed": {
-    "links_json": "links"
-   },
-   "meanings": {
-    "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
-    "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON."
    }
   },
   "fec_source_catalog": {

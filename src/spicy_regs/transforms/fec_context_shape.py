@@ -142,19 +142,6 @@ def source_page_body(title, text, url):
     return None, "unsupported_body_boundaries"
 
 
-def response_capture_disposition(profile_refusal, payload_shape):
-    """Classify reported refusal/shape; empty payloads never prove coverage."""
-    if profile_refusal is not None and not isinstance(profile_refusal, str):
-        raise ValueError('Response profile refusal must be native text or null')
-    if payload_shape is not None and not isinstance(payload_shape, str):
-        raise ValueError('Response payload shape must be native text or null')
-    if profile_refusal:
-        return 'refused'
-    if payload_shape is None:
-        return 'unavailable_retained_payload_shape'
-    return ('empty_payload_not_verified_success' if payload_shape == 'results_empty'
-            else 'captured_payload_not_verified_success')
-
 COL_DESCRIPTIONS = {
     "reported_filer_id": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label.",
     "source_label_status": "Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling.",

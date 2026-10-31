@@ -6081,42 +6081,6 @@
       "measurement": null
     },
     {
-      "child": "fec_research_context_dispositions",
-      "child_columns": [
-        "collection_id"
-      ],
-      "parent": "fec_collections",
-      "parent_columns": [
-        "collection_id"
-      ],
-      "kind": "complete",
-      "reason": "",
-      "measured_via": null,
-      "baseline_keys": 1517,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": null
-    },
-    {
-      "child": "fec_research_filing_feed_items",
-      "child_columns": [
-        "collection_id"
-      ],
-      "parent": "fec_collections",
-      "parent_columns": [
-        "collection_id"
-      ],
-      "kind": "complete",
-      "reason": "",
-      "measured_via": null,
-      "baseline_keys": 9,
-      "baseline_missing": 0,
-      "floor_pct": 100.0,
-      "expected_cardinality": "one",
-      "measurement": null
-    },
-    {
       "child": "fec_research_meeting_observations",
       "child_columns": [
         "collection_id"
@@ -6135,7 +6099,7 @@
       "measurement": null
     },
     {
-      "child": "fec_research_response_outcomes",
+      "child": "fec_reference_filing_feed_items",
       "child_columns": [
         "collection_id"
       ],
@@ -6146,14 +6110,14 @@
       "kind": "complete",
       "reason": "",
       "measured_via": null,
-      "baseline_keys": 42,
+      "baseline_keys": 1,
       "baseline_missing": 0,
       "floor_pct": 100.0,
       "expected_cardinality": "one",
       "measurement": null
     },
     {
-      "child": "fec_research_source_pages",
+      "child": "fec_reference_source_pages",
       "child_columns": [
         "collection_id"
       ],
@@ -6164,7 +6128,7 @@
       "kind": "complete",
       "reason": "",
       "measured_via": null,
-      "baseline_keys": 30,
+      "baseline_keys": 14,
       "baseline_missing": 0,
       "floor_pct": 100.0,
       "expected_cardinality": "one",
@@ -13104,14 +13068,7 @@
           "guards": [
             {
               "path": [
-                "source_context_pointer"
-              ],
-              "from": "row",
-              "pattern": "/.*"
-            },
-            {
-              "path": [
-                "context_sha256"
+                "source_sha256"
               ],
               "from": "row",
               "pattern": "sha256:[a-f0-9]{64}"
@@ -13121,7 +13078,7 @@
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
+      "meaning": "The capture collection that retained the original this row was read from, with that original's digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
@@ -13845,97 +13802,6 @@
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "receipt_fec_research_context_dispositions_collection_id_fec_collections",
-      "source": "fec_research_context_dispositions",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_collections",
-          "columns": [
-            "collection_id"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            }
-          ],
-          "guards": [
-            {
-              "path": [
-                "context_sha256"
-              ],
-              "from": "row",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ]
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The retained collection context covered by this mapping disposition and its context digest; no individual source-record identity is asserted.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
-      "id": "receipt_fec_research_filing_feed_items_collection_id_fec_collections",
-      "source": "fec_research_filing_feed_items",
-      "fields": [],
-      "targets": [
-        {
-          "table": "fec_collections",
-          "columns": [
-            "collection_id"
-          ],
-          "keys": [
-            {
-              "parts": [
-                {
-                  "path": [
-                    "collection_id"
-                  ],
-                  "from": "row"
-                }
-              ],
-              "separator": "",
-              "pattern": ".+"
-            }
-          ],
-          "guards": [
-            {
-              "path": [
-                "source_context_pointer"
-              ],
-              "from": "row",
-              "pattern": "/.*"
-            },
-            {
-              "path": [
-                "context_sha256"
-              ],
-              "from": "row",
-              "pattern": "sha256:[a-f0-9]{64}"
-            }
-          ]
-        }
-      ],
-      "mode": "row",
-      "candidates": false,
-      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
-      "receiptFields": [],
-      "elementPath": [],
-      "ruleVersion": "source-navigation/1"
-    },
-    {
       "id": "receipt_fec_research_meeting_observations_collection_id_fec_collections",
       "source": "fec_research_meeting_observations",
       "fields": [],
@@ -13962,14 +13828,7 @@
           "guards": [
             {
               "path": [
-                "source_context_pointer"
-              ],
-              "from": "row",
-              "pattern": "/.*"
-            },
-            {
-              "path": [
-                "context_sha256"
+                "source_sha256"
               ],
               "from": "row",
               "pattern": "sha256:[a-f0-9]{64}"
@@ -13979,14 +13838,14 @@
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
+      "meaning": "The capture collection that retained the original this row was read from, with that original's digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "receipt_fec_research_response_outcomes_collection_id_fec_collections",
-      "source": "fec_research_response_outcomes",
+      "id": "receipt_fec_reference_filing_feed_items_collection_id_fec_collections",
+      "source": "fec_reference_filing_feed_items",
       "fields": [],
       "targets": [
         {
@@ -14011,14 +13870,7 @@
           "guards": [
             {
               "path": [
-                "source_context_pointer"
-              ],
-              "from": "row",
-              "pattern": "/.*"
-            },
-            {
-              "path": [
-                "context_sha256"
+                "source_sha256"
               ],
               "from": "row",
               "pattern": "sha256:[a-f0-9]{64}"
@@ -14028,14 +13880,14 @@
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
+      "meaning": "The capture collection that retained the original this row was read from, with that original's digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"
     },
     {
-      "id": "receipt_fec_research_source_pages_collection_id_fec_collections",
-      "source": "fec_research_source_pages",
+      "id": "receipt_fec_reference_source_pages_collection_id_fec_collections",
+      "source": "fec_reference_source_pages",
       "fields": [],
       "targets": [
         {
@@ -14060,14 +13912,7 @@
           "guards": [
             {
               "path": [
-                "source_context_pointer"
-              ],
-              "from": "row",
-              "pattern": "/.*"
-            },
-            {
-              "path": [
-                "context_sha256"
+                "source_sha256"
               ],
               "from": "row",
               "pattern": "sha256:[a-f0-9]{64}"
@@ -14077,7 +13922,7 @@
       ],
       "mode": "row",
       "candidates": false,
-      "meaning": "The retained collection containing the historical, research or CSV observation, with its source-context pointer and context digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
+      "meaning": "The capture collection that retained the original this row was read from, with that original's digest. This collection anchor does not assert an individual source-record identity or qualify financial totals.",
       "receiptFields": [],
       "elementPath": [],
       "ruleVersion": "source-navigation/1"

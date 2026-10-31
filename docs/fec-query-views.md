@@ -30,8 +30,8 @@ accessible through exact evidence references.
 | `fec_filing_report_observations`, `fec_filing_text_observations` | Report facts with the ordered native lists `reported_measures` and `text_fragments`, without a second copy of the complete native field array. |
 | `fec_legal_matters`, `fec_legal_documents` | Matter and document facts. Useful legal scalars are typed columns; citations and subjects are native lists and structures that keep their source hierarchy. |
 | `fec_agency_report_text` | Text, its kind and its source order (`text_ordinal`). |
-| `fec_research_filing_feed_items` | Feed identifiers, labels, dates and timestamp interpreted at build time. Candidate IDs incorrectly labelled CommitteeId by the source retain that distinction. |
-| `fec_research_source_pages` | Body text, content scope and a native list of links. The extraction status (`content_status`) is in the receipt. |
+| `fec_reference_filing_feed_items` | Feed identifiers, labels, dates and timestamp interpreted at build time. Candidate IDs incorrectly labelled CommitteeId by the source retain that distinction. |
+| `fec_reference_source_pages` | Body text, content scope and a native list of links. The extraction status (`content_status`) is in the receipt. |
 | `fec_research_meeting_observations` | Meeting facts with native lists of dates and links; `date_kind` says whether the dates are one date, separately listed dates or the two endpoints of a range. |
 
 ## Receipt-only datasets
@@ -43,7 +43,7 @@ They are processing evidence, not tables, and have no Parquet file of their own.
 | --- | --- |
 | `fec_source_catalog`, `fec_collections`, `fec_collection_selection`, `fec_source_records`, `fec_record_evidence` | The official source inventory, each selected collection's scope and counts, and the complete source records behind the typed rows. |
 | `fec_filing_definitions`, `fec_filing_definition_evidence`, `fec_filing_header_associations`, `fec_agency_mapping_dispositions` | Filing layouts and their evidence, header association checks and agency mapping decisions. |
-| `fec_api_response_controls`, `fec_research_response_outcomes`, `fec_research_context_dispositions` | Capture and mapping diagnostics. |
+| `fec_api_response_controls` | Capture and mapping diagnostics. |
 
 ## When a child view is justified
 

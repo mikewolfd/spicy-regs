@@ -1,8 +1,14 @@
-"""Receipt-only context may emit only the tables the registry admits from receipts (ss-j4vz B11)."""
+"""Receipt context builds no table of its own (ss-j4vz B11): a context input only carries its collections."""
 
+import hashlib
+import json
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
-from spicy_regs.transforms.build_fec_identity_context import _emit_mapping
+from spicy_regs.transforms.build_fec_identity_context import _emit_mapping, build_fec_identity_context
+from spicy_regs.transforms.build_fec_observations import COLLECTION_SCHEMA
 from spicy_regs.transforms.fec_identity_context_fields import REGISTRY
 
 
@@ -22,50 +28,50 @@ def evidence(table, record_id, role):
     return dict(target_table=table, target_record_id=record_id, role=role)
 
 
-def test_admitted_set_is_only_the_two_tables_that_describe_the_receipts():
-    admitted = {table for table, rules in REGISTRY.items() if rules.get("admitted_from_receipts")}
-    assert admitted == {"fec_research_context_dispositions", "fec_research_response_outcomes"}
+def test_no_registry_table_is_admitted_from_receipts():
+    assert not any("admitted_from_receipts" in rules for rules in REGISTRY.values())
+    assert not {"fec_research_response_outcomes", "fec_research_context_dispositions"} & REGISTRY.keys()
 
 
-@pytest.mark.parametrize(
-    "table", ["fec_research_meeting_observations", "fec_research_filing_feed_items", "fec_research_source_pages"]
-)
-def test_tables_built_from_originals_are_refused_from_receipt_context(table):
+def test_context_input_carries_its_collections_and_builds_no_other_table(tmp_path):
+    collection = dict.fromkeys(COLLECTION_SCHEMA.names)
+    collection.update(collection_id="research-capture-0000", source_family="fec-query", record_count=1,
+                      relationship_count=0, collection_outcome_json=json.dumps({"receiverDisposition": {}}))
+    source = tmp_path / "collections.parquet"
+    pq.write_table(pa.Table.from_pylist([collection], schema=COLLECTION_SCHEMA), source)
+    manifest = tmp_path / "selection.json"
+    manifest.write_text(json.dumps({
+        "version": 1, "generation_id": "context-g1", "tables": ["fec_collections"],
+        "inputs": [{"mode": "context", "table": "fec_collections", "path": str(source), "rows": 1,
+                    "sha256": "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest(),
+                    "source_generation_pin": "sha256:" + "a" * 64, "collection_ids": ["research-capture-0000"]}],
+    }))
+    outputs = build_fec_identity_context(manifest, tmp_path / "out")
+    assert [path.name for path in outputs] == ["fec_collections.parquet", "etl_receipts.parquet"]
+    assert sorted(p.name for p in (tmp_path / "out").glob("*.parquet")) == ["etl_receipts.parquet", "fec_collections.parquet"]
+    receipts = pq.read_table(tmp_path / "out" / "etl_receipts.parquet").to_pylist()
+    assert [r["dataset"] for r in receipts] == ["fec_collections"]
+
+
+def test_a_mapping_may_emit_only_registered_tables():
     writer = RecordingWriter()
-    with pytest.raises(ValueError, match=f"Receipt-only input cannot produce table output: {table}"):
-        _emit_mapping(writer, {table: [dict(record_id="x")]}, [], {}, None, from_receipts=True)
+    with pytest.raises(ValueError, match="another owned family: fec_research_response_outcomes"):
+        _emit_mapping(writer, {"fec_research_response_outcomes": [dict(record_id="r1")]}, [], {}, None)
     assert writer.emitted == []
-
-
-def test_receipt_only_input_cannot_emit_a_subject_table_and_nothing_is_written():
-    writer = RecordingWriter()
-    tables = {
-        "fec_research_response_outcomes": [dict(record_id="r1")],
-        "fec_filings": [dict(record_id="f1")],
-    }
-    with pytest.raises(ValueError, match="Receipt-only input cannot produce table output: fec_filings"):
-        _emit_mapping(writer, tables, [], {}, None, from_receipts=True)
-    assert writer.emitted == []
-
-
-def test_native_source_mapping_is_not_subject_to_the_receipt_rule():
-    writer = RecordingWriter()
-    _emit_mapping(writer, {"fec_filings": [dict(record_id="f1")]}, [], {}, None)
-    assert writer.emitted == [("fec_filings", "f1", [])]
 
 
 def test_evidence_is_attached_per_row_by_table_and_record_identity():
     writer = RecordingWriter()
-    tables = {"fec_research_response_outcomes": [dict(record_id="a"), dict(record_id="b")]}
+    tables = {"fec_filings": [dict(record_id="a"), dict(record_id="b")]}
     links = [
-        evidence("fec_research_response_outcomes", "a", "primary"),
-        evidence("fec_research_response_outcomes", "b", "primary"),
-        evidence("fec_research_response_outcomes", "a", "field_definition"),
-        evidence("fec_research_context_dispositions", "a", "other_table"),
+        evidence("fec_filings", "a", "primary"),
+        evidence("fec_filings", "b", "primary"),
+        evidence("fec_filings", "a", "field_definition"),
+        evidence("fec_receipts", "a", "other_table"),
     ]
-    _emit_mapping(writer, tables, links, {}, None, from_receipts=True)
+    _emit_mapping(writer, tables, links, {}, None)
     assert writer.emitted[:2] == [
-        ("fec_research_response_outcomes", "a", ["primary", "field_definition"]),
-        ("fec_research_response_outcomes", "b", ["primary"]),
+        ("fec_filings", "a", ["primary", "field_definition"]),
+        ("fec_filings", "b", ["primary"]),
     ]
     assert [e[0] for e in writer.emitted[2:]] == ["fec_record_evidence"] * 4

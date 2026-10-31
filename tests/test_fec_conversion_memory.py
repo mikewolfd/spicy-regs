@@ -37,15 +37,15 @@ def test_wide_kept_subject_flush_keeps_exact_subject_receipt_values(tmp_path):
     witness = {"source_id": "fixture", "sha256": "sha256:" + "a" * 64, "source_uri": None, "locator": None}
     expected_subjects, expected_receipts = [], []
     output = tmp_path / "wide"
-    with IdentityReceiptWriter(output, generation_id="g", tables=["fec_research_source_pages"]) as writer:
+    with IdentityReceiptWriter(output, generation_id="g", tables=["fec_reference_source_pages"]) as writer:
         for i in range(3):
-            subject, receipt = writer.emit("fec_research_source_pages",
+            subject, receipt = writer.emit("fec_reference_source_pages",
                 {"record_id": str(i), "content_status": "body_extracted", "text": "é" * (3 * 1024 * 1024)},
                 input_witness=witness)
             expected_subjects.append(subject)
             expected_receipts.append(receipt)
             assert not writer.receipts  # One wide subject crosses the byte bound, even with empty processing fields.
-    assert pq.read_table(output / "fec_research_source_pages.parquet").to_pylist() == expected_subjects
+    assert pq.read_table(output / "fec_reference_source_pages.parquet").to_pylist() == expected_subjects
     assert pq.read_table(output / "etl_receipts.parquet").to_pylist() == expected_receipts
 
 

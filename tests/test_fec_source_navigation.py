@@ -30,11 +30,9 @@ def witness(**changes):
 CONTEXT_ONLY = (
     "fec_collection_selection",
     "fec_historical_ie_statistics",
-    "fec_research_context_dispositions",
-    "fec_research_filing_feed_items",
+    "fec_reference_filing_feed_items",
     "fec_research_meeting_observations",
-    "fec_research_response_outcomes",
-    "fec_research_source_pages",
+    "fec_reference_source_pages",
     "fec_filing_definition_evidence",
 )
 
@@ -251,12 +249,13 @@ def test_context_anchors_require_existing_column_and_pointer(route, change):
     assert target_keys(recipe(route)["targets"][0], {}, row | change) is None
 
 
-def test_collection_observation_anchor_requires_context_evidence_without_record_identity():
+def test_rebuilt_observation_anchor_requires_its_original_digest_without_record_identity():
+    """Tables rebuilt from originals (ss-j4vz B7-B9) anchor to their collection by the original's digest."""
     target = recipe("receipt_fec_research_meeting_observations_collection_id_fec_collections")["targets"][0]
-    row = {"collection_id": "csv", "source_context_pointer": "/facts/4", "context_sha256": "sha256:" + "d" * 64}
-    assert target_keys(target, {}, row) == ["csv"]
-    for field in ("source_context_pointer", "context_sha256"):
-        assert target_keys(target, {}, row | {field: None}) is None
+    row = {"collection_id": "capture", "source_sha256": "sha256:" + "d" * 64}
+    assert target_keys(target, {}, row) == ["capture"]
+    assert target_keys(target, {}, row | {"source_sha256": None}) is None
+    assert target_keys(target, {}, row | {"source_sha256": "not-a-digest"}) is None
 
 
 @pytest.mark.parametrize("side", ["subject", "object"])

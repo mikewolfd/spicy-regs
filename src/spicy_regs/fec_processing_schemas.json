@@ -7609,13 +7609,13 @@
     "subject": "campaign_finance",
     "arrow_schema": "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",
     "descriptions": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
+      "record_id": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event.",
+      "mapping_version": "Named, versioned rule that built this row from its retained original.",
+      "collection_id": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row.",
       "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
       "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+      "source_sha256": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness.",
+      "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
       "worksheet_name": "Literal worksheet title that supplies this historical statistical observation.",
       "row_grain": "Source-defined statistical row meaning, such as a detail row, subtotal or group heading; controls whether values are additive.",
       "population": "Source-described population covered by the statistical worksheet or summary, preserving its historical scope.",
@@ -12515,6 +12515,217 @@
       "witness_locator_json": "Native source coordinates of the witness, including worksheet cells, source row address or definition location."
     }
   },
+  "fec_reference_filing_feed_items": {
+    "columns": [
+      [
+        "record_id",
+        "VARCHAR"
+      ],
+      [
+        "mapping_version",
+        "VARCHAR"
+      ],
+      [
+        "collection_id",
+        "VARCHAR"
+      ],
+      [
+        "source_authority",
+        "VARCHAR"
+      ],
+      [
+        "source_url",
+        "VARCHAR"
+      ],
+      [
+        "source_sha256",
+        "VARCHAR"
+      ],
+      [
+        "observed_at_json",
+        "VARCHAR"
+      ],
+      [
+        "title",
+        "VARCHAR"
+      ],
+      [
+        "link",
+        "VARCHAR"
+      ],
+      [
+        "guid",
+        "VARCHAR"
+      ],
+      [
+        "published_at_raw",
+        "VARCHAR"
+      ],
+      [
+        "current_record_status",
+        "VARCHAR"
+      ],
+      [
+        "reported_filer_id",
+        "VARCHAR"
+      ],
+      [
+        "committee_id",
+        "VARCHAR"
+      ],
+      [
+        "candidate_id",
+        "VARCHAR"
+      ],
+      [
+        "source_label_status",
+        "VARCHAR"
+      ],
+      [
+        "filing_id",
+        "VARCHAR"
+      ],
+      [
+        "form_type",
+        "VARCHAR"
+      ],
+      [
+        "report_type",
+        "VARCHAR"
+      ],
+      [
+        "coverage_start_raw",
+        "VARCHAR"
+      ],
+      [
+        "coverage_end_raw",
+        "VARCHAR"
+      ],
+      [
+        "parsing_status",
+        "VARCHAR"
+      ],
+      [
+        "filing_link_status",
+        "VARCHAR"
+      ],
+      [
+        "coverage_start_date",
+        "DATE"
+      ],
+      [
+        "coverage_end_date",
+        "DATE"
+      ],
+      [
+        "published_at",
+        "TIMESTAMP WITH TIME ZONE"
+      ]
+    ],
+    "subject": "campaign_finance",
+    "arrow_schema": "/////7gFAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABoAAABYBQAAFAUAAOAEAACoBAAAeAQAAEQEAAAMBAAA4AMAALQDAACIAwAAUAMAABQDAADcAgAAqAIAAHQCAAA8AgAADAIAANwBAACsAQAAdAEAADwBAAAIAQAA0AAAAIwAAABQAAAABAAAACD7//8AAAEKEAAAACgAAAAEAAAAAAAAAAwAAABwdWJsaXNoZWRfYXQAAAAACAAMAAYACAAIAAAAAAACAAQAAAADAAAAVVRDAGj7//8AAAEIEAAAACQAAAAEAAAAAAAAABEAAABjb3ZlcmFnZV9lbmRfZGF0ZQAAAMb///8AAAAAoPv//wAAAQgQAAAALAAAAAQAAAAAAAAAEwAAAGNvdmVyYWdlX3N0YXJ0X2RhdGUAAAAGAAgABgAGAAAAAAAAAOD7//8AAAEFEAAAACQAAAAEAAAAAAAAABIAAABmaWxpbmdfbGlua19zdGF0dXMAANj7//8U/P//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAcGFyc2luZ19zdGF0dXMAAAj8//9E/P//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAY292ZXJhZ2VfZW5kX3JhdwAAAAA8/P//ePz//wAAAQUQAAAAJAAAAAQAAAAAAAAAEgAAAGNvdmVyYWdlX3N0YXJ0X3JhdwAAcPz//6z8//8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAAByZXBvcnRfdHlwZQCc/P//2Pz//wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAGZvcm1fdHlwZQAAAMj8//8E/f//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAZmlsaW5nX2lkAAAA9Pz//zD9//8AAAEFEAAAACQAAAAEAAAAAAAAABMAAABzb3VyY2VfbGFiZWxfc3RhdHVzACj9//9k/f//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY2FuZGlkYXRlX2lkAAAAAFj9//+U/f//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY29tbWl0dGVlX2lkAAAAAIj9///E/f//AAABBRAAAAAkAAAABAAAAAAAAAARAAAAcmVwb3J0ZWRfZmlsZXJfaWQAAAC8/f//+P3//wAAAQUQAAAAKAAAAAQAAAAAAAAAFQAAAGN1cnJlbnRfcmVjb3JkX3N0YXR1cwAAAPT9//8w/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAcHVibGlzaGVkX2F0X3JhdwAAAAAo/v//ZP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAGd1aWQAAAAAUP7//4z+//8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABsaW5rAAAAAHj+//+0/v//AAABBRAAAAAYAAAABAAAAAAAAAAFAAAAdGl0bGUAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
+    "descriptions": {
+      "record_id": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event.",
+      "mapping_version": "Named, versioned rule that built this row from its retained original.",
+      "collection_id": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row.",
+      "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
+      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
+      "source_sha256": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness.",
+      "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
+      "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
+      "link": "Literal RSS item link retained from the source feed.",
+      "guid": "Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity.",
+      "published_at_raw": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date.",
+      "current_record_status": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record.",
+      "reported_filer_id": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label.",
+      "committee_id": "OpenFEC committee identifier (e.g. `C00684373`). Committee join key; this feed row is identified separately. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization.",
+      "candidate_id": "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers.",
+      "source_label_status": "Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling.",
+      "filing_id": "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata.",
+      "form_type": "Literal filing form or record-type code from the source layout; does not prove submission conformance.",
+      "report_type": "Source-reported report classification, interpreted within its namespace rather than as a universal period code.",
+      "coverage_start_raw": "Literal CoverageFrom value from the feed's explicitly labelled metadata.",
+      "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
+      "parsing_status": "Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause.",
+      "filing_link_status": "Source feed assertion only; the value does not qualify a filing match or establish the target exists.",
+      "coverage_start_date": "Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
+      "coverage_end_date": "Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
+      "published_at": "Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status."
+    }
+  },
+  "fec_reference_source_pages": {
+    "columns": [
+      [
+        "record_id",
+        "VARCHAR"
+      ],
+      [
+        "mapping_version",
+        "VARCHAR"
+      ],
+      [
+        "collection_id",
+        "VARCHAR"
+      ],
+      [
+        "source_authority",
+        "VARCHAR"
+      ],
+      [
+        "source_url",
+        "VARCHAR"
+      ],
+      [
+        "source_sha256",
+        "VARCHAR"
+      ],
+      [
+        "observed_at_json",
+        "VARCHAR"
+      ],
+      [
+        "page_type",
+        "VARCHAR"
+      ],
+      [
+        "title",
+        "VARCHAR"
+      ],
+      [
+        "text",
+        "VARCHAR"
+      ],
+      [
+        "content_scope",
+        "VARCHAR"
+      ],
+      [
+        "content_status",
+        "VARCHAR"
+      ],
+      [
+        "links_json",
+        "VARCHAR"
+      ]
+    ],
+    "subject": "campaign_finance",
+    "arrow_schema": "/////9ACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA0AAABwAgAALAIAAPgBAADAAQAAkAEAAFwBAAAkAQAA9AAAAMgAAACcAAAAaAAAADQAAAAEAAAA1P3//wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGxpbmtzX2pzb24AAMT9//8A/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGVudF9zdGF0dXMAAPT9//8w/v//AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29udGVudF9zY29wZQAAACT+//9g/v//AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAdGV4dAAAAABM/v//iP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHRpdGxlAAAAdP7//7D+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABwYWdlX3R5cGUAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
+    "descriptions": {
+      "record_id": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event.",
+      "mapping_version": "Named, versioned rule that built this row from its retained original.",
+      "collection_id": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row.",
+      "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
+      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
+      "source_sha256": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness.",
+      "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
+      "page_type": "Supported type of retained source documentation page, such as a form page or statutory filing reference.",
+      "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
+      "text": "Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference.",
+      "content_scope": "Scope of retained page content; text, headings and links are source documentation rather than inferred transactions.",
+      "content_status": "Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer.",
+      "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval."
+    }
+  },
   "fec_registration_statements": {
     "columns": [
       [
@@ -13247,187 +13458,6 @@
       "measures": "Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value, value_status and unit. Unnest with record_id; never add parent summaries to their itemized details."
     }
   },
-  "fec_research_context_dispositions": {
-    "columns": [
-      [
-        "collection_id",
-        "VARCHAR"
-      ],
-      [
-        "mapping_status",
-        "VARCHAR"
-      ],
-      [
-        "mapping_reason",
-        "VARCHAR"
-      ],
-      [
-        "source_url",
-        "VARCHAR"
-      ],
-      [
-        "context_sha256",
-        "VARCHAR"
-      ],
-      [
-        "outputs_json",
-        "VARCHAR"
-      ],
-      [
-        "source_fact_count",
-        "BIGINT"
-      ]
-    ],
-    "subject": "campaign_finance",
-    "arrow_schema": "/////8ABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAcAAABcAQAAGAEAAOQAAAC0AAAAgAAAAEwAAAAEAAAA0P7//wAAAQIQAAAALAAAAAQAAAAAAAAAEQAAAHNvdXJjZV9mYWN0X2NvdW50AAAACAAMAAgABwAIAAAAAAAAAUAAAAAU////AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAb3V0cHV0c19qc29uAAAAAAT///9E////AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGV4dF9zaGEyNTYAADT///90////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAc291cmNlX3VybAAAYP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABtYXBwaW5nX3JlYXNvbgAAkP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABtYXBwaW5nX3N0YXR1cwAAwP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAkAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAAQABAAEAAAA",
-    "descriptions": {
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
-      "mapping_status": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values.",
-      "mapping_reason": "Concrete reason for the retained context's mapping, reference-only classification or source-reader refusal.",
-      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "outputs_json": "JSON object recording emitted table counts for this context; an empty output has an explicit mapping reason.",
-      "source_fact_count": "Number of held native facts or events processed in this collection context, stored as an integer."
-    }
-  },
-  "fec_research_filing_feed_items": {
-    "columns": [
-      [
-        "record_id",
-        "VARCHAR"
-      ],
-      [
-        "mapping_version",
-        "VARCHAR"
-      ],
-      [
-        "collection_id",
-        "VARCHAR"
-      ],
-      [
-        "source_authority",
-        "VARCHAR"
-      ],
-      [
-        "source_url",
-        "VARCHAR"
-      ],
-      [
-        "source_sha256",
-        "VARCHAR"
-      ],
-      [
-        "observed_at_json",
-        "VARCHAR"
-      ],
-      [
-        "title",
-        "VARCHAR"
-      ],
-      [
-        "link",
-        "VARCHAR"
-      ],
-      [
-        "guid",
-        "VARCHAR"
-      ],
-      [
-        "published_at_raw",
-        "VARCHAR"
-      ],
-      [
-        "current_record_status",
-        "VARCHAR"
-      ],
-      [
-        "reported_filer_id",
-        "VARCHAR"
-      ],
-      [
-        "committee_id",
-        "VARCHAR"
-      ],
-      [
-        "candidate_id",
-        "VARCHAR"
-      ],
-      [
-        "source_label_status",
-        "VARCHAR"
-      ],
-      [
-        "filing_id",
-        "VARCHAR"
-      ],
-      [
-        "form_type",
-        "VARCHAR"
-      ],
-      [
-        "report_type",
-        "VARCHAR"
-      ],
-      [
-        "coverage_start_raw",
-        "VARCHAR"
-      ],
-      [
-        "coverage_end_raw",
-        "VARCHAR"
-      ],
-      [
-        "parsing_status",
-        "VARCHAR"
-      ],
-      [
-        "filing_link_status",
-        "VARCHAR"
-      ],
-      [
-        "coverage_start_date",
-        "DATE"
-      ],
-      [
-        "coverage_end_date",
-        "DATE"
-      ],
-      [
-        "published_at",
-        "TIMESTAMP WITH TIME ZONE"
-      ]
-    ],
-    "subject": "campaign_finance",
-    "arrow_schema": "/////7gFAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAABoAAABYBQAAFAUAAOAEAACoBAAAeAQAAEQEAAAMBAAA4AMAALQDAACIAwAAUAMAABQDAADcAgAAqAIAAHQCAAA8AgAADAIAANwBAACsAQAAdAEAADwBAAAIAQAA0AAAAIwAAABQAAAABAAAACD7//8AAAEKEAAAACgAAAAEAAAAAAAAAAwAAABwdWJsaXNoZWRfYXQAAAAACAAMAAYACAAIAAAAAAACAAQAAAADAAAAVVRDAGj7//8AAAEIEAAAACQAAAAEAAAAAAAAABEAAABjb3ZlcmFnZV9lbmRfZGF0ZQAAAMb///8AAAAAoPv//wAAAQgQAAAALAAAAAQAAAAAAAAAEwAAAGNvdmVyYWdlX3N0YXJ0X2RhdGUAAAAGAAgABgAGAAAAAAAAAOD7//8AAAEFEAAAACQAAAAEAAAAAAAAABIAAABmaWxpbmdfbGlua19zdGF0dXMAANj7//8U/P//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAcGFyc2luZ19zdGF0dXMAAAj8//9E/P//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAY292ZXJhZ2VfZW5kX3JhdwAAAAA8/P//ePz//wAAAQUQAAAAJAAAAAQAAAAAAAAAEgAAAGNvdmVyYWdlX3N0YXJ0X3JhdwAAcPz//6z8//8AAAEFEAAAABwAAAAEAAAAAAAAAAsAAAByZXBvcnRfdHlwZQCc/P//2Pz//wAAAQUQAAAAHAAAAAQAAAAAAAAACQAAAGZvcm1fdHlwZQAAAMj8//8E/f//AAABBRAAAAAcAAAABAAAAAAAAAAJAAAAZmlsaW5nX2lkAAAA9Pz//zD9//8AAAEFEAAAACQAAAAEAAAAAAAAABMAAABzb3VyY2VfbGFiZWxfc3RhdHVzACj9//9k/f//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY2FuZGlkYXRlX2lkAAAAAFj9//+U/f//AAABBRAAAAAgAAAABAAAAAAAAAAMAAAAY29tbWl0dGVlX2lkAAAAAIj9///E/f//AAABBRAAAAAkAAAABAAAAAAAAAARAAAAcmVwb3J0ZWRfZmlsZXJfaWQAAAC8/f//+P3//wAAAQUQAAAAKAAAAAQAAAAAAAAAFQAAAGN1cnJlbnRfcmVjb3JkX3N0YXR1cwAAAPT9//8w/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAcHVibGlzaGVkX2F0X3JhdwAAAAAo/v//ZP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABAAAAGd1aWQAAAAAUP7//4z+//8AAAEFEAAAABgAAAAEAAAAAAAAAAQAAABsaW5rAAAAAHj+//+0/v//AAABBRAAAAAYAAAABAAAAAAAAAAFAAAAdGl0bGUAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
-    "descriptions": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
-      "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
-      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
-      "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
-      "link": "Literal RSS item link retained from the source feed.",
-      "guid": "Source RSS item GUID, scoped to the feed; not promoted to a filing number or a globally resolved identity.",
-      "published_at_raw": "Publication timestamp exactly as supplied by the RSS item; distinct from filing receipt date.",
-      "current_record_status": "Explicit current-selection limitation or decision. Capture order and a mapped value alone do not establish the current record.",
-      "reported_filer_id": "Literal identifier labelled CommitteeId in the source feed; candidate filings can carry candidate identifiers under this label.",
-      "committee_id": "OpenFEC committee identifier (e.g. `C00684373`). Committee join key; this feed row is identified separately. Joins `fec_committee_history.committee_id` for per-cycle names and the connected organization.",
-      "candidate_id": "Literal candidate identifier reported by API metadata or a verified named bulk field such as CAND_ID. Blanks and aggregate codes remain literal; an ID-shaped aggregate value does not establish a person. Names are not converted to identifiers.",
-      "source_label_status": "Whether the feed's CommitteeId label contains a committee identifier, a candidate identifier, a missing value or an unsupported spelling.",
-      "filing_id": "Source-reported sub_id of a filing metadata row when present; not an inferred original-file number. Amendment/current-record meaning remains in native metadata.",
-      "form_type": "Literal filing form or record-type code from the source layout; does not prove submission conformance.",
-      "report_type": "Source-reported report classification, interpreted within its namespace rather than as a universal period code.",
-      "coverage_start_raw": "Literal CoverageFrom value from the feed's explicitly labelled metadata.",
-      "coverage_end_raw": "Literal CoverageThrough value from the feed's explicitly labelled metadata.",
-      "parsing_status": "Interpretation of source parsing: distinguishes reported/parsed values, missing/null/empty source states and unsupported spellings. A NULL typed value alone does not identify the cause.",
-      "filing_link_status": "Source feed assertion only; the value does not qualify a filing match or establish the target exists.",
-      "coverage_start_date": "Build-parsed CoverageFrom date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
-      "coverage_end_date": "Build-parsed CoverageThrough date; requires exact MM/DD/YYYY spelling and a valid calendar date.",
-      "published_at": "Build-parsed feed publication instant from an exact four-digit-year GMT timestamp; invalid input remains null with parsing status."
-    }
-  },
   "fec_research_meeting_observations": {
     "columns": [
       [
@@ -13494,13 +13524,13 @@
     "subject": "campaign_finance",
     "arrow_schema": "/////1gDAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA8AAAD0AgAAsAIAAHwCAABEAgAAFAIAAOABAACoAQAAdAEAAEQBAAAQAQAA4AAAALAAAACAAAAAPAAAAAQAAABY/f//AAABAhAAAAAcAAAABAAAAAAAAAAJAAAAdGFibGVfcm93AAAAyP///wAAAAEgAAAAjP3//wAAAQIQAAAAKAAAAAQAAAAAAAAADQAAAHRhYmxlX29yZGluYWwAAAAIAAwACAAHAAgAAAAAAAABIAAAAMz9//8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABsaW5rc19qc29uAAC8/f//+P3//wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAGRhdGVfc3RhdHVzAOj9//8k/v//AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAZGF0ZXNfanNvbgAAFP7//1D+//8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAAByZXBvcnRlZF9zdGF0dXMARP7//4D+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAAB0aXRsZV9yYXcAAABw/v//rP7//wAAAQUQAAAAIAAAAAQAAAAAAAAADAAAAG1lZXRpbmdfdHlwZQAAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAAAAAAA",
     "descriptions": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
+      "record_id": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event.",
+      "mapping_version": "Named, versioned rule that built this row from its retained original.",
+      "collection_id": "Capture collection that retained the original, the lowest id when one original was captured in several parts. Join fec_collections in the selected source generation; it is not the part that held this row.",
       "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
       "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
+      "source_sha256": "SHA-256 of the retained original this row was read from; with the row's native position it is the row's own witness.",
+      "observed_at_json": "Acquisition time from the original's acquisition receipt in the raw archive, as JSON.",
       "meeting_type": "Meeting classification explicitly stated by the retained HTML table.",
       "title_raw": "Meeting title exactly as retained in the source row, including cancellation language.",
       "reported_status": "Status explicitly stated in the source, including cancellation where the meeting table reports it.",
@@ -13509,162 +13539,6 @@
       "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval.",
       "table_ordinal": "Zero-based ordinal of the source HTML table containing this observation.",
       "table_row": "Native row address in the retained HTML table; use native_cells_json for exact cell evidence."
-    }
-  },
-  "fec_research_response_outcomes": {
-    "columns": [
-      [
-        "record_id",
-        "VARCHAR"
-      ],
-      [
-        "mapping_version",
-        "VARCHAR"
-      ],
-      [
-        "collection_id",
-        "VARCHAR"
-      ],
-      [
-        "source_authority",
-        "VARCHAR"
-      ],
-      [
-        "source_url",
-        "VARCHAR"
-      ],
-      [
-        "source_sha256",
-        "VARCHAR"
-      ],
-      [
-        "context_sha256",
-        "VARCHAR"
-      ],
-      [
-        "source_context_pointer",
-        "VARCHAR"
-      ],
-      [
-        "observed_at_json",
-        "VARCHAR"
-      ],
-      [
-        "profile_refusal",
-        "VARCHAR"
-      ],
-      [
-        "query_completeness",
-        "VARCHAR"
-      ],
-      [
-        "payload_shape",
-        "VARCHAR"
-      ],
-      [
-        "outcome_status",
-        "VARCHAR"
-      ],
-      [
-        "capture_disposition",
-        "VARCHAR"
-      ],
-      [
-        "observed_payload_records",
-        "INTEGER"
-      ]
-    ],
-    "subject": "campaign_finance",
-    "arrow_schema": "/////4ADAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA8AAAAcAwAA2AIAAKQCAABsAgAAPAIAAAgCAADUAQAAmAEAAGABAAAsAQAA9AAAAMAAAACMAAAAVAAAAAQAAAAw/f//AAABAhAAAAA0AAAABAAAAAAAAAAYAAAAb2JzZXJ2ZWRfcGF5bG9hZF9yZWNvcmRzAAAAAAgADAAIAAcACAAAAAAAAAEgAAAAfP3//wAAAQUQAAAAJAAAAAQAAAAAAAAAEwAAAGNhcHR1cmVfZGlzcG9zaXRpb24AdP3//7D9//8AAAEFEAAAACAAAAAEAAAAAAAAAA4AAABvdXRjb21lX3N0YXR1cwAApP3//+D9//8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABwYXlsb2FkX3NoYXBlAAAA1P3//xD+//8AAAEFEAAAACQAAAAEAAAAAAAAABIAAABxdWVyeV9jb21wbGV0ZW5lc3MAAAj+//9E/v//AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAcHJvZmlsZV9yZWZ1c2FsADj+//90/v//AAABBRAAAAAkAAAABAAAAAAAAAAQAAAAb2JzZXJ2ZWRfYXRfanNvbgAAAABs/v//qP7//wAAAQUQAAAAKAAAAAQAAAAAAAAAFgAAAHNvdXJjZV9jb250ZXh0X3BvaW50ZXIAAKT+///g/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGV4dF9zaGEyNTYAANT+//8Q////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAc291cmNlX3NoYTI1NgAAAAT///9A////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAc291cmNlX3VybAAAMP///2z///8AAAEFEAAAACQAAAAEAAAAAAAAABAAAABzb3VyY2VfYXV0aG9yaXR5AAAAAGT///+g////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29sbGVjdGlvbl9pZAAAAJT////Q////AAABBRAAAAAgAAAABAAAAAAAAAAPAAAAbWFwcGluZ192ZXJzaW9uAMT///8QABQACAAGAAcADAAAABAAEAAAAAAAAQUQAAAAIAAAAAQAAAAAAAAACQAAAHJlY29yZF9pZAAAAAQABAAEAAAAAAAAAA==",
-    "descriptions": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
-      "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
-      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
-      "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
-      "profile_refusal": "Source-reader refusal retained for this context, even where the native response exposes useful outcome metadata.",
-      "query_completeness": "Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query.",
-      "payload_shape": "Observed native response shape, distinguishing result arrays, error objects and unsupported structures.",
-      "outcome_status": "Explicit retained response outcome, including rejection or empty payload. Neither establishes a completed successful query by itself.",
-      "capture_disposition": "Distinguishes a provider refusal from an empty or present held payload. No value asserts successful source coverage.",
-      "observed_payload_records": "Count of result entries actually visible in the retained payload, distinct from a claimed complete query population."
-    }
-  },
-  "fec_research_source_pages": {
-    "columns": [
-      [
-        "record_id",
-        "VARCHAR"
-      ],
-      [
-        "mapping_version",
-        "VARCHAR"
-      ],
-      [
-        "collection_id",
-        "VARCHAR"
-      ],
-      [
-        "source_authority",
-        "VARCHAR"
-      ],
-      [
-        "source_url",
-        "VARCHAR"
-      ],
-      [
-        "source_sha256",
-        "VARCHAR"
-      ],
-      [
-        "observed_at_json",
-        "VARCHAR"
-      ],
-      [
-        "page_type",
-        "VARCHAR"
-      ],
-      [
-        "title",
-        "VARCHAR"
-      ],
-      [
-        "text",
-        "VARCHAR"
-      ],
-      [
-        "content_scope",
-        "VARCHAR"
-      ],
-      [
-        "content_status",
-        "VARCHAR"
-      ],
-      [
-        "links_json",
-        "VARCHAR"
-      ]
-    ],
-    "subject": "campaign_finance",
-    "arrow_schema": "/////9ACAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAA0AAABwAgAALAIAAPgBAADAAQAAkAEAAFwBAAAkAQAA9AAAAMgAAACcAAAAaAAAADQAAAAEAAAA1P3//wAAAQUQAAAAHAAAAAQAAAAAAAAACgAAAGxpbmtzX2pzb24AAMT9//8A/v//AAABBRAAAAAgAAAABAAAAAAAAAAOAAAAY29udGVudF9zdGF0dXMAAPT9//8w/v//AAABBRAAAAAgAAAABAAAAAAAAAANAAAAY29udGVudF9zY29wZQAAACT+//9g/v//AAABBRAAAAAYAAAABAAAAAAAAAAEAAAAdGV4dAAAAABM/v//iP7//wAAAQUQAAAAGAAAAAQAAAAAAAAABQAAAHRpdGxlAAAAdP7//7D+//8AAAEFEAAAABwAAAAEAAAAAAAAAAkAAABwYWdlX3R5cGUAAACg/v//3P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAG9ic2VydmVkX2F0X2pzb24AAAAA1P7//xD///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABzb3VyY2Vfc2hhMjU2AAAABP///0D///8AAAEFEAAAABwAAAAEAAAAAAAAAAoAAABzb3VyY2VfdXJsAAAw////bP///wAAAQUQAAAAJAAAAAQAAAAAAAAAEAAAAHNvdXJjZV9hdXRob3JpdHkAAAAAZP///6D///8AAAEFEAAAACAAAAAEAAAAAAAAAA0AAABjb2xsZWN0aW9uX2lkAAAAlP///9D///8AAAEFEAAAACAAAAAEAAAAAAAAAA8AAABtYXBwaW5nX3ZlcnNpb24AxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAJAAAAcmVjb3JkX2lkAAAABAAEAAQAAAA=",
-    "descriptions": {
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
-      "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
-      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "observed_at_json": "Retained capture time value(s) as JSON without collapsing separately observed captures.",
-      "page_type": "Supported type of retained source documentation page, such as a form page or statutory filing reference.",
-      "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
-      "text": "Build-extracted body text when content_status is body_extracted; null for failed, empty or unsupported pages. Original page text and context remain at the evidence reference.",
-      "content_scope": "Scope of retained page content; text, headings and links are source documentation rather than inferred transactions.",
-      "content_status": "Page body disposition: body_extracted, failed_page, empty_page or unsupported_body_boundaries. Filter body_extracted for subject search; every capture retains its source evidence pointer.",
-      "links_json": "Source links with their labels and exact native locations; metadata does not imply body retrieval."
     }
   },
   "fec_source_records": {

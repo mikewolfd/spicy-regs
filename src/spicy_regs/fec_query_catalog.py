@@ -10,8 +10,9 @@ FEC_SOURCE_CATEGORIES = {
     "fec_source_records": "source_data",
     "fec_agency_mapping_dispositions": "diagnostics",
     "fec_api_response_controls": "diagnostics",
-    "fec_research_context_dispositions": "diagnostics",
-    "fec_research_response_outcomes": "diagnostics",
+    # The reference namespace (ss-j4vz Q1): rebuilt from whole originals, not query data.
+    "fec_reference_filing_feed_items": "reference_data",
+    "fec_reference_source_pages": "reference_data",
 }
 
 
@@ -116,8 +117,6 @@ def child_column_descriptions(spec, described, descriptions):
             "invalid_control for refused values; missing_fields when a required control is absent. "
             "The first applicable state in that order of failure takes precedence."
         )
-    elif spec.name == "fec_context_output_counts":
-        status = "parsed for an exact nonnegative integer count; unsupported_count otherwise."
     elif spec.name == "fec_meeting_dates":
         status = "parsed for a valid four-digit-year calendar date; unsupported_date otherwise."
     elif spec.name == "fec_meeting_links":

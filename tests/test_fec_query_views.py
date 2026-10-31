@@ -32,7 +32,6 @@ def installed(tmp_path):
         "relationship_views/fec_financial_meaning.py",
         "fec_financial_rules.py",
         "fec_versions.py",
-        "transforms/fec_research_context.py",
     ]:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)

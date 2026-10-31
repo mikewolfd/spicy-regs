@@ -9016,33 +9016,8 @@ tables:
       period_end: "End of the reporting period the source defines. A two-digit year (the leadership-PAC and bundling files write `31-JUL-26`) is read as the one year ending in those digits between 1975, when FEC began, and the year the file was captured (`26` is 2026; the range is `date_year_bounds` in `mapping_reason_json`). Other layouts state four digits. A typo that stays in the range (`26` for `24`) is typed as written and cannot be detected; `period_end_raw` keeps the date as filed. NULL has its reason in `period_end_status`; capture time is never substituted."
       measures: 'Source-specific monetary measures as a list of structs: native_field, raw_value, exact DECIMAL value,
         value_status and unit. Unnest with record_id; never add parent summaries to their itemized details.'
-  fec_research_context_dispositions:
-    row_unit: "processing results"
-    label: "FEC source processing results"
-    subject: campaign_finance
-    grain: One explicit mapping disposition for a retained collection context.
-    identity_columns:
-    - collection_id
-    coverage: Sampled. Supported observations from selected retained source documentation, response, research and
-      statistical contexts. The retained selection is explicit in fec_collections and its source-generation evidence;
-      this declaration does not establish complete FEC history or current publication.
-    measured_on: '2026-10-01'
-    summary: "Records what processing a saved source file or request produced, including empty, refused and unsupported inputs."
-    columns:
-      collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
-        label alone is not a globally unique source identity.
-      mapping_status: Whether this source observation mapped fully, partially, or received an explicit nondata/refusal
-        disposition; inspect the reason alongside NULL values.
-      mapping_reason: Concrete reason for the retained context's mapping, reference-only classification or source-reader
-        refusal.
-      source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
-        bytes and typed output.
-      outputs_json: JSON object recording emitted table counts for this context; an empty output has an explicit mapping
-        reason.
-      source_fact_count: Number of held native facts or events processed in this collection context, stored as an
-        integer.
-  fec_research_filing_feed_items:
+  fec_reference_filing_feed_items:
+    row_unit: "feed items"
     label: FEC filing feed items
     subject: campaign_finance
     grain: One RSS item occurrence in a captured source feed.
@@ -9137,45 +9112,8 @@ tables:
       links_json: Source links with their labels and exact native locations; metadata does not imply body retrieval.
       table_ordinal: Zero-based ordinal of the source HTML table containing this observation.
       table_row: Native row address in the retained HTML table; use native_cells_json for exact cell evidence.
-  fec_research_response_outcomes:
-    row_unit: "response outcomes"
-    label: "FEC API request outcomes"
-    subject: campaign_finance
-    grain: One retained response/context outcome observation.
-    identity_columns:
-    - record_id
-    coverage: Sampled. Supported observations from selected rejected, empty or otherwise limited OpenFEC contexts.
-      The retained selection is explicit in fec_collections and its source-generation evidence; this declaration does
-      not establish complete FEC history or current publication.
-    measured_on: '2026-10-01'
-    summary: "Saved FEC API response outcomes, including empty results, refusals and errors. These do not establish that the full query was collected."
-    columns:
-      record_id: Deterministic key for this mapped source observation within its table and generation; repeated captures
-        remain distinct from a single economic event.
-      mapping_version: Named, versioned source-to-field mapping used for this observation.
-      collection_id: Exact retained collection label. Join fec_collections in the selected source generation; the
-        label alone is not a globally unique source identity.
-      source_authority: Authority assigned to the selected source, preserving official FEC, unofficial originals and
-        third-party research distinctions.
-      source_url: Captured source URL for this observation; it does not assert current availability or body retrieval.
-      source_sha256: SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.
-      context_sha256: Digest of the sealed retained context object used by this mapping; separate from original-source
-        bytes and typed output.
-      source_context_pointer: Exact JSON pointer into the retained collection context to the native fact represented
-        by this observation.
-      observed_at_json: Retained capture time value(s) as JSON without collapsing separately observed captures.
-      profile_refusal: Source-reader refusal retained for this context, even where the native response exposes useful
-        outcome metadata.
-      query_completeness: Whether complete traversal of the stated source query was established. A retained page or
-        rejected response is not a completed query.
-      payload_shape: Observed native response shape, distinguishing result arrays, error objects and unsupported structures.
-      outcome_status: Explicit retained response outcome, including rejection or empty payload. Neither establishes
-        a completed successful query by itself.
-      capture_disposition: Distinguishes a provider refusal from an empty or present held payload. No value asserts
-        successful source coverage.
-      observed_payload_records: Count of result entries actually visible in the retained payload, distinct from a
-        claimed complete query population.
-  fec_research_source_pages:
+  fec_reference_source_pages:
+    row_unit: "source pages"
     label: FEC source documentation pages
     subject: campaign_finance
     grain: One supported source-documentation page from its retained original.

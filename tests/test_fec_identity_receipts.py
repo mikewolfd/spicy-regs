@@ -28,7 +28,7 @@ def test_every_table_subject_or_processing_roundtrip(tmp_path):
             for key in rules["identity_fields"]:
                 if key in row:
                     row[key] = ("2024" if key == "cycle" else WITNESS["sha256"] if key == "source_sha256" else name + key)
-            if name == "fec_research_source_pages":
+            if name == "fec_reference_source_pages":
                 row.update(content_status="body_extracted", text="Public document")
             writer.emit(name, row, input_witness=WITNESS, source_input={"original": None})
     for name, rules in REGISTRY.items():
@@ -69,22 +69,6 @@ def test_native_list_nulls_and_multiple_context_witnesses_survive(tmp_path):
     assert internal["conversion_diagnostics"]["cycles"][0]["ordinal"] == 1
     with pytest.raises(ValueError):
         list(read_identity_rows(output, table, generation_id=""))
-
-
-def test_failed_pages_have_receipts_without_subjects(tmp_path):
-    output = tmp_path / "pages"
-    table = "fec_research_source_pages"
-    with IdentityReceiptWriter(output, generation_id="g1", tables=[table]) as writer:
-        writer.emit(
-            table,
-            {"record_id": "failed", "content_status": "failed_page", "title": "Server error"},
-            input_witness=WITNESS,
-        )
-        writer.emit(
-            table, {"record_id": "unsupported", "content_status": "unsupported_body_boundaries"}, input_witness=WITNESS
-        )
-    assert pq.read_table(output / (table + ".parquet")).num_rows == 0
-    assert [r["outcome"] for r in pq.read_table(output / "etl_receipts.parquet").to_pylist()] == ["refused", "refused"]
 
 
 def test_subject_tamper_missing_receipt_duplicate_identity_and_existing_output_refuse(tmp_path):

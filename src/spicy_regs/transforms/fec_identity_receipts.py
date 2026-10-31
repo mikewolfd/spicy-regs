@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from functools import cache
-from dataclasses import replace
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -173,9 +172,6 @@ class IdentityReceiptWriter:
         )
         if lineage is not None and not policy.receipt_only:
             context = lineage.inherit(context, policy, mapped)
-        if table == "fec_research_source_pages" and row.get("content_status") != "body_extracted":
-            outcome = "refused"
-            context = replace(context, diagnostics={**diagnostics, "content_status": row.get("content_status")})
         return mapped, context, outcome
 
     def emit(self, table, row, **kwargs):

@@ -3319,7 +3319,7 @@
       "filing_association_target_record_ids": "Every matching filing observation identifier in the selected target population, preserving repeated witnesses. Null means the population is not established. Stored as native nested values; list order, repeated values, null and empty collections remain distinct."
     }
   },
-  "fec_research_filing_feed_items": {
+  "fec_reference_filing_feed_items": {
     "columns": {
       "record_id": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event.",
       "title": "Source title or explicitly labeled mapper title; consult title_basis or title_status when present.",
@@ -3362,7 +3362,7 @@
       "date_status": "Conversion state for the reported transaction/context date; distinguishes exact values, source NULL/empty and invalid or unsupported spelling."
     }
   },
-  "fec_research_source_pages": {
+  "fec_reference_source_pages": {
     "columns": {
       "record_id": "Deterministic key from the retained original's SHA-256 and this row's native position in it (fec-original-tables/1); repeated captures remain distinct from a single economic event.",
       "page_type": "Supported type of retained source documentation page, such as a form page or statutory filing reference.",
@@ -4677,36 +4677,6 @@
       "context_pointer": "Exact JSON pointer inside context_column to the retained source fact or definition; does not create a fictional source record.",
       "witness_sha256": "Digest of the original bytes supporting this witness, which may differ from the primary financial row's digest.",
       "witness_locator_json": "Native source coordinates of the witness, including worksheet cells, source row address or definition location."
-    }
-  },
-  "fec_research_context_dispositions": {
-    "columns": {
-      "observation_ordinal": "Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
-      "mapping_status": "Whether this source observation mapped fully, partially, or received an explicit nondata/refusal disposition; inspect the reason alongside NULL values.",
-      "mapping_reason": "Concrete reason for the retained context's mapping, reference-only classification or source-reader refusal.",
-      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_fact_count": "Number of held native facts or events processed in this collection context, stored as an integer."
-    }
-  },
-  "fec_research_response_outcomes": {
-    "columns": {
-      "observation_ordinal": "Zero-based observation order within this dataset generation. Repeated observations remain separate; this is not a publisher record identifier.",
-      "record_id": "Deterministic key for this mapped source observation within its table and generation; repeated captures remain distinct from a single economic event.",
-      "mapping_version": "Named, versioned source-to-field mapping used for this observation.",
-      "collection_id": "Exact retained collection label. Join fec_collections in the selected source generation; the label alone is not a globally unique source identity.",
-      "source_authority": "Authority assigned to the selected source, preserving official FEC, unofficial originals and third-party research distinctions.",
-      "source_url": "Captured source URL for this observation; it does not assert current availability or body retrieval.",
-      "source_sha256": "SHA-256 of the original source witness bytes; distinct from the typed table's publication digest.",
-      "context_sha256": "Digest of the sealed retained context object used by this mapping; separate from original-source bytes and typed output.",
-      "source_context_pointer": "Exact JSON pointer into the retained collection context to the native fact represented by this observation.",
-      "profile_refusal": "Source-reader refusal retained for this context, even where the native response exposes useful outcome metadata.",
-      "query_completeness": "Whether complete traversal of the stated source query was established. A retained page or rejected response is not a completed query.",
-      "payload_shape": "Observed native response shape, distinguishing result arrays, error objects and unsupported structures.",
-      "outcome_status": "Explicit retained response outcome, including rejection or empty payload. Neither establishes a completed successful query by itself.",
-      "capture_disposition": "Distinguishes a provider refusal from an empty or present held payload. No value asserts successful source coverage.",
-      "observed_payload_records": "Count of result entries actually visible in the retained payload, distinct from a claimed complete query population."
     }
   },
   "fec_source_catalog": {
