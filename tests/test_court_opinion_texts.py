@@ -195,3 +195,30 @@ def test_a_build_refuses_an_output_it_would_overwrite(built) -> None:
     out, _, _ = built
     with pytest.raises(FileExistsError):
         build.build_court_opinion_texts(Path("unused.csv.bz2"), out, dump_date=date(2026, 6, 30), convert=stand_in)
+
+
+def test_court_opinions_at_courts_3_still_reads_its_courts_2_receipts(tmp_path) -> None:
+    """date_modified moved from court_opinions receipts to court_opinion_texts (C21); a courts/2 bundle, which
+    carries it, stays readable through the registered history rather than being relabelled."""
+    from spicy_regs.court_receipts import POLICIES, read_court_rows
+    from spicy_regs.court_subjects import normalize_court_row
+    from spicy_regs.earlier_receipt_policies import earlier_policies
+    from spicy_regs.etl_receipts import ReceiptContext, write_dataset
+
+    current = POLICIES["court_opinions"]
+    prior, original = earlier_policies(current)
+    assert (current.policy_version, prior.policy_version, original.policy_version) == ("courts/3", "courts/2", "courts/1")
+    assert "date_modified" not in current.receipt_fields and "date_modified" in prior.receipt_fields
+    assert [f for f in prior.receipt_fields if f != "date_modified"] == list(current.receipt_fields)
+    assert prior.subject_schema.equals(current.subject_schema) and prior.identity_fields == current.identity_fields
+    assert "date_modified" in POLICIES[build.DATASET].subject_schema.names
+
+    raw = dict(opinion_id="1", cluster_id="2", sha1="a" * 40, download_url="https://court.example/1.pdf",
+               date_modified="2026-06-01T00:00:00Z", dump_date="2026-06-30")
+    shaped = normalize_court_row("court_opinions", {k: v for k, v in raw.items() if k != "date_modified"})
+    held = {name: raw["date_modified"] if name == "date_modified" else shaped.get(name) for name in prior.input_fields}
+    context = ReceiptContext("courts-2", "row", "prior", [{"source_id": "opinions", "body_version": "courts-2"}])
+    subject, receipt = write_dataset([(held, context)], tmp_path / "old", prior)
+    assert subject is not None
+    [row] = read_court_rows(subject, dataset="court_opinions", receipt_path=receipt, generation_id="courts-2")
+    assert row["opinion_id"] == "1" and row["date_modified"] == "2026-06-01T00:00:00Z"

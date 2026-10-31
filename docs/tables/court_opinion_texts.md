@@ -8,7 +8,7 @@ Each CourtListener opinion's text as Markdown (CommonMark with GFM tables and fo
 
 **Coverage.** Not published. Only a bounded build of the head of the 2026-06-30 CourtListener opinions export has run; it proves the build path, is not a range and establishes no completeness. *(measured 2026-10-30)*
 
-**Data quality.** The text is converted from the publisher's html_with_citations, else html, else plain_text (in the whole 2026-06-30 export 9,355 opinions fall back to html, 7,976 to plain_text and 554 have no text); images are dropped. On 500 sampled opinions every citation link, heading, blockquote, table and footnote survived and 0.28% of italic characters lost their emphasis. A plain CommonMark reader misreads footnote definitions; read with a GFM + footnote parser.
+**Data quality.** The text is converted from the publisher's html_with_citations, else html, else plain_text (in the whole 2026-06-30 export 9,355 opinions fall back to html, 7,976 to plain_text and 554 have no text); images are dropped. Preformatted bodies (a fifth of the export) keep their line breaks and indentation. On 500 sampled opinions stratified by source rendering, all 5,539 citation links kept their cited id and text, and no heading, blockquote or table was lost; 2 of 406 footnote markers, 6 of 400 footnote bodies and 0.28% of italic characters were. A plain CommonMark reader misreads footnote definitions; read with a GFM + footnote parser.
 
 - **Parquet file:** `court_opinion_texts.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

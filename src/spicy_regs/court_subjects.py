@@ -261,7 +261,8 @@ RECEIPT_FIELDS = {
     'court_dockets': ('date_created', 'absolute_url', 'parties_json', 'attorneys_json', 'firms_json', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_opinion_clusters': ('source', 'slug', 'absolute_url', 'date_created', 'date_modified', 'ingest_source', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_opinion_pdf_extractions': ('conversion_inputs', 'raw_source_record', 'source_observation'),
-    'court_opinions': ('local_path', 'extracted_by_ocr', 'date_created', 'date_modified', 'dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
+    # courts/3: date_modified moved to court_opinion_texts (action list C21); courts/2 receipts carry it.
+    'court_opinions': ('local_path', 'extracted_by_ocr', 'date_created', 'dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     # A pointer to the converted value, never a copy of it: the export is the receipt's witness.
     'court_opinion_texts': ('source_sha256', 'dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
     'court_parentheticals': ('dump_date', 'conversion_inputs', 'raw_source_record', 'source_observation'),
@@ -274,7 +275,7 @@ LEGACY_COLUMNS = {
     'court_dockets': ('cl_docket_id', 'case_name', 'case_name_full', 'court_id', 'court', 'court_citation_string', 'docket_number', 'date_filed', 'date_terminated', 'date_argued', 'nature_of_suit', 'cause', 'jurisdiction_type', 'jury_demand', 'assigned_to', 'referred_to', 'parties_json', 'attorneys_json', 'firms_json', 'pacer_case_id', 'date_created', 'absolute_url', 'case_type'),
     'court_opinion_clusters': ('cluster_id', 'cl_docket_id', 'court_id', 'court_jurisdiction', 'court_is_federal', 'case_name', 'case_name_short', 'case_name_full', 'date_filed', 'date_filed_is_approximate', 'judges', 'nature_of_suit', 'precedential_status', 'citation_count', 'scdb_id', 'scdb_decision_direction', 'scdb_votes_majority', 'scdb_votes_minority', 'source', 'procedural_history', 'attorneys', 'posture', 'syllabus', 'headnotes', 'summary', 'disposition', 'history', 'other_dates', 'cross_reference', 'correction', 'arguments', 'headmatter', 'blocked', 'date_blocked', 'slug', 'absolute_url', 'date_created', 'date_modified', 'ingest_source'),
     'court_opinion_pdf_extractions': ('opinion_id', 'cluster_id', 'source_url', 'resolved_url', 'source_sha256', 'native_sha1', 'actual_sha1', 'sha1_matches', 'text_content', 'pdf_extraction_results_json', 'observed_at', 'extractor', 'extractor_version', 'parent_opinion_publication_json'),
-    'court_opinions': ('opinion_id', 'cluster_id', 'opinion_type', 'author_id', 'author_str', 'per_curiam', 'joined_by_str', 'page_count', 'sha1', 'download_url', 'local_path', 'extracted_by_ocr', 'date_created', 'date_modified', 'dump_date'),
+    'court_opinions': ('opinion_id', 'cluster_id', 'opinion_type', 'author_id', 'author_str', 'per_curiam', 'joined_by_str', 'page_count', 'sha1', 'download_url', 'local_path', 'extracted_by_ocr', 'date_created', 'dump_date'),
     'court_opinion_texts': ('opinion_id', 'cluster_id', 'opinion_block', 'date_modified', 'text_source', 'markdown', 'converter_version', 'source_sha256', 'dump_date'),
     'court_parentheticals': ('parenthetical_id', 'described_opinion_id', 'describing_opinion_id', 'text', 'score', 'group_id', 'dump_date'),
 }
