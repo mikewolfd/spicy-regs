@@ -30,8 +30,8 @@ import json
 import os
 import re
 import time
-from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
+from contextlib import closing, contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from datetime import datetime
@@ -534,23 +534,115 @@ class DownloadedMember:
     state: tuple[int, int, int, int, int, int]
 
 
-class _PinnedBody:
-    """One member's response body, chunk by chunk, held to its pin while it streams.
+RESUME_STALLS = 5  # consecutive reconnects that add no byte before a member fetch gives up
+_STRONG_ETAG = re.compile(r'"[\x21\x23-\x7e\x80-\xff]*"')
 
-    The single streaming loop behind :func:`fetch_member` and :func:`verify_member`. A pinned body longer than its
-    pin stops at the first excess chunk; once exhausted, ``sha256`` and ``byte_size`` describe what arrived, and a
-    pinned body that differs raises.
+
+def _resume_etag(response) -> str | None:
+    """The strong ETag that makes a byte-range resume of this response safe, or ``None`` when it cannot be resumed.
+
+    Same rule as ``spicy_docs.transport.resume.PartialDownload``: an encoded body has no stable byte offsets, and a
+    weak or missing validator cannot pin the object across ranges.
+    """
+    etag = response.headers.get("etag")
+    if (response.headers.get("content-encoding") or "identity").lower() != "identity" or not etag:
+        return None
+    return etag if _STRONG_ETAG.fullmatch(etag) else None
+
+
+class _MemberAbsent(Exception):
+    """The first response for a member was HTTP 404."""
+
+
+def _resumable_body(url: str, label: str, headers: Mapping[str, str] | None,
+                    timeout: float | None) -> Generator[bytes | None, None, None]:
+    """Yield one object's body across connection resets: ``b""`` once the first response is accepted, then its chunks.
+
+    ``None`` means the object changed: every byte yielded before it must be discarded and the body restarts at 0.
+    The public host resets long responses (seven members from 163 MB to 3.5 GB in one mirror run), so a transport
+    error mid-body reconnects for the remainder: ``Range`` from the held byte with ``If-Match`` on the body's strong
+    ETag, admitting only HTTP 206 with the exact remaining ``Content-Range`` and the same ETag (the rules of
+    ``explorer_publications._range``). A 200 or 412 answer means the object changed or the range was ignored.
+    Resume is gated on a strong ETag rather than on a pin, so a mutable legacy key resumes too; the pin is
+    :class:`_PinnedBody`'s rule. ``RESUME_STALLS`` reconnects in a row without progress, or the caller's runtime
+    deadline, end the body. An in-process reconnect is used rather than ``PartialDownload``'s fsync'd checkpoint
+    because this contract keeps no state across processes. A 404 before any response was accepted raises
+    :class:`_MemberAbsent`; any other refusal raises ``RuntimeError``.
+    """
+    etag, source, held, stalls, resuming, started = None, None, 0, 0, False, False
+    while True:
+        sent = dict(headers or {})
+        if resuming:
+            sent |= {"Range": f"bytes={held}-", "If-Match": etag, "Accept-Encoding": "identity"}
+        request: dict = {name: value for name, value in (("headers", sent or None),
+                                                         ("timeout", remaining_timeout(timeout)))
+                         if value is not None}
+        start = held
+        try:
+            with httpx.stream("GET", url, follow_redirects=True, **request) as response:
+                status = response.status_code
+                if resuming and status in (200, 412):
+                    logger.warning("{} changed or ignored the range at byte {}; restarting", label, held)
+                    yield None
+                    etag, source, held, resuming = None, None, 0, False
+                    if status == 412:
+                        stalls += 1
+                        if stalls >= RESUME_STALLS:
+                            raise RuntimeError(f"{label} kept changing during download")
+                        continue
+                elif resuming:
+                    match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("content-range", ""))
+                    if (status != 206 or match is None or int(match[1]) != held
+                            or int(match[2]) != int(match[3]) - 1 or response.headers.get("etag") != etag):
+                        raise RuntimeError(f"Resume of {label} did not return the exact remaining range "
+                                           f"(HTTP {status})")
+                elif status == 404 and not started:
+                    raise _MemberAbsent(label)
+                elif status != 200:
+                    raise RuntimeError(f"Failed to download {label} from R2: HTTP {status}")
+                if status == 200:
+                    source = response
+                if not started:
+                    started = True
+                    yield b""
+                for chunk in response.iter_bytes():
+                    yield chunk
+                    held += len(chunk)
+            return
+        except httpx.TransportError as error:
+            etag = etag or (_resume_etag(source) if source is not None else None)
+            if etag is None:
+                raise
+            stalls = 0 if held > start else stalls + 1
+            if stalls >= RESUME_STALLS:
+                raise RuntimeError(f"{label}: {stalls} reconnects without progress at byte {held}") from error
+            logger.warning("{} reset at byte {} ({}); resuming", label, held, type(error).__name__)
+            time.sleep(remaining_timeout(min(30, 2 ** stalls)))
+            resuming = True
+
+
+class _PinnedBody:
+    """One member's body, chunk by chunk, held to its pin while it streams.
+
+    The single streaming loop behind :func:`fetch_member` and :func:`verify_member`, fed by
+    :func:`_resumable_body`, so the pin holds across resumed ranges. ``None`` passes through as the restart marker
+    and resets the digest. A pinned body longer than its pin stops at the first excess chunk; once exhausted,
+    ``sha256`` and ``byte_size`` describe what arrived, and a pinned body that differs raises.
     """
 
-    def __init__(self, response: httpx.Response, member: Member, label: str):
-        self._response, self._member, self._label = response, member, label
+    def __init__(self, chunks: Iterator[bytes | None], member: Member, label: str):
+        self._chunks, self._member, self._label = chunks, member, label
         self.sha256: str | None = None
         self.byte_size = 0
 
-    def __iter__(self) -> Iterator[bytes]:
+    def __iter__(self) -> Iterator[bytes | None]:
         member, digest = self._member, hashlib.sha256()
-        for chunk in self._response.iter_bytes():
+        for chunk in self._chunks:
             checkpoint()
+            if chunk is None:
+                digest, self.byte_size = hashlib.sha256(), 0
+                yield None
+                continue
             self.byte_size += len(chunk)
             if member.sha256 is not None and self.byte_size > (member.byte_size or 0):
                 raise RuntimeError(f"Published generation member differs from its pin: {self._label}")
@@ -564,19 +656,18 @@ class _PinnedBody:
 @contextmanager
 def _member_body(base_url: str, member: Member, label: str, *, headers: Mapping[str, str] | None,
                  timeout: float | None) -> Iterator[_PinnedBody | None]:
-    """``None`` only when an unpinned (legacy) file is absent (HTTP 404); any other non-200 status raises."""
-    request: dict = {name: value for name, value in (("headers", headers), ("timeout", remaining_timeout(timeout)))
-                     if value is not None}
-    with httpx.stream("GET", f"{base_url.rstrip('/')}/{member.path}", follow_redirects=True, **request) as response:
-        if response.status_code == 404:
+    """``None`` only when an unpinned (legacy) file is absent (HTTP 404); any other refusal raises."""
+    with closing(_resumable_body(f"{base_url.rstrip('/')}/{member.path}", label, headers, timeout)) as chunks:
+        try:
+            next(chunks)
+        except _MemberAbsent:
             if member.sha256 is not None:
-                raise RuntimeError(f"Published generation member is missing: {label}")
+                raise RuntimeError(f"Published generation member is missing: {label}") from None
             logger.info("{} not found on R2 (404)", label)
-            yield None
-            return
-        if response.status_code != 200:
-            raise RuntimeError(f"Failed to download {label} from R2: HTTP {response.status_code}")
-        yield _PinnedBody(response, member, label)
+            body = None
+        else:
+            body = _PinnedBody(chunks, member, label)
+        yield body
 
 
 def fetch_member(base_url: str, member: Member, local_path: Path, label: str | None = None, *,
@@ -584,8 +675,9 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
     """Stream one table file to ``local_path`` through a sibling temp file, checked against its pin when it has one.
 
     ``False`` only when an unpinned (legacy) file is absent (HTTP 404). A missing pinned member, any other status, a
-    transport error or bytes that differ from the pin raise, leaving ``local_path`` untouched and no temp file.
-    ``headers`` and ``timeout`` pass through to the request when given.
+    transport error that cannot be resumed (``_resumable_body``) or bytes that differ from the pin raise, leaving
+    ``local_path`` untouched and no temp file. ``headers`` and ``timeout`` pass through to each request when given.
+    Each byte is hashed once, as it arrives; a restarted body truncates the temp file and the digest.
     """
     label = label or member.path
     from spicy_regs.local_data import file_state_from_stat
@@ -599,6 +691,10 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
             temp_path = Path(temporary)
             with os.fdopen(fd, "wb") as out:
                 for chunk in body:
+                    if chunk is None:
+                        out.seek(0)
+                        out.truncate()
+                        continue
                     out.write(chunk)
                 out.flush()
                 written = file_state_from_stat(os.fstat(out.fileno()))
@@ -622,7 +718,8 @@ def fetch_member(base_url: str, member: Member, local_path: Path, label: str | N
 def verify_member(base_url: str, member: Member, label: str | None = None) -> int:
     """Stream one pinned member as an anonymous consumer receives it and hold it to its pin; nothing is written.
 
-    Returns the byte count. An absent member, any other status, a transport error or bytes that differ raise.
+    Returns the byte count. An absent member, any other status, a transport error that cannot be resumed or bytes
+    that differ raise.
     ``Accept-Encoding: identity`` keeps the hash over the stored bytes rather than a decoded transfer.
     """
     if member.sha256 is None:
