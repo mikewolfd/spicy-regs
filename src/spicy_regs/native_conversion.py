@@ -758,10 +758,7 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
     The admission key binds the semantic admission and restoration this process just completed to this validator
     identity, so a publisher under the same key may rely on them (:func:`publish_prepared`). The receipt digest
     covers all of it; the operator carries it to publication from this run's output, never from the receipt.
-    ``closure`` records the code this process loaded (:mod:`spicy_regs.code_closure`) so a later rule can rebind the
-    seal on it; no publication reads it yet (ss-5tt8: the rebind awaits the owner's closure-scope answer).
     """
-    from spicy_regs import code_closure
     from spicy_regs.generations import admission_key, validation_identity
 
     if built.read_operation is None:
@@ -777,7 +774,6 @@ def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
         "generationPin": pin,
         "validationIdentity": identity,
         "admissionKey": admission_key(pin, identity),
-        "closure": code_closure.record(),
         "capturedIndexSha256": _file_digest(work / "captured-publication.v2.json"),
         "evidenceDirectories": [path.resolve().relative_to(work.resolve()).as_posix() for path in built.evidence],
     }
