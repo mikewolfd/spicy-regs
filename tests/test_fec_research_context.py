@@ -1,6 +1,5 @@
 """Retained native context is evidence, never an invented source record."""
 
-from copy import deepcopy
 from datetime import date
 from decimal import Decimal
 import json
