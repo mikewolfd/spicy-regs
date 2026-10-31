@@ -210,7 +210,7 @@ def write_court_bulk(
 
 def _write_bulk_pair(dataset, source, subject, receipt, *, generation_id, witnesses,
                      processor='spicy_regs/courts/1', diagnostics=None, attempt_prefix='row',
-                     refused_receipts=None, receipt_writer=None):
+                     refused_receipts=None, receipt_writer=None, subject_writer=None, segments=None):
     policy = POLICIES[dataset]
 
     def attempt(raw: Mapping, ordinal: int):
@@ -221,10 +221,10 @@ def _write_bulk_pair(dataset, source, subject, receipt, *, generation_id, witnes
         except _REFUSED as error:
             return None, _refusal(policy, context, error, raw)
 
-    court_bulk.write_bundle(dataset, source, subject, receipt, policy=policy,
+    return court_bulk.write_bundle(dataset, source, subject, receipt, policy=policy,
         generation_id=generation_id, processor=processor, witnesses=witnesses,
         diagnostics=diagnostics or {}, attempt_prefix=attempt_prefix, attempt=attempt,
-        receipt_writer=receipt_writer,
+        receipt_writer=receipt_writer, subject_writer=subject_writer, segments=segments,
         last_receipts=() if refused_receipts is None else (
             row for row in parquet_rows(refused_receipts) if _check_refused(row, dataset, generation_id)))
 

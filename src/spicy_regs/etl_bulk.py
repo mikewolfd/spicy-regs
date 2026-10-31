@@ -336,6 +336,7 @@ def write_split(
     isolate: str | None = None,
     subject_columns: Sequence[str] | None = None,
     receipt_writer: pq.ParquetWriter | None = None,
+    subject_writer: pq.ParquetWriter | None = None,
 ) -> int:
     """Write a subject file and a receipt file from one SQL query over ``source``; return how many rows the row code decided.
 
@@ -350,6 +351,9 @@ def write_split(
     records, as the row writers order them. ``first_receipts`` open the receipt file and ``last_receipts`` follow the rows.
     ``last_refusals`` follows the routed refusals, retaining the order of separately rejected updates.
     ``receipt_writer`` borrows an already open family member; this call flushes its rows but does not close it.
+    ``subject_writer`` likewise borrows an open subject member (``subject_path`` is then not written), so a caller
+    that owns the member's layout (compression level, statistics, several sources into one member) writes it once.
+    Each segment's subjects are one ``write_table`` call, so ``segments`` also bounds the subject row groups.
     ``subject_columns`` optionally names query aliases in subject-schema order when a native field name collides with
     a receipt field; aliases are renamed before routed subjects are inserted.
     ``segments`` may split a batch; a row whose boolean ``isolate`` column is true must be alone in its segment and is
@@ -367,7 +371,8 @@ def write_split(
     pending = pa.Table.from_pylist(list(first_receipts), schema=RECEIPT_SCHEMA)
     with ExitStack() as stack:
         scratch = Path(stack.enter_context(TemporaryDirectory(dir=Path(receipt_path).parent, prefix=".split-")))
-        subjects = stack.enter_context(pq.ParquetWriter(subject_path, subject_schema, compression="zstd"))
+        subjects = subject_writer if subject_writer is not None else stack.enter_context(
+            pq.ParquetWriter(subject_path, subject_schema, compression="zstd"))
         receipts = receipt_writer if receipt_writer is not None else stack.enter_context(new_receipt_writer(receipt_path))
         refused = stack.enter_context(pq.ParquetWriter(scratch / "refused.parquet", RECEIPT_SCHEMA, compression="zstd"))
 

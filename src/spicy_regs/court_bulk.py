@@ -29,9 +29,11 @@ from spicy_regs.etl_receipts import WITNESS_TYPE, DatasetPolicy, ReceiptContext,
 #: Tables whose mapping is only the rules above (the others convert lists, derive identities or read JSON).
 DATASETS = frozenset({
     "court_citation_map", "court_citations", "court_parentheticals", "court_opinion_clusters", "court_opinions",
+    "court_opinion_texts",
 })
-#: Rows per DuckDB batch; clusters carry whole opinions' metadata text, so a batch is smaller.
-_BATCH = {"court_opinion_clusters": 10_000}
+#: Rows per DuckDB batch; clusters carry whole opinions' metadata text, so a batch is smaller, and an opinion's
+#: Markdown averages about 16 KB (the first 100,000 of the 2026-06-30 export), so 2,000 hold tens of MB, not GB.
+_BATCH = {"court_opinion_clusters": 10_000, "court_opinion_texts": 2_000}
 _DEFAULT_BATCH = 100_000
 
 _INTEGER = "'-?[0-9]+'"
@@ -128,11 +130,14 @@ def write_bundle(
     attempt: Callable[[Mapping, int], tuple[dict | None, dict]],
     last_receipts: Iterable[Mapping] = (),
     receipt_writer: pq.ParquetWriter | None = None,
+    subject_writer: pq.ParquetWriter | None = None,
+    segments: Callable[[pa.Table], Iterable[pa.Table]] | None = None,
 ) -> int:
     """Write ``dataset``'s subject table and receipts to the two paths; return how many rows the row function decided.
 
     ``attempt(raw_row, ordinal)`` is the row writer's own step for one source row. Receipts that are not accepted
-    follow every accepted one, as the row writer orders them.
+    follow every accepted one, as the row writer orders them. ``receipt_writer``, ``subject_writer`` and ``segments``
+    pass through to ``etl_bulk.write_split``.
     """
     lit = etl_bulk._literal
     source = Path(source)
@@ -172,6 +177,6 @@ def write_bundle(
         return etl_bulk.write_split(
             con, query, source=source, batch_rows=_BATCH.get(dataset, _DEFAULT_BATCH), expected_rows=expected,
             subject_schema=policy.subject_schema, subject_path=subject_path, receipt_path=receipt_path,
-            receipt_writer=receipt_writer,
+            receipt_writer=receipt_writer, subject_writer=subject_writer, segments=segments,
             label=dataset, refusals_last=True, last_refusals=last_receipts,
             row_attempt=lambda table, index, source_row: attempt(source_row, table["_ordinal"][index].as_py()))
