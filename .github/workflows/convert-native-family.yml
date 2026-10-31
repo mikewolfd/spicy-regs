@@ -25,7 +25,7 @@ on:
         default: ''
         type: string
       expected_receipt_digest:
-        description: 'With source_run_id: the "prepared receipt digest" line from that run''s prepare log, typed in by the operator'
+        description: 'With source_run_id: the "prepared receipt digest" from that run''s job log or step summary (never an uploaded artifact), typed in by the operator'
         default: ''
         type: string
       expected_bucket:
@@ -83,8 +83,8 @@ jobs:
           elif [ -n "$EXPECTED_PRODUCER" ]; then
             echo 'expected_producer belongs to a retained source_run_id'; exit 1
           fi
-          # The digest of a downloaded receipt comes from the operator, who copies it from the preparing run's log:
-          # never from the artifact being checked. A same-job preparation hands its printed digest on directly.
+          # The digest of a downloaded receipt comes from the operator, who copies it from the preparing run's job log or
+          # step summary, never from the artifact being checked. A same-job preparation hands its printed digest on.
           if [ -n "$SOURCE_RUN_ID" ] && [ "$PUBLISH" = true ]; then
             [[ "$EXPECTED_RECEIPT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] \
               || { echo 'Require expected_receipt_digest from the preparing run'"'"'s log'; exit 1; }
@@ -135,6 +135,8 @@ jobs:
           DIGEST=$(sed -n 's/^prepared receipt digest \(sha256:[0-9a-f]\{64\}\)$/\1/p' output/logs/prepare.log)
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'Preparation printed no receipt digest'; exit 1; }
           echo "receipt_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          # The channel a later separate publish takes its digest from: this run's summary, not its artifacts.
+          echo "prepared receipt digest \`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
       - name: Check the prepared artifact captured the exact requested prior
         run: |
           set -euo pipefail

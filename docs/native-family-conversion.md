@@ -583,9 +583,10 @@ Hosted limits do not establish that a larger family fits the runner.
 After checks against the actual reader, dispatch with `publish=true`, the
 explicit `expected_bucket`, `source_run_id` naming that preparation run,
 `expected_producer` naming its full producer commit, and
-`expected_receipt_digest` copied from that run's `prepare.log` (the
-`prepared receipt digest` line, as shown in the job log). The downloaded
-artifact cannot supply its own digest. A single dispatch that prepares and
+`expected_receipt_digest` copied from that run's job log or step summary
+(the `prepared receipt digest` line). Never take it from an uploaded artifact,
+`prepare.log` in the evidence bundle included: the downloaded artifact cannot
+supply its own digest. A single dispatch that prepares and
 publishes hands the digest from the prepare step to the publish step; that
 guards against a stale or edited receipt, not against a compromised job.
 The workflow downloads those same bytes and calls `--publish-prepared`;
