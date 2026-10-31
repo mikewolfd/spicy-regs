@@ -13,7 +13,9 @@ about the publisher's own document, not about a list somebody typed.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -462,6 +464,27 @@ def test_fec_lists_come_from_refspecs_parse_of_the_pinned_pages(documented, labe
     assert labels_only["fec-candidate-party"].labels["REP"] == "Republican Party"
 
 
+def test_every_vendored_fec_code_and_label_is_on_its_pinned_page(documented, labels_only):
+    """The digest match is the vendored file's own claim; this reads the pinned bytes themselves.
+
+    A one-way presence check (each code and label occurs in the page's text), not a second parser.
+    """
+
+    def page_text(capture) -> str:
+        text = re.sub(r"<[^>]+>", " ", html.unescape(read_capture(capture, root=DOMAIN_DIR).decode("utf-8")))
+        return " ".join(text.split())
+
+    captures = load_capture_manifest(DOMAIN_DIR)
+    fec = [domain for domain in (*documented.values(), *labels_only.values()) if domain.capture_key.startswith("fec-")]
+    assert len(fec) == 6
+    for domain in fec:
+        text = page_text(captures[domain.capture_key])
+        for code in domain.values:
+            label = " ".join(domain.labels[code].split())
+            assert re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", text), (domain.key, code)
+            assert label in text, (domain.key, code, label)
+
+
 def test_a_vendored_fec_list_parsed_from_other_bytes_is_refused(tmp_path):
     """The derived list is not its own witness: its recorded source digest must be the pinned capture's."""
 
@@ -486,6 +509,25 @@ def test_documented_values_mark_which_lists_gate():
     assert party["source_url"] == "https://www.fec.gov/campaign-finance-data/party-code-descriptions/"
     assert "caveat" in values["bill_actions"]["action_code"]
     assert values["bill_actions"]["action_type"]["values"][0] == {"value": "Actions by the President"}
+
+
+def test_documented_values_carry_the_accepted_disagreements():
+    """A checked list is the publisher's, not the column's: the dominant off-list value must ride along."""
+
+    values = documented_values(DOMAIN_DIR)
+    comment_type = values["comments"]["document_type"]
+    assert "Public Submission" not in {item["value"] for item in comment_type["values"]}
+    assert [item["value"] for item in comment_type["observed_off_list"]] == ["Public Submission"]
+    assert set(comment_type["unobserved"]) == {"Notice", "Rule", "Proposed Rule"}
+    action_type = values["bill_actions"]["action_type"]
+    assert [item["value"] for item in action_type["observed_off_list"]] == ["Veto"]
+    assert "Actions Related to Veto" in action_type["unobserved"]
+    assert "Section 3(f)(1) Significant" in {
+        item["value"] for item in values["unified_agenda"]["priority_category"]["observed_off_list"]
+    }
+    lda = values["lobbying_filings"]["filing_type"]
+    assert (lda["observed_off_list"], lda["unobserved"]) == ([], [])
+    assert {"observed_off_list", "unobserved", "observed_at"}.isdisjoint(values["bill_actions"]["action_code"])
 
 
 # --- the observed snapshot's own provenance ---------------------------------

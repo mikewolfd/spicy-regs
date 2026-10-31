@@ -126,7 +126,12 @@ LDA covered government entities have no captured list at all.
 
 Every documented list, gated or not, reaches `describe_table` as the table's
 `metadata.documented_values` with `detail=true`, each column marked `checked`
-or not, with its source URL, locator and any caveat.
+or not, with its source URL, locator and any caveat. `values` is the
+publisher's list, not the column's domain: a checked column also carries the
+ledger's accepted disagreements as of the snapshot's `observed_at` —
+`observed_off_list` (values the data carries that the list omits, with the
+reason, e.g. `Public Submission` on 99.998% of comments rows) and `unobserved`
+(listed values no row carries).
 
 ## The observation
 
@@ -142,7 +147,10 @@ It names its inputs: the published tables it read at
 them remotely, one column per query, so nothing was downloaded (`comments` alone
 is 9.7 GB); each source therefore records the index's pin for that member
 (`"digest_basis": "publication-index"`), and the observation refused to proceed
-unless each file's parquet footer row count equalled the index's. A fragment of
+unless each file's parquet footer row count equalled the index's. That basis
+pins identity by reference, not by measurement: the digest is the index's
+statement about the member, never computed from the bytes read, and the footer
+row count is the only independent binding between the two. A fragment of
 that index (`published-index-fragment-2026-10-30.json`) is checked in beside the
 snapshot so the recorded URLs stay verifiable offline. The per-value counts were
 re-derived for every table but `comments` with the DuckDB CLI over the same URLs

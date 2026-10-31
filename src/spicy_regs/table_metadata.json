@@ -97,7 +97,10 @@
           {
             "value": "Nonrulemaking"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [],
+        "unobserved": []
       }
     }
   },
@@ -297,7 +300,15 @@
           {
             "value": "Other"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [
+          {
+            "value": "Public Submission",
+            "reason": "regulations.gov returns this documentType on 374 document rows and labels it in its own web UI, but the pinned v4 OpenAPI DocumentType enum lists only five values and does not include it. The publisher's documentation is incomplete; the data is not wrong."
+          }
+        ],
+        "unobserved": []
       }
     }
   },
@@ -501,6 +512,18 @@
           {
             "value": "Other"
           }
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [
+          {
+            "value": "Public Submission",
+            "reason": "The documentType of a comment itself (26,417,470 of 26,418,078 comments rows on 2026-10-30), which regulations.gov returns and labels but its v4 OpenAPI DocumentType enum omits; the same gap as on documents."
+          }
+        ],
+        "unobserved": [
+          "Notice",
+          "Rule",
+          "Proposed Rule"
         ]
       }
     }
@@ -1370,6 +1393,11 @@
           {
             "value": "No Stage"
           }
+        ],
+        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_off_list": [],
+        "unobserved": [
+          "No Stage"
         ]
       },
       "priority_category": {
@@ -1396,6 +1424,16 @@
           {
             "value": "Not Major"
           }
+        ],
+        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_off_list": [
+          {
+            "value": "Section 3(f)(1) Significant",
+            "reason": "EO 14094 (April 2023) renamed the EO 12866 section 3(f)(1) category, and editions 202304-202410 carry it on 833 rows; the pinned XSD (version 10262011) predates the order. 202504 and later return to Economically Significant after EO 14148 revoked 14094."
+          }
+        ],
+        "unobserved": [
+          "Not Major"
         ]
       },
       "rin_status": {
@@ -1410,6 +1448,21 @@
           {
             "value": "Previously published in the Unified Agenda"
           }
+        ],
+        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_off_list": [
+          {
+            "value": "First Time Published in The Unified Agenda",
+            "reason": "Title-cased in the data, sentence-cased in the schema documentation (\"First time published in the Unified Agenda\"). Same value, different bytes: an exact-match consumer built from the documentation matches no row at all."
+          },
+          {
+            "value": "Previously Published in The Unified Agenda",
+            "reason": "The other half of the same casing drift; the schema documents \"Previously published in the Unified Agenda\"."
+          }
+        ],
+        "unobserved": [
+          "First time published in the Unified Agenda",
+          "Previously published in the Unified Agenda"
         ]
       },
       "major": {
@@ -1427,7 +1480,10 @@
           {
             "value": "Undetermined"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_off_list": [],
+        "unobserved": []
       },
       "related_rins.rin_relation": {
         "domain": "unified-agenda-rin-relation",
@@ -1450,6 +1506,24 @@
           {
             "value": "Related to"
           }
+        ],
+        "observed_at": "2026-10-31T01:30:00Z",
+        "observed_off_list": [
+          {
+            "value": "Merged with",
+            "reason": "The XSD documents \"Merge with\"; the data writes \"Merged with\" on 2,283 related RINs. Same relation, different bytes: an exact-match consumer built from the documentation matches none."
+          },
+          {
+            "value": "Related t",
+            "reason": "A publisher cut-off of \"Related to\": 1125-AB08 in 202004, 202010 and 202104, the same entry that states the related RIN \" 1615-NYD\". Kept as written (owner Q15), never repaired to a guess."
+          },
+          {
+            "value": "Previously report",
+            "reason": "A publisher cut-off of \"Previously reported as\": 3150-AH33 in 200310, beside the malformed related RIN \"d as AF61\". Kept as written (owner Q15)."
+          }
+        ],
+        "unobserved": [
+          "Merge with"
         ]
       }
     }
@@ -2591,7 +2665,10 @@
             "value": "Y@Y",
             "label": "Year-End Termination Amendment (No Activity)"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [],
+        "unobserved": []
       }
     }
   },
@@ -2969,7 +3046,10 @@
             "value": "WEL",
             "label": "Welfare"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [],
+        "unobserved": []
       }
     }
   },
@@ -24394,6 +24474,32 @@
           {
             "value": "VARIES"
           }
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [
+          {
+            "value": "Veto",
+            "reason": "212 actions (veto messages laid before the House or received in the Senate, 2007-2026) carry type Veto, which the guide's section 4 omits; it lists only 'Actions Related to Veto', which no row carries. Congress.gov emits the type; the guide's list is behind it."
+          }
+        ],
+        "unobserved": [
+          "Actions by the President",
+          "Actions Related to President",
+          "Actions Related to Veto",
+          "Amending Actions",
+          "Chamber Actions",
+          "Chamber Consideration Actions",
+          "Committee Actions",
+          "Conference Actions",
+          "ForwardY-N",
+          "House Actions",
+          "Introduced in House",
+          "Introduced in Senate",
+          "Procedural",
+          "Senate Actions",
+          "Significant Actions",
+          "Unknown",
+          "VARIES"
         ]
       },
       "action_code": {
@@ -27913,7 +28019,10 @@
             "value": "Z",
             "label": "National party nonfederal account"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [],
+        "unobserved": []
       },
       "designation": {
         "domain": "fec-committee-designation",
@@ -27945,7 +28054,10 @@
             "value": "U",
             "label": "Unauthorized"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [],
+        "unobserved": []
       },
       "filing_frequency": {
         "domain": "fec-filing-frequency",
@@ -27977,6 +28089,11 @@
             "value": "W",
             "label": "Waived"
           }
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [],
+        "unobserved": [
+          "W"
         ]
       },
       "organization_type": {
@@ -28009,7 +28126,19 @@
             "value": "W",
             "label": "Corporation without capital stock"
           }
-        ]
+        ],
+        "observed_at": "2026-10-31T01:59:08Z",
+        "observed_off_list": [
+          {
+            "value": "H",
+            "reason": "26 committee-cycle rows (cycles 2014-2020, all designation U) carry ORG_TP H, which the 2026-08-03 committee master file description does not list. Retained as the FEC states it; its meaning is undocumented."
+          },
+          {
+            "value": "I",
+            "reason": "20 committee-cycle rows (cycles 2014-2026, all designation U) carry ORG_TP I, which the 2026-08-03 committee master file description does not list. Retained as the FEC states it; its meaning is undocumented."
+          }
+        ],
+        "unobserved": []
       },
       "party": {
         "domain": "fec-committee-party",

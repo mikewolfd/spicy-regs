@@ -64,7 +64,9 @@ RefSpec's parser rather than a second one written here: the code lists RefSpec
 parsed from the same bytes are vendored at
 ``spicy_regs/reference/refspec/fec-committee-codes.json``, and each list is
 used only when the digest RefSpec recorded for its source equals the pinned
-capture's, so the derived list never vouches for itself.
+capture's. That digest is the vendored file's own statement, so a test also
+reads the pinned bytes and requires every vendored code and label to occur in
+the page's text.
 
 Parsers here are pure — bytes in, values out, no network and no I/O beyond the
 manifest, snapshot and vendored-list reads — and every document parse is
@@ -703,9 +705,20 @@ def documented_values(root: Path | str = DEFAULT_SOURCE_DOMAIN_DIR) -> dict[str,
 
     ``checked`` says whether ``check_source_domain_drift.py`` holds the column
     to the list (a dated lock re-pinned by hand, not a live check) or whether
-    the list is labels only. ``values`` keep the publisher's order.
+    the list is labels only. ``values`` keep the publisher's order and are the
+    publisher's list, not the column's domain: for a checked column the
+    ledger's accepted disagreements ride along as ``observed_off_list`` (values
+    the data carries that the list omits, each with its reason) and
+    ``unobserved`` (listed values no row carries), as of the ``observed_at`` of
+    the dated snapshot that observes the column, so a reader never takes the dominant value of a column
+    for an invalid one.
     """
 
+    # Each domain's date is the date of the dated file that observes it.
+    observed_at = {key: one.observed_at for one in load_observed_snapshots(root) for key in one.domains}
+    accepted: dict[str, dict[str, list[AcceptedFinding]]] = {}
+    for finding in ACCEPTED_DOMAIN_FINDINGS:
+        accepted.setdefault(finding.domain_key, {}).setdefault(finding.kind, []).append(finding)
     result: dict[str, dict[str, dict[str, Any]]] = {}
     for checked, domains in ((True, documented_domains(root)), (False, label_only_domains(root))):
         for domain in domains.values():
@@ -720,6 +733,13 @@ def documented_values(root: Path | str = DEFAULT_SOURCE_DOMAIN_DIR) -> dict[str,
                     for value in domain.values
                 ],
             }
+            if checked:
+                ledger = accepted.get(domain.key, {})
+                entry["observed_at"] = observed_at[domain.key]
+                entry["observed_off_list"] = [
+                    {"value": finding.value, "reason": finding.reason} for finding in ledger.get(UNDOCUMENTED, ())
+                ]
+                entry["unobserved"] = [finding.value for finding in ledger.get(UNOBSERVED, ())]
             result.setdefault(domain.table, {})[domain.column] = entry
     return result
 
