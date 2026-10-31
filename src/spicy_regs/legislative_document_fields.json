@@ -1545,8 +1545,6 @@
     ],
     "processing_only": false,
     "retired_fields": [
-      "estimate_heading",
-      "estimate_heading_rule",
       "letter_span_start",
       "letter_span_end",
       "letter_text_sha256",
@@ -1760,6 +1758,24 @@
         "target": "recital_bill_id",
         "target_type": "string",
         "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "estimate_heading",
+        "source_type": "VARCHAR",
+        "meaning": "The part's first cost-estimate section heading, as the committee spelled it, collapsed to one line where GPO wrapped it across two -- **only where no located CBO letter opens on it**.  Two-sided: a heading that opens a letter is that letter's fact and sits on its committee_report_cbo_letters row, so this is NULL there; a heading that opens none (a declared estimate whose letter was not located, an undeclared report's `Congressional Budget Office Cost Estimate` section saying none was received, or a committee's own `COMMITTEE COST ESTIMATE` section printed apart from the letter) is the part's and sits here.  Read whether or not the cover declares an estimate.",
+        "decision": "keep",
+        "target": "estimate_heading",
+        "target_type": "string",
+        "reason": "Published domain value or stable subject key; preserve its literal meaning."
+      },
+      {
+        "name": "estimate_heading_rule",
+        "source_type": "VARCHAR",
+        "meaning": "Which entry of the heading vocabulary matched estimate_heading; NULL exactly where it is.  **That vocabulary is a floor**: it only ever locates a span the recital already declared.",
+        "decision": "move-to-receipt",
+        "target": null,
+        "target_type": "receipt exact typed value",
+        "reason": "Processing, source locator, acquisition, quality, or diagnostic evidence; retain the exact original value in the matching shared ETL receipt."
       },
       {
         "name": "estimate_absence_reason",

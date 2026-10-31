@@ -18,11 +18,16 @@ Entries link to the pull request that introduced the change.
     enclosed estimate's "Estimate approved by ... Analysis." line, and
     `letter_date` is the letterhead's dateline, NULL where none is printed
     (every 118th-Congress letter).
-  - **`committee_reports` moves to `legislative-documents/2`.** Its seven
-    per-letter columns (`estimate_heading`, `estimate_heading_rule`,
-    `letter_span_start`, `letter_span_end`, `letter_text_sha256`,
-    `letter_end_rule`, `letter_signatory`) move to the new table, and it gains
-    `cbo_letter_count` (NULL where no rule ran). A prior published under `/1`
+  - **`committee_reports` moves to `legislative-documents/2`.** Its five
+    per-letter columns (`letter_span_start`, `letter_span_end`,
+    `letter_text_sha256`, `letter_end_rule`, `letter_signatory`) move to the
+    new table, and it gains `cbo_letter_count` (NULL where no rule ran).
+    `estimate_heading` (and its receipt-only rule) stays in place with a
+    two-sided meaning: the part's first estimate heading where no located
+    letter opens on it, NULL where one does, so none of the 144 live
+    `estimate_heading` values is lost (115 stay on the part row, 29 move to
+    their letter's row; checked against generation `670476640e83` over every
+    live row's body). A prior published under `/1`
     restores in its exact shape (`legislative_policy_history.json`); the
     `cbo=` and `sections=` rule versions re-read every report once.
   - **Needs the SpicyDocs release that carries the reader** (0.67.x, the

@@ -501,12 +501,12 @@ def test_reference_restore_loads_and_admits_receipts_once(tmp_path, monkeypatch,
 
 
 #: The seven per-letter columns committee_reports carried under legislative-documents/1 (ss-uep5 moved them).
-LETTER_COLUMNS = ("estimate_heading", "estimate_heading_rule", "letter_span_start", "letter_span_end",
-                  "letter_text_sha256", "letter_end_rule", "letter_signatory")
+# The five columns that moved; estimate_heading and its rule stay on the part row with a part-level meaning.
+LETTER_COLUMNS = ("letter_span_start", "letter_span_end", "letter_text_sha256", "letter_end_rule", "letter_signatory")
 
 
 def _committee_reports_v1_registry():
-    """The legislative-documents/1 committee_reports spec: today's fields with the seven letter columns where they were.
+    """The legislative-documents/1 committee_reports spec: today's fields with the five letter columns where they were.
 
     The letter columns kept their names, decisions and types when they moved, so the letters table's own spec is what
     they were; the recorded /1 policy pins that this rebuild is the shape the earlier writer published.
@@ -518,7 +518,7 @@ def _committee_reports_v1_registry():
         if field["name"] == "cbo_letter_count":
             continue
         fields.append(field)
-        if field["name"] == "recital_bill_id":
+        if field["name"] == "estimate_heading_rule":
             fields.extend(letters[name] for name in LETTER_COLUMNS)
     spec = {k: v for k, v in registry["committee_reports"].items() if k != "retired_fields"} | {"fields": fields}
     return registry | {"committee_reports": spec}
@@ -528,7 +528,7 @@ def test_a_bundle_written_before_the_letters_moved_restores_under_the_new_policy
     """A legislative-documents/1 committee_reports generation still restores its exact source rows after the bump.
 
     Its subjects keep their /1 shape (the four letter columns that were native, no cbo_letter_count), the next run's
-    prior is the original row with the seven retired columns, and a /2 write of the same row drops them from the
+    prior is the original row with the five retired columns, and a /2 write of the same row drops them from the
     subject while the receipt keeps the whole original.
     """
     import json
@@ -571,10 +571,11 @@ def test_a_bundle_written_before_the_letters_moved_restores_under_the_new_policy
     # Restoring under the bumped policy reproduces the /1 subject from its receipt and returns the original row.
     restored = restore_prior(tmp_path / "v1", tmp_path / "prior")
     assert pq.read_table(restored["committee_reports"]).to_pylist() == [source]
-    # The same original written now publishes the /2 shape: no letter columns, an unread count.
+    # The same original written now publishes the /2 shape: no letter columns, the heading kept, an unread count.
     write_legislative_outputs([restored["committee_reports"]], tmp_path / "v2", generation_id="g2")
     [published] = pq.read_table(tmp_path / "v2/committee_reports.parquet").to_pylist()
     assert not set(LETTER_COLUMNS) & published.keys()
+    assert published["estimate_heading"] == "COMMITTEE COST ESTIMATE"
     assert published["cbo_letter_count"] is None and published["report_states_estimate"] is True
     receipts = select_receipts(tmp_path / "v2/etl_receipts.parquet", tmp_path / "selected.parquet",
                                dataset="committee_reports")

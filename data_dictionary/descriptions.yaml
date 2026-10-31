@@ -2630,9 +2630,14 @@ tables:
       an absent recital; NULL means the rule has not run. cbo_letter_count counts the letters
       located in the part, each a committee_report_cbo_letters row; a positive recital with a
       count of 0 is a declared estimate no letter was located for, distinct from an extracted
-      letter. The seven per-letter columns this table carried until committee_reports
-      legislative-documents/2 (the first letter's heading, span, digest, end rule and
-      signatory) are on committee_report_cbo_letters, one row per letter (ss-uep5). recital_bill_id comes from the
+      letter. The five per-letter columns this table carried until committee_reports
+      legislative-documents/2 (the first letter's span, digest, end rule and signatory) are on
+      committee_report_cbo_letters, one row per letter (ss-uep5). estimate_heading stays here
+      with a two-sided meaning: the part's first estimate heading where no located letter opens
+      on it, NULL where one does (that letter's row carries it). It keeps all 115 headings of
+      live generation 670476640e83 that open no letter, among them 110 undeclared reports'
+      "Congressional Budget Office Cost Estimate" sections saying none was received; the other
+      29 live headings opened a letter and are on its row. recital_bill_id comes from the
       printed recital and is retained beside the MODS bill_id. bill_id is the part's own PRIMARY
       bill: a multi-part package's root states none, so each part of CRPT-119hrpt494 carries the
       H.R. 3495 its constituent record names, where its row read before parts were keyed has
