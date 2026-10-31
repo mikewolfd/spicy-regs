@@ -71,6 +71,13 @@ from spicy_docs.reading.xml import parse_xml
 DEFAULT_SOURCE_DOMAIN_DIR = Path("sample-data/source-domains")
 CAPTURE_MANIFEST_FILENAME = "documented-enumeration-capture-manifest-v1.json"
 OBSERVED_SNAPSHOT_FILENAME = "observed-domain-snapshot-2026-09-22.json"
+#: Each dated observation covers its own domains; together they cover every declaration once. The 2026-09-22
+#: file observed edition 202510 only, and re-observing it whole would reopen its edition-bounded reasons, so
+#: RIN_RELATION, read from all 60 editions, is its own dated file.
+OBSERVED_SNAPSHOT_FILENAMES = (
+    OBSERVED_SNAPSHOT_FILENAME,
+    "observed-domain-snapshot-2026-10-30-unified-agenda-related-rins.json",
+)
 
 CAPTURE_MANIFEST_FORMAT_VERSION = "spicyregs-source-domains/capture-v1"
 OBSERVED_SNAPSHOT_FORMAT_VERSION = "spicyregs-source-domains/observed-v1"
@@ -258,7 +265,11 @@ def xsd_documented_options(payload: bytes, element_name: str) -> tuple[tuple[str
 
 @dataclass(frozen=True)
 class DocumentedDomain:
-    """One published column, the values its publisher documents, and where it says so."""
+    """One published column, the values its publisher documents, and where it says so.
+
+    ``column`` names a scalar column, or ``list_column.member`` for one member of a list-of-struct column,
+    observed over every list element.
+    """
 
     key: str
     table: str
@@ -281,7 +292,7 @@ class _DomainDeclaration:
     expected_raw_options: int
 
 
-# Six columns across three published tables. What is absent, and why — so a reader
+# Seven columns across three published tables. What is absent, and why — so a reader
 # takes the set for a decision and knows which hole is not one:
 #
 # * ``TTBL_ACTION`` (XSD L441-448) is a decided exclusion. The publisher's own
@@ -363,6 +374,16 @@ _DECLARATIONS: tuple[_DomainDeclaration, ...] = (
         expected_values=3,
         expected_raw_options=3,
     ),
+    _DomainDeclaration(
+        key="unified-agenda-rin-relation",
+        table="unified_agenda",
+        column="related_rins.rin_relation",
+        capture_key="reginfo-rin-data-xsd",
+        locator="RELATED_RINType/RIN_RELATION xs:documentation (line 526)",
+        element="RIN_RELATION",
+        expected_values=5,
+        expected_raw_options=5,
+    ),
 )
 
 DOMAIN_KEYS: tuple[str, ...] = tuple(declaration.key for declaration in _DECLARATIONS)
@@ -413,7 +434,10 @@ def documented_domains(root: Path | str = DEFAULT_SOURCE_DOMAIN_DIR) -> dict[str
 
 @dataclass(frozen=True)
 class ObservedDomain:
-    """The distinct values one published column actually carries, with row support."""
+    """The distinct values one published column actually carries, with row support.
+
+    For a ``list_column.member`` domain the counts and ``row_count`` are list elements, not table rows.
+    """
 
     key: str
     table: str
@@ -468,6 +492,24 @@ def load_observed_snapshot(
         sources=tuple(payload.get("sources") or ()),
         domains=domains,
     )
+
+
+def load_observed_snapshots(root: Path | str = DEFAULT_SOURCE_DOMAIN_DIR) -> tuple[ObservedSnapshot, ...]:
+    """Every checked-in dated observation, in :data:`OBSERVED_SNAPSHOT_FILENAMES` order."""
+
+    return tuple(load_observed_snapshot(root, filename=filename) for filename in OBSERVED_SNAPSHOT_FILENAMES)
+
+
+def merged_domains(snapshots: Sequence[ObservedSnapshot]) -> dict[str, ObservedDomain]:
+    """The snapshots' domains as one register, refusing a domain two snapshots both observe."""
+
+    merged: dict[str, ObservedDomain] = {}
+    for snapshot in snapshots:
+        for key, domain in snapshot.domains.items():
+            if key in merged:
+                raise SourceDomainError(f"domain {key!r} is observed by more than one snapshot")
+            merged[key] = domain
+    return merged
 
 
 # --- the diff ---------------------------------------------------------------
@@ -533,7 +575,7 @@ class AcceptedFinding:
     reason: str
 
 
-# Every finding the 2026-09-22 snapshot produces, each with the reason it stands
+# Every finding the checked-in snapshots produce, each with the reason it stands
 # recorded rather than fixed. The ledger is closed in both directions: an
 # unrecorded finding fails the gate, and so does a recorded finding the data no
 # longer produces, because an exception nothing exercises is a claim nobody
@@ -596,6 +638,41 @@ ACCEPTED_DOMAIN_FINDINGS: tuple[AcceptedFinding, ...] = (
         reason=(
             "Absent from edition 202510 for the same reason as No Stage. The XSD documentation also lists "
             "this value twice, which is the publisher's own typo rather than two categories."
+        ),
+    ),
+    # RIN_RELATION, observed over all 28,720 related RINs of the 60 retained editions (owner Q15: published as
+    # written). The four findings are the action list's C11.
+    AcceptedFinding(
+        domain_key="unified-agenda-rin-relation",
+        kind=UNDOCUMENTED,
+        value="Merged with",
+        reason=(
+            'The XSD documents "Merge with"; the data writes "Merged with" on 2,283 related RINs. Same '
+            "relation, different bytes: an exact-match consumer built from the documentation matches none."
+        ),
+    ),
+    AcceptedFinding(
+        domain_key="unified-agenda-rin-relation",
+        kind=UNOBSERVED,
+        value="Merge with",
+        reason="The documented spelling occurs on no related RIN in 60 editions; the data carries \"Merged with\".",
+    ),
+    AcceptedFinding(
+        domain_key="unified-agenda-rin-relation",
+        kind=UNDOCUMENTED,
+        value="Related t",
+        reason=(
+            'A publisher cut-off of "Related to": 1125-AB08 in 202004, 202010 and 202104, the same entry that '
+            'states the related RIN " 1615-NYD". Kept as written (owner Q15), never repaired to a guess.'
+        ),
+    ),
+    AcceptedFinding(
+        domain_key="unified-agenda-rin-relation",
+        kind=UNDOCUMENTED,
+        value="Previously report",
+        reason=(
+            'A publisher cut-off of "Previously reported as": 3150-AH33 in 200310, beside the malformed '
+            'related RIN "d as AF61". Kept as written (owner Q15).'
         ),
     ),
 )

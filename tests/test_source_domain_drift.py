@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.check_source_domain_drift import table_urls
+from scripts.check_source_domain_drift import observe, table_urls
 from spicy_regs.data_dictionary import expected_schemas
 from spicy_regs.sources.publication import parse_index, single_member
 from spicy_regs.sources.source_domains import (
@@ -30,13 +30,15 @@ from spicy_regs.sources.source_domains import (
     DEFAULT_SOURCE_DOMAIN_DIR,
     DOMAIN_KEYS,
     FINDING_KINDS,
-    OBSERVED_SNAPSHOT_FILENAME,
+    OBSERVED_SNAPSHOT_FILENAMES,
     UNDOCUMENTED,
     SourceDomainError,
     documented_domains,
     domain_findings,
     load_capture_manifest,
     load_observed_snapshot,
+    load_observed_snapshots,
+    merged_domains,
     openapi_schema_enum,
     read_capture,
     stale_accepted_findings,
@@ -72,8 +74,19 @@ def snapshot():
 
 
 @pytest.fixture(scope="module")
-def findings(documented, snapshot):
-    return domain_findings(documented, snapshot.domains)
+def related_snapshot():
+    return load_observed_snapshot(DOMAIN_DIR, filename=OBSERVED_SNAPSHOT_FILENAMES[1])
+
+
+@pytest.fixture(scope="module")
+def observed():
+    """Every dated snapshot's domains: the register the gate diffs."""
+    return merged_domains(load_observed_snapshots(DOMAIN_DIR))
+
+
+@pytest.fixture(scope="module")
+def findings(documented, observed):
+    return domain_findings(documented, observed)
 
 
 # --- the gate itself --------------------------------------------------------
@@ -103,19 +116,23 @@ def test_every_accepted_finding_states_a_reason():
         assert len(entry.reason) > 60, entry
 
 
-def test_the_findings_are_the_seven_this_snapshot_carries(findings):
+def test_the_findings_are_the_eleven_the_snapshots_carry(findings):
     """Pinned so a silent change in either half shows up as a number, not a shrug.
 
     This list deliberately transcribes the ledger a second time. The set-equality
     tests above compare the ledger against the findings, so both pass when someone
     edits the ledger and the snapshot to agree on something wrong. This one states
-    the seven independently of both, and catches that. Kept for that reason.
+    the eleven independently of both, and catches that. Kept for that reason.
     """
 
     identifiers = sorted(finding.identifier for finding in findings)
     assert identifiers == [
         "regulations-gov-document-type/undocumented-value/Public Submission",
         "unified-agenda-priority-category/unobserved-value/Not Major",
+        "unified-agenda-rin-relation/undocumented-value/Merged with",
+        "unified-agenda-rin-relation/undocumented-value/Previously report",
+        "unified-agenda-rin-relation/undocumented-value/Related t",
+        "unified-agenda-rin-relation/unobserved-value/Merge with",
         "unified-agenda-rin-status/undocumented-value/First Time Published in The Unified Agenda",
         "unified-agenda-rin-status/undocumented-value/Previously Published in The Unified Agenda",
         "unified-agenda-rin-status/unobserved-value/First time published in the Unified Agenda",
@@ -143,11 +160,11 @@ def test_two_domains_agree_completely(findings):
 # --- the gate fires ---------------------------------------------------------
 
 
-def test_an_undocumented_value_that_is_not_recorded_fails(documented, snapshot):
+def test_an_undocumented_value_that_is_not_recorded_fails(documented, observed):
     """Flip one observed value to something nobody documented: the gate must catch it."""
 
-    domain = snapshot.domains["unified-agenda-major"]
-    mutated = dict(snapshot.domains)
+    domain = observed["unified-agenda-major"]
+    mutated = dict(observed)
     mutated["unified-agenda-major"] = replace(domain, value_counts=(("Undecided", 865), ("Yes", 309), ("No", 2780)))
     unrecorded = unrecorded_findings(domain_findings(documented, mutated))
     assert [finding.identifier for finding in unrecorded] == [
@@ -156,37 +173,54 @@ def test_an_undocumented_value_that_is_not_recorded_fails(documented, snapshot):
     ]
 
 
-def test_a_documented_value_falling_out_of_the_data_fails(documented, snapshot):
+def test_a_documented_value_falling_out_of_the_data_fails(documented, observed):
     """Drop a value the publisher documents and we observe: that is news, not silence."""
 
-    domain = snapshot.domains["regulations-gov-docket-type"]
-    mutated = dict(snapshot.domains)
+    domain = observed["regulations-gov-docket-type"]
+    mutated = dict(observed)
     mutated["regulations-gov-docket-type"] = replace(domain, value_counts=(("Nonrulemaking", 213858),))
     unrecorded = unrecorded_findings(domain_findings(documented, mutated))
     assert [finding.identifier for finding in unrecorded] == ["regulations-gov-docket-type/unobserved-value/Rulemaking"]
 
 
-def test_a_ledger_entry_the_data_stopped_producing_fails(documented, snapshot):
+def test_a_ledger_entry_the_data_stopped_producing_fails(documented, observed):
     """The reverse: 'Public Submission' disappearing must fail loudly, not pass quietly."""
 
-    domain = snapshot.domains["regulations-gov-document-type"]
+    domain = observed["regulations-gov-document-type"]
     kept = tuple(one for one in domain.value_counts if one[0] != "Public Submission")
-    mutated = dict(snapshot.domains)
+    mutated = dict(observed)
     mutated["regulations-gov-document-type"] = replace(domain, value_counts=kept)
     stale = stale_accepted_findings(domain_findings(documented, mutated))
     assert [entry.value for entry in stale] == ["Public Submission"]
 
 
-def test_a_domain_observed_on_the_wrong_column_fails(documented, snapshot):
-    domain = snapshot.domains["unified-agenda-major"]
-    mutated = dict(snapshot.domains)
+def test_a_cut_off_relation_the_data_stopped_producing_fails(documented, observed):
+    """Repairing "Related t" upstream without deleting its ledger entry must fail, not pass quietly."""
+
+    domain = observed["unified-agenda-rin-relation"]
+    mutated = dict(observed)
+    mutated["unified-agenda-rin-relation"] = replace(
+        domain, value_counts=tuple(one for one in domain.value_counts if one[0] != "Related t")
+    )
+    stale = stale_accepted_findings(domain_findings(documented, mutated))
+    assert [(entry.kind, entry.value) for entry in stale] == [(UNDOCUMENTED, "Related t")]
+
+
+def test_a_domain_two_snapshots_observe_is_refused(snapshot, related_snapshot):
+    with pytest.raises(SourceDomainError, match="more than one snapshot"):
+        merged_domains((snapshot, related_snapshot, related_snapshot))
+
+
+def test_a_domain_observed_on_the_wrong_column_fails(documented, observed):
+    domain = observed["unified-agenda-major"]
+    mutated = dict(observed)
     mutated["unified-agenda-major"] = replace(domain, column="rule_stage")
     with pytest.raises(SourceDomainError, match="observed on unified_agenda.rule_stage"):
         domain_findings(documented, mutated)
 
 
-def test_an_unobserved_domain_fails(documented, snapshot):
-    mutated = {key: value for key, value in snapshot.domains.items() if key != "unified-agenda-major"}
+def test_an_unobserved_domain_fails(documented, observed):
+    mutated = {key: value for key, value in observed.items() if key != "unified-agenda-major"}
     with pytest.raises(SourceDomainError, match="domain coverage differs"):
         domain_findings(documented, mutated)
 
@@ -243,6 +277,13 @@ def test_unified_agenda_domains_come_from_documentation_prose_not_enumerations(d
         "Previously published in the Unified Agenda",
     )
     assert documented["unified-agenda-major"].values == ("Yes", "No", "Undetermined")
+    assert documented["unified-agenda-rin-relation"].values == (
+        "Merge with",
+        "Split from",
+        "Previously reported as",
+        "Duplicate of",
+        "Related to",
+    )
 
 
 def test_the_priority_category_sentence_lists_not_major_twice(documented):
@@ -328,8 +369,11 @@ def test_an_xsd_the_shared_reader_refuses_is_a_source_domain_error(payload, reas
 def test_every_domain_names_a_real_published_column(documented):
     schemas = expected_schemas()
     for domain in documented.values():
-        columns = {column for column, _ in schemas[domain.table]}
-        assert domain.column in columns, f"{domain.table}.{domain.column} is not a published column"
+        columns = dict(schemas[domain.table])
+        column, _, member = domain.column.partition(".")
+        assert column in columns, f"{domain.table}.{column} is not a published column"
+        if member:
+            assert f"{member} VARCHAR" in columns[column] and columns[column].endswith("[]"), columns[column]
 
 
 def test_the_snapshot_states_where_its_rows_came_from(snapshot):
@@ -366,6 +410,48 @@ def test_the_snapshot_row_counts_add_up(snapshot):
         assert domain.row_count == int(sources[domain.table]["row_count"])
 
 
+def test_the_related_rins_snapshot_counts_list_elements_of_an_unpublished_build(related_snapshot):
+    """RIN_RELATION is observed over every related RIN of the 60 retained editions, not over table rows.
+
+    The counts equal the independent lxml parse in work/agenda-related-rins-20261030 (28,720 related RINs).
+    The build is not published yet, so no publisher URL is recorded; re-pin once it is.
+    """
+
+    [domain] = related_snapshot.domains.values()
+    assert (domain.key, domain.column) == ("unified-agenda-rin-relation", "related_rins.rin_relation")
+    assert dict(domain.value_counts) == {
+        "Related to": 21_248,
+        "Previously reported as": 3_099,
+        "Merged with": 2_283,
+        "Split from": 1_676,
+        "Duplicate of": 410,
+        "Related t": 3,
+        "Previously report": 1,
+    }
+    assert sum(count for _, count in domain.value_counts) + domain.null_count == domain.row_count == 28_720
+    [source] = related_snapshot.sources
+    assert source["publisher_url"] is None and source["table"] == "unified_agenda"
+    assert source["row_count"] == 241_726 and str(source["bytes_digest"]).startswith("sha256:")
+
+
+def test_a_list_member_domain_is_observed_over_its_elements(tmp_path, documented):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    related = pa.list_(pa.struct([("rin", pa.string()), ("rin_relation", pa.string())]))
+    rows = [
+        {"related_rins": [{"rin": "1", "rin_relation": "Related to"}, {"rin": "2", "rin_relation": None}]},
+        {"related_rins": None},
+        {"related_rins": [{"rin": "1", "rin_relation": "Related to"}]},
+    ]
+    pq.write_table(pa.Table.from_pylist(rows, schema=pa.schema([("related_rins", related)])), tmp_path / "unified_agenda.parquet")
+    key = "unified-agenda-rin-relation"
+    snapshot = observe(tmp_path, {key: documented[key]}, base_url=None, observed_at="t", producer_revision="r")
+    domain = snapshot.domains[key]
+    assert (domain.value_counts, domain.null_count, domain.row_count) == ((("Related to", 2),), 1, 3)
+    assert snapshot.sources[0]["row_count"] == 3 and snapshot.sources[0]["publisher_url"] is None
+
+
 def test_priority_category_is_the_one_nullable_domain(snapshot):
     """The XSD declares PRIORITY_CATEGORY minOccurs="0", so a null is documented, not drift."""
 
@@ -377,7 +463,8 @@ def test_priority_category_is_the_one_nullable_domain(snapshot):
 def test_the_snapshot_file_is_small_enough_to_read():
     """A domain snapshot is a summary, not a copy of the table it summarizes."""
 
-    assert (DOMAIN_DIR / OBSERVED_SNAPSHOT_FILENAME).stat().st_size < 16_384
+    for filename in OBSERVED_SNAPSHOT_FILENAMES:
+        assert (DOMAIN_DIR / filename).stat().st_size < 16_384
 
 
 # --- the tool ---------------------------------------------------------------
@@ -386,8 +473,8 @@ def test_the_snapshot_file_is_small_enough_to_read():
 def test_the_tool_passes_on_the_committed_inputs():
     result = subprocess.run([sys.executable, str(TOOL)], capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr
-    assert "6 documented domains" in result.stdout
-    assert "7 findings" in result.stdout
+    assert "7 documented domains" in result.stdout
+    assert "11 findings" in result.stdout
     assert "UNRECORDED" not in result.stdout
 
 

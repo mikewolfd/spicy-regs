@@ -71,8 +71,10 @@ Related Material` carries the literal ampersand the API returns.
 This XSD holds no `xs:enumeration` at all. Every controlled field is
 `<xs:restriction base="xs:string"/>` with no facets, and states its value list
 only as `xs:documentation` prose of the form *One of the following options: "…",
-"…"*. Four of those twenty sentences are read here: `RULE_STAGE` (line 66),
-`PRIORITY_CATEGORY` (line 50), `RIN_STATUS` (line 58) and `MAJOR` (line 74). The
+"…"*. Five of those twenty sentences are read here: `RULE_STAGE` (line 66),
+`PRIORITY_CATEGORY` (line 50), `RIN_STATUS` (line 58), `MAJOR` (line 74) and
+`RELATED_RINType/RIN_RELATION` (line 526), observed over every element of the
+`related_rins` list as `related_rins.rin_relation`. The
 publisher's own prose repeats itself — `PRIORITY_CATEGORY` lists `Not Major`
 twice — so a literal duplicate folds into one value and the raw count is kept
 beside the distinct one rather than thrown away.
@@ -118,6 +120,24 @@ snapshot so the recorded URLs stay verifiable offline. Those digests are
 provenance, not verification — nothing recomputes them later, because the tables
 run to 90 MB and stay out of the repository. That is the whole reason a 3.7 KB
 summary of 2,284,609 rows exists.
+
+`observed-domain-snapshot-2026-10-30-unified-agenda-related-rins.json` holds
+the one domain the 2026-09-22 file does not: `RIN_RELATION`, counted over the
+28,720 related RINs of all 60 retained editions rather than one edition, so
+its `row_count` is list elements and its source's `row_count` table rows. It
+was observed from the source-only replay built on the branch that added the
+column, before that generation was published, so it records no publisher URL
+(`--unpublished`); its digest names that local build. Re-pin it from the
+published generation once it is live:
+
+```
+scripts/check_source_domain_drift.py --observe --data-dir <dir with unified_agenda.parquet> \
+    --snapshot observed-domain-snapshot-2026-10-30-unified-agenda-related-rins.json \
+    --observed-at <ISO-8601> --producer-revision <sha> --write-snapshot
+```
+
+Each domain lives in exactly one dated file; the check refuses a domain two
+files observe and a declared domain no file observes.
 
 ## Refreshing it
 

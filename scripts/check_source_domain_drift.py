@@ -19,7 +19,11 @@ the observed half is the manual step below.
 
 ``--observe --data-dir DIR`` re-observes the published tables from parquet and
 prints the same report against that data; add ``--write-snapshot`` to re-pin the
-checked-in snapshot from that observation. ``DIR`` holds the published tables
+checked-in snapshot from that observation. Each dated snapshot file observes its
+own domains: ``--snapshot FILE`` selects which one an observation covers (the
+2026-09-22 file by default), and ``--domains`` names them for a new file.
+``--unpublished`` records no publisher URL, for an observation of a built but
+not yet published generation that must be re-pinned once it is published. ``DIR`` holds the published tables
 under their own names (``documents.parquet`` and so on) — a fresh download of
 the published corpus, or any directory built from it. The recorded publisher
 URLs resolve through the publication index of the host the reader chain selects
@@ -47,6 +51,7 @@ from spicy_regs.sources.publication import current_index, single_member
 from spicy_regs.sources.source_domains import (
     DEFAULT_SOURCE_DOMAIN_DIR,
     OBSERVED_SNAPSHOT_FILENAME,
+    OBSERVED_SNAPSHOT_FILENAMES,
     OBSERVED_SNAPSHOT_FORMAT_VERSION,
     DocumentedDomain,
     DomainFinding,
@@ -56,6 +61,8 @@ from spicy_regs.sources.source_domains import (
     documented_domains,
     domain_findings,
     load_observed_snapshot,
+    load_observed_snapshots,
+    merged_domains,
     stale_accepted_findings,
     unrecorded_findings,
 )
@@ -94,22 +101,39 @@ def _file_identity(path: Path) -> tuple[str, int]:
     return "sha256:" + digest.hexdigest(), length
 
 
+def _value_query(path: Path, column: str) -> tuple[str, str]:
+    """The distinct-value query for a scalar column or a ``list_column.member`` path, and its row-count query."""
+
+    if "." not in column:
+        return (
+            f"SELECT \"{column}\" AS value, count(*) AS n FROM read_parquet('{path}') GROUP BY 1 ORDER BY n DESC, 1",
+            f"SELECT count(*) FROM read_parquet('{path}')",
+        )
+    list_column, member = column.split(".", 1)
+    elements = f"FROM read_parquet('{path}'), UNNEST(\"{list_column}\") AS t(item)"
+    return (
+        f"SELECT item.\"{member}\" AS value, count(*) AS n {elements} GROUP BY 1 ORDER BY n DESC, 1",
+        f"SELECT count(*) {elements}",
+    )
+
+
 def observe(
     data_dir: Path,
     documented: Mapping[str, DocumentedDomain],
     *,
-    base_url: str,
+    base_url: str | None,
     observed_at: str,
     producer_revision: str,
 ) -> ObservedSnapshot:
     """Scan the published tables in ``data_dir`` for each declared domain's distinct values.
 
     Takes the register the caller already parsed, so the observation and the diff
-    it feeds cover the same domains, read from the same captures once.
+    it feeds cover the same domains, read from the same captures once. With no
+    ``base_url`` the tables are an unpublished build and no publisher URL is recorded.
     """
 
     tables = sorted({domain.table for domain in documented.values()})
-    urls = table_urls(current_index(base_url), base_url, tables)
+    urls = table_urls(current_index(base_url), base_url, tables) if base_url else dict.fromkeys(tables)
     connection = _connect()
     sources = []
     row_counts: dict[str, int] = {}
@@ -137,19 +161,21 @@ def observe(
 
     observed: dict[str, ObservedDomain] = {}
     for key, domain in documented.items():
-        path = data_dir / f"{domain.table}.parquet"
-        rows = connection.execute(
-            f"SELECT \"{domain.column}\" AS value, count(*) AS n FROM read_parquet('{path}') "
-            f"GROUP BY 1 ORDER BY n DESC, 1"
-        ).fetchall()
+        values, count_rows = _value_query(data_dir / f"{domain.table}.parquet", domain.column)
+        rows = connection.execute(values).fetchall()
         null_count = sum(int(count) for value, count in rows if value is None)
+        if "." in domain.column:
+            (element_count,) = connection.execute(count_rows).fetchone()
+            row_counts_for_domain = int(element_count)
+        else:
+            row_counts_for_domain = row_counts[domain.table]
         observed[key] = ObservedDomain(
             key=key,
             table=domain.table,
             column=domain.column,
             value_counts=tuple((str(value), int(count)) for value, count in rows if value is not None),
             null_count=null_count,
-            row_count=row_counts[domain.table],
+            row_count=row_counts_for_domain,
         )
     return ObservedSnapshot(
         observed_at=observed_at,
@@ -196,31 +222,47 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--write-snapshot re-pins an observation; it needs --observe")
     if args.write_snapshot and not (args.observed_at and args.producer_revision):
         parser.error("--write-snapshot needs --observed-at and --producer-revision; a snapshot states its provenance")
+    if args.snapshot not in OBSERVED_SNAPSHOT_FILENAMES:
+        parser.error(f"--snapshot must be one of {', '.join(OBSERVED_SNAPSHOT_FILENAMES)}")
 
     documented = documented_domains(SOURCE_DOMAIN_DIR)
-    if args.observe:
+    if not args.observe:
+        snapshots = load_observed_snapshots(SOURCE_DOMAIN_DIR)
+        held = snapshots
+    else:
+        # An observation re-pins one dated file: the domains it holds, or those --domains names for a new one.
+        # The other files stay as checked in, so the diff still covers every declared domain.
+        held = tuple(
+            load_observed_snapshot(SOURCE_DOMAIN_DIR, filename=name)
+            for name in OBSERVED_SNAPSHOT_FILENAMES
+            if name != args.snapshot
+        )
+        if args.domains:
+            selected = args.domains.split(",")
+        else:
+            selected = list(load_observed_snapshot(SOURCE_DOMAIN_DIR, filename=args.snapshot).domains)
+        if unknown := sorted(set(selected) - set(documented)):
+            parser.error(f"--domains names undeclared domains {unknown}")
         snapshot = observe(
             Path(args.data_dir),
-            documented,
-            base_url=resolve_r2_base_url(),
+            {key: documented[key] for key in selected},
+            base_url=None if args.unpublished else resolve_r2_base_url(),
             observed_at=args.observed_at,
             producer_revision=args.producer_revision,
         )
-    else:
-        snapshot = load_observed_snapshot(SOURCE_DOMAIN_DIR)
+        snapshots = (snapshot,)
+        held = (*held, snapshot)
 
-    findings = domain_findings(documented, snapshot.domains)
+    findings = domain_findings(documented, merged_domains(held))
     unrecorded = unrecorded_findings(findings)
     stale = stale_accepted_findings(findings)
 
-    print(
-        f"{len(documented)} documented domains against {snapshot.observed_at} "
-        f"({snapshot.producer_revision[:12]}): {len(findings)} findings"
-    )
+    dates = ", ".join(f"{one.observed_at} ({one.producer_revision[:12]})" for one in snapshots)
+    print(f"{len(documented)} documented domains against {dates}: {len(findings)} findings")
     _report(findings, unrecorded)
 
     if args.write_snapshot:
-        target = SOURCE_DOMAIN_DIR / OBSERVED_SNAPSHOT_FILENAME
+        target = SOURCE_DOMAIN_DIR / args.snapshot
         target.write_text(render_snapshot(snapshot), encoding="utf-8")
         print(f"wrote {target.relative_to(ROOT)}")
 
@@ -254,6 +296,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="SpicyRegs revision that produced the observed tables",
     )
     parser.add_argument("--write-snapshot", action="store_true", help="re-pin the checked-in observed snapshot")
+    parser.add_argument(
+        "--snapshot",
+        default=OBSERVED_SNAPSHOT_FILENAME,
+        help="the dated snapshot file an observation covers and --write-snapshot re-pins",
+    )
+    parser.add_argument("--domains", help="comma-separated domain keys to observe for a snapshot file not yet written")
+    parser.add_argument(
+        "--unpublished",
+        action="store_true",
+        help="the data is a built generation not yet published: record no publisher URL",
+    )
     return parser
 
 
