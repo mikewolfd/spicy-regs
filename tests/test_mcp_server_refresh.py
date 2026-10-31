@@ -10,7 +10,7 @@ from spicy_regs.sources import publication
 from tests.generation_fakes import Store
 from tests.test_generation_mcp import connection_fixture
 from tests.test_generation_publication import build, publish
-from tests.test_mcp_server import _Publisher, _listed, _make_local_connection, _moved, _records, _tool_data
+from tests.test_mcp_server import _Publisher, _make_local_connection, _moved, _records, _tool_data
 
 
 @pytest.fixture(autouse=True)
@@ -60,8 +60,11 @@ def published_files(tmp_path, monkeypatch):
     return state, server._Publication(new_index, None)
 
 
-@pytest.mark.parametrize("tool_name", ["query_sql", "describe_table", "list_sources"])
-def test_new_family_is_visible_before_ttl_and_old_cursor_keeps_its_pins(published_files, clock, tool_name):
+@pytest.mark.parametrize("tool_name,subject", [
+    ("query_sql", None), ("describe_table", None),
+    ("list_sources", None), ("list_sources", server.UNASSIGNED_SUBJECT),
+])
+def test_new_family_is_visible_before_ttl_and_old_cursor_keeps_its_pins(published_files, clock, tool_name, subject):
     state, moved = published_files
     mcp = server.build_server()
     if tool_name == "query_sql":
@@ -76,14 +79,18 @@ def test_new_family_is_visible_before_ttl_and_old_cursor_keeps_its_pins(publishe
     state.publication, clock[0] = moved, 11.0
 
     arguments = {"sql": "SELECT id FROM new_source LIMIT 1"} if tool_name == "query_sql" else (
-        {"table": "new_source"} if tool_name == "describe_table" else {})
+        {"table": "new_source"} if tool_name == "describe_table" else {"subject": subject})
     result = _tool_data(mcp, tool_name, arguments)
     if tool_name == "query_sql":
         assert _records(result) == [{"id": "new-family"}]
         current = server._cached_connection
     else:
-        assert result["available"] if tool_name == "describe_table" else "new_source" in {
-            row["table"] for row in _listed(result)}
+        if tool_name == "describe_table":
+            assert result["available"]
+        elif subject is None:
+            assert sum(group["table_count"] for group in result["subjects"]) == 3
+        else:
+            assert "new_source" in {row["table"] for group in result["subjects"] for row in group["tables"]}
         current = server._cached_discovery_connection
     assert current is not first
     assert current is not None
