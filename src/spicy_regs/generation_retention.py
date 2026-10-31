@@ -11,6 +11,8 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
   ``docs/`` names. The output ledger states its audits that way, and the MCP's
   qualification record is parsed from the ledger, so this covers both;
 * every generation DocSpec pins in its ``docs/pins/fork-generations.json``;
+* every generation the Congressional Tech archive pins in its
+  ``pins/spicy-generations.json``;
 * every generation holding a table the current rulemaking snapshot states as
   an input, by the table's sha256, so the snapshot's inputs stay readable;
 * the managed parents a kept generation records, transitively, so its inputs
@@ -62,10 +64,13 @@ RECORDS = "retention/"
 DELETE_BATCH = 1000
 DOCS = LEDGER.parents[1]
 DOCSPEC_PINS = "https://raw.githubusercontent.com/mikewolfd/DocSpec/main/docs/pins/fork-generations.json"
+ARCHIVE_PINS = "https://congressional-data.spicygov.ai/viewer-publications/pins/spicy-generations.json"
+ARCHIVE_S3_PINS = "s3://congressional-tech-raw/viewer-publications/pins/spicy-generations.json"
 DOCSPEC_PINS_FORMAT = "docspec-fork-generation-pins"
 _KEY = re.compile(r"generations/([a-z][a-z0-9_-]*)/([0-9a-f]{64})/")
 _HEX = re.compile(r"(?<![0-9a-f])[0-9a-f]{8,64}(?![0-9a-f])")
 _DIGEST = re.compile(r"sha256:([0-9a-f]{64})\Z")
+_ARCHIVE_DIGEST = re.compile(r"(?:sha256:)?([0-9a-f]{64})\Z")
 _NEVER = datetime.min.replace(tzinfo=timezone.utc)
 
 
@@ -119,8 +124,8 @@ def note_pins(notes: Iterable[tuple[str, str]], generations: Mapping[str, Genera
     return named
 
 
-def docspec_pins(raw: bytes) -> dict[str, str]:
-    """DocSpec's pinned digests and why each is held; a document outside the stated shape refuses."""
+def docspec_pins(raw: bytes, *, label: str = "DocSpec") -> dict[str, str]:
+    """Pinned digests and why each is held; a document outside the stated shape refuses."""
     try:
         document = json.loads(raw)
         if document["format"] != DOCSPEC_PINS_FORMAT or document["version"] != 1:
@@ -130,10 +135,82 @@ def docspec_pins(raw: bytes) -> dict[str, str]:
             match = _DIGEST.fullmatch(pin["artifactDigest"])
             if match is None or not isinstance(pin["family"], str):
                 raise ValueError("invalid pin")
-            pins[match[1]] = f"DocSpec {pin['role']} pin ({pin['cites']})"
+            pins[match[1]] = f"{label} {pin['role']} pin ({pin['cites']})"
     except (ValueError, TypeError, KeyError) as exc:
-        raise publication.PublicationError("DocSpec pins are not a docspec-fork-generation-pins v1 document") from exc
+        raise publication.PublicationError(f"{label} pins are not a docspec-fork-generation-pins v1 document") from exc
     return pins
+
+
+def archive_pins(raw: bytes) -> dict[str, str]:
+    """The Congressional Tech archive's pinned digests (``pins/spicy-generations.json``); another shape refuses.
+
+    The archive writes ``{"version": 1, "generations": [{"family", "digest"}]}``, the generations also as a mapping
+    of family to digest, a digest bare or ``sha256:``-prefixed; DocSpec's ``docspec-fork-generation-pins`` v1 is
+    accepted too.
+    """
+    try:
+        document = json.loads(raw)
+        if not isinstance(document, Mapping) or document.get("version") != 1:
+            raise ValueError("unknown version")
+        if document.get("format", DOCSPEC_PINS_FORMAT) != DOCSPEC_PINS_FORMAT:
+            raise ValueError("unknown format")
+        if "pins" in document:
+            return docspec_pins(raw, label="Archive")
+        entries = document["generations"]
+        if isinstance(entries, Mapping):
+            entries = [{"family": family, **(target if isinstance(target, Mapping) else {"digest": target})}
+                       for family, target in entries.items()]
+        if isinstance(entries, (str, bytes)) or not isinstance(entries, Sequence):
+            raise ValueError("invalid generations")
+        pins: dict[str, str] = {}
+        for entry in entries:
+            family, digest = entry["family"], entry.get("digest", entry.get("artifactDigest"))
+            match = _ARCHIVE_DIGEST.fullmatch(digest) if isinstance(digest, str) else None
+            if match is None or not isinstance(family, str) or not family:
+                raise ValueError("invalid pin")
+            pins[match[1]] = f"Archive {entry.get('role') or 'archive'} pin ({entry.get('cites') or family})"
+    except (ValueError, TypeError, KeyError, AttributeError, publication.PublicationError) as exc:
+        raise publication.PublicationError("Archive pins are not a spicy-generations v1 document") from exc
+    return pins
+
+
+#: The archive's pin document has two homes; a read that fails at one tries the other.
+_ARCHIVE_HOMES = {ARCHIVE_PINS: ARCHIVE_S3_PINS, ARCHIVE_S3_PINS: ARCHIVE_PINS}
+
+
+def _read_one(source: str, client) -> bytes:
+    if source.startswith("s3://"):
+        pin_bucket, _, pin_key = source.removeprefix("s3://").partition("/")
+        if not pin_key:
+            raise publication.PublicationError(f"Invalid S3 pin URI: {source}")
+        if client is None:
+            from spicy_regs.sources import r2
+
+            client = r2.get_r2_client()
+        stored = publication._get_bounded(client, pin_bucket, pin_key)
+        if stored is None:
+            raise publication.PublicationError(f"Pin document is missing in S3: {source}")
+        return stored[0]
+    if source.startswith("https://"):
+        raw = publication._bounded_get(source, allow_missing=False)
+        assert raw is not None
+        return raw
+    return Path(source).read_bytes()
+
+
+def _read_pin_source(source: str, *, client=None) -> bytes:
+    """Read a pin document from an ``s3://`` URI, an ``https://`` URL, or a local path."""
+    from botocore.exceptions import BotoCoreError, ClientError
+    import httpx
+
+    try:
+        return _read_one(source, client)
+    except (publication.PublicationError, httpx.HTTPError, BotoCoreError, ClientError) as exc:
+        other = _ARCHIVE_HOMES.get(source)
+        if other is None:
+            raise
+        print(f"{source} unreadable ({exc}); reading {other}", file=sys.stderr)
+        return _read_one(other, client)
 
 
 def _snapshot_inputs(client, bucket: str) -> tuple[str, dict[str, str], dict[str, str]]:
@@ -153,10 +230,11 @@ def _snapshot_inputs(client, bucket: str) -> tuple[str, dict[str, str], dict[str
 
 
 def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapping[str, str],
-         now: datetime) -> dict:
+         archive: Mapping[str, str] | None = None, now: datetime) -> dict:
     """Mark every generation kept or deletable under decision 36 and return the plan as a JSON-able record."""
     from rulespec_artifacts import expected_artifact_digest, parse_canonical_json
 
+    archive_map = dict(archive or {})
     index, etag = publication._stored_index(client, bucket)
     generations, stray = inventory(client, bucket)
     roots: dict[str, dict | None] = {}
@@ -216,6 +294,8 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
         keep(digest, "named in " + ", ".join(sorted(names)))
     for digest, reason in docspec.items():
         keep(digest, reason)
+    for digest, reason in archive_map.items():
+        keep(digest, reason)
     snapshot_id, inputs, native_inputs = _snapshot_inputs(client, bucket)
     for name, digest in native_inputs.items():
         if digest not in generations or not generations[digest].has_members:
@@ -257,6 +337,7 @@ def plan(client, bucket: str, *, notes: Iterable[tuple[str, str]], docspec: Mapp
             "pruned_generations": len(pruned), "pruned_bytes": sum(g.bytes for g in pruned),
         },
         "unlisted_docspec_pins": sorted(set(docspec) - set(generations)),
+        "unlisted_archive_pins": sorted(set(archive_map) - set(generations)),
         "stray_keys": stray,
         "delete": [g.prefix for g in deleted],
         "families": dict(sorted(families.items())),
@@ -308,6 +389,8 @@ def summary(record: Mapping) -> list[str]:
                      f"({totals['pruned_bytes'] / 1024 ** 2:.1f} MiB)")
     if record["unlisted_docspec_pins"]:
         lines.append(f"\nDocSpec pins no longer stored: {', '.join(d[:8] for d in record['unlisted_docspec_pins'])}")
+    if record.get("unlisted_archive_pins"):
+        lines.append(f"\nArchive pins no longer stored: {', '.join(d[:8] for d in record['unlisted_archive_pins'])}")
     if record["stray_keys"]:
         lines.append(f"\nKeys under {PREFIX} outside the generation layout, left alone: {len(record['stray_keys'])}")
     return lines
@@ -323,18 +406,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--output", type=Path, required=True, help="Write the JSON plan here")
-    parser.add_argument("--docspec-pins", default=DOCSPEC_PINS, help="DocSpec's pin document, a URL or a path")
+    parser.add_argument("--docspec-pins", default=DOCSPEC_PINS, help="DocSpec's pin document, an s3:// URI, a URL, or a path")
+    parser.add_argument("--archive-pins", default=ARCHIVE_PINS, help="Archive's pin document, an s3:// URI, a URL, or a path")
     parser.add_argument("--execute", type=Path, help="A reviewed plan: delete what it and this fresh plan both mark")
     args = parser.parse_args(argv)
-    source = args.docspec_pins
-    raw = (publication._bounded_get(source, allow_missing=False) if source.startswith("https://")
-           else Path(source).read_bytes())
-    assert raw is not None
     bucket = getenv("R2_BUCKET_NAME")
     if not bucket:
         parser.error("R2_BUCKET_NAME is not set")
     client = r2.get_r2_client()
-    record = plan(client, bucket, notes=_notes(), docspec=docspec_pins(raw), now=datetime.now(timezone.utc))
+    raw = _read_pin_source(args.docspec_pins, client=client)
+    archive_raw = _read_pin_source(args.archive_pins, client=client)
+    record = plan(
+        client,
+        bucket,
+        notes=_notes(),
+        docspec=docspec_pins(raw),
+        archive=archive_pins(archive_raw),
+        now=datetime.now(timezone.utc),
+    )
     args.output.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print("\n".join(summary(record)))
     if args.execute:

@@ -1,12 +1,14 @@
 name: Plan generation retention
 
 # Decision 36 (2026-09-26): keep each family's last three generations and every
-# generation the docs, DocSpec, the rulemaking snapshot or a kept generation's
-# parents cite; delete the rest. Dispatched bare, this only plans: it lists the
-# bucket, reads roots, and uploads the plan for a person to review. Given the run
-# id of a plan someone reviewed, it deletes what that plan and a fresh one both
-# mark deletable. Weekly (decision 63), it plans and then executes that plan
-# against a second fresh one, under the same rules.
+# generation the docs, DocSpec, the Congressional Tech archive, the rulemaking
+# snapshot or a kept generation's parents cite; delete the rest. Dispatched bare,
+# this only plans: it lists the bucket, reads roots, and uploads the plan for a
+# person to review. Given the run id of a plan someone reviewed, it deletes what
+# that plan and a fresh one both mark deletable. Weekly (decision 63), it plans
+# and then executes that plan against a second fresh one, under the same rules.
+# The archive's pins are read from its public URL by default, falling back to
+# s3://congressional-tech-raw with the R2 credentials (ss-vhi2, L2-R6).
 
 on:
   schedule:

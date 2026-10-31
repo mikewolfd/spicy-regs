@@ -49,8 +49,8 @@ def _publish(pipeline: type[RollupPipeline], tmp_path: Path, store, runs: int) -
     return digests
 
 
-def _plan(store, *, notes=(), docspec=None, now=LATER) -> dict:
-    return retention.plan(store, "spicy-regs", notes=notes, docspec=docspec or {}, now=now)
+def _plan(store, *, notes=(), docspec=None, archive=None, now=LATER) -> dict:
+    return retention.plan(store, "spicy-regs", notes=notes, docspec=docspec or {}, archive=archive or {}, now=now)
 
 
 def _kept(record: dict, family: str) -> dict[str, list[str]]:
@@ -74,6 +74,103 @@ def test_a_note_or_docspec_pin_keeps_an_older_generation(tmp_path, remote):
     assert kept[digests[0]] == ["named in docs/research/ledger.md"]
     assert kept[digests[1]] == ["DocSpec evidence pin (a receipt)"]
     assert record["delete"] == []
+
+
+def test_archive_pins_keep_generations_from_s3_or_path_and_report_unlisted_pins(tmp_path, remote):
+    digests = _publish(_Base, tmp_path, remote, 5)
+    unlisted = "b" * 64
+    document = {
+        "format": retention.DOCSPEC_PINS_FORMAT,
+        "version": 1,
+        "pins": [
+            {
+                "family": "base",
+                "artifactDigest": f"sha256:{digests[0]}",
+                "role": "archive",
+                "cites": "viewer-publications/releases/2026-10-29/manifest.json",
+            },
+            {
+                "family": "base",
+                "artifactDigest": f"sha256:{unlisted}",
+                "role": "archive",
+                "cites": "viewer-publications/releases/2026-09-01/manifest.json",
+            },
+        ],
+    }
+    raw = json.dumps(document).encode()
+    remote.objects["viewer-publications/pins/spicy-generations.json"] = raw
+    loaded = retention._read_pin_source(retention.ARCHIVE_S3_PINS, client=remote)
+    parsed = retention.archive_pins(loaded)
+    assert parsed[digests[0]] == "Archive archive pin (viewer-publications/releases/2026-10-29/manifest.json)"
+    record = _plan(remote, archive=parsed)
+    assert _kept(record, "base")[digests[0]] == [
+        "Archive archive pin (viewer-publications/releases/2026-10-29/manifest.json)"
+    ]
+    assert record["unlisted_archive_pins"] == [unlisted]
+    assert record["delete"] == [f"generations/base/{digests[1]}"]
+    assert any("Archive pins no longer stored: bbbbbbbb" in line for line in retention.summary(record))
+
+
+def test_archive_pins_read_the_archives_own_shape_as_a_list_or_mapping():
+    a, b = "a" * 64, "c" * 64
+    listed = {"version": 1, "generations": [{"family": "amendments", "digest": a},
+                                             {"family": "members", "digest": f"sha256:{b}"}]}
+    assert retention.archive_pins(json.dumps(listed).encode()) == {
+        a: "Archive archive pin (amendments)", b: "Archive archive pin (members)"}
+    mapped = {"version": 1, "generations": {"amendments": a, "members": {"artifactDigest": f"sha256:{b}"}}}
+    assert retention.archive_pins(json.dumps(mapped).encode()) == retention.archive_pins(json.dumps(listed).encode())
+
+
+@pytest.mark.parametrize("document", [
+    {"version": 2, "generations": []},
+    {"version": 1, "format": "other", "generations": []},
+    {"version": 1},
+    {"version": 1, "generations": "a" * 64},
+    {"version": 1, "generations": [{"family": "members", "digest": "a" * 63}]},
+    {"version": 1, "generations": [{"family": "", "digest": "a" * 64}]},
+    {"version": 1, "generations": ["a" * 64]},
+    [],
+])
+def test_archive_pins_outside_the_stated_shapes_refuse(document):
+    with pytest.raises(pub.PublicationError, match="spicy-generations v1"):
+        retention.archive_pins(json.dumps(document).encode())
+
+
+def test_archive_pins_fall_back_between_the_s3_and_https_homes(remote, monkeypatch):
+    import httpx
+    from botocore.exceptions import ClientError
+
+    raw = json.dumps({"version": 1, "generations": [{"family": "base", "digest": "a" * 64}]}).encode()
+    fetched: list[str] = []
+
+    def https_down(url, *, allow_missing=False):
+        fetched.append(url)
+        raise httpx.HTTPStatusError("503", request=httpx.Request("GET", url), response=httpx.Response(503))
+
+    # HTTPS fails with a status error: the S3 home is read with the R2 client.
+    remote.objects["viewer-publications/pins/spicy-generations.json"] = raw
+    monkeypatch.setattr(pub, "_bounded_get", https_down)
+    assert retention._read_pin_source(retention.ARCHIVE_PINS, client=remote) == raw
+    assert fetched == [retention.ARCHIVE_PINS]
+
+    # S3 is missing or denied: the HTTPS home is read.
+    monkeypatch.setattr(pub, "_bounded_get", lambda url, *, allow_missing=False: fetched.append(url) or raw)
+    del remote.objects["viewer-publications/pins/spicy-generations.json"]
+    assert retention._read_pin_source(retention.ARCHIVE_S3_PINS, client=remote) == raw
+
+    def denied(*, Bucket, Key):
+        raise ClientError({"Error": {"Code": "AccessDenied"}}, "GetObject")
+
+    monkeypatch.setattr(remote, "get_object", denied, raising=False)
+    assert retention._read_pin_source(retention.ARCHIVE_S3_PINS, client=remote) == raw
+    assert fetched[1:] == [retention.ARCHIVE_PINS, retention.ARCHIVE_PINS]
+
+    # Both homes down: the second failure surfaces; other pin sources never fall back.
+    monkeypatch.setattr(pub, "_bounded_get", https_down)
+    with pytest.raises(httpx.HTTPStatusError):
+        retention._read_pin_source(retention.ARCHIVE_S3_PINS, client=remote)
+    with pytest.raises(httpx.HTTPStatusError):
+        retention._read_pin_source(retention.DOCSPEC_PINS, client=remote)
 
 
 def test_a_kept_generation_keeps_the_parent_it_read(tmp_path, monkeypatch, remote):
