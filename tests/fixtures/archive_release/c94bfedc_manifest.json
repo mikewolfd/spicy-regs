@@ -1,0 +1,175 @@
+{
+ "schema_version": 1,
+ "release_id": "c94bfedcfcf0287ce9868b4532766c7dcf4b3202187d48db07874a05fd703a78",
+ "origin": {
+  "kind": "model",
+  "gaps": []
+ },
+ "files": [
+  {
+   "name": "list.parquet",
+   "sha256": "c082ce6311e8c78cf81b1976111ed6c660ecda7ac1c667886592426829f624ad",
+   "size": 5512476,
+   "rows": 367008,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "detail.parquet",
+   "sha256": "71e0a3a76e11759e17c856314a2cb1faf9e99578512ae4e9b02a982f745c26a7",
+   "size": 21005362,
+   "rows": 367008,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "links.parquet",
+   "sha256": "57ee5198237cf48973f51fe2fd9334103ea00a963ec1dd47a3ad1db5d5a0917c",
+   "size": 4047506,
+   "rows": 439555,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "urls.parquet",
+   "sha256": "9879369d194d5ace318f14e809ed95e4ea628c35fe2acd815fcb4d3c00b5cdfb",
+   "size": 5376548,
+   "rows": 587616,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "sources.parquet",
+   "sha256": "f0b470f92537ef7a289ee72269a1354a0a8b4544ee4eb3e074a5fdac99a713e4",
+   "size": 8092414,
+   "rows": 605848,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "recoveries.parquet",
+   "sha256": "5f348a7a4497df72b5d445e993ef249059c4aa0de5bbfabb45cc643685a4d162",
+   "size": 642291,
+   "rows": 12782,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "meetings.parquet",
+   "sha256": "8bce72531a927007368512d54053dde61996608174b336389346bfa8fbedf799",
+   "size": 1622466,
+   "rows": 18687,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "witnesses.parquet",
+   "sha256": "c158ff67096f9648228be777dd2bba1d568e31d435a65c50fb5efb1abf291ab2",
+   "size": 5671305,
+   "rows": 147048,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "recordings.parquet",
+   "sha256": "328159061c66d851ddd3ffc85a812bc6446b78fa7cef10b54ed063a534d4c5b7",
+   "size": 153105,
+   "rows": 12033,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "committees.parquet",
+   "sha256": "6a6c7cda9edf92e58954db397213bfc732e226f3322094143c661a5f58b82809",
+   "size": 33244,
+   "rows": 817,
+   "row_range": null,
+   "shard": null,
+   "producer": "spicy-regs"
+  },
+  {
+   "name": "members.parquet",
+   "sha256": "f7bfd7aab99addead82bfdfc197eb0660b6b8edac1fb5b8777267560c79b8f5f",
+   "size": 460548,
+   "rows": 12770,
+   "row_range": null,
+   "shard": null,
+   "producer": "spicy-regs"
+  },
+  {
+   "name": "rosters.parquet",
+   "sha256": "d9d94e70f5dacc354e48cb86dff9036ffe9f285aec743b20bd60d49e43de167b",
+   "size": 9791,
+   "rows": 2973,
+   "row_range": null,
+   "shard": null,
+   "producer": "spicy-regs"
+  },
+  {
+   "name": "bills.parquet",
+   "sha256": "458654930b5c255e3cd7b084c05251c22020ecb6f442ba83441a6501006c7889",
+   "size": 929981,
+   "rows": 11832,
+   "row_range": null,
+   "shard": null,
+   "producer": "spicy-regs"
+  },
+  {
+   "name": "nominations.parquet",
+   "sha256": "1fd7bd3fe2f55729e34aab97f99a3986b5fee03f29a22bdf6d724cf87d13c4ed",
+   "size": 49638,
+   "rows": 747,
+   "row_range": null,
+   "shard": null,
+   "producer": "spicy-regs"
+  },
+  {
+   "name": "url_state.parquet",
+   "sha256": "fa0f7b9754dab7a1b82b5740bb4879aad59664e98628bca0d977195ea6b38f06",
+   "size": 17598975,
+   "rows": 1201754,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "url_variants.parquet",
+   "sha256": "7fbde8fa5eb17e628b217972b42dd1192a8af76d8f4254153dba123799f56928",
+   "size": 380,
+   "rows": 0,
+   "row_range": null,
+   "shard": null,
+   "producer": "archive"
+  },
+  {
+   "name": "schema.json",
+   "sha256": "fa0b8e30f0330b36bb2151aa74f8f84ee491b5b9ee6a3062fb1ebb6f59718f65",
+   "size": 53090,
+   "rows": 0,
+   "producer": "archive"
+  },
+  {
+   "name": "capture_scope.json",
+   "sha256": "fa661620bee346a901069fc67ff610807e8daa2bb455a1e20c38be0d503080c7",
+   "size": 4769,
+   "rows": 0,
+   "producer": "archive"
+  },
+  {
+   "name": "capture_profile.json",
+   "sha256": "2b1273426cf43857265f243de7e4f477b690dfc7bc4433327770bc6808106703",
+   "size": 6140,
+   "rows": 0,
+   "producer": "archive"
+  }
+ ]
+}
