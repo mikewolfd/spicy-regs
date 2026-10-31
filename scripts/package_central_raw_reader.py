@@ -77,6 +77,9 @@ def main() -> None:
         raise ValueError("current locked reader wheel does not match its recorded digest")
 
     module_names = ["spicy_docs/storage/raw_archive.py"]
+    owned_provider = consumer / "vendor/central_raw_reader"
+    if provider is None and owned_provider.is_dir():
+        provider = owned_provider
     if provider is None:
         retained = consumer / "vendor/spicy_docs-0.65.0+centralraw.523052e8a6fe-py3-none-any.whl"
         retained_bytes = retained.read_bytes()
@@ -129,8 +132,18 @@ def main() -> None:
     # same maintained store interface used by successful captures.
     with zipfile.ZipFile(io.BytesIO(base_bytes)) as archive:
         refusal = archive.read("spicy_docs/reading/refusals.py")
-    refusal = refusal.replace(b"from pathlib import Path", b"from pathlib import Path\nfrom spicy_docs.storage.blobs import SourceNativeBlobStore")
-    refusal = refusal.replace(b"store: Path,", b"store: Path | SourceNativeBlobStore,")
+    refusal = refusal.replace(b"from pathlib import Path", b"""from pathlib import Path
+from collections.abc import Iterable
+from typing import Protocol
+from spicy_docs.storage.blobs import SourceNativeBlobWrite
+
+
+class RefusedResponseBlobWriter(Protocol):
+    \"\"\"Refusal retention needs only the existing blob write operation.\"\"\"
+
+    def put_blob(self, blob_ref: str, byte_size: int, chunks: Iterable[bytes]) -> SourceNativeBlobWrite: ...
+""")
+    refusal = refusal.replace(b"store: Path,", b"store: Path | RefusedResponseBlobWriter,")
     before = b"            written = LocalBlobWriter(store).put([response.response_bytes], max_bytes=max_bytes)\n            result.update(sha256=written.digest, bytes=written.byte_size)"
     after = b"""            if isinstance(store, Path):
                 written = LocalBlobWriter(store).put([response.response_bytes], max_bytes=max_bytes)

@@ -10,6 +10,7 @@ names are accepted without fetching them; entities and internal DTDs are refused
 from __future__ import annotations
 
 import json
+import hashlib
 import html
 import re
 from datetime import date, datetime
@@ -26,6 +27,8 @@ _SCOPE = "Observed primary native records only; no completeness or acquisition-d
 _BILL_TYPES = {"hr", "s", "hres", "sres", "hjres", "sjres", "hconres", "sconres"}
 _MODS = "{http://www.loc.gov/mods/v3}"
 _MAX_RECORDS = 10_000
+_REGISTER_CONTEXT = Path(__file__).parent / "config/register-publication-dates.v1.json"
+_REGISTER_PROJECTION = Path(__file__).parent / "config/register-publication-date-projection.v1.json"
 _REGISTER_TITLE = re.compile(
     r"^Federal Register,\s*Volume\s+\d+\s+Issue\s+\d+\s+"
     r"\((Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+"
@@ -38,10 +41,86 @@ def reader_inputs(dataset_id: str) -> tuple[Path, ...]:
     paths = [Path(__file__)]
     if dataset_id == 'family:federal-register':
         from spicy_docs.reading import xml_tree
-        from spicy_docs.sources.federal_register import issues, native
+        from spicy_docs.sources.federal_register import body_sources, body_xml, issues, native
         from spicy_docs.sources.govinfo import mods
-        paths.extend(Path(module.__file__) for module in (native, issues, mods, xml_tree))
+        from spicy_docs.transport import source_acquirer
+        paths.extend(Path(module.__file__) for module in (native, issues, mods, xml_tree,
+                                                         body_xml, body_sources, source_acquirer))
+        paths.extend((_REGISTER_CONTEXT, _REGISTER_PROJECTION))
     return tuple(paths)
+
+
+def _register_presidential(original: bytes) -> dict:
+    """Use exact-original, unique published context; the XML validator proves identity only."""
+    from spicy_docs.sources.federal_register.body_xml import publisher_xml_locator, validate_publisher_xml
+    from spicy_docs.sources.federal_register.native import classify_document
+
+    context = _json(_REGISTER_CONTEXT.read_bytes())
+    if (not isinstance(context, dict) or context.get("format") != "spicygov-publication-date-context"
+            or type(context.get("version")) is not int or context["version"] != 1
+            or not isinstance(context.get("matches"), list) or len(context["matches"]) > 1000
+            or not isinstance(context.get("context"), dict)):
+        raise ValueError("Invalid publication context")
+    pin = context["context"]
+    if (not isinstance(pin.get("projectionSha256"), str)
+            or not re.fullmatch(r"sha256:[a-f0-9]{64}", pin["projectionSha256"])
+            or type(pin.get("projectionBytes")) is not int or pin["projectionBytes"] <= 0
+            or type(pin.get("objectBytes")) is not int or pin["objectBytes"] <= 0
+            or not isinstance(pin.get("etag"), str) or not pin["etag"]
+            or not isinstance(pin.get("key"), str)
+            or not re.fullmatch(r"generations/federal-register/[a-f0-9]{64}/federal_register.parquet", pin["key"])
+            or pin.get("url") != "https://data.spicygov.ai/" + pin["key"]):
+        raise ValueError("Publication context lacks its independent source pin")
+    sha = "sha256:" + hashlib.sha256(original).hexdigest()
+    matches = [(i, row) for i, row in enumerate(context["matches"])
+               if isinstance(row, dict) and row.get("originalSha256") == sha]
+    if not matches:
+        return _result("unsupported", reason="No independently pinned publication context for this exact original")
+    if len(matches) != 1:
+        return _result("error", error="AmbiguousPublicationContext", reason="Repeated exact-original date context")
+    position, selected = matches[0]
+    native = classify_document({"document_number": selected.get("documentNumber"),
+                                "publication_date": selected.get("publicationDate")})
+    projection_bytes = _REGISTER_PROJECTION.read_bytes()
+    if (len(projection_bytes) != pin["projectionBytes"]
+            or "sha256:" + hashlib.sha256(projection_bytes).hexdigest() != pin["projectionSha256"]):
+        raise ValueError("Independent publication context differs from its pin")
+    projection = _json(projection_bytes)
+    if (not isinstance(projection, dict) or projection.get("format") != "spicygov-publication-date-context-projection"
+            or type(projection.get("version")) is not int or projection["version"] != 1
+            or projection.get("columns") != ["document_number", "publication_date"]
+            or projection.get("source") != {"url": pin["url"], "key": pin["key"],
+                                           "etag": pin["etag"], "bytes": pin["objectBytes"]}):
+        raise ValueError("Independent publication context source differs")
+    observed = [row["publication_date"] for row, _ in _records(projection.get("rows"), "/rows")
+                if row.get("document_number") == native["document_number"]]
+    if observed != [native["publication_date"]]:
+        return _result("error", error="AmbiguousPublicationContext",
+                       reason="Published context has no unique matching identity and date")
+    dates = {row.get("publicationDate") for row in context["matches"]
+             if isinstance(row, dict) and row.get("documentNumber") == native["document_number"]}
+    if (len(dates) != 1 or type(selected.get("matchingPublishedRows")) is not int
+            or selected["matchingPublishedRows"] != 1 or selected.get("acquisitionUrlProven") is not False):
+        return _result("error", error="AmbiguousPublicationContext", reason="Publication context is multiple or conflicting")
+    if type(selected.get("bytes")) is not int or selected["bytes"] != len(original):
+        raise ValueError("Publication context original size differs")
+    identity = validate_publisher_xml(original, source_document_number=native["document_number"],
+        publication_date=native["publication_date"],
+        final_url=publisher_xml_locator(native["document_number"], native["publication_date"]), max_bytes=len(original))
+    if identity.document_type != "PRESDOCU":
+        raise ValueError("Publication context requires presidential XML")
+    facts = _Facts("federal-register")
+    facts.result["scope"] = context["scope"]
+    facts.identity(identity.marker_document_number, "/PRESDOCU//FRDOC", "federal-register-document")
+    field = f"/matches/{position}/publicationDate"
+    rule = "exact-original-unique-published-date-context/1"
+    facts.result["periods"].append({"kind": "publication-date", "label": native["publication_date"],
+        "origin": "publication-context", "field": field, "rule": rule,
+        "basis": "Independent pinned publication_date plus exact XML FRDOC identity; not signing, filing or acquisition date"})
+    facts.evidence(field, native["publication_date"], rule, "period", origin="publication-context",
+                   kind="publication-date", label=native["publication_date"], context=pin,
+                   context_map=_REGISTER_CONTEXT.name, original_sha256=sha, acquisition_url_proven=False)
+    return facts.finish()
 
 
 def _register_html(raw: bytes) -> dict:
@@ -499,7 +578,9 @@ def extract_metadata(dataset_id: str | None, original_bytes: bytes) -> dict:
                 return _register_html(raw) if dataset_id == "family:federal-register" else _result("unsupported")
             if dataset_id is not None and dataset_id not in SUPPORTED_DATASETS:
                 return _result("unsupported")
-            result = _extract_xml(_xml(raw), raw)
+            root = _xml(raw)
+            result = (_register_presidential(original_bytes) if root.tag == "PRESDOCU"
+                      else _extract_xml(root, raw))
             if result["dataset_id"] is not None and dataset_id is not None and result["dataset_id"] != dataset_id:
                 return _result("unsupported", reason="Native shape conflicts with the supplied dataset")
             return result

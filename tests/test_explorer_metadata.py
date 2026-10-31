@@ -157,7 +157,7 @@ def measurement_refresh(tmp_path, monkeypatch):
     monkeypatch.setattr(script, "get_public", lambda *_: pytest.fail("Publishing must use authoritative control reads"))
     monkeypatch.setattr(script, "other_tables", lambda *a, **kw: {})
     monkeypatch.setattr(script.subprocess, "check_output", lambda *a, **kw: "fixture-revision\n")
-    monkeypatch.setattr(explorer_metadata, "publication_descriptions", lambda _: {
+    monkeypatch.setattr(explorer_metadata, "publication_descriptions", lambda _, **kwargs: {
         "source": {"label": "Source", "columns": [], "identity_columns": ["id"]},
         "target": {"label": "Target", "columns": []}})
     maintained_read = explorer_metadata.read_json
@@ -353,6 +353,7 @@ def test_still_published_processing_tables_use_the_canonical_dictionary(monkeypa
     def load_descriptions():
         return {"brand_new": {"label": "Saved collection log", "summary": "Records the requests made.",
                               "category": "processing_evidence",
+                              "grain": "One saved request.", "identity_columns": ["id"],
                               "coverage": "Only saved requests.", "columns": {"id": "Request ID."}},
                 "unpublished": {"label": "Not published"}}
     monkeypatch.setattr(data_dictionary, "load_curated_descriptions", load_descriptions)
@@ -361,6 +362,9 @@ def test_still_published_processing_tables_use_the_canonical_dictionary(monkeypa
     assert table["metadataStatus"] == "documented"
     assert table["label"] == "Saved collection log"
     assert table["category"] == "processing_evidence"
+    assert table["grain"] == "One saved request."
+    assert table["recordIdentity"] == {
+        "columns": ["id"], "basis": "declared_main_key", "uniqueness": "unknown"}
     assert table["columns"] == [{"column_name": "id", "column_type": "VARCHAR", "description": "Request ID."}]
     assert "unpublished" not in result["tables"]
     assert len(result["joins"]) == 1
@@ -402,6 +406,36 @@ def test_published_fec_roles_and_count_units_survive_dictionary_fallback(monkeyp
         assert result[name]["row_unit"] == unit
         assert "record_id" in {column["column_name"] for column in result[name]["columns"]}
     assert "committee_report_reads" not in result  # Documentation cannot invent publication.
+
+
+@pytest.mark.parametrize("receipt_owner, changed_schema", [(False, False), (True, False), (False, True)])
+def test_earlier_fec_names_use_only_exact_receipt_free_dictionary_declarations(receipt_owner, changed_schema):
+    from spicy_regs import data_dictionary
+
+    name = "fec_research_source_pages"
+    historical = json.loads((data_dictionary.REPO_ROOT / "data_dictionary/fec_historical_definitions.json").read_text())
+    entry = historical["tables"][name]
+    schema = deepcopy(entry["columns"])
+    if changed_schema:
+        schema[0][1] = "BIGINT" if schema[0][1] != "BIGINT" else "VARCHAR"
+    owner: dict[str, object] = {"artifactDigest": "sha256:" + "a" * 64,
+             "tables": {name + ".parquet": {"columns": schema, "rows": 1, "byteSize": 100}}}
+    if receipt_owner:
+        owner["etlReceipts"] = {"version": 1}
+    selected = {"format": "spicy-regs-publication", "version": 2, "families": {"fec-query": owner}}
+    result = build_bundle(selected, join_record={"joins": []}, audit={}, generated_at="2026-10-31T00:00:00Z")
+    table = result["tables"][name]
+    assert table["publicationSchema"] == schema
+    if receipt_owner or changed_schema:
+        assert table["metadataStatus"] == "unknown"
+        assert "recordIdentity" not in table
+    else:
+        assert table["metadataStatus"] == "documented"
+        assert table["grain"] == entry["description"]["grain"]
+        assert table["summary"] == entry["description"]["summary"]
+        assert table["recordIdentity"]["columns"] == entry["description"]["identity_columns"]
+        assert {column["column_name"]: column["description"] for column in table["columns"]} == entry["columnDescriptions"]
+        assert "fec_reference_source_pages" not in result["tables"]
 
 
 def test_packaged_fec_metadata_uses_the_same_roles_as_the_fallback(monkeypatch):
@@ -452,13 +486,16 @@ def test_curated_fallback_preserves_removed_key_validation_without_publishing_it
     del known["parent"]
     monkeypatch.setattr(explorer_metadata, "read_json", lambda _: deepcopy(known))
     monkeypatch.setattr(data_dictionary, "load_curated_descriptions", lambda: {
-        "parent": {"label": "Parent", "columns": {"id": "Recorded ID.", "edition": "Edition."}}})
+        "parent": {"label": "Parent", "identity_columns": ["id", "edition"],
+                   "columns": {"id": "Recorded ID.", "edition": "Edition."}}})
     changed["families"]["example"]["tables"]["parent.parquet"]["columns"] = [["new_id", "VARCHAR"]]
     result = build_bundle(changed, **options)
     assert result["joins"] == []
     assert result["tables"]["parent"]["publicationSchema"] == [["new_id", "VARCHAR"]]
     assert result["tables"]["parent"]["columns"] == [
         {"column_name": "new_id", "column_type": "VARCHAR", "description": ""}]
+    assert "recordIdentity" not in result["tables"]["parent"]
+    assert result["tables"]["parent"]["unavailableIdentity"]["columns"] == ["id", "edition"]
     assert "parent.id, parent.edition" in result["omittedJoins"][0]["reason"]
     options["join_record"]["joins"][0]["parent_columns"][0] = "never_documented"
     with pytest.raises(ValueError, match="missing columns"):

@@ -657,7 +657,18 @@ def build(
         raise ValueError("The rebuildable catalog must live outside the raw archive")
     if is_raw_archive and (catalog_input or table_inputs_input):
         raise ValueError("Raw archive builds use retained source manifests, not corpus overlays")
+    # A selected local index changes only through the coordinated selector.
+    # Unmanaged disposable outputs retain their existing rebuild behavior.
+    control = output.resolve().parent / 'current.json'
+    if control.is_file():
+        selected_name = json.loads(control.read_text()).get('index')
+        if selected_name:
+            selected = control.parent / selected_name
+            if (output.resolve() == selected.resolve()
+                    or (output.exists() and selected.exists() and os.path.samefile(output, selected))):
+                raise ValueError('Build output is a selected catalog; prepare a separate candidate')
     output.parent.mkdir(parents=True, exist_ok=True)
+    retained_output = output.exists()
     inputs = Inputs(corpus)
     for source in Path(__file__).parent.glob("*.py"):
         inputs.pin(source)
@@ -781,5 +792,7 @@ def build(
         raise
     finally:
         receipt = output.with_suffix(output.suffix + ".reconciliation.json")
+        if retained_output and report['status'] == 'failed':
+            receipt = output.with_suffix(output.suffix + '.failed-reconciliation.json')
         receipt.write_text(json.dumps(report, indent=2) + "\n")
     return report

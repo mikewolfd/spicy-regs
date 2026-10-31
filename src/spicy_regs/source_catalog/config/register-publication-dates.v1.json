@@ -1,0 +1,123 @@
+{
+  "format": "spicygov-publication-date-context",
+  "version": 1,
+  "context": {
+    "projectionSha256": "sha256:289744a284b7c18d973eacb3cf954d4ee199e1e0ee82acc40d235b2a3bae33ca",
+    "projectionBytes": 5992,
+    "url": "https://data.spicygov.ai/generations/federal-register/6216007482fa6bea17c18027d55b1a5ea763474e10847eaf69f5f678e12985ce/federal_register.parquet",
+    "key": "generations/federal-register/6216007482fa6bea17c18027d55b1a5ea763474e10847eaf69f5f678e12985ce/federal_register.parquet",
+    "objectBytes": 221758416,
+    "etag": "\"08cf16883e6f08f23d9fea0ba76e8c0a-4\""
+  },
+  "scope": "Exact-original XML identity plus separately pinned unique published date; no acquisition URL or completeness claim.",
+  "matches": [
+    {
+      "originalSha256": "sha256:0005f0c2c15261f45fb8c4caac98c7e91476141fc1048ac28ecea22fdb3d2bd9",
+      "bytes": 13521,
+      "originalObject": "objects/sha256/00/0005f0c2c15261f45fb8c4caac98c7e91476141fc1048ac28ecea22fdb3d2bd9",
+      "documentNumber": "2024-15641",
+      "publicationDate": "2024-07-15",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:0c3283a9d84531f7a255ff7ee8028a3ee36edb7bd59269751d89cca33e861626",
+      "bytes": 14953,
+      "originalObject": "objects/sha256/0c/0c3283a9d84531f7a255ff7ee8028a3ee36edb7bd59269751d89cca33e861626",
+      "documentNumber": "2025-13123",
+      "publicationDate": "2025-07-11",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:0013bcfe5fc04d9d3fa61444d9db7f0de5579b027a29285799cc49ee701a8f99",
+      "bytes": 14194,
+      "originalObject": "objects/sha256/00/0013bcfe5fc04d9d3fa61444d9db7f0de5579b027a29285799cc49ee701a8f99",
+      "documentNumber": "2018-11101",
+      "publicationDate": "2018-05-22",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:0015d398600df0c1564cfd7cc6d89ebef63b2289c2a24ae173ace9a7010481cc",
+      "bytes": 2759,
+      "originalObject": "objects/sha256/00/0015d398600df0c1564cfd7cc6d89ebef63b2289c2a24ae173ace9a7010481cc",
+      "documentNumber": "2018-16550",
+      "publicationDate": "2018-07-31",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:0017d4da2e9a3e84adc93b13fa40e632859340562448295e2d2968ce769108e8",
+      "bytes": 5718,
+      "originalObject": "objects/sha256/00/0017d4da2e9a3e84adc93b13fa40e632859340562448295e2d2968ce769108e8",
+      "documentNumber": "2017-19740",
+      "publicationDate": "2017-09-14",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:00270b84c214baaaf3410d7aeeb161cc5b22906de2c102a5c93adc11858ef570",
+      "bytes": 5196,
+      "originalObject": "objects/sha256/00/00270b84c214baaaf3410d7aeeb161cc5b22906de2c102a5c93adc11858ef570",
+      "documentNumber": "02-12860",
+      "publicationDate": "2002-05-21",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:002f5504fff9c3bc0f85a047858dedbc493f6401cf31cfb766d384c96800b9bf",
+      "bytes": 10176,
+      "originalObject": "objects/sha256/00/002f5504fff9c3bc0f85a047858dedbc493f6401cf31cfb766d384c96800b9bf",
+      "documentNumber": "2026-07725",
+      "publicationDate": "2026-04-20",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:0030e11e35a6cceab6e807d4e53fff9efc18ebfe83b656a4496af63630b97a3f",
+      "bytes": 2306,
+      "originalObject": "objects/sha256/00/0030e11e35a6cceab6e807d4e53fff9efc18ebfe83b656a4496af63630b97a3f",
+      "documentNumber": "2022-10840",
+      "publicationDate": "2022-05-18",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:004123a24be3976e23ccb5aac22898038f36181f660859a640166880afe9552b",
+      "bytes": 7821,
+      "originalObject": "objects/sha256/00/004123a24be3976e23ccb5aac22898038f36181f660859a640166880afe9552b",
+      "documentNumber": "2021-01761",
+      "publicationDate": "2021-01-25",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:004846d130f9bf18ab9e18e4cbf6944f1099e96a200028f1ee73436e2fcd2235",
+      "bytes": 4850,
+      "originalObject": "objects/sha256/00/004846d130f9bf18ab9e18e4cbf6944f1099e96a200028f1ee73436e2fcd2235",
+      "documentNumber": "03-26007",
+      "publicationDate": "2003-10-14",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:004cf043749709803fc95a94c647f70e2fd456ea50876555d13396fa195e4688",
+      "bytes": 25670,
+      "originalObject": "objects/sha256/00/004cf043749709803fc95a94c647f70e2fd456ea50876555d13396fa195e4688",
+      "documentNumber": "2017-28144",
+      "publicationDate": "2017-12-27",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    },
+    {
+      "originalSha256": "sha256:005a406f43665f3b3b79d450021b794bff1e91703e47eeb28ddcb642440e5dcd",
+      "bytes": 5491,
+      "originalObject": "objects/sha256/00/005a406f43665f3b3b79d450021b794bff1e91703e47eeb28ddcb642440e5dcd",
+      "documentNumber": "2020-04089",
+      "publicationDate": "2020-02-26",
+      "matchingPublishedRows": 1,
+      "acquisitionUrlProven": false
+    }
+  ]
+}

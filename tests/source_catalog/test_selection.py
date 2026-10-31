@@ -486,3 +486,175 @@ def test_updated_inventory_candidate_requires_explicit_opt_in(prepared):
     with pytest.raises(ValueError, match="--allow-inventory-change"):
         selection.select(**prepared)
     assert selected_bytes(prepared) == before
+
+
+def test_selection_rejects_consistent_public_content_that_differs_from_candidate(prepared):
+    before = selected_bytes(prepared)
+    manifest_path = prepared['staged_public'] / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    summary = manifest['collections'][0]
+    detail_path = prepared['staged_public'] / summary['detailPath']
+    detail = json.loads(detail_path.read_text())
+    summary['title'] = detail['collection']['title'] = 'Different source'
+    for path, value in ((manifest_path, manifest), (detail_path, detail)):
+        path.write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+    with pytest.raises(ValueError, match='candidate'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+    assert prepared['candidate'].is_file()
+
+
+@pytest.mark.parametrize('fault', ['manifest-metadata', 'aggregate', 'candidate-title', 'parquet-row'])
+def test_rejects_candidate_and_public_content_mismatches(prepared, fault):
+    import hashlib
+    from spicy_regs.source_catalog.file_inventory import encode, validate
+
+    before = selected_bytes(prepared)
+    root = prepared['staged_public']
+    manifest_path = root / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    detail_path = root / manifest['collections'][0]['detailPath']
+    detail = json.loads(detail_path.read_text())
+    if fault == 'manifest-metadata':
+        manifest['generatedAt'] = '2000-01-01T00:00:00Z'
+    elif fault == 'aggregate':
+        manifest['totals']['aliases'] += 1
+    elif fault == 'candidate-title':
+        with connect(prepared['candidate']) as db:
+            db.execute("UPDATE collections SET title='Changed candidate' WHERE id='source'")
+    else:
+        page = detail['files']['pages'][0]
+        path = root / page['path']
+        generation = manifest['generation']
+        rows = validate(path.read_bytes(), generation=generation, dataset_id='source', inventory_kind='active')
+        rows[0]['name'] = 'different.txt'
+        body = encode(rows, generation=generation, dataset_id='source', inventory_kind='active')
+        path.write_bytes(body)
+        page['bytes'] = len(body)
+        page['sha256'] = 'sha256:' + hashlib.sha256(body).hexdigest()
+    for path, value in ((manifest_path, manifest), (detail_path, detail)):
+        path.write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n')
+    with pytest.raises(ValueError, match='candidate'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+    assert prepared['candidate'].is_file()
+
+
+def test_selection_uses_export_page_size(prepared, tmp_path):
+    with connect(prepared['candidate']) as db:
+        db.execute("INSERT INTO files VALUES('file2','source',NULL,'second.txt','receipt-only',NULL,NULL,NULL,'{}')")
+    stage = tmp_path / 'small-pages'
+    export(prepared['candidate'], stage, page_size=1)
+    prepared['staged_public'] = stage
+    assert selection.select(**prepared)['status'] == 'selected'
+
+
+@pytest.mark.parametrize('version', [2, 3])
+def test_selection_refuses_changed_pinned_receipt(prepared, tmp_path, version):
+    receipt = tmp_path / 'receipts' / 'listing.json'
+    write(receipt, {})
+    facts = {'mapping': {'receipt_evidence_ref': {
+        'manifest': 'receipts/listing.json', 'sha256': digest(receipt), 'entry': 1,
+    }}}
+    with connect(prepared['candidate']) as db:
+        db.execute('INSERT INTO inputs VALUES(?,?,?)', (str(receipt), digest(receipt), receipt.stat().st_size))
+        db.execute("UPDATE files SET data=? WHERE id='file'", (json.dumps(facts),))
+    stage = tmp_path / 'receipt-stage'
+    export(prepared['candidate'], stage)
+    prepared['staged_public'] = stage
+    if version == 2:
+        public_version(prepared, 2)
+    before = selected_bytes(prepared)
+    receipt.write_text('[]')
+    with pytest.raises(ValueError, match='Pinned receipt bytes changed'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+    assert prepared['candidate'].is_file()
+
+
+@pytest.mark.parametrize('target', ['candidate', 'staged-member'])
+def test_selection_refuses_linked_inputs(prepared, tmp_path, target):
+    before = selected_bytes(prepared)
+    if target == 'candidate':
+        candidate = prepared['candidate']
+        link = tmp_path / 'candidate-link.sqlite'
+        link.symlink_to(candidate)
+        prepared['candidate'] = link
+    else:
+        root = prepared['staged_public']
+        manifest = json.loads((root / 'manifest.json').read_text())
+        path = root / manifest['collections'][0]['detailPath']
+        data = path.read_bytes()
+        actual = tmp_path / 'linked-detail.json'
+        actual.write_bytes(data)
+        path.unlink()
+        path.symlink_to(actual)
+    with pytest.raises(ValueError, match='Linked path'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+
+
+@pytest.mark.parametrize('version', [1, 2])
+def test_legacy_export_must_match_candidate(prepared, version):
+    public_version(prepared, version)
+    root = prepared['staged_public']
+    manifest = json.loads((root / 'manifest.json').read_text())
+    detail_path = root / manifest['collections'][0]['detailPath']
+    detail = json.loads(detail_path.read_text())
+    page_path = root / detail['files']['pages'][0]['path']
+    page = json.loads(page_path.read_text())
+    page['files'][0]['name'] = 'different.txt'
+    write(page_path, page)
+    before = selected_bytes(prepared)
+    with pytest.raises(ValueError, match='candidate'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+
+
+def test_original_version_one_without_provenance_is_supported(prepared):
+    public_version(prepared, 1)
+    root = prepared['staged_public']
+    manifest = json.loads((root / 'manifest.json').read_text())
+    detail = json.loads((root / manifest['collections'][0]['detailPath']).read_text())
+    path = root / detail['files']['pages'][0]['path']
+    page = json.loads(path.read_text())
+    for row in page['files']:
+        row.pop('provenance')
+    write(path, page)
+    assert selection.select(**prepared)['status'] == 'selected'
+
+
+def test_version_two_cannot_omit_provenance(prepared):
+    public_version(prepared, 2)
+    root = prepared['staged_public']
+    manifest = json.loads((root / 'manifest.json').read_text())
+    detail = json.loads((root / manifest['collections'][0]['detailPath']).read_text())
+    path = root / detail['files']['pages'][0]['path']
+    page = json.loads(path.read_text())
+    for row in page['files']:
+        row.pop('provenance')
+    write(path, page)
+    before = selected_bytes(prepared)
+    with pytest.raises(ValueError, match='provenance is missing'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+
+
+def test_preexisting_selected_noncontrol_mutation_refuses_before_any_switch(prepared):
+    with connect(prepared['cache'] / 'index.sqlite') as db:
+        db.execute("UPDATE collections SET title='Preexisting changed bytes'")
+    before = selected_bytes(prepared)
+    with pytest.raises(ValueError, match='recorded identity'):
+        selection.select(**prepared)
+    assert selected_bytes(prepared) == before
+    assert prepared['candidate'].is_file()
+
+
+def test_full_build_cannot_replace_selected_index_or_report(prepared):
+    from spicy_regs.source_catalog.importer import build
+
+    before = selected_bytes(prepared)
+    with pytest.raises(ValueError, match='selected catalog'):
+        build(prepared['raw_root'], prepared['cache'] / 'index.sqlite')
+    assert selected_bytes(prepared) == before

@@ -1435,11 +1435,18 @@ class PublishedIndex(dict):
     """
 
     mirror: dict | None = None
+    catalog_refresh_request: dict | None = None
 
 
 def _published(index: dict, raw: bytes, family: str, local: Path | None) -> PublishedIndex:
+    from spicy_regs.catalog_refresh_request import notify
+
     result = PublishedIndex(index)
     result.mirror = _mirror_published(index, raw, family, local)
+    result.catalog_refresh_request = notify("publication-complete", {
+        "family":family,"publicationSha256":"sha256:"+hashlib.sha256(raw).hexdigest(),
+        "artifactDigest":index["families"][family]["artifactDigest"],
+    })
     return result
 
 

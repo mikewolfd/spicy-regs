@@ -137,12 +137,15 @@ def file_provenance(facts: dict, *, status: str, local: bool) -> dict:
     return result
 
 
-def write_json(path: Path, value: dict, *, internal: bool) -> None:
+def write_json(path: Path, value: dict, *, internal: bool, emit=None) -> None:
     if not internal:
         validate_public(value)
+    body = json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+    if emit is not None:
+        emit(path, body.encode("utf-8"))
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    body = json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
     if path.is_file() and path.name != "manifest.json":
         if path.read_text() != body:
             raise ValueError(f"Immutable export collision: {path}")
@@ -378,13 +381,14 @@ def source_coverage_note(table: dict, evidence: list[tuple[str, dict]]) -> str |
     return next(iter(notes), None)
 
 
-def export_file_pages(db, output: Path, *, cid: str, folder: str, common: dict, internal: bool, page_size: int, retained: bool = False, references=None, publisher=None) -> list[dict]:
+def export_file_pages(db, output: Path, *, cid: str, folder: str, common: dict, internal: bool, page_size: int, retained: bool = False, references=None, publisher=None, emit=None, page_rows=None, legacy_provenance=True) -> list[dict]:
     """Write both inventories through the same bounded, public-safe file format."""
-    if not internal:
+    if not internal and common["version"] == 3:
         from .file_inventory import export_pages
         return export_pages(db, output, dataset_id=cid, publisher=publisher, folder=folder,
                             generation=common["generation"], page_size=page_size,
-                            inventory_kind="attention" if retained else "active", references=references)
+                            inventory_kind="attention" if retained else "active", references=references, emit=emit,
+                            page_rows=page_rows)
     pages = []
     # Select only the per-alias provenance facts needed by public pages.
     # Receipt bodies and content evidence may be large and remain private.
@@ -409,17 +413,33 @@ def export_file_pages(db, output: Path, *, cid: str, folder: str, common: dict, 
     source = "retained_response_files" if retained else "files"
     cursor = db.execute(f"SELECT {file_fields} FROM {source} WHERE collection_id=? ORDER BY id", (cid,))
     page_number = 0
-    while batch := cursor.fetchmany(page_size):
+    sizes = iter(page_rows) if page_rows is not None else None
+    while True:
+        size = next(sizes, None) if sizes is not None else page_size
+        if size is None:
+            if cursor.fetchone() is not None:
+                raise ValueError("Staged public pages omit candidate rows")
+            break
+        if not 0 < size <= 5000:
+            raise ValueError("Invalid staged public page size")
+        batch = cursor.fetchmany(size)
+        if not batch:
+            if sizes is not None:
+                raise ValueError("Staged public pages exceed candidate rows")
+            break
+        if sizes is not None and len(batch) != size:
+            raise ValueError("Staged public page size differs from candidate rows")
         files = []
         for row in batch:
             item = {"id": row["id"], "name": safe_text(row["name"]), "status": row["status"]}
             for sql, public in [("sha256", "sha256"), ("bytes", "bytes"), ("route_id", "routeId")]:
                 if row[sql] is not None:
                     item[public] = row[sql]
-            item["provenance"] = file_provenance(
-                json.loads(row["provenance_facts"]), status=row["status"],
-                local=bool(row["local"]),
-            )
+            if internal or legacy_provenance:
+                facts = json.loads(row["provenance_facts"])
+                if not internal and references is not None:
+                    references.indexed((facts.get("mapping") or {}).get("receipt_evidence_ref") or {})
+                item["provenance"] = file_provenance(facts, status=row["status"], local=bool(row["local"]))
             if internal:
                 item.update(
                     pick(
@@ -435,14 +455,14 @@ def export_file_pages(db, output: Path, *, cid: str, folder: str, common: dict, 
         write_json(
             output / page_path,
             {"format": "spicy-source-files", **common, "collectionId": cid, "files": files},
-            internal=internal,
+            internal=internal, emit=emit,
         )
         pages.append({"path": page_path, "rows": len(files)})
         page_number += 1
     return pages
 
 
-def export(index: Path, output: Path, *, internal: bool = False, page_size: int = 5000) -> dict:
+def export(index: Path, output: Path, *, internal: bool = False, page_size: int = 5000, emit=None, public_version=3, page_layout=None) -> dict:
     if page_size < 1 or page_size > 5000:
         raise ValueError("page_size must be between 1 and 5000")
     db = connect(index, readonly=True)
@@ -450,7 +470,9 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
         metadata = {r["key"]: json.loads(r["value"]) for r in db.execute("SELECT * FROM metadata")}
         generation = metadata["generation"]
         prefix = "generations/" + generation.removeprefix("sha256:")
-        common = {"version": 2 if internal else 3, "generation": generation}
+        if public_version not in (1, 2, 3):
+            raise ValueError("Unsupported public version")
+        common = {"version": 2 if internal else public_version, "generation": generation}
         if internal:
             common["audience"] = "internal"
         # Coverage already supports the whole catalog. Share its global
@@ -576,9 +598,14 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                     if key == "publisher" and isinstance(display, dict):
                         display = display.get("name") or display.get("title") or "Unknown publisher"
                     summary[key] = safe_text(display)
+            if not internal and public_version == 1:
+                summary.pop("periodSummary")
+                summary["periods"] = periods
             summaries.append(summary)
+            layout = (page_layout or {}).get((cid, "active"), {})
             pages = export_file_pages(db, output, cid=cid, folder=folder, common=common,
-                                      internal=internal, page_size=page_size, references=references, publisher=summary.get("publisher"))
+                                      internal=internal, page_size=page_size, references=references, publisher=summary.get("publisher"), emit=emit,
+                                      page_rows=layout.get("rows"), legacy_provenance=layout.get("provenance", True))
             detail: dict[str, Any] = {
                 "format": "spicy-source-collection",
                 **common,
@@ -594,8 +621,10 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
             if retained_responses:
                 retained_count = db.execute("SELECT count(*) FROM retained_response_files WHERE collection_id=?", (cid,)).fetchone()[0]
                 if retained_count:
+                    layout = (page_layout or {}).get((cid, "attention"), {})
                     retained_pages = export_file_pages(db, output, cid=cid, folder=folder, common=common,
-                                                      internal=internal, page_size=page_size, retained=True, references=references, publisher=summary.get("publisher"))
+                                                      internal=internal, page_size=page_size, retained=True, references=references, publisher=summary.get("publisher"), emit=emit,
+                                                      page_rows=layout.get("rows"), legacy_provenance=layout.get("provenance", True))
                     detail["retainedFiles"] = {"pages": retained_pages, "total": retained_count}
             publications = [item for kind, item in evidence if kind == "publication_observation"]
             if publications:
@@ -661,7 +690,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
                         for r in db.execute("SELECT data FROM lineage WHERE collection_id=? ORDER BY id", (cid,))
                     ],
                 }
-            write_json(output / summary["detailPath"], detail, internal=internal)
+            write_json(output / summary["detailPath"], detail, internal=internal, emit=emit)
         # Probe files_sha for each object instead of materializing all eligible aliases.
         total_objects = db.execute("""SELECT count(*),coalesce(sum(objects.bytes),0) FROM objects
                                     WHERE EXISTS (SELECT 1 FROM files
@@ -681,7 +710,7 @@ def export(index: Path, output: Path, *, internal: bool = False, page_size: int 
             },
         }
         # The switch occurs after every immutable partition has passed validation.
-        write_json(output / "manifest.json", manifest, internal=internal)
+        write_json(output / "manifest.json", manifest, internal=internal, emit=emit)
         return manifest
     finally:
         db.close()

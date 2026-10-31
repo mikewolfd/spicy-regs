@@ -75,7 +75,19 @@ def validate_join(join: dict, schemas: dict[str, list]) -> tuple:
     return (join["child"], tuple(join["child_columns"]), join["parent"], tuple(join["parent_columns"]))
 
 
-def publication_descriptions(live: dict) -> dict:
+def _table_description(entry: dict, schema: list) -> dict:
+    description = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "category", "row_unit", "grain", "identity_columns", "data_quality")
+                   if key in entry}
+    description["columns"] = [
+        {"column_name": column, "column_type": typ,
+         "description": entry.get("columns", {}).get(column, "")}
+        # Removed declarations validate joins but never become published fields.
+        for column, typ in {**dict.fromkeys(entry.get("columns", {}), ""), **dict(schema)}.items()
+    ]
+    return description
+
+
+def publication_descriptions(live: dict, *, index: dict | None = None) -> dict:
     """Include canonical prose and roles for every published table."""
     from .fec_query_catalog import table_category
 
@@ -85,17 +97,19 @@ def publication_descriptions(live: dict) -> dict:
         from .data_dictionary import load_curated_descriptions
         curated = load_curated_descriptions()
         for name in sorted(missing & set(curated)):
-            entry = curated[name]
-            descriptions[name] = {key: entry[key] for key in ("label", "summary", "coverage", "kind", "category", "row_unit", "data_quality")
-                                  if key in entry}
-            descriptions[name]["columns"] = [
-                {"column_name": column, "column_type": typ,
-                 "description": entry.get("columns", {}).get(column, "")}
-                # Old curated field names validate declarations but do not
-                # become fields in the current output schema below.
-                for column, typ in {**dict.fromkeys(entry.get("columns", {}), ""),
-                                    **dict(live[name]["schema"])}.items()
-            ]
+            descriptions[name] = _table_description(curated[name], live[name]["schema"])
+    if index is not None:
+        from .sources.publication import table_owner
+        legacy = {name for name in live if name.startswith("fec_")
+                  and (owner := table_owner(index, name + ".parquet")) is not None
+                  and "etlReceipts" not in owner[1]}
+        if legacy:
+            from .data_dictionary import DEFAULT_DESCRIPTIONS, selected_dictionary_definitions
+            selected, schemas = selected_dictionary_definitions(index, legacy, DEFAULT_DESCRIPTIONS)
+            for name in sorted(legacy & selected.keys() & schemas.keys()):
+                # Earlier names and meanings apply only to their exact declared schema.
+                if schemas[name] == [tuple(column) for column in live[name]["schema"]]:
+                    descriptions[name] = _table_description(selected[name], live[name]["schema"])
     for name in live.keys() & descriptions.keys():
         category = table_category(name)
         if category:
@@ -120,7 +134,7 @@ def build_bundle(index: dict, *, descriptions: dict | None = None, registry: dic
         if identity != entry["publicationIdentity"] or entry["descriptor"]["family"] != entry["family"]:
             raise ValueError(f"Separate publication identity does not match its descriptor: {name}")
         live.update(extra)
-    descriptions = publication_descriptions(live) if descriptions is None else descriptions
+    descriptions = publication_descriptions(live, index=index) if descriptions is None else descriptions
     registry = read_json("explorer_sources.json") if registry is None else registry
     join_record = read_json("table_joins.json") if join_record is None else join_record
     if audit is None:

@@ -129,6 +129,13 @@ def main() -> None:
                              help='Replay only listed canonical SHA-256 identities in the named collections')
     maintenance.add_argument('--reuse-unchanged', action='store_true',
                              help='Return the accepted generation without creating a candidate when inputs match')
+    maintenance.add_argument('--receipt-snapshot', type=Path)
+    maintenance.add_argument('--receipt-snapshot-sha256')
+    freeze = commands.add_parser('freeze-receipts', help='Authenticate a base and freeze its receipt keys and custody')
+    for flag in ('index', 'output'):
+        freeze.add_argument('--' + flag, type=Path, required=True)
+    freeze.add_argument('--expected-generation', required=True)
+    freeze.add_argument('--expected-index-sha256')
     reconcile = commands.add_parser("reconcile-publication")
     reconcile.add_argument("--index", type=Path, required=True)
     reconcile.add_argument("--output", type=Path, required=True)
@@ -138,6 +145,7 @@ def main() -> None:
     parity = commands.add_parser("check-publication")
     parity.add_argument("--index", type=Path, required=True)
     parity.add_argument("--selection", type=Path, required=True)
+    parity.add_argument('--target-only', action='store_true', help='Require exact selected descriptors while preserving provenance uncertainty')
     publish = commands.add_parser("export")
     publish.add_argument("--index", type=Path, required=True)
     publish.add_argument("--output", type=Path, required=True)
@@ -149,6 +157,8 @@ def main() -> None:
     select.add_argument("--expected-generation", required=True)
     select.add_argument("--allow-inventory-change", action="store_true",
                         help="Accept reviewed raw inventory changes pinned by the prepared candidate")
+    select.add_argument('--receipt-snapshot', type=Path)
+    select.add_argument('--receipt-snapshot-sha256')
     refresh = commands.add_parser("compare-inventory")
     refresh.add_argument("--previous", type=Path, required=True)
     refresh.add_argument("--current", type=Path, required=True)
@@ -192,7 +202,14 @@ def main() -> None:
                                   expected_generation=args.expected_generation,
                                   include_acquisitions=args.include_acquisitions,
                                   refresh_content=tuple(args.refresh_content), reuse_unchanged=args.reuse_unchanged,
-                                  refresh_object_list=args.refresh_object_list)
+                                  refresh_object_list=args.refresh_object_list,
+                                  receipt_snapshot=args.receipt_snapshot,
+                                  receipt_snapshot_sha256=args.receipt_snapshot_sha256)
+    elif args.command == 'freeze-receipts':
+        from .maintenance import freeze_receipts
+
+        result = freeze_receipts(args.index, args.output, expected_generation=args.expected_generation,
+                                 expected_index_sha256=args.expected_index_sha256)
     elif args.command == "reconcile-publication":
         from .publication import reconcile
 
@@ -203,7 +220,7 @@ def main() -> None:
 
         result = check_publication(args.index, args.selection)
         print(json.dumps(result, indent=2))
-        if not result["verified"]:
+        if not (result['selectionMatches'] and result['targetMatches'] if args.target_only else result['verified']):
             raise SystemExit(1)
         return
     elif args.command == "export":
@@ -218,7 +235,9 @@ def main() -> None:
 
         result = select(args.candidate, args.reconciliation, args.staged_public, args.cache,
                         args.public, args.raw_root, expected_generation=args.expected_generation,
-                        allow_inventory_change=args.allow_inventory_change)
+                        allow_inventory_change=args.allow_inventory_change,
+                        receipt_snapshot=args.receipt_snapshot,
+                        receipt_snapshot_sha256=args.receipt_snapshot_sha256)
     elif args.command == "compare-inventory":
         result = compare(
             args.previous,
