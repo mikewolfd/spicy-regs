@@ -423,6 +423,54 @@ def test_the_backfill_rereads_editions_restored_before_related_rins_were_read(tm
     assert rows["202404"] == rows["201210"] == "[]" and rows["202310"] == "null"
 
 
+def test_a_reread_that_drops_a_restored_row_holds_the_edition_afterwards(tmp_path, monkeypatch):
+    """A v1 row the v2 re-read no longer lists stays NULL, and the edition is held, not re-fetched daily."""
+    import sys
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    import spicy_regs.transforms.build_unified_agenda  # noqa: F401 -- the package re-exports the function by this name
+
+    module = sys.modules["spicy_regs.transforms.build_unified_agenda"]
+    requested: list[str] = []
+    warnings: list[str] = []
+
+    class Reader:
+        def __init__(self, *, editions, on_source=None):
+            requested.extend(editions)
+            self.editions = editions
+
+        def iter_records(self):
+            for stem in self.editions:
+                edition = "201210" if stem == "2012" else stem
+                yield {"rin": f"0000-{edition}", "agenda_edition": edition, "timetable": [], "related_rins": []}
+
+    prior = [
+        {**dict.fromkeys(COLUMNS), "rin": f"0000-{edition}", "agenda_edition": edition,
+         "related_rins_json": None if edition == "202404" else "null"}
+        for edition in ("201210" if stem == "2012" else stem for stem in module.edition_series())
+    ]
+    prior.append({**dict.fromkeys(COLUMNS), "rin": "9999-AA00", "agenda_edition": "202404"})
+    pq.write_table(pa.Table.from_pylist(prior, schema=module._SCHEMA), tmp_path / "_ua_prior.parquet")
+    monkeypatch.setattr(module, "UnifiedAgendaReader", Reader)
+    monkeypatch.setattr(module, "newest_edition", lambda: "202510")
+    monkeypatch.setattr(module.logger, "warning", lambda message, *args: warnings.append(message.format(*args)))
+    out = module.build_unified_agenda(tmp_path, download_prior=lambda *args: False)
+    assert requested == ["202510", "202404"]
+    assert [w for w in warnings if "not in the re-read" in w] == [
+        "Unified Agenda: 1 restored rows in editions read this run were not in the re-read; "
+        "their related_rins stay unread (NULL)"]
+    dropped = {(row["rin"], row["related_rins_json"]) for row in pq.read_table(out).to_pylist()
+               if row["agenda_edition"] == "202404"}
+    assert dropped == {("0000-202404", "[]"), ("9999-AA00", None)}
+
+    out.rename(tmp_path / "_ua_prior.parquet")
+    requested.clear()
+    module.build_unified_agenda(tmp_path, download_prior=lambda *args: False)
+    assert requested == ["202510"]
+
+
 def test_a_prior_without_the_related_rins_column_is_reread_from_the_newest_edition(tmp_path, monkeypatch):
     import sys
 

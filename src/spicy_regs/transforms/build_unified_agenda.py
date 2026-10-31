@@ -222,17 +222,18 @@ def build_unified_agenda(
     # 2. Fetch + shape the requested edition(s) into a "new rows" parquet: the
     # current edition plus a bounded backfill of editions the prior table lacks.
     if editions is None:
-        # An edition is held only when every prior row was read for related_rins (SpicyDocs 0.67.0). Rows
-        # restored from a regulations-native-v1 generation carry SQL NULL there (a read edition that states
-        # no list carries the JSON text "null"), so the bounded backfill re-reads those editions instead of
-        # republishing them with the column empty.
+        # An edition is held once any of its rows was read for related_rins (SpicyDocs 0.67.0). Rows restored
+        # from a regulations-native-v1 generation carry SQL NULL there (a read edition that states no list
+        # carries the JSON text "null"), so the bounded backfill re-reads editions that are entirely v1 instead
+        # of republishing them with the column empty. One read row suffices: a v2 re-read that no longer lists
+        # a v1 row leaves that row NULL, and requiring every row would re-fetch the edition every day (ss-cdaa).
         held = set()
         if have_prior and "related_rins_json" in pq.read_schema(prior_file).names:
             held = {
                 row[0]
                 for row in duckdb.sql(
                     f"SELECT agenda_edition FROM read_parquet('{prior_file}') "
-                    "GROUP BY 1 HAVING count(related_rins_json) = count(*)"
+                    "GROUP BY 1 HAVING count(related_rins_json) > 0"
                 ).fetchall()
             }
         editions = editions_to_fetch(held, newest_edition())
@@ -307,7 +308,16 @@ def build_unified_agenda(
         ) TO '{out_file}' (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 50000);
         """
     )
+    unread = con.execute(
+        f"SELECT count(*) FROM read_parquet('{out_file}') "
+        "WHERE related_rins_json IS NULL AND agenda_edition IN "
+        f"(SELECT DISTINCT agenda_edition FROM read_parquet('{new_file}'))"
+    ).fetchone()
     con.close()
+    if unread and unread[0]:
+        logger.warning(
+            "Unified Agenda: {:,} restored rows in editions read this run were not in the re-read; "
+            "their related_rins stay unread (NULL)", unread[0])
 
     if source_receipts:
         # Receipt conversion retains this manifest's digest and repair evidence.
