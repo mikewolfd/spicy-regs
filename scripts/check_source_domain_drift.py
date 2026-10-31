@@ -21,7 +21,7 @@ the observed half is the manual step below.
 prints the same report against that data; add ``--write-snapshot`` to re-pin the
 checked-in snapshot from that observation. Each dated snapshot file observes its
 own domains: ``--snapshot FILE`` selects which one an observation covers (the
-2026-09-22 file by default), and ``--domains`` names them for a new file.
+2026-09-22 file by default), and ``--domains`` names them for a new file; each file observes whole tables.
 ``--unpublished`` records no publisher URL, for an observation of a built but
 not yet published generation that must be re-pinned once it is published. ``DIR`` holds the published tables
 under their own names (``documents.parquet`` and so on) — a fresh download of

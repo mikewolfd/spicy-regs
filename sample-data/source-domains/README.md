@@ -22,9 +22,8 @@ directions:
 - **undocumented-value** — our data carries a value the publisher's list omits.
   Anyone switching on the documented list mishandles those rows.
 - **unobserved-value** — the publisher documents a value no row carries. Either
-  the observation is bounded (it holds one semiannual Unified Agenda edition, and
-  no single edition reaches every stage) or the publisher dropped the value in
-  silence.
+  the observation is bounded (part of a table need not reach every documented
+  value) or the publisher dropped or never used the value.
 
 Neither is automatically a bug. Read the publisher's document, decide which it
 is, then either record the finding in `ACCEPTED_DOMAIN_FINDINGS`
@@ -108,31 +107,36 @@ count, and the row count of the table they came from.
 `scripts/check_source_domain_drift.py --observe --write-snapshot` generates it,
 so the code that writes it is the code that reads it back.
 
-It names its inputs: the three published tables it scanned, at the fork's
+It names its inputs: the published tables it scanned, at the fork's
 public bucket (`https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev`, the
 `R2_PUBLIC_URL` the fork's workflows publish to), as of producer revision
 `ae1c4e108bf764b2d15370c11832cfeff11487d1`, each with
 the SHA-256 and byte length the scan actually read. Where each table lives comes
 from the publication index, not from this file: `documents` and `dockets` sit at
-the bucket root, `unified_agenda` under its generation prefix, and a fragment of
+the bucket root, and a fragment of
 the index (`published-index-fragment-2026-09-22.json`) is checked in beside the
 snapshot so the recorded URLs stay verifiable offline. Those digests are
 provenance, not verification — nothing recomputes them later, because the tables
-run to 90 MB and stay out of the repository. That is the whole reason a 3.7 KB
-summary of 2,284,609 rows exists.
+run to 90 MB and stay out of the repository. That is the whole reason a few-KB
+summary of 2,280,655 rows exists. Its `unified_agenda` domains and source were
+removed when that table moved to its own dated file; the rest is unchanged.
 
-`observed-domain-snapshot-2026-10-30-unified-agenda-related-rins.json` holds
-the one domain the 2026-09-22 file does not: `RIN_RELATION`, counted over the
-28,720 related RINs of all 60 retained editions rather than one edition, so
-its `row_count` is list elements and its source's `row_count` table rows. It
-was observed from the source-only replay built on the branch that added the
-column, before that generation was published, so it records no publisher URL
-(`--unpublished`); its digest names that local build. Re-pin it from the
-published generation once it is live:
+`observed-domain-snapshot-2026-10-30-unified-agenda.json` observes
+`unified_agenda` whole: its five domains, `RIN_RELATION` included, over all 60
+retained editions (241,726 rows). The 2026-09-22 file's `unified_agenda` read
+held edition 202510 only (3,954 rows), so its domains moved here rather than
+leaving the table pinned by two digests; that file now covers `documents` and
+`dockets`. A `related_rins.rin_relation` domain counts the 28,720 list elements,
+so its `row_count` is elements and its source's `row_count` table rows. It was
+observed from the source-only replay built on the branch that added the column,
+before that generation was published, so it records no publisher URL
+(`--unpublished`); its digest names that local build, whose other columns equal
+the live table's both ways. Re-pin it from the published generation once it is
+live:
 
 ```
 scripts/check_source_domain_drift.py --observe --data-dir <dir with unified_agenda.parquet> \
-    --snapshot observed-domain-snapshot-2026-10-30-unified-agenda-related-rins.json \
+    --snapshot observed-domain-snapshot-2026-10-30-unified-agenda.json \
     --observed-at <ISO-8601> --producer-revision <sha> --write-snapshot
 ```
 

@@ -14,9 +14,9 @@ emit. The two directions of disagreement mean different things:
 * an **undocumented** value (observed, not documented) says the documented
   enumeration is incomplete. A consumer that switches on the documented list
   silently mishandles those rows.
-* an **unobserved** value (documented, not observed) says either the snapshot is
-  bounded — it holds one semiannual Unified Agenda edition, and no edition need
-  exercise every documented value — or the publisher retired a value in silence.
+* an **unobserved** value (documented, not observed) says either the observation
+  is bounded — part of a table need not exercise every documented value — or the
+  publisher retired a value in silence.
 
 Neither is automatically an error, and neither is automatically fine, so both
 land in :data:`ACCEPTED_DOMAIN_FINDINGS`, a ledger closed in both directions:
@@ -71,12 +71,13 @@ from spicy_docs.reading.xml import parse_xml
 DEFAULT_SOURCE_DOMAIN_DIR = Path("sample-data/source-domains")
 CAPTURE_MANIFEST_FILENAME = "documented-enumeration-capture-manifest-v1.json"
 OBSERVED_SNAPSHOT_FILENAME = "observed-domain-snapshot-2026-09-22.json"
-#: Each dated observation covers its own domains; together they cover every declaration once. The 2026-09-22
-#: file observed edition 202510 only, and re-observing it whole would reopen its edition-bounded reasons, so
-#: RIN_RELATION, read from all 60 editions, is its own dated file.
+#: Each dated observation covers whole tables, so one source digest pins every domain of its table, and
+#: together the files cover every declaration once. The 2026-09-22 file observes documents and dockets; its
+#: unified_agenda read held edition 202510 only, so unified_agenda is re-observed whole (all 60 retained
+#: editions, the five domains including RIN_RELATION) in its own dated file.
 OBSERVED_SNAPSHOT_FILENAMES = (
     OBSERVED_SNAPSHOT_FILENAME,
-    "observed-domain-snapshot-2026-10-30-unified-agenda-related-rins.json",
+    "observed-domain-snapshot-2026-10-30-unified-agenda.json",
 )
 
 CAPTURE_MANIFEST_FORMAT_VERSION = "spicyregs-source-domains/capture-v1"
@@ -627,8 +628,9 @@ ACCEPTED_DOMAIN_FINDINGS: tuple[AcceptedFinding, ...] = (
         kind=UNOBSERVED,
         value="No Stage",
         reason=(
-            "The snapshot holds one semiannual edition (202510), and an edition states only the stages its "
-            "RINs are in. Absence here is edition-boundedness, not a retired value."
+            "Documented, yet no row of any of the 60 retained editions (199510-202510, 241,726 rows) carries it: "
+            "the publisher lists a stage its exports never use. Kept in the documented domain because the "
+            "pinned XSD still states it."
         ),
     ),
     AcceptedFinding(
@@ -636,8 +638,19 @@ ACCEPTED_DOMAIN_FINDINGS: tuple[AcceptedFinding, ...] = (
         kind=UNOBSERVED,
         value="Not Major",
         reason=(
-            "Absent from edition 202510 for the same reason as No Stage. The XSD documentation also lists "
-            "this value twice, which is the publisher's own typo rather than two categories."
+            "Documented, yet no row of the 60 retained editions carries it, like No Stage. The XSD "
+            "documentation also lists this value twice, which is the publisher's own typo rather than two "
+            "categories."
+        ),
+    ),
+    AcceptedFinding(
+        domain_key="unified-agenda-priority-category",
+        kind=UNDOCUMENTED,
+        value="Section 3(f)(1) Significant",
+        reason=(
+            "EO 14094 (April 2023) renamed the EO 12866 section 3(f)(1) category, and editions 202304-202410 "
+            "carry it on 833 rows; the pinned XSD (version 10262011) predates the order. 202504 and later "
+            "return to Economically Significant after EO 14148 revoked 14094."
         ),
     ),
     # RIN_RELATION, observed over all 28,720 related RINs of the 60 retained editions (owner Q15: published as

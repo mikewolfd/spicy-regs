@@ -1,0 +1,153 @@
+{
+  "domains": [
+    {
+      "column": "major",
+      "key": "unified-agenda-major",
+      "null_count": 9879,
+      "row_count": 241726,
+      "table": "unified_agenda",
+      "value_counts": [
+        [
+          "No",
+          189010
+        ],
+        [
+          "Undetermined",
+          31779
+        ],
+        [
+          "Yes",
+          11058
+        ]
+      ]
+    },
+    {
+      "column": "priority_category",
+      "key": "unified-agenda-priority-category",
+      "null_count": 15,
+      "row_count": 241726,
+      "table": "unified_agenda",
+      "value_counts": [
+        [
+          "Substantive, Nonsignificant",
+          146482
+        ],
+        [
+          "Other Significant",
+          69422
+        ],
+        [
+          "Economically Significant",
+          10424
+        ],
+        [
+          "Info./Admin./Other",
+          8858
+        ],
+        [
+          "Routine and Frequent",
+          5692
+        ],
+        [
+          "Section 3(f)(1) Significant",
+          833
+        ]
+      ]
+    },
+    {
+      "column": "related_rins.rin_relation",
+      "key": "unified-agenda-rin-relation",
+      "null_count": 0,
+      "row_count": 28720,
+      "table": "unified_agenda",
+      "value_counts": [
+        [
+          "Related to",
+          21248
+        ],
+        [
+          "Previously reported as",
+          3099
+        ],
+        [
+          "Merged with",
+          2283
+        ],
+        [
+          "Split from",
+          1676
+        ],
+        [
+          "Duplicate of",
+          410
+        ],
+        [
+          "Related t",
+          3
+        ],
+        [
+          "Previously report",
+          1
+        ]
+      ]
+    },
+    {
+      "column": "rin_status",
+      "key": "unified-agenda-rin-status",
+      "null_count": 2,
+      "row_count": 241726,
+      "table": "unified_agenda",
+      "value_counts": [
+        [
+          "Previously Published in The Unified Agenda",
+          199563
+        ],
+        [
+          "First Time Published in The Unified Agenda",
+          42161
+        ]
+      ]
+    },
+    {
+      "column": "rule_stage",
+      "key": "unified-agenda-rule-stage",
+      "null_count": 0,
+      "row_count": 241726,
+      "table": "unified_agenda",
+      "value_counts": [
+        [
+          "Proposed Rule Stage",
+          80032
+        ],
+        [
+          "Final Rule Stage",
+          68208
+        ],
+        [
+          "Long-Term Actions",
+          45742
+        ],
+        [
+          "Completed Actions",
+          41898
+        ],
+        [
+          "Prerule Stage",
+          5846
+        ]
+      ]
+    }
+  ],
+  "format_version": "spicyregs-source-domains/observed-v1",
+  "observed_at": "2026-10-31T01:30:00Z",
+  "producer_revision": "2546c1c9463c0177748cf61a8b98be93f04a7fae",
+  "sources": [
+    {
+      "byte_length": 66495631,
+      "bytes_digest": "sha256:e92f34f72f934b438d667a78790d14aaca77ff9de0eb8f510d54cfdbfc5f35de",
+      "publisher_url": null,
+      "row_count": 241726,
+      "table": "unified_agenda"
+    }
+  ]
+}

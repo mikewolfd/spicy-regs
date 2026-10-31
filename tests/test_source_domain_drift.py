@@ -74,7 +74,7 @@ def snapshot():
 
 
 @pytest.fixture(scope="module")
-def related_snapshot():
+def agenda_snapshot():
     return load_observed_snapshot(DOMAIN_DIR, filename=OBSERVED_SNAPSHOT_FILENAMES[1])
 
 
@@ -116,18 +116,19 @@ def test_every_accepted_finding_states_a_reason():
         assert len(entry.reason) > 60, entry
 
 
-def test_the_findings_are_the_eleven_the_snapshots_carry(findings):
+def test_the_findings_are_the_twelve_the_snapshots_carry(findings):
     """Pinned so a silent change in either half shows up as a number, not a shrug.
 
     This list deliberately transcribes the ledger a second time. The set-equality
     tests above compare the ledger against the findings, so both pass when someone
     edits the ledger and the snapshot to agree on something wrong. This one states
-    the eleven independently of both, and catches that. Kept for that reason.
+    the twelve independently of both, and catches that. Kept for that reason.
     """
 
     identifiers = sorted(finding.identifier for finding in findings)
     assert identifiers == [
         "regulations-gov-document-type/undocumented-value/Public Submission",
+        "unified-agenda-priority-category/undocumented-value/Section 3(f)(1) Significant",
         "unified-agenda-priority-category/unobserved-value/Not Major",
         "unified-agenda-rin-relation/undocumented-value/Merged with",
         "unified-agenda-rin-relation/undocumented-value/Previously report",
@@ -206,9 +207,9 @@ def test_a_cut_off_relation_the_data_stopped_producing_fails(documented, observe
     assert [(entry.kind, entry.value) for entry in stale] == [(UNDOCUMENTED, "Related t")]
 
 
-def test_a_domain_two_snapshots_observe_is_refused(snapshot, related_snapshot):
+def test_a_domain_two_snapshots_observe_is_refused(snapshot, agenda_snapshot):
     with pytest.raises(SourceDomainError, match="more than one snapshot"):
-        merged_domains((snapshot, related_snapshot, related_snapshot))
+        merged_domains((snapshot, agenda_snapshot, agenda_snapshot))
 
 
 def test_a_domain_observed_on_the_wrong_column_fails(documented, observed):
@@ -380,7 +381,7 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
     assert snapshot.observed_at == "2026-09-22T16:50:25Z"
     assert snapshot.producer_revision == "ae1c4e108bf764b2d15370c11832cfeff11487d1"
     sources = {str(one["table"]): one for one in snapshot.sources}
-    assert sorted(sources) == ["dockets", "documents", "unified_agenda"]
+    assert sorted(sources) == ["dockets", "documents"]  # unified_agenda is observed whole in its own file
     index = _published_index()
     for table, source in sources.items():
         # The recorded URL is a string in a checked-in data file; the expected one
@@ -393,10 +394,10 @@ def test_the_snapshot_states_where_its_rows_came_from(snapshot):
         assert str(source["bytes_digest"]).startswith("sha256:")
         assert int(source["byte_length"]) > 0
     assert sources["documents"]["row_count"] == 2_001_531
-    assert sources["unified_agenda"]["row_count"] == 3_954
 
 
-def test_the_snapshot_row_counts_add_up(snapshot):
+@pytest.mark.parametrize("filename", OBSERVED_SNAPSHOT_FILENAMES)
+def test_the_snapshot_row_counts_add_up(filename):
     """Every row of a domain's table is either a value or a null; nothing is dropped.
 
     The file states each table's total twice — once per domain and once per source —
@@ -404,22 +405,26 @@ def test_the_snapshot_row_counts_add_up(snapshot):
     match the other half before it can pass.
     """
 
+    snapshot = load_observed_snapshot(DOMAIN_DIR, filename=filename)
     sources = {str(one["table"]): one for one in snapshot.sources}
     for domain in snapshot.domains.values():
         assert sum(count for _, count in domain.value_counts) + domain.null_count == domain.row_count
-        assert domain.row_count == int(sources[domain.table]["row_count"])
+        if "." not in domain.column:  # a list-member domain counts list elements, not table rows
+            assert domain.row_count == sources[domain.table]["row_count"]
 
 
-def test_the_related_rins_snapshot_counts_list_elements_of_an_unpublished_build(related_snapshot):
-    """RIN_RELATION is observed over every related RIN of the 60 retained editions, not over table rows.
+def test_the_agenda_snapshot_observes_the_whole_table_of_an_unpublished_build(agenda_snapshot):
+    """unified_agenda is observed over all 60 retained editions (241,726 rows), RIN_RELATION over its list elements.
 
-    The counts equal the independent lxml parse in work/agenda-related-rins-20261030 (28,720 related RINs).
-    The build is not published yet, so no publisher URL is recorded; re-pin once it is.
+    The RIN_RELATION counts equal the independent lxml parse in work/agenda-related-rins-20261030 (28,720
+    related RINs); the scalar columns equal the live table's, since the build equals live on every one of
+    them. The build is not published yet, so no publisher URL is recorded; re-pin once it is.
     """
 
-    [domain] = related_snapshot.domains.values()
-    assert (domain.key, domain.column) == ("unified-agenda-rin-relation", "related_rins.rin_relation")
-    assert dict(domain.value_counts) == {
+    assert sorted(agenda_snapshot.domains) == [key for key in sorted(DOMAIN_KEYS) if key.startswith("unified-agenda-")]
+    relation = agenda_snapshot.domains["unified-agenda-rin-relation"]
+    assert relation.column == "related_rins.rin_relation"
+    assert dict(relation.value_counts) == {
         "Related to": 21_248,
         "Previously reported as": 3_099,
         "Merged with": 2_283,
@@ -428,8 +433,11 @@ def test_the_related_rins_snapshot_counts_list_elements_of_an_unpublished_build(
         "Related t": 3,
         "Previously report": 1,
     }
-    assert sum(count for _, count in domain.value_counts) + domain.null_count == domain.row_count == 28_720
-    [source] = related_snapshot.sources
+    assert sum(count for _, count in relation.value_counts) + relation.null_count == relation.row_count == 28_720
+    assert dict(agenda_snapshot.domains["unified-agenda-priority-category"].value_counts)[
+        "Section 3(f)(1) Significant"] == 833
+    assert "No Stage" not in dict(agenda_snapshot.domains["unified-agenda-rule-stage"].value_counts)
+    [source] = agenda_snapshot.sources
     assert source["publisher_url"] is None and source["table"] == "unified_agenda"
     assert source["row_count"] == 241_726 and str(source["bytes_digest"]).startswith("sha256:")
 
@@ -452,12 +460,21 @@ def test_a_list_member_domain_is_observed_over_its_elements(tmp_path, documented
     assert snapshot.sources[0]["row_count"] == 3 and snapshot.sources[0]["publisher_url"] is None
 
 
-def test_priority_category_is_the_one_nullable_domain(snapshot):
-    """The XSD declares PRIORITY_CATEGORY minOccurs="0", so a null is documented, not drift."""
+def test_nulls_occur_only_where_the_xsd_makes_the_element_optional(observed):
+    """PRIORITY_CATEGORY, RIN_STATUS and MAJOR are minOccurs="0" in the XSD, so a null there is documented, not drift.
 
-    nullable = {key for key, domain in snapshot.domains.items() if domain.null_count}
-    assert nullable == {"unified-agenda-priority-category"}
-    assert snapshot.domains["unified-agenda-priority-category"].null_count == 2
+    MAJOR is absent from most of 199510 and 199604 (9,830 of its 9,879 nulls); the rest are single records.
+    """
+
+    nulls = {key: domain.null_count for key, domain in observed.items() if domain.null_count}
+    assert nulls == {
+        "unified-agenda-priority-category": 15,
+        "unified-agenda-rin-status": 2,
+        "unified-agenda-major": 9_879,
+    }
+    xsd = (DOMAIN_DIR / "reginfo-rin-data-ver10262011.xsd").read_text()
+    for element in ("PRIORITY_CATEGORY", "RIN_STATUS", "MAJOR"):
+        assert f'<xs:element name="{element}" minOccurs="0">' in xsd
 
 
 def test_the_snapshot_file_is_small_enough_to_read():
@@ -474,7 +491,7 @@ def test_the_tool_passes_on_the_committed_inputs():
     result = subprocess.run([sys.executable, str(TOOL)], capture_output=True, text=True, cwd=ROOT)
     assert result.returncode == 0, result.stderr
     assert "7 documented domains" in result.stdout
-    assert "11 findings" in result.stdout
+    assert "12 findings" in result.stdout
     assert "UNRECORDED" not in result.stdout
 
 

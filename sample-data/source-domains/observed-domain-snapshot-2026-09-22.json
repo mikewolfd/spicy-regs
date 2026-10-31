@@ -49,102 +49,6 @@
           374
         ]
       ]
-    },
-    {
-      "column": "major",
-      "key": "unified-agenda-major",
-      "null_count": 0,
-      "row_count": 3954,
-      "table": "unified_agenda",
-      "value_counts": [
-        [
-          "No",
-          2780
-        ],
-        [
-          "Undetermined",
-          865
-        ],
-        [
-          "Yes",
-          309
-        ]
-      ]
-    },
-    {
-      "column": "priority_category",
-      "key": "unified-agenda-priority-category",
-      "null_count": 2,
-      "row_count": 3954,
-      "table": "unified_agenda",
-      "value_counts": [
-        [
-          "Substantive, Nonsignificant",
-          2190
-        ],
-        [
-          "Other Significant",
-          1275
-        ],
-        [
-          "Economically Significant",
-          345
-        ],
-        [
-          "Info./Admin./Other",
-          101
-        ],
-        [
-          "Routine and Frequent",
-          41
-        ]
-      ]
-    },
-    {
-      "column": "rin_status",
-      "key": "unified-agenda-rin-status",
-      "null_count": 0,
-      "row_count": 3954,
-      "table": "unified_agenda",
-      "value_counts": [
-        [
-          "Previously Published in The Unified Agenda",
-          2835
-        ],
-        [
-          "First Time Published in The Unified Agenda",
-          1119
-        ]
-      ]
-    },
-    {
-      "column": "rule_stage",
-      "key": "unified-agenda-rule-stage",
-      "null_count": 0,
-      "row_count": 3954,
-      "table": "unified_agenda",
-      "value_counts": [
-        [
-          "Proposed Rule Stage",
-          1437
-        ],
-        [
-          "Final Rule Stage",
-          985
-        ],
-        [
-          "Long-Term Actions",
-          808
-        ],
-        [
-          "Completed Actions",
-          628
-        ],
-        [
-          "Prerule Stage",
-          96
-        ]
-      ]
     }
   ],
   "format_version": "spicyregs-source-domains/observed-v1",
@@ -164,13 +68,6 @@
       "publisher_url": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev/documents.parquet",
       "row_count": 2001531,
       "table": "documents"
-    },
-    {
-      "byte_length": 1017557,
-      "bytes_digest": "sha256:52775a37b2ecb68e3e1a1a3a418ce034bd4c5cf36a9569c14e878be373fa4bd0",
-      "publisher_url": "https://pub-72e95c0c20a84508b42b03a6ff6d55f8.r2.dev/generations/unified-agenda/ea589343f8dcb5ffe134c5a2ac2fbf5d8856f105f296d838fe59e6330ee075b2/unified_agenda.parquet",
-      "row_count": 3954,
-      "table": "unified_agenda"
     }
   ]
 }
