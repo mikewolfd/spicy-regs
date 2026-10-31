@@ -28,10 +28,20 @@ RELEASE_POINT_SECTIONS_SQL = f"""SELECT observation_id, edition_id,
     WHERE regexp_full_match(identifier, '{_SECTION_ID}')"""
 
 
+#: A section's parts in Code order: integer stem, letters, the number after a dash, then any remainder (1857f-5a).
+_PARTS = r"^([0-9]+)([a-z]*)(?:-([0-9]+))?(.*)$"
+
+
 def _order(section: str) -> str:
-    """A section's place in Code order: its integer stem, then the rest (RefSpec ``_section_key``); 34c < 34d < 35."""
-    return (f"struct_pack(stem := TRY_CAST(regexp_extract({section}, '^[0-9]+') AS BIGINT), "
-            f"rest := regexp_replace({section}, '^[0-9]+', ''))")
+    """A section's place in Code order, so a range stub's bounds and a key compare as OLRC numbers them.
+
+    Each number compares as a number and the letters by length first: 34c < 34d < 35, 698v < 698v-4 < 698v-10, and
+    2689r < 2689z < 2689aa. RefSpec ``_section_key`` compares the part after the stem as text, which misorders the
+    last two; the release point holds stubs of both shapes (``698v...698v-10``, ``2689r...2689aa``).
+    """
+    stem, letters, number, rest = (f"regexp_extract({section}, '{_PARTS}', {group})" for group in range(1, 5))
+    return (f"struct_pack(stem := TRY_CAST({stem} AS BIGINT), letters_length := length({letters}), "
+            f"letters := {letters}, number := coalesce(TRY_CAST({number} AS BIGINT), -1), rest := {rest})")
 
 
 _SOURCES = ("document_citations", "law_code_sections", "table3_records")

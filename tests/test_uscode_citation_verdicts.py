@@ -13,7 +13,8 @@ def _table(con, name, fields, records):
 
 
 #: Release-point rows shaped as generation 792cbaa7 holds them: an en dash, an upper-case suffix, a combined heading,
-#: three range stubs (one spanning lettered sections, one crossing a digit count), an OLRC duplicate numbering, an
+#: range stubs (one spanning lettered sections, one crossing a digit count, two whose bounds carry a dash number,
+#: one crossing a letter count), an OLRC duplicate numbering, an
 #: appendix identifier of another shape, a notes row with no identifier, and an annual-edition row that must not count.
 RELEASE = [
     ("o1", "rp-119-102", "release-point-corpus", "main-body-candidate", "/us/usc/t5/s553"),
@@ -27,6 +28,9 @@ RELEASE = [
     ("o9", "rp-119-102", "release-point-corpus", "main-body-candidate", "/us/usc/t18a/pl/91/538/s1"),
     ("o10", "rp-119-102", "release-point-corpus", "notes-or-quoted-content", None),
     ("o12", "rp-119-102", "release-point-corpus", "main-body-candidate", "/us/usc/t15/s99...101"),
+    ("o13", "rp-119-102", "release-point-corpus", "main-body-candidate", "/us/usc/t16/s698v...698v–10"),
+    ("o14", "rp-119-102", "release-point-corpus", "main-body-candidate", "/us/usc/t16/s1857f-5a...1857f-6c"),
+    ("o15", "rp-119-102", "release-point-corpus", "main-body-candidate", "/us/usc/t42/s2689r...2689aa"),
     ("o11", "annual-2000", "annual", "main-body-candidate", "/us/usc/t7/s1"),
 ]
 
@@ -40,6 +44,12 @@ CITATIONS = [  # (cite_kind, target_key, target_resolved)
     ("usc_section", "12-34b", "true"),  # inside 33...34c only in Code order (stem, then suffix)
     ("usc_section", "12-34d", "true"),
     ("usc_section", "15-100", "true"),  # inside 99...101 by stem; a text comparison would miss it
+    ("usc_section", "16-698v-4", "true"),  # inside 698v...698v-10 only when the dash number compares as a number
+    ("usc_section", "16-698w", "true"),
+    ("usc_section", "16-1857f-6a", "true"),  # inside 1857f-5a...1857f-6c
+    ("usc_section", "16-1857f-7", "true"),
+    ("usc_section", "42-2689s", "true"),  # inside 2689r...2689aa only when shorter letters sort first
+    ("usc_section", "42-2689ab", "true"),
     ("usc_section", "50A-541", "true"),
     ("usc_section", "7-1", "true"),  # held only in an annual edition
     ("usc_section", "10-130g", "true"),
@@ -65,6 +75,12 @@ EXPECTED = {  # key: (citations, classifications, table3, release rows, stubs, v
     ("12", "34b"): (1, 0, 0, 0, ["33...34c"], "in_range_stub", None),
     ("12", "34d"): (1, 0, 0, 0, None, "not_printed_at_release_point", "not_printed"),
     ("15", "100"): (1, 0, 0, 0, ["99...101"], "in_range_stub", None),
+    ("16", "698v-4"): (1, 0, 0, 0, ["698v...698v-10"], "in_range_stub", None),
+    ("16", "698w"): (1, 0, 0, 0, None, "not_printed_at_release_point", "not_printed"),
+    ("16", "1857f-6a"): (1, 0, 0, 0, ["1857f-5a...1857f-6c"], "in_range_stub", None),
+    ("16", "1857f-7"): (1, 0, 0, 0, None, "not_printed_at_release_point", "not_printed"),
+    ("42", "2689s"): (1, 0, 0, 0, ["2689r...2689aa"], "in_range_stub", None),
+    ("42", "2689ab"): (1, 0, 0, 0, None, "not_printed_at_release_point", "not_printed"),
     ("50A", "541"): (1, 0, 0, 0, None, "not_printed_at_release_point", "appendix_title"),
     ("7", "1"): (1, 0, 0, 0, None, "not_printed_at_release_point", "not_printed"),
     ("10", "130g"): (1, 0, 0, 2, None, "printed_at_release_point", None),

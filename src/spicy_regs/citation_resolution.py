@@ -65,7 +65,9 @@ ROUTES = {
                                          "AND TRY_CAST(t.statutes_at_large_last_page AS INTEGER)",
                                range_columns=("statutes_at_large_last_page",)),
     "usc_section": Route("law_code_sections", "usc_title || '-' || usc_section_key", ("congress", "session", "seq"),
-                         "many", grain="OLRC classification rows naming this section; not hosted Code text"),
+                         "many", grain="OLRC classification rows naming this section; not hosted Code text. A "
+                                       "section no row classifies may still be in the Code: usc_citation_verdicts "
+                                       "says whether the held release point prints it"),
     # A part citation (2-200) keys every structural row of the part; its own granule is the target.
     "cfr_section": Route("cfr_sections", "cfr_ref", ("package_id", "granule_id"),
                          predicate="section IS NOT NULL OR part_granule = 'true'",
