@@ -1,6 +1,7 @@
 """Only complete, admitted immutable SQL URL sets permit HTTP metadata reuse."""
 from copy import deepcopy
 import json
+from typing import Any
 from pathlib import Path
 
 import duckdb
@@ -38,13 +39,20 @@ def paths(value):
     return [prefix + "/s.parquet", prefix + "/etl_receipts.parquet", prefix + "/" + KEY]
 
 
-def snapshot():
+def snapshot(*, receipt=False):
     prefix = "materialized/rulemaking/snapshots/snapshot_" + "b" * 64
     pointer = {"dataset": "rulemaking", "format_version": 2,
                "snapshot_id": "snapshot_" + "b" * 64, "manifest_key": prefix + "/manifest.json"}
-    manifest = {**pointer, "artifacts": {"snapshot_table.parquet": {
+    manifest: dict[str, Any] = {**pointer, "artifacts": {"snapshot_table.parquet": {
         "visibility": "public", "remote_key": prefix + "/snapshot_table.parquet",
         "sha256": "b" * 64, "bytes": 1, "rows": 1}}}
+    if receipt:
+        manifest["run_id"] = "run-1"
+        manifest["etlReceipts"] = {"key": "etl_receipts.parquet", "generationId": "run-1",
+                                   "policies": [{"dataset": "snapshot_table"}]}
+        manifest["artifacts"]["etl_receipts.parquet"] = {
+            "visibility": "internal", "remote_key": prefix + "/etl_receipts.parquet",
+            "sha256": "c" * 64, "bytes": 1, "rows": 1}
     docs = {server.R2_BASE_URL + "/" + pub.SNAPSHOT_POINTER: json.dumps(pointer).encode(),
             server.R2_BASE_URL + "/" + pointer["manifest_key"]: json.dumps(manifest).encode()}
     return pub.load_rulemaking_snapshot(server.R2_BASE_URL, read=lambda url, **_: docs[url])
@@ -64,6 +72,18 @@ def test_complete_managed_subject_receipt_index_and_snapshot_paths_enable_both_c
     con = Settings()
     result = server._enable_immutable_metadata_cache(con, value, rulemaking, admitted)
     assert result == {**dict.fromkeys(paths(value), "managed_generation"), admitted[-1]: "rulemaking_snapshot"}
+    assert con.statements == ["SET enable_http_metadata_cache=true", "SET GLOBAL parquet_metadata_cache=true"]
+
+
+def test_the_snapshot_receipt_the_build_admits_is_owned_with_its_snapshot():
+    """The live snapshot declares a receipt; before it was owned, every remote connection ran without the cache."""
+    value, rulemaking = index(), snapshot(receipt=True)
+    assert rulemaking is not None and (declared := pub.rulemaking_receipt(rulemaking)) is not None
+    tables = server.R2_BASE_URL + "/" + rulemaking["tables"]["snapshot_table.parquet"]["remote_key"]
+    receipt = server.R2_BASE_URL + "/" + declared["remote_key"]
+    con = Settings()
+    result = server._enable_immutable_metadata_cache(con, value, rulemaking, [*paths(value), tables, receipt])
+    assert result is not None and result[receipt] == "rulemaking_snapshot"
     assert con.statements == ["SET enable_http_metadata_cache=true", "SET GLOBAL parquet_metadata_cache=true"]
 
 

@@ -705,7 +705,7 @@ def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, st
     """Classify every admitted SQL URL from validated records, or retain cache defaults."""
     from spicy_regs.sources.publication import (
         PublicationError, SNAPSHOT_POINTER, load_rulemaking_snapshot, parse_index,
-        receipt_key_members, receipt_members, table_members,
+        receipt_key_members, receipt_members, rulemaking_receipt, table_members,
     )
 
     base = R2_BASE_URL.rstrip("/")
@@ -733,6 +733,9 @@ def _immutable_metadata_inputs(index, rulemaking, allowed_paths) -> dict[str, st
                 return None
             owned.update({f"{base}/{record['remote_key']}": "rulemaking_snapshot"
                           for record in validated["tables"].values()})
+            # The build admits the snapshot's declared receipt member too; it sits under the same snapshot prefix.
+            if (receipt := rulemaking_receipt(validated)) is not None:
+                owned[f"{base}/{receipt['remote_key']}"] = "rulemaking_snapshot"
         if any(path not in owned for path in allowed_paths):
             return None
         return {path: owned[path] for path in allowed_paths}
