@@ -550,9 +550,12 @@ CARD = (
     b'<html><head><link rel="canonical" href="https://www.cbo.gov/publication/62720" /></head><body>'
     b'<a href="/system/files/2026-09/s4429.pdf">View Document</a>'
     b'<table data-cbo-region="estimate-table"><caption><span data-cbo-field="at-a-glance-title">S. 4429</span>'
-    b'</caption><thead><tr><th data-cbo-cell-type="column-heading">2026</th></tr></thead><tbody>'
-    b'<tr data-cbo-unit="millions-usd" data-cbo-field="revenues"><td data-cbo-cell-type="value" '
-    b'data-cbo-period="2026">-5</td></tr></tbody></table></body></html>'
+    b'</caption><thead><tr><th data-cbo-cell-type="column-heading">2026</th>'
+    b'<th data-cbo-cell-type="column-heading">2026-2031</th><th data-cbo-cell-type="column-heading">2026-2036</th>'
+    b'</tr></thead><tbody><tr data-cbo-unit="millions-usd" data-cbo-field="revenues">'
+    b'<td data-cbo-cell-type="value" data-cbo-period="2026">-5</td>'
+    b'<td data-cbo-cell-type="value" data-cbo-period="2026-2031">*</td>'
+    b'<td data-cbo-cell-type="value" data-cbo-period="2026-2036">1,234</td></tr></tbody></table></body></html>'
 )
 NOTICE = b'<html><head><link rel="canonical" href="https://www.cbo.gov/publication/62589" /></head></html>'
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
@@ -602,6 +605,7 @@ def _transport(warc, rows, calls):
 
 def test_archived_cards_are_gated_and_every_capture_receipt_names_its_archive_coordinates(tmp_path):
     warc, rows = _archive()
+    rows.append({**rows[0], "timestamp": "20250105000000"})  # an earlier crawl of the card page: counted, not read
     calls = []
     evidence = CaptureEvidence(tmp_path / "run", "bill-family")
     bound = cbo.cbo_archive_evidence(evidence)
@@ -610,7 +614,9 @@ def test_archived_cards_are_gated_and_every_capture_receipt_names_its_archive_co
              CboEstimateItem(1, "62589", "Suspension", "Fri, 11 Sep 2026 17:00:00 -0400",
                              "https://www.cbo.gov/publication/62589", None, None),
              CboEstimateItem(2, "1", "Never crawled", "Fri, 11 Sep 2026 17:00:00 -0400",
-                             "https://www.cbo.gov/publication/1", None, None)]
+                             "https://www.cbo.gov/publication/1", None, None),
+             CboEstimateItem(3, "62999", "S. 4429 page uncrawled", "Fri, 11 Sep 2026 17:00:00 -0400",
+                             "https://www.cbo.gov/publication/62999", None, "S. 4429")]
     with WebArchiveAcquirer(max_requests=12, min_request_interval_seconds=0,
                             transport=_transport(warc, rows, calls)) as acquirer:
         sweep = cbo.sweep_cbo_archive_index([CRAWL], acquirer=acquirer, evidence=bound, reserve=3)
@@ -618,9 +624,14 @@ def test_archived_cards_are_gated_and_every_capture_receipt_names_its_archive_co
         assert acquirer.request_count == len(calls) == 7  # 2 page counts + 2 index pages + 2 pages + 1 PDF
     evidence.finish()
     assert all(call.url.host in {"index.commoncrawl.org", "data.commoncrawl.org"} for call in calls)
+    # A PDF without an archived page is omitted and counted as its own gap (owner Q4): no request, no card.
     assert [(card.publication_id, card.outcome) for card in cards] == [
-        ("62720", "card"), ("62589", "absent"), ("1", "unarchived")]
-    assert cards[0].card.measures == {"revenues": ("-5",)}
+        ("62720", "card"), ("62589", "absent"), ("1", "unarchived"), ("62999", "pdf-only")]
+    # The latest capture is read; the count and the earliest timestamp are kept (owner Q3).
+    assert (cards[0].captures, cards[0].earliest_timestamp) == (2, "20250105000000")
+    assert (cards[1].captures, cards[1].earliest_timestamp) == (1, "20261017051839")
+    assert cards[0].card.measures == {"revenues": ("-5", "*", "1,234")}
+    assert cards[0].card.periods == ("2026", "2026-2031", "2026-2036")
     assert (cards[0].pdf_path, cards[0].match_rule) == ("/system/files/2026-09/s4429.pdf", "page_pdf")
     assert cards[0].pdf.response.payload == PDF_BYTES
     receipts = [document["receipt"] for _, document in iter_acquisition_receipts(tmp_path / "central-raw")]
@@ -659,6 +670,10 @@ def test_an_archived_pdf_that_is_not_a_pdf_is_retained_and_refused_and_a_spent_b
     # The spent request's bytes are kept: the refused "PDF" is retained beside the page.
     assert sorted(r["stage"] for r in receipts if r.get("stage") in {"cbo-archive-page", "cbo-archive-pdf"}) == [
         "cbo-archive-page", "cbo-archive-pdf"]
+    journal = [json.loads(line) for line in (evidence.artifact_dir / "journal.jsonl").read_text().splitlines()]
+    refused = [event for event in journal if event["event"] == "source-validation"]
+    assert [(e["stage"], e["native_id"], e["outcome"]) for e in refused] == [("cbo-archive-pdf", "62720", "refused")]
+    assert "archived CBO estimate PDF" in refused[0]["message"]
 
 
 def test_the_sweep_keeps_its_reserve_and_lists_what_it_left_unread(tmp_path):
@@ -677,14 +692,16 @@ def test_the_sweep_keeps_its_reserve_and_lists_what_it_left_unread(tmp_path):
                             ("CC-MAIN-2026-38", "www.cbo.gov/system/files/*", "budget"))
 
 
-def test_latest_capture_prefers_the_newest_200_without_a_query():
+def test_latest_capture_is_the_newest_200_and_a_query_only_breaks_a_tie():
     def row(url, timestamp, status=200):
         return ArchiveCandidate("Common Crawl", url, timestamp, status, "text/html", "A" * 32)
 
     plain, query, newer_403 = (row("https://www.cbo.gov/publication/1", "20260101000000"),
                                row("https://www.cbo.gov/publication/1?utm_source=x", "20260301000000"),
                                row("https://www.cbo.gov/publication/1", "20260401000000", 403))
-    assert cbo.latest_capture([plain, query, newer_403]) is plain
+    tied = row("https://www.cbo.gov/publication/1", "20260301000000")
+    assert cbo.latest_capture([plain, query, newer_403]) is query
+    assert cbo.latest_capture([plain, query, tied]) is tied
     assert cbo.latest_capture([newer_403]) is None
 
 

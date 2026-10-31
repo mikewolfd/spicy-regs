@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -270,9 +270,12 @@ def sweep_cbo_archive_index(crawls: Sequence[str], *, acquirer: Any, evidence: A
 
 
 def latest_capture(candidates: Iterable[Any]) -> Any | None:
-    """The capture a row is read from: the latest status-200 one, a URL without a query before one with."""
+    """The capture a row is read from: the latest status-200 one (owner Q3, 2026-10-31).
+
+    A query (``?utm_source=``) does not change the page, so it only breaks a tie at one timestamp.
+    """
     usable = [candidate for candidate in candidates if candidate.status == 200]
-    return max(usable, key=lambda c: ("?" not in c.original_url, c.timestamp), default=None)
+    return max(usable, key=lambda c: (c.timestamp, "?" not in c.original_url), default=None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,7 +290,10 @@ class ArchivedCard:
     pdf: Any = None
     pdf_path: str | None = None
     match_rule: str | None = None
+    #: How many status-200 captures the index listed, and the earliest one's timestamp (owner Q3): a revision
+    #: between them stays visible though only the latest is read.
     captures: int = 0
+    earliest_timestamp: str | None = None
 
 
 def _receipt(record: Any, sweep: ArchiveSweep, *, native_id: str, dataset_id: str) -> dict[str, Any]:
@@ -304,7 +310,9 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
 
     One dict join of the sweep's rows by publication id and by PDF path, so the cost is linear in index rows plus
     sampled items. Each outcome is ``card``, ``absent`` (a genuine page without a card), ``refused`` (the gate or
-    a digest check said no), ``unarchived`` or ``not-fetched`` (archived, past ``max_pages``); a refusal is retained as evidence and never becomes a card.
+    a digest check said no), ``unarchived``, ``pdf-only`` (no archived page, but the bill-month PDF is archived:
+    omitted and counted as a gap, owner Q4) or ``not-fetched`` (archived, past ``max_pages``); a refusal is
+    retained as evidence and never becomes a card.
     """
     import httpx
     from spicy_docs.reading.pdf_bytes import check_pdf_bytes
@@ -330,35 +338,40 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
     results: list[ArchivedCard] = []
     fetched_pages = fetched_pdfs = 0
     for item in items:
+        bills = item_bills.get(item.publication_id, ())
         chosen = latest_capture(pages.get(item.publication_id, ()))
         if chosen is None:
-            results.append(ArchivedCard(item.publication_id, "unarchived"))
+            pdf_only = select_estimate_pdf((), item, bills, pdfs) is not None
+            results.append(ArchivedCard(item.publication_id, "pdf-only" if pdf_only else "unarchived"))
             continue
+        timestamps = [c.timestamp for c in pages[item.publication_id] if c.status == 200]
+        # Every outcome from here on carries the capture count and earliest timestamp (owner Q3).
+        seen = ArchivedCard(item.publication_id, "not-fetched", "page budget spent", captures=len(timestamps),
+                            earliest_timestamp=min(timestamps))
         if fetched_pages >= max_pages:
-            results.append(ArchivedCard(item.publication_id, "not-fetched", "page budget spent"))
+            results.append(seen)
             continue
         fetched_pages += 1
-        captures = sum(1 for c in pages[item.publication_id] if c.status == 200)
         try:
             page = acquirer.acquire_cc_record(chosen)
             evidence.capture(page.capture, stage="cbo-archive-page",
                              **_receipt(page, sweep, native_id=item.publication_id, dataset_id="cbo-publication-page"))
         except (WebArchiveError, httpx.HTTPError, OSError) as error:
             evidence.refusal(error, stage="cbo-archive-page")
-            results.append(ArchivedCard(item.publication_id, "refused", str(error), captures=captures))
+            results.append(replace(seen, outcome="refused", reason=str(error)))
             continue
         try:
             card = parse_cbo_estimate_card(page.response.payload, publication_id=item.publication_id,
                                            archived_url=page.response.target_uri)
         except CboCardAbsent as absent:
-            results.append(ArchivedCard(item.publication_id, "absent", str(absent), page=page, captures=captures))
+            results.append(replace(seen, outcome="absent", reason=str(absent), page=page))
             continue
         except CboSourceError as refused:
             evidence.event("source-validation", stage="cbo-archive-page", native_id=item.publication_id,
                            outcome="refused", message=str(refused))
-            results.append(ArchivedCard(item.publication_id, "refused", str(refused), page=page, captures=captures))
+            results.append(replace(seen, outcome="refused", reason=str(refused), page=page))
             continue
-        chosen_pdf = select_estimate_pdf(card.documents, item, item_bills.get(item.publication_id, ()), pdfs)
+        chosen_pdf = select_estimate_pdf(card.documents, item, bills, pdfs)
         pdf = None
         if chosen_pdf is not None and fetched_pdfs < max_pdfs:
             fetched_pdfs += 1
@@ -378,9 +391,9 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
                     evidence.event("source-validation", stage="cbo-archive-pdf", native_id=item.publication_id,
                                    outcome="refused", message=str(refused))
                     pdf = None
-        results.append(ArchivedCard(item.publication_id, "card", card=card, page=page, pdf=pdf,
-                                    pdf_path=None if chosen_pdf is None else chosen_pdf[0],
-                                    match_rule=None if chosen_pdf is None else chosen_pdf[1], captures=captures))
+        results.append(replace(seen, outcome="card", reason=None, card=card, page=page, pdf=pdf,
+                               pdf_path=None if chosen_pdf is None else chosen_pdf[0],
+                               match_rule=None if chosen_pdf is None else chosen_pdf[1]))
     return tuple(results)
 
 
