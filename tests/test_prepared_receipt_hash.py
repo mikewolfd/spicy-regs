@@ -206,3 +206,45 @@ def test_the_cli_prints_the_digest_and_requires_it_back(tmp_path, monkeypatch, b
                          "--expect-receipt-digest", printed[0].upper()])
     assert conversion.main(["--publish-prepared", str(path), *COMMON, "--expect-bucket", BUCKET,
                             "--expect-receipt-digest", printed[0]]) == 0
+
+
+@pytest.mark.parametrize("moved", ["validator-code", "checkout", "hosted-main-only"])
+def test_a_seal_names_only_the_code_its_run_started_with(tmp_path, monkeypatch, bucket, moved):
+    """Code changed on disk after the writer and admission ran refuses the seal; hosted main moving does not."""
+    publish_old(bucket, monkeypatch, tmp_path, "cfr-sections", {"cfr_sections": CFR})
+    started = generations.validation_identity()
+    calls = []
+
+    def state(_):
+        calls.append(None)
+        if len(calls) == 1 or moved == "validator-code":
+            return dict(STATE)
+        return STATE | ({"checkout": "f" * 40} if moved == "checkout" else {"main": "e" * 40})
+
+    real_seal = conversion._seal_prepared
+
+    def seal_after_a_change(*args):
+        if moved == "validator-code":  # a pull or SpicyDocs re-sync lands after the run imported its modules
+            monkeypatch.setattr(generations, "validation_identity", lambda: started | {"spicy_regs": "0" * 64})
+        return real_seal(*args)
+
+    monkeypatch.setattr(conversion, "_seal_prepared", seal_after_a_change)
+    work = tmp_path / "work"
+    if moved == "hosted-main-only":
+        done = convert("cfr-sections", work, state=state)
+        assert done["prepared"]["validationIdentity"] == started and len(calls) == 2
+        return
+    with pytest.raises(conversion.ConversionRefused, match="stays unsealed"):
+        convert("cfr-sections", work, state=state)
+    receipt = json.loads((work / conversion.RECEIPT).read_bytes())
+    assert "prepared" not in receipt and "refused" not in receipt and receipt["generation"]
+    # The unsealed receipt resumes from an unchanged checkout without rerunning the writer.
+    identity = json.loads((Path(receipt["generation"]["directory"]) / "artifact.json").read_bytes())
+    monkeypatch.setattr(conversion, "_seal_prepared", real_seal)
+    monkeypatch.setattr(generations, "validation_identity", lambda: started)
+    monkeypatch.setattr(conversion, "_historical_producer", lambda *_: (
+        identity["producer"]["implementationId"], {"version": WHEEL, "wheels": [{"hash": STATE["spicy_docs_wheel"]["locked_sha256"]}]}))
+    resumed = conversion.resume_prepared(Path(receipt["generation"]["directory"]), work=work, allowed=["cfr-sections"],
+                                         expected_main=MAIN, expected_spicy_docs=WHEEL, expected_producer=MAIN,
+                                         state=lambda _: dict(STATE))
+    assert resumed["prepared"]["validationIdentity"] == started

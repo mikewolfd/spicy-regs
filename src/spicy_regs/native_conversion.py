@@ -144,6 +144,11 @@ def _runtime_problems(state: Mapping, spicy_docs: str) -> list[str]:
     return problems
 
 
+def _local_state(state: Mapping) -> dict:
+    """The parts of a source state this process loaded from: everything but the hosted main."""
+    return {key: value for key, value in state.items() if key != "main"}
+
+
 def _refuse_moved(state: Mapping, *, main: str, spicy_docs: str) -> None:
     """Field policies and the writer come from main and its pinned wheel; converting from anything else is refused."""
     problems = []
@@ -752,27 +757,32 @@ def _prepared_digest(receipt: Mapping) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def _seal_prepared(receipt: dict, built: _Built, work: Path) -> None:
+def _seal_prepared(receipt: dict, built: _Built, work: Path, identity: Mapping) -> None:
     """Seal a qualified preparation: its pin, captured index, evidence, and the identity its admission ran under.
 
     The admission key binds the semantic admission and restoration this process just completed to this validator
     identity, so a publisher under the same key may rely on them (:func:`publish_prepared`). The receipt digest
     covers all of it; the operator carries it to publication from this run's output, never from the receipt.
+    ``identity`` is the one taken when the run started: the process ran the modules it imported then, so a
+    checkout, pull or SpicyDocs re-sync on disk since then refuses the seal rather than naming code that did not run.
+    The receipt stays unsealed and resumable.
     """
     from spicy_regs.generations import admission_key, validation_identity
 
     if built.read_operation is None:
         raise ConversionRefused("Preparation seal requires its active admitted operation")
+    if validation_identity() != identity:
+        raise ConversionRefused("The validator code on disk changed during this preparation; the receipt stays "
+                                "unsealed: resume it from an unchanged checkout")
     if built.check_originals:
         built.check_originals()
     admitted, _ = built.read_operation.verified_source(built.generation)
     artifact = admitted.root
     pin = {key: artifact[key] for key in ("logicalId", "artifactDigest")}
-    identity = validation_identity()
     receipt["prepared"] = {
         "format": "spicy-regs-native-conversion-prepared", "version": 2,
         "generationPin": pin,
-        "validationIdentity": identity,
+        "validationIdentity": dict(identity),
         "admissionKey": admission_key(pin, identity),
         "capturedIndexSha256": _file_digest(work / "captured-publication.v2.json"),
         "evidenceDirectories": [path.resolve().relative_to(work.resolve()).as_posix() for path in built.evidence],
@@ -919,7 +929,7 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
                     expected_spicy_docs: str, expected_producer: str, remote: str = "origin",
                     state: Callable[[str], dict] | None = None) -> dict:
     """Finish a retained writer's complete generation; never rerun its writer or publish it."""
-    from spicy_regs.generations import implementation_id
+    from spicy_regs.generations import implementation_id, validation_identity
     from spicy_regs.pipelines.rollups.base import RollupPipeline
     from spicy_regs.source_evidence import INPUT_ROLE
 
@@ -927,6 +937,7 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
     work = work.resolve()
     try:
         now = state(remote)
+        validator = validation_identity()
         _refuse_moved(now, main=expected_main, spicy_docs=expected_spicy_docs)
         base = (os.getenv("R2_PUBLIC_URL") or "").rstrip("/")
         if not base:
@@ -977,7 +988,7 @@ def resume_prepared(generation: Path, *, work: Path, allowed: Sequence[str], exp
                        "preparation_verifier": {"source": now, "implementationId": implementation_id()}, **proof,
                        **({"staged_observations": previous["staged_observations"]} if "staged_observations" in previous else {})}
             operation.verified_source(generation)
-            _seal_prepared(receipt, built, work)
+            _seal_prepared(receipt, built, work, validator)
             _write_receipt(receipt_path, receipt)
             return receipt
     except (KeyError, TypeError, ValueError, OSError) as failure:
@@ -1154,9 +1165,12 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         raise ConversionRefused('Observation checkpoints require an explicit retained member map; no downloads')
     if family not in allowed:
         raise ConversionRefused(f"{family} is not in this run's allow-list ({', '.join(sorted(allowed)) or 'empty'})")
+    from spicy_regs.generations import validation_identity
+
     work = work.resolve()
     state = state or source_state
     started = state(remote)
+    validator = validation_identity()
     checkpoint_producer = None
     if observation_checkpoint is not None:
         checkpoint_producer = _checkpoint_producer(started, expected_main, expected_spicy_docs)
@@ -1276,7 +1290,15 @@ def convert(family: str, *, allowed: Sequence[str], work: Path, expected_main: s
         raise ConversionRefused(f"{family}: " + "; ".join(problems))
     if not publish or target is None:
         receipt["published"] = None
-        _seal_prepared(receipt, built, work)
+        try:
+            # Hosted main may move during a long preparation; the checkout and wheel this process loaded may not.
+            if _local_state(state(remote)) != _local_state(started):
+                raise ConversionRefused("The checkout or installed SpicyDocs moved during this preparation; the "
+                                        "receipt stays unsealed: resume it from an unchanged checkout")
+            _seal_prepared(receipt, built, work, validator)
+        except ConversionRefused:
+            save()
+            raise
         return save()
 
     return _publish_conversion(receipt, built, captured, work, expected_main=expected_main,
