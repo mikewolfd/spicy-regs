@@ -1,0 +1,17 @@
+{
+  "dataset": "court_opinion_texts",
+  "policy_version": "courts/1",
+  "subject_schema": "/////6gBAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAcAAABEAQAABAEAANAAAACcAAAAbAAAADwAAAAEAAAA6P7//wAAAQUQAAAAJAAAAAQAAAAAAAAAEQAAAGNvbnZlcnRlcl92ZXJzaW9uAAAA4P7//xz///8AAAEFEAAAABwAAAAEAAAAAAAAAAgAAABtYXJrZG93bgAAAAAM////SP///wAAAQUQAAAAHAAAAAQAAAAAAAAACwAAAHRleHRfc291cmNlADj///90////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAZGF0ZV9tb2RpZmllZAAAAGj///+k////AAABBRAAAAAgAAAABAAAAAAAAAANAAAAb3Bpbmlvbl9ibG9jawAAAJj////U////AAABBRAAAAAcAAAABAAAAAAAAAAKAAAAY2x1c3Rlcl9pZAAAxP///xAAFAAIAAYABwAMAAAAEAAQAAAAAAABBRAAAAAgAAAABAAAAAAAAAAKAAAAb3Bpbmlvbl9pZAAABAAEAAQAAAAAAAAA",
+  "identity_fields": [
+    "opinion_id"
+  ],
+  "receipt_fields": [
+    "source_sha256",
+    "dump_date",
+    "conversion_inputs",
+    "raw_source_record",
+    "source_observation"
+  ],
+  "receipt_only": false,
+  "nullable_identity_fields": []
+}

@@ -3658,6 +3658,42 @@
       "measurement": null
     },
     {
+      "child": "court_opinion_texts",
+      "child_columns": [
+        "opinion_id"
+      ],
+      "parent": "court_opinions",
+      "parent_columns": [
+        "opinion_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Both rows come from the same CourtListener opinions export; only a bounded build of its head exists, so the relationship has no complete baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "court_opinion_texts",
+      "child_columns": [
+        "cluster_id"
+      ],
+      "parent": "court_opinion_clusters",
+      "parent_columns": [
+        "cluster_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Both rows come from the same CourtListener opinions export; only a bounded build of its head exists, so the relationship has no complete baseline yet.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
       "child": "court_citation_map",
       "child_columns": [
         "citing_opinion_id"
@@ -9949,6 +9985,26 @@
       }
     ],
     "court_opinion_pdf_extractions": [
+      {
+        "child_columns": [
+          "cluster_id"
+        ],
+        "parent_table": "court_opinion_clusters",
+        "parent_columns": [
+          "cluster_id"
+        ]
+      }
+    ],
+    "court_opinion_texts": [
+      {
+        "child_columns": [
+          "opinion_id"
+        ],
+        "parent_table": "court_opinions",
+        "parent_columns": [
+          "opinion_id"
+        ]
+      },
       {
         "child_columns": [
           "cluster_id"

@@ -844,6 +844,11 @@ JOINS: tuple[Join, ...] = (
           'later changed source body cannot be presented as the extraction input. Parent keys were unique in the '
           'complete selected inputs checked on 2026-10-03; CI enforces that cardinality.',
           expected_cardinality="one"),
+    *(_join('court_opinion_texts', key, parent, key,
+            0, 0, 'unmeasured',
+            'Both rows come from the same CourtListener opinions export; only a bounded build of its head exists, so '
+            'the relationship has no complete baseline yet.', expected_cardinality='one')
+      for key, parent in (('opinion_id', 'court_opinions'), ('cluster_id', 'court_opinion_clusters'))),
     _join('court_citation_map', ('citing_opinion_id', 'dump_date'),
           'court_opinions', ('opinion_id', 'dump_date'),
           7_511_929, 262, 'scope',

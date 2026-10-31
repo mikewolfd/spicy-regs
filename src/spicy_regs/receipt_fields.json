@@ -1065,6 +1065,7 @@
    }
   },
   "court_opinion_pdf_extractions": {},
+  "court_opinion_texts": {},
   "court_opinions": {
    "meanings": {
     "date_created": "Timestamp the publisher created the opinion record.",
