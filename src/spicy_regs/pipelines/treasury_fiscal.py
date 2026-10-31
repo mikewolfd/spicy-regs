@@ -60,7 +60,9 @@ def acquire(selections, report_dates, output_dir: Path, *, transport=None) -> di
             listed = evidence.transport(transport, stage=LISTING_STAGE, max_bytes=MAX_BYTES)
             with httpx.Client(transport=listed, timeout=60) as client:
                 response = client.get(PUBLISHED_FILES).raise_for_status()
-            listing, listing_sha256 = response.json(), "sha256:" + hashlib.sha256(response.content).hexdigest()
+            # The raw archive keeps the wire bytes (gzip when the server encodes),
+            # so the digest comes from the completed capture, not the decoded body.
+            listing, listing_sha256 = response.json(), response.extensions["spicy_docs.completed_capture"].sha256
             pdf = evidence.transport(transport, stage=REPORT_STAGE, max_bytes=MAX_REPORT_BYTES)
             with httpx.Client(transport=pdf, timeout=120) as client:
                 for report_date in report_dates:

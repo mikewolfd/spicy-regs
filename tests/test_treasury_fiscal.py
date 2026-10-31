@@ -2,6 +2,7 @@
 from copy import deepcopy
 from datetime import date
 from decimal import Decimal
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -390,6 +391,7 @@ def test_acquire_records_receipt_scopes_and_rebuilds_identical_releases_from_raw
     report = b"%PDF-1.7 retained statement"
     listing = [{"report_date": "2026-09-30", "report_group_id": "5",
                 "path": "/static-data/published-reports/mts/MonthlyTreasuryStatement_202609.pdf"}]
+    wire_listing = gzip.compress(json.dumps(listing).encode(), mtime=0)
     requests = []
 
     def serve(request):
@@ -397,8 +399,9 @@ def test_acquire_records_receipt_scopes_and_rebuilds_identical_releases_from_raw
         if request.url.path.endswith(".pdf"):
             return httpx.Response(200, content=report, headers={"content-type": "application/pdf"})
         if request.url.path.endswith("/publishedfiles"):
-            return httpx.Response(200, content=json.dumps(listing).encode(),
-                                  headers={"content-type": "application/json"})
+            # Fiscal Data serves the listing gzip-encoded; raw keeps those wire bytes.
+            return httpx.Response(200, content=wire_listing,
+                                  headers={"content-type": "application/json", "content-encoding": "gzip"})
         dataset = request.url.path.rsplit("/", 1)[-1]
         name = bodies[dataset, request.url.params["filter"].removeprefix("record_date:eq:")]
         return httpx.Response(200, content=(FIXTURES / (name + ".json")).read_bytes(),
@@ -417,7 +420,8 @@ def test_acquire_records_receipt_scopes_and_rebuilds_identical_releases_from_raw
                           if event["event"] == "capture" and event["stage"] == pipeline.LISTING_STAGE]
     (stated,) = [event for event in events if event["event"] == "treasury-report-listing"]
     assert stated["listing_sha256"] == listing_capture["sha256"] == (
-        "sha256:" + hashlib.sha256(json.dumps(listing).encode()).hexdigest())
+        "sha256:" + hashlib.sha256(wire_listing).hexdigest())
+    assert listing_capture["content_encoding"] == "gzip"
     digests = []
     for run in ("first", "second"):
         artifact, _, summary = pipeline.build_from_captures(selection, tmp_path / run)
