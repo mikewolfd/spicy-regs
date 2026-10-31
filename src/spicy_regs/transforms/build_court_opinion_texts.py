@@ -56,7 +56,6 @@ of phase 2 for 0.5 GB more peak RSS (3.4 GB).
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import os
 import resource
@@ -76,6 +75,7 @@ from uuid import uuid4
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
+from spicy_docs.sources.courtlistener import opinion_markdown
 
 from spicy_regs import etl_bulk
 from spicy_regs.court_receipts import POLICIES, _refusal, _write_bulk_pair, file_witness
@@ -115,18 +115,6 @@ _SPILL_SCHEMA = pa.schema([
 Converter = Callable[[dict], Any]
 
 
-#: The SpicyDocs converter. The pinned reader wheel predates it, so it is imported by name and a run on that wheel
-#: refuses with this module named; replace with a static import once a reader wheel carrying it is pinned.
-CONVERTER_MODULE = "spicy_docs.sources.courtlistener.opinion_markdown"
-
-
-def _converter():
-    try:
-        return importlib.import_module(CONVERTER_MODULE)
-    except ModuleNotFoundError as error:
-        raise RuntimeError(f"the installed SpicyDocs reader has no {CONVERTER_MODULE}") from error
-
-
 @dataclass
 class _Converted:
     batch: pa.RecordBatch
@@ -140,7 +128,7 @@ def _convert(rows: list[dict], dump_date: str, convert: Converter | None, versio
     """One task: each record's Markdown row, or a refusal pointer for a rendering the converter refuses."""
     started = time.process_time()
     if convert is None:
-        convert = _converter().select_source
+        convert = opinion_markdown.select_source
     out: dict[str, list] = {name: [] for name in _SPILL_SCHEMA.names}
     refused, source_bytes = [], 0
     for row in rows:
@@ -241,7 +229,7 @@ def build_court_opinion_texts(
     if run_path.exists():
         raise FileExistsError(f"{run_path} exists; build into an empty directory")
     witness = file_witness(local_file, source_id=source_id)
-    identity = _converter().converter_identity() if convert is None else {"converter_version": "test"}
+    identity = opinion_markdown.converter_identity() if convert is None else {"converter_version": "test"}
     marker = spill_dir / _SPILL_COMPLETE
     resumed = marker.exists()
     if resumed:

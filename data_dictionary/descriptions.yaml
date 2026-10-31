@@ -1920,9 +1920,10 @@ tables:
       heading, blockquote or paragraph lost; footnotes and italics at most 0.5%
       lost; tables at most 1%. On 500 sampled opinions stratified by source
       rendering, all 5,539 citation links kept their cited id and text, and no
-      heading, blockquote or table was lost; 0.28% of italic characters and 2
-      of 406 footnote markers were, and 6 of 400 footnote bodies (1.5%, over the
-      accepted 0.5%). A plain CommonMark reader misreads footnote definitions;
+      heading, blockquote or table was lost; 0.28% of italic characters were.
+      All 394 referenced footnote bodies read back as footnote definitions and
+      the 6 bodies nothing references stay in place as text; 2 markers point at
+      bodies the rendering does not contain. A plain CommonMark reader misreads footnote definitions;
       read with a GFM parser that supports footnotes.
     columns:
       opinion_id: "CourtListener opinion ID, as text; filter it with a quoted literal (opinion_id = '123'). Primary key; joins court_opinions.opinion_id, court_opinion_pdf_extractions.opinion_id and the opinion ids of court_citation_map."
