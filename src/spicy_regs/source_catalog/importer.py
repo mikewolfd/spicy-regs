@@ -646,13 +646,19 @@ def build(
     table_inputs_input: Path | None = None,
     temp_store: str = "file",
     publication_reconciliation: Path | None = None,
+    acquisition_receipts: Sequence[str] | None = None,
 ) -> dict:
-    """Validate a complete temporary index before atomic activation."""
+    """Validate and install a local index; a receipt selection indexes only those captures."""
     if temp_store not in {"file", "memory"}:
         raise ValueError("temp_store must be 'file' or 'memory'")
     if (corpus / "raw/snapshot.json").is_file() or (corpus / "raw/acquisitions/sha256").is_dir():
         corpus = corpus / "raw"
     is_raw_archive = (corpus / "snapshot.json").is_file() or (corpus / "acquisitions/sha256").is_dir()
+    if acquisition_receipts is not None and (
+        not is_raw_archive or not acquisition_receipts or discovery or publication_observations
+        or publication_reconciliation is not None
+    ):
+        raise ValueError("Selected acquisition receipts require a raw archive and a holdings-only build")
     if is_raw_archive and output.resolve().is_relative_to(corpus.resolve()):
         raise ValueError("The rebuildable catalog must live outside the raw archive")
     if is_raw_archive and (catalog_input or table_inputs_input):
@@ -683,6 +689,8 @@ def build(
         "status": "building",
         "temp_store": temp_store,
     }
+    if acquisition_receipts is not None:
+        report["scope"] = "selected-acquisition-receipts"
     db = connect(path)
     try:
         # Choose resource use before any schema or temporary cache is created.
@@ -700,7 +708,11 @@ def build(
             catalog_input=catalog_input,
             table_inputs_input=table_inputs_input,
         )
-        importer.run()
+        if is_raw_archive:
+            assert isinstance(importer, RawImporter)
+            importer.run(receipt_keys=acquisition_receipts)
+        else:
+            importer.run()
         for discovery_path in discovery:
             importer.discovery(inputs.json(discovery_path))
         for selection_path in publication_observations:
@@ -762,7 +774,7 @@ def build(
         )
         if is_raw_archive:
             assert isinstance(importer, RawImporter)
-            report["raw_archive"] = importer.summary()
+            report["raw_archive"] = importer.summary(complete_inventory=acquisition_receipts is None)
         metadata = {
             "generation": generation,
             "generatedAt": importer.generated_at,

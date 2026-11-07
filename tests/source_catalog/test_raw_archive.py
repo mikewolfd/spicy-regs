@@ -113,7 +113,7 @@ def test_support_role_preserves_original_but_excludes_usable_coverage(tmp_path):
     raw, _ = base_archive(root)
     path = root / "files.jsonl.gz"
     with gzip.open(path, "wt") as stream:
-        for role in ("original-response", "supporting-original", "discovery-index"):
+        for role in ("original-response", "supporting-original", "discovery-index", "source-index"):
             stream.write(json.dumps(dict(raw, role=role)) + "\n")
     snapshot = json.loads((root / "snapshot.json").read_text())
     snapshot["indexes"][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -124,7 +124,7 @@ def test_support_role_preserves_original_but_excludes_usable_coverage(tmp_path):
     build(root, index, config=config)
     with connect(index, readonly=True) as db:
         assert [r[0] for r in db.execute("SELECT status FROM files ORDER BY status")] == [
-            "held", "supporting-evidence", "supporting-evidence",
+            "held", "supporting-evidence", "supporting-evidence", "supporting-evidence",
         ]
         assert db.execute("SELECT count(DISTINCT sha256) FROM files").fetchone()[0] == 1
         acquired = coverage(db, "family:bill-family")["collections"][0]["stages"]["acquired"]

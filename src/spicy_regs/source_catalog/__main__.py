@@ -115,6 +115,10 @@ def main() -> None:
     create.add_argument("--discovery", type=Path, action="append", default=[])
     create.add_argument("--publication-observation", type=Path, action="append", default=[])
     create.add_argument("--publication-reconciliation", type=Path)
+    create.add_argument(
+        "--acquisition-receipt", action="append",
+        help="Index only this canonical raw-archive receipt key; repeat for a local holdings slice",
+    )
     maintenance = commands.add_parser("refresh-metadata", help="Prepare metadata updates over unchanged raw holdings")
     maintenance.add_argument("--index", type=Path, required=True)
     maintenance.add_argument("--output", type=Path, required=True)
@@ -194,6 +198,7 @@ def main() -> None:
             table_inputs_input=args.table_inputs_input,
             temp_store=args.temp_store,
             publication_reconciliation=args.publication_reconciliation,
+            acquisition_receipts=args.acquisition_receipt,
         )
     elif args.command == "refresh-metadata":
         from .maintenance import refresh_metadata

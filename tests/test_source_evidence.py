@@ -91,10 +91,18 @@ def test_gao_rss_contact_body_is_hash_only_while_source_values_survive(tmp_path)
 
 
 def test_exact_capture_metadata_and_request_bytes_are_admitted(tmp_path):
+    from spicy_docs.storage.raw_archive import iter_acquisition_receipts
+
     evidence = CaptureEvidence(tmp_path, "test")
     raw = capture(request_body=b'{"selection": 1}')
-    evidence.capture(raw, stage="used")
+    result = evidence.capture(raw, stage="used", archive_receipt_key="caller-cannot-set-this")
     event = journal(evidence)[-1]
+    assert "archive_receipt_key" not in event  # No self-reference in the immutable event.
+    (path, receipt), = iter_acquisition_receipts(evidence.store.root, receipt_keys=[result["archive_receipt_key"]])
+    assert path.relative_to(evidence.store.root).as_posix() == result["archive_receipt_key"]
+    assert receipt["receipt"]["capture_id"] == event["capture_id"]
+    assert receipt["files"][1]["role"] == "request-body"
+    assert receipt["files"][1]["sha256"] == hashlib.sha256(raw.request_body).hexdigest()
     assert event["sha256"] == raw.sha256
     assert event["byte_size"] == len(raw.body)
     assert event["observed_at"] == raw.observed_at

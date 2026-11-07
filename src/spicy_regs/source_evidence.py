@@ -67,6 +67,7 @@ _OWNER_FIELDS = frozenset(
         "blob_store",
         "request_body",
         "response_headers",
+        "archive_receipt_key",
     }
 )
 ARCHIVE_REFERENCE = "source-archive.json"
@@ -355,8 +356,8 @@ class CaptureEvidence:
         self.retention_failure = self.retention_failure or message
         return SourceEvidenceError(message)
 
-    def event(self, event: str, **fields) -> None:
-        """Append one fsynced journal event; refuses once the artifact has been sealed."""
+    def event(self, event: str, **fields) -> str | None:
+        """Append one fsynced event and return its central receipt key when one was committed."""
         if self.artifact is not None:
             raise SourceEvidenceError("Cannot append to sealed source evidence")
         if event in {"capture", "retained-file", "refusal", "capture-incomplete"}:
@@ -368,6 +369,7 @@ class CaptureEvidence:
         record = self._safe({"event": event, "recorded_at": datetime.now(UTC).isoformat(), **fields},
                             f"{event}({fields['stage']})" if fields.get("stage") else event)
         try:
+            key = None
             raw = canonical_json_bytes(record)
             # ``senate-archive-capture`` dates the Internet Archive copy a Senate roll call rests on (ss-bruk).
             if event in {"capture", "refusal", "capture-incomplete", "build-outcome", "senate-archive-capture"} or (
@@ -375,11 +377,12 @@ class CaptureEvidence:
             ):
                 # Commit source provenance before the disposable run journal.
                 # A run-output failure must not orphan a retained original.
-                self._archive_receipt(json.loads(raw))
+                key = self._archive_receipt(json.loads(raw))
             with (self.artifact_dir / JOURNAL).open("ab") as stream:
                 stream.write(raw + b"\n")
                 stream.flush()
                 os.fsync(stream.fileno())
+            return key
         except Exception as error:
             raise self._failure("Cannot retain source evidence journal") from error
 
@@ -392,20 +395,22 @@ class CaptureEvidence:
             os.fsync(stream.fileno())
         temporary.replace(pointer)
 
-    def _archive_receipt(self, receipt: dict) -> None:
+    def _archive_receipt(self, receipt: dict) -> str | None:
         self._pending_archive_receipts.append(receipt)
-        self._flush_archive_receipts()
+        return self._flush_archive_receipts()
 
-    def _flush_archive_receipts(self) -> None:
+    def _flush_archive_receipts(self) -> str | None:
+        key = None
         while self._pending_archive_receipts:
             receipt = self._pending_archive_receipts[0]
-            self._commit_archive_receipt(receipt)
+            key = self._commit_archive_receipt(receipt)
             for body in (receipt, receipt.get("request_body"), receipt.get("response")):
                 if isinstance(body, dict) and body.get("blob_store") == "central-raw":
                     self._pending_blobs.discard(body["sha256"])
             self._pending_archive_receipts.pop(0)
+        return key
 
-    def _commit_archive_receipt(self, receipt: dict) -> None:
+    def _commit_archive_receipt(self, receipt: dict) -> str:
         files = []
         identity = {key: receipt[key] for key in (
             "dataset_id", "native_id", "covered_period", "source_version", "name", "original_location",
@@ -426,7 +431,8 @@ class CaptureEvidence:
                     "role": "request-body" if body is receipt.get("request_body") else receipt.get("role", "source-body"),
                 })
         try:
-            self.store.record_receipt(files=files, receipt={**receipt, "run_id": self.run_id, "family": self.family})
+            result = self.store.record_receipt(files=files, receipt={**receipt, "run_id": self.run_id, "family": self.family})
+            return result["object"]
         except Exception as error:
             raise self._failure("Cannot retain source acquisition receipt") from error
 
@@ -450,6 +456,7 @@ class CaptureEvidence:
     def capture(self, capture: CapturedBodyResponse, *, stage: str, source_validation: str | None = None, **fields) -> dict:
         """Retain one owner capture's body (and request body) into the evidence store.
 
+        The returned ``archive_receipt_key`` locates the committed central receipt.
         Anything that is not a ``CapturedBodyResponse`` raises
         ``SourceEvidenceError``; a credential-bearing or 401/403 response raises
         ``CredentialRefusedError`` and journals only a refusal reason and status.
@@ -561,7 +568,9 @@ class CaptureEvidence:
             request_body=request,
             **response,
         )
-        self.event("capture", **receipt)
+        key = self.event("capture", **receipt)
+        if key is not None:
+            receipt["archive_receipt_key"] = key
         return receipt
 
     def _file_blob(self, stream: IO[bytes], *, sha256: str, byte_size: int, raw_source: bool = True) -> dict:
@@ -634,7 +643,9 @@ class CaptureEvidence:
         if self.policy == "full" and name is not None:
             receipt["name"] = name
         receipt.update(capture_id=uuid4().hex, evidence_policy=self.policy, response_complete=True, stage=stage, **blob)
-        self.event("retained-file", **receipt)
+        key = self.event("retained-file", **receipt)
+        if key is not None:
+            receipt["archive_receipt_key"] = key
         return receipt
 
     def retain_file(self, path: Path, *, stage: str, raw_source: bool = False, **fields) -> dict:
@@ -1275,14 +1286,14 @@ class SourceEvidenceContext:
     def family(self):
         return self.root.family
 
-    def event(self, event: str, **fields) -> None:
+    def event(self, event: str, **fields) -> str | None:
         fields.update(
             publisher_id=self.publisher_id,
             evidence_policy=self.policy,
             parser_version=self.parser_version,
             policy_decision_id=self.policy_decision_id,
         )
-        self.root.event(event, **fields)
+        return self.root.event(event, **fields)
 
     def _failure(self, message: str):
         return self.root._failure(message)

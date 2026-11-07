@@ -130,6 +130,38 @@ uv run --frozen python -m spicy_regs.source_catalog query \
   --collection family:bill-family --period 119 --limit 100
 ```
 
+### Inspect an explicit receipt selection
+
+When qualifying a few newly retained or historical originals, pass their
+immutable acquisition keys to the existing holdings build. The key has the
+form `acquisitions/sha256/<prefix>/<digest>`; `CaptureEvidence.capture`
+returns it as `archive_receipt_key`. Size the chosen receipts and their original
+objects before building. This build reads only the named receipts and objects
+they reference. It skips the archive's base snapshot and receipt enumeration.
+
+```sh
+uv run --frozen python -m spicy_regs.source_catalog build \
+  --corpus "$RAW" --output "$WORK/receipts.sqlite" \
+  --acquisition-receipt "$NEWER_RECEIPT" \
+  --acquisition-receipt "$OLDER_RECEIPT"
+uv run --frozen python -m spicy_regs.source_catalog query \
+  --index "$WORK/receipts.sqlite" --scope all --collection family:crs-reports \
+  --native-id R41330 --source-version 44
+```
+
+Use the row's `mapping.receipt_evidence_ref` to open the exact receipt. Its
+`entry` is one-based. Retrieve original bytes with `CentralRawArchiveStore.open`
+and check them against the row's SHA-256 and byte count. The receipt holds the
+source-specific facts, such as archive capture time, an original publisher URL
+or a separately retained index digest. Different receipts and file entries stay
+separately addressable even when they share identical bytes.
+
+The reconciliation scope is `selected-acquisition-receipts`. Adding an older
+receipt can extend this local result without touching publication selection or
+live fetch checkpoints. A missing or corrupt receipt fails the build and leaves
+the previous local index in place. This slice cannot be selected as the shared
+catalog, and its holdings do not establish the archive's total coverage.
+
 ### Refresh additions without replaying the base inventory
 
 From the workspace root, recreate the dated discovery input offline with

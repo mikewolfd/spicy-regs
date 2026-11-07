@@ -13,7 +13,7 @@ UNUSABLE_STATUSES = (
     "conflicting-receipt", "conflicting-metadata", "supporting-evidence", "unclassified-source",
 )
 
-SUPPORTING_ROLES = ("supporting-original", "discovery-index", "processing-evidence")
+SUPPORTING_ROLES = ("supporting-original", "discovery-index", "source-index", "processing-evidence")
 
 
 def install_scope(db, policy: dict) -> None:
