@@ -8,8 +8,8 @@ generation something cites and the last ``KEEP_LAST`` per family. Kept:
   its own family's entry there is the generation it replaced. A family the
   index no longer names keeps its newest ``KEEP_LAST`` by upload time;
 * every generation that a hex prefix of eight or more digits anywhere under
-  ``docs/`` names. The output ledger states its audits that way, and the MCP's
-  qualification record is parsed from the ledger, so this covers both;
+  ``docs/`` or in the output ledger names. The ledger states its audits that
+  way, and the MCP's qualification record is parsed from it, so this covers both;
 * every generation DocSpec pins in its ``docs/pins/fork-generations.json``;
 * every generation the Congressional Tech archive pins in its
   ``pins/spicy-generations.json``;
@@ -62,7 +62,7 @@ ROOT = "artifact.json"
 RECORDS = "retention/"
 #: DeleteObjects accepts at most this many keys per request.
 DELETE_BATCH = 1000
-DOCS = LEDGER.parents[1]
+DOCS = Path(__file__).resolve().parents[2] / "docs"
 DOCSPEC_PINS = "https://raw.githubusercontent.com/mikewolfd/DocSpec/main/docs/pins/fork-generations.json"
 ARCHIVE_PINS = "https://congressional-data.spicygov.ai/viewer-publications/pins/spicy-generations.json"
 ARCHIVE_S3_PINS = "s3://congressional-tech-raw/viewer-publications/pins/spicy-generations.json"
@@ -423,8 +423,8 @@ def summary(record: Mapping) -> list[str]:
 
 
 def _notes() -> list[tuple[str, str]]:
-    return [(str(path.relative_to(DOCS.parent)), path.read_text(encoding="utf-8"))
-            for path in sorted(DOCS.rglob("*")) if path.suffix in {".md", ".json"} and path.is_file()]
+    paths = [path for path in sorted(DOCS.rglob("*")) if path.suffix in {".md", ".json"} and path.is_file()]
+    return [(str(path.relative_to(DOCS.parent)), path.read_text(encoding="utf-8")) for path in [*paths, LEDGER]]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

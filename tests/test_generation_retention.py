@@ -68,10 +68,10 @@ def test_a_family_keeps_its_current_and_two_predecessors_along_the_prior_chain(t
 
 def test_a_note_or_docspec_pin_keeps_an_older_generation(tmp_path, remote):
     digests = _publish(_Base, tmp_path, remote, 5)
-    notes = [("docs/research/ledger.md", f"qualified at `{digests[0][:8]}…` (2026-09-26)")]
+    notes = [("docs/ledger.md", f"qualified at `{digests[0][:8]}…` (2026-09-26)")]
     record = _plan(remote, notes=notes, docspec={digests[1]: "DocSpec evidence pin (a receipt)"})
     kept = _kept(record, "base")
-    assert kept[digests[0]] == ["named in docs/research/ledger.md"]
+    assert kept[digests[0]] == ["named in docs/ledger.md"]
     assert kept[digests[1]] == ["DocSpec evidence pin (a receipt)"]
     assert record["delete"] == []
 
@@ -222,7 +222,7 @@ def test_docspec_pins_refuse_a_document_outside_the_stated_shape():
 def test_execution_deletes_only_what_a_fresh_plan_agrees_on_and_keeps_each_root(tmp_path, remote):
     digests = _publish(_Base, tmp_path, remote, 5)
     approved = _plan(remote)
-    cited = [("docs/research/ledger.md", f"`{digests[1][:8]}…`")]  # cited after the review
+    cited = [("docs/ledger.md", f"`{digests[1][:8]}…`")]  # cited after the review
     record = retention.execute(remote, "spicy-regs", approved, _plan(remote, notes=cited))
 
     assert record["deleted"] == [f"generations/base/{digests[0]}"]
@@ -291,3 +291,12 @@ def test_the_generations_the_hand_refresh_runbook_keeps_are_found_by_the_docs_sc
     # The family pages name their own as well, so one page's edit alone does not unpin a generation.
     assert "docs/ofac-sanctions.md" in named[kept["ofac-sanctions"]]
     assert "docs/grants-opportunities.md" in named[kept["grants-opportunities"]]
+
+
+def test_the_output_ledger_is_scanned_like_a_docs_note():
+    """The ledger lives beside the dictionary inputs, outside ``docs/``; its audit pins still keep their generations."""
+    from spicy_regs import output_ledger
+
+    names = [name for name, _ in retention._notes()]
+    assert output_ledger.LEDGER_NAME in names
+    assert all(name.startswith("docs/") for name in names if name != output_ledger.LEDGER_NAME)
