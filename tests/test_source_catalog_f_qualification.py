@@ -404,9 +404,14 @@ def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_deci
 
         (blobs / member["sha256"][7:]).write_bytes(read_evidence_member(evidence, member["objectKey"]))
     generation_dir = tmp_path / "generation"
+    from spicy_regs import subject_catalog
     from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args
     migrate_outputs((table,))
-    generation = build_generation(generation_dir, family="fcc-proceedings", files=[table], expected_keys=[table.name], inputs=evidence.inputs(), **generation_receipt_args((table,)))
+    # The retained generation this replays is one fcc-proceedings published with receipts, before ss-vse3.
+    with pytest.MonkeyPatch.context() as as_published:
+        retired = subject_catalog.retired_receipt_datasets() - {"fcc_proceedings"}
+        as_published.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
+        generation = build_generation(generation_dir, family="fcc-proceedings", files=[table], expected_keys=[table.name], inputs=evidence.inputs(), **generation_receipt_args((table,)))
     target = corpus / "lineage/generations/fcc-proceedings" / generation.pin.artifact_digest[7:]
     target.mkdir(parents=True)
     shutil.copyfile(generation_dir / "artifact.json", target / "artifact.json")

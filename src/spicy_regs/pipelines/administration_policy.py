@@ -148,9 +148,7 @@ def build_from_captures(selection: dict, output_dir: Path, *, archive_root: Path
             files=[output_dir / "candidate" / built["outputs"][table]["path"] for table in tables],
             expected_keys=[table + ".parquet" for table in tables],
             schemas={table: described_schema(schema) for table, schema in tables.items()},
-            receipt_path=output_dir / "candidate" / "etl_receipts.parquet",
-            receipt_policies=list(retained_collections.POLICIES.values()),
-            receipt_generation_id=built["generation"], inputs=evidence.inputs(),
+            inputs=evidence.inputs(),
             read_snapshot=read_snapshot,
         )
     except BaseException as error:

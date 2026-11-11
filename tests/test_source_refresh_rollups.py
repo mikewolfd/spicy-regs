@@ -237,7 +237,13 @@ def test_administration_policy_rebuilds_at_the_head_commit_and_skips_an_unchange
         ("47-Trump", policy_fixture.NOVEMBER, "Statement on H.R. 1"),
         ("47-Trump", policy_fixture.NOVEMBER, "Statement on H.R. 4"),
     ]
-    assert pq.read_table(generation / "etl_receipts.parquet").num_rows == 7  # three statements, four bill links
+    links = pq.read_table(generation / "administration_policy_bill_links.parquet")
+    assert links.schema == rollups.retained_collections.SCHEMAS["administration_policy_bill_links"]
+    assert pq.read_schema(generation / "administration_policy_statements.parquet") == (
+        rollups.retained_collections.SCHEMAS["administration_policy_statements"])
+    assert [row["bill_id"] for row in links.to_pylist()] == ["118-s-2", "119-hr-1", "119-hr-4", "119-s-9"]
+    assert not any((tmp_path / "first").rglob("*receipt*"))
+    assert "etlReceipts" not in json.loads((generation / "artifact.json").read_text())["spec"]
     assert [event["commit"] for event in events if event["event"] == "administration-policy-head"] == [
         policy_fixture.NOVEMBER]
     changed = "sha256:" + hashlib.sha256(policy_fixture.TRUMP_LATER).hexdigest()

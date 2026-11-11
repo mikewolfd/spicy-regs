@@ -3,6 +3,18 @@
  "version": 1,
  "basis": "One entry per dataset whose installed policy is marked receipts_retired (subject_catalog.RECEIPTS_RETIRED): the last generation its family published with per-row ETL receipts, which holds the only complete copy of them. Weekly retention keeps every generation a file under docs/ cites by eight or more hex digits, so this file keeps each one for good; tests/test_receipt_archive_pins.py holds every retired dataset to an entry here. Never delete an entry: it is the archive's only pin.",
  "archives": {
+  "administration_policy_bill_links": {
+   "family": "administration-policy",
+   "artifactDigest": "sha256:9f019ad806bfd3f31286ff8be80c76d43344828da7976234486b3700918e4a20",
+   "publishedAt": "2026-11-10T14:58:27Z",
+   "receipts": "generations/administration-policy/9f019ad806bfd3f31286ff8be80c76d43344828da7976234486b3700918e4a20/etl_receipts.parquet"
+  },
+  "administration_policy_statements": {
+   "family": "administration-policy",
+   "artifactDigest": "sha256:9f019ad806bfd3f31286ff8be80c76d43344828da7976234486b3700918e4a20",
+   "publishedAt": "2026-11-10T14:58:27Z",
+   "receipts": "generations/administration-policy/9f019ad806bfd3f31286ff8be80c76d43344828da7976234486b3700918e4a20/etl_receipts.parquet"
+  },
   "cfr_sections": {
    "family": "cfr-sections",
    "artifactDigest": "sha256:897008e4a0fd9b1763d624ada093613ef7f7911efd03939af32505d9f0450c0e",
@@ -50,6 +62,12 @@
    "artifactDigest": "sha256:7c2fc74c1b8096801f0f779baceb77e538e34047f234afbd9e56aa6515261d9d",
    "publishedAt": "2026-10-20T00:50:52Z",
    "receipts": "generations/court-citations/7c2fc74c1b8096801f0f779baceb77e538e34047f234afbd9e56aa6515261d9d/etl_receipts.parquet"
+  },
+  "fcc_proceedings": {
+   "family": "fcc-proceedings",
+   "artifactDigest": "sha256:e9fe4002523a19eefc60cdb4348bff6f75c4143d2d87af58cab69678e98a02ba",
+   "publishedAt": "2026-11-11T18:18:39Z",
+   "receipts": "generations/fcc-proceedings/e9fe4002523a19eefc60cdb4348bff6f75c4143d2d87af58cab69678e98a02ba/etl_receipts.parquet"
   },
   "federal_register": {
    "family": "federal-register",
