@@ -1,8 +1,8 @@
 {
   "format": "spicy-regs-code-cited-generations",
   "version": 1,
-  "description": "Generations that code keeps naming: the source catalog's required rebuild baselines (registry.v1.json) and the inputs of recorded join measurements (join_measurements.json, table_joins.json). generation_retention keeps any generation whose digest a docs/ note names, so the full digests in this file are what protect these generations from the weekly retention run. tests/test_generation_retention.py holds this file to those three sources in both directions: every digest they name is here, and every entry here is still named by one of them. Remove an entry only when its releaseWhen holds. storedAtListing records what the bucket held for each generation at the listing named by listedAt: \"members\" (its tables are stored; storedBytes counts every object), \"root only\" (retention already pruned its members; only artifact.json remains) or \"absent\". An entry that is not \"members\" protects nothing: it records a reference that already points at nothing.",
-  "listedAt": "2026-11-11T16:45Z",
+  "description": "Generations that code keeps naming: the source catalog's required rebuild baselines (registry.v1.json) and the inputs of recorded join measurements (join_measurements.json, table_joins.json). generation_retention keeps any generation whose digest a docs/ note names, so the full digests in this file are what protect these generations from the weekly retention run. tests/test_generation_retention.py holds this file to those three sources in both directions: every digest they name is here, and every entry here is still named by one of them. Remove an entry only when its releaseWhen holds. storedAtListing records what the bucket held for each generation according to the retention plan named by listedAt, which that weekly run then executed: \"members\" (its tables are stored; storedBytes counts every object), \"root only\" (retention pruned its members, before or in that run; only artifact.json remains) or \"absent\". storedBytes is null unless the state is \"members\". An entry that is not \"members\" protects nothing: it records a code reference that already points at nothing.",
+  "listedAt": "2026-11-11T18:24:57Z (retention plan of run 43077506428, executed at 18:31Z)",
   "generations": [
     {
       "family": "agency-monthly-volume",
@@ -120,7 +120,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 289481
+      "storedBytes": null
     },
     {
       "family": "bill-family",
@@ -184,7 +184,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 256089
+      "storedBytes": null
     },
     {
       "family": "committee-meetings",
@@ -334,7 +334,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 260383
+      "storedBytes": null
     },
     {
       "family": "committee-rosters",
@@ -656,7 +656,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 62089
+      "storedBytes": null
     },
     {
       "family": "fcc-proceedings",
@@ -670,7 +670,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 214819
+      "storedBytes": null
     },
     {
       "family": "fec-committees",
@@ -683,8 +683,8 @@
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
-      "storedAtListing": "members",
-      "storedBytes": 2898589
+      "storedAtListing": "root only",
+      "storedBytes": null
     },
     {
       "family": "fec-observations",
@@ -774,7 +774,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 260317
+      "storedBytes": null
     },
     {
       "family": "federal-register",
@@ -788,7 +788,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 260318
+      "storedBytes": null
     },
     {
       "family": "feed-summary",
@@ -820,7 +820,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 61749
+      "storedBytes": null
     },
     {
       "family": "house-communications",
@@ -916,7 +916,7 @@
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
       "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
       "storedAtListing": "root only",
-      "storedBytes": 211726
+      "storedBytes": null
     },
     {
       "family": "member-vote-terms",
@@ -994,7 +994,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 257129
+      "storedBytes": null
     },
     {
       "family": "print-citations",
@@ -1125,8 +1125,8 @@
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
-      "storedAtListing": "members",
-      "storedBytes": 3700410411
+      "storedAtListing": "root only",
+      "storedBytes": null
     },
     {
       "family": "sam-entities",
@@ -1140,7 +1140,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 257660
+      "storedBytes": null
     },
     {
       "family": "scorecard-analysis",
@@ -1190,7 +1190,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 235670
+      "storedBytes": null
     },
     {
       "family": "treaties",
@@ -1218,7 +1218,7 @@
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
       "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
       "storedAtListing": "root only",
-      "storedBytes": 257039
+      "storedBytes": null
     },
     {
       "family": "usaspending-recipients",
