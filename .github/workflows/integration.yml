@@ -81,8 +81,13 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         # -s disables pytest output capture so loguru's step-by-step logs
         # (which write to stderr) stream live into the Actions log, not just
-        # on failure. -v prints each test id.
-        run: uv run pytest -m integration -v -s
+        # on failure. -v prints each test id. Live WARNING logs show on passing
+        # runs too, so a storm of skipped views stays visible.
+        env:
+          # The fork's own published data, as every other workflow reads it; the
+          # code default is the upstream project's bucket.
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || format('https://data.{0}', vars.SPICYREGS_DOMAIN || 'spicy-regs.dev') }}
+        run: uv run pytest -m integration -v -s -o log_cli=true --log-cli-level=WARNING
 
       - name: Probe catalog MERGE and rollback on a throwaway table
         if: steps.changes.outputs.run == 'true'

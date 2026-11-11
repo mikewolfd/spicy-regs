@@ -33,12 +33,16 @@ if TYPE_CHECKING:
 def run_probe(connect: "Callable[[], duckdb.DuckDBPyConnection]", namespace: str) -> list[str]:
     """Exercise the supported comment/receipt writer in an isolated namespace."""
     import re
+    from unittest.mock import patch
+    from spicy_regs.sources import publication
     if not re.fullmatch(r'probe_catalog_replace_[A-Za-z0-9_]+', namespace):
         raise ValueError('Probe requires an explicit disposable probe_catalog_replace_ namespace')
     previous = os.environ.get('R2_CATALOG_NAMESPACE')
     os.environ['R2_CATALOG_NAMESPACE'] = namespace
+    # Nothing publishes tables in a disposable probe_catalog_replace_* namespace.
     try:
-        return _run_native_probe(connect)
+        with patch.object(publication, 'current_index', side_effect=lambda _base_url: publication.empty_index()):
+            return _run_native_probe(connect)
     finally:
         if previous is None:
             os.environ.pop('R2_CATALOG_NAMESPACE', None)

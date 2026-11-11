@@ -64,3 +64,18 @@ def test_probe_refuses_existing_native_storage_without_deleting_it(connect, monk
 def test_probe_refuses_production_namespace_before_connecting():
     with pytest.raises(ValueError, match='disposable'):
         probe.run_probe(lambda: pytest.fail('production namespace was opened'), 'default')
+
+
+def test_probe_never_fetches_live_publication_index_for_disposable_namespace(connect, monkeypatch):
+    from spicy_regs.sources import publication, regulatory_catalog
+    monkeypatch.setattr(regulatory_catalog, "_remote_catalog", lambda con: True)
+
+    def sentinel(base_url: str):
+        pytest.fail(f"probe fetched live index from {base_url}")
+
+    monkeypatch.setattr(publication, "current_index", sentinel)
+    assert probe.run_probe(connect, "probe_catalog_replace_remote") == [
+        "insert", "scoped update with expected prior and replay", "changed prior refused",
+        "post-MERGE failure rolled back",
+    ]
+    assert publication.current_index is sentinel
