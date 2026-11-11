@@ -549,7 +549,7 @@ def current_api_inventory(directory, progress):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--directory", type=Path, default=Path("docs/research/scorecards/work/integration"))
+    parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(argv)
     report, markdown = generate(args.directory)

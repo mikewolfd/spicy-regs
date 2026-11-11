@@ -68,10 +68,10 @@ def test_a_family_keeps_its_current_and_two_predecessors_along_the_prior_chain(t
 
 def test_a_note_or_docspec_pin_keeps_an_older_generation(tmp_path, remote):
     digests = _publish(_Base, tmp_path, remote, 5)
-    notes = [("docs/research/ledger.md", f"qualified at `{digests[0][:8]}…` (2026-09-26)")]
+    notes = [("docs/ledger.md", f"qualified at `{digests[0][:8]}…` (2026-09-26)")]
     record = _plan(remote, notes=notes, docspec={digests[1]: "DocSpec evidence pin (a receipt)"})
     kept = _kept(record, "base")
-    assert kept[digests[0]] == ["named in docs/research/ledger.md"]
+    assert kept[digests[0]] == ["named in docs/ledger.md"]
     assert kept[digests[1]] == ["DocSpec evidence pin (a receipt)"]
     assert record["delete"] == []
 
@@ -222,7 +222,7 @@ def test_docspec_pins_refuse_a_document_outside_the_stated_shape():
 def test_execution_deletes_only_what_a_fresh_plan_agrees_on_and_keeps_each_root(tmp_path, remote):
     digests = _publish(_Base, tmp_path, remote, 5)
     approved = _plan(remote)
-    cited = [("docs/research/ledger.md", f"`{digests[1][:8]}…`")]  # cited after the review
+    cited = [("docs/ledger.md", f"`{digests[1][:8]}…`")]  # cited after the review
     record = retention.execute(remote, "spicy-regs", approved, _plan(remote, notes=cited))
 
     assert record["deleted"] == [f"generations/base/{digests[0]}"]
@@ -291,3 +291,50 @@ def test_the_generations_the_hand_refresh_runbook_keeps_are_found_by_the_docs_sc
     # The family pages name their own as well, so one page's edit alone does not unpin a generation.
     assert "docs/ofac-sanctions.md" in named[kept["ofac-sanctions"]]
     assert "docs/grants-opportunities.md" in named[kept["grants-opportunities"]]
+
+
+def test_the_output_ledger_is_scanned_like_a_docs_note():
+    """The ledger lives beside the dictionary inputs, outside ``docs/``; its audit pins still keep their generations."""
+    from spicy_regs import output_ledger
+
+    names = [name for name, _ in retention._notes()]
+    assert output_ledger.LEDGER_NAME in names
+    assert all(name.startswith("docs/") for name in names if name != output_ledger.LEDGER_NAME)
+
+
+def test_every_generation_code_names_is_pinned_under_docs():
+    """Retention keeps only what a docs/ note names, so a generation code still reads must be named there.
+
+    The source catalog's required rebuild baselines and the inputs of recorded join measurements name stored
+    generations; ``docs/pins/code-cited-generations.json`` names each one in full, and drops one only when nothing
+    names it any more.
+    """
+    import re
+
+    root = retention.DOCS.parent
+    named: dict[str, str] = {}
+
+    def baselines(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "required_baselines":
+                    for seed in item:
+                        if match := re.fullmatch(r"rebuild-seeds/([a-z][a-z0-9_-]*)/([0-9a-f]{64})", seed):
+                            named[match[2]] = match[1]
+                baselines(item)
+        elif isinstance(value, list):
+            for item in value:
+                baselines(item)
+
+    baselines(json.loads((root / "src/spicy_regs/source_catalog/config/registry.v1.json").read_text()))
+    for name in ("join_measurements.json", "table_joins.json"):
+        text = (root / "src/spicy_regs" / name).read_text()
+        named.update((digest, family) for family, digest in retention._KEY.findall(text))
+    pins = json.loads((retention.DOCS / "pins/code-cited-generations.json").read_text())
+    pinned = {pin["artifactDigest"].removeprefix("sha256:"): pin["family"] for pin in pins["generations"]}
+    assert pinned == named
+    for pin in pins["generations"]:
+        assert pin["storedAtListing"] in {"members", "root only", "absent"}, pin
+        assert (pin["storedBytes"] is None) == (pin["storedAtListing"] != "members"), pin
+    stored = {digest: retention.Generation(family, digest) for digest, family in named.items()}
+    assert set(retention.note_pins(retention._notes(), stored)) == set(named)

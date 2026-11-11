@@ -26,7 +26,7 @@ growth for the intended population.
 
 The CourtListener opinion-body stager that first used this path was removed with
 its table on 2026-09-23 (decision 6 in
-[fork delivery decisions](research/fork-delivery-decisions-2026-09-22.md): opinion
+[fork delivery decisions](decisions/fork-delivery-decisions-2026-09-22.md): opinion
 text links out to CourtListener). `write_remote_parquet` stays for other large
 outputs; `tests/test_remote_parquet.py` holds its contract.
 

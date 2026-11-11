@@ -1,5 +1,7 @@
 # Scorecard domain rows and processing evidence
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 Publisher facts retain their stated meaning: ratings, grades, weights, eligibility,
 methodology, disclosure, action text and result text. The source adapters still
 return the frozen SpicyDocs acquisition shape for whole-edition validation.
@@ -19,7 +21,7 @@ publisher JSON exceeds the earlier fixed decimal precision; increasing Arrow's
 precision did not preserve those values in DuckDB. Weights and contributions
 retain `DECIMAL(38,18)` and refuse values outside that bound. Publisher display
 text remains independently available. Grade letters never become numbers.
-See [exact rating numbers](research/scorecards/work/integration/rating_numbers.md)
+See exact rating numbers
 for source evidence, SQL behavior and the supported local migration path.
 The retained-row census and exact-roundtrip checks are in
 `/Users/mikewolfd/Work/corpora/spicy-regs-etl-split-20261003/scorecards-report.json`.
@@ -89,8 +91,7 @@ The reader restores every selected partition under its generation-bound receipts
 Analysis preflight requires matching source generations and complete native receipt
 declarations before downloading inputs.
 
-For official tables published before native receipts, the preparation script
-`docs/research/scorecards/work/integration/deployment/prepare_analysis.py` supports
+For official tables published before native receipts, `spicy-regs-scorecards prepare-analysis` supports
 the explicit `--convert-published-official-inputs` option. It verifies every pinned
 published object, converts the complete shaped table through
 `write_congress_dataset`, and verifies exact restoration of all original fields,
@@ -123,8 +124,8 @@ and new policies rather than relabeling prior evidence.
 ## Qualified live refresh
 
 The source registry enables only readers qualified for unattended live acquisition.
-See [the retained qualification](research/scorecards/work/integration/live_refresh_20261004.json)
-for the named LCV and AFSCME editions, exact installed reader hashes, completeness
+See the qualification the registry enforces,
+`src/spicy_regs/scorecards/live_qualifications.json`, for the named LCV and AFSCME editions, exact installed reader hashes, completeness
 checks, source counts and private capture pins. Those readers require no private
 PDF extraction assets. Other readers remain available for explicitly qualified
 retained-input builds; registry enablement and published historical coverage are

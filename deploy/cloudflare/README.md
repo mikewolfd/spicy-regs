@@ -191,7 +191,7 @@ Complete catalog configuration is refused: its dynamic file access has not been
 qualified against the public SQL server's selected-file restrictions.
 
 Iceberg remains the ingestion and update store. The
-[2026-09-27 comparison](../../docs/research/mcp-chaos-2026-09-27.md#iceberg-decision)
+2026-09-27 comparison (a dated record deleted on 2026-11-11, in git history)
 matched the current comments catalog snapshot to the published mirror receipt
 and public objects. Direct catalog access showed no freshness benefit in that
 measurement. ETL credentials belong to the ingestion workflows, independently

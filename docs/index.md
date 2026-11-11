@@ -1,5 +1,7 @@
 # Spicy Regs Data Dictionary
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 This is the schema reference for the **Spicy Regs** dataset — an open mirror of
 [regulations.gov](https://www.regulations.gov) federal regulatory data,
 published as Apache Parquet on a public Cloudflare R2 bucket.
@@ -89,11 +91,11 @@ For selected native FEC records, collection coverage and reported relationships,
 see [FEC integration](fec-integration.md) and the
 [R2 delivery checklist](fec-delivery-plan.md). The
 [coverage limits and backlog](fec-gaps.md) and
-[coverage census](research/fec-coverage-2026-09-21.md) preserve source gaps and
+coverage census preserve source gaps and
 optional expansion separately from the delivered selection.
 
 For the complete fork delivery, see the [generation plan](fork-generation.md)
-and [local reuse inventory](research/local-data-reuse-2026-09-21.md), which cover
+and local reuse inventory, which cover
 all rollups and distinguish usable inputs from incomplete or defective outputs.
 
 ### Outcomes & context
