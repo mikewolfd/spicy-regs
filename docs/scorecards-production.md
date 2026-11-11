@@ -14,17 +14,19 @@ and each phase's `--help` for its arguments. These commands also run as
 | Command | Input and result |
 | --- | --- |
 | `inspect-adapters` | Inspect every installed reader's module or injected class, shared helpers, parser version and code digest. It performs no source requests or extraction. Long functions are review leads, not an automatic qualification failure. |
-| `inventory` | Generate the existing publisher queue and API inventory from pinned discovery, qualification, publication and work-policy files. Discovery never promotes support or publication. |
+| `inventory` | Generate the existing publisher queue and API inventory from pinned discovery, qualification, publication and work-policy files in the required `--directory`. Discovery never promotes support or publication. |
 | `qualifications` | Record bounded public metadata from an explicit, pinned private qualification plan. Source and model bodies stay private. |
 | `prepare` | Replay a pinned source plan, merge only complete editions with an admitted prior generation, and verify one candidate. It performs no publisher requests or publication. |
 | `prepare-analysis` | Build exact links from pinned published scorecard and congressional tables. Conversion of earlier official layouts requires its explicit option. It acquires no congressional source data. |
 | `publish` | Reverify a prepared source or analysis candidate and use the existing family publication code. Analysis refuses changed parents. |
 | `publish --observe-only` | Recover an uncertain write by observing that the exact candidate is current. It uploads nothing and changes no pointer. Use a fresh output directory, then run readback. |
 | `readback` | Verify public member pins and scope counts, then compare hosted native values; default `full` also checks receipt serving, while explicit `--mode source-adoption` checks accepted native scopes and records receipt serving as unchecked. |
-| `record-publication` | Advance only matching qualified editions after passed public-file and hosted readback. |
+| `record-publication` | Advance only matching qualified editions after passed public-file and hosted readback, in the ledgers of the required `--directory`. |
 
-The earlier scripts remain thin compatibility entry points. Research directories
-hold observations and plans; the installed package owns executable operations.
+The earlier scripts remain thin compatibility entry points. The installed package
+owns executable operations; the ledgers `inventory` and `record-publication` work
+on lived in `docs/research` until it was deleted on 2026-11-11 (git history keeps
+them), so both now take the directory explicitly.
 An installed publish command needs no Git checkout. `--implementation-commit`
 optionally requires a clean named checkout. The authenticated result records the
 current verifier separately from the candidate's recorded producer packages;

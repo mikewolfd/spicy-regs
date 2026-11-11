@@ -7,7 +7,7 @@ which readers resolve the same way. Legacy bare URLs remain readable only for
 tables neither pointer names.
 
 The pointer is ``INDEX_V2_KEY`` alone; it lists split tables (a table stored as
-several files) with their members (``docs/research/multi-file-tables-2026-09-26.md``).
+several files) with their members (the 2026-09-26 multi-file tables design, in git history).
 Readers resolve any table's files through :func:`table_members`. The older
 ``publication.json`` is neither written nor read: one left in a bucket is a stale
 copy that names whatever generations it last did.

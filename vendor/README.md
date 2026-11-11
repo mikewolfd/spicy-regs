@@ -239,7 +239,7 @@ Base CLI and MCP installs do not require them.
   reviews passed. The wheel has SHA-256
   `081cfb339b63d3ea6b396cea68f1ae3a2a5e339a10355325c64e07e295ae74ea`;
   see `spicy_docs-0.61.0.json` and the
-  [adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_new_american_print_20261005.json).
+  adoption evidence (deleted with `docs/research` on 2026-11-11; in git history).
   This adds only the named printed 2008 Freedom Index fourth installment.
   The existing New American registry stays disabled with `hash_only`,
   unreviewed rights and no historical backfill. Deployment and data publication
@@ -301,21 +301,21 @@ Base CLI and MCP installs do not require them.
 - `spicy_docs-0.56.0+scorecards.7aed167baa10`: reviewed Drum Major Institute
   readers on the previously qualified scorecard package. The baseline receipt
   remains in `spicy_docs-scorecards-8253a8a31276.json`. See the
-  [adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_dmi_20261005.json)
+  adoption evidence (deleted with `docs/research` on 2026-11-11; in git history)
   for named source renditions, independent original-source review, installed
   replay and consumer checks. Data publication and scheduled refresh remain
   separate stages.
 - `spicy_docs-0.56.0+scorecards.8253a8a31276`: SMART and CWA readers on
   the previously qualified scorecard package. The baseline receipt is retained
   as `spicy_docs-scorecards-ef0b64b3121f.json`. See the
-  [adoption status](https://github.com/mikewolfd/spicy-regs/blob/main/docs/research/scorecards/work/integration/reader_adoption_smart_cwa_20261005.json)
+  adoption status (deleted with `docs/research` on 2026-11-11; in git history)
   for installed replay, independent source checks and complete consumer gates.
 - `spicy_docs-0.56.0+scorecards.ef0b64b3121f`: the released `0.56.0` baseline
   with the qualified AGC, CGS and Environment America readers from SpicyDocs
   `554dfba52246773a103601d3987d46a7755ef7ae`. The
   [package receipt](spicy_docs-scorecards.json) records identical repeated builds,
   exact module pins and unchanged baseline runtime files and dependencies.
-  The [adoption evidence](../docs/research/scorecards/work/integration/reader_adoption_three_20261005.json)
+  The adoption evidence (deleted with `docs/research` on 2026-11-11; in git history)
   records fresh installed replay and consumer checks. Earlier wheels and
   receipts remain available for their historical inputs. Data publication and
   scheduled refresh are separate stages.
@@ -348,7 +348,7 @@ Base CLI and MCP installs do not require them.
   1,934,729 bytes. It includes the qualified scorecard readers, historical member
   crosswalk fields, structured Gemini page extraction and HRC's exact standalone
   rating `NA` to `N/A` rule. The raw HRC asset remains unchanged. Independent builds
-  are byte-identical; the [merge build recipe](../docs/research/scorecards/work/integration/build_merge_reader_wheel.py)
+  are byte-identical; the merge build recipe (deleted with `docs/research` on 2026-11-11; in git history)
   checks all package changes against the current main wheel. Consumer adoption is
   separate from a package-registry release or deployment.
 
@@ -378,8 +378,8 @@ Base CLI and MCP installs do not require them.
   explicitly identified browser-rendered API JSON. Reconstruction remains at
   the native-only baseline; the receipt lists the scoped extraction tests. The `yaml` extra is now
   selected for discovery; PDF model configuration remains explicit at the host.
-  See [build recipe](../docs/research/scorecards/work/integration/build_reader_wheel.py)
-  and [hash/overlay receipt](../docs/research/scorecards/work/integration/reader_wheel_paired.json).
+  See build recipe (deleted with `docs/research` on 2026-11-11; in git history)
+  and hash/overlay receipt (deleted with `docs/research` on 2026-11-11; in git history).
   This is local package adoption, not a registry release or source qualification.
 
 - `spicy_docs-0.53.0+fec.69964fe27c6d`: reviewed FEC source at

@@ -1,20 +1,22 @@
 # FEC data delivery to R2
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 Updated October 4, 2026. **Deliver useful retained non-PDF FEC data as
 source-faithful, queryable Parquet tables in the `spicy-regs` R2 bucket.**
 Keep the exact source evidence and enough metadata to explain each table.
 
 The selected retained release was published October 1. Its
-[publication checkpoint](research/fec-retained-delivery-execution-2026-09-30.md#query-table-publication-2026-10-01)
+publication checkpoint
 records complete remote byte verification and public table queries. The
-[reviewed release](research/fec-reviewed-release-2026-10-01.md) records the
+reviewed release records the
 matching consumer and successful hosted queries. Later corrections regenerated
 the typed `fec-query` generation and bound a new release receipt to each new
-consumer image; the [round-6 release record](research/mcp-chaos-2026-10-03-round6.md#deployment)
+consumer image; the round-6 release record
 names the current generation, receipt and rollback target.
 
 This is the active checklist. The
-[earlier roadmap](research/fec-delivery-roadmap-2026-10-01.md) preserves the full
+earlier roadmap preserves the full
 historical acquisition plan and original FR/FH task IDs. The
 [gap register](fec-gaps.md) preserves source limits and optional work; those
 items become delivery tasks only when they affect the selected data's accuracy,

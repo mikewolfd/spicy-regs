@@ -1,5 +1,7 @@
 # Select scorecard acquisition transport
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 Use `--zyte-publisher` for an explicitly selected publisher whose public source
 needs the existing Zyte transport. Selection does not enable a disabled source
 or waive publisher completeness checks. The credential comes from `ZYTE_TOKEN`,
@@ -42,8 +44,8 @@ behavior. Failed or incomplete editions cannot replace previous observations.
 Qualification inspects retained original bytes directly and compares row
 locators and values against them. A returned page or PDF establishes access;
 it does not establish a complete supported scorecard. See the
-[blocked-source retry receipts](research/scorecards/work/integration/zyte_retry/)
-and [API qualification](research/scorecards/work/integration/api_adapters/README.md).
+blocked-source retry receipts
+and API qualification.
 
 An offline integration plan can set `reference_max_bytes` for a large pinned
 table reference. The reference combines parsed rows from many captures and can

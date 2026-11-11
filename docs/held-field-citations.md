@@ -56,7 +56,7 @@ contains executive orders and verbose Federal Register references outside the
 current grammar. A normalized U.S. Code section key does not identify a specific
 statutory note: the original `note` qualifier remains in matched text.
 
-See `research/join-delivery-execution-2026-09-27.md` and its evidence receipts for
+The dated join delivery record (deleted on 2026-11-11, in git history) and its evidence receipts hold
 the reviewed source scopes, misses, selected publications and delivery status.
 These bounded reads do not establish whole-document or corpus recall. FCC body
 extraction remains disabled until a retained body route is qualified. Inline

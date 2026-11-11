@@ -113,8 +113,8 @@ sentence for whether two names are one agency.
   discovered manifest and data paths have not been scoped to this file boundary.
   The fork currently serves published Parquet and configures no catalog on its
   Worker. ETL ingestion and mirror publication continue to use Iceberg. See
-  `docs/research/mcp-chaos-2026-09-27.md` for the catalog comparison and adoption
-  criteria; enabling unrestricted reads to make a catalog query pass is not a fix.
+  the 2026-09-27 MCP chaos record (deleted with `docs/research` on 2026-11-11; git
+  history keeps it) for the catalog comparison and adoption criteria; enabling unrestricted reads to make a catalog query pass is not a fix.
 
 ## Connection lifecycle (`_get_connection`, `_refreshed`)
 
@@ -715,7 +715,7 @@ answer `null_unmarked`.
 
 `describe_table` reports the output ledger's audit for its table beside the
 live pin. (`list_sources` did too, for every table, until the response-size
-repair below.) The ledger is Markdown under `docs/research/`, which
+repair below.) The ledger is Markdown in `data_dictionary/`, which
 the image does not ship, so `spicy-regs-dict generate` bundles
 `table_qualification.json` (built by `spicy_regs.output_ledger`) and `check`
 refuses a stale copy. `_ledger` reads it once per process.
@@ -740,7 +740,7 @@ refuses a stale copy. `_ledger` reads it once per process.
 
 ## Response size: a reply carries what its caller asked about
 
-On 2026-09-28 a blind persona test (`docs/research/mcp-chaos-2026-09-28.md`)
+On 2026-09-28 a blind persona test (its dated record is in git history)
 found the replies too large for the clients reading them. `list_sources`
 returned 163,699 characters: every table's publication pin, ledger audit and
 relationship-view metadata. Every `query_sql` returned about 54,000 characters,
@@ -809,8 +809,7 @@ file its reader cannot page, so two of five personas never read a row.
   shaping creates new dictionaries and leaves the stored relationship records,
   checks and publication provenance unchanged.
 - **`describe_table(detail=false)` is the default since round 3 (2026-10-03).**
-  The 2026-10-02 round-3 personas (`docs/research/mcp-chaos-2026-10-02.md`,
-  round 3) found `bill_versions`' description at 24,600 bytes, 12,048 of them
+  The 2026-10-02 round-3 personas (dated record in git history) found `bill_versions`' description at 24,600 bytes, 12,048 of them
   the joins' `measurement` records and 3,365 the bill family's ledger statements
   repeated on every table of the family. The default reply now omits exactly
   `joins[].measurement` and `qualification.ledger_statements` and names them in

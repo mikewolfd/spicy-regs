@@ -1,5 +1,7 @@
 # FEC table ontology and relationships
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 Saved September 30, 2026. The existing FEC tables are the right foundation for
 preserving source evidence and candidate/committee history. The proposed query
 layer adds clear financial, filing, legal and agency row meanings so users can
@@ -13,7 +15,7 @@ views or small adapters over existing structures. Materialize new Parquet tables
 only when the row meaning or measured query need warrants it.
 
 **October 1 delivery update:** the selected retained subject tables are now
-published; see the [reviewed release](research/fec-reviewed-release-2026-10-01.md).
+published; see the reviewed release.
 This design retains proposed names and future semantics alongside implemented
 concepts. Use the published manifests and table dictionaries for exact schemas.
 
@@ -261,7 +263,7 @@ individual bundler identity. Map those rows to `fec_reported_financial_summaries
 with separate quarterly and semiannual measures. Populate
 `fec_bundled_contributions` only where retained source records actually identify
 the bundler/recipient association. The
-[execution register](research/fec-retained-delivery-execution-2026-09-30.md)
+execution register
 records this source-shape distinction.
 
 The retained electioneering CSV uses candidate-associated disbursement rows.

@@ -1,6 +1,6 @@
 # Fork delivery decisions — September 22, 2026
 
-Mike answered the open delivery questions in the [fork output ledger](fork-output-ledger-2026-09-21.md)
+Mike answered the open delivery questions in the fork output ledger (`data_dictionary/fork-output-ledger-2026-09-21.md`)
 and [consolidated backlog](../fork-generation.md) on September 22, 2026. Each entry states
 the question in terms of what users get, the decision, and the work it sets. The ledger owns
 status and pins, the backlog the order of work, and the execution log the dated narrative
