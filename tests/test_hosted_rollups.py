@@ -415,7 +415,7 @@ def test_scorecard_commands_are_registered_and_inputs_remain_explicit():
 
 
 def test_scorecard_schedule_selects_only_qualified_weekly_publishers():
-    from spicy_regs.scorecards.registry import load_registry, select_sources
+    from spicy_regs.scorecards.registry import LIVE_QUALIFICATIONS, load_registry, select_sources
 
     workflow = yaml.safe_load((WORKFLOWS / "rollup-scorecards.yml").read_text())
     triggers = workflow.get("on", workflow.get(True))
@@ -423,7 +423,7 @@ def test_scorecard_schedule_selects_only_qualified_weekly_publishers():
     assert triggers["schedule"] == [{"cron": "15 6 * * 1"}]
     selected = select_sources(load_registry())
     assert {source.publisher_id for source in selected} == {"lcv", "afscme"}
-    proof = json.loads((REPO_ROOT / "docs/research/scorecards/work/integration/live_refresh_20261004.json").read_text())
+    proof = json.loads(LIVE_QUALIFICATIONS.read_text())
     scopes = {row["publisher_id"]: row for row in proof["scopes"]}
     assert set(scopes) == {source.publisher_id for source in selected}
     for source in selected:

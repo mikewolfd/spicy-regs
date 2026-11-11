@@ -12,7 +12,7 @@ from collections import Counter, defaultdict
 import json
 from pathlib import Path
 
-DEFAULT_SCHEMA = Path(__file__).resolve().parents[2] / "proposed_schema.json"
+DEFAULT_SCHEMA = Path(__file__).with_name("proposed_schema.json")
 DEFAULT_QUALIFICATION = Path(__file__).with_name("qualification.json")
 HANDOFFS = ("census", "samples", "operations")
 REQUIREMENTS = (

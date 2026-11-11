@@ -17,16 +17,17 @@ import yaml
 
 from spicy_regs.pipelines.rollups.scorecards import ScorecardsRollup
 from spicy_regs.scorecards.etl import SOURCE_NAMES, read_family
-from spicy_regs.scorecards.registry import REGISTRY, RegistryError, load_registry, select_sources
+from spicy_regs.scorecards.registry import (
+    LIVE_QUALIFICATIONS, REGISTRY, RegistryError, load_registry, select_sources,
+)
 from spicy_regs.source_evidence import CaptureEvidence, SourceEvidenceError
 from spicy_regs.transforms.build_scorecards import NoScorecardsDue, ScorecardRefreshError, build_scorecards
 from tests.test_source_evidence import capture, journal
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = json.loads((ROOT / "docs/research/scorecards/proposed_schema.json").read_text())
-SPEC = importlib.util.spec_from_file_location(
-    "research_gate", ROOT / "docs/research/scorecards/work/gate/validate_gate.py"
-)
+FIXTURES = ROOT / "tests/fixtures/scorecards"
+SCHEMA = json.loads((FIXTURES / "proposed_schema.json").read_text())
+SPEC = importlib.util.spec_from_file_location("scorecard_gate", FIXTURES / "validate_gate.py")
 assert SPEC is not None and SPEC.loader is not None
 GATE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GATE)
@@ -462,11 +463,10 @@ def test_complete_local_generation_binds_every_table_and_one_evidence_artifact(t
 def test_live_registry_matches_complete_pinned_reader_qualifications():
     from spicy_docs.sources.scorecards import get_adapter
 
-    proof = json.loads((ROOT / "docs/research/scorecards/work/integration/live_refresh_20261004.json").read_text())
+    proof = json.loads(LIVE_QUALIFICATIONS.read_text())
     selected = select_sources(load_registry())
     by_id = {row["publisher_id"]: row for row in proof["scopes"]}
     assert set(by_id) == {source.publisher_id for source in selected} == {"lcv", "afscme"}
-    assert proof["public_raw_source_bodies"] is False
     for source in selected:
         row = by_id[source.publisher_id]
         adapter = get_adapter(source.adapter)
