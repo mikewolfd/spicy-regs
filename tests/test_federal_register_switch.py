@@ -410,6 +410,12 @@ def test_both_hosted_jobs_merge_at_the_pinned_public_table_and_publish_no_receip
     before = index()["families"]["federal-register"]
     serve(monkeypatch, tmp_path, "night-1")
     monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
+    from tests.test_receipts_retired import _pin, pin_archive
+
+    with pytest.raises(publication.PublicationError, match="pin the live generation before this publish"):
+        FederalRegisterRollup(output_dir=tmp_path / "unpinned", skip_upload=False).run()
+    # The receipts leave here: the archive must pin the generation they leave in, the live one (ss-ag1j review).
+    pin_archive(monkeypatch, tmp_path, {"federal_register": _pin("federal-register", before["artifactDigest"])})
     with pytest.raises(ValueError, match=V1_REFUSAL):
         FederalRegisterRollup(output_dir=tmp_path / "early", skip_upload=False).run()
     assert index()["families"]["federal-register"] == before
@@ -419,10 +425,6 @@ def test_both_hosted_jobs_merge_at_the_pinned_public_table_and_publish_no_receip
     shutil.copyfile(FIXTURE / "expected/night-1.parquet", tmp_path / "night-1/federal_register.parquet")
     build_generation(tmp_path / "promoted", family="federal-register",
                      files=[tmp_path / "night-1/federal_register.parquet"], expected_keys=["federal_register.parquet"])
-    from tests.test_receipts_retired import _pin, pin_archive
-
-    # The receipts leave here: the archive must pin the generation they leave in, the live one (ss-ag1j review).
-    pin_archive(monkeypatch, tmp_path, {"federal_register": _pin("federal-register", before["artifactDigest"])})
     publication.publish_generation(tmp_path / "promoted", client=remote, bucket="spicy-regs", prior_index=index())
     serve(monkeypatch, tmp_path, "night-2")
     monkeypatch.setenv("R2_PUBLIC_URL", "https://example.test")
