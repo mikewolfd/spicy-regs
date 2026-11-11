@@ -1,5 +1,7 @@
 # FEC source discovery and retained data
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 SpicyRegs exposes source metadata, records and reported relationships for reuse
 across investigations. SpicyDocs supplies the FEC source inventory, acquisition
 and parsing. SpicyRegs builds queryable tables and serves their meaning through
@@ -7,11 +9,11 @@ MCP. Each collection retains its own selection, dates and evidence.
 
 The [R2 delivery checklist](fec-delivery-plan.md) focuses on useful retained
 non-PDF data, validated table shapes and verified remote delivery. The
-[reviewed release](research/fec-reviewed-release-2026-10-01.md) records the
+reviewed release records the
 published tables and successful hosted queries.
 
 The [coverage limits and backlog](fec-gaps.md) preserve source gaps and optional
-expansion. The [coverage census](research/fec-coverage-2026-09-21.md) records the
+expansion. The coverage census records the
 earlier source-family and bulk-group inventory. The
 [table ontology and relationships](fec-data-model.md) explain row meanings and
 design choices; table dictionaries and release receipts identify what is
@@ -92,7 +94,7 @@ FEC history or make these local tables publicly available.
 The same `SPICY_REGS_DATA_DIR` setting accepts a normal CLI download directory
 containing `current`, or an exact downloaded batch. MCP verifies the selected
 managed files and returns their generation pins with discovery and query results.
-See the [full FEC download-to-MCP audit](research/fec-generation-readiness-2026-09-21.md)
+See the full FEC download-to-MCP audit
 for retained local outputs, raw/output witnesses and remaining source coverage.
 
 ```sql
@@ -168,7 +170,7 @@ must not become the processed-filings `filing_id` merely because it is numeric.
 Preserve reported committee identifiers in their native fields until a verified
 field mapping supports lifting them.
 
-The [Senate recovery evidence](research/fec-senate-recovery-2026-09-21.md)
+The Senate recovery evidence
 records acquired originals, raw/output checks and remaining discovery limits.
 
 ## Bulk coverage
@@ -214,7 +216,7 @@ and full daily-filing history need further acquisition and output checks.
 Selected `pas2` rows do not establish coverage of the broader intercommittee
 export. Financial totals also need source-specific amendment and memo rules.
 
-See the dated [bulk expansion and audits](research/fec-bulk-continuation-2026-09-21.md)
+See the dated bulk expansion and audits
 for the selected 2026 transaction files, named summary mappings and unresolved
 publisher-format and access issues. Those retained snapshots are separate from
 complete historical backfills and public availability.

@@ -124,7 +124,7 @@ def test_changed_module_without_default_tests_falls_back_to_full_collection(tmp_
     ('pull_request', 'tests/test_live.py', 'true'),
     ('pull_request', 'tests/conftest.py', 'true'),
     ('pull_request', 'data_dictionary/descriptions.yaml', 'true'),
-    ('pull_request', 'docs/research/fork-output-ledger-2026-09-21.md', 'true'),
+    ('pull_request', 'data_dictionary/fork-output-ledger-2026-09-21.md', 'true'),
     ('pull_request', 'src/spicy_regs/legislative_receipts.py', 'true'),
     ('pull_request', 'docs/tables/example.md', 'false'),
     ('schedule', 'tests/test_leaf.py', 'true'),

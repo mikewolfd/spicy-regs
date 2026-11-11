@@ -3822,7 +3822,7 @@
       "registrant_country": "Country of the registrant's address as filed on this filing, as the publisher displays it (e.g. `United States of America`), not a country code.",
       "registrant_ppb_country": "Country of the registrant's principal place of business as filed, when the filing states one (display name); null otherwise.",
       "registrant_different_address": "The filing's flag for whether the registrant's principal place of business differs from the address filed: true, false, or null when the filing does not carry it (registrations among others).",
-      "url": "The filing's `filing_document_url` as LDA served it: its printable document page (`https://lda.gov/filings/public/filing/<filing_uuid>/print/`; lda.senate.gov redirects there). Ten filings of 2006-2007 hold an API page address instead, as captured (measured 2026-11-11). Before 2026-11-11 this value was held only in the row's ETL receipt."
+      "url": "The filing's `filing_document_url` as LDA served it: its printable document page (`https://lda.gov/filings/public/filing/<filing_uuid>/print/`; lda.senate.gov redirects there). Ten filings of 2006-2007 hold an API page address instead, as captured (measured 2026-11-11)."
     }
   },
   "member_party_affiliations": {

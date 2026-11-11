@@ -161,7 +161,6 @@ class Cadence:
     input_pin: tuple[str, str, Callable[[], str]] | None = None
 
 
-_RETAINED = Cadence("finite native selection of retained captures; no acquisition (docs/retained-collections.md)")
 #: CMS dated the 2024 benefit-year release 2026-06-25.
 _CMS = Cadence("one CMS drug spending release a year, about June (docs/cms-part-d.md)", months=12,
                release_lag=170, grace=70)
@@ -172,11 +171,6 @@ _CMS = Cadence("one CMS drug spending release a year, about June (docs/cms-part-
 #: uscode-editions and executive-orders are left out on purpose: both are meant to carry what their publisher
 #: serves, so their age is a real gap.
 FAMILY_CADENCE: dict[str, Cadence] = {
-    **dict.fromkeys(
-        ("retained-sec-comments", "retained-ferc-originals", "retained-cftc-comments", "retained-edis-filings",
-         "retained-supreme-court", "retained-inspectors-general"),
-        _RETAINED,
-    ),
     "native-legal-references": Cadence("a pinned sample of retained U.S. Code and eCFR XML; no acquisition "
                                        "(docs/native-legal-references.md)"),
     "court-opinion-pdf-extractions": Cadence("one sampled cohort of captured opinion PDFs"),

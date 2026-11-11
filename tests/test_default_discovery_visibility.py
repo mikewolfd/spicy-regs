@@ -7,16 +7,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from spicy_regs import mcp_server
 
-# Independently pinned owner scope: four intentional-empty tables and the five
-# audited small retained families. Generic sampled coverage is not this policy.
-HIDDEN = (
-    "financial_changes", "section_classifications", "bill_summaries", "diff_summaries",
-    "edis_documents", "edis_attachments", "edis_attachment_files",
-    "sec_rulemakings", "sec_comment_files",
-    "cftc_rule_observations", "cftc_comments", "cftc_comment_files",
-    "inspectors_general_report_metadata", "supreme_court_index_observations",
-    "supreme_court_opinion_observations", "supreme_court_pdf_observations",
-)
+# Independently pinned owner scope: four intentional-empty tables. Generic
+# sampled coverage is not this policy.
+HIDDEN = ("financial_changes", "section_classifications", "bill_summaries", "diff_summaries")
 
 
 def call(server, name, arguments):
@@ -62,7 +55,7 @@ def test_default_unavailable_preview_and_count_omit_only_owner_scope(local_reade
 
 def test_small_empty_sampled_and_unknown_non_targets_stay_visible(local_reader, monkeypatch):
     connection, server = local_reader
-    visible = ("dockets", "documents", "fec_source_records", "ferc_search_documents")
+    visible = ("dockets", "documents", "fec_source_records", "administration_policy_statements")
     metadata = {name: dict(value) for name, value in mcp_server._table_metadata().items()}
     metadata["dockets"]["kind"] = "unknown"
     monkeypatch.setattr(mcp_server, "_table_metadata", lambda: metadata)

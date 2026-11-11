@@ -1,5 +1,7 @@
 # Fork delivery: consolidated tasks and execution order
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 The delivery target is every existing rollup and its declared outputs generated
 and verified for `mikewolfd/spicy-regs`, using the fork's own data destination.
 FEC is one part of that delivery. A local sample, an upstream-hosted file, an
@@ -7,11 +9,11 @@ enabled schedule or a successful workflow is not completion evidence by itself.
 
 This is the single execution backlog for fork generation and local data reuse.
 It owns the order of work and what each task requires; each fact has one home
-(decisions record, decision 16). The [output ledger](research/fork-output-ledger-2026-09-21.md)
+(decisions record, decision 16). The output ledger (`data_dictionary/fork-output-ledger-2026-09-21.md`)
 owns every output's status, pins and verification, the
-[execution log](research/fork-execution-log-2026-09-23.md) the dated narrative,
-and the [decisions record](research/fork-delivery-decisions-2026-09-22.md) the
-decisions. The [dated local inventory](research/local-data-reuse-2026-09-21.md) supplies
+execution log the dated narrative,
+and the [decisions record](decisions/fork-delivery-decisions-2026-09-22.md) the
+decisions. The dated local inventory supplies
 exact paths, sizes, artifact pins and qualification limits; it is supporting
 evidence, not a second task list. Source-specific defects remain in the
 [cross-repository gap register][master] and [FEC gap register](fec-gaps.md).
@@ -27,11 +29,11 @@ execution update below supersedes its September 21, 22:28 UTC baseline.
 ## Execution update
 
 Updated September 25, 2026, through local mirror publication, public/catalog
-readback and the [parallel source/output audits](research/parallel-rollup-audit-2026-09-25.md).
+readback and the parallel source/output audits.
 The campaign remains open. The ledger holds exact qualified pins and partial or
 failed dispositions; the execution log records the dated work and receipts.
 
-- **September 25 repairs (R1–R4 of the [repair plan](research/rollup-audit-repair-plan-2026-09-25.md)):**
+- **September 25 repairs (R1–R4 of the repair plan):**
   in code at `9818b2e` with spicy-docs 0.33.0, and `197e449`. They cover
   Table III and private-law fidelity, compiled hearing dates and PDF-only
   bodies, retained source evidence with per-row USAspending observation times,
@@ -69,18 +71,18 @@ failed dispositions; the execution log records the dated work and receipts.
   The hosted regulatory completion chain once stopped during the mirror
   export; it now qualifies on hosted runners (see T06). Monitoring and the
   read-only duplicate audit are enabled again.
-  See the [workflow review](research/workflow-review-2026-09-24.md).
+  See the workflow review.
 - **T04:** complete for the selected seed: all five FEC tables, from the retained
   2024/2026 committee traversal, not all FEC history (T05). See the ledger and
   the [FEC gap register](fec-gaps.md).
 - **T06:** metadata catch-up is complete. Every batch succeeded and published
   its checkpoint. Reviewed publisher test payloads remain excluded with raw
   evidence retained; genuine source-null docket relationships are preserved.
-  The [comment-text refactor](research/comment-text-refactor-2026-09-24.md)
+  The comment-text refactor
   adds shared concurrent reads, independent text retries and reusable local
   manifests; its batch-boundary handoff preserves the running batch's revision.
   The public comments mirror and raw catalog pass identity and coverage checks.
-  Hosted export and scheduled ETL qualify ([hosted qualification](research/comments-publication-efficiency-2026-09-25.md#hosted-qualification)):
+  Hosted export and scheduled ETL qualify (hosted qualification):
   run 36170694175 rebuilt, uploaded and read back the mirror at 4.30 GB peak
   (the earlier failure was at a 6 GB budget), 36175550193 skipped an unchanged
   snapshot, and 36177463432 completed the first full incremental sweep since
@@ -88,7 +90,7 @@ failed dispositions; the execution log records the dated work and receipts.
   and verify passing, 2 h 33 min end to end). ETL was re-enabled at 19:04 UTC on
   September 25. Document bodies and the retained text-read exceptions remain open. Follow the
   [catch-up runbook](https://github.com/mikewolfd/spicy-regs/blob/7bd285a189f997501159abbf7bed8cd19be90402/docs/etl-catalog-seed.md). The local
-  [publication efficiency refactor](research/comments-publication-efficiency-2026-09-25.md)
+  publication efficiency refactor
   reuses sweep membership, builds the mirror agency-first and skips verified
   unchanged snapshots. Listing now dominates a sweep; SpicyDocs 0.33.1's
   concurrent docket-range listing and the retry-only 18:25 sweep address it
@@ -159,7 +161,7 @@ failed dispositions; the execution log records the dated work and receipts.
 ### Current parallel work
 
 The September 25 audits ran in parallel at medium effort with independent
-cross-reviews. The [audit report](research/parallel-rollup-audit-2026-09-25.md)
+cross-reviews. The audit report
 records findings, scope and receipts. Audit execution is complete; repairs and
 the explicitly partial source/semantic checks remain in this backlog. Empty
 model/backfill tables are verified as empty, not completed work.
@@ -309,14 +311,14 @@ is the evidence for valid emptiness; a generic nonempty-file check is insufficie
 
 ### Immediate execution order
 
-The [September 25 repair proposal](research/rollup-audit-repair-plan-2026-09-25.md)
+The September 25 repair proposal
 supplies concrete fixes and acceptance checks for every audit disposition,
 including checkpoint/schema migration and reuse of existing local work. It is
 implementation guidance proposed for the tasks below, not a completion claim.
 
 *Updated 2026-09-25; see the
-[parallel audit](research/parallel-rollup-audit-2026-09-25.md) and
-[execution log](research/fork-execution-log-2026-09-23.md). What remains, in order. Items A5–A12, B6 onward, C4 and D6 are in
+parallel audit and
+execution log. What remains, in order. Items A5–A12, B6 onward, C4 and D6 are in
 SpicyDocs' consolidation plan (`spicy-docs/docs/research/consolidation-path-2026-09-22.md`),
 with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
 
@@ -326,7 +328,7 @@ with their evidence in `spicy-docs/docs/research/parsing-survey-2026-09-23.md`:*
   replay the retained examples, preserve the broader population, then publish
   and read back corrected families. Historical hearing-part support remains
   open. The audit report records exact native proof and owner boundaries.
-- **Hosted export and the incremental sweep: done** ([hosted qualification](research/comments-publication-efficiency-2026-09-25.md#hosted-qualification)).
+- **Hosted export and the incremental sweep: done** (hosted qualification).
   Hosted mirror publication, an unchanged-snapshot skip and a complete
   incremental sweep passed on September 25, and scheduled ETL runs again. Monitoring and the read-only duplicate audit are
   enabled. The source schedules remain independent; retain the reviewed
@@ -505,7 +507,7 @@ its registration deleted. Their publication state is in the ledger.
   owns account, storage, catalog and hosting setup.
 - [FEC gap register](fec-gaps.md) owns FEC-specific coverage and interpretation;
   its public delivery is one family group within this campaign.
-- [Local data reuse](research/local-data-reuse-2026-09-21.md) identifies sealed
+- Local data reuse identifies sealed
   publication candidates, retained source inputs and outputs requiring rebuild.
 - [Cross-repository remaining work][master] owns the known source, transformation,
   reference and publication defects that generation must account for.

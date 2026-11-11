@@ -324,7 +324,7 @@ def test_family_age_is_staleness_only_where_its_cadence_says(monkeypatch, capsys
     monkeypatch.setitem(freshness.FAMILY_CADENCE, "fec-source-catalog", freshness.Cadence(
         "pinned", input_pin=("fec_source_catalog", "catalog_sha256", freshness._installed_fec_catalog)))
     families = {
-        "retained-sec-comments": _family("2026-01-02T00:00:00Z"),  # ten months old and finite
+        "native-legal-references": _family("2026-01-02T00:00:00Z"),  # ten months old and finite
         "court-citations": _family("2026-10-20T00:00:00Z"),  # published after the 09-30 export
         "court-opinions": _family("2026-09-29T00:00:00Z"),  # not since the 09-30 export, now due
         "cms-part-b": _family(None),  # no recorded publication
@@ -339,7 +339,7 @@ def test_family_age_is_staleness_only_where_its_cadence_says(monkeypatch, capsys
         "court-opinions was last published 2026-09-29, before the release of 2026-10-01 that fell due 2026-10-31",
     ]
     output = capsys.readouterr().out
-    assert "FINITE: retained-sec-comments published=2026-01-02 age=312d" in output
+    assert "FINITE: native-legal-references published=2026-01-02 age=312d" in output
     assert "OK: court-citations published=2026-10-20" in output
     assert "AGE: house-disbursements published=2026-11-06 age=4d (its tables' checks above decide)" in output
     assert "AGE: executive-orders published=2026-10-20 age=21d (its tables' checks above decide)" in output
@@ -373,9 +373,7 @@ def test_declared_families_are_the_verified_ones():
     """Finite families are declared from their docs; families meant to track their publisher are not."""
     finite = {name for name, cadence in freshness.FAMILY_CADENCE.items()
               if cadence.months is None and cadence.input_pin is None}
-    assert finite == {"retained-sec-comments", "retained-ferc-originals", "retained-cftc-comments",
-                      "retained-edis-filings", "retained-supreme-court", "retained-inspectors-general",
-                      "native-legal-references", "court-opinion-pdf-extractions"}
+    assert finite == {"native-legal-references", "court-opinion-pdf-extractions"}
     assert not {"uscode-editions", "executive-orders"} & freshness.FAMILY_CADENCE.keys()
 
 

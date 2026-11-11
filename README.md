@@ -331,7 +331,7 @@ declaration other repos vendor — and `src/spicy_regs/table_metadata.json`, the
 field meanings and coverage notes bundled with the MCP server. This lets a base
 MCP installation describe datasets without installing the source readers.
 It also writes `src/spicy_regs/table_qualification.json` from the
-[output ledger](docs/research/fork-output-ledger-2026-09-21.md): each row's
+[output ledger](data_dictionary/fork-output-ledger-2026-09-21.md): each row's
 audited pins, dates and disposition words, its statement and the ledger's
 publisher, parsed by `spicy_regs.output_ledger`. `check` fails when that copy
 differs from a fresh build or a row states an audit outside the recognized phrases.
@@ -393,8 +393,7 @@ See [FEC tables and child rows](docs/fec-query-views.md) for grains, evidence an
 count of declared tables without a loaded view (`unavailable_tables` and
 `unavailable_table_count`), relationship and deferred view counts, the receipt
 summary and FEC release status counts. The default excludes a designated set
-of intentionally empty tables and sample-sized datasets from its lists and
-unavailable count.
+of intentionally empty tables from its lists and unavailable count.
 `list_sources(subject)` returns all loaded tables in that subject, including
 those omitted by default, with their label, coverage kind (`true_range`,
 `window`, `sampled`, `derived`, `not_a_range` or `empty`) and pinned row count.
@@ -459,12 +458,12 @@ Default local-directory behavior is unchanged when this setting is absent.
 For the FEC source inventory, selected retained collections and relationship
 evidence, see [FEC integration](docs/fec-integration.md). The
 [FEC gap register](docs/fec-gaps.md) tracks remaining work, owners and completion
-checks; the [coverage census](docs/research/fec-coverage-2026-09-21.md) accounts
-for every researched source family and official bulk group.
+checks; the dated coverage census that accounted for every researched source family
+and official bulk group was deleted with `docs/research` on 2026-11-11 (git history keeps it).
 
 The [fork generation plan](docs/fork-generation.md) covers all rollups and their
-dependencies. Its [local reuse inventory](docs/research/local-data-reuse-2026-09-21.md)
-identifies existing source data and audited outputs available to seed the fork.
+dependencies. Its dated local reuse inventory of existing source data and audited
+outputs went with `docs/research` on 2026-11-11 (git history keeps it).
 
 | Client | Setup |
 |---|---|

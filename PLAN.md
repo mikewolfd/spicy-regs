@@ -54,8 +54,8 @@ Recorded as open in September and not re-checked:
 
 Built since, so no longer open: both Congresses are named across a Congress boundary
 (`transforms/congress_scope.py`, `CONGRESS_BOUNDARY_OVERLAP_DAYS`); the per-request retry bound on
-Congress.gov consumers is 5 (`sources/congress_bills.py`, `transforms/build_amendments.py`); the
-agency readers from spicy-docs are consumed (`sources/retained_native_collections.py`).
+Congress.gov consumers is 5 (`sources/congress_bills.py`, `transforms/build_amendments.py`). The
+spicy-docs agency readers were consumed by six sample families, unpublished with their code on 2026-11-11.
 
 Rules those items left behind that the code does not state:
 

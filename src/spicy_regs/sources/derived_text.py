@@ -10,7 +10,7 @@ by another tool's text. This module decides what a comment row gets from that:
 * ``text_content`` -- the selected attachments, each stripped, blank ones dropped,
   joined with a blank line;
 * ``text_extraction_status`` -- ``derived``: SpicyRegs did not run the extractor, so the
-  text is not ``ok`` (decision 19, ``docs/research/fork-delivery-decisions-2026-09-22.md``);
+  text is not ``ok`` (decision 19, ``docs/decisions/fork-delivery-decisions-2026-09-22.md``);
 * ``pdf_extraction_results_json`` -- the comment's provenance record: primary tool,
   available tools, each attachment's tool, key, size, ETag and SHA-256, and the
   attachment numbers taken from a tool other than the primary.

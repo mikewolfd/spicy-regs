@@ -260,8 +260,8 @@ invalid active SAM family: its run lacked a source key but published a zero-row,
 was paused; storage setup does not make the other schedules ready. The fork now
 has `DATA_GOV_API_KEY` (one-record OpenFEC check passed) and `ZYTE_TOKEN` (not yet
 wired), while full per-source acquisitions remain separately qualified.
-The [local reuse inventory](../docs/research/local-data-reuse-2026-09-21.md)
-identifies existing sealed outputs and source data available for the initial
+The dated local reuse inventory (deleted on 2026-11-11, in git history)
+identified existing sealed outputs and source data available for the initial
 generation campaign.
 
 Core GitHub CI passed for the setup commit. The separate documentation build
