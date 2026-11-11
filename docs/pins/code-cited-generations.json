@@ -1,7 +1,8 @@
 {
   "format": "spicy-regs-code-cited-generations",
   "version": 1,
-  "description": "Generations that code keeps naming: the source catalog's required rebuild baselines (registry.v1.json) and the inputs of recorded join measurements (join_measurements.json, table_joins.json). generation_retention keeps any generation whose digest a docs/ note names, so the full digests in this file are what protect these generations from the weekly retention run. tests/test_generation_retention.py holds this file to those three sources in both directions: every digest they name is here, and every entry here is still named by one of them. Remove an entry only when its releaseWhen holds.",
+  "description": "Generations that code keeps naming: the source catalog's required rebuild baselines (registry.v1.json) and the inputs of recorded join measurements (join_measurements.json, table_joins.json). generation_retention keeps any generation whose digest a docs/ note names, so the full digests in this file are what protect these generations from the weekly retention run. tests/test_generation_retention.py holds this file to those three sources in both directions: every digest they name is here, and every entry here is still named by one of them. Remove an entry only when its releaseWhen holds. storedAtListing records what the bucket held for each generation at the listing named by listedAt: \"members\" (its tables are stored; storedBytes counts every object), \"root only\" (retention already pruned its members; only artifact.json remains) or \"absent\". An entry that is not \"members\" protects nothing: it records a reference that already points at nothing.",
+  "listedAt": "2026-11-11T16:45Z",
   "generations": [
     {
       "family": "agency-monthly-volume",
@@ -17,7 +18,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 337149
     },
     {
       "family": "agency-stats",
@@ -33,7 +36,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 228182
     },
     {
       "family": "amendments",
@@ -49,7 +54,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 3038482
     },
     {
       "family": "amendments",
@@ -61,7 +68,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 197702
     },
     {
       "family": "amendments",
@@ -77,7 +86,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 348255
     },
     {
       "family": "bill-family",
@@ -93,7 +104,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1643163479
     },
     {
       "family": "bill-family",
@@ -105,7 +118,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 289481
     },
     {
       "family": "bill-family",
@@ -121,7 +136,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1175165251
     },
     {
       "family": "bill-family",
@@ -137,7 +154,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1643160126
     },
     {
       "family": "bill-subjects",
@@ -149,7 +168,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 2290851
     },
     {
       "family": "cfr-sections",
@@ -161,7 +182,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 256089
     },
     {
       "family": "committee-meetings",
@@ -177,7 +200,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2548475
     },
     {
       "family": "committee-meetings",
@@ -189,7 +214,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1493253
     },
     {
       "family": "committee-reports",
@@ -205,7 +232,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 3350028
     },
     {
       "family": "committee-reports",
@@ -221,7 +250,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2905544
     },
     {
       "family": "committee-reports",
@@ -237,7 +268,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11167683
     },
     {
       "family": "committee-reports",
@@ -253,7 +286,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 15454757
     },
     {
       "family": "committee-reports",
@@ -265,7 +300,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1864966
     },
     {
       "family": "committee-reports",
@@ -281,7 +318,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 3340546
     },
     {
       "family": "committee-rosters",
@@ -293,7 +332,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 260383
     },
     {
       "family": "committee-rosters",
@@ -309,7 +350,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 335987
     },
     {
       "family": "committee-rosters",
@@ -325,7 +368,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 348801
     },
     {
       "family": "court-citations",
@@ -345,7 +390,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven; a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive; and the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive; and the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1009598500
     },
     {
       "family": "court-docket-groups",
@@ -361,7 +408,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 226273
     },
     {
       "family": "court-docket-groups",
@@ -373,7 +422,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 352061
     },
     {
       "family": "court-opinion-clusters",
@@ -385,7 +436,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 3952861352
     },
     {
       "family": "court-opinion-pdf-extractions",
@@ -401,7 +454,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 128215
     },
     {
       "family": "court-opinions",
@@ -413,7 +468,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1982886925
     },
     {
       "family": "court-opinions",
@@ -429,7 +486,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 643923972
     },
     {
       "family": "courtlistener",
@@ -441,7 +500,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1770124
     },
     {
       "family": "courtlistener",
@@ -457,7 +518,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2184889
     },
     {
       "family": "crs-reports",
@@ -469,7 +532,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 533916
     },
     {
       "family": "discovery-signals",
@@ -485,7 +550,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 225799
     },
     {
       "family": "docket-attributes",
@@ -501,7 +568,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 4878283
     },
     {
       "family": "dockets",
@@ -517,7 +586,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11692814
     },
     {
       "family": "dockets",
@@ -533,7 +604,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11861449
     },
     {
       "family": "document-attributes",
@@ -549,7 +622,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 79128837
     },
     {
       "family": "documents",
@@ -565,7 +640,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 76968689
     },
     {
       "family": "fcc-filings",
@@ -577,7 +654,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 62089
     },
     {
       "family": "fcc-proceedings",
@@ -589,7 +668,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 214819
     },
     {
       "family": "fec-committees",
@@ -601,7 +682,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 2898589
     },
     {
       "family": "fec-observations",
@@ -617,7 +700,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 9066675725
     },
     {
       "family": "fec-query",
@@ -633,7 +718,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 4094588795
     },
     {
       "family": "fec-query",
@@ -649,7 +736,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 4062303035
     },
     {
       "family": "fec-source-catalog",
@@ -669,7 +758,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven; a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive; and the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive; and the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 20099
     },
     {
       "family": "federal-register",
@@ -681,7 +772,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 260317
     },
     {
       "family": "federal-register",
@@ -693,7 +786,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 260318
     },
     {
       "family": "feed-summary",
@@ -709,7 +804,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 14352451
     },
     {
       "family": "gao-reports",
@@ -721,7 +818,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 61749
     },
     {
       "family": "house-communications",
@@ -733,7 +832,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "absent",
+      "storedBytes": null
     },
     {
       "family": "house-communications",
@@ -749,7 +850,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 949570
     },
     {
       "family": "laws",
@@ -765,7 +868,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2386564
     },
     {
       "family": "laws",
@@ -777,7 +882,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 180258
     },
     {
       "family": "lobbying-filings",
@@ -789,7 +896,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 4889109
     },
     {
       "family": "lobbying-filings",
@@ -805,7 +914,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "root only",
+      "storedBytes": 211726
     },
     {
       "family": "member-vote-terms",
@@ -821,7 +932,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 15043990
     },
     {
       "family": "members",
@@ -833,7 +946,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 493928
     },
     {
       "family": "members",
@@ -849,7 +964,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 689773
     },
     {
       "family": "nominations",
@@ -861,7 +978,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 125078
     },
     {
       "family": "press-releases",
@@ -873,7 +992,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 257129
     },
     {
       "family": "print-citations",
@@ -889,7 +1010,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1351955
     },
     {
       "family": "print-citations",
@@ -901,7 +1024,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1163404
     },
     {
       "family": "print-citations",
@@ -917,7 +1042,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 59753140
     },
     {
       "family": "record-issues",
@@ -929,7 +1056,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 99205
     },
     {
       "family": "record-issues",
@@ -945,7 +1074,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 256348
     },
     {
       "family": "roll-call-votes",
@@ -961,7 +1092,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 31162160
     },
     {
       "family": "roll-call-votes",
@@ -977,7 +1110,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 31172028
     },
     {
       "family": "roll-call-votes",
@@ -989,7 +1124,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 3700410411
     },
     {
       "family": "sam-entities",
@@ -1001,7 +1138,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 257660
     },
     {
       "family": "scorecard-analysis",
@@ -1017,7 +1156,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 467155
     },
     {
       "family": "scorecards",
@@ -1033,7 +1174,9 @@
         }
       ],
       "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
-      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)"
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 617259
     },
     {
       "family": "senate-expenditures",
@@ -1045,7 +1188,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 235670
     },
     {
       "family": "treaties",
@@ -1057,7 +1202,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 69931
     },
     {
       "family": "unified-agenda",
@@ -1069,7 +1216,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": 257039
     },
     {
       "family": "usaspending-recipients",
@@ -1081,7 +1230,9 @@
         }
       ],
       "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
-      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive"
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "absent",
+      "storedBytes": null
     }
   ]
 }

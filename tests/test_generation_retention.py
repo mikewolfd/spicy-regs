@@ -333,5 +333,8 @@ def test_every_generation_code_names_is_pinned_under_docs():
     pins = json.loads((retention.DOCS / "pins/code-cited-generations.json").read_text())
     pinned = {pin["artifactDigest"].removeprefix("sha256:"): pin["family"] for pin in pins["generations"]}
     assert pinned == named
+    for pin in pins["generations"]:
+        assert pin["storedAtListing"] in {"members", "root only", "absent"}, pin
+        assert (pin["storedBytes"] is None) == (pin["storedAtListing"] == "absent"), pin
     stored = {digest: retention.Generation(family, digest) for digest, family in named.items()}
     assert set(retention.note_pins(retention._notes(), stored)) == set(named)
