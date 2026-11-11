@@ -187,7 +187,8 @@ def test_arrow_memory_failure_converting_a_batch_fails_fast(tmp_path, monkeypatc
         raise failure
 
     from types import SimpleNamespace
-    monkeypatch.setattr(etl_bulk, 'pa', SimpleNamespace(**{**vars(pa), 'Table': SimpleNamespace(from_pylist=exhausted)}))
+    table_stub = SimpleNamespace(from_batches=pa.Table.from_batches, from_pylist=exhausted)
+    monkeypatch.setattr(etl_bulk, 'pa', SimpleNamespace(**{**vars(pa), 'Table': table_stub}))
     with pytest.raises(etl_bulk.BulkValidationError) as caught:
         comments_bulk.restore_catalog(*pair, tmp_path / 'out.parquet', generation_id='g')
     assert_raised_as(caught, failure, False)
@@ -230,3 +231,79 @@ def test_fresh_deep_attachment_uses_reference_order_and_error(tmp_path, monkeypa
     assert routed == list(enumerate(reference_order))
     assert reference_order == ['earlier-accepted', 'earlier-refused', 'deep']
     assert outcomes == ['accepted', 'refused']
+
+
+def test_restore_catalog_uses_single_bounded_ordinal_admission_without_duckdb_payloads(tmp_path, monkeypatch):
+    rows = [
+        {'comment_id': f'c{i}', 'comment': f'<p>body {i} {"x" * 2048}</p>', 'duplicate_comments': str(i)}
+        for i in range(7)
+    ] + [{'comment_id': 'bad-attachment', 'attachments_json': '{bad'}]
+    subjects, receipts = write_records(
+        'comments', [(row, context(row, i)) for i, row in enumerate(rows)], tmp_path / 'pair',
+        project=lambda row: normalize_source_record('comments', row))
+    # Reverse the receipt file across small row groups so receipt ordinals differ from subject ordinals.
+    receipt_table = pq.read_table(receipts)
+    reversed_indices = pa.array(list(reversed(range(receipt_table.num_rows))), type=pa.int64())
+    pq.write_table(receipt_table.take(reversed_indices), receipts, row_group_size=2)
+    pq.write_table(pq.read_table(subjects), subjects, row_group_size=3)
+
+    connections = []
+    real_bulk_connection = etl_bulk.bulk_connection
+    from contextlib import contextmanager
+
+    @contextmanager
+    def spy_connection(*args, **kwargs):
+        connections.append(kwargs)
+        with real_bulk_connection(*args, **kwargs) as (con, root):
+            yield con, root
+            columns = {row[0] for row in con.execute('DESCRIBE receipts').fetchall()}
+            assert 'processing_json' not in columns
+
+    validated_calls = []
+    real_validated = etl_bulk._validated_bundle
+
+    @contextmanager
+    def spy_validated(*args, **kwargs):
+        validated_calls.append(kwargs)
+        with real_validated(*args, **kwargs) as con:
+            yield con
+
+    monkeypatch.setattr(etl_bulk, 'bulk_connection', spy_connection)
+    monkeypatch.setattr(etl_bulk, '_validated_bundle', spy_validated)
+    monkeypatch.setattr(comments_bulk, '_BATCH', 2)
+
+    restored = tmp_path / 'restored.parquet'
+    assert comments_bulk.restore_catalog(subjects, receipts, restored, generation_id='g') == 7
+    assert connections == [{'threads': 1, 'memory_limit': '8GB'}]
+    assert len(validated_calls) == 1
+    assert validated_calls[0]['retain_processing'] is False
+    assert validated_calls[0]['bounded_insert'] is True
+
+    from spicy_regs.transforms.regulations_shape import SOURCE_COLUMNS, TYPES
+    restored_schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS['comments']])
+    expected = pa.Table.from_pylist([normalize_source_record('comments', row) for row in rows[:7]], schema=restored_schema)
+    assert pq.read_table(restored).equals(expected)
+
+
+def test_restore_catalog_refuses_mutated_source_without_row_fallback(tmp_path, monkeypatch):
+    rows = [{'comment_id': f'c{i}', 'comment': f'text {i}'} for i in range(4)]
+    subjects, receipts = write_records(
+        'comments', [(row, context(row, i)) for i, row in enumerate(rows)], tmp_path / 'pair',
+        project=lambda row: normalize_source_record('comments', row))
+    destination = tmp_path / 'existing.parquet'
+    destination.write_bytes(b'keep')
+
+    from spicy_regs import receipt_history
+    real_take = receipt_history._take_prior_rows
+
+    def mutate_then_take(*args, **kwargs):
+        result = real_take(*args, **kwargs)
+        receipts.write_bytes(receipts.read_bytes() + b' ')
+        return result
+
+    monkeypatch.setattr(receipt_history, '_take_prior_rows', mutate_then_take)
+    with pytest.raises(ValueError, match='Ordinal processing source changed after selection') as caught:
+        comments_bulk.restore_catalog(subjects, receipts, destination, generation_id='g')
+    assert not isinstance(caught.value, etl_bulk.NotBulkEligible)
+    assert destination.read_bytes() == b'keep'
+

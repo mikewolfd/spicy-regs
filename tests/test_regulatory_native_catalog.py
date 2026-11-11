@@ -787,3 +787,36 @@ def test_row_reader_skips_processor_pairing_without_promotion_receipts(con, monk
     monkeypatch.setattr(comments_bulk, 'receipt_processors', lambda *a, **k: pytest.fail('unneeded processor join'))
     restored = native.processing_table(con, COMMENT)
     assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [expected]
+
+
+def test_comments_processing_and_rejected_copies_use_bounded_layout_and_ordinal_fallback(con, monkeypatch):
+    from spicy_regs import comments_bulk
+    from spicy_regs.duckdb_settings import ExportResources
+
+    expected = source(con)
+    iceberg.replace_rows(con, COMMENT, 'source')
+
+    copied = []
+    real_copy = native._copy
+
+    def spy_copy(connection, sql, path, **kwargs):
+        copied.append((path.name, kwargs.get('resources')))
+        return real_copy(connection, sql, path, **kwargs)
+
+    fallback_kwargs = []
+    real_read = native.read_with_receipts
+
+    def spy_read(*args, **kwargs):
+        fallback_kwargs.append(dict(kwargs))
+        yield from real_read(*args, **kwargs)
+
+    monkeypatch.setattr(native, '_copy', spy_copy)
+    monkeypatch.setattr(native, 'read_with_receipts', spy_read)
+    monkeypatch.setattr(comments_bulk, 'restore_catalog',
+                        lambda *a, **k: (_ for _ in ()).throw(etl_bulk.NotBulkEligible('forced fallback')))
+
+    restored = native.processing_table(con, COMMENT, where="agency_code='EPA'")
+    assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [expected]
+    assert copied == [('subjects.parquet', ExportResources()), ('selected-receipts.parquet', ExportResources())]
+    assert fallback_kwargs == [{'generation_id': fallback_kwargs[0]['generation_id'], 'processing_by_ordinal': True}]
+

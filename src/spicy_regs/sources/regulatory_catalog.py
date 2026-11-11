@@ -59,7 +59,7 @@ def rejected_attempts(con, source, dataset, work, generation, *, reason):
     """Keep unselected exact source observations as processing evidence."""
     from spicy_regs.etl_receipts import ReceiptContext, failure_receipt, exact_json
     path = work / ('rejected-source-' + uuid4().hex + '.parquet')
-    _copy(con, f'SELECT * FROM {source}', path)
+    _copy(con, f'SELECT * FROM {source}', path, resources=_layout(dataset))
     def records():
         for i, row in enumerate(_rows(path)):
             witness = {'source_id': source, 'source_uri': None,
@@ -409,7 +409,7 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             generation = 'read-' + uuid4().hex
             require_initialized(con, record_type)
             subject = work / 'subjects.parquet'
-            _copy(con, f'SELECT * FROM {target}{predicate}', subject)
+            _copy(con, f'SELECT * FROM {target}{predicate}', subject, resources=_layout(dataset))
             ids = work / 'identities.parquet'
             if where:
                 write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
@@ -438,10 +438,10 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                 # to refuse; duplicate accepted receipts also remain visible.
                 receipt_predicate += ' AND (' + (' OR '.join(choices) or 'FALSE') + ')'
             _copy(con, f"SELECT r.* FROM {receipts_table()} r{selected_ids} "
-                       f'WHERE {receipt_predicate}', raw_receipts, parameters=parameters)
+                       f'WHERE {receipt_predicate}', raw_receipts, resources=_layout(dataset), parameters=parameters)
             receipts = work / 'receipts.parquet'
             write_rows((rebind_receipt(row, generation_id=generation) for row in _rows(raw_receipts)),
-                       receipts, RECEIPT_SCHEMA)
+                       receipts, RECEIPT_SCHEMA, batch_size=500 if dataset == 'comments' else 2_000)
             restored = work / 'processing.parquet'
             def source_rows():
                 from spicy_regs.transforms.regulations_receipts import COMMENTS_PROMOTION_PROCESSOR, _processor_input
@@ -453,7 +453,8 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                         [str(receipts), COMMENTS_PROMOTION_PROCESSOR]).fetchone():
                     from spicy_regs.comments_bulk import receipt_processors
                     processors = receipt_processors(subject, receipts, directory=work)
-                for row in read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation):
+                for row in read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation,
+                                              processing_by_ordinal=dataset == 'comments'):
                     processor = None
                     if processors is not None:
                         comment_id, processor = next(processors, (None, None))
@@ -813,7 +814,8 @@ def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
                    receipts, RECEIPT_SCHEMA)
         logger.info('Paired export of {}: admitting and replaying {:,} subjects', dataset,
                     pq.ParquetFile(subjects).metadata.num_rows)
-        for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id):
+        for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id,
+                                    processing_by_ordinal=dataset == 'comments'):
             pass
     metadata = {'generation_id': generation_id, 'dataset': dataset}
     if snapshot is not None:
