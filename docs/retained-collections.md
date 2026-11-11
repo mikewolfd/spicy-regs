@@ -105,16 +105,17 @@ must exclude local input paths from `selection.json` and `build.json`.
 ## Unpublished sample families
 
 Six finite samples built from retained captures were published once on
-2026-10-13 and taken out of the public index on 2026-11-11 (owner decision,
-ticket ss-i1dy): `retained-sec-comments` (`882e25ee81465719`),
-`retained-ferc-originals` (`ced75d6c013eb63f`), `retained-cftc-comments`
-(`9365d7578737d906`), `retained-edis-filings` (`2ca35ac62c13af40`),
-`retained-supreme-court` (`1b51fb35e0bf2aa5`) and `retained-inspectors-general`
-(`a1bf8f85c1b02528`): fifteen tables, 718 rows. Their builder
-(`sources/retained_native_collections.py`), publication wrapper, policies and
-dictionary entries were removed with them. The generations stay stored under
-`generations/<family>/<digest>/`; `publication.restore_family` puts one back
-from its saved index entry. The SpicyDocs readers they used remain in SpicyDocs.
-The raw captures stay in the raw archive, and the exact finite selections and
-their qualification stay in the canonical corpus under
+2026-10-13. The owner decided on 2026-11-11 (ticket ss-i1dy) that they leave
+the public index, through the coordinator's `unpublish-families` run (PR #185):
+`retained-sec-comments` (`882e25ee81465719`), `retained-ferc-originals`
+(`ced75d6c013eb63f`), `retained-cftc-comments` (`9365d7578737d906`),
+`retained-edis-filings` (`2ca35ac62c13af40`), `retained-supreme-court`
+(`1b51fb35e0bf2aa5`) and `retained-inspectors-general` (`a1bf8f85c1b02528`):
+fifteen tables, 718 rows. Their builder (`sources/retained_native_collections.py`),
+publication wrapper, policies and dictionary entries were removed with them. The
+generations stay stored under `generations/<family>/<digest>/`;
+`publication.restore_family` puts one back from its saved index entry. The
+SpicyDocs readers they used remain in SpicyDocs. The raw captures stay in the
+raw archive, and the exact finite selections and their qualification stay in the
+canonical corpus under
 `metadata/source-catalog-program/20261010/execution-20261012/G/`.

@@ -35,8 +35,6 @@ def test_source_catalog_policy_descriptions_keep_selected_scope_and_native_field
     assert "uscode_edition_sections" in policies
 
 
-
-
 def test_generation_preserves_qualified_legacy_fec_meanings_and_processing_tables():
     import json
 

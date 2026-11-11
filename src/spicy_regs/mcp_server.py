@@ -349,7 +349,7 @@ _DISCOVERY_TIMEOUT_SECONDS = 15.0
 INSTRUCTIONS = (
     "Query Spicy Regs public datasets across government and attributed third-party sources. "
     "With no subject, list_sources shows default table lists and an unavailable preview. "
-    "Both omit a designated set of intentionally empty tables and sample-sized datasets. "
+    "Both omit a designated set of intentionally empty tables. "
     "Use list_sources(subject) for all loaded tables in a subject, with labels, coverage and row counts. "
     "Use list_sources('views') for the full unavailable list. Use describe_table for actual "
     "schemas, field meanings, identifiers and coverage caveats, and query_sql for "
