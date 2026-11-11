@@ -1,6 +1,6 @@
 """Parse the fork output ledger's rows, audit phrases and destination into the MCP's qualification record.
 
-The ledger is dated Markdown a person maintains under ``docs/research/``; the
+The ledger is dated Markdown a person maintains beside the dictionary inputs in ``data_dictionary/``; the
 MCP image installs only the package, so the server cannot read it. ``spicy-regs-dict
 generate`` writes ``table_qualification.json`` beside ``table_metadata.json`` and
 ``check`` refuses a copy that differs from a fresh build.
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from spicy_regs.table_joins import maintainer_path
 
-LEDGER_NAME = "docs/research/fork-output-ledger-2026-09-21.md"
+LEDGER_NAME = "data_dictionary/fork-output-ledger-2026-09-21.md"
 LEDGER = Path(__file__).resolve().parents[2] / LEDGER_NAME
 RECORD = Path(__file__).with_name("table_qualification.json")
 RECORD_FORMAT = "spicy-regs-table-qualification"

@@ -1,5 +1,7 @@
 # Reconcile GovTrack discovery leads
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 This workflow produces a review report for the scorecard source census. It reads
 GovTrack's publisher metadata and original links, then proposes exact matches or
 new discovery leads. It never imports GovTrack's ratings, verifies an original
@@ -22,13 +24,14 @@ uv run --frozen python -m spicy_regs.scorecards.govtrack_discovery acquire \
 
 uv run --frozen python -m spicy_regs.scorecards.govtrack_discovery reconcile \
   --retained-dir /private/corpora/govtrack-discovery/run-001 \
-  --catalog docs/research/scorecards/scorecard_source_catalog.json \
-  --aliases docs/research/scorecards/work/integration/govtrack_discovery/aliases.json \
+  --catalog <source catalog JSON> \
+  --aliases <alias decisions JSON> \
   --output /private/reviews/govtrack-discovery.json \
   --imported-at 2026-10-03T20:00:00Z
 ```
 
-Use the actual import timestamp for a new review. Replaying an existing report
+The catalog and aliases pinned for the 2026-10-03 review were research files, deleted on 2026-11-11 (in git
+history); pass the ones a new review selects. Use the actual import timestamp for a new review. Replaying an existing report
 with its original timestamp and pinned inputs is deterministic. `reconcile`
 performs no network calls. It checks the capture manifest, every stored body
 hash, the commit's root tree, exact tree membership and each file's Git blob hash.
@@ -74,8 +77,8 @@ implemented, does not copy `lint.py`, and ignores the CSV rating tail. Private
 whole-file retention is necessary for blob verification; it is not permission to
 republish upstream files or original publisher scorecards. Fixtures are synthetic.
 
-See the [pinned discovery report](research/scorecards/work/integration/govtrack_discovery/README.md)
-for the measured import and the proposed alias decisions. Focused checks:
+The pinned discovery report, with the measured import and the proposed alias decisions, was a dated
+research record (deleted on 2026-11-11, in git history). Focused checks:
 
 ```sh
 uv run --frozen pytest tests/test_govtrack_discovery.py

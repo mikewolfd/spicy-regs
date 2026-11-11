@@ -243,7 +243,7 @@ def promote(directory, proof):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--readback", type=Path, required=True)
-    parser.add_argument("--directory", type=Path, default=Path("docs/research/scorecards/work/integration"))
+    parser.add_argument("--directory", type=Path, required=True)
     args = parser.parse_args(argv)
     result = promote(args.directory, publication_proof(args.readback))
     print(json.dumps(dict(published_observations=len(result["editions"]))))

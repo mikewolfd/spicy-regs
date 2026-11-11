@@ -1,0 +1,1238 @@
+{
+  "format": "spicy-regs-code-cited-generations",
+  "version": 1,
+  "description": "Generations that code keeps naming: the source catalog's required rebuild baselines (registry.v1.json) and the inputs of recorded join measurements (join_measurements.json, table_joins.json). generation_retention keeps any generation whose digest a docs/ note names, so the full digests in this file are what protect these generations from the weekly retention run. tests/test_generation_retention.py holds this file to those three sources in both directions: every digest they name is here, and every entry here is still named by one of them. Remove an entry only when its releaseWhen holds. storedAtListing records what the bucket held for each generation according to the retention plan named by listedAt, which that weekly run then executed: \"members\" (its tables are stored; storedBytes counts every object), \"root only\" (retention pruned its members, before or in that run; only artifact.json remains) or \"absent\". storedBytes is null unless the state is \"members\". An entry that is not \"members\" protects nothing: it records a code reference that already points at nothing.",
+  "listedAt": "2026-11-11T18:24:57Z (retention plan of run 43077506428, executed at 18:31Z)",
+  "generations": [
+    {
+      "family": "agency-monthly-volume",
+      "artifactDigest": "sha256:0b35361bd0b34a589890460dbb983daf92f3a2bac0af14c592e8ee5dab5987f8",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 337149
+    },
+    {
+      "family": "agency-stats",
+      "artifactDigest": "sha256:e9d8d4f1c0574e09dcfb49dd34f49c3d516e9707a221e48b147a22fd7dcbf2c8",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 228182
+    },
+    {
+      "family": "amendments",
+      "artifactDigest": "sha256:39473e54a93dc455e517e4b97f2dda96404903d8fc3e37f1ff6031d4b8f99807",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 3038482
+    },
+    {
+      "family": "amendments",
+      "artifactDigest": "sha256:559fd5f4761a2eec78bad1878033ed69952adf56729f1de7dccb0f132dec25bd",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/amendments/559fd5f4761a2eec78bad1878033ed69952adf56729f1de7dccb0f132dec25bd"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 197702
+    },
+    {
+      "family": "amendments",
+      "artifactDigest": "sha256:a1f7489c31fd5894d4b0a44d7fc6fac3063f70e210699f0b8570d9bcc1a7f622",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 348255
+    },
+    {
+      "family": "bill-family",
+      "artifactDigest": "sha256:6afdbce3385b9fc15b95bfb72036b5d4eb2a05d6f5464cf6afffcf1582357027",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1643163479
+    },
+    {
+      "family": "bill-family",
+      "artifactDigest": "sha256:6b616960a34ab99b6c193f7520eb5cc7afe1ca06ab800ef2b57a75f49355a1ba",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/bill-family/6b616960a34ab99b6c193f7520eb5cc7afe1ca06ab800ef2b57a75f49355a1ba"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "bill-family",
+      "artifactDigest": "sha256:72899ab3dbf4944700841130ec218e6d03cab3dbafed943dbf88d7e0b2daa6b7",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1175165251
+    },
+    {
+      "family": "bill-family",
+      "artifactDigest": "sha256:ff945e34ac1c7781f346a0dc14c18365df7281db236ecc7c3ab32529232cad21",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1643160126
+    },
+    {
+      "family": "bill-subjects",
+      "artifactDigest": "sha256:1b067027ccd29a82316f2d26fd9914f885ff17f615c702b16088020a468cc76b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/bill-subjects/1b067027ccd29a82316f2d26fd9914f885ff17f615c702b16088020a468cc76b"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 2290851
+    },
+    {
+      "family": "cfr-sections",
+      "artifactDigest": "sha256:59a8c5f7224b76713f3fa7e65197a537bffe23318c76a656178bbee011f6ef3c",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/cfr-sections/59a8c5f7224b76713f3fa7e65197a537bffe23318c76a656178bbee011f6ef3c"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "committee-meetings",
+      "artifactDigest": "sha256:56ff898668032314e79d08fd9823e07b0591fc08365a06c4940c4af44364e06b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2548475
+    },
+    {
+      "family": "committee-meetings",
+      "artifactDigest": "sha256:f85be7b61bc9d3638f5dd1932fe7897cfb5f50d79daee0d4abee47aff48ca726",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/committee-meetings/f85be7b61bc9d3638f5dd1932fe7897cfb5f50d79daee0d4abee47aff48ca726"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1493253
+    },
+    {
+      "family": "committee-reports",
+      "artifactDigest": "sha256:516557a9ca339cf2bda253230f399daee9e01a83ecda45a88d258e0247ebbeda",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 3350028
+    },
+    {
+      "family": "committee-reports",
+      "artifactDigest": "sha256:607484a1c1e29358d36adf33a94852e26500531d6b6c7212669c1451d31a8aba",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2905544
+    },
+    {
+      "family": "committee-reports",
+      "artifactDigest": "sha256:629148c35e7e7567a58db6298109fd542bd0bde59e03c45353cbc54d42b04862",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11167683
+    },
+    {
+      "family": "committee-reports",
+      "artifactDigest": "sha256:640381dc2ee07d4dab33ed21b161f83cef3700ca6c3550f6df21253db66e9844",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 15454757
+    },
+    {
+      "family": "committee-reports",
+      "artifactDigest": "sha256:925b245110c59ae3a605da56c0ac95fdb79a75aa74c0ecb21868af8398bb07b5",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/committee-reports/925b245110c59ae3a605da56c0ac95fdb79a75aa74c0ecb21868af8398bb07b5"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1864966
+    },
+    {
+      "family": "committee-reports",
+      "artifactDigest": "sha256:94d5e61f174ecd815d08e79152ed6d0cdfa98c5139146262808520ea74a2334a",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 3340546
+    },
+    {
+      "family": "committee-rosters",
+      "artifactDigest": "sha256:819e7c2dd939de10b9262639e6b9a14695b6991080f5835ab11a9dc488a0e829",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/committee-rosters/819e7c2dd939de10b9262639e6b9a14695b6991080f5835ab11a9dc488a0e829"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "committee-rosters",
+      "artifactDigest": "sha256:f2f215f6560c92aaea01baf1bd643a81d2d43880c92d2ddf1780b347fb0a213d",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 335987
+    },
+    {
+      "family": "committee-rosters",
+      "artifactDigest": "sha256:fbc45f8349132bd29c7905f22260580a18e0b1f2a86e930ccec2cbe8736ccb88",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 348801
+    },
+    {
+      "family": "court-citations",
+      "artifactDigest": "sha256:f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/court-citations/f1e2e523631ed4e291f85e4350c917bdabcb06bfa75ad47e12ac0e1d4c865415"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven; a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive; and the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1009598500
+    },
+    {
+      "family": "court-docket-groups",
+      "artifactDigest": "sha256:a925b6dcfb6b7d2e6646427d1b59d12093ab880673c958ac86709e9ba6180f98",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 226273
+    },
+    {
+      "family": "court-docket-groups",
+      "artifactDigest": "sha256:d1cc66fa71422cec1bd013497b6a1c622f1d64105227589375826187ec8dfccc",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/court-docket-groups/d1cc66fa71422cec1bd013497b6a1c622f1d64105227589375826187ec8dfccc"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 352061
+    },
+    {
+      "family": "court-opinion-clusters",
+      "artifactDigest": "sha256:7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/court-opinion-clusters/7a2cbdb72ad6a7b9c79aa7f25dfa03c4ae3fe752cdb33900cb5d6b346d299b7c"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 3952861352
+    },
+    {
+      "family": "court-opinion-pdf-extractions",
+      "artifactDigest": "sha256:6d1e4e651ecbe1c533e0f76a29633e0a2caca9914897066925f39e76e19ef97a",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 128215
+    },
+    {
+      "family": "court-opinions",
+      "artifactDigest": "sha256:731ab961d8825f1f099581d70f4100fd3fb1a3d1fbc3d1aa3ecc85a75553f8f6",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/court-opinions/731ab961d8825f1f099581d70f4100fd3fb1a3d1fbc3d1aa3ecc85a75553f8f6"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1982886925
+    },
+    {
+      "family": "court-opinions",
+      "artifactDigest": "sha256:f7cc67cc03bf7ef1a7d976d6eb74bf2654f7212b66ad785c633331a4cf377d41",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 643923972
+    },
+    {
+      "family": "courtlistener",
+      "artifactDigest": "sha256:50a0b9fc5d928a9014fd3d27cface946401c4182b338bb1c6847eae24402c405",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/courtlistener/50a0b9fc5d928a9014fd3d27cface946401c4182b338bb1c6847eae24402c405"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1770124
+    },
+    {
+      "family": "courtlistener",
+      "artifactDigest": "sha256:d589e7f678abb3ca11c649f37457ed619ff05b50553e523b58e76c535b7689b1",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2184889
+    },
+    {
+      "family": "crs-reports",
+      "artifactDigest": "sha256:7076f2821be7447a75c3f2833fddca8220e5b21805d8f41103cac8464a1d6c69",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/crs-reports/7076f2821be7447a75c3f2833fddca8220e5b21805d8f41103cac8464a1d6c69"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 533916
+    },
+    {
+      "family": "discovery-signals",
+      "artifactDigest": "sha256:7c0a2057c262cf7c0c9d9f285349c5a116839824f1ed92bb3801ab5bbf82bce1",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 225799
+    },
+    {
+      "family": "docket-attributes",
+      "artifactDigest": "sha256:5d40315a4d4c82916e23f379be63ac197507307730b0aac1372e7ae29074bd4b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 4878283
+    },
+    {
+      "family": "dockets",
+      "artifactDigest": "sha256:90200d28dec45606925ce83a22f4b2306049ac85f75d59ee5ae2ed3b252cae14",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11692814
+    },
+    {
+      "family": "dockets",
+      "artifactDigest": "sha256:98cab2924885b3aa3a181d4c40d11b418959677007022339e04c2414d3a89ca8",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 11861449
+    },
+    {
+      "family": "document-attributes",
+      "artifactDigest": "sha256:5de9df255b87b83d86ea8282b8776280f1f5d3358ab89ec0507db598312acf36",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 79128837
+    },
+    {
+      "family": "documents",
+      "artifactDigest": "sha256:b5e567d1114948f5f4cf0cf998adc4e87a5582cf1777c4d6e414f8f468ec721c",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 76968689
+    },
+    {
+      "family": "fcc-filings",
+      "artifactDigest": "sha256:6bdd9eefa135f7c6e5de4945dccc644d038dd77444b349921e95eab6c7aeadb2",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/fcc-filings/6bdd9eefa135f7c6e5de4945dccc644d038dd77444b349921e95eab6c7aeadb2"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "fcc-proceedings",
+      "artifactDigest": "sha256:2272b1a9ef1ae2500a8e7ad59c6b373e45da5bc070ea19953aff5ad325daeb20",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/fcc-proceedings/2272b1a9ef1ae2500a8e7ad59c6b373e45da5bc070ea19953aff5ad325daeb20"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "fec-committees",
+      "artifactDigest": "sha256:4a93358f4ffbbcb299da9231e1d521dc4972ed3982240d3b780328421cd284a4",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/fec-committees/4a93358f4ffbbcb299da9231e1d521dc4972ed3982240d3b780328421cd284a4"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "fec-observations",
+      "artifactDigest": "sha256:9c289dfec822ff7e54f9d5719276579452a7b35cad573e701a51e0a15c2a06c0",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 9066675725
+    },
+    {
+      "family": "fec-query",
+      "artifactDigest": "sha256:784b23da0ea9ee7807e09715d38508cd8e0cd654af1047ae6a5b1fc63efb7300",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 4094588795
+    },
+    {
+      "family": "fec-query",
+      "artifactDigest": "sha256:d76de786fccdd502efc8f20b65cc38863cce0084defad63770fb1f2b997a3153",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 4062303035
+    },
+    {
+      "family": "fec-source-catalog",
+      "artifactDigest": "sha256:167fc868d0c8c81540f819692f8347c64ada48a21cf695e975f6013d7f48a8ae",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/fec-source-catalog/167fc868d0c8c81540f819692f8347c64ada48a21cf695e975f6013d7f48a8ae"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven; a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive; and the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 20099
+    },
+    {
+      "family": "federal-register",
+      "artifactDigest": "sha256:a7be8d2924c02cb6f99572ca21a35999bd43344ab066aabfd2003b7f62904cc0",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/federal-register/a7be8d2924c02cb6f99572ca21a35999bd43344ab066aabfd2003b7f62904cc0"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "federal-register",
+      "artifactDigest": "sha256:ed22329a9e1fa4358088f6c6fd78107fd67712d0b54ee88590629c1449bd5963",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/federal-register/ed22329a9e1fa4358088f6c6fd78107fd67712d0b54ee88590629c1449bd5963"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "feed-summary",
+      "artifactDigest": "sha256:b86c15d6c6e7e621d56db640117879d2a94210c739febd3effed05474b1da819",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 14352451
+    },
+    {
+      "family": "gao-reports",
+      "artifactDigest": "sha256:d87cf97b51e9da3d6f7d1b4f3be8530dab5595c65adac6ec2cc1f1d8b512ad6e",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/gao-reports/d87cf97b51e9da3d6f7d1b4f3be8530dab5595c65adac6ec2cc1f1d8b512ad6e"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "house-communications",
+      "artifactDigest": "sha256:37625a89156c2ba2c28407274fe4e4bfce0923cc4adf2636bb3992bcf5fe5854",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/house-communications/37625a89156c2ba2c28407274fe4e4bfce0923cc4adf2636bb3992bcf5fe5854"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "absent",
+      "storedBytes": null
+    },
+    {
+      "family": "house-communications",
+      "artifactDigest": "sha256:f743da7a08183ef00aa8aa88372db5e3c3cc28b8ed34102cbfab82baab4462f0",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 949570
+    },
+    {
+      "family": "laws",
+      "artifactDigest": "sha256:3a35c4db22311d39aa4f5e57203064410ee723a7c051f0d5215f79a09c7cda17",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 2386564
+    },
+    {
+      "family": "laws",
+      "artifactDigest": "sha256:c9d356616b509a39c1e11b1d1c43cddc067cfbab43fc7fab30728844687f9292",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/laws/c9d356616b509a39c1e11b1d1c43cddc067cfbab43fc7fab30728844687f9292"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 180258
+    },
+    {
+      "family": "lobbying-filings",
+      "artifactDigest": "sha256:56a84791e06a1c198ed8195891bd1aff02a81738141c94e0a80baf9836b0f29d",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/lobbying-filings/56a84791e06a1c198ed8195891bd1aff02a81738141c94e0a80baf9836b0f29d"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 4889109
+    },
+    {
+      "family": "lobbying-filings",
+      "artifactDigest": "sha256:6ac8813aa36683c9fe742bc5afe930cd5192a4ea2324a88070f7d5f6339c4e5a",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "member-vote-terms",
+      "artifactDigest": "sha256:7d8c7937359bcb7f835ea25a1886fe6862b290a154f07fe4f6e75860686b272b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 15043990
+    },
+    {
+      "family": "members",
+      "artifactDigest": "sha256:0b0588cc96e965a914094889e23e4d4b359439317d727de05cbccdb8790c7c05",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/members/0b0588cc96e965a914094889e23e4d4b359439317d727de05cbccdb8790c7c05"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 493928
+    },
+    {
+      "family": "members",
+      "artifactDigest": "sha256:5d6bd2a29a3b0fa9b587ed4e787a9cf26e3534a74c96c0daebc56a8149115b0b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 689773
+    },
+    {
+      "family": "nominations",
+      "artifactDigest": "sha256:d4622c60e01b3bccb3a14de0fb26e532708316f63f7d273ded6b8afcaa21908f",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/nominations/d4622c60e01b3bccb3a14de0fb26e532708316f63f7d273ded6b8afcaa21908f"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 125078
+    },
+    {
+      "family": "press-releases",
+      "artifactDigest": "sha256:de339def1f21fd1fd78300ffa5cb223cdc750b6abdc925337a8bc0aba565a026",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/press-releases/de339def1f21fd1fd78300ffa5cb223cdc750b6abdc925337a8bc0aba565a026"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "print-citations",
+      "artifactDigest": "sha256:8885c43caa0d12301492da662bc43eb9d99d6cbce55357e7c41eb3c9980f545b",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 1351955
+    },
+    {
+      "family": "print-citations",
+      "artifactDigest": "sha256:d57faac3f9cd64b1becd86fd202e765c4b00d02e5004cae3e35ae201e18a2170",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/print-citations/d57faac3f9cd64b1becd86fd202e765c4b00d02e5004cae3e35ae201e18a2170"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 1163404
+    },
+    {
+      "family": "print-citations",
+      "artifactDigest": "sha256:efa0e8597653f1889c3cba48806cc63f5c16a27ef70d012908bc55dfdbaa8399",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 59753140
+    },
+    {
+      "family": "record-issues",
+      "artifactDigest": "sha256:6b1913dab8dc550322ab315defaefadb3e926c63f09155d2c14de3261c10d77d",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/record-issues/6b1913dab8dc550322ab315defaefadb3e926c63f09155d2c14de3261c10d77d"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 99205
+    },
+    {
+      "family": "record-issues",
+      "artifactDigest": "sha256:eea30e580a6b6d3ce8e8cbcba910cfe790a08ac4e40a073232d2cdc084e015ab",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 256348
+    },
+    {
+      "family": "roll-call-votes",
+      "artifactDigest": "sha256:4dc318be76b2ecd16db02b5174aa59146a2c9acd7d2d9b4aed3ed7f4c7c6f030",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 31162160
+    },
+    {
+      "family": "roll-call-votes",
+      "artifactDigest": "sha256:e053a85168c530c8fe1dd8c9ce6dc3437b4a43478191124a119f407c69519c9d",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 31172028
+    },
+    {
+      "family": "roll-call-votes",
+      "artifactDigest": "sha256:f26f7375ff377a67c16a58c8321cd3e2230c436510c1ec3f85dc78fbf96956d6",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/roll-call-votes/f26f7375ff377a67c16a58c8321cd3e2230c436510c1ec3f85dc78fbf96956d6"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "sam-entities",
+      "artifactDigest": "sha256:89e7666a513c583a25a6aa7687198a83edf9e6121d0559a73216e6ce6ed96fd6",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/sam-entities/89e7666a513c583a25a6aa7687198a83edf9e6121d0559a73216e6ce6ed96fd6"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "scorecard-analysis",
+      "artifactDigest": "sha256:4a99801a8a935e1dbe617ddaf219e959b32d46061fa196a36b693806121a8b46",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 467155
+    },
+    {
+      "family": "scorecards",
+      "artifactDigest": "sha256:8692fd934f8d1ec15ac0e426e8775f36c904872caa11eee48599b5dbddbf7109",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/join_measurements.json",
+          "field": "measurement parent/child URLs and SQL"
+        },
+        {
+          "file": "src/spicy_regs/table_joins.json",
+          "field": "measurement parent/child URLs and SQL"
+        }
+      ],
+      "why": "a recorded join measurement, served by describe_table's detail mode, reads its tables by URL",
+      "releaseWhen": "the join measurements naming it are re-taken against current generations (ticket ss-664h)",
+      "storedAtListing": "members",
+      "storedBytes": 617259
+    },
+    {
+      "family": "senate-expenditures",
+      "artifactDigest": "sha256:8fa326186cb334892c39f29a5782938a5b4ba661817e23a2447f74a4b28462d9",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/senate-expenditures/8fa326186cb334892c39f29a5782938a5b4ba661817e23a2447f74a4b28462d9"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "treaties",
+      "artifactDigest": "sha256:4ccf2d7a133edb9ff76f138a12d919ac94e6a822852003887cbc53d4f05e9a4f",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/treaties/4ccf2d7a133edb9ff76f138a12d919ac94e6a822852003887cbc53d4f05e9a4f"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "members",
+      "storedBytes": 69931
+    },
+    {
+      "family": "unified-agenda",
+      "artifactDigest": "sha256:8c85ffb1af57d958d6774b1618699770a30a3d8238246d017cbfa73b5a0ae994",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/unified-agenda/8c85ffb1af57d958d6774b1618699770a30a3d8238246d017cbfa73b5a0ae994"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "root only",
+      "storedBytes": null
+    },
+    {
+      "family": "usaspending-recipients",
+      "artifactDigest": "sha256:ddad898826f88b4322f99d47f7f580eb3b7a5b23142b202456510c1fbeb70552",
+      "citedBy": [
+        {
+          "file": "src/spicy_regs/source_catalog/config/registry.v1.json",
+          "field": "required_baselines: rebuild-seeds/usaspending-recipients/ddad898826f88b4322f99d47f7f580eb3b7a5b23142b202456510c1fbeb70552"
+        }
+      ],
+      "why": "the source catalog states that existing table history depends on this retained baseline and that a rebuild from source is unproven",
+      "releaseWhen": "registry.v1.json no longer lists it in required_baselines, or its tables are copied into the raw archive",
+      "storedAtListing": "absent",
+      "storedBytes": null
+    }
+  ]
+}

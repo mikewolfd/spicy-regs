@@ -45,7 +45,6 @@ nav:
   - Publication status: publication-status.md
   - Fork generation: fork-generation.md
   - Comment field fill: comment-fields-fill.md
-  - Local data reuse: research/local-data-reuse-2026-09-21.md
   - Correction handling: correction-lifecycle.md
   - Changelog: changelog.md
   - Querying with Python: querying-python.md
@@ -63,7 +62,6 @@ nav:
       - Reported relationships: fec-relationships.md
       - Retained-input workflows: fec-retained-workflows.md
       - Coverage limits and backlog: fec-gaps.md
-      - Coverage census: research/fec-coverage-2026-09-21.md
   - Tables:
       - ETL receipts: tables/etl_receipts.md
       - cms_part_d_drug_spending: tables/cms_part_d_drug_spending.md

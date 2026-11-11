@@ -1,12 +1,14 @@
 # Congressional scorecards: integration plan and research gate
 
+*The dated research records this page once linked (under `docs/research`) were deleted on 2026-11-11; they remain in the repository's git history.*
+
 For selected blocked public publishers, see [explicit Zyte acquisition](scorecard-acquisition.md).
 
-The [component reuse review](research/scorecards/reuse_review.md) identifies the
+The component reuse review identifies the
 existing readers, identity conventions and extraction infrastructure to retain.
 It also defines the repeatable repository review method and concrete LCV 2025
-qualification target. The [implemented ecosystem takeaways](research/scorecards/work/integration/ecosystem_takeaways.md) record the discovery and identity changes. Broader implementation follows the
-[candidate task manifest](research/scorecards/work/integration/adapter_tasks.json).
+qualification target. The implemented ecosystem takeaways record the discovery and identity changes. Broader implementation follows the
+candidate task manifest.
 
 Build scorecards as a SpicyDocs source vertical and publish them through
 SpicyRegs. Preserve the publisher's rating, methodology and preferred action as
@@ -15,11 +17,11 @@ existing congressional tables. Begin production ingestion only after the source
 survey supports the model and every sampled shape has an explicit disposition.
 
 **Status:** sampled source model frozen as `scorecards-v1`; implementation is
-enabled by the [accepted gate](research/scorecards/work/gate/freeze_receipt.json).
-See the [research baseline](research/scorecards/README.md),
-[generated coverage](research/scorecards/coverage_summary.json) and
-[sample dispositions](research/scorecards/schema_fit.md). The
-[bounded row examples](research/scorecards/schema_examples.json) preserve sampled
+enabled by the accepted gate.
+See the research baseline,
+generated coverage and
+sample dispositions. The
+bounded row examples preserve sampled
 literal values and exercise proposed relationships. These files do not
 enable a source, change publication, or schedule a refresh.
 
@@ -42,7 +44,7 @@ the workspace had unrelated changes. This plan makes no claim about deployment.
 
 ## What the survey changes in the candidate model
 
-The [proposed schema](research/scorecards/proposed_schema.json) keeps the original
+The proposed schema (kept as `tests/fixtures/scorecards/proposed_schema.json`, the refresh tests' fixture) keeps the original
 publisher, edition, metric, item, metric-item and rating concepts. The evidence
 requires additional source facts:
 
@@ -64,7 +66,7 @@ Evidence: [LCV FAQ](https://www.lcv.org/congressional-scorecard/about-the-scorec
 [AJP method](https://ajpaction.org/scorecard2026/),
 [NEA report](https://www.nea.org/advocating-for-change/action-center/nea-in-congress/report-card),
 [NORML rubric](https://vote.norml.org/about), and the exact captures linked from
-[each profile](research/scorecards/shape_profiles.json).
+each profile.
 
 The additions are `scorecard_snapshots`, `scorecard_methodologies`,
 `scorecard_metric_components`, `scorecard_members`,
