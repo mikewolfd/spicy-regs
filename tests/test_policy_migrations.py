@@ -20,8 +20,23 @@ from spicy_regs.transforms.regulations_receipts import policy as regulations_pol
 FIXTURES = Path(__file__).parent / "fixtures/policy_migrations"
 
 
+#: Families the index stopped naming on 2026-11-11 (owner decision, ss-i1dy), their code and policies removed: no
+#: generation a reader selects declares their policies, so the answers frozen about them no longer bind.
+UNPUBLISHED = frozenset({"retained-sec-comments", "retained-ferc-originals", "retained-cftc-comments",
+                         "retained-edis-filings", "retained-supreme-court", "retained-inspectors-general"})
+
+
 def _fixture(name):
     return json.loads((FIXTURES / name).read_text())
+
+
+def _unpublished_digests():
+    """The policies the unpublished families declared live, held to be installed nowhere."""
+    declared = _fixture("live_declared_20261110.json")["families"]
+    assert UNPUBLISHED <= declared.keys()
+    policies = [entry for family in UNPUBLISHED for entry in declared[family]]
+    assert not {dataset for dataset, _, _ in policies} & (installed_policies().keys() | ledger().keys())
+    return {digest for _, _, digest in policies}
 
 
 def test_every_installed_policy_is_recorded_current_and_every_earlier_entry_is_well_formed():
@@ -45,7 +60,9 @@ def _frozen_answer_problems(installed):
         for declared in policy_migrations.ledger()[name].get("earlier", ()):
             earlier = earlier_policy(name, declared["policy_version"])
             recorded[descriptor_digest(earlier)] = earlier
-    answers, deviations = frozen["answers"], frozen["deviations"]
+    unpublished = _unpublished_digests()
+    answers = {digest: answer for digest, answer in frozen["answers"].items() if digest not in unpublished}
+    deviations = frozen["deviations"]
     problems = [f"{dataset} {version} is no longer recorded" for digest, (dataset, version, _) in answers.items()
                 if digest not in recorded]
     for digest, (dataset, version, earlier) in answers.items():
@@ -109,6 +126,8 @@ def test_no_published_prior_becomes_unreadable():
     installed = installed_policies()
     unrecorded = []
     for family, declared in _fixture("live_declared_20261110.json")["families"].items():
+        if family in UNPUBLISHED:
+            continue
         for dataset, version, digest in declared:
             if dataset not in installed:
                 unrecorded.append((family, dataset))

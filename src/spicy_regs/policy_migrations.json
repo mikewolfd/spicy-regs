@@ -149,15 +149,6 @@
  "cfr_sections": {
   "installed": "sha256:7c14eaec43eb181444f67081471adc3c1c327c16a1a9d0ae2fa394c3f17a9bba"
  },
- "cftc_comment_files": {
-  "installed": "sha256:abb1fc0d9542786cfb64b9b4ed42e1861942ff395752adf2f328a4c7c433ffe8"
- },
- "cftc_comments": {
-  "installed": "sha256:e99650d66c57633d6bf2867e94ae817d1572db0e3f7578b894a78e62a86889e9"
- },
- "cftc_rule_observations": {
-  "installed": "sha256:0861c8643cdd9cc22fcd5f09204eadf4dc7e54be4ee0103fb12e8321d6aef919"
- },
  "comment_attributes": {
   "installed": "sha256:ee40edeea51f00ba24d53f1f256b903002868ea6260cd255afcc9eb091c5bed3"
  },
@@ -567,15 +558,6 @@
  },
  "ecfr_snapshots": {
   "installed": "sha256:f5285ede918dedbfda4f1357e33e13bd8db51df5f6f3f86754e9b5e011deb22b"
- },
- "edis_attachment_files": {
-  "installed": "sha256:51524c6ac808de1844e0ec5e8dfd1d0e8668201156bd2f9da1d4acc764b25958"
- },
- "edis_attachments": {
-  "installed": "sha256:3b006af38cabb42026e2250dbb10174dfc4ebeb526d4e69e0ea1bd660aa1491d"
- },
- "edis_documents": {
-  "installed": "sha256:26d3c1de81e4dca7476e0e71ef3f06fe019b9d65cfcd9eaa4b79b5641ca138b1"
  },
  "fcc_filings": {
   "earlier": [
@@ -2453,15 +2435,6 @@
  "federal_register_issues": {
   "installed": "sha256:bd328eb0e7d6ec49cb8e2ed0d259fc50fee2508c541ea5d17250df72b0621460"
  },
- "ferc_accession_files": {
-  "installed": "sha256:7c1a21bd3ccb1b6b34afedeecf0f2eeb3f25892902dd821397dc671a0c9950b4"
- },
- "ferc_original_files": {
-  "installed": "sha256:455a4b10b4baa7ff9414d5e9894dbbc5142f962218233dc94970a5ba59e4efa3"
- },
- "ferc_search_documents": {
-  "installed": "sha256:960d72faa22688dfb19348bc61393a22433d2c09b2f205460c3e1417bfff1a7f"
- },
  "financial_changes": {
   "installed": "sha256:f5331e198069daf8d742351481bdcc797b0056f084f4835be2af3dc950ec6ee0"
  },
@@ -2656,9 +2629,6 @@
    }
   ],
   "installed": "sha256:9fdf3bc52c0b081c9c337ad3d2dfd556cf2f4a5ea41759be8ec775b146179330"
- },
- "inspectors_general_report_metadata": {
-  "installed": "sha256:71b45c7a30523e2a94afd8de58c1b6a96e1895a24610ab9febfb5d5cc38b9553"
  },
  "law_code_sections": {
   "installed": "sha256:94e3242f4ed65a6b5858642ffe7c6a39d267a097c8978a0b26e09889dae0cd41"
@@ -3577,12 +3547,6 @@
   ],
   "installed": "sha256:2afd7066c58398a59bfdddabcde168ab34cbcbc534b3f1ce538405fab433b58d"
  },
- "sec_comment_files": {
-  "installed": "sha256:c33af9fe8526f0277ffd5330b6e7b633ba031b32fed046a46913d0f508c31f12"
- },
- "sec_rulemakings": {
-  "installed": "sha256:dc036a2451cc290d19e339e2228cbb514bbf093c66e4cbad0f441bf00b478e42"
- },
  "section_classifications": {
   "installed": "sha256:25d66693b7c63c596878a792fd266c78dddb5ab798f9835633a4f413791b9edb"
  },
@@ -3617,15 +3581,6 @@
  },
  "senate_expenditures_document_file_outcomes": {
   "installed": "sha256:c10aadf651aacb6a7e21b46e702429371dd1abc1e7eaf56edbbd368cd8ea5d08"
- },
- "supreme_court_index_observations": {
-  "installed": "sha256:d5551abdba7b451950088a8dfe1d2651f2849241291e72b2511e98d2a9bd0208"
- },
- "supreme_court_opinion_observations": {
-  "installed": "sha256:5536ee763e51a3b9d77d4afbecc5192992b702838a8da300230d1d0ef2459cec"
- },
- "supreme_court_pdf_observations": {
-  "installed": "sha256:b75057a5f0f00ac75088f5b650fb5877bc39922f280ab436e7c03f3593fd48bb"
  },
  "table3_historical_records": {
   "installed": "sha256:6244472987e823bc822bbd4ca8934c0c8972a82e26f72d3d792d5fbb6193d400"
