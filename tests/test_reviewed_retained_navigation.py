@@ -41,8 +41,6 @@ def test_declarations_use_only_explicit_main_fields_and_are_independent():
 
 
 @pytest.mark.parametrize("name,field,target_column", [
-    ("sec_file_rulemaking", "rulemaking_id", "rulemaking_id"),
-    ("supreme_court_opinion_index", "index_observation_id", "observation_id"),
     ("ecfr_content_snapshot", "snapshot_id", "snapshot_id"),
     ("uscode_content_edition_member", "edition_id", "edition_id"),
     ("uscode_structure_edition_member", "edition_id", "edition_id"),
@@ -53,62 +51,6 @@ def test_content_bound_parent_references_do_not_cross_capture_versions(tmp_path,
                     [{target_column: digest("a"), "member_name": "same.xml"}], ("id",))
     assert (proof["eligible"], proof["matched"], proof["missing"], proof["ambiguous"]) == (2, 1, 1, 0)
     assert proof["reverse"]["matchedTargetRows"] == 1
-    assert proof["reverse"]["maximumDistinctSourceRecordsPerTarget"] == 1
-
-
-def test_cftc_comment_link_uses_native_ids_with_exact_rule_observation(tmp_path):
-    proof = measure(tmp_path, "cftc_file_comment", [
-        {"observation_id": digest("c"), "rule_observation_id": digest("a"), "rule_id": 12, "comment_id": 34},
-        {"observation_id": digest("d"), "rule_observation_id": digest("b"), "rule_id": 12, "comment_id": 34},
-    ], [{"rule_observation_id": digest("a"), "rule_id": 12, "comment_id": 34}], ("observation_id",))
-    assert (proof["matched"], proof["missing"]) == (1, 1)
-    assert proof["reverse"]["maximumDistinctSourceRecordsPerTarget"] == 1
-
-
-def test_edis_attachment_link_preserves_multiple_metadata_versions_and_rejects_wrong_scope(tmp_path):
-    row = {"document_observation_id": digest("a"), "document_id": 5, "attachment_id": 9}
-    proof = measure(tmp_path, "edis_file_attachment", [
-        {"observation_id": digest("b"), **row},
-        {"observation_id": digest("c"), **row, "document_observation_id": digest("d")},
-    ], [{"observation_id": digest(letter), **row} for letter in ("e", "f")], ("observation_id",))
-    assert (proof["eligible"], proof["matched"], proof["missing"], proof["ambiguous"]) == (2, 1, 1, 1)
-    assert proof["targetPopulation"]["maximumRowsPerKey"] == 2
-    assert proof["reverse"]["matchedTargetRows"] == 2
-
-
-def test_ferc_collection_does_not_select_one_capture_or_cross_accessions(tmp_path):
-    native = {"accession": "20240418-4000", "file_guid": "12345678-1234-1234-1234-1234567890ab"}
-    proof = measure(tmp_path, "ferc_original_file_observations", [
-        {"observation_id": digest(letter), **native} for letter in ("a", "b")
-    ] + [{"observation_id": digest("c"), **native, "accession": "20240419-4000"}], [
-        {"observation_id": digest(letter), **native} for letter in ("d", "e")
-    ], ("observation_id",))
-    assert (proof["eligible"], proof["matched"], proof["missing"], proof["ambiguous"]) == (3, 2, 1, 2)
-    assert proof["reverse"]["matchedTargetRows"] == 2
-    assert proof["reverse"]["maximumDistinctSourceRecordsPerTarget"] == 2
-
-
-def test_ferc_accession_navigation_retains_repeated_search_captures(tmp_path):
-    proof = measure(tmp_path, "ferc_file_search_observations", [
-        {"observation_id": digest("a"), "accession": "20240418-4000"},
-    ], [{"observation_id": digest(letter), "accession": "20240418-4000"} for letter in ("b", "c")]
-        + [{"observation_id": digest("d"), "accession": "20240419-4000"}], ("observation_id",))
-    assert (proof["matched"], proof["ambiguous"]) == (1, 1)
-    assert proof["reverse"]["matchedTargetRows"] == 2
-    assert proof["reverse"]["unmatchedTargetRows"] == 1
-
-
-def test_supreme_court_pdf_declarations_keep_revisions_repeats_and_index_scope(tmp_path):
-    occurrence = {"index_observation_id": digest("a"), "opinion_index": 0, "role": "opinion"}
-    entries = [occurrence, {**occurrence, "role": "revision", "revision_index": 1},
-               {**occurrence, "index_observation_id": digest("b")}, {**occurrence, "role": "unknown"}]
-    proof = measure(tmp_path, "supreme_court_pdf_declarations", [
-        {"observation_id": digest("c"), "declaring_occurrences_json": json.dumps(entries)},
-    ], [{"index_observation_id": digest("a"), "opinion_index": 0}], ("observation_id",))
-    assert (proof["eligible"], proof["matched"], proof["missing"]) == (3, 2, 1)
-    assert proof["repeatedReferences"] == 1
-    assert proof["unsupportedReferences"] == 1
-    assert proof["reverse"]["maximumReferencesPerTarget"] == 2
     assert proof["reverse"]["maximumDistinctSourceRecordsPerTarget"] == 1
 
 
@@ -129,26 +71,6 @@ def test_administration_links_keep_repeated_mentions_and_do_not_infer_positions(
 def test_parent_keys_refuse_invalid_shape_even_when_a_native_name_matches(value):
     target = recipe("uscode_content_edition_member")["targets"][0]
     assert target_keys(target, {}, {"edition_id": value, "member_name": "title5.xml"}) is None
-
-
-@pytest.mark.parametrize("value", [None, True, 1.0, -1, "0", "12.0"])
-def test_native_document_identity_requires_positive_integer_spelling(value):
-    target = recipe("edis_file_document")["targets"][0]
-    assert target_keys(target, {}, {"document_observation_id": digest("a"), "document_id": value}) is None
-
-
-def test_typed_array_shape_and_complete_main_keys_gate_availability():
-    spec = recipe("supreme_court_pdf_declarations")
-    schemas = {
-        spec["source"]: [["declaring_occurrences_json", "STRUCT(index_observation_id VARCHAR, opinion_index BIGINT)[]"]],
-        "supreme_court_opinion_observations": [["index_observation_id", "VARCHAR"], ["opinion_index", "BIGINT"]],
-    }
-    target = published_navigation([spec], schemas)[0]["targets"][0]
-    assert not target["sourceAvailable"]  # Declaring role is required, even with both key fields present.
-    schemas[spec["source"]] = [["declaring_occurrences_json", "VARCHAR"]]
-    assert published_navigation([spec], schemas)[0]["targets"][0]["sourceAvailable"]
-    del schemas["supreme_court_opinion_observations"]
-    assert not published_navigation([spec], schemas)[0]["targets"][0]["available"]
 
 
 def test_every_retained_recipe_binds_to_its_maintained_native_main_schema():
@@ -172,14 +94,7 @@ def test_all_retained_collections_have_original_source_attribution_without_false
         "administration_policy_statements": "administration-policy-archive",
         "administration_policy_bill_links": "administration-policy-archive",
         "uscode_editions": "uscode", "uscode_edition_structure": "uscode", "uscode_edition_sections": "uscode",
-        "sec_rulemakings": "sec-comments", "sec_comment_files": "sec-comments",
-        "cftc_rule_observations": "cftc-comments", "cftc_comments": "cftc-comments",
-        "cftc_comment_files": "cftc-comments",
-        "edis_documents": "edis", "edis_attachments": "edis", "edis_attachment_files": "edis",
-        "ferc_search_documents": "ferc", "ferc_accession_files": "ferc", "ferc_original_files": "ferc",
-        "supreme_court_index_observations": "supreme-court",
-        "supreme_court_opinion_observations": "supreme-court", "supreme_court_pdf_observations": "supreme-court",
-        "inspectors_general_report_metadata": "reports-archive", "federal_register_issues": "govinfo-register",
+        "federal_register_issues": "govinfo-register",
         "ecfr_snapshots": "ecfr", "ecfr_snapshot_sections": "ecfr", "table3_historical_records": "uscode",
     }
     for table, source in sources.items():
@@ -189,7 +104,6 @@ def test_all_retained_collections_have_original_source_attribution_without_false
         assert not origin["modelGenerated"]
         assert (Path(__file__).parents[1] / origin["evidence"]).is_file()
     assert registry["sources"]["administration-policy-archive"]["kind"] == "community"
-    assert registry["sources"]["reports-archive"]["kind"] == "community"
 
 
 def test_public_metadata_binds_source_attribution_to_the_actual_main_table():

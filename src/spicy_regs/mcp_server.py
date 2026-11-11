@@ -483,16 +483,12 @@ UNASSIGNED_SUBJECT = "unassigned"
 #: Keep the preview bounded so unavailable names cannot crowd out the loaded table names.
 UNAVAILABLE_TABLES_LISTED = 8
 #: Owner choice 2026-11-05 (ss-kj95/ss-qm55): omit these intentional-empty
-#: tables and the five audited small retained families from the default page.
-#: This is presentation only. Keep registration, explicit pages and queries.
-#: Generic coverage kind ``sampled`` includes many other useful populations.
+#: tables from the default page. The small retained families it also omitted
+#: were unpublished on 2026-11-11 (ss-i1dy). This is presentation only. Keep
+#: registration, explicit pages and queries. Generic coverage kind ``sampled``
+#: includes many other useful populations.
 DEFAULT_DISCOVERY_EXCLUDED_TABLES = frozenset({
     "financial_changes", "section_classifications", "bill_summaries", "diff_summaries",
-    "edis_documents", "edis_attachments", "edis_attachment_files",
-    "sec_rulemakings", "sec_comment_files",
-    "cftc_rule_observations", "cftc_comments", "cftc_comment_files",
-    "inspectors_general_report_metadata", "supreme_court_index_observations",
-    "supreme_court_opinion_observations", "supreme_court_pdf_observations",
 })
 #: Room a refusal keeps for the clause it asks the caller to add (ORDER BY, LIMIT, OFFSET), which the reply echoes.
 RE_ASK_CHARS = 100
