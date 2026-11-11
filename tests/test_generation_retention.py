@@ -300,3 +300,38 @@ def test_the_output_ledger_is_scanned_like_a_docs_note():
     names = [name for name, _ in retention._notes()]
     assert output_ledger.LEDGER_NAME in names
     assert all(name.startswith("docs/") for name in names if name != output_ledger.LEDGER_NAME)
+
+
+def test_every_generation_code_names_is_pinned_under_docs():
+    """Retention keeps only what a docs/ note names, so a generation code still reads must be named there.
+
+    The source catalog's required rebuild baselines and the inputs of recorded join measurements name stored
+    generations; ``docs/pins/code-cited-generations.json`` names each one in full, and drops one only when nothing
+    names it any more.
+    """
+    import re
+
+    root = retention.DOCS.parent
+    named: dict[str, str] = {}
+
+    def baselines(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "required_baselines":
+                    for seed in item:
+                        if match := re.fullmatch(r"rebuild-seeds/([a-z][a-z0-9_-]*)/([0-9a-f]{64})", seed):
+                            named[match[2]] = match[1]
+                baselines(item)
+        elif isinstance(value, list):
+            for item in value:
+                baselines(item)
+
+    baselines(json.loads((root / "src/spicy_regs/source_catalog/config/registry.v1.json").read_text()))
+    for name in ("join_measurements.json", "table_joins.json"):
+        text = (root / "src/spicy_regs" / name).read_text()
+        named.update((digest, family) for family, digest in retention._KEY.findall(text))
+    pins = json.loads((retention.DOCS / "pins/code-cited-generations.json").read_text())
+    pinned = {pin["artifactDigest"].removeprefix("sha256:"): pin["family"] for pin in pins["generations"]}
+    assert pinned == named
+    stored = {digest: retention.Generation(family, digest) for digest, family in named.items()}
+    assert set(retention.note_pins(retention._notes(), stored)) == set(named)
