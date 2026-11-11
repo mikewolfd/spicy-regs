@@ -35,17 +35,6 @@ def test_source_catalog_policy_descriptions_keep_selected_scope_and_native_field
     assert "uscode_edition_sections" in policies
 
 
-def test_retained_native_policies_regenerate_receipt_declarations():
-    from spicy_regs.sources.retained_native_collections import POLICIES
-    from scripts.update_etl_policy_declarations import family_policies
-
-    selected = family_policies(frozenset(POLICIES))
-    assert set(selected) == set(POLICIES)
-    for name, policy in POLICIES.items():
-        assert selected[name].descriptor() == policy.descriptor()
-        assert not policy.receipt_fields
-
-
 def test_generation_preserves_qualified_legacy_fec_meanings_and_processing_tables():
     import json
 

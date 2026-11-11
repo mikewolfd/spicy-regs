@@ -393,8 +393,7 @@ See [FEC tables and child rows](docs/fec-query-views.md) for grains, evidence an
 count of declared tables without a loaded view (`unavailable_tables` and
 `unavailable_table_count`), relationship and deferred view counts, the receipt
 summary and FEC release status counts. The default excludes a designated set
-of intentionally empty tables and sample-sized datasets from its lists and
-unavailable count.
+of intentionally empty tables from its lists and unavailable count.
 `list_sources(subject)` returns all loaded tables in that subject, including
 those omitted by default, with their label, coverage kind (`true_range`,
 `window`, `sampled`, `derived`, `not_a_range` or `empty`) and pinned row count.
