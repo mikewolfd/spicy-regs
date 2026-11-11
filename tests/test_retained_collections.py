@@ -156,7 +156,8 @@ def test_unlinked_only_selection_keeps_empty_link_schema(tmp_path):
     output = result["outputs"]["administration_policy_bill_links"]
     assert output["rows"] == 0 and output["path"] and output["sha256"]
     table = pq.read_table(tmp_path / "candidate" / output["path"])
-    assert table.num_rows == 0 and table.schema == reader.SCHEMAS["administration_policy_bill_links"]
+    assert table.num_rows == 0 and table.schema.equals(reader.SCHEMAS["administration_policy_bill_links"],
+                                                       check_metadata=True)
     assert len(rows(tmp_path / "candidate", "administration_policy_statements")) == 1
 
 

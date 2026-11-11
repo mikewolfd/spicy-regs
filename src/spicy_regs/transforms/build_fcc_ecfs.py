@@ -542,14 +542,17 @@ def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None 
 
     staged = output_dir / f".{PROCEEDINGS_OUTPUT}.partial"
     schema = SUBJECT_SCHEMAS["fcc_proceedings"]
+    row_count = len(rows)
+    for index, row in enumerate(rows):
+        rows[index] = map_subject("fcc_proceedings", row)
     pq.write_table(
-        pa.Table.from_pylist([map_subject("fcc_proceedings", row) for row in rows], schema=schema),
+        pa.Table.from_pylist(rows, schema=schema),
         staged,
         compression="zstd",
         row_group_size=50_000,
     )
     staged.replace(out_file)
-    logger.info("FCC proceedings: {:,} rows from {:,} documents", len(rows), len(documents))
+    logger.info("FCC proceedings: {:,} rows from {:,} documents", row_count, len(documents))
     return out_file
 
 

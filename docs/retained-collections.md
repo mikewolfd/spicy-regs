@@ -4,7 +4,7 @@
 statements that a pinned community archive associates with congressional bills.
 `administration_policy_bill_links` provides each explicit bill-link occurrence.
 The maintained SpicyDocs administration-policy reader supplies the native facts;
-these tables add queryable rows and generation-bound ETL receipts.
+these tables add queryable rows backed by generation-pinned source evidence.
 
 A statement can have no identified bill, several bills, or repeated bill links.
 Every statement remains in the first table. Link rows preserve source order and
@@ -55,10 +55,9 @@ source record index. `source_record_id` retains the archive reader's commit-pinn
 locator. `link_id` adds the source link position. Changed captures and archive
 commits produce separate observations; no cross-edition deduplication is implied.
 
-Outputs are table directories containing Parquet rows, `etl_receipts.parquet`,
-`selection.json` and `build.json`. The build receipt records exact inputs,
-processing code/runtime identities, row counts and output hashes. Every output
-row has a witness pointing to its source capture and native record position.
+Outputs are table directories containing Parquet rows, `selection.json` and
+`build.json`. The build record lists exact inputs, processing code/runtime
+identities, row counts and output hashes.
 A table with no rows still has a schema-bearing empty Parquet subject and a
 zero-row entry in `build.json`; release packaging must preserve that distinction.
 
@@ -83,7 +82,7 @@ python -m spicy_regs.pipelines.administration_policy build \
 ```
 
 `build` writes the builder manifest over the raw originals, builds the
-candidate in `$POLICY_OUTPUT/candidate` and admits its tables and receipts as
+candidate in `$POLICY_OUTPUT/candidate` and admits its tables as
 `$POLICY_OUTPUT/generation`. The generation pins a source-evidence artifact
 that names each selected file's commit, URL, digest and observation time and
 holds its bytes, as the other source families' evidence does. The archive
@@ -94,7 +93,7 @@ only. The refresh sequence through publication is in
 ## Qualification and release
 
 Compare all selected statement JSON with the maintained reader, verify every
-bill-link occurrence and foreign key, validate dataset receipts, and record
+bill-link occurrence and foreign key, validate source-evidence pins, and record
 schema/coverage limits. This proves the selected metadata files. Publisher-wide
 coverage, held PDF-body coverage and downstream bill completeness remain separate.
 

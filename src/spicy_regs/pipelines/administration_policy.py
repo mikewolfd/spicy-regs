@@ -140,6 +140,11 @@ def build_from_captures(selection: dict, output_dir: Path, *, archive_root: Path
     store = open_raw(archive_root)
     evidence = CaptureEvidence(output_dir, FAMILY)
     try:
+        if read_index is not None:
+            from spicy_regs.sources import publication
+
+            publication.require_live_receipt_pins(
+                publication.parse_index(Path(read_index).read_bytes()), retained_collections.SCHEMAS)
         read_snapshot = inherit_read_index(evidence, read_index)
         built = candidate(selection, output_dir, evidence, store=store)
         tables = retained_collections.SCHEMAS

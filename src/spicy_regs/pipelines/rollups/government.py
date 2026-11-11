@@ -23,14 +23,6 @@ class GovernmentTableRollup(RollupPipeline):
             schemas[dataset] = described_schema(SUBJECT_SCHEMAS[dataset])
         return schemas
 
-    def _prime(self, output_dir, snapshot=None):
-        if snapshot is not None:
-            from spicy_regs.sources import publication
-
-            publication.require_live_receipt_pins(
-                snapshot, [key.removesuffix(".parquet") for key in self.outputs or (self.output,)])
-        return super()._prime(output_dir, snapshot)
-
 
 class GovernmentReceiptRollup(GovernmentTableRollup):
     def run(self, *, read_operation=None):

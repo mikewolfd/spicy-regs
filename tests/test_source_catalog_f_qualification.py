@@ -352,12 +352,14 @@ def test_court_delta_final_body_drift_and_code_drift_fail(tmp_path, monkeypatch)
     assert not (tmp_path / 'code-drift').exists()
 
 
-def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_decision=False, paginated=False, missing=False, continuation_drift=False):
+def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_decision=False, paginated=False, missing=False, continuation_drift=False, receipts_free=False):
     from spicy_docs.sources.fcc_ecfs import proceedings_url
     from spicy_docs.transport.captured import CapturedBodyResponse
+    from spicy_regs.native_types import described_schema
     from spicy_regs.source_evidence import CaptureEvidence
     from spicy_regs.generations import build_generation
     from spicy_regs.transforms.build_fcc_ecfs import _PROCEEDING_SCHEMA
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
     from scripts.qualify_source_catalog_f import _fcc_rows, fcc_selection
     documents = [
         {"name": "24-89", "id_proceeding": "2", "date_proceeding_created": "2024-01-02", "description": "later", "bureau": {"name": "Media", "code": "MB"}},
@@ -374,7 +376,14 @@ def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_deci
     output = tmp_path / "producer"
     output.mkdir()
     table = output / "fcc_proceedings.parquet"
-    pq.write_table(pa.Table.from_pylist(expected, schema=_PROCEEDING_SCHEMA), table)
+    if receipts_free:
+        pq.write_table(
+            pa.Table.from_pylist([map_subject("fcc_proceedings", row) for row in expected],
+                                 schema=SUBJECT_SCHEMAS["fcc_proceedings"]),
+            table,
+        )
+    else:
+        pq.write_table(pa.Table.from_pylist(expected, schema=_PROCEEDING_SCHEMA), table)
     evidence = CaptureEvidence(output, "fcc-proceedings")
     evidence.event("selection", stage="fcc-proceedings", since="1990-01-01")
     body = json.dumps({"proceeding": documents[:250], "aggregations": {"bureau_name": {"buckets": [{"doc_count": len(documents)-1}], "sum_other_doc_count": 0}}}).encode()
@@ -390,7 +399,8 @@ def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_deci
     if bad_decision:
         decision["nameless_ids"] = []
     evidence.event("proceeding-selection", **decision)
-    evidence.retain_file(table, stage="government-producer-output", dataset="fcc_proceedings")
+    if not receipts_free:
+        evidence.retain_file(table, stage="government-producer-output", dataset="fcc_proceedings")
     artifact = evidence.seal(outcome="build-complete")
     corpus = tmp_path / "corpus"
     source_dir = corpus / "source-evidence" / artifact.pin.artifact_digest[7:]
@@ -404,17 +414,27 @@ def _fcc_fixture(tmp_path, *, mismatch=False, extra=False, drift=False, bad_deci
 
         (blobs / member["sha256"][7:]).write_bytes(read_evidence_member(evidence, member["objectKey"]))
     generation_dir = tmp_path / "generation"
-    from spicy_regs import subject_catalog
-    from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args
-    migrate_outputs((table,))
-    # The retained generation this replays is one fcc-proceedings published with receipts, before ss-vse3.
-    with pytest.MonkeyPatch.context() as as_published:
-        retired = subject_catalog.retired_receipt_datasets() - {"fcc_proceedings"}
-        as_published.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
-        generation = build_generation(generation_dir, family="fcc-proceedings", files=[table], expected_keys=[table.name], inputs=evidence.inputs(), **generation_receipt_args((table,)))
+    if receipts_free:
+        generation = build_generation(
+            generation_dir, family="fcc-proceedings", files=[table], expected_keys=[table.name],
+            schemas={"fcc_proceedings": described_schema(SUBJECT_SCHEMAS["fcc_proceedings"])},
+            inputs=evidence.inputs(),
+        )
+    else:
+        from spicy_regs import subject_catalog
+        from spicy_regs.transforms.government_receipts import migrate_outputs, generation_receipt_args
+        migrate_outputs((table,))
+        # The retained generation this replays is one fcc-proceedings published with receipts, before ss-vse3.
+        with pytest.MonkeyPatch.context() as as_published:
+            retired = subject_catalog.retired_receipt_datasets() - {"fcc_proceedings"}
+            as_published.setattr(subject_catalog, "retired_receipt_datasets", lambda: retired)
+            generation = build_generation(generation_dir, family="fcc-proceedings", files=[table], expected_keys=[table.name], inputs=evidence.inputs(), **generation_receipt_args((table,)))
     target = corpus / "lineage/generations/fcc-proceedings" / generation.pin.artifact_digest[7:]
     target.mkdir(parents=True)
     shutil.copyfile(generation_dir / "artifact.json", target / "artifact.json")
+    if receipts_free:
+        shutil.copyfile(generation_dir / "members.json", target / "members.json")
+        shutil.copyfile(generation_dir / "fcc_proceedings.parquet", target / "fcc_proceedings.parquet")
     manifest = tmp_path / "selection.json"
     manifest.write_text(json.dumps(fcc_selection(corpus, generation.pin.artifact_digest)))
     return manifest, corpus
@@ -441,6 +461,25 @@ def test_fcc_selected_dated_refresh_exact_order_preference_and_roundtrip(tmp_pat
     assert result["decoded_source_reserved_bytes"] < selected["decoded_source_read_cap"]
     with pytest.raises(FileExistsError):
         fcc_replay(manifest, tmp_path / "candidate")
+
+
+def test_fcc_receipts_free_generation_selection_and_replay(tmp_path, monkeypatch):
+    from scripts.qualify_source_catalog_f import fcc_replay
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS
+    manifest, _ = _fcc_fixture(tmp_path, receipts_free=True)
+    selected = json.loads(manifest.read_text())
+    assert selected["producer_output"] is None
+    assert selected["published_table"]["objectKey"] == "fcc_proceedings.parquet"
+    monkeypatch.setattr(socket.socket, "connect", lambda *a, **k: pytest.fail("network"))
+    result = fcc_replay(manifest, tmp_path / "candidate")
+    assert result["state"] == "qualified"
+    assert result["producer_comparison"]["ordered_rows_equal"]
+    assert result["native_candidate_raw_roundtrip"]["ordered_rows_equal"]
+    assert len(result["outputs"]) == 1
+    assert not any((tmp_path / "candidate").rglob("*receipt*"))
+    table = pq.read_table(tmp_path / "candidate/fcc_proceedings.parquet")
+    assert table.schema.equals(SUBJECT_SCHEMAS["fcc_proceedings"], check_metadata=True)
+    assert [row["name"] for row in table.to_pylist()] == ["25-12", "24-89"]
 
 
 @pytest.mark.parametrize("option,match", [("extra", "unused"), ("bad_decision", "selection differs")])
