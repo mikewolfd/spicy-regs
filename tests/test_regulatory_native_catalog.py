@@ -793,16 +793,28 @@ def test_comments_processing_and_rejected_copies_use_bounded_layout_and_ordinal_
     from spicy_regs import comments_bulk
     from spicy_regs.duckdb_settings import ExportResources
 
-    expected = source(con)
-    iceberg.replace_rows(con, COMMENT, 'source')
+    layout = ExportResources()
+    assert con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0] is True
+    expected = source(con, text='latest')
+    con.execute("CREATE OR REPLACE TEMP TABLE rejected AS SELECT * REPLACE ('older' AS text_content) FROM source")
 
-    copied = []
-    real_copy = native._copy
+    copies = []
 
-    def spy_copy(connection, sql, path, **kwargs):
-        copied.append((path.name, kwargs.get('resources')))
-        return real_copy(connection, sql, path, **kwargs)
+    class Recorded:
+        def execute(self, sql, *args):
+            if sql.startswith('COPY '):
+                copies.append(sql)
+            return con.execute(sql, *args)
 
+    native.ensure_native(con, COMMENT)
+    native.replace_native(Recorded(), COMMENT, 'source', rejected_source='rejected')
+    assert con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0] is True
+    rejected_copies = [sql for sql in copies if 'rejected-source-' in sql]
+    assert len(rejected_copies) == 1
+    assert rejected_copies[0].endswith(
+        f"ROW_GROUP_SIZE {layout.row_group_rows}, ROW_GROUP_SIZE_BYTES '{layout.row_group_bytes}')")
+
+    copies.clear()
     fallback_kwargs = []
     real_read = native.read_with_receipts
 
@@ -810,13 +822,16 @@ def test_comments_processing_and_rejected_copies_use_bounded_layout_and_ordinal_
         fallback_kwargs.append(dict(kwargs))
         yield from real_read(*args, **kwargs)
 
-    monkeypatch.setattr(native, '_copy', spy_copy)
     monkeypatch.setattr(native, 'read_with_receipts', spy_read)
     monkeypatch.setattr(comments_bulk, 'restore_catalog',
                         lambda *a, **k: (_ for _ in ()).throw(etl_bulk.NotBulkEligible('forced fallback')))
 
-    restored = native.processing_table(con, COMMENT, where="agency_code='EPA'")
+    restored = native.processing_table(Recorded(), COMMENT, where="agency_code='EPA'")
+    assert con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0] is True
     assert con.execute(f'SELECT * FROM {restored}').to_arrow_table().to_pylist() == [expected]
-    assert copied == [('subjects.parquet', ExportResources()), ('selected-receipts.parquet', ExportResources())]
+    assert len(copies) == 2
+    for sql in copies:
+        assert sql.endswith(
+            f"ROW_GROUP_SIZE {layout.row_group_rows}, ROW_GROUP_SIZE_BYTES '{layout.row_group_bytes}')")
     assert fallback_kwargs == [{'generation_id': fallback_kwargs[0]['generation_id'], 'processing_by_ordinal': True}]
 

@@ -209,6 +209,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
     states = {subjects: file_signature(subjects), receipts: file_signature(receipts)}
 
     def check_sources() -> None:
+        etl_bulk.checkpoint()
         if any(file_signature(path) != state for path, state in states.items()):
             raise ValueError('Ordinal processing source changed after selection')
 
@@ -220,7 +221,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
     with etl_bulk._validated_bundle(
         {'comments': [subjects]}, [receipts], [selected],
         generation_id=generation_id, retain_processing=False,
-        threads=1, memory_limit='8GB', bounded_insert=True,
+        threads=1, memory_limit='4GB', bounded_insert=True,
     ) as con, ExitStack() as files, TemporaryDirectory(prefix='comments-restore-', dir=destination.parent) as scratch:
         check_sources()
         try:

@@ -274,7 +274,7 @@ def test_restore_catalog_uses_single_bounded_ordinal_admission_without_duckdb_pa
 
     restored = tmp_path / 'restored.parquet'
     assert comments_bulk.restore_catalog(subjects, receipts, restored, generation_id='g') == 7
-    assert connections == [{'threads': 1, 'memory_limit': '8GB'}]
+    assert connections == [{'threads': 1, 'memory_limit': '4GB'}]
     assert len(validated_calls) == 1
     assert validated_calls[0]['retain_processing'] is False
     assert validated_calls[0]['bounded_insert'] is True

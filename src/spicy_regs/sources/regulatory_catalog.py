@@ -59,7 +59,7 @@ def rejected_attempts(con, source, dataset, work, generation, *, reason):
     """Keep unselected exact source observations as processing evidence."""
     from spicy_regs.etl_receipts import ReceiptContext, failure_receipt, exact_json
     path = work / ('rejected-source-' + uuid4().hex + '.parquet')
-    _copy(con, f'SELECT * FROM {source}', path, resources=_layout(dataset))
+    _copy(con, f'SELECT * FROM {source}', path, resources=_layout(dataset), ordered=False)
     def records():
         for i, row in enumerate(_rows(path)):
             witness = {'source_id': source, 'source_uri': None,
@@ -120,19 +120,28 @@ def _layout(dataset):
     return ExportResources() if dataset == 'comments' else None
 
 
-def _copy(con, sql, path, *, resources: ExportResources | None = None, parameters=None):
+def _copy(con, sql, path, *, resources: ExportResources | None = None, parameters=None, ordered: bool = True):
     from .iceberg import _sql_str
     options = 'FORMAT PARQUET, COMPRESSION ZSTD'
-    if resources is not None:
-        options += f', ROW_GROUP_SIZE {resources.row_group_rows}'
-        # DuckDB permits the byte target only when the caller allows reordering.
-        if not con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0]:
-            options += f", ROW_GROUP_SIZE_BYTES '{_sql_str(resources.row_group_bytes)}'"
-    statement = f"COPY ({sql}) TO '{_sql_str(str(path))}' ({options})"
-    if parameters is None:
-        con.execute(statement)
-    else:
-        con.execute(statement, parameters)
+    restore_order = False
+    if (resources is not None and not ordered
+            and con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0]):
+        con.execute('SET preserve_insertion_order = false')
+        restore_order = True
+    try:
+        if resources is not None:
+            options += f', ROW_GROUP_SIZE {resources.row_group_rows}'
+            # DuckDB permits the byte target only when the caller allows reordering.
+            if not con.execute("SELECT current_setting('preserve_insertion_order')").fetchone()[0]:
+                options += f", ROW_GROUP_SIZE_BYTES '{_sql_str(resources.row_group_bytes)}'"
+        statement = f"COPY ({sql}) TO '{_sql_str(str(path))}' ({options})"
+        if parameters is None:
+            con.execute(statement)
+        else:
+            con.execute(statement, parameters)
+    finally:
+        if restore_order:
+            con.execute('SET preserve_insertion_order = true')
 
 
 def _rows(path):
@@ -409,7 +418,7 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             generation = 'read-' + uuid4().hex
             require_initialized(con, record_type)
             subject = work / 'subjects.parquet'
-            _copy(con, f'SELECT * FROM {target}{predicate}', subject, resources=_layout(dataset))
+            _copy(con, f'SELECT * FROM {target}{predicate}', subject, resources=_layout(dataset), ordered=False)
             ids = work / 'identities.parquet'
             if where:
                 write_rows(({'record_id': subject_identity(policy(dataset), row)[0]} for row in _rows(subject)),
@@ -438,7 +447,8 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
                 # to refuse; duplicate accepted receipts also remain visible.
                 receipt_predicate += ' AND (' + (' OR '.join(choices) or 'FALSE') + ')'
             _copy(con, f"SELECT r.* FROM {receipts_table()} r{selected_ids} "
-                       f'WHERE {receipt_predicate}', raw_receipts, resources=_layout(dataset), parameters=parameters)
+                       f'WHERE {receipt_predicate}', raw_receipts, resources=_layout(dataset),
+                  parameters=parameters, ordered=False)
             receipts = work / 'receipts.parquet'
             write_rows((rebind_receipt(row, generation_id=generation) for row in _rows(raw_receipts)),
                        receipts, RECEIPT_SCHEMA, batch_size=500 if dataset == 'comments' else 2_000)
@@ -554,6 +564,8 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                             '(SELECT record_id FROM read_parquet(?))', [record_type.name, str(removed)])
                 con.execute(f'DELETE FROM {qualified(record_type)} WHERE {scope_sql} AND {key_sql} NOT IN '
                             f'(SELECT {key_sql} FROM {source})')
+            con.execute(f'DROP TABLE {prior}')
+            con.execute(f'DROP TABLE {prior_receipts}')
             columns = policy(record_type.name).subject_schema.names
             assignments = ', '.join(f'"{c}"=s."{c}"' for c in columns)
             names = ', '.join(f'"{c}"' for c in columns)
@@ -563,9 +575,11 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                 WHEN NOT MATCHED THEN INSERT ({names}) VALUES ({values})''').fetchone()[0]
             if changed != count:
                 raise RuntimeError('Catalog replacement changed an unexpected number of rows')
+            con.execute(f'DROP TABLE {native}')
             con.execute(f'''DELETE FROM {receipts_table()} WHERE dataset=? AND outcome='accepted'
                 AND record_id IN (SELECT record_id FROM {pending})''', [record_type.name])
             con.execute(f'INSERT INTO {receipts_table()} SELECT * FROM {pending}')
+            con.execute(f'DROP TABLE {pending}')
             if rejected_source is not None:
                 rejected_attempts(con, rejected_source, record_type.name, work, generation,
                                   reason='not selected: duplicate or not newer than current subject')
@@ -577,8 +591,7 @@ def replace_native(con, record_type, source, *, expected_prior=None, scope=None,
                 UNION ALL (SELECT * FROM {comparison} EXCEPT ALL SELECT * FROM {verified}))''').fetchone()[0]
             if delta:
                 raise RuntimeError('Catalog replacement changed source values')
-            for temporary_table in (prior, verified, prior_receipts, native, pending):
-                con.execute(f'DROP TABLE {temporary_table}')
+            con.execute(f'DROP TABLE {verified}')
 
 
 #: Columns regulations-native-v2 inserted into the v1 comments table (6th, 20th, 21st of 24).
@@ -804,18 +817,17 @@ def export_pair(con, record_type, output_dir, *, generation_id, snapshot=None):
         # Each stage reads the whole population and none reports progress: the hosted comments export ran
         # 110 minutes without a line before it failed (run 42738947666).
         logger.info('Paired export of {}: copying subjects', dataset)
-        _copy(con, f'SELECT * FROM {qualified(record_type)}', subjects, resources=_layout(dataset))
+        _copy(con, f'SELECT * FROM {qualified(record_type)}', subjects, resources=_layout(dataset), ordered=False)
         raw_receipts = Path(temporary) / 'receipts.parquet'
         logger.info('Paired export of {}: copying receipts', dataset)
         _copy(con, f"SELECT * FROM {receipts_table()} WHERE dataset='{dataset}'", raw_receipts,
-              resources=_layout(dataset))
+              resources=_layout(dataset), ordered=False)
         logger.info('Paired export of {}: rebinding {:,} receipts', dataset, pq.ParquetFile(raw_receipts).metadata.num_rows)
         write_rows((rebind_receipt(row, generation_id=generation_id) for row in _rows(raw_receipts)),
-                   receipts, RECEIPT_SCHEMA)
+                   receipts, RECEIPT_SCHEMA, batch_size=500 if dataset == 'comments' else 2_000)
         logger.info('Paired export of {}: admitting and replaying {:,} subjects', dataset,
                     pq.ParquetFile(subjects).metadata.num_rows)
-        for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id,
-                                    processing_by_ordinal=dataset == 'comments'):
+        for _ in read_with_receipts([subjects], [receipts], policy(dataset), generation_id=generation_id):
             pass
     metadata = {'generation_id': generation_id, 'dataset': dataset}
     if snapshot is not None:
