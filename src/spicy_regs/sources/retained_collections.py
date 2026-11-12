@@ -7,7 +7,6 @@ assertions, source order and evidence without inferring political positions.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import gzip
 import hashlib
 from importlib import metadata
@@ -25,7 +24,8 @@ from spicy_docs.schemas.tables import bill_id as canonical_bill_id
 from spicy_docs.sources.congress.bill_status import BillIdentity
 
 from spicy_regs import etl_receipts
-from spicy_regs.etl_receipts import DatasetPolicy, ReceiptContext, combine_receipts, write_dataset
+from spicy_regs.etl_receipts import DatasetPolicy
+from spicy_regs.parquet_rows import write_rows
 
 VERSION = "administration-policy-v1"
 MAX_MANIFEST_BYTES = 1024 * 1024
@@ -151,8 +151,8 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
         staged.mkdir()
         streams = {table: gzip.open(staged / (table + ".jsonl.gz"), "wt", encoding="utf-8") for table in SCHEMAS}
 
-        def emit(table: str, row: dict, context: ReceiptContext) -> None:
-            streams[table].write(_json({"row": row, "context": asdict(context)}) + "\n")
+        def emit(table: str, row: dict) -> None:
+            streams[table].write(_json(row) + "\n")
             counts[table] += 1
 
         try:
@@ -179,19 +179,6 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                 parsed = administration_policy.parse_policy_metadata(body, commit=commit, administration=administration)
                 for statement in parsed.records:
                     statement_id = _digest(_json([url, digest, statement.source_record_index]).encode())
-                    context = ReceiptContext(
-                        generation,
-                        statement_id,
-                        VERSION,
-                        [
-                            {
-                                "source_id": digest,
-                                "sha256": digest,
-                                "source_uri": url,
-                                "locator": f"record:{statement.source_record_index}",
-                            },
-                        ],
-                    )
                     emit(
                         "administration_policy_statements",
                         {
@@ -211,7 +198,6 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                             "observed_at": source["observed_at"],
                             "source_record_json": statement.raw_json,
                         },
-                        context,
                     )
                     for index, (bill, bill_id) in enumerate(zip(statement.bills, statement.bill_ids, strict=True)):
                         # The native token is already validated by SpicyDocs;
@@ -231,31 +217,24 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
                                 "native_bill_id": bill_id,
                                 "bill_id": canonical_bill_id(identity),
                             },
-                            ReceiptContext(generation, link_id, VERSION, context.witnesses),
                         )
                 inputs.append({**source, "path": str(path.resolve()), "records": len(parsed.records)})
         finally:
             for stream in streams.values():
                 stream.close()
-        outputs, receipts = {}, []
-        for table, policy in POLICIES.items():
+        outputs = {}
+        for table, schema in SCHEMAS.items():
             spool = staged / (table + ".jsonl.gz")
+            (staged / table).mkdir()
+            subject = staged / table / (table + ".parquet")
             with gzip.open(spool, "rt", encoding="utf-8") as stream:
-
-                def rows():
-                    for line in stream:
-                        item = json.loads(line)
-                        yield item["row"], ReceiptContext(**item["context"])
-
-                subject, receipt = write_dataset(rows(), staged / table, policy)
+                write_rows(map(json.loads, stream), subject, schema)
             outputs[table] = {
                 "rows": counts[table],
-                "path": str(subject.relative_to(staged)) if subject else None,
-                "sha256": _file_digest(subject) if subject else None,
+                "path": str(subject.relative_to(staged)),
+                "sha256": _file_digest(subject),
             }
-            receipts.append(receipt)
             spool.unlink()
-        combined = combine_receipts(receipts, staged / "etl_receipts.parquet")
         if _read(manifest_path, MAX_MANIFEST_BYTES) != raw_manifest or _code_pins() != pins:
             raise ValueError("manifest or processing code changed during build")
         for source in inputs:
@@ -271,7 +250,6 @@ def build(manifest_path: Path, output_dir: Path) -> dict:
             "inputs": inputs,
             "outputs": outputs,
             "baseline_inputs": [],
-            "receipts_sha256": _file_digest(combined),
             "limits": [
                 "Community archive assertions; no inferred political position.",
                 "Complete selected metadata files; publisher-wide coverage unknown.",

@@ -99,8 +99,14 @@ def test_registered_release_policy_matches_final_producer(dataset):
     assert installed_policies()[dataset].descriptor() == producers[dataset].descriptor()
 
 
-#: Release tables whose receipts are retired (ss-coca): admission takes them without receipts and refuses any.
-RETIRED_RELEASE_DATASETS = ("uscode_edition_structure", "uscode_editions", "uscode_edition_sections")
+#: Release tables whose receipts are retired (ss-coca, ss-vse3): admission takes them without receipts and refuses any.
+RETIRED_RELEASE_DATASETS = (
+    "administration_policy_bill_links",
+    "administration_policy_statements",
+    "uscode_edition_structure",
+    "uscode_editions",
+    "uscode_edition_sections",
+)
 
 
 def test_retired_release_artifact_admission_refuses_receipts(tmp_path):
@@ -112,7 +118,11 @@ def test_retired_release_artifact_admission_refuses_receipts(tmp_path):
     assert set(RETIRED_RELEASE_DATASETS) <= retired_receipt_datasets()
     for dataset in RETIRED_RELEASE_DATASETS:
         policy = installed_policies()[dataset]
-        row = {field.name: "fixture" for field in policy.subject_schema}
+        row: dict[str, object] = {
+            field.name: (False if pa.types.is_boolean(field.type)
+                         else 1 if pa.types.is_integer(field.type) else "fixture")
+            for field in policy.subject_schema
+        }
         context = ReceiptContext("test-generation", "test-attempt", "test-processor", [{
             "source_id": "test-source", "sha256": "sha256:" + "a" * 64}])
         subject, receipts = write_dataset([(row, context)], tmp_path / dataset / "source", policy)

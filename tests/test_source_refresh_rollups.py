@@ -1,5 +1,6 @@
 """The hosted refreshes of the once hand-run families: wiring, raw retention and the no-change exit."""
 
+import contextlib
 from datetime import UTC, datetime, timedelta
 import hashlib
 import json
@@ -237,7 +238,14 @@ def test_administration_policy_rebuilds_at_the_head_commit_and_skips_an_unchange
         ("47-Trump", policy_fixture.NOVEMBER, "Statement on H.R. 1"),
         ("47-Trump", policy_fixture.NOVEMBER, "Statement on H.R. 4"),
     ]
-    assert pq.read_table(generation / "etl_receipts.parquet").num_rows == 7  # three statements, four bill links
+    links = pq.read_table(generation / "administration_policy_bill_links.parquet")
+    assert links.schema.equals(rollups.retained_collections.SCHEMAS["administration_policy_bill_links"],
+                               check_metadata=True)
+    assert pq.read_schema(generation / "administration_policy_statements.parquet").equals(
+        rollups.retained_collections.SCHEMAS["administration_policy_statements"], check_metadata=True)
+    assert [row["bill_id"] for row in links.to_pylist()] == ["118-s-2", "119-hr-1", "119-hr-4", "119-s-9"]
+    assert not any((tmp_path / "first").rglob("*receipt*"))
+    assert "etlReceipts" not in json.loads((generation / "artifact.json").read_text())["spec"]
     assert [event["commit"] for event in events if event["event"] == "administration-policy-head"] == [
         policy_fixture.NOVEMBER]
     changed = "sha256:" + hashlib.sha256(policy_fixture.TRUMP_LATER).hexdigest()
@@ -249,6 +257,40 @@ def test_administration_policy_rebuilds_at_the_head_commit_and_skips_an_unchange
                                  for name in ("46-Biden", "47-Trump")})
     rollups.AdministrationPolicyRollup(output_dir=tmp_path / "unchanged").run()
     assert generations(tmp_path / "unchanged") == []
+
+    digest = "sha256:" + "d" * 64
+    table_desc = {"sha256": digest, "byteSize": 100, "rows": 1, "columns": [["statement_id", "VARCHAR"]]}
+    unpinned_index = {
+        "format": "spicy-regs-publication", "version": 2,
+        "families": {"administration-policy": {
+            "logicalId": "urn:spicy-regs:family:administration-policy",
+            "artifactDigest": digest,
+            "prefix": f"generations/administration-policy/{'d' * 64}",
+            "tables": {
+                "administration_policy_statements.parquet": table_desc,
+                "administration_policy_bill_links.parquet": table_desc,
+            },
+            "etlReceipts": {
+                "key": "etl_receipts.parquet", "sha256": digest, "byteSize": 100, "rows": 2,
+                "columns": [["dataset", "VARCHAR"]], "generationId": digest,
+                "datasets": ["administration_policy_statements", "administration_policy_bill_links"],
+            },
+        }},
+    }
+    index_path = tmp_path / "unpinned-index.json"
+    index_path.write_text(json.dumps(unpinned_index))
+    with pytest.raises(publication.PublicationError, match="receipt-archive.json"):
+        administration_policy.build_from_captures(october, tmp_path / "refused-cli", read_index=index_path)
+
+    @contextlib.contextmanager
+    def snapshot(_url):
+        yield unpinned_index
+
+    monkeypatch.setenv("R2_PUBLIC_URL", "https://data.example.test")
+    monkeypatch.setattr(publication, "snapshot", snapshot)
+    monkeypatch.setattr(administration_policy, "head_commit", lambda: pytest.fail("ran build before pin check"))
+    with pytest.raises(publication.PublicationError, match="receipt-archive.json"):
+        rollups.AdministrationPolicyRollup(output_dir=tmp_path / "refused-rollup").run()
 
 
 def test_treasury_adds_listed_debt_days_to_the_published_generation(tmp_path, monkeypatch):

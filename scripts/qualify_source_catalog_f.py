@@ -564,7 +564,7 @@ def fcc_code_pins() -> dict:
     from importlib import import_module
     result = code_pins()
     modules = ("spicy_docs.sources.fcc_ecfs", "spicy_docs.reading.paged_json",
-               "spicy_regs.transforms.build_fcc_ecfs")
+               "spicy_regs.transforms.build_fcc_ecfs", "spicy_regs.transforms.government_source_shapes")
     result["files"] += [pin(_module_path(import_module(name))) for name in modules]
     return result
 
@@ -625,27 +625,54 @@ def fcc_selection(corpus: Path, generation: str = FCC_GENERATION) -> dict:
     decisions = [e for e in events if e.get("event") == "proceeding-selection"]
     outputs = [e for e in events if e.get("event") == "retained-file"]
     outcomes = [e for e in events if e.get("event") == "build-outcome"]
+    has_receipts = "etlReceipts" in root.get("spec", {})
     if (len(selections) != 1 or selections[0].get("stage") != "fcc-proceedings" or selections[0].get("since") != since
             or len(decisions) != 1 or decisions[0].get("selection_rule") != "earliest-created/latest-modified/most-populated/lowest-id"
-            or len(outputs) != 1 or outputs[0].get("dataset") != "fcc_proceedings"
-            or outputs[0].get("name") != "fcc_proceedings.parquet" or outputs[0].get("stage") != "government-producer-output"
-            or outputs[0].get("body_retained") is not True or outputs[0].get("response_complete") is not True
             or len(outcomes) != 1 or outcomes[0].get("outcome") != "build-complete"):
         raise ValueError("FCC refresh selection, decisions or producer output absent")
-    output_member = source.members.get(outputs[0].get("blob_member"))
-    if (output_member is None or output_member.get("role") != "source-body"
-            or output_member["sha256"] != outputs[0]["sha256"] or output_member["byteSize"] != outputs[0]["byte_size"]):
-        raise ValueError("FCC producer-output/member pins differ")
-    return {"format": "source-catalog-f-fcc-refresh/1", "family": "fcc-proceedings", "corpus": str(corpus.resolve()),
-            "selected_generation": generation, "artifact": sources[0], "captures": captures,
-            "since": since, "until": until, "publisher_upper_bound": publisher_bound,
-            "producer_decision": decisions[0], "producer_output": outputs[0],
-            "recorded_packages": next(e["packages"] for e in events if e.get("event") == "run"),
-            "metadata_pins": [pin(directory / "artifact.json")] + [pin(source.directory / k) for k in sorted(source.metadata)],
-            "code_pins": fcc_code_pins(), "decoded_source_read_cap": FCC_READ_BUDGET,
-            "scope": "Selected dated producer refresh and candidate native raw-record roundtrip only",
-            "limits": ["Historical baseline acquisition absent", "Historical native receipt inheritance not replayed",
-                       "No undated/full publisher population closure", "Recorded package compatibility requires exact replay evidence"]}
+    generation_pins = [pin(directory / "artifact.json")]
+    published_table = None
+    producer_output = None
+    if has_receipts:
+        if (len(outputs) != 1 or outputs[0].get("dataset") != "fcc_proceedings"
+                or outputs[0].get("name") != "fcc_proceedings.parquet" or outputs[0].get("stage") != "government-producer-output"
+                or outputs[0].get("body_retained") is not True or outputs[0].get("response_complete") is not True):
+            raise ValueError("FCC refresh selection, decisions or producer output absent")
+        output_member = source.members.get(outputs[0].get("blob_member"))
+        if (output_member is None or output_member.get("role") != "source-body"
+                or output_member["sha256"] != outputs[0]["sha256"] or output_member["byteSize"] != outputs[0]["byte_size"]):
+            raise ValueError("FCC producer-output/member pins differ")
+        producer_output = outputs[0]
+        scope = "Selected dated producer refresh and candidate native raw-record roundtrip only"
+    else:
+        if outputs:
+            raise ValueError("Receipts-free FCC refresh must not retain an intermediate producer output")
+        manifests = root.get("memberManifests", ())
+        members_pin = pin(directory / "members.json")
+        if (len(manifests) != 1 or manifests[0].get("objectKey") != "members.json"
+                or manifests[0].get("sha256") != members_pin["sha256"]
+                or manifests[0].get("byteSize") != members_pin["byteSize"]):
+            raise ValueError("FCC generation member manifest differs")
+        generation_pins.append(members_pin)
+        tables = [m for m in json.loads(_fcc_metadata(directory / "members.json"))["members"]
+                  if m.get("objectKey") == "fcc_proceedings.parquet"]
+        if len(tables) != 1 or tables[0].get("role") != "table":
+            raise ValueError("FCC generation requires one fcc_proceedings.parquet table member")
+        published_table = tables[0]
+        scope = "Selected dated producer refresh and published subject-table replay only"
+    result = {"format": "source-catalog-f-fcc-refresh/1", "family": "fcc-proceedings", "corpus": str(corpus.resolve()),
+              "selected_generation": generation, "artifact": sources[0], "captures": captures,
+              "since": since, "until": until, "publisher_upper_bound": publisher_bound,
+              "producer_decision": decisions[0], "producer_output": producer_output,
+              "recorded_packages": next(e["packages"] for e in events if e.get("event") == "run"),
+              "metadata_pins": generation_pins + [pin(source.directory / k) for k in sorted(source.metadata)],
+              "code_pins": fcc_code_pins(), "decoded_source_read_cap": FCC_READ_BUDGET,
+              "scope": scope,
+              "limits": ["Historical baseline acquisition absent", "Historical native receipt inheritance not replayed",
+                         "No undated/full publisher population closure", "Recorded package compatibility requires exact replay evidence"]}
+    if published_table is not None:
+        result["published_table"] = published_table
+    return result
 
 
 def _fcc_rows(documents: list[dict]) -> tuple[list[dict], dict]:
@@ -662,6 +689,7 @@ def _fcc_replay(manifest_path: Path, output: Path, owned: list) -> dict:
     import httpx
     from spicy_regs.transforms.build_fcc_ecfs import _fetch_fcc, _PROCEEDING_SCHEMA
     from spicy_regs.transforms.government_receipts import migrate_outputs, POLICIES, _INHERITED
+    from spicy_regs.transforms.government_source_shapes import SUBJECT_SCHEMAS, map_subject
     from spicy_regs.etl_receipts import read_with_receipts
 
     manifest = json.loads(manifest_path.read_text())
@@ -697,14 +725,34 @@ def _fcc_replay(manifest_path: Path, output: Path, owned: list) -> dict:
     rows, decision = _fcc_rows(documents)
     if any(decision[key] != manifest["producer_decision"].get(key) for key in decision):
         raise ValueError("FCC duplicate-document or nameless selection differs")
-    expected = pq.read_table(io.BytesIO(source.body(manifest["producer_output"]))).to_pylist()
-    comparison = compare_rows(expected, rows)
     candidate = output / "fcc_proceedings.parquet"
-    pq.write_table(pa.Table.from_pylist(rows, schema=_PROCEEDING_SCHEMA), candidate, compression="zstd")
-    migration = migrate_outputs((candidate,))
-    restored = [row["raw_record"] for row in read_with_receipts(
-        [candidate], [Path(migration["receipt_path"])], POLICIES["fcc_proceedings"], generation_id=migration["generation_id"])]
-    roundtrip = compare_rows(rows, restored)
+    if manifest["producer_output"] is not None:
+        expected = pq.read_table(io.BytesIO(source.body(manifest["producer_output"]))).to_pylist()
+        comparison = compare_rows(expected, rows)
+        pq.write_table(pa.Table.from_pylist(rows, schema=_PROCEEDING_SCHEMA), candidate, compression="zstd")
+        migration = migrate_outputs((candidate,))
+        restored = [row["raw_record"] for row in read_with_receipts(
+            [candidate], [Path(migration["receipt_path"])], POLICIES["fcc_proceedings"], generation_id=migration["generation_id"])]
+        roundtrip = compare_rows(rows, restored)
+        output_pins = [pin(candidate), pin(Path(migration["receipt_path"]))]
+    else:
+        published = manifest["published_table"]
+        size = published["byteSize"]
+        if type(size) is not int or size < 0 or size + 1 > source.read_allowance:
+            raise ValueError("FCC decoded pre-read budget exceeded")
+        source.read_allowance -= size + 1
+        source.reserved_read_bytes += size + 1
+        table_path = corpus / "lineage/generations/fcc-proceedings" / manifest["selected_generation"][7:] / "fcc_proceedings.parquet"
+        table_bytes = _fcc_metadata(table_path, size)
+        if "sha256:" + hashlib.sha256(table_bytes).hexdigest() != published["sha256"]:
+            raise ValueError("FCC published table bytes differ from generation member manifest")
+        source.remaining -= len(table_bytes)
+        mapped = [map_subject("fcc_proceedings", row) for row in rows]
+        pq.write_table(pa.Table.from_pylist(mapped, schema=SUBJECT_SCHEMAS["fcc_proceedings"]), candidate, compression="zstd")
+        expected = pq.read_table(io.BytesIO(table_bytes)).to_pylist()
+        comparison = compare_rows(expected, mapped)
+        roundtrip = compare_rows(mapped, pq.read_table(candidate).to_pylist())
+        output_pins = [pin(candidate)]
     source.verify()
     if fcc_selection(corpus, manifest["selected_generation"]) != manifest:
         raise ValueError("FCC selection/code changed during replay")
@@ -714,7 +762,7 @@ def _fcc_replay(manifest_path: Path, output: Path, owned: list) -> dict:
               "artifact": manifest["artifact"], "logical_until": manifest["until"], "publisher_upper_bound": manifest["publisher_upper_bound"],
               "capture_occurrences": [{"journal_ordinal": c["journal_ordinal"], "capture_id": c["event"]["capture_id"]} for c in consumed],
               "source_documents": len(documents), "producer_decision": decision, "producer_comparison": comparison,
-              "native_candidate_raw_roundtrip": roundtrip, "outputs": [pin(candidate), pin(Path(migration["receipt_path"]))],
+              "native_candidate_raw_roundtrip": roundtrip, "outputs": output_pins,
               "decoded_source_successful_bytes": FCC_READ_BUDGET - source.remaining,
               "decoded_source_reserved_bytes": source.reserved_read_bytes,
               "code_pins": manifest["code_pins"], "limits": manifest["limits"], "production_actions": []}

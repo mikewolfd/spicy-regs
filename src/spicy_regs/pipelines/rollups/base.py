@@ -191,6 +191,14 @@ class RollupPipeline(Pipeline):
         public_url = getenv("R2_PUBLIC_URL")
         context = publication.snapshot(public_url) if public_url else nullcontext(publication.empty_index())
         with context as prior_index:
+            publication.require_live_receipt_pins(
+                dict(prior_index),
+                [
+                    key.removesuffix(".parquet")
+                    for key in (self.outputs or (self.output,))
+                    if key not in self.receipt_only_tables
+                ],
+            )
             if self.source_evidence:
                 self.source_evidence.inherit(prior_index, public_url=public_url)
             # Bespoke ingest builders also cache priors. An isolated build
@@ -352,6 +360,17 @@ class RollupPipeline(Pipeline):
         managed download reuses its descriptor; any other file is hashed once.
         The rollup's own table is primed but is no parent (:meth:`_own`).
         """
+        if snapshot is not None:
+            from spicy_regs.sources import publication
+
+            publication.require_live_receipt_pins(
+                dict(snapshot),
+                [
+                    key.removesuffix(".parquet")
+                    for key in (self.outputs or (self.output,))
+                    if key not in self.receipt_only_tables
+                ],
+            )
         return self._prime_tables(self.inputs, output_dir, snapshot)
 
     def _prime_tables(self, keys: tuple[str, ...], output_dir: Path, snapshot: Mapping | None) -> dict[str, dict]:

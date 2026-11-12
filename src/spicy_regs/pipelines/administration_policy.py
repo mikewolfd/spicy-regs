@@ -140,6 +140,11 @@ def build_from_captures(selection: dict, output_dir: Path, *, archive_root: Path
     store = open_raw(archive_root)
     evidence = CaptureEvidence(output_dir, FAMILY)
     try:
+        if read_index is not None:
+            from spicy_regs.sources import publication
+
+            publication.require_live_receipt_pins(
+                publication.parse_index(Path(read_index).read_bytes()), retained_collections.SCHEMAS)
         read_snapshot = inherit_read_index(evidence, read_index)
         built = candidate(selection, output_dir, evidence, store=store)
         tables = retained_collections.SCHEMAS
@@ -148,9 +153,7 @@ def build_from_captures(selection: dict, output_dir: Path, *, archive_root: Path
             files=[output_dir / "candidate" / built["outputs"][table]["path"] for table in tables],
             expected_keys=[table + ".parquet" for table in tables],
             schemas={table: described_schema(schema) for table, schema in tables.items()},
-            receipt_path=output_dir / "candidate" / "etl_receipts.parquet",
-            receipt_policies=list(retained_collections.POLICIES.values()),
-            receipt_generation_id=built["generation"], inputs=evidence.inputs(),
+            inputs=evidence.inputs(),
             read_snapshot=read_snapshot,
         )
     except BaseException as error:

@@ -397,24 +397,6 @@
     ],
     "datasets": [
       {
-        "dataset": "administration_policy_bill_links",
-        "receipt_only": false,
-        "policy_version": "administration-policy-v1",
-        "identity_columns": [
-          "link_id"
-        ],
-        "processing_fields": []
-      },
-      {
-        "dataset": "administration_policy_statements",
-        "receipt_only": false,
-        "policy_version": "administration-policy-v1",
-        "identity_columns": [
-          "statement_id"
-        ],
-        "processing_fields": []
-      },
-      {
         "dataset": "agency_lifecycle_stats",
         "receipt_only": false,
         "policy_version": "regulations-native-v1",
@@ -1137,17 +1119,6 @@
         "policy_version": "government-sources/3",
         "identity_columns": [
           "id_submission"
-        ],
-        "processing_fields": [
-          "raw_record"
-        ]
-      },
-      {
-        "dataset": "fcc_proceedings",
-        "receipt_only": false,
-        "policy_version": "government-sources/2",
-        "identity_columns": [
-          "name"
         ],
         "processing_fields": [
           "raw_record"

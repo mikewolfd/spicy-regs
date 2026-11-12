@@ -506,7 +506,7 @@ def subject_schema(dataset: str) -> pa.Schema:
 SUBJECT_SCHEMAS = {dataset: subject_schema(dataset) for dataset in LEGACY_COLUMNS}
 
 #: Text columns published with edge whitespace stripped and a blank (empty or whitespace-only) value as NULL. The
-#: receipt's ``raw_record`` keeps the value as written. fcc_proceedings ``rule_section`` (owner, 2026-10-31): FCC staff
+#: run's retained source pages keep the value as written. fcc_proceedings ``rule_section`` (owner, 2026-10-31): FCC staff
 #: type it freely, so ECFS writes a single space for "none" (643 of 21,705 dockets, walk 2026-10-08) and pads some
 #: values (`` Part 76``); ``government_bulk`` states the same rule in SQL.
 STRIPPED_TEXT = {"fcc_proceedings": frozenset({"rule_section"})}
