@@ -989,6 +989,7 @@ def read_with_receipts(
     *,
     generation_id: str,
     bulk: bool = True,
+    processing_by_ordinal: bool = False,
 ) -> Iterable[dict]:
     """Reconstruct internal processing columns after complete validation; no legacy fallback.
 
@@ -1002,7 +1003,13 @@ def read_with_receipts(
     if bulk:
         from spicy_regs.etl_bulk import NotBulkEligible, log_row_fallback, read_with_receipts as read_bulk
         try:
-            yield from read_bulk(subject_paths, receipt_paths, policy, generation_id=generation_id)
+            yield from read_bulk(
+                subject_paths,
+                receipt_paths,
+                policy,
+                generation_id=generation_id,
+                processing_by_ordinal=processing_by_ordinal,
+            )
             return
         except NotBulkEligible as error:
             log_row_fallback("receipt read", error, dataset=policy.dataset,

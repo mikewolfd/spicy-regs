@@ -182,68 +182,133 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
     Earlier receipts with explicit normalized inputs remain readable, and
     carried-over promotion receipts take theirs from the subject row
     (``comments_promotion_input``) without a row-reader fallback.
-    Batch shaping uses the same mapper as _processor_input, followed by one Arrow
-    conversion per batch. Any unproven value returns the whole pair to that row
-    reader so it decides the exact first error. A DuckDB or Arrow failure does
-    not: it raises ``BulkValidationError`` (``BulkInputError`` when the data
-    caused it) and the pair is never redone by row. No destination appears
-    until all joins, input values, and source-order checks pass.
+    Admission runs once on narrow keys (`retain_processing=False`, `threads=1`,
+    `bounded_insert=True`), then streams `(n, receipt)` ordinals and gathers
+    guarded receipt row groups so DuckDB never buffers full `processing_json`
+    payloads across all rows. Batch shaping uses the same mapper as
+    _processor_input, followed by one Arrow conversion per batch. Any unproven
+    value returns the whole pair to that row reader so it decides the exact
+    first error. A DuckDB or Arrow failure does not: it raises
+    ``BulkValidationError`` (``BulkInputError`` when the data caused it) and the
+    pair is never redone by row. No destination appears until all joins, input
+    values, custody checks, and source-order checks pass.
     """
+    from contextlib import ExitStack, closing
     from tempfile import TemporaryDirectory
-    from spicy_regs.etl_receipts import decode_exact_json, exact_json
+    from spicy_regs import receipt_history
+    from spicy_regs.etl_receipts import RECEIPT_SCHEMA, decode_exact_json, exact_json
+    from spicy_regs.local_data import file_signature
     from spicy_regs.transforms.regulations_shape import RECEIPT_COLUMNS, shape_record
     from spicy_regs.transforms.regulations_receipts import (
         COMMENTS_PROMOTION_PROCESSOR, comments_promotion_input, policy as selected_policy, _retained_processor_input)
 
+    if not isinstance(subjects, Path) or not isinstance(receipts, Path):
+        raise etl_bulk.NotBulkEligible('Comments catalog restore requires regular local Path inputs')
+    subjects = subjects.absolute()
+    receipts = receipts.absolute()
+    states = {subjects: file_signature(subjects), receipts: file_signature(receipts)}
+
+    def check_sources() -> None:
+        etl_bulk.checkpoint()
+        if any(file_signature(path) != state for path, state in states.items()):
+            raise ValueError('Ordinal processing source changed after selection')
+
     selected = selected_policy('comments')
-    etl_bulk.validate_bundle({'comments': [subjects]}, [receipts], [selected], generation_id=generation_id)
     schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS['comments']])
-    expected = pq.ParquetFile(subjects).metadata.num_rows
-    query = _accepted_join(subjects, receipts, 'n.* EXCLUDE(file_row_number), n.file_row_number AS _ordinal, '
-                                               'r.processing_json AS _processing, r.processor AS _processor')
+    receipt_fields = pa.schema([RECEIPT_SCHEMA.field('processing_json'), RECEIPT_SCHEMA.field('processor')])
     destination.parent.mkdir(parents=True, exist_ok=True)
     seen = 0
-    try:
-        with etl_bulk.bulk_connection() as (con, _), TemporaryDirectory(prefix='comments-restore-', dir=destination.parent) as scratch:
-            temporary = Path(scratch)/'processing.parquet'
+    with etl_bulk._validated_bundle(
+        {'comments': [subjects]}, [receipts], [selected],
+        generation_id=generation_id, retain_processing=False,
+        threads=1, memory_limit='4GB', bounded_insert=True,
+    ) as con, ExitStack() as files, TemporaryDirectory(prefix='comments-restore-', dir=destination.parent) as scratch:
+        check_sources()
+        try:
+            subjects_file = files.enter_context(etl_bulk._parquet(subjects))
+            receipts_file = files.enter_context(etl_bulk._parquet(receipts))
+            expected = subjects_file.metadata.num_rows
+            group_ends, total_receipts = [], 0
+            for group in range(receipts_file.metadata.num_row_groups):
+                total_receipts += receipts_file.metadata.row_group(group).num_rows
+                group_ends.append(total_receipts)
+            batch_size = min(_BATCH, 1000)
+            pending: list[pa.RecordBatch] = []
+            pending_rows = 0
+            subject_batches = subjects_file.iter_batches(batch_size=batch_size, use_threads=False)
+
+            def next_subjects(count: int) -> pa.Table:
+                nonlocal pending_rows
+                while pending_rows < count:
+                    try:
+                        piece = next(subject_batches)
+                    except StopIteration as stop:
+                        raise RuntimeError('comments: restored subject order or membership changed') from stop
+                    if piece.num_rows:
+                        pending.append(piece)
+                        pending_rows += piece.num_rows
+                combined = pa.Table.from_batches(pending, schema=selected.subject_schema)
+                head = combined.slice(0, count)
+                tail = combined.slice(count)
+                pending.clear()
+                if tail.num_rows:
+                    pending.extend(tail.to_batches())
+                pending_rows = tail.num_rows
+                return head
+
+            temporary = Path(scratch) / 'processing.parquet'
             with pq.ParquetWriter(temporary, schema, compression='zstd') as writer:
-                for batch in con.execute(query).to_arrow_reader(min(_BATCH, 1000)):
-                    table = pa.Table.from_batches([batch])
-                    table.validate(full=True)
-                    if table['_ordinal'].to_pylist() != list(range(seen, seen+batch.num_rows)):
-                        raise RuntimeError('comments: restored subject order or membership changed')
-                    held = [decode_exact_json(value) for value in table['_processing'].to_pylist()]
-                    processors = table['_processor'].to_pylist()
-                    # Promotion receipts hold no input; their subject rows supply it (see comments_promotion_input).
-                    subject_rows = (table.select(selected.subject_schema.names).to_pylist()
-                                    if COMMENTS_PROMOTION_PROCESSOR in processors else None)
-                    raw = []
-                    for index, values in enumerate(held):
-                        promoted = (None if subject_rows is None else
-                                    comments_promotion_input(subject_rows[index] | values, processors[index]))
-                        if promoted is None and values.get('input_metadata') != {}:
-                            raise etl_bulk.NotBulkEligible('Comments catalog restore requires empty processor metadata')
-                        raw.append(promoted if promoted is not None else _retained_processor_input('comments', values))
-                    if any(not isinstance(value, Mapping) for value in raw):
-                        raise etl_bulk.NotBulkEligible('Comments exact retained processor input is required')
-                    shaped = [shape_record('comments', value) for value in raw]
-                    reproduced = etl_bulk.mapper_table(shaped, selected.subject_schema, 'Comments reproduction')
-                    actual = table.select(selected.subject_schema.names).cast(selected.subject_schema)
-                    if not reproduced.equals(actual):
-                        raise etl_bulk.NotBulkEligible('Comments processor input differs from selected native subjects')
-                    names = RECEIPT_COLUMNS['comments']
-                    if any(exact_json({name: value.get(name) for name in names}) !=
-                           exact_json({name: values.get(name) for name in names})
-                           for value, values in zip(shaped, held)):
-                        raise etl_bulk.NotBulkEligible('Comments processor input differs from selected receipt values')
-                    writer.write_table(etl_bulk.mapper_table(raw, schema, 'Comments retained input'))
-                    seen += batch.num_rows
-            if seen != expected:
-                raise RuntimeError(f'comments: restored {seen} of {expected} native subjects')
+                with closing(con.execute('SELECT n, receipt FROM subject_receipts ORDER BY n').to_arrow_reader(batch_size)) as reader:
+                    for batch in reader:
+                        ordinals = pa.Table.from_batches([batch])
+                        ordinals.validate(full=True)
+                        if ordinals['n'].to_pylist() != list(range(seen, seen + batch.num_rows)):
+                            raise RuntimeError('comments: restored subject order or membership changed')
+                        check_sources()
+                        table = next_subjects(batch.num_rows)
+                        table.validate(full=True)
+                        receipt_ordinals = ordinals['receipt'].to_pylist()
+                        receipt_table, positions = receipt_history._take_prior_rows(
+                            [receipts_file], [total_receipts], [group_ends], receipt_ordinals, receipt_fields)
+                        if positions != list(range(len(receipt_ordinals))):
+                            raise RuntimeError('comments: restored receipt selection omitted an admitted ordinal')
+                        receipt_table.validate(full=True)
+                        check_sources()
+                        try:
+                            held = [decode_exact_json(value) for value in receipt_table['processing_json'].to_pylist()]
+                            processors = receipt_table['processor'].to_pylist()
+                            # Promotion receipts hold no input; their subject rows supply it (see comments_promotion_input).
+                            subject_rows = (table.select(selected.subject_schema.names).to_pylist()
+                                            if COMMENTS_PROMOTION_PROCESSOR in processors else None)
+                            raw = []
+                            for index, values in enumerate(held):
+                                promoted = (None if subject_rows is None else
+                                            comments_promotion_input(subject_rows[index] | values, processors[index]))
+                                if promoted is None and values.get('input_metadata') != {}:
+                                    raise etl_bulk.NotBulkEligible('Comments catalog restore requires empty processor metadata')
+                                raw.append(promoted if promoted is not None else _retained_processor_input('comments', values))
+                            if any(not isinstance(value, Mapping) for value in raw):
+                                raise etl_bulk.NotBulkEligible('Comments exact retained processor input is required')
+                            shaped = [shape_record('comments', value) for value in raw]
+                            reproduced = etl_bulk.mapper_table(shaped, selected.subject_schema, 'Comments reproduction')
+                            actual = table.select(selected.subject_schema.names).cast(selected.subject_schema)
+                            if not reproduced.equals(actual):
+                                raise etl_bulk.NotBulkEligible('Comments processor input differs from selected native subjects')
+                            names = RECEIPT_COLUMNS['comments']
+                            if any(exact_json({name: value.get(name) for name in names}) !=
+                                   exact_json({name: values.get(name) for name in names})
+                                   for value, values in zip(shaped, held)):
+                                raise etl_bulk.NotBulkEligible('Comments processor input differs from selected receipt values')
+                            mapped = etl_bulk.mapper_table(raw, schema, 'Comments retained input')
+                        except (ValueError, TypeError, OverflowError, RecursionError) as error:
+                            # The shared mapper rejected a retained input: the row reader decides the exact first error.
+                            raise etl_bulk.NotBulkEligible('Comments batch processing proof requires the row reader') from error
+                        writer.write_table(mapped)
+                        seen += batch.num_rows
+                if seen != expected or pending_rows or next(subject_batches, None) is not None:
+                    raise RuntimeError(f'comments: restored {seen} of {expected} native subjects')
+            check_sources()
             temporary.replace(destination)
-    except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
-        raise etl_bulk.bulk_failure('Comments batch processing proof failed', error) from error
-    except (ValueError, TypeError, OverflowError, RecursionError) as error:
-        # The shared mapper rejected a retained input: the row reader decides the exact first error.
-        raise etl_bulk.NotBulkEligible('Comments batch processing proof requires the row reader') from error
+        except (etl_bulk.duckdb.Error, pa.ArrowException) as error:
+            raise etl_bulk.bulk_failure('Comments batch processing proof failed', error) from error
     return seen

@@ -1151,7 +1151,7 @@ def _validated_bundle(subjects, receipt_paths, policies, *, generation_id, scope
                 retained_scan = _retained_source15_scan(retained_scan, subjects[held_policy.dataset],
                                                         receipt_paths, held_policy, generation_id)
                 _check_retained_scan(con, retained_scan, subjects, receipt_paths, held_policy, generation_id)
-        except duckdb.Error as error:
+        except (duckdb.Error, pa.ArrowMemoryError, pa.ArrowCapacityError) as error:
             raise bulk_failure("Bulk receipt validation failed", error) from error
         try:
             yield con
