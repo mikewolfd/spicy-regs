@@ -41,7 +41,7 @@ from loguru import logger
 from spicy_regs.env_values import first_env
 from spicy_regs.sources import r2
 from spicy_regs.transforms.government_receipts import internal_prior, receipt_builder
-from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS
+from spicy_regs.transforms.government_source_shapes import LEGACY_COLUMNS, SUBJECT_SCHEMAS, map_subject
 from spicy_regs.transforms.parquet_rows import str_or_none, write_rows
 from spicy_regs.transforms.table_merge import merge_local_prior
 
@@ -103,8 +103,8 @@ def _shape_proceeding(raw: dict) -> dict:
         "date_created": raw.get("date_proceeding_created"),
         "date_closed": raw.get("date_closed"),
         "filed_by": raw.get("filed_by"),
-        # Copied as ECFS writes them: offset timestamps stay VARCHAR. rule_section keeps staff spacing here, so the
-        # receipt's raw_record holds it; map_subject strips it for the published row (STRIPPED_TEXT).
+        # Copied as ECFS writes them: offset timestamps stay VARCHAR. rule_section keeps staff spacing here;
+        # map_subject strips it for the published row (STRIPPED_TEXT) and the run's retained ECFS pages keep it.
         # ECFS's four comment-window keys are not read: never filled in 250,251 retained records (ss-17vd).
         "date_nprm": raw.get("date_nprm"),
         "date_reporting_and_order": raw.get("date_reporting_and_order"),
@@ -512,7 +512,6 @@ def proceeding_rows(documents: Iterable[dict]) -> tuple[list[dict], list[str], l
     return rows, nameless, sorted(name for name, docs in by_name.items() if len(docs) > 1)
 
 
-@receipt_builder
 def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None = None) -> Path:
     """Build ``fcc_proceedings.parquet`` from a whole walk of ECFS proceedings, one row per docket name.
 
@@ -542,11 +541,18 @@ def build_fcc_proceedings(output_dir: Path, *, evidence: CaptureEvidence | None 
                        selection_rule=PROCEEDING_SELECTION_RULE)
 
     staged = output_dir / f".{PROCEEDINGS_OUTPUT}.partial"
+    schema = SUBJECT_SCHEMAS["fcc_proceedings"]
+    row_count = len(rows)
+    for index, row in enumerate(rows):
+        rows[index] = map_subject("fcc_proceedings", row)
     pq.write_table(
-        pa.Table.from_pylist(rows, schema=_PROCEEDING_SCHEMA), staged, compression="zstd", row_group_size=50_000
+        pa.Table.from_pylist(rows, schema=schema),
+        staged,
+        compression="zstd",
+        row_group_size=50_000,
     )
     staged.replace(out_file)
-    logger.info("FCC proceedings: {:,} rows from {:,} documents", len(rows), len(documents))
+    logger.info("FCC proceedings: {:,} rows from {:,} documents", row_count, len(documents))
     return out_file
 
 

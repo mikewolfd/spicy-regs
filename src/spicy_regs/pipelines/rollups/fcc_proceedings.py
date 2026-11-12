@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import ClassVar
 
 from spicy_regs.pipelines.rollups.base import make_rollup_app
-from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup
+from spicy_regs.pipelines.rollups.government import GovernmentTableRollup
 from spicy_regs.transforms.build_fcc_ecfs import build_fcc_proceedings
 
 
-class FccProceedingsRollup(GovernmentReceiptRollup):
+class FccProceedingsRollup(GovernmentTableRollup):
     """FCC proceedings (docket equivalents) ingested from ECFS (api.data.gov key)."""
 
     name: ClassVar[str] = "fcc-proceedings"
@@ -23,7 +23,7 @@ class FccProceedingsRollup(GovernmentReceiptRollup):
     output: ClassVar[str] = "fcc_proceedings.parquet"
 
     def build(self, output_dir: Path) -> Path:
-        return build_fcc_proceedings(output_dir, evidence=self.source_evidence, receipt_generation_id=self.receipt_generation_id)
+        return build_fcc_proceedings(output_dir, evidence=self.source_evidence)
 
 
 app = make_rollup_app(FccProceedingsRollup)

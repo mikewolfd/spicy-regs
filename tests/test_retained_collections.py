@@ -49,7 +49,7 @@ def rows(output, table):
     return pq.read_table(path).to_pylist() if path.exists() else []
 
 
-def test_native_statements_and_repeated_bill_links_survive_with_receipts(tmp_path):
+def test_native_statements_and_repeated_bill_links_survive_without_receipts(tmp_path):
     records = [
         statement(bills=["hr1", "s2", "hr1"], rescinded=True, unknown={"x": 1}),
         statement(bills=[], date_issued="literal unknown date"),
@@ -70,9 +70,10 @@ def test_native_statements_and_repeated_bill_links_survive_with_receipts(tmp_pat
     assert [s["source_link_index"] for s in links] == [0, 1, 2, 0]
     assert len({s["link_id"] for s in links}) == 4
     assert all(link["statement_id"] in {s["statement_id"] for s in statements} for link in links)
-    receipts = pq.read_table(output / "etl_receipts.parquet").to_pylist()
-    assert len(receipts) == 7 and all(r["generation_id"] == result["generation"] for r in receipts)
-    assert all(r["witnesses"][0]["sha256"] == statements[0]["source_sha256"] for r in receipts)
+    assert not any(output.rglob("*receipt*"))
+    assert "receipts_sha256" not in result
+    for name, schema in reader.SCHEMAS.items():
+        assert pq.read_schema(output / name / f"{name}.parquet").equals(schema, check_metadata=True)
     second = reader.build(pin, tmp_path / "second")
     assert second["generation"] == result["generation"] and second["outputs"] == result["outputs"]
     with pytest.raises(FileExistsError):
@@ -118,14 +119,14 @@ def test_duplicate_selection_is_refused(tmp_path):
 
 def test_original_change_during_build_is_refused(tmp_path, monkeypatch):
     pin = manifest(tmp_path, [statement()])
-    original = reader.write_dataset
+    original = reader.write_rows
 
     def mutate(*args, **kwargs):
         result = original(*args, **kwargs)
         (tmp_path / "metadata.yaml").write_bytes(b"[]")
         return result
 
-    monkeypatch.setattr(reader, "write_dataset", mutate)
+    monkeypatch.setattr(reader, "write_rows", mutate)
     with pytest.raises(ValueError, match="changed during build"):
         reader.build(pin, tmp_path / "candidate")
     assert not (tmp_path / "candidate").exists()
@@ -155,7 +156,8 @@ def test_unlinked_only_selection_keeps_empty_link_schema(tmp_path):
     output = result["outputs"]["administration_policy_bill_links"]
     assert output["rows"] == 0 and output["path"] and output["sha256"]
     table = pq.read_table(tmp_path / "candidate" / output["path"])
-    assert table.num_rows == 0 and table.schema == reader.SCHEMAS["administration_policy_bill_links"]
+    assert table.num_rows == 0 and table.schema.equals(reader.SCHEMAS["administration_policy_bill_links"],
+                                                       check_metadata=True)
     assert len(rows(tmp_path / "candidate", "administration_policy_statements")) == 1
 
 

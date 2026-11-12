@@ -22,11 +22,22 @@ import pytest
 from spicy_regs.pipelines import comment_fields as cf
 from spicy_regs.pipelines import comment_fields_write as cfw
 from spicy_regs.schemas import COMMENT
-from spicy_regs.sources import iceberg
+from spicy_regs.sources import iceberg, publication
 
 pytestmark = pytest.mark.integration
 IMAGE = "apache/iceberg-rest-fixture:1.10.1@sha256:f7d679d30ac9c640bdeb2c015dff533cd3c8f1c7d491ebcb5d436f9a42db1d6f"
 T0 = "2020-01-01T00:00:00Z"
+
+
+@pytest.fixture(autouse=True)
+def nothing_published(monkeypatch):
+    """Nothing publishes the throwaway namespace's tables, so first initialization is allowed.
+
+    ``ensure_native`` otherwise reads the live public index and refuses an empty start for a published dataset
+    (covered in tests/test_regulatory_native_catalog.py). Read from the fork's index, which publishes comments, that
+    refusal failed every test here; read from the upstream default, it passed by accident and its 500 failed a run.
+    """
+    monkeypatch.setattr(publication, "current_index", lambda base_url: publication.empty_index())
 
 
 @pytest.fixture(scope="module")

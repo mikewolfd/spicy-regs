@@ -7,7 +7,6 @@ the published generation lacks raises :class:`Unchanged` and publishes nothing.
 """
 from __future__ import annotations
 
-import shutil
 from datetime import UTC, date, datetime, timedelta
 from os import getenv
 from pathlib import Path
@@ -107,7 +106,6 @@ class AdministrationPolicyRollup(SourceRefreshRollup):
 
     name = "administration-policy"
     outputs = tuple(f"{table}.parquet" for table in retained_collections.SCHEMAS)
-    receipt_policies = tuple(retained_collections.POLICIES.values())
 
     def build(self, output_dir: Path) -> tuple[Path, ...]:
         evidence = self.evidence
@@ -121,9 +119,6 @@ class AdministrationPolicyRollup(SourceRefreshRollup):
         if all(source["commit"] == published[source["administration"]]["commit"] for source in selection["sources"]):
             raise Unchanged(f"no archive file differs at {commit[:12]}")
         built = administration_policy.candidate(selection, output_dir, evidence, store=evidence.store, retain=False)
-        # The builder states its own generation identity in every receipt it wrote.
-        self.receipt_generation_id = built["generation"]
-        shutil.copyfile(output_dir / "candidate" / "etl_receipts.parquet", output_dir / "etl_receipts.parquet")
         return tuple(output_dir / "candidate" / built["outputs"][table]["path"]
                      for table in retained_collections.SCHEMAS)
 

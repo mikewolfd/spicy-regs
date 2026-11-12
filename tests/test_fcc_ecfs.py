@@ -249,3 +249,51 @@ def test_native_filing_receipt_preserves_flag_presence_and_literal_type(state, v
     if state != "missing":
         assert native["express_comment"] == value
         assert type(native["express_comment"]) is type(value)
+
+
+def test_build_fcc_proceedings_matches_receipt_route_without_writing_receipts(tmp_path, monkeypatch):
+    import duckdb
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from spicy_regs.pipelines.rollups.fcc_proceedings import FccProceedingsRollup
+    from spicy_regs.pipelines.rollups.government import GovernmentReceiptRollup, GovernmentTableRollup
+    from spicy_regs.transforms import build_fcc_ecfs as fcc
+    from spicy_regs.transforms.government_receipts import migrate_outputs
+
+    assert issubclass(FccProceedingsRollup, GovernmentTableRollup)
+    assert not issubclass(FccProceedingsRollup, GovernmentReceiptRollup)
+
+    fixture = json.loads((_FIXTURES / "proceeding_96_82.json").read_text())["record"]
+    documents = [
+        _RAW_PROCEEDING,
+        fixture,
+        {**_RAW_PROCEEDING, "name": "23-320", "id_proceeding": 9001, "rule_section": " "},
+        {"name": "17-108", "id_proceeding": 999999, "date_proceeding_created": "2026-09-21T13:00:56.032Z"},
+        {"id_proceeding": 404, "date_proceeding_created": "2024-01-01T00:00:00Z"},
+    ]
+    monkeypatch.setattr(fcc, "_fetch_fcc", lambda *args, **kwargs: iter(documents))
+
+    new_dir = tmp_path / "new"
+    new_dir.mkdir()
+    built = fcc.build_fcc_proceedings(new_dir)
+    assert [p.relative_to(new_dir) for p in new_dir.rglob("*") if p.is_file()] == [Path(fcc.PROCEEDINGS_OUTPUT)]
+
+    old_dir = tmp_path / "old"
+    old_dir.mkdir()
+    expected_path = old_dir / fcc.PROCEEDINGS_OUTPUT
+    rows, _, _ = fcc.proceeding_rows(documents)
+    pq.write_table(pa.Table.from_pylist(rows, schema=fcc._PROCEEDING_SCHEMA), expected_path, compression="zstd")
+    migrate_outputs((expected_path,), generation_id="receipt-route")
+
+    actual, expected = pq.read_table(built), pq.read_table(expected_path)
+    assert actual.schema.equals(expected.schema, check_metadata=True)
+    assert actual.equals(expected)
+    with duckdb.connect() as con:
+        assert con.execute("SELECT * FROM read_parquet(?) EXCEPT ALL SELECT * FROM read_parquet(?)",
+                           [str(built), str(expected_path)]).fetchall() == []
+        assert con.execute("SELECT * FROM read_parquet(?) EXCEPT ALL SELECT * FROM read_parquet(?)",
+                           [str(expected_path), str(built)]).fetchall() == []
+    # One row per docket name, the original document over a re-created one, staff spacing stripped, blank as NULL.
+    assert [(row["name"], row["id_proceeding"], row["rule_section"]) for row in actual.to_pylist()] == [
+        ("17-108", "301759", "Part 8"), ("23-320", "9001", None), ("96-82", "308877", "PART 80 AND 87")]
