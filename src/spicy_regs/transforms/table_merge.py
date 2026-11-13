@@ -779,6 +779,15 @@ UPDATE_DATE_SHAPE = (
 #: fresh value wins as it does in every other column (a NULL side fails the match too).
 COALESCE_RULES: dict[str, dict[str, str]] = {
     "congress_bills": {
+        # A new BILLSTATUS observation speaks for these source fields even
+        # when it omits them. An unrelated parent-only backfill cannot erase them.
+        **{
+            name: f"CASE WHEN f.schema_version IS NOT NULL THEN f.{name} ELSE COALESCE(f.{name}, p.{name}) END"
+            for name in (
+                "title_history_json", "calendar_numbers_json", "constitutional_authority_statement_text",
+                "source_create_date", "origin_chamber_code",
+            )
+        },
         "update_date": (
             f"CASE WHEN regexp_full_match(f.update_date, '{UPDATE_DATE_SHAPE}') "
             f"AND regexp_full_match(p.update_date, '{UPDATE_DATE_SHAPE}') "

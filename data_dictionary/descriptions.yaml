@@ -463,11 +463,13 @@ tables:
     measured_on: "2026-09-29"
     summary: >-
       One bill or resolution. Full BILLSTATUS records, older API details and retained
-      archive-list rows provide different amounts of detail. Pre-108th detail records do not
-      include walked action, committee, text, subject or related-bill lists; their missing
-      values stay NULL. `cosponsor_count` is retained when stated. Without actions, stage
-      and signed-date rules remain unset. Main identifiers support navigation; source method
-      and processing evidence are inspected separately.
+      archive-list rows provide different amounts of detail. An explicitly selected
+      82nd–107th Congress bill may have a completed API action list and publisher summaries.
+      The `child_routes` inventory separates the detail's advertised links and counts
+      from child observations and their page pins. A detail's `cosponsor_count` is a
+      declaration. Its acquired cosponsor population requires a separate read.
+      Main identifiers support navigation. Source method and processing evidence are
+      inspected separately.
     data_quality: >-
       **Historical cosponsor-count defect:** the 2026-09-21 native-XML audit
       found 13,154 wrong zero counts in the then-retained 118th Congress HR/S
@@ -2439,17 +2441,15 @@ tables:
     label: "Bill actions"
     subject: congress
     coverage: >-
-      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
-      by Congress from the 108th on; group by the Congress in bill_id to see
-      which Congresses are filled.
+      Sampled. GovInfo BILLSTATUS from the 108th Congress onward, with explicitly
+      selected Congress.gov action lists for bills in the 82nd–107th Congresses.
     measured_on: "2026-09-28"
     summary: >-
-      One row per entry of the bill's own action list (`actions` in its
-      BILLSTATUS document), in publisher order; actions recorded under the
-      bill's amendments (`amendments/amendment/actions`) are not rows, so a roll
-      call on an amendment can have no action here. Each row also carries the
-      stage the action text implies, with the rule and matcher that fired, which
-      makes `congress_bills.stage` auditable action by action.
+      One row per entry of the bill's own action list, in publisher order.
+      Committee, calendar and roll call references appear under the action
+      that states them. Amendment actions have a separate scope. API rows
+      carry the exact page digest, observation time and zero-based page
+      position. Each row also carries the stage the action text implies.
     data_quality: >-
       One event is often entered by more than one system (`source_system_name`).
       Library of Congress and House floor rows carry an `action_code`; Senate and
@@ -2480,10 +2480,8 @@ tables:
     label: "CRS bill summaries (publisher)"
     subject: congress
     coverage: >-
-      Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress
-      by Congress from the 108th on; group by the Congress in bill_id to see
-      which Congresses are filled. A bill has rows only for the summaries the
-      publisher has written.
+      Sampled. GovInfo BILLSTATUS from the 108th Congress onward, with explicitly
+      selected Congress.gov summary lists for bills in the 82nd–107th Congresses.
     measured_on: "2026-09-28"
     summary: >-
       One row per retained CRS summary revision, keyed by bill, summary version,
@@ -2492,8 +2490,9 @@ tables:
       `summary_html` is kept exactly as the publisher escaped it. `update_date`
       preserves the native item clock; legacy `last_summary_update_date` dates
       the summary itself. `source_schema_version` qualifies those meanings.
-      Neither clock nor its minimum establishes first publication. See
-      docs/bill-summary-clocks.md for the schema-qualified query and replay limits.
+      For `congress-api-v3`, `update_date` is the child response's own updateDate.
+      Read its page digest, capture time and row index from the receipt.
+      See docs/bill-summary-clocks.md for the schema-qualified query and replay limits.
     columns_from: spicy_docs
 
   bill_versions:
@@ -2517,7 +2516,9 @@ tables:
       stage's slug. Public/private laws are distinct publisher listings, not
       enrolled BILLS printings. Unsupported law bodies remain unacquired: their
       offered URLs, labels and dates are retained, with no acquired body or
-      section claims.
+      section claims. The matching `etl_receipts` processing evidence retains
+      original offered format URLs, body capture time and body digest when
+      stated. See docs/bill-source-detail.md.
     columns_from: spicy_docs
 
   bill_sections:

@@ -83,7 +83,13 @@ class BillFamilyRollup(RollupPipeline):
         if raw and (not raw.isascii() or not raw.isdecimal()):
             raise ValueError("BILL_FAMILY_MAX_VERSION_FETCHES must be a nonnegative integer; zero disables acquisition")
         budget = int(raw) if raw else MAX_VERSION_FETCHES
-        return self.build_receipts(output_dir, build_bill_family, max_version_fetches=budget, evidence=self.source_evidence)
+        ids = tuple(os.environ.get("BILL_FAMILY_CHILD_BILL_IDS", "").split())
+        directory = os.environ.get("BILL_FAMILY_CHILD_CHECKPOINT_DIR")
+        child_scope = {"child_bill_ids": ids, "child_checkpoint_dir": Path(directory) if directory else None}
+        return self.build_receipts(
+            output_dir, build_bill_family, max_version_fetches=budget, evidence=self.source_evidence,
+            **(child_scope if ids or directory else {}),
+        )
 
 
 app = make_rollup_app(BillFamilyRollup)

@@ -29,10 +29,12 @@ WITH clocks AS (
            CASE source_schema_version
                WHEN '1.0.0' THEN last_summary_update_date
                WHEN '3.0.0' THEN update_date
+               WHEN 'congress-api-v3' THEN update_date
            END AS summary_update_literal,
            CASE source_schema_version
                WHEN '1.0.0' THEN 'lastSummaryUpdateDate'
                WHEN '3.0.0' THEN 'updateDate'
+               WHEN 'congress-api-v3' THEN 'updateDate'
            END AS summary_update_field
     FROM bill_publisher_summaries
 )

@@ -31,6 +31,18 @@ NATIVE = {
     ("congress_bills", "related_bills_json"): objects(
         "bill_type congress latest_action_date latest_action_text number relationship_details title",
         relationship_details=objects("identifiedBy type")),
+    ("congress_bills", "title_history_json"): objects(
+        "title title_type chamber_code chamber_name bill_text_version_code bill_text_version_name "
+        "update_date title_type_code parent_title_type"),
+    ("congress_bills", "calendar_numbers_json"): objects("calendar number"),
+    ("congress_bills", "child_routes_json"): objects(
+        "route advertised_url parent_declared_count parent_observed_at outcome reason observed_count http_status page_pins",
+        parent_declared_count=INTEGER, observed_count=INTEGER, http_status=INTEGER,
+        page_pins=objects("url sha256 observed_at records declared_count", records=INTEGER, declared_count=INTEGER)),
+    ("bill_actions", "action_committees_json"): objects("system_code name url"),
+    ("bill_actions", "action_calendar_numbers_json"): objects("calendar number"),
+    ("bill_actions", "action_recorded_votes_json"): objects(
+        "chamber congress date full_action_name roll_number session_number url"),
     ("committee_meetings", "committees_json"): objects("name systemCode url"),
     ("committee_meetings", "hearing_jackets_json"): pa.list_(TEXT),
     ("committee_meetings", "bill_ids_json"): pa.list_(TEXT),
@@ -79,7 +91,8 @@ INPUT_COLUMNS = {
     'bill_actions': tuple(
         'bill_id action_index action_date action_time action_text action_code action_type '
         'source_system_code source_system_name recorded_vote_count is_latest_action stage stage_rule '
-        'stage_matcher'
+        'stage_matcher action_committees_json action_calendar_numbers_json action_recorded_votes_json source_page_sha256 '
+        'source_page_observed_at source_page_row_index'
     .split()),
     'bill_committee_activities': tuple('bill_id system_code activity_name activity_date occurrence parent_system_code snapshot_update_date'.split()),
     'cbo_feed_items': tuple('publication_id congress pub_date title link description bill_number feed_url'.split()),
@@ -133,7 +146,8 @@ INPUT_COLUMNS = {
         'stage_action_date stage_source_text signed_date signed_date_rule signed_date_action_index '
         'signed_date_action_code money_bill_kind money_bill_rule money_bill_reason_codes fiscal_year '
         'appropriations_subcommittee referral_signals short_title related_bills_json related_bill_count '
-        'cbo_cost_estimates_outcome url_source cosponsors_outcome'
+        'cbo_cost_estimates_outcome url_source cosponsors_outcome title_history_json calendar_numbers_json '
+        'constitutional_authority_statement_text source_create_date origin_chamber_code child_routes_json'
     .split()),
     'house_communications': tuple(
         'communication_id congress communication_type communication_type_name number chamber session '
@@ -266,7 +280,7 @@ PROMOTED = {
 INTEGERS = {
     'bill_committee_activities': frozenset({'occurrence'}),
     'cbo_feed_items': frozenset({'congress'}),
-    'bill_actions': frozenset('action_index recorded_vote_count'.split()),
+    'bill_actions': frozenset('action_index recorded_vote_count source_page_row_index'.split()),
     'bill_cosponsors': frozenset('cosponsor_index'.split()),
     'bill_subjects': frozenset('subject_count'.split()),
     'bill_vote_references': frozenset('action_index'.split()),
