@@ -288,6 +288,13 @@
       "url": "https://www.senate.gov/legislative/vetoes/vetoCounts.htm",
       "kind": "government",
       "note": "One dated Summary of Bills Vetoed; administration spans, categories and disputed-veto footnotes remain source-defined."
+    },
+    "irs-form990": {
+      "id": "irs-form990",
+      "name": "Internal Revenue Service Form 990 series",
+      "url": "https://www.irs.gov/charities-non-profits/form-990-series-downloads",
+      "kind": "government",
+      "note": "Explicit annual-index and XML filing slice. Selected Form 990 finances, Part VII entries and Schedule I domestic organization grants; not complete donor coverage."
     }
   },
   "families": {
@@ -680,6 +687,11 @@
     "historical-vetoes": {
       "sources": [
         "senate-veto-summary"
+      ]
+    },
+    "irs-form990": {
+      "sources": [
+        "irs-form990"
       ]
     }
   },

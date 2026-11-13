@@ -12276,3 +12276,168 @@ tables:
         plus omitted_rows.
       registrations_without_rows_json: Requested registration numbers with no rows in
         this export. This is observed-empty, not proof of source absence.
+
+  irs990_filings:
+    label: IRS Form 990 filings and selected finances
+    subject: reference
+    summary: Find selected nonprofit returns by EIN and filing identity and compare
+      source-reported finances.
+    coverage: Sampled. Explicit filing identities from one retained IRS annual index
+      and selected official XML archive; only declared Form 990 versions and selected
+      fields are interpreted. Other schedules remain native XML. No historical census,
+      donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.
+    measured_on: '2026-11-13'
+    grain: One selected filing.
+    identity_columns:
+    - filing_id
+    columns:
+      filing_id: Literal IRS OBJECT_ID identifying this return; distinct from organization
+        EIN. Amended returns remain separate filings.
+      ein: Filing organization EIN as nine-character text with leading zeros retained.
+      organization_name: Literal TAXPAYER_NAME from the selected annual index; XML filer
+        name remains in native_xml_json.
+      return_id: Literal index RETURN_ID. Distinct from OBJECT_ID, EIN and DLN.
+      tax_period: Literal six-character TAX_PERIOD from index, reconciled to XML tax
+        period end month.
+      return_type: Literal index and XML return type. This interpretation supports 990
+        only; 990EZ, 990PF and 990-N are unsupported.
+      return_version: Literal XML returnVersion. Only explicitly qualified versions
+        are interpreted.
+      tax_year: Literal XML TaxYr; missing remains NULL.
+      tax_period_begin: Literal XML TaxPeriodBeginDt; missing remains NULL.
+      tax_period_end: Literal XML TaxPeriodEndDt, checked against the selected index
+        tax period.
+      amended_raw: Literal AmendedReturnInd. Absence is NULL and does not imply an original
+        or unamended return.
+      amended_status: absent, empty or reported. Source amendment labels do not establish
+        which filing supersedes another.
+      revenue_raw: Literal XML spelling of Part I current-year total revenue; NULL may
+        mean absent or empty as its status records.
+      expenses_raw: Literal XML spelling of Part I current-year total expenses; NULL
+        may mean absent or empty as its status records.
+      grants_paid_raw: Literal XML spelling of Part I current-year grants and similar
+        amounts paid; NULL may mean absent or empty as its status records.
+      revenue_status: exact, absent or empty. Only exact supplies a numeric amount;
+        unknown amount syntax refuses the build.
+      expenses_status: exact, absent or empty. Only exact supplies a numeric amount;
+        unknown amount syntax refuses the build.
+      grants_paid_status: exact, absent or empty. Only exact supplies a numeric amount;
+        unknown amount syntax refuses the build.
+      revenue_reconciliation: matched, different or missing_field comparing Part I current-year
+        revenue with Part VIII total revenue column.
+      expenses_reconciliation: matched, different or missing_field comparing Part I
+        current-year expenses with Part IX total functional expenses.
+      schedule_i_status: present or absent. An absent Schedule I does not establish
+        no grants; Schedule I is not comprehensive donor data.
+      index_native_json: Every original selected index field, including unrecognized
+        columns, without numeric conversion.
+      source_locator_json: Retained annual index and ZIP descriptors, original and XML
+        member SHA-256 digests, member name and index row. XML positions are namespace-independent
+        positional XPath.
+      native_xml_json: Complete selected XML tree with expanded names, literal text,
+        attributes and positions. Retained fields outside the declared interpretation
+        remain unqualified.
+      submission_year: Selected annual index year. Distinct from tax year, tax period
+        and observation time.
+      revenue_usd: Part I current-year total revenue in reported whole US dollars as
+        exact decimal(38,0); no scaling, currency conversion or invented zero.
+      expenses_usd: Part I current-year total expenses in reported whole US dollars
+        as exact decimal(38,0); no scaling, currency conversion or invented zero.
+      grants_paid_usd: Part I current-year grants and similar amounts paid in reported
+        whole US dollars as exact decimal(38,0); no scaling, currency conversion or
+        invented zero.
+  irs990_officers:
+    label: IRS Form 990 Part VII personnel entries
+    subject: reference
+    summary: Repeated Part VII Section A personnel entries and separately reported compensation.
+    coverage: Sampled. Explicit filing identities from one retained IRS annual index
+      and selected official XML archive; only declared Form 990 versions and selected
+      fields are interpreted. Other schedules remain native XML. No historical census,
+      donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.
+    measured_on: '2026-11-13'
+    grain: One source-ordered repeated entry in a selected filing.
+    identity_columns:
+    - filing_id
+    - entry_ordinal
+    columns:
+      filing_id: Literal IRS OBJECT_ID identifying this return; distinct from organization
+        EIN. Amended returns remain separate filings.
+      ein: Filing organization EIN as nine-character text with leading zeros retained.
+      source_xpath: Namespace-independent positional XPath of the complete repeated
+        entry in the retained original XML member.
+      person_name: Literal PersonNm for this Part VII Section A entry; not a resolved
+        person identifier. An organization entry may have no person name.
+      title: Literal TitleTxt for this officer, director, trustee, employee or organization
+        entry.
+      compensation_raw: Literal XML spelling of Part VII reportable compensation from
+        the filing organization; NULL may mean absent or empty as its status records.
+      compensation_status: exact, absent or empty. Only exact supplies a numeric amount;
+        unknown amount syntax refuses the build.
+      related_compensation_raw: Literal XML spelling of Part VII reportable compensation
+        from related organizations; NULL may mean absent or empty as its status records.
+      related_compensation_status: exact, absent or empty. Only exact supplies a numeric
+        amount; unknown amount syntax refuses the build.
+      other_compensation_raw: Literal XML spelling of Part VII other compensation; NULL
+        may mean absent or empty as its status records.
+      other_compensation_status: exact, absent or empty. Only exact supplies a numeric
+        amount; unknown amount syntax refuses the build.
+      native_entry_json: Complete original entry with expanded XML names, literal values,
+        attributes, repeated children and XML positions.
+      source_locator_json: Retained annual index and ZIP descriptors, original and XML
+        member SHA-256 digests, member name and index row. XML positions are namespace-independent
+        positional XPath.
+      entry_ordinal: One-based occurrence within this filing; repeated names and recipients
+        remain distinct entries.
+      compensation_usd: Part VII reportable compensation from the filing organization
+        in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion
+        or invented zero.
+      related_compensation_usd: Part VII reportable compensation from related organizations
+        in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion
+        or invented zero.
+      other_compensation_usd: Part VII other compensation in reported whole US dollars
+        as exact decimal(38,0); no scaling, currency conversion or invented zero.
+  irs990_grants:
+    label: IRS Form 990 Schedule I domestic organization grants
+    subject: reference
+    summary: Repeated Schedule I Part II domestic organization grant entries; cash and
+      noncash assistance remain separate.
+    coverage: Sampled. Explicit filing identities from one retained IRS annual index
+      and selected official XML archive; only declared Form 990 versions and selected
+      fields are interpreted. Other schedules remain native XML. No historical census,
+      donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.
+    measured_on: '2026-11-13'
+    grain: One source-ordered repeated entry in a selected filing.
+    identity_columns:
+    - filing_id
+    - entry_ordinal
+    columns:
+      filing_id: Literal IRS OBJECT_ID identifying this return; distinct from organization
+        EIN. Amended returns remain separate filings.
+      ein: Filing organization EIN as nine-character text with leading zeros retained.
+      source_xpath: Namespace-independent positional XPath of the complete repeated
+        entry in the retained original XML member.
+      recipient_ein: Literal RecipientEIN; absent remains NULL. No inferred recipient
+        identity.
+      recipient_name: Schedule I recipient business name lines joined with a space;
+        exact separate source lines remain in native_entry_json.
+      purpose: Literal PurposeOfGrantTxt for this repeated Schedule I domestic-organization
+        recipient entry.
+      cash_raw: Literal XML spelling of Schedule I Part II cash grant; NULL may mean
+        absent or empty as its status records.
+      cash_status: exact, absent or empty. Only exact supplies a numeric amount; unknown
+        amount syntax refuses the build.
+      noncash_raw: Literal XML spelling of Schedule I Part II noncash assistance; NULL
+        may mean absent or empty as its status records.
+      noncash_status: exact, absent or empty. Only exact supplies a numeric amount;
+        unknown amount syntax refuses the build.
+      native_entry_json: Complete original entry with expanded XML names, literal values,
+        attributes, repeated children and XML positions.
+      source_locator_json: Retained annual index and ZIP descriptors, original and XML
+        member SHA-256 digests, member name and index row. XML positions are namespace-independent
+        positional XPath.
+      entry_ordinal: One-based occurrence within this filing; repeated names and recipients
+        remain distinct entries.
+      cash_usd: Schedule I Part II cash grant in reported whole US dollars as exact
+        decimal(38,0); no scaling, currency conversion or invented zero.
+      noncash_usd: Schedule I Part II noncash assistance in reported whole US dollars
+        as exact decimal(38,0); no scaling, currency conversion or invented zero.

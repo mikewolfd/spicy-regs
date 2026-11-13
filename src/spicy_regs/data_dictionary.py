@@ -596,6 +596,9 @@ TABLES: tuple[str, ...] = (
     "ofac_snapshots",
     "historical_veto_administrations",
     "historical_veto_snapshots",
+    "irs990_filings",
+    "irs990_officers",
+    "irs990_grants",
     "executive_order_observations",
     "house_disbursements",
     "house_disbursements_summary",
@@ -692,6 +695,9 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "ofac_snapshots",
         "historical_veto_administrations",
         "historical_veto_snapshots",
+        "irs990_filings",
+        "irs990_officers",
+        "irs990_grants",
         "executive_order_observations",
         "house_disbursements",
         "house_disbursements_summary",
@@ -921,6 +927,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_fara import SCHEMAS as FARA_SCHEMAS
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
     from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
+    from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
     from spicy_regs.schemas.senate_disbursements import SCHEMAS as SENATE_DISBURSEMENT_SCHEMAS
@@ -1033,6 +1040,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **FARA_SCHEMAS,
         **OFAC_SCHEMAS,
         **HISTORICAL_VETO_SCHEMAS,
+        **IRS990_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         **HOUSE_DISBURSEMENT_SCHEMAS,
         **SENATE_DISBURSEMENT_SCHEMAS,

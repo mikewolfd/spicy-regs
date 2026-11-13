@@ -21,6 +21,46 @@
   ],
   "joins": [
     {
+      "child": "irs990_officers",
+      "child_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "parent": "irs990_filings",
+      "parent_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "kind": "unmeasured",
+      "reason": "Source-native selected filing membership; local cohort checked separately, public baseline pending.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "many-to-one",
+      "measurement": null
+    },
+    {
+      "child": "irs990_grants",
+      "child_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "parent": "irs990_filings",
+      "parent_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "kind": "unmeasured",
+      "reason": "Schedule I recipient entries belong to their source filing, not an inferred organization match.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "many-to-one",
+      "measurement": null
+    },
+    {
       "child": "bill_actions",
       "child_columns": [
         "bill_id"
@@ -8744,6 +8784,32 @@
     }
   ],
   "references": {
+    "irs990_officers": [
+      {
+        "child_columns": [
+          "filing_id",
+          "ein"
+        ],
+        "parent_table": "irs990_filings",
+        "parent_columns": [
+          "filing_id",
+          "ein"
+        ]
+      }
+    ],
+    "irs990_grants": [
+      {
+        "child_columns": [
+          "filing_id",
+          "ein"
+        ],
+        "parent_table": "irs990_filings",
+        "parent_columns": [
+          "filing_id",
+          "ein"
+        ]
+      }
+    ],
     "bill_actions": [
       {
         "child_columns": [

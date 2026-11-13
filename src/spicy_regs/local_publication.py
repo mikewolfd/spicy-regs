@@ -42,6 +42,7 @@ LOCAL_FAMILIES = frozenset({
     "historical-vetoes",
     "house-disbursements",
     "ofac-sanctions",
+    "irs-form990",
     "treasury-fiscal",
     "uscode-editions",
 })

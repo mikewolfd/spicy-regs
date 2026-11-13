@@ -41191,5 +41191,355 @@
       "kind",
       "capture_sha256"
     ]
+  },
+  "irs990_filings": {
+    "table": "irs990_filings",
+    "label": "IRS Form 990 filings and selected finances",
+    "summary": "Find selected nonprofit returns by EIN and filing identity and compare source-reported finances.",
+    "coverage": "Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Literal IRS OBJECT_ID identifying this return; distinct from organization EIN. Amended returns remain separate filings."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Filing organization EIN as nine-character text with leading zeros retained."
+      },
+      {
+        "column_name": "organization_name",
+        "column_type": "VARCHAR",
+        "description": "Literal TAXPAYER_NAME from the selected annual index; XML filer name remains in native_xml_json."
+      },
+      {
+        "column_name": "return_id",
+        "column_type": "VARCHAR",
+        "description": "Literal index RETURN_ID. Distinct from OBJECT_ID, EIN and DLN."
+      },
+      {
+        "column_name": "tax_period",
+        "column_type": "VARCHAR",
+        "description": "Literal six-character TAX_PERIOD from index, reconciled to XML tax period end month."
+      },
+      {
+        "column_name": "return_type",
+        "column_type": "VARCHAR",
+        "description": "Literal index and XML return type. This interpretation supports 990 only; 990EZ, 990PF and 990-N are unsupported."
+      },
+      {
+        "column_name": "return_version",
+        "column_type": "VARCHAR",
+        "description": "Literal XML returnVersion. Only explicitly qualified versions are interpreted."
+      },
+      {
+        "column_name": "tax_year",
+        "column_type": "VARCHAR",
+        "description": "Literal XML TaxYr; missing remains NULL."
+      },
+      {
+        "column_name": "tax_period_begin",
+        "column_type": "VARCHAR",
+        "description": "Literal XML TaxPeriodBeginDt; missing remains NULL."
+      },
+      {
+        "column_name": "tax_period_end",
+        "column_type": "VARCHAR",
+        "description": "Literal XML TaxPeriodEndDt, checked against the selected index tax period."
+      },
+      {
+        "column_name": "amended_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal AmendedReturnInd. Absence is NULL and does not imply an original or unamended return."
+      },
+      {
+        "column_name": "amended_status",
+        "column_type": "VARCHAR",
+        "description": "absent, empty or reported. Source amendment labels do not establish which filing supersedes another."
+      },
+      {
+        "column_name": "revenue_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Part I current-year total revenue; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "expenses_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Part I current-year total expenses; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "grants_paid_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Part I current-year grants and similar amounts paid; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "revenue_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "expenses_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "grants_paid_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "revenue_reconciliation",
+        "column_type": "VARCHAR",
+        "description": "matched, different or missing_field comparing Part I current-year revenue with Part VIII total revenue column."
+      },
+      {
+        "column_name": "expenses_reconciliation",
+        "column_type": "VARCHAR",
+        "description": "matched, different or missing_field comparing Part I current-year expenses with Part IX total functional expenses."
+      },
+      {
+        "column_name": "schedule_i_status",
+        "column_type": "VARCHAR",
+        "description": "present or absent. An absent Schedule I does not establish no grants; Schedule I is not comprehensive donor data."
+      },
+      {
+        "column_name": "index_native_json",
+        "column_type": "VARCHAR",
+        "description": "Every original selected index field, including unrecognized columns, without numeric conversion."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+      },
+      {
+        "column_name": "native_xml_json",
+        "column_type": "VARCHAR",
+        "description": "Complete selected XML tree with expanded names, literal text, attributes and positions. Retained fields outside the declared interpretation remain unqualified."
+      },
+      {
+        "column_name": "submission_year",
+        "column_type": "INTEGER",
+        "description": "Selected annual index year. Distinct from tax year, tax period and observation time."
+      },
+      {
+        "column_name": "revenue_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Part I current-year total revenue in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      },
+      {
+        "column_name": "expenses_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Part I current-year total expenses in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      },
+      {
+        "column_name": "grants_paid_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Part I current-year grants and similar amounts paid in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One selected filing.",
+    "identity_columns": [
+      "filing_id"
+    ]
+  },
+  "irs990_officers": {
+    "table": "irs990_officers",
+    "label": "IRS Form 990 Part VII personnel entries",
+    "summary": "Repeated Part VII Section A personnel entries and separately reported compensation.",
+    "coverage": "Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Literal IRS OBJECT_ID identifying this return; distinct from organization EIN. Amended returns remain separate filings."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Filing organization EIN as nine-character text with leading zeros retained."
+      },
+      {
+        "column_name": "source_xpath",
+        "column_type": "VARCHAR",
+        "description": "Namespace-independent positional XPath of the complete repeated entry in the retained original XML member."
+      },
+      {
+        "column_name": "person_name",
+        "column_type": "VARCHAR",
+        "description": "Literal PersonNm for this Part VII Section A entry; not a resolved person identifier. An organization entry may have no person name."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Literal TitleTxt for this officer, director, trustee, employee or organization entry."
+      },
+      {
+        "column_name": "compensation_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Part VII reportable compensation from the filing organization; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "compensation_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "related_compensation_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Part VII reportable compensation from related organizations; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "related_compensation_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "other_compensation_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Part VII other compensation; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "other_compensation_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "native_entry_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original entry with expanded XML names, literal values, attributes, repeated children and XML positions."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+      },
+      {
+        "column_name": "entry_ordinal",
+        "column_type": "INTEGER",
+        "description": "One-based occurrence within this filing; repeated names and recipients remain distinct entries."
+      },
+      {
+        "column_name": "compensation_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Part VII reportable compensation from the filing organization in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      },
+      {
+        "column_name": "related_compensation_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Part VII reportable compensation from related organizations in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      },
+      {
+        "column_name": "other_compensation_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Part VII other compensation in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One source-ordered repeated entry in a selected filing.",
+    "identity_columns": [
+      "filing_id",
+      "entry_ordinal"
+    ]
+  },
+  "irs990_grants": {
+    "table": "irs990_grants",
+    "label": "IRS Form 990 Schedule I domestic organization grants",
+    "summary": "Repeated Schedule I Part II domestic organization grant entries; cash and noncash assistance remain separate.",
+    "coverage": "Sampled. Explicit filing identities from one retained IRS annual index and selected official XML archive; only declared Form 990 versions and selected fields are interpreted. Other schedules remain native XML. No historical census, donor completeness, Forms 8871/8872 or Form 990-EZ/PF/N interpretation.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Literal IRS OBJECT_ID identifying this return; distinct from organization EIN. Amended returns remain separate filings."
+      },
+      {
+        "column_name": "ein",
+        "column_type": "VARCHAR",
+        "description": "Filing organization EIN as nine-character text with leading zeros retained."
+      },
+      {
+        "column_name": "source_xpath",
+        "column_type": "VARCHAR",
+        "description": "Namespace-independent positional XPath of the complete repeated entry in the retained original XML member."
+      },
+      {
+        "column_name": "recipient_ein",
+        "column_type": "VARCHAR",
+        "description": "Literal RecipientEIN; absent remains NULL. No inferred recipient identity."
+      },
+      {
+        "column_name": "recipient_name",
+        "column_type": "VARCHAR",
+        "description": "Schedule I recipient business name lines joined with a space; exact separate source lines remain in native_entry_json."
+      },
+      {
+        "column_name": "purpose",
+        "column_type": "VARCHAR",
+        "description": "Literal PurposeOfGrantTxt for this repeated Schedule I domestic-organization recipient entry."
+      },
+      {
+        "column_name": "cash_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Schedule I Part II cash grant; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "cash_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "noncash_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal XML spelling of Schedule I Part II noncash assistance; NULL may mean absent or empty as its status records."
+      },
+      {
+        "column_name": "noncash_status",
+        "column_type": "VARCHAR",
+        "description": "exact, absent or empty. Only exact supplies a numeric amount; unknown amount syntax refuses the build."
+      },
+      {
+        "column_name": "native_entry_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original entry with expanded XML names, literal values, attributes, repeated children and XML positions."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Retained annual index and ZIP descriptors, original and XML member SHA-256 digests, member name and index row. XML positions are namespace-independent positional XPath."
+      },
+      {
+        "column_name": "entry_ordinal",
+        "column_type": "INTEGER",
+        "description": "One-based occurrence within this filing; repeated names and recipients remain distinct entries."
+      },
+      {
+        "column_name": "cash_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Schedule I Part II cash grant in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      },
+      {
+        "column_name": "noncash_usd",
+        "column_type": "DECIMAL(38,0)",
+        "description": "Schedule I Part II noncash assistance in reported whole US dollars as exact decimal(38,0); no scaling, currency conversion or invented zero."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One source-ordered repeated entry in a selected filing.",
+    "identity_columns": [
+      "filing_id",
+      "entry_ordinal"
+    ]
   }
 }

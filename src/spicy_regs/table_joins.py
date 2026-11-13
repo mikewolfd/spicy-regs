@@ -186,6 +186,12 @@ def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: s
 
 
 JOINS: tuple[Join, ...] = (
+    _join("irs990_officers", ("filing_id", "ein"), "irs990_filings", ("filing_id", "ein"), 0, 0,
+          "unmeasured", "Source-native selected filing membership; local cohort checked separately, public baseline pending.",
+          expected_cardinality="many-to-one"),
+    _join("irs990_grants", ("filing_id", "ein"), "irs990_filings", ("filing_id", "ein"), 0, 0,
+          "unmeasured", "Schedule I recipient entries belong to their source filing, not an inferred organization match.",
+          expected_cardinality="many-to-one"),
     # The bill family and the tables that name its bills.
     _join("bill_actions", "bill_id", _BILL, "bill_id", 38_559, 0),
     _join("bill_cosponsors", "bill_id", _BILL, "bill_id", 0, 0, "empty",
