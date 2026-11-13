@@ -153,6 +153,14 @@ def test_pinned_capture_refuses_journal_and_original_corruption(tmp_path):
     pin = JournalEntry(path, sha, 2)
     store = CentralRawArchiveStore(raw, create=False)
     assert pin.read(store, max_bytes=1024) == capture
+    # Early CaptureEvidence journals have the same digest and body flags but predate the store marker.
+    legacy = json.loads(journal.splitlines()[1])
+    del legacy["blob_store"]
+    legacy_bytes = json.dumps(legacy).encode() + b"\n"
+    legacy_path = tmp_path / "legacy.jsonl"
+    legacy_path.write_bytes(legacy_bytes)
+    legacy_pin = JournalEntry(legacy_path, "sha256:" + hashlib.sha256(legacy_bytes).hexdigest(), 1)
+    assert legacy_pin.read(store, max_bytes=1024) == capture
     path.write_bytes(journal + b"\n")
     with pytest.raises(ValueError, match="pinned SHA"):
         pin.read(store, max_bytes=1024)

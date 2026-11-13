@@ -5,8 +5,8 @@ read of a selected committee report, hearing or budget package, call
 `RetainedGovInfoBodyAcquirer.acquire_preservation` with `CaptureEvidence`.
 Select budget granule pages with `RetainedGovInfoDiscoveryReader.granules`.
 Use `budget_table_offers` to choose a publisher-stated native file and
-`acquire_budget_table_file` to retain it. A package without a readable root
-document can still offer a workbook.
+`acquire_budget_table_file` to retain it inside a new SUMMARY bracket.
+A package without a readable root document can still offer a workbook.
 
 Query selected original responses without fetching them again.
 

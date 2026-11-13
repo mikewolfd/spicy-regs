@@ -7,7 +7,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 import httpx
@@ -53,7 +53,7 @@ class JournalEntry:
             or record.get("response_complete") is not True
             or record.get("body_retained") is not True
             or record.get("request_body") is not None
-            or record.get("blob_store") != "central-raw"
+            or record.get("blob_store") not in (None, "central-raw")
             or type(record.get("byte_size")) is not int
             or not 0 <= record["byte_size"] <= max_bytes
             or type(record.get("status_code")) is not int
@@ -103,13 +103,12 @@ def _sources(observation: GovInfoPreservation) -> dict:
 def preservation_facts(observation: GovInfoPreservation) -> dict:
     """Dates, native preservation events, files and relationships with source paths."""
     summary, mods, premis = observation.summary, observation.mods, observation.premis
-    raw_summary = (
-        load_decimal_json(observation.summary_capture.body, source="GovInfo SUMMARY", error_type=ValueError)
-        if summary is not None and observation.summary_capture is not None
-        else {}
-    )
-    if not isinstance(raw_summary, dict):
-        raise ValueError("GovInfo SUMMARY is not an object")
+    raw_summary: dict[str, Any] = {}
+    if summary is not None and observation.summary_capture is not None:
+        raw = load_decimal_json(observation.summary_capture.body, source="GovInfo SUMMARY", error_type=ValueError)
+        if not isinstance(raw, dict):
+            raise ValueError("GovInfo SUMMARY is not an object")
+        raw_summary = cast(dict[str, Any], raw)
     native_dates = []
     for field in ("dateIssued", "lastModified"):
         value = raw_summary.get(field)
