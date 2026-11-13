@@ -38,7 +38,15 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected provider** `spicy_docs-0.85.0` (ss-mbia, ss-i1gm, ss-348x). `members` appends
+- **Selected local integration provider** `spicy_docs-0.85.0+readers.20261113.2`
+  is built from `837143fd864e56db24b840dd3b1ba78f015ca96f`. Its reader implementation is the independently reviewed
+  `e247fc9b` candidate plus the independently reviewed `3ccb64d4` CFR spelling fix;
+  the final integration commit changes only version and lock metadata.
+  It adopts the OLRC route, markup normalization and XML evidence fixes and exports
+  source-owned rendition equivalence. The public `0.86` attachment release is not
+  consumed. Built twice from the clean worktree and a Git archive, byte-identical;
+  see [the receipt](spicy_docs-0.85.0+readers.20261113.2.json). No public upload occurred.
+- **Earlier provider** `spicy_docs-0.85.0` (ss-mbia, ss-i1gm, ss-348x). `members` appends
   `name_middle`, `name_suffix` and `name_official_full`, the legislators crosswalk's own name parts;
   `congress_subjects.INPUT_COLUMNS` classifies them and `members` moves to `congress-subjects/2`, whose
   ledger entry carries `/1` rows. On the two pinned roster files all 12,770 rows read, the 22 earlier
