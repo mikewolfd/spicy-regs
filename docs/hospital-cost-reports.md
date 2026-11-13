@@ -75,3 +75,29 @@ The source ticket and completion lane retain exact original pins, visual review,
 source reconciliation, tested population and consumer/failure receipts. Schema
 registration and fixtures establish capability; they do not establish live source
 coverage, public publication or complete hospital-finance history.
+
+## Rehearse the maintained local publication CLI
+
+`hospital-cost-reports` is registered in
+`spicy_regs.local_publication.LOCAL_FAMILIES`. Reuse the admitted generation and
+its pinned evidence in place. A private first-publication rehearsal uses an
+explicit empty index, so unrelated published families are neither downloaded nor
+copied:
+
+```sh
+uv run --frozen --no-sync publish-local-generation \
+  --family hospital-cost-reports --generation /path/to/candidate/generation \
+  --evidence /path/to/candidate/source-evidence/RUN/artifact \
+  --dry-run --live-index /path/to/private-empty-publication-index.json \
+  --output /path/to/fresh-private-receipt
+```
+
+The private index must use the maintained `publication.empty_index()` shape.
+For genuine source evidence, leave `SPICYGOV_RAW_ROOT` unset so the CLI verifies
+that the cited original is in the shared raw archive. The dry run stages tables,
+pinned source evidence and temporary multipart data in its private disk store;
+budget those bytes before running it. It removes that store after checking and
+retains the receipt. A missing evidence argument, a mismatched evidence pin or a
+`local-partial` generation refuses. Family registration changes none of these
+guards. Passing this rehearsal establishes local CLI admission for the declared
+cohort; coordinator review and public selection remain separate.

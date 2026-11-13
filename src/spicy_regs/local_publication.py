@@ -46,6 +46,7 @@ LOCAL_FAMILIES = frozenset({
     "fara",
     "grants-status",
     "historical-vetoes",
+    "hospital-cost-reports",
     "house-disbursements",
     "house-disclosures",
     "ofac-sanctions",

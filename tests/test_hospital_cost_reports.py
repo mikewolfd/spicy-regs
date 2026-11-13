@@ -78,3 +78,37 @@ def test_generation_publication_and_ordinary_query(tmp_path, monkeypatch):
         rows=con.execute('SELECT ccn,report_id,value FROM hospital_cost_report_measures '
                          "WHERE measure='hospital_beds' ORDER BY report_id").fetchall()
     assert rows==[('010001','1',Decimal('0')),('010001','2',Decimal('9'))]
+
+
+def test_maintained_local_cli_admits_hospital_and_requires_evidence(tmp_path, monkeypatch):
+    from spicy_regs.local_publication import main
+
+    body = original()
+    source = tmp_path / 'original.zip'
+    source.write_bytes(body)
+    monkeypatch.setenv('SPICYGOV_RAW_ROOT', str(tmp_path / 'raw'))
+    selection = {
+        'original': str(source), 'sha256': 'sha256:' + hashlib.sha256(body).hexdigest(),
+        'byte_size': len(body), 'form': 'CMS-2552-10', 'year': 2010,
+        'source_url': 'https://downloads.cms.gov/Files/hcris/HOSP10FY2010.zip',
+        'measures': ['hospital_beds', 'total_costs', 'total_charges', 'net_patient_revenue'],
+    }
+    result = build(selection, tmp_path / 'build')
+    prior = tmp_path / 'private-empty-index.json'
+    prior.write_text(json.dumps(publication.empty_index()))
+    output = tmp_path / 'cli-receipt'
+    args = [
+        '--generation', str(tmp_path / 'build/generation'), '--family', 'hospital-cost-reports',
+        '--dry-run', '--scratch-raw', '--live-index', str(prior), '--output', str(output),
+    ]
+    with pytest.raises(publication.PublicationError, match='source evidence it pins'):
+        main(args)
+    assert not output.exists()
+
+    main([*args, '--evidence', result['evidence']])
+    receipt = json.loads((output / 'dry-run.json').read_text())
+    assert receipt['status'] == 'dry_run_accepted'
+    assert receipt['artifactDigest'] == result['pin']['artifactDigest']
+    assert receipt['tables']['hospital_cost_report_cells.parquet']['rows'] == 5
+    assert receipt['tables']['hospital_cost_report_measures.parquet']['rows'] == 8
+    assert receipt['other_family_changes'] == []
