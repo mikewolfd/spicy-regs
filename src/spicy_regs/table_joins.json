@@ -37,7 +37,7 @@
       "baseline_keys": 0,
       "baseline_missing": 0,
       "floor_pct": null,
-      "expected_cardinality": "many-to-one",
+      "expected_cardinality": "one",
       "measurement": null
     },
     {
@@ -57,7 +57,7 @@
       "baseline_keys": 0,
       "baseline_missing": 0,
       "floor_pct": null,
-      "expected_cardinality": "many-to-one",
+      "expected_cardinality": "one",
       "measurement": null
     },
     {

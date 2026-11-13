@@ -6,7 +6,7 @@
 
 Source-defined Original Medicare fee-for-service provider totals, utilization and drug/medical subsets for one selected calendar-year release.
 
-**Coverage.** One complete explicitly pinned by-provider CSV, checked against the selected API population and dictionary. No service detail, geographic aggregate files, Medicare Advantage, practice-wide totals or historical completeness claim. Missing and suppressed cells remain missing. Local versus public delivery is determined by the selected generation. *(measured 2026-11-13)*
+**Coverage.** Window. One complete explicitly pinned by-provider CSV, checked against the selected API population and dictionary. No service detail, geographic aggregate files, Medicare Advantage, practice-wide totals or historical completeness claim. Missing and suppressed cells remain missing. Local versus public delivery is determined by the selected generation. *(measured 2026-11-13)*
 
 - **Parquet file:** `cms_medicare_provider.parquet`
 - **MCP `query_sql` support:** Configured; requires an available artifact.

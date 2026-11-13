@@ -10564,7 +10564,7 @@ tables:
     subject: spending
     identity_columns: [observation_id]
     summary: Source-defined Original Medicare fee-for-service provider totals, utilization and drug/medical subsets for one selected calendar-year release.
-    coverage: One complete explicitly pinned by-provider CSV, checked against the selected API population and dictionary. No service detail, geographic aggregate files, Medicare Advantage, practice-wide totals or historical completeness claim. Missing and suppressed cells remain missing. Local versus public delivery is determined by the selected generation.
+    coverage: Window. One complete explicitly pinned by-provider CSV, checked against the selected API population and dictionary. No service detail, geographic aggregate files, Medicare Advantage, practice-wide totals or historical completeness claim. Missing and suppressed cells remain missing. Local versus public delivery is determined by the selected generation.
     measured_on: '2026-11-13'
     grain: One selected source release, calendar year and rendering NPI. Provider totals and drug/medical subsets are alternative columns; beneficiaries and HCPCS counts overlap. Do not add releases, rows from service/geographic products, or directory join duplicates. Filter year, source selection, specialty and geography before a comparison; no risk-adjusted quality ranking.
     columns:
