@@ -24299,6 +24299,276 @@
       "source_page"
     ]
   },
+  "senate_disclosure_reports": {
+    "table": "senate_disclosure_reports",
+    "label": "Senate transaction report observations",
+    "summary": "One row per native filing UUID, retaining original and amended observations separately.",
+    "coverage": "Sampled. A declared calendar filing year from the public Senate eFD PTR search. Electronic reports are qualified; listed paper reports remain unsupported observations. Annual reports are outside this selection.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Parent matches use literal listing names and report dates and may be ambiguous. No amendment replacement semantics, person enrichment or paper/annual completeness is inferred.",
+    "columns": [
+      {
+        "column_name": "filing_year",
+        "column_type": "INTEGER",
+        "description": "Calendar year selected by the publisher submission-date search; transaction dates may be outside it."
+      },
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Publisher UUID from the filing URL; amendments have their own UUID."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original public eFD report locator; using it may require the publisher agreement session."
+      },
+      {
+        "column_name": "report_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of exact electronic report HTML. Null for unsupported paper observations."
+      },
+      {
+        "column_name": "first_name",
+        "column_type": "VARCHAR",
+        "description": "Literal first-name cell from the search listing, with outer whitespace removed."
+      },
+      {
+        "column_name": "last_name",
+        "column_type": "VARCHAR",
+        "description": "Literal last-name cell from the search listing, with outer whitespace removed."
+      },
+      {
+        "column_name": "filer_label",
+        "column_type": "VARCHAR",
+        "description": "Literal filer description from the listing; no bioguide or private identity enrichment."
+      },
+      {
+        "column_name": "report_kind",
+        "column_type": "VARCHAR",
+        "description": "electronic or paper, as stated by the native report URL."
+      },
+      {
+        "column_name": "report_title",
+        "column_type": "VARCHAR",
+        "description": "Complete literal listing title, including any amendment label."
+      },
+      {
+        "column_name": "report_date",
+        "column_type": "DATE",
+        "description": "Date in the report title, distinct from its submission date."
+      },
+      {
+        "column_name": "submitted_date",
+        "column_type": "DATE",
+        "description": "Date stated in the listing; electronic report filed date must agree."
+      },
+      {
+        "column_name": "amendment_status",
+        "column_type": "VARCHAR",
+        "description": "none, numbered or unnumbered, from the native title."
+      },
+      {
+        "column_name": "amendment_number",
+        "column_type": "INTEGER",
+        "description": "Number printed in an amendment title; null when absent."
+      },
+      {
+        "column_name": "original_candidate_ids",
+        "column_type": "VARCHAR[]",
+        "description": "Derived original electronic report candidates with the same literal first/last names and report date within this selection. Does not establish replacement or cumulative semantics."
+      },
+      {
+        "column_name": "amendment_link_status",
+        "column_type": "VARCHAR",
+        "description": "not_applicable, unique_candidate, ambiguous or unresolved. Candidate matching is derived and never collapses filings."
+      },
+      {
+        "column_name": "parse_status",
+        "column_type": "VARCHAR",
+        "description": "parsed for qualified electronic HTML; unsupported_paper for listed paper filings. Source failures prevent a completed build."
+      },
+      {
+        "column_name": "filer_heading",
+        "column_type": "VARCHAR",
+        "description": "Complete printed electronic-report filer heading; null for unparsed paper."
+      },
+      {
+        "column_name": "filed_at_raw",
+        "column_type": "VARCHAR",
+        "description": "Printed Filed date and time, without an inferred timezone."
+      },
+      {
+        "column_name": "transaction_count",
+        "column_type": "BIGINT",
+        "description": "Printed electronic report transaction count, reconciled with every table row; null for paper."
+      },
+      {
+        "column_name": "search_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original JSON search page that states this filing."
+      },
+      {
+        "column_name": "search_start",
+        "column_type": "BIGINT",
+        "description": "Zero-based publisher page offset."
+      },
+      {
+        "column_name": "search_row",
+        "column_type": "BIGINT",
+        "description": "One-based row position within the retained search page."
+      },
+      {
+        "column_name": "raw_search_cells_json",
+        "column_type": "VARCHAR",
+        "description": "All original search cells, including literal link HTML and untouched whitespace."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Acquisition time of the electronic report original, distinct from the filed date; null for paper."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "filing_year",
+      "report_id"
+    ]
+  },
+  "senate_disclosure_transactions": {
+    "table": "senate_disclosure_transactions",
+    "label": "Senate reported transactions",
+    "summary": "One row per native transaction within one electronic filing; amendments remain separate report observations.",
+    "coverage": "Sampled. A declared calendar filing year from the public Senate eFD PTR search. Electronic reports are qualified; listed paper reports remain unsupported observations. Annual reports are outside this selection.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Parent matches use literal listing names and report dates and may be ambiguous. No amendment replacement semantics, person enrichment or paper/annual completeness is inferred.",
+    "columns": [
+      {
+        "column_name": "filing_year",
+        "column_type": "INTEGER",
+        "description": "Calendar year selected by the publisher submission-date search; transaction dates may be outside it."
+      },
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Publisher UUID from the filing URL; amendments have their own UUID."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Original public eFD report locator; using it may require the publisher agreement session."
+      },
+      {
+        "column_name": "report_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of exact electronic report HTML. Null for unsupported paper observations."
+      },
+      {
+        "column_name": "row_number",
+        "column_type": "BIGINT",
+        "description": "Native transaction number, unique within this report."
+      },
+      {
+        "column_name": "row_position",
+        "column_type": "BIGINT",
+        "description": "One-based displayed row position; it may differ from the native transaction number."
+      },
+      {
+        "column_name": "source_locator",
+        "column_type": "VARCHAR",
+        "description": "CSS selector identifying this row in the exact retained HTML."
+      },
+      {
+        "column_name": "transaction_date",
+        "column_type": "DATE",
+        "description": "Valid calendar date from the printed transaction-date cell."
+      },
+      {
+        "column_name": "transaction_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Original displayed slash-formatted transaction date."
+      },
+      {
+        "column_name": "owner",
+        "column_type": "VARCHAR",
+        "description": "Literal owner cell; an empty cell stays empty and is never assumed to mean Self."
+      },
+      {
+        "column_name": "ticker",
+        "column_type": "VARCHAR",
+        "description": "Printed ticker, with blank or double-dash markers represented as null; no external symbol enrichment."
+      },
+      {
+        "column_name": "ticker_raw",
+        "column_type": "VARCHAR",
+        "description": "Displayed ticker cell before missing-value interpretation."
+      },
+      {
+        "column_name": "asset_name",
+        "column_type": "VARCHAR",
+        "description": "Literal asset-name text, including any source notes."
+      },
+      {
+        "column_name": "asset_type",
+        "column_type": "VARCHAR",
+        "description": "Literal asset-type label."
+      },
+      {
+        "column_name": "transaction_type",
+        "column_type": "VARCHAR",
+        "description": "Literal action, including Purchase, Sale (Full), Sale (Partial) or Exchange when printed."
+      },
+      {
+        "column_name": "amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Exact displayed dollar range or other amount statement; no midpoint estimate."
+      },
+      {
+        "column_name": "amount_lower_usd",
+        "column_type": "BIGINT",
+        "description": "Lower printed dollar bound when recognized; null for an unresolved format."
+      },
+      {
+        "column_name": "amount_upper_usd",
+        "column_type": "BIGINT",
+        "description": "Upper printed dollar bound; null for an open upper bound or unresolved format."
+      },
+      {
+        "column_name": "lower_inclusive",
+        "column_type": "BOOLEAN",
+        "description": "Whether the recognized lower bound is inclusive; false for Over statements; null when unresolved."
+      },
+      {
+        "column_name": "amount_parse_status",
+        "column_type": "VARCHAR",
+        "description": "closed_range, open_upper or unresolved. Unknown text remains in amount_raw."
+      },
+      {
+        "column_name": "comment",
+        "column_type": "VARCHAR",
+        "description": "Printed comment with blank or double-dash markers represented as null."
+      },
+      {
+        "column_name": "comment_raw",
+        "column_type": "VARCHAR",
+        "description": "Displayed comment cell before missing-value interpretation."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "Every displayed transaction cell in source column order; raw source HTML is separately retained."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "filing_year",
+      "report_id",
+      "row_number"
+    ]
+  },
   "senate_disbursements": {
     "table": "senate_disbursements",
     "label": "Senate disbursement ledger observations",

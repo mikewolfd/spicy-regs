@@ -270,6 +270,8 @@ TABLES = (
     "budget_volumes",
     "bill_committee_actions",
     "document_citations",
+    "senate_disclosure_reports",
+    "senate_disclosure_transactions",
     "senate_expenditures",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
     "laws",

@@ -620,6 +620,8 @@ TABLES: tuple[str, ...] = (
     "house_disbursements_summary",
     "house_disbursement_pdf_rows",
     "house_disbursement_pdf_pages",
+    "senate_disclosure_reports",
+    "senate_disclosure_transactions",
     "senate_disbursements",
     "senate_disbursement_pages",
     *DISBURSEMENT_SUMMARY_TABLES,
@@ -741,7 +743,9 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "house_disbursements_summary",
         "house_disbursement_pdf_rows",
         "house_disbursement_pdf_pages",
-        "senate_disbursements",
+        "senate_disclosure_reports",
+    "senate_disclosure_transactions",
+    "senate_disbursements",
         "senate_disbursement_pages",
         *DISBURSEMENT_SUMMARY_TABLES,
         "fec_financial_profiles",
@@ -978,6 +982,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as EXECUTIVE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
+    from spicy_regs.schemas.senate_disclosures import SCHEMAS as SENATE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.senate_disbursements import SCHEMAS as SENATE_DISBURSEMENT_SCHEMAS
     from spicy_regs.schemas.house_disbursement_pages import SCHEMAS as HOUSE_PDF_SCHEMAS
     from spicy_regs.schemas.disbursement_summaries import SCHEMAS as DISBURSEMENT_SUMMARY_SCHEMAS
@@ -1099,6 +1104,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         **EXECUTIVE_DISCLOSURE_SCHEMAS,
         **HOUSE_DISBURSEMENT_SCHEMAS,
+        **SENATE_DISCLOSURE_SCHEMAS,
         **SENATE_DISBURSEMENT_SCHEMAS,
         **HOUSE_PDF_SCHEMAS,
         **DISBURSEMENT_SUMMARY_SCHEMAS,
