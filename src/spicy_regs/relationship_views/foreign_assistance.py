@@ -57,6 +57,8 @@ FOREIGN_ASSISTANCE_VIEWS = (
         identity_columns=("snapshot_id", "recipient_code", "recipient_name", "fiscal_period", "measure_id", "dollar_basis"),
         rule_version="foreign-assistance-observed-v1", role="child_query", category="query_data",
         column_descriptions={
+            "previous_snapshot_id": "Identifier of the immediately preceding held snapshot ordered by observed_at, "
+                                    "then snapshot_id; this is an observed-file comparison, not a publisher revision order.",
             "observation_change": "newly_observed, now_unobserved, changed or unchanged between adjacent held files.",
             "current_usd_change": "Current-dollar difference only when both amounts are numeric; NULL otherwise.",
         },
