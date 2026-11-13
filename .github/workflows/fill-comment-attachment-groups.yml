@@ -1,0 +1,155 @@
+name: Fill physical comment attachment groups
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_ref:
+        description: 'Reviewed exact 40-character runtime commit'
+        required: true
+        type: string
+      operation:
+        description: 'Plan first, then one writing pilot, then remaining groups; see runbook for recovery'
+        required: true
+        type: choice
+        options: [plan, pilot, fill, resume, undo]
+      config:
+        description: 'JSON with exact input/plan/pilot/recovery pins, as documented in comment-attachment-physical-fill.md'
+        required: true
+        type: string
+      resume_run_id:
+        description: 'Resume/undo only: earlier run holding the pinned recovery artifact'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+# One lock covers planning, every sequential write, maintenance restoration and recovery retention.
+concurrency:
+  group: comments-catalog-write
+  cancel-in-progress: false
+  queue: max
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  OMP_NUM_THREADS: '2'
+  OPENBLAS_NUM_THREADS: '2'
+  POLARS_MAX_THREADS: '2'
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      groups: ${{ steps.groups.outputs.groups }}
+    steps:
+      - name: Validate runtime and recovery choice
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          OPERATION: ${{ inputs.operation }}
+          RESUME_RUN: ${{ inputs.resume_run_id }}
+        run: |
+          [[ "$RUNTIME_REF" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$OPERATION" == resume || "$OPERATION" == undo ]]; then
+            [[ "$RESUME_RUN" =~ ^[0-9]+$ ]]
+          else
+            test -z "$RESUME_RUN"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.runtime_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen --extra operational-runner
+      - name: Select bounded groups and verify writing pilot
+        id: groups
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIG: ${{ inputs.config }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          result=$(uv run --no-sync python scripts/fill_comment_attachment_groups.py \
+            --runtime-ref "$RUNTIME_REF" --operation "$OPERATION" --config "$CONFIG" \
+            --workdir "$RUNNER_TEMP/fill-selection" --matrix)
+          echo "groups=$result" >> "$GITHUB_OUTPUT"
+
+  fill:
+    needs: select
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        group: ${{ fromJSON(needs.select.outputs.groups) }}
+    env:
+      WORKDIR: /tmp/comment-attachment-fill
+      SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+      R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+      R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+      R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+      R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE || 'default' }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.runtime_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen --extra operational-runner
+      - name: Restore exact earlier recovery files
+        if: inputs.operation == 'resume' || inputs.operation == 'undo'
+        uses: actions/download-artifact@v4
+        with:
+          name: comment-attachment-fill-${{ matrix.group }}
+          path: ${{ env.WORKDIR }}
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+      - name: Run the bounded maintained planner or writer
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIG: ${{ inputs.config }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          uv run --no-sync python scripts/fill_comment_attachment_groups.py \
+            --runtime-ref "$RUNTIME_REF" --operation "$OPERATION" --config "$CONFIG" \
+            --group "$GROUP" --workdir "$WORKDIR"
+      - name: Retry exact maintenance restoration even after process interruption
+        if: always() && inputs.operation != 'plan'
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIG: ${{ inputs.config }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          uv run --no-sync python scripts/fill_comment_attachment_groups.py \
+            --runtime-ref "$RUNTIME_REF" --operation "$OPERATION" --config "$CONFIG" \
+            --group "$GROUP" --workdir "$WORKDIR" --finalize
+      - name: Retain group journals, preimages and exact recovery controls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-attachment-fill-${{ matrix.group }}
+          path: |
+            ${{ env.WORKDIR }}/*.json
+            ${{ env.WORKDIR }}/*.log
+            ${{ env.WORKDIR }}/*.sha256
+            ${{ env.WORKDIR }}/writer/fill/
+            ${{ env.WORKDIR }}/group/
+            ${{ env.WORKDIR }}/physical/
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 0

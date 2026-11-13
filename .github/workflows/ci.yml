@@ -65,7 +65,9 @@ jobs:
         env:
           CHANGE_BASE: ${{ github.event.pull_request.base.sha }}
           CHANGE_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: uv run --extra comments-reader python -B scripts/run_ci_tests.py ${{ matrix.partition }} --manifest "$RUNNER_TEMP/ci-partition-${{ matrix.partition }}.json" -ra
+        # Report every failure in a partition so integrated source changes can
+        # be repaired together; the existing job deadline still bounds the run.
+        run: uv run --extra comments-reader python -B scripts/run_ci_tests.py ${{ matrix.partition }} --manifest "$RUNNER_TEMP/ci-partition-${{ matrix.partition }}.json" --maxfail=0 -ra
 
       - name: Retain complete test selection
         if: always()
@@ -135,7 +137,10 @@ jobs:
         run: |
           ARGS=(--receipt join-check-results.json)
           if [ -n "$CHANGE_BASE" ] && [ "$CHANGE_BASE" != "0000000000000000000000000000000000000000" ]; then
-            ARGS+=(--changed-since "$CHANGE_BASE")
+            # New local source declarations precede their first public selection.
+            # Report those absent/unmeasured children explicitly; existing or
+            # selected missing tables and published unbaselined joins still fail.
+            ARGS+=(--changed-since "$CHANGE_BASE" --allow-unpublished-new)
           fi
           uv run --frozen --no-default-groups python scripts/check_table_joins.py "${ARGS[@]}"
       - name: Retain join measurements

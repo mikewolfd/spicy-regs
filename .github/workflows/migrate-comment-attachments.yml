@@ -1,0 +1,83 @@
+name: Migrate comment attachment metadata
+
+# Schema-only adoption of the reviewed nullable attachment fields. Never scheduled.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply the previewed schema change; otherwise preview only'
+        type: boolean
+        default: false
+      table_uuid:
+        description: 'Exact comments table UUID from the reviewed preview'
+        type: string
+      snapshot_id:
+        description: 'Exact comments data snapshot from the reviewed preview'
+        type: string
+      schema_id:
+        description: 'Exact comments schema ID from the reviewed preview'
+        type: string
+
+concurrency:
+  group: comments-catalog-write
+  cancel-in-progress: false
+  queue: max
+
+permissions:
+  contents: read
+
+env:
+  SPICY_REGS_CATALOG_LOCK: comments-catalog-write
+  R2_CATALOG_URI: ${{ secrets.R2_CATALOG_URI }}
+  R2_CATALOG_WAREHOUSE: ${{ secrets.R2_CATALOG_WAREHOUSE }}
+  R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+  R2_CATALOG_NAMESPACE: ${{ secrets.R2_CATALOG_NAMESPACE || 'default' }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+  R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install the pinned runtime
+        run: uv sync --frozen --extra comments-reader --no-group dev
+      - name: Preview the selected schema and snapshot
+        run: |
+          mkdir -p "$RUNNER_TEMP/attachment-migration"
+          uv run --no-sync python scripts/migrate_comments_attachment_schema.py > "$RUNNER_TEMP/attachment-migration/preview.json"
+          cat "$RUNNER_TEMP/attachment-migration/preview.json"
+      - name: Suspend maintenance on both selected native tables
+        if: inputs.apply
+        run: uv run --no-sync python -m spicy_regs.comments_maintenance suspend --state "$RUNNER_TEMP/attachment-migration/maintenance-state.json"
+      - name: Apply only against the reviewed pin
+        if: inputs.apply
+        env:
+          TABLE_UUID: ${{ inputs.table_uuid }}
+          SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+          SCHEMA_ID: ${{ inputs.schema_id }}
+        run: |
+          : "${TABLE_UUID:?table_uuid is required}" "${SNAPSHOT_ID:?snapshot_id is required}" "${SCHEMA_ID:?schema_id is required}"
+          uv run --no-sync python scripts/migrate_comments_attachment_schema.py \
+            --apply --table-uuid "$TABLE_UUID" --snapshot-id "$SNAPSHOT_ID" --schema-id "$SCHEMA_ID" \
+            --maintenance-state "$RUNNER_TEMP/attachment-migration/maintenance-state.json" \
+            > "$RUNNER_TEMP/attachment-migration/applied.json"
+          cat "$RUNNER_TEMP/attachment-migration/applied.json"
+      - name: Restore exact prior maintenance settings
+        if: always() && inputs.apply
+        run: uv run --no-sync python -m spicy_regs.comments_maintenance restore --state "$RUNNER_TEMP/attachment-migration/maintenance-state.json"
+      - name: Retain preview, result, and maintenance recovery state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-attachment-migration
+          path: ${{ runner.temp }}/attachment-migration/
+          if-no-files-found: warn
+          retention-days: 30

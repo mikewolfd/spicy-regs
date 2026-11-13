@@ -166,6 +166,24 @@ def test_prepare_leaves_only_its_outputs_where_the_artifact_collects_them(tmp_pa
     assert not (tmp_path / "fill" / "work").exists()
 
 
+def test_prepare_uses_explicit_resource_targets_through_actual_catalog_read(tmp_path, catalog):
+    from spicy_regs.duckdb_settings import ExportResources
+
+    seed(catalog, [row("A"), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED},
+                     {"key": "b", "comment_id": "B", "modify_date": "2021-01-01", "attachments_json": LISTED}])
+    with catalog() as con:
+        prepared = cfw.prepare(tmp_path, profile="attachments", con=con,
+                               resources=ExportResources(memory="128MiB", threads=1))
+        memory, threads = con.execute("SELECT current_setting('memory_limit'), current_setting('threads')").fetchall()[0]
+        assert memory == "128.0 MiB"
+        assert threads == 1
+    assert prepared["rows_to_fill"] == 1
+    assert prepared["other_version_only"] == 1
+    assert pl.read_parquet(tmp_path / "fill" / "fill.parquet")["attachments_json"].to_list() == [LISTED]
+    assert all(value["attachments_json"] is None for value in table(catalog).values())
+
+
 def test_a_read_of_another_version_fills_nothing(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "modify_date": "2021-06-01T00:00:00Z", "subtype": "Read"}])

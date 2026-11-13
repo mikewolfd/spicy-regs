@@ -184,7 +184,7 @@ def test_refuses_changed_inputs(tmp_path, change):
 
 
 def test_schema_cli_describes_both_native_policy_families():
-    for dataset, version in [("bill_versions", "legislative-documents/2"), ("bill_actions", "congress-subjects/1")]:
+    for dataset, version in [("bill_versions", "legislative-documents/2"), ("bill_actions", "congress-subjects/2")]:
         result = json.loads(
             subprocess.check_output([sys.executable, "-m", "spicy_regs.coverage_reader", "--schema", dataset])
         )
@@ -210,7 +210,7 @@ def test_congress_native_source_fields_restore_using_its_maintained_reader(tmp_p
     }
     result = bridge.restore(request)
     assert pq.read_table(result["urls"][0]).to_pylist() == [raw]
-    assert result["policyVersion"] == "congress-subjects/1"
+    assert result["policyVersion"] == "congress-subjects/2"
 
 
 def rewrite_receipts(request, edit):

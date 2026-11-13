@@ -217,6 +217,8 @@ def test_the_receipts_free_export_equals_the_receipt_routes_table(catalog, tmp_p
     attached = rows["EPA-1-0003"]
     assert attached["attachments"] == [{
         "title": "Letter", "attachment_id": "EPA-1-0003-A1", "restrict_reason": None, "restrict_reason_type": None,
+        "agency_note": None, "authors": None, "description": None, "doc_abstract": None,
+        "doc_order": None, "modify_date": None, "publication": None,
         "formats": [{"url": "https://downloads.regulations.gov/EPA-1-0003/attachment_1.pdf", "format": "pdf",
                      "size": 52011}]}]
     assert (attached["text_content"], attached["text_extraction_status"], attached["pdf_extraction_results_json"]) == (

@@ -78,7 +78,8 @@ def test_default_scheduled_run_does_not_filter_any_declaration(monkeypatch):
     monkeypatch.setattr(checker, "connect", duckdb.connect)
     monkeypatch.setattr(checker, "table_urls", lambda _: lambda name: [name])
     seen = []
-    def check(_con, joins, _urls):
+    def check(_con, joins, _urls, *, unpublished_new):
+        assert not unpublished_new
         seen.extend(joins)
         return [checker.verdict(j, 0, 0) for j in joins]
     monkeypatch.setattr(checker, "check", check)

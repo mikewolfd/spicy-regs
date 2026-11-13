@@ -107,6 +107,12 @@ that every remote file is pruned. Size a production run by its candidate rows
 and their full subject/receipt bytes, plus those remaining scans. A full staged
 population still needs measured admission.
 
+Python callers can pass an explicit `ExportResources` to both
+`comment_fields_write.prepare(..., resources=...)` and `write(..., resources=...)`
+for a bounded execution. These are DuckDB query targets; the executor must
+separately monitor process memory, scratch space and available disk. Omitting
+the override preserves the existing command-line defaults.
+
 ### Bounded attachment groups
 
 A full attachment stage can name millions of candidate rows. Use

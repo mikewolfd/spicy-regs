@@ -1,0 +1,97 @@
+name: Aggregate checked comment attachment stages
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_ref:
+        description: Exact reviewed runtime commit
+        type: string
+        required: true
+      groups_key:
+        description: Verified staging key for groups.json
+        type: string
+        required: true
+      groups_sha256:
+        description: Exact SHA-256 of groups.json
+        type: string
+        required: true
+      local_key:
+        description: Verified staging key for local-stages.json
+        type: string
+        required: false
+      local_sha256:
+        description: Exact SHA-256 of local-stages.json
+        type: string
+        required: false
+      source_runs:
+        description: JSON array of completed source workflow run IDs
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 135
+    concurrency:
+      group: comment-attachment-aggregate-${{ inputs.groups_sha256 }}
+      cancel-in-progress: false
+    env:
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      POLARS_MAX_THREADS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Set up exact runtime
+        env:
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+        run: |
+          [[ "$RUNTIME_REF" =~ ^[0-9a-f]{40}$ ]]
+          echo "WORKDIR=$RUNNER_TEMP/comment-attachment-aggregate" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.runtime_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install the locked runtime
+        run: uv sync --frozen --extra operational-runner
+      - name: Verify and combine complete group stages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_REF: ${{ inputs.runtime_ref }}
+          GROUPS_KEY: ${{ inputs.groups_key }}
+          GROUPS_SHA256: ${{ inputs.groups_sha256 }}
+          LOCAL_KEY: ${{ inputs.local_key }}
+          LOCAL_SHA256: ${{ inputs.local_sha256 }}
+          SOURCE_RUNS: ${{ inputs.source_runs }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          uv run --no-sync python scripts/aggregate_comment_attachment_stages.py \
+            --runtime-ref "$RUNTIME_REF" --repository "$GITHUB_REPOSITORY" \
+            --groups-key "$GROUPS_KEY" --groups-sha256 "$GROUPS_SHA256" \
+            --local-key "$LOCAL_KEY" --local-sha256 "$LOCAL_SHA256" --source-runs "$SOURCE_RUNS" \
+            --workdir "$WORKDIR"
+      - name: Retain aggregate receipts and resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-attachment-aggregate-${{ inputs.groups_sha256 }}
+          path: |
+            ${{ env.WORKDIR }}/admission.json
+            ${{ env.WORKDIR }}/execution.json
+            ${{ env.WORKDIR }}/execution.log
+            ${{ env.WORKDIR }}/process-closure.json
+            ${{ env.WORKDIR }}/result.json
+            ${{ env.WORKDIR }}/stage/staging.json
+            ${{ env.WORKDIR }}/stage/reads.parquet.sha256
+            ${{ env.WORKDIR }}/stage/attachment-census.json
+          if-no-files-found: warn
+          retention-days: 30
