@@ -36,10 +36,30 @@ def _lock() -> None:
         raise ValueError("Hold comments-catalog-write before changing or verifying maintenance")
 
 
-def _selected() -> tuple[str, dict]:
+def _selected(migration_pin: tuple[str, int, int] | None = None) -> tuple[str, dict]:
     with closing(iceberg._connect()) as con:
-        namespace = iceberg._selected_catalog_namespace(con, COMMENT)
+        if migration_pin is None:
+            namespace = iceberg._selected_catalog_namespace(con, COMMENT)
+        else:
+            # Only this schema migration may guard the initialized prior layout.
+            # Ordinary writers still take require_initialized's current-schema check.
+            namespace = regulatory_catalog.namespace()
+            if not regulatory_catalog.initialized(con, COMMENT.name):
+                raise ValueError("Comments catalog has no qualified initialization receipt")
         pins = {name: iceberg._catalog_metadata(con, namespace, name) for name in TABLES}
+        if migration_pin is not None:
+            from pyiceberg.schema import Schema
+
+            from spicy_regs.comment_attachment_schema import attachment_additions
+
+            metadata = pins[COMMENT.name]
+            actual = (metadata["table-uuid"], metadata["current-snapshot-id"], metadata["current-schema-id"])
+            if actual != migration_pin or actual[1] is None or actual[1] < 0:
+                raise ValueError("Comments catalog differs from the migration preview pin")
+            schemas = [schema for schema in metadata["schemas"] if schema["schema-id"] == actual[2]]
+            if len(schemas) != 1:
+                raise ValueError("Comments migration schema is missing or ambiguous")
+            attachment_additions(Schema.model_validate(schemas[0]))
     return namespace, {name: {key: value[key] for key in (
         "table-uuid", "current-snapshot-id", "current-schema-id"
     )} for name, value in pins.items()}
@@ -140,16 +160,18 @@ def restore(path: Path, api: MaintenanceAPI) -> dict:
     return state
 
 
-def suspend(path: Path, api: MaintenanceAPI) -> dict:
+def suspend(path: Path, api: MaintenanceAPI, *, migration_pin: tuple[str, int, int] | None = None) -> dict:
     _lock()
     if path.exists():
         raise FileExistsError("Use a new maintenance state path; retain earlier recovery evidence")
-    namespace, pins = _selected()
+    namespace, pins = _selected() if migration_pin is None else _selected(migration_pin)
     if namespace != regulatory_catalog.namespace():
         raise ValueError("Maintenance may only guard the selected native Comments namespace")
     account, bucket = _catalog()
-    state = {"format": FORMAT, "account": account, "bucket": bucket, "namespace": namespace,
+    state: dict = {"format": FORMAT, "account": account, "bucket": bucket, "namespace": namespace,
              "held": False, "restored": False, "tables": {}}
+    if migration_pin is not None:
+        state["attachment_migration_pin"] = list(migration_pin)
     # Complete both read-only captures before changing either table.
     for name in TABLES:
         original = api.request("GET", namespace, name)
@@ -175,19 +197,21 @@ def suspend(path: Path, api: MaintenanceAPI) -> dict:
             _save(path, state)
         state["held"] = True
         _save(path, state)
-        verify(path, api)
+        verify(path, api, migration_pin=migration_pin)
     except BaseException:
         restore(path, api)
         raise
     return state
 
 
-def verify(path: Path, api: MaintenanceAPI) -> dict:
+def verify(path: Path, api: MaintenanceAPI, *, migration_pin: tuple[str, int, int] | None = None) -> dict:
     _lock()
     state = _load(path)
     if not state.get("held") or state.get("restored"):
         raise ValueError("Maintenance guard is not held")
-    namespace, pins = _selected()
+    if state.get("attachment_migration_pin") != (list(migration_pin) if migration_pin is not None else None):
+        raise ValueError("Maintenance guard requires its exact migration preview pins")
+    namespace, pins = _selected() if migration_pin is None else _selected(migration_pin)
     if namespace != state["namespace"]:
         raise ValueError("Selected native namespace changed")
     for name in TABLES:
@@ -204,20 +228,28 @@ def verify(path: Path, api: MaintenanceAPI) -> dict:
     return state
 
 
-def run(operation: str, path: Path) -> dict:
+def run(operation: str, path: Path, *, migration_pin: tuple[str, int, int] | None = None) -> dict:
     account, bucket = _catalog()
     with httpx.Client(headers={"Authorization": "Bearer " + os.environ["R2_CATALOG_TOKEN"]},
                       timeout=30, follow_redirects=False) as client:
-        return {"suspend": suspend, "restore": restore, "verify": verify}[operation](
-            path, MaintenanceAPI(account, bucket, client))
+        api = MaintenanceAPI(account, bucket, client)
+        if operation == "restore":
+            return restore(path, api)
+        return {"suspend": suspend, "verify": verify}[operation](path, api, migration_pin=migration_pin)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("suspend", "verify", "restore"))
     parser.add_argument("--state", type=Path, required=True)
+    parser.add_argument("--migration-table-uuid", help="Only for the reviewed attachment schema migration")
+    parser.add_argument("--migration-snapshot-id", type=int)
+    parser.add_argument("--migration-schema-id", type=int)
     args = parser.parse_args()
-    result = run(args.operation, args.state)
+    pins = (args.migration_table_uuid, args.migration_snapshot_id, args.migration_schema_id)
+    if any(value is not None for value in pins) and (None in pins or args.operation == "restore"):
+        parser.error("Migration suspension/verification requires all three preview pins; restoration uses saved state")
+    result = run(args.operation, args.state, migration_pin=None if None in pins else pins)
     print(json.dumps({"operation": args.operation, "held": result.get("held", False),
                       "restored": result.get("restored", False)}))
 
