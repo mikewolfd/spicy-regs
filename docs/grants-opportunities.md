@@ -166,3 +166,72 @@ Focused local fixtures prove mapping, refusal, ordinary publication and SQL
 behavior. `ss-5bhb` records accepted complete selected-export qualification and
 public delivery. The release-selection checks reuse that acceptance; they do not
 establish automatic daily freshness, lifecycle status or complete history.
+
+## Source-stated lifecycle status
+
+`grants_status_observations` adds literal search2 `oppStatus` observations to
+ordinary SQL. Each row retains its native opportunity ID, status, API document
+type, raw date strings, observation timestamp, complete hit and exact source
+response locator. Missing, null, blank and supplied status values stay distinct
+in `status_value_state`. Unknown status strings survive unchanged.
+`grants_status_queries` retains each complete declared API population, including
+zero hits with `observed-empty` outcome, capture descriptors and reconciled counts.
+These tables form a separate `grants-status` generation; adding them requires no
+daily XML reacquisition or rebuild.
+
+Acquire only the explicitly needed population, after checking retained holdings:
+
+```sh
+python -m spicy_regs.pipelines.grants_status acquire \
+  --opportunity-number PAR-25-370 --agencies HHS-NIH11 --eligibilities 12 \
+  --page-size 1 --output-dir "$RUN/acquisition" --captures-out "$RUN/captures.json"
+python -m spicy_regs.pipelines.grants_status build \
+  --captures "$RUN/captures.json" --output-dir "$RUN/candidate"
+```
+
+The default status request selects `forecasted|posted|closed|archived`, as the
+publisher documents. This is a query filter, never a list used to rewrite or
+guess returned values. Search matching remains the publisher's rule; keep the
+echoed selection and all actual hits. Complete paging requires echoed filters,
+contiguous offsets, stable counts and unique native IDs. Failed or missing pages
+retain refusal evidence and produce no generation. Existing successful output
+is protected by the fresh-directory requirement. Acquire and build never select
+shared publication or catalog state.
+
+For declared status history, repeat `build --captures` for each retained capture
+selection, including older selections. The full explicit input set determines
+the output; the builder never discovers or appends old observations. Later-only
+input intentionally produces later-only coverage. An older status remains an
+older observation even after a later empty query. Inspect the query table and
+failure evidence to distinguish later missing membership from a failed refresh.
+Neither establishes withdrawal. The source supplies no frozen population token,
+so even fully reconciled pages establish an observed crawl only.
+
+To combine the candidate with an already admitted XML table, select both through
+the existing local SQL consumer. Join on native ID and show both source times:
+
+```sql
+SELECT g.opportunity_id, g.opportunity_number, g.agency_name,
+       g.close_date, g.eligibility_text, g.snapshot_date,
+       s.lifecycle_status, s.status_value_state, s.observed_at,
+       s.document_type, s.close_date_raw,
+       json_extract_string(s.source_locator_json, '$.request_url') AS status_url,
+       json_extract_string(s.source_locator_json, '$.response_sha256') AS status_response,
+       json_extract_string(s.source_locator_json, '$.json_pointer') AS status_path,
+       g.source_release_digest AS xml_release,
+       s.source_release_digest AS status_release
+FROM grants_opportunity_observations g
+JOIN grants_status_observations s USING (opportunity_id)
+WHERE g.agency_code = 'HHS-NIH11'
+  AND json_contains(g.eligibility_codes_json, '"12"')
+  AND g.close_date >= DATE '2026-11-13'
+  AND s.lifecycle_status = 'posted';
+```
+
+Select the intended XML and status releases explicitly when querying history;
+otherwise each selected observation participates in the join. API capture time,
+XML export date, source deadline and notice update dates describe different
+events. This query answers the declared agency/eligibility/deadline selection
+using status as observed at its recorded time; it does not promise future
+availability or infer status from the deadline. Exact raw response evidence and
+query count remain available even when no opportunity is returned.

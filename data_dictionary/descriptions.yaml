@@ -10499,6 +10499,46 @@ tables:
       source_locator_json: Original request URL, response digest, capture time, page-local JSON pointer and ordinal.
       raw_row_json: Complete literal source row including all supplied years, trend fields, unknown fields
         and missing cells. Kept once, without multiplying historical rows or manufacturer associations.
+  grants_status_observations:
+    label: Grants.gov source-stated lifecycle status observations
+    subject: spending
+    summary: Literal search2 status and date strings for each native opportunity in an explicitly selected complete API query.
+    coverage: Not a range. Each selected query preserves all returned native IDs and its page observation times. No frozen snapshot, automatic freshness, complete status history or withdrawal from missing membership is claimed.
+    measured_on: '2026-11-13'
+    grain: One selected API source release and native opportunity ID; older selected observations remain separate.
+    columns:
+      opportunity_id: Literal search2 id; joins to XML OpportunityID without implying simultaneous snapshots.
+      lifecycle_status: Literal oppStatus, including blank or unknown strings; never inferred from dates or document type.
+      status_value_state: value, blank, null or missing, distinguishing absent status from an empty source string.
+      document_type: Literal API docType; separate from lifecycle status and the daily XML notice kind.
+      opportunity_number: Literal API number; query matching remains the publisher's rule.
+      agency_code: Literal API agencyCode.
+      open_date_raw: Literal API openDate; blank, null and missing stay visible in raw_fields_json.
+      close_date_raw: Literal API closeDate; no inference about status or date validity.
+      observed_at: UTC time the exact API response was observed; original timestamp remains in source_locator_json.
+      source_record_id: Source-owned native record identity within this API release.
+      source_release_logical_id: Exact admitted status source release logical ID.
+      source_release_digest: Exact admitted status source release digest; also joins to grants_status_queries.
+      source_locator_json: Exact request URL, POST selection, response SHA-256, observation timestamp and page-local JSON pointer.
+      raw_fields_json: Complete literal API hit, preserving unknown fields, strings, nulls and missing keys.
+  grants_status_queries:
+    label: Grants.gov reconciled status query populations
+    subject: spending
+    summary: Selected API query populations with complete page evidence, including successful zero-hit responses.
+    coverage: Not a range. Contiguous echoed offsets, stable declared counts and unique IDs qualify one observed query. Failed or incomplete queries retain refusal evidence and create no generation; missing membership never establishes withdrawal.
+    measured_on: '2026-11-13'
+    grain: One explicitly selected admitted API source release, including an observed-empty population.
+    columns:
+      source_release_logical_id: Exact admitted status source release logical ID.
+      source_release_digest: Exact admitted source release digest; links the population to its literal status observations.
+      selection_json: Exact opportunity number, agency, eligibility, status population and page size selected by the caller.
+      declared_count: Publisher hitCount reconciled by source admission across every selected page.
+      observed_count: Number of admitted unique native opportunity IDs in this query.
+      page_count: Number of retained and reconciled API response pages.
+      first_observed_at: Earliest page observation timestamp, separate from XML export date and notice dates.
+      last_observed_at: Latest page observation timestamp; does not establish simultaneous publisher state.
+      outcome: observed-complete or observed-empty; refusal is retained separately and is never a successful zero.
+      captures_json: Ordered exact page descriptors, each with POST request, response SHA-256, byte size and observation timestamp.
   grants_opportunity_observations:
     label: Grants.gov opportunity and forecast observations
     subject: spending

@@ -22304,6 +22304,154 @@
     "grain": "One source release, notice kind and native opportunity ID; publisher versions and older selected snapshots remain distinct.",
     "identity_columns": []
   },
+  "grants_status_observations": {
+    "table": "grants_status_observations",
+    "label": "Grants.gov source-stated lifecycle status observations",
+    "summary": "Literal search2 status and date strings for each native opportunity in an explicitly selected complete API query.",
+    "coverage": "Not a range. Each selected query preserves all returned native IDs and its page observation times. No frozen snapshot, automatic freshness, complete status history or withdrawal from missing membership is claimed.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "opportunity_id",
+        "column_type": "VARCHAR",
+        "description": "Literal search2 id; joins to XML OpportunityID without implying simultaneous snapshots."
+      },
+      {
+        "column_name": "lifecycle_status",
+        "column_type": "VARCHAR",
+        "description": "Literal oppStatus, including blank or unknown strings; never inferred from dates or document type."
+      },
+      {
+        "column_name": "status_value_state",
+        "column_type": "VARCHAR",
+        "description": "value, blank, null or missing, distinguishing absent status from an empty source string."
+      },
+      {
+        "column_name": "document_type",
+        "column_type": "VARCHAR",
+        "description": "Literal API docType; separate from lifecycle status and the daily XML notice kind."
+      },
+      {
+        "column_name": "opportunity_number",
+        "column_type": "VARCHAR",
+        "description": "Literal API number; query matching remains the publisher's rule."
+      },
+      {
+        "column_name": "agency_code",
+        "column_type": "VARCHAR",
+        "description": "Literal API agencyCode."
+      },
+      {
+        "column_name": "open_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal API openDate; blank, null and missing stay visible in raw_fields_json."
+      },
+      {
+        "column_name": "close_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal API closeDate; no inference about status or date validity."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "UTC time the exact API response was observed; original timestamp remains in source_locator_json."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Source-owned native record identity within this API release."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted status source release logical ID."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted status source release digest; also joins to grants_status_queries."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Exact request URL, POST selection, response SHA-256, observation timestamp and page-local JSON pointer."
+      },
+      {
+        "column_name": "raw_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal API hit, preserving unknown fields, strings, nulls and missing keys."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One selected API source release and native opportunity ID; older selected observations remain separate.",
+    "identity_columns": []
+  },
+  "grants_status_queries": {
+    "table": "grants_status_queries",
+    "label": "Grants.gov reconciled status query populations",
+    "summary": "Selected API query populations with complete page evidence, including successful zero-hit responses.",
+    "coverage": "Not a range. Contiguous echoed offsets, stable declared counts and unique IDs qualify one observed query. Failed or incomplete queries retain refusal evidence and create no generation; missing membership never establishes withdrawal.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted status source release logical ID."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source release digest; links the population to its literal status observations."
+      },
+      {
+        "column_name": "selection_json",
+        "column_type": "VARCHAR",
+        "description": "Exact opportunity number, agency, eligibility, status population and page size selected by the caller."
+      },
+      {
+        "column_name": "declared_count",
+        "column_type": "BIGINT",
+        "description": "Publisher hitCount reconciled by source admission across every selected page."
+      },
+      {
+        "column_name": "observed_count",
+        "column_type": "BIGINT",
+        "description": "Number of admitted unique native opportunity IDs in this query."
+      },
+      {
+        "column_name": "page_count",
+        "column_type": "BIGINT",
+        "description": "Number of retained and reconciled API response pages."
+      },
+      {
+        "column_name": "first_observed_at",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "Earliest page observation timestamp, separate from XML export date and notice dates."
+      },
+      {
+        "column_name": "last_observed_at",
+        "column_type": "TIMESTAMP WITH TIME ZONE",
+        "description": "Latest page observation timestamp; does not establish simultaneous publisher state."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "observed-complete or observed-empty; refusal is retained separately and is never a successful zero."
+      },
+      {
+        "column_name": "captures_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered exact page descriptors, each with POST request, response SHA-256, byte size and observation timestamp."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One explicitly selected admitted API source release, including an observed-empty population.",
+    "identity_columns": []
+  },
   "ofac_entity_observations": {
     "table": "ofac_entity_observations",
     "label": "OFAC sanctions entity observations",

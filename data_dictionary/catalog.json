@@ -7178,6 +7178,52 @@
       ]
     },
     {
+      "table": "grants_status_observations",
+      "label": "Grants.gov source-stated lifecycle status observations",
+      "summary": "Literal search2 status and date strings for each native opportunity in an explicitly selected complete API query.",
+      "coverage": "Not a range. Each selected query preserves all returned native IDs and its page observation times. No frozen snapshot, automatic freshness, complete status history or withdrawal from missing membership is claimed.",
+      "kind": "not_a_range",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "opportunity_id",
+        "lifecycle_status",
+        "status_value_state",
+        "document_type",
+        "opportunity_number",
+        "agency_code",
+        "open_date_raw",
+        "close_date_raw",
+        "observed_at",
+        "source_record_id",
+        "source_release_logical_id",
+        "source_release_digest",
+        "source_locator_json",
+        "raw_fields_json"
+      ]
+    },
+    {
+      "table": "grants_status_queries",
+      "label": "Grants.gov reconciled status query populations",
+      "summary": "Selected API query populations with complete page evidence, including successful zero-hit responses.",
+      "coverage": "Not a range. Contiguous echoed offsets, stable declared counts and unique IDs qualify one observed query. Failed or incomplete queries retain refusal evidence and create no generation; missing membership never establishes withdrawal.",
+      "kind": "not_a_range",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "source_release_logical_id",
+        "source_release_digest",
+        "selection_json",
+        "declared_count",
+        "observed_count",
+        "page_count",
+        "first_observed_at",
+        "last_observed_at",
+        "outcome",
+        "captures_json"
+      ]
+    },
+    {
       "table": "ofac_entity_observations",
       "label": "OFAC sanctions entity observations",
       "summary": "Literal OFAC enhanced-export observations with selected-list context and retained source history.",
