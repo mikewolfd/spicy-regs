@@ -8,6 +8,10 @@ and footnote bodies survive; link destinations and footnote labels are not searc
 terms. The stored Markdown, native source-column hash and export witness remain
 unchanged. NULL bodies stay NULL; a search miss does not mean a body is missing.
 
+Converter 003 can use GFM inline `<em>`/`<strong>` for exact emphasis boundaries
+that Markdown delimiters cannot express. The search reader skips those formatting
+tags, keeps their visible content, and preserves escaped literal tag text.
+
 This is a literal text scan of selected Parquet bodies, with no duplicate corpus
 or index. Filter court, date and opinion block before searching when possible.
 An unrestricted search can read the full selected body population; LIMIT bounds

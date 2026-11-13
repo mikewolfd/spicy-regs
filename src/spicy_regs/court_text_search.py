@@ -23,6 +23,8 @@ def _visible(element) -> str:
         return " "
     if name == "FootnoteRef":
         return ""
+    if name == "InlineHTML" and element.children in {"<em>", "</em>", "<strong>", "</strong>"}:
+        return ""  # Converter 003's exact GFM emphasis spans are formatting.
     children = getattr(element, "children", "")
     if isinstance(children, str):
         return html.unescape(children)

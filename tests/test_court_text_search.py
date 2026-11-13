@@ -22,6 +22,9 @@ def test_visible_phrase_includes_citations_and_notes_but_not_destinations():
     assert court_opinion_search_text('') == ''
     assert court_opinion_search_text('&amp;lt;literal&amp;gt;') == '&lt;literal&gt;'
     assert court_opinion_search_text('| a | b |\n| --- | --- |\n| c | d |') == 'a b c d'
+    assert court_opinion_search_text('<em>“</em>as plaintiffs then') == '“as plaintiffs then'
+    assert court_opinion_search_text('[373 <em>A.</em>2d](opinion:1) and <strong>\\*</strong>2') == '373 A.2d and *2'
+    assert court_opinion_search_text('&lt;em&gt;literal&lt;/em&gt;') == '<em>literal</em>'
 
 
 def test_arrow_nulls_and_request_cursor_see_the_registered_function():
