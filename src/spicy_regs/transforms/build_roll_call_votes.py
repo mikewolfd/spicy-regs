@@ -118,6 +118,7 @@ from spicy_docs.sources.congress.votes import (
 from spicy_regs.sources import r2
 from spicy_regs.phase_log import annotate
 from spicy_regs.sources.senate_vote_ladder import LadderVoteAcquirer, senate_warnings
+from spicy_docs.sources.web_archive import WAYBACK_RESPONSE_HEADERS
 from spicy_regs.transforms.build_bill_family import VOTE_REFERENCES_TABLE
 from spicy_regs.transforms.congress_scope import (
     FIRST_CONGRESS_YEAR,
@@ -743,7 +744,9 @@ def build_roll_call_votes(
         })
     acquirer = acquirer or LadderVoteAcquirer(
         budget=VOTE_BUDGET,
-        transport=None if evidence is None else evidence.transport(stage="vote-source", max_bytes=VOTE_BUDGET.max_bytes),
+        transport=None if evidence is None else evidence.transport(
+            stage="vote-source", max_bytes=VOTE_BUDGET.max_bytes, response_header_names=WAYBACK_RESPONSE_HEADERS
+        ),
         evidence=evidence,
     )
 

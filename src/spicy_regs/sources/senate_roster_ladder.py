@@ -82,7 +82,9 @@ class LadderCommitteeRosterAcquirer(CommitteeRosterAcquirer):
         )
         rung = answer.transport.value
         if self.evidence is not None:
-            self.evidence.capture(capture, stage=f"senate-cvc:{rung}")
+            self.evidence.capture(
+                capture, stage=f"senate-cvc:{rung}", transport=rung, provider_request_id=answer.request_id
+            )
             self.evidence.event("senate-roster-rung", rung=rung, provider_request_id=answer.request_id,
                                 sha256=capture.sha256, bytes=capture.byte_size)  # fmt: skip
         return SenateRosterAcquisition(roster, capture, self.request_count, self.budget)
