@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
+from collections import defaultdict
+from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.pipelines.comment_fields import _reader_sha256
 from spicy_regs.pipelines.comment_fields_evidence import REFETCH_SUFFIX, SOURCE_PIN_COLUMNS, file_sha256
 
 _RESOURCES = ExportResources(memory="512MB", threads=1)
+_KEY_SCHEMA = pa.schema([("key", pa.string())])
 
 
 def _sql(value):
@@ -28,6 +32,31 @@ def _comment_identity(key):
 
 def _file(path):
     return {"file": path.name, "bytes": path.stat().st_size, "sha256": file_sha256(path)}
+
+
+def _write_keys(batches, ready):
+    """Keep one bounded row buffer and one Parquet writer per nonempty group."""
+    buffers = defaultdict(list)
+    writers = {}
+    with ExitStack() as open_writers:
+        def flush(group):
+            if group not in writers:
+                directory = ready / group
+                directory.mkdir()
+                writers[group] = open_writers.enter_context(
+                    pq.ParquetWriter(directory / "manifest.parquet", _KEY_SCHEMA, compression="zstd"))
+            writers[group].write_table(pa.Table.from_arrays([pa.array(buffers[group])], schema=_KEY_SCHEMA))
+            buffers[group].clear()
+
+        for batch in batches:
+            keys, groups = batch.column(0).to_pylist(), batch.column(1).to_pylist()
+            for key, group in zip(keys, groups, strict=True):
+                buffers[group].append(key)
+                if len(buffers[group]) == 2_048:
+                    flush(group)
+        for group, keys in buffers.items():
+            if keys:
+                flush(group)
 
 
 def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_keys=250_000, max_spill="1GB"):
@@ -47,7 +76,6 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
         temp = Path(scratch)
         ready = temp / "groups"
         ready.mkdir()
-        partitions = temp / "partitions"
         group_receipts = []
         with duckdb.connect() as con:
             _RESOURCES.configure(con, temp / "spill")
@@ -75,11 +103,10 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                 CREATE TEMP TABLE local_ids AS
                 SELECT DISTINCT {_comment_identity('key')} AS comment_id FROM held WHERE raw_custody='local'
             """)
-            # The partition writer only needs keys and the group number. Join
-            # source metadata after splitting so no per-key metadata is copied
-            # through the full-size sort/buffer.
-            con.execute(f"""
-                COPY (
+            expected = con.execute("SELECT count(*) FROM selected_keys").fetchone()[0]
+            if not expected:
+                raise ValueError("The selected manifest has no comment keys")
+            with con.execute(f"""
                     SELECT k.key,
                            CASE WHEN l.comment_id IS NOT NULL THEN
                                printf('local-%03d', bucket % {int(local_groups)})
@@ -87,15 +114,12 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                     FROM (SELECT *, ('0x' || left(sha256(comment_id), 15))::UBIGINT AS bucket
                           FROM selected_keys) k
                     LEFT JOIN local_ids l USING (comment_id)
-                ) TO {_sql(partitions)} (
-                    FORMAT PARQUET, PARTITION_BY source_group, COMPRESSION ZSTD, ROW_GROUP_SIZE 2048)
-            """)
-            expected = con.execute("SELECT count(*) FROM selected_keys").fetchone()[0]
-            if not expected:
-                raise ValueError("The selected manifest has no comment keys")
-            for partition in sorted(partitions.glob("source_group=*")):
-                group = partition.name.removeprefix("source_group=")
-                table = f"read_parquet({_sql(partition / '*.parquet')}, hive_partitioning=false)"
+            """).to_arrow_reader(20_000) as batches:
+                _write_keys(batches, ready)
+            for dest in sorted(ready.iterdir()):
+                group = dest.name
+                keys = dest / "manifest.parquet"
+                table = f"read_parquet({_sql(keys)})"
                 count, distinct, local, hosted = con.execute(f"""
                     SELECT count(*), count(DISTINCT key),
                            count(*) FILTER (WHERE h.raw_custody='local'),
@@ -104,10 +128,6 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                 """).fetchone()
                 if count != distinct or count > max_keys or (group.startswith("runner-") and local):
                     raise ValueError(f"Source group {group} violates key uniqueness, custody or size ({count} keys)")
-                dest = ready / group
-                dest.mkdir()
-                keys = dest / "manifest.parquet"
-                con.execute(f"COPY (SELECT key FROM {table} ORDER BY key) TO {_sql(keys)} (FORMAT PARQUET, COMPRESSION ZSTD)")
                 pins = None
                 if local or hosted:
                     pins = dest / "source-pins.parquet"
@@ -120,7 +140,6 @@ def split(manifest, source_pins, out, *, local_groups=8, runner_groups=128, max_
                     "group": group, "keys": count, "local": local, "r2": hosted, "external": count - local - hosted,
                     "manifest": _file(keys), "source_pins": _file(pins) if pins is not None else None,
                 })
-                shutil.rmtree(partition)
         if sum(group["keys"] for group in group_receipts) != expected:
             raise ValueError("Source groups do not conserve the frozen manifest key count")
         if (_file(manifest) != manifest_pin or _file(source_pins) != source_pin
