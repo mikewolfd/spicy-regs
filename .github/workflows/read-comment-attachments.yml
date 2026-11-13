@@ -80,7 +80,7 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          uv run --frozen python scripts/read_comment_attachment_group.py \
+          uv run --no-sync python scripts/read_comment_attachment_group.py \
             --runtime-ref "$RUNTIME_REF" --groups-key "$GROUPS_KEY" --groups-sha256 "$GROUPS_SHA256" \
             --group "$SOURCE_GROUP" --workdir "$WORKDIR" --workers 64
       - name: Retain compact checkpoints and resource evidence

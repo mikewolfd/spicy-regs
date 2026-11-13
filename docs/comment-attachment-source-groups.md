@@ -1,6 +1,6 @@
 # Read one attachment source group on a hosted runner
 
-Use `.github/workflows/read-comment-attachments.yml` for the read phase. It processes one complete source group per job and retains compact recovery files. It does not access or lock the catalog. The existing fill workflow consumes each group's verified staged output afterward.
+Use `.github/workflows/read-comment-attachments.yml` for the read phase. It processes one complete source group per job and retains compact recovery files. It does not access or lock the catalog. Aggregate the complete verified source groups, then partition the staged output by the catalog's physical files before filling. Source groups keep copies of each comment together; they do not match the catalog's file layout.
 
 Build groups with `spicy_regs.pipelines.comment_source_groups` from the frozen manifest and exact retained-source pins. Keep every copy of a comment identity in one group. An identity with any local-held original belongs to a local group; hosted jobs accept only `runner-NNN` groups with no local pins. The grouping receipt records the input, implementation and reader hashes and exact member files.
 
