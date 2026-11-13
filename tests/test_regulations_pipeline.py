@@ -73,6 +73,44 @@ def test_reviewed_exclusions_are_checkpointed_without_catalog_writes(tmp_path, m
     assert not list(output.glob("staging/comments/*.parquet"))
 
 
+@pytest.mark.parametrize("chunk_size", [0, 2])
+def test_malformed_attachment_leaves_only_its_key_unresolved(tmp_path, monkeypatch, chunk_size):
+    docket = "EPA-2026-0001"
+    bad = _comment_payload(f"{docket}-0001", docket, "2026-01-01")
+    good = _comment_payload(f"{docket}-0002", docket, "2026-01-01")
+    bad["included"] = [{"id": "bad-attachment", "type": "attachments", "attributes": {"authors": "one"}}]
+    good["included"] = [{"id": "good-attachment", "type": "attachments", "attributes": {"authors": ["one"]}}]
+    bad_key = _comment_key(bad["data"]["id"], docket)
+    good_key = _comment_key(good["data"]["id"], docket)
+    store = {bad_key: dumps(bad).encode(), good_key: dumps(good).encode()}
+    monkeypatch.setattr(mirrulations, "s3_resource", lambda: _FakeS3Resource(store))
+    monkeypatch.setattr(regulations.r2, "download", lambda *args, **kwargs: False)
+    staged = []
+
+    def merge(path, record_type):
+        staged.extend(pl.read_parquet(list((path / record_type.name).glob("*.parquet"))).to_dicts())
+        return len(staged)
+
+    monkeypatch.setattr(regulations.iceberg, "merge_comments", merge)
+    pipeline = RegulationsPipeline(
+        allow_fresh_start=True, agency=AGENCY, output_dir=tmp_path, only_comments=True,
+        use_iceberg=True, enrich_text=False, chunk_size=chunk_size,
+    )
+    pipeline.run()
+    assert pl.read_parquet(tmp_path / "manifest.parquet")["key"].to_list() == [good_key]
+    [failed] = restore_checkpoint(tmp_path, "failed_keys")
+    assert (failed["key"], failed["status"], failed["attempts"]) == (bad_key, "unreadable", 1)
+    assert "attachment.authors" in failed["reason"]
+    assert [row["comment_id"] for row in staged] == [good["data"]["id"]]
+
+    bad["included"][0]["attributes"]["authors"] = ["one"]
+    store[bad_key] = dumps(bad).encode()
+    pipeline.run()
+    assert set(pl.read_parquet(tmp_path / "manifest.parquet")["key"].to_list()) == {bad_key, good_key}
+    assert restore_checkpoint(tmp_path, "failed_keys") == []
+    assert [row["comment_id"] for row in staged] == [good["data"]["id"], bad["data"]["id"]]
+
+
 def test_invalid_comment_staging_refuses_before_any_dataset_merge(tmp_path, monkeypatch):
     """An unsafe docket outside the reviewed exclusions must protect every output."""
     comment = _comment_payload("EPA-2026-0001-0001", "EPA-2026-0001", "2026-01-01")

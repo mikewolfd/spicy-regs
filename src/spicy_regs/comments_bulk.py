@@ -175,7 +175,8 @@ def receipt_processors(subjects: Path, receipts: Path, *, directory: Path | None
             yield from zip(batch.column(0).to_pylist(), batch.column(1).to_pylist())
 
 
-def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, generation_id: str) -> int:
+def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, generation_id: str,
+                    admitted: DatasetPolicy | None = None) -> int:
     """Restore catalog comments after complete admission and shared mapper proof.
 
     The catalog retains one original row; readers normalize it when needed.
@@ -213,7 +214,9 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
         if any(file_signature(path) != state for path, state in states.items()):
             raise ValueError('Ordinal processing source changed after selection')
 
-    selected = selected_policy('comments')
+    current = selected_policy('comments')
+    selected = admitted or current
+    legacy = selected != current
     schema = pa.schema([(name, TYPES[kind]) for name, kind in SOURCE_COLUMNS['comments']])
     receipt_fields = pa.schema([RECEIPT_SCHEMA.field('processing_json'), RECEIPT_SCHEMA.field('processor')])
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -286,7 +289,7 @@ def restore_catalog(subjects: Path, receipts: Path, destination: Path, *, genera
                                             comments_promotion_input(subject_rows[index] | values, processors[index]))
                                 if promoted is None and values.get('input_metadata') != {}:
                                     raise etl_bulk.NotBulkEligible('Comments catalog restore requires empty processor metadata')
-                                raw.append(promoted if promoted is not None else _retained_processor_input('comments', values))
+                                raw.append(promoted if promoted is not None else _retained_processor_input('comments', values, legacy_comments=legacy))
                             if any(not isinstance(value, Mapping) for value in raw):
                                 raise etl_bulk.NotBulkEligible('Comments exact retained processor input is required')
                             shaped = [shape_record('comments', value) for value in raw]

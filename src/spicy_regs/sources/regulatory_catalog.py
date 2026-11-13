@@ -397,6 +397,91 @@ def _initialization_marker(dataset, path):
     return path
 
 
+def _restore_catalog_selection(con, dataset, subject, receipts, restored, generation, *, admitted=None):
+    """Restore a single policy selection with the existing bounded receipt readers."""
+    from spicy_regs.transforms.regulations_receipts import COMMENTS_PROMOTION_PROCESSOR, _processor_input
+
+    declared = admitted or policy(dataset)
+    if dataset == 'comments':
+        from spicy_regs import comments_bulk, etl_bulk
+        try:
+            comments_bulk.restore_catalog(subject, receipts, restored, generation_id=generation, admitted=declared)
+            return
+        except etl_bulk.NotBulkEligible as error:
+            etl_bulk.log_row_fallback("comments restore", error, dataset=dataset)
+
+    def source_rows():
+        processors = None
+        if dataset == 'comments':
+            has_promotions = con.execute(
+                'SELECT 1 FROM read_parquet(?) WHERE processor=? LIMIT 1',
+                [str(receipts), COMMENTS_PROMOTION_PROCESSOR],
+            ).fetchone()
+            if has_promotions:
+                processors = comments_bulk.receipt_processors(subject, receipts, directory=restored.parent)
+        for row in read_with_receipts([subject], [receipts], declared, generation_id=generation,
+                                      processing_by_ordinal=dataset == 'comments'):
+            processor = None
+            if processors is not None:
+                comment_id, processor = next(processors, (None, None))
+                if comment_id != row['comment_id']:
+                    raise ValueError('comments: receipt processors differ from the admitted subject order')
+            yield _processor_input(dataset, row, processor=processor, selected=declared)
+        if processors is not None and next(processors, None) is not None:
+            raise ValueError('comments: receipt processors differ from the admitted subject order')
+
+    write_rows(source_rows(), restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
+
+
+def _restore_comments_catalog(con, subject, receipts, work, generation):
+    """Verify v2 receipts against their exact subject before replaying a mixed catalog."""
+    from spicy_regs.policy_migrations import earlier_policy
+    from spicy_regs.transforms.regulations_shape import COMMENT_ATTACHMENT_METADATA
+
+    restored = work / 'processing.parquet'
+    v2 = earlier_policy('comments', 'regulations-native-v2')
+    if not con.execute("SELECT 1 FROM read_parquet(?) WHERE policy_version=? LIMIT 1",
+                       [str(receipts), v2.policy_version]).fetchone():
+        _restore_catalog_selection(con, 'comments', subject, receipts, restored, generation)
+        return [restored]
+
+    # An original v2 accepted receipt selects a row only for verification. The strict reader
+    # still checks its digest, natural key, exact historical subject version, and one-to-one join.
+    from .iceberg import _sql_str
+
+    subject_input = f"read_parquet('{_sql_str(str(subject))}')"
+    receipts_input = f"read_parquet('{_sql_str(str(receipts))}')"
+    legacy_receipts = f"SELECT * FROM {receipts_input} WHERE policy_version='{v2.policy_version}'"
+    legacy_join = (f"FROM {subject_input} n {{join}} ({legacy_receipts}) r "
+                   "ON n.comment_id=json_extract_string(r.identity_json, '$[1][0][1][1][1]')")
+    legacy = legacy_join.format(join='SEMI JOIN')
+    # Only the metadata fields were appended. Refuse any attempt to hide a populated field
+    # by recasting an expanded row to the earlier Arrow schema.
+    populated = ' OR '.join(f'a."{name}" IS NOT NULL' for _, name, _ in COMMENT_ATTACHMENT_METADATA)
+    if con.execute(f'SELECT 1 {legacy} WHERE len(list_filter(n.attachments, a -> {populated})) > 0 LIMIT 1').fetchone():
+        raise ValueError('comments: v2 receipt cannot attest to populated attachment metadata')
+
+    current = policy('comments')
+    if not pq.read_schema(subject).equals(current.subject_schema):
+        raise ValueError('comments: catalog subject schema differs from the installed policy')
+    attachments = dict(described_schema(v2.subject_schema))['attachments']
+    subjects_query = f'SELECT n.* REPLACE (CAST(n.attachments AS {attachments}) AS attachments)'
+    result = []
+    for label, selected, subjects_query, input_receipts in (
+        ('v2', v2, f'{subjects_query} {legacy}', legacy_receipts),
+        ('v3', current, f'SELECT n.* {legacy_join.format(join="ANTI JOIN")}',
+         f"SELECT * FROM {receipts_input} WHERE policy_version IS DISTINCT FROM '{v2.policy_version}'"),
+    ):
+        rows = work / f'{label}-subjects.parquet'
+        evidence = work / f'{label}-receipts.parquet'
+        output = work / f'{label}-processing.parquet'
+        _copy(con, subjects_query, rows, resources=_layout('comments'), ordered=False)
+        _copy(con, input_receipts, evidence, resources=_layout('comments'), ordered=False)
+        _restore_catalog_selection(con, 'comments', rows, evidence, output, generation, admitted=selected)
+        result.append(output)
+    return result
+
+
 def processing_table(con, record_type, *, where: str | None = None, in_transaction=False,
                      selected_receipts: Path | None = None):
     """Return exact retained mapper observations after checking native subject joins.
@@ -452,38 +537,13 @@ def processing_table(con, record_type, *, where: str | None = None, in_transacti
             receipts = work / 'receipts.parquet'
             write_rows((rebind_receipt(row, generation_id=generation) for row in _rows(raw_receipts)),
                        receipts, RECEIPT_SCHEMA, batch_size=500 if dataset == 'comments' else 2_000)
-            restored = work / 'processing.parquet'
-            def source_rows():
-                from spicy_regs.transforms.regulations_receipts import COMMENTS_PROMOTION_PROCESSOR, _processor_input
-                # Comments' promotion receipts need their processor (comments_promotion_input). Pair processors
-                # with subjects only when a promotion receipt is present.
-                processors = None
-                if dataset == 'comments' and con.execute(
-                        'SELECT 1 FROM read_parquet(?) WHERE processor=? LIMIT 1',
-                        [str(receipts), COMMENTS_PROMOTION_PROCESSOR]).fetchone():
-                    from spicy_regs.comments_bulk import receipt_processors
-                    processors = receipt_processors(subject, receipts, directory=work)
-                for row in read_with_receipts([subject], [receipts], policy(dataset), generation_id=generation,
-                                              processing_by_ordinal=dataset == 'comments'):
-                    processor = None
-                    if processors is not None:
-                        comment_id, processor = next(processors, (None, None))
-                        if comment_id != row['comment_id']:
-                            raise ValueError('comments: receipt processors differ from the admitted subject order')
-                    yield _processor_input(dataset, row, processor=processor)
-                if processors is not None and next(processors, None) is not None:
-                    raise ValueError('comments: receipt processors differ from the admitted subject order')
-            batch_restored = False
             if dataset == 'comments':
-                from spicy_regs import comments_bulk, etl_bulk
-                try:
-                    comments_bulk.restore_catalog(subject, receipts, restored, generation_id=generation)
-                    batch_restored = True
-                except etl_bulk.NotBulkEligible as error:
-                    etl_bulk.log_row_fallback("comments restore", error, dataset=dataset)  # The row reader decides the first error.
-            if not batch_restored:
-                write_rows(source_rows(), restored, pa.schema([(n, TYPES[t]) for n, t in SOURCE_COLUMNS[dataset]]))
-            con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)', [str(restored)])
+                restored = _restore_comments_catalog(con, subject, receipts, work, generation)
+            else:
+                restored = [work / 'processing.parquet']
+                _restore_catalog_selection(con, dataset, subject, receipts, restored[0], generation)
+            con.execute(f'CREATE TEMP TABLE "{temporary_name}" AS SELECT * FROM read_parquet(?)',
+                        [[str(path) for path in restored]])
     return '"' + temporary_name + '"'
 
 

@@ -37,6 +37,7 @@ from pathlib import Path
 
 import duckdb
 import polars as pl
+import pyarrow as pa
 from cyclopts import App
 from loguru import logger
 
@@ -52,21 +53,21 @@ from spicy_regs.pipelines.comment_fields_write import (
     write,
 )
 from spicy_regs.schemas import COMMENT
+from spicy_regs.transforms.regulations_shape import COMMENT_ATTACHMENT_ID, COMMENT_ATTACHMENT_METADATA
 
 #: Keys per chunk: the resume unit, about 17 s of reads at the measured rate.
 CHUNK_KEYS = 20_000
-#: The part record's shape; a plan carries it, so a new shape is a new plan. s3 (2026-10-03): ``attachments_json`` as
-#: SpicyDocs b19b092 extracts it, every attachment the record lists, withheld ones included. The s2 parts (the
-#: 2026-09-28 read) hold the rule before it; under s2, ``plan`` on their workdir would add only the keys ingested since
-#: and keep the rest, so the owner's full re-read (2026-10-03) would replace nothing. s4 (2026-11-10): as s3, each entry
-#: ending with its ``attachment_id`` (SpicyDocs 0.85.0), so a read under it starts a plan of its own beside s3's.
-#: :func:`require_record_shape` refuses to plan or read s4 under an extract that drops a withheld attachment or its id.
-RECORD_SHAPE = "s4"
+#: Plans are versioned so older parts cannot satisfy a new re-read. s3 kept withheld attachments,
+#: s4 added their IDs, and s5 adds the publisher's remaining metadata.
+RECORD_SHAPE = "s5"
 _PROBE_ATTACHMENT_ID = "0900006400000001"
-#: A record listing one withheld attachment (no ``fileFormats``) with its id, which an s4 part keeps.
+_PROBE_METADATA = {
+    source: 1 if pa.types.is_integer(dtype) else ["Author"] if pa.types.is_list(dtype) else source
+    for source, _, dtype in COMMENT_ATTACHMENT_METADATA
+}
 _WITHHELD = {"data": {"id": "PROBE-0000-0001", "attributes": {}}, "included": [
     {"id": _PROBE_ATTACHMENT_ID, "type": "attachments",
-     "attributes": {"title": "withheld", "fileFormats": None, "restrictReasonType": "Other"}}]}
+     "attributes": {"title": "withheld", "fileFormats": None, "restrictReasonType": "Other", **_PROBE_METADATA}}]}
 #: The ``data.attributes`` keys ``COMMENT.extract`` maps into the thin row; every other stated key is kept in
 #: ``attributes_json``. ``test_extracted_attributes_are_the_keys_the_extract_reads`` derives this set independently.
 EXTRACTED_ATTRIBUTES = frozenset({
@@ -97,15 +98,20 @@ def part_row(keyed) -> dict:
 
 
 def require_record_shape(extract=None) -> None:
-    """Refuse an extract that reads another shape than :data:`RECORD_SHAPE`: one that drops a withheld attachment
-    (SpicyDocs before b19b092) or its id (before 0.85.0) would write s4 parts holding s2's or s3's ``attachments_json``."""
+    """Refuse an extract that would write attachment data under an older shape."""
     listed = json.loads((extract or COMMENT.extract)(_WITHHELD)["attachments_json"] or "null")
     if not listed:
         raise RuntimeError(f"record shape {RECORD_SHAPE} keeps withheld attachments, and this environment's SpicyDocs "
                            "drops them: run from a branch that vendors SpicyDocs with b19b092 (0.54.0 or later)")
-    if listed[0].get("attachment_id") != _PROBE_ATTACHMENT_ID:
+    if listed[0].get(COMMENT_ATTACHMENT_ID) != _PROBE_ATTACHMENT_ID:
         raise RuntimeError(f"record shape {RECORD_SHAPE} keeps each attachment's id, and this environment's SpicyDocs "
                            "drops it: run from a branch that vendors SpicyDocs 0.85.0 or later")
+
+    if (listed[0].get("formats") is not None
+            or listed[0].get("restrictReasonType") != "Other"
+            or any(listed[0].get(name) != value or type(listed[0][name]) is not type(value)
+                   for name, value in _PROBE_METADATA.items())):
+        raise RuntimeError(f"record shape {RECORD_SHAPE} needs SpicyDocs with attachment metadata")
 
 
 def _sql(value: str | Path) -> str:

@@ -188,6 +188,15 @@ def test_copies_that_disagree_on_one_column_block_only_that_column(tmp_path, cat
     assert prepared["conflicted_versions_by_column"]["attachments_json"] == 1
 
 
+def test_a_read_can_add_metadata_to_an_id_bearing_attachment_without_changing_the_id():
+    previous = {"title": "held", "formats": None, "attachment_id": "a"}
+    held = json.dumps([previous])
+    added = previous | {"agencyNote": "note", "authors": ["A", "A"], "docOrder": 0}
+    assert cfw.only_adds_attachments(json.dumps([added]), held)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"attachment_id": "b"}]), held)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"title": "changed"}]), held)
+
+
 def test_a_read_that_only_adds_withheld_attachments_replaces_the_held_list(tmp_path, catalog):
     """The 2026-10 re-read: the held list is the read's with its withheld entries and file-less renditions removed."""
     seed(catalog, [row("A", attachments_json=HELD)])

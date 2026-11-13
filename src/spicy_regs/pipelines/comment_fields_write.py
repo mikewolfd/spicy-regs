@@ -53,6 +53,9 @@ from pathlib import Path
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
+from spicy_regs.transforms.regulations_shape import (
+    COMMENT_ATTACHMENT_ID, COMMENT_ATTACHMENT_METADATA, COMMENT_ATTACHMENT_RESTRICTIONS,
+)
 
 #: The catalog's key and version, which :func:`prepare` selects on their own and a fill never writes.
 KEY_COLUMNS = ("comment_id", "agency_code", "docket_id", "modify_date")
@@ -86,11 +89,8 @@ def read_columns(profile: str) -> tuple[str, ...]:
 READ_COLUMNS = read_columns("all")
 
 
-#: The key SpicyDocs 0.85.0 adds to every attachment entry: the attachment's own id, NULL where the record states none.
-_ATTACHMENT_ID = "attachment_id"
-#: The keys later extracts add to an attachment's entry: b19b092 the restriction, only when the record states it;
-#: 0.85.0 :data:`_ATTACHMENT_ID`.
-_ADDED_KEYS = ("restrictReasonType", "restrictReason", _ATTACHMENT_ID)
+_METADATA_KEYS = frozenset(source for source, _, _ in COMMENT_ATTACHMENT_METADATA)
+_ADDED_KEYS = _METADATA_KEYS | {COMMENT_ATTACHMENT_ID, *COMMENT_ATTACHMENT_RESTRICTIONS}
 
 
 def _listed(value: str | None) -> list:
@@ -101,16 +101,8 @@ def _listed(value: str | None) -> list:
     return listed
 
 
-def without_attachment_ids(value: str | None) -> str | None:
-    """``attachments_json`` less each entry's ``attachment_id``: what SpicyDocs 0.54.0 (b19b092) to 0.84.0 wrote for
-    the same record, every attachment the record lists, withheld ones and url-less renditions included.
-
-    Only removals, keys and order kept; None for a value of any other spelling or shape.
-    """
-    try:
-        return json.dumps([{k: v for k, v in entry.items() if k != _ATTACHMENT_ID} for entry in _listed(value)])
-    except (ValueError, TypeError, AttributeError):
-        return None
+def _without_keys(listed: list, keys: set | frozenset) -> str:
+    return json.dumps([{k: v for k, v in entry.items() if k not in keys} for entry in listed])
 
 
 def downloadable_attachments(value: str | None) -> str | None:
@@ -132,15 +124,19 @@ def downloadable_attachments(value: str | None) -> str | None:
     return json.dumps(kept) if kept else None
 
 
-#: How each earlier extract spelled a record's list, newest first: a held list in either spelling is one a read of the
-#: same record only adds to.
-_EARLIER_ATTACHMENT_SPELLINGS = (without_attachment_ids, downloadable_attachments)
-
-
 def only_adds_attachments(read: str | None, held: str | None) -> bool:
-    """Whether ``read`` only adds to ``held``: ``held`` is, byte for byte, the read's list as an earlier extract spelled
-    it, before 0.85.0 added each entry's id or before b19b092 listed withheld attachments and url-less renditions."""
-    return held is not None and any(spelling(read) == held for spelling in _EARLIER_ATTACHMENT_SPELLINGS)
+    """Compare the read against the exact JSON written by an earlier extract."""
+    if held is None:
+        return False
+    try:
+        listed = _listed(read)
+        return (
+            _without_keys(listed, _METADATA_KEYS) == held
+            or _without_keys(listed, _METADATA_KEYS | {COMMENT_ATTACHMENT_ID}) == held
+            or downloadable_attachments(read) == held
+        )
+    except (ValueError, TypeError, AttributeError):
+        return False
 
 
 #: Fill columns whose held value a read may replace, each with whether a read only adds to the held value. Only

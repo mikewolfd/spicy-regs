@@ -50,11 +50,11 @@ def test_plan_chunks_comment_keys_per_agency_and_a_newer_manifest_adds_only_new_
     assert cf.status(tmp_path)["planned_keys"] == len(keys)
 
 
-@pytest.mark.parametrize("earlier", ["s2", "s3"])
+@pytest.mark.parametrize("earlier", ["s2", "s3", "s4"])
 def test_a_new_record_shape_reads_every_key_again_beside_an_earlier_shapes_parts(tmp_path, monkeypatch, earlier):
     """A re-read on an earlier shape's workdir (s2: 2026-09-28; s3: 2026-10-03) plans and reads every key again."""
     store, shape = _store(), cf.RECORD_SHAPE
-    assert shape not in {"s2", "s3"}
+    assert shape not in {"s2", "s3", "s4"}
     monkeypatch.setattr(cf, "RECORD_SHAPE", earlier)
     cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
     assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
@@ -72,7 +72,12 @@ def test_planning_or_reading_the_shape_needs_an_extract_that_keeps_withheld_atta
         cf.require_record_shape(dropped)
     with pytest.raises(RuntimeError, match="0.85.0"):
         cf.require_record_shape(unidentified)
-    cf.require_record_shape()  # the installed extract keeps both
+    def old_id_only(record):
+        return {"attachments_json": json.dumps([{"attachment_id": record["included"][0]["id"]}])}
+
+    with pytest.raises(RuntimeError, match="attachment metadata"):
+        cf.require_record_shape(old_id_only)
+    cf.require_record_shape()
 
     def refuse(extract=None):
         raise RuntimeError("refused")

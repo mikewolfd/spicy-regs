@@ -406,3 +406,31 @@ Only then re-enable the workflows. From then on, the scheduled ETL's comment
 passes merge their rows into the working copy, like `document_attributes`. The
 chunked manual path stages none: a crash between its per-chunk checkpoints
 would lose rows.
+
+## Comment attachment metadata
+
+Comments policy `regulations-native-v3` appends nullable metadata to the
+attachment list. The catalog retains the existing attachment field IDs and
+accepted receipts. A read checks older rows against the exact v2 shape and
+requires every newly added field on those rows to be null. Current rows use
+the v3 shape and receipt.
+
+Before enabling the v3 writer, run the migration against a disposable R2 Data
+Catalog table using the hosted DuckDB and Iceberg versions. Check that DuckDB
+reads both old and new rows and that a normal comments merge and receipt-free
+mirror export succeed. For the selected catalog, hold the existing
+`comments-catalog-write` lock and preview the change with
+`uv run --frozen --extra comments-reader python scripts/migrate_comments_attachment_schema.py`.
+Apply with `--apply --table-uuid UUID --snapshot-id ID --schema-id ID` using the
+values from the preview. The command checks the initialization receipt and
+requires the exact v2 schema and pinned snapshot at commit. It changes schema
+metadata and keeps the existing data snapshot.
+
+New or changed comments populate the added fields during the normal nightly
+run. Previously published comments need an s5 re-read of the originals. The
+attachment fill still requires the same publisher modification date and
+agreement across copies. It can replace an earlier list when the re-read adds
+only the newly retained keys, and reports conflicting values. Measure the
+fill with a bounded agency sample before running it across the corpus. An
+unread older value and a publisher-omitted value both appear as NULL in public
+Parquet.

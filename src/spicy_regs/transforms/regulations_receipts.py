@@ -73,8 +73,8 @@ def policy(dataset: str) -> DatasetPolicy:
         IDENTITIES[dataset],
         (*RECEIPT_COLUMNS[dataset], "raw_conversion_inputs", "input_metadata", "raw_source_record"),
         policy_version=(
-            "regulations-native-v3" if dataset == "federal_register" else
-            "regulations-native-v2" if dataset in {"comment_periods", "lifecycle_events", "comments", "documents", "agenda_item_proceedings", "rule_targets", "proceedings", "regulatory_agenda_items", "unified_agenda", "fr_docket_links"} else "regulations-native-v1"),
+            "regulations-native-v3" if dataset in {"comments", "federal_register"} else
+            "regulations-native-v2" if dataset in {"comment_periods", "lifecycle_events", "documents", "agenda_item_proceedings", "rule_targets", "proceedings", "regulatory_agenda_items", "unified_agenda", "fr_docket_links"} else "regulations-native-v1"),
         nullable_identity_fields=NULLABLE_IDENTITIES.get(dataset, ()),
     )
 
@@ -135,16 +135,16 @@ def _qualified_rows(selected: ReceiptInput, *, scoped: bool = False) -> Iterable
         for row in read_with_receipts(
             selected.subjects, [receipts], admitted, generation_id=selected.generation_id
         ):
-            _processor_input(selected.dataset, row)
+            _processor_input(selected.dataset, row, selected=admitted)
         yield from read_with_receipts(
             selected.subjects, [receipts], admitted, generation_id=selected.generation_id
         )
 
 
-def _comments_processor_input(original):
+def _comments_processor_input(original, *, legacy=False):
     """Replay the maintained API projection or flat catalog normalization."""
     if "data" in original:
-        return _source_record_projection("comments")(original)
+        return _source_record_projection("comments", legacy=legacy)(original)
     from spicy_regs.sources.regulatory_catalog import normalize_source_record
     return normalize_source_record("comments", original)
 
@@ -186,7 +186,7 @@ def comments_promotion_input(row: Mapping, processor: str | None) -> dict | None
     return {name: encoded if name == "attachments_json" else row[name] for name, _ in SOURCE_COLUMNS["comments"]}
 
 
-def _retained_processor_input(dataset, row, *, processor=None):
+def _retained_processor_input(dataset, row, *, processor=None, legacy_comments=False):
     """Historical normalized input, Comments' one retained original row, or its promotion-receipt input.
 
     ``processor`` is the receipt's processor when the caller has it; without it a promotion receipt refuses.
@@ -194,7 +194,7 @@ def _retained_processor_input(dataset, row, *, processor=None):
     value = row.get("raw_conversion_inputs")
     if dataset == "comments" and not isinstance(value, Mapping):
         if isinstance(row.get("raw_source_record"), Mapping):
-            value = _comments_processor_input(row["raw_source_record"])
+            value = _comments_processor_input(row["raw_source_record"], legacy=legacy_comments)
         else:
             value = comments_promotion_input(row, processor)
     if not isinstance(value, Mapping):
@@ -202,10 +202,13 @@ def _retained_processor_input(dataset, row, *, processor=None):
     return dict(value)
 
 
-def _processor_input(dataset, row, *, processor=None):
-    value = _retained_processor_input(dataset, row, processor=processor)
-    shaped = shape_record(dataset, value)
+def _processor_input(dataset, row, *, processor=None, selected=None):
     schema = subject_schema(dataset)
+    legacy_comments = dataset == "comments" and selected is not None and not schema.equals(selected.subject_schema)
+    if legacy_comments:
+        schema = selected.subject_schema
+    value = _retained_processor_input(dataset, row, processor=processor, legacy_comments=legacy_comments)
+    shaped = shape_record(dataset, value)
     reproduced = pa.Table.from_pylist([shaped], schema=schema).to_pylist()[0]
     # A pair selected under an earlier policy holds that policy's columns. One promoted since under a new name
     # (a list its receipt held as JSON text) has no selected value to compare: it is reproduced from the retained
@@ -260,8 +263,11 @@ def _processor_inputs(dataset, rows):
 
 def read_internal(selected: ReceiptInput) -> Iterable[dict]:
     """Read exact retained processor inputs after validating the selected dataset."""
+    from spicy_regs.etl_receipts import selected_subject_policy
+
+    admitted = selected_subject_policy(policy(selected.dataset), selected.subjects)
     for row in _qualified_rows(selected):
-        yield _processor_input(selected.dataset, row)
+        yield _processor_input(selected.dataset, row, selected=admitted)
 
 
 def processing_schema(dataset, *, metadata=None, source_schema=None):
@@ -337,8 +343,12 @@ def materialize_internal(selected: ReceiptInput, destination: Path, *, bulk: boo
             metadata = held[0] if held else {}
     schema = processing_schema(selected.dataset, source_schema=source_schema, metadata=metadata)
 
+    from spicy_regs.etl_receipts import selected_subject_policy
+
+    admitted = selected_subject_policy(policy(selected.dataset), selected.subjects)
+
     def original(row):
-        raw = _processor_input(selected.dataset, row)
+        raw = _processor_input(selected.dataset, row, selected=admitted)
         if source_schema is not None and set(raw) != set(source_schema.names):
             raise ValueError("Exact regulatory source field presence differs from retained input")
         return raw
@@ -663,7 +673,7 @@ def build_from_receipts(
 
 
 @cache
-def _source_record_projection(dataset: str):
+def _source_record_projection(dataset: str, *, legacy=False):
     """The same Regulations.gov mapper for source writing and input replay."""
     from spicy_regs.schemas.regulations import RECORD_TYPES
     from spicy_regs.transforms.regulations_attributes import _projection_and_digest
@@ -706,7 +716,7 @@ def _source_record_projection(dataset: str):
             prepared = {**payload, "data": {**data, "attributes": dict(attrs)}}
             if dataset == "documents":
                 prepared["data"]["attributes"]["fileFormats"] = []
-            elif dataset == "comments":
+            elif dataset == "comments" and legacy:
                 prepared["included"] = []
             row = extract(prepared)
             if dataset == "documents":
@@ -714,7 +724,7 @@ def _source_record_projection(dataset: str):
                     row["attachments_json"] = json.dumps(formats(attrs["fileFormats"]))
                 if "additionalRins" in attrs:
                     row["additional_rins"] = json.dumps(attrs["additionalRins"])
-            elif dataset == "comments" and "included" in payload:
+            elif dataset == "comments" and legacy and "included" in payload:
                 included = payload["included"]
                 if included is not None and not isinstance(included, list):
                     raise ValueError("Native included attachment records must be a list or null")
