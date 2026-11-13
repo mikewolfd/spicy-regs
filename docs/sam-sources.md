@@ -95,3 +95,21 @@ deadline without a time zone. Report missing/unrecognized deadlines separately
 when reconciling the declared window. Local generation validation and a working
 query do not establish shared publication or hosted adoption; the publication
 owner performs those steps after integration.
+
+Both SAM families are registered with the maintained `publish-local-generation`
+command. Rehearse an exact candidate and its pinned source evidence against a
+saved index, using a fresh private output directory:
+
+```sh
+uv run publish-local-generation --family sam-exclusions \
+  --generation /owned/new-build/generation \
+  --evidence /owned/new-build/source-evidence/BUILD_ID/artifact \
+  --dry-run --live-index /owned/saved-publication.v2.json \
+  --output /owned/exclusions-publication-rehearsal
+```
+
+Use `sam-opportunities` for notices. The dry run retains the real publication
+guards and writes only a private receipt; missing or mismatched source evidence
+and a generation classified as partial refuse. A successful rehearsal preserves
+all description qualifications and does not qualify diagnostic Latin-1 text or
+establish public adoption.

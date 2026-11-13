@@ -49,6 +49,8 @@ LOCAL_FAMILIES = frozenset({
     "ofac-sanctions",
     "fjc-judicial-careers",
     "irs-form990",
+    "sam-exclusions",
+    "sam-opportunities",
     "sec-edgar",
     "treasury-fiscal",
     "foreign-assistance",
