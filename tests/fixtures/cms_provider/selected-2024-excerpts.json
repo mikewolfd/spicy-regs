@@ -1,0 +1,1146 @@
+{
+  "catalog": {
+    "conformsTo": {
+      "identifier": "https://resources.data.gov/dcat-us/3.0.0"
+    },
+    "datasetSeries": [
+      {
+        "@id": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data",
+        "@type": "DatasetSeries",
+        "title": "Medicare Physician & Other Practitioners - by Provider",
+        "description": "The Medicare Physician & Other Practitioners by Provider dataset provides information on use, payments, submitted charges and beneficiary demographic and health characteristics organized by National Provider Identifier (NPI).",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Enterprise Data and Analytics (OEDA)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare and Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "contactPoint": [
+          {
+            "@type": "Kind",
+            "fn": "Medicare Provider Data - OEDA",
+            "hasEmail": "mailto:IPAG_Data_Products@cms.hhs.gov"
+          }
+        ],
+        "identifier": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data",
+        "accessRights": "public",
+        "sourceSite": "data.cms.gov",
+        "sourceCatalog": "https://data.cms.gov/data.json",
+        "language": [
+          "en"
+        ],
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2013-01-01",
+            "endDate": "2024-12-31"
+          }
+        ],
+        "landingPage": {
+          "@type": "Document",
+          "title": "Medicare Physician & Other Practitioners - by Provider landing page",
+          "accessURL": "https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider"
+        },
+        "describedBy": {
+          "@type": "Distribution",
+          "title": "Medicare Physician & Other Practitioners - by Provider data dictionary",
+          "downloadURL": "https://data.cms.gov/resources/medicare-physician-other-practitioners-by-provider-data-dictionary"
+        },
+        "keyword": [
+          "Medicare",
+          "Original Medicare",
+          "Physicians & Practitioners",
+          "Health Care Use & Payments",
+          "Health Equity"
+        ],
+        "theme": [
+          "Medicare"
+        ],
+        "accrualPeriodicity": "annually",
+        "accessLevel": "public",
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "references": [
+          "https://data.cms.gov/resources/medicare-physician-other-practitioners-methodology"
+        ],
+        "first": {
+          "@id": "https://data.cms.gov/data-api/v1/dataset/483a68df-26a9-42a5-a24c-7458e5374f61/data-viewer",
+          "@type": "Dataset",
+          "title": "Medicare Physician & Other Practitioners - by Provider : 2013-12-17",
+          "description": "The Medicare Physician & Other Practitioners by Provider dataset provides information on use, payments, submitted charges and beneficiary demographic and health characteristics organized by National Provider Identifier (NPI).",
+          "publisher": {
+            "@type": "Organization",
+            "name": "Office of Enterprise Data and Analytics (OEDA)",
+            "subOrganizationOf": [
+              {
+                "@type": "Organization",
+                "name": "Centers for Medicare and Medicaid Services (CMS)"
+              }
+            ]
+          },
+          "contactPoint": {
+            "@type": "Kind",
+            "fn": "Medicare Provider Data - OEDA",
+            "hasEmail": "mailto:IPAG_Data_Products@cms.hhs.gov"
+          },
+          "identifier": "https://data.cms.gov/data-api/v1/dataset/483a68df-26a9-42a5-a24c-7458e5374f61/data-viewer"
+        },
+        "last": {
+          "@id": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data-viewer",
+          "@type": "Dataset",
+          "title": "Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+          "description": "The Medicare Physician & Other Practitioners by Provider dataset provides information on use, payments, submitted charges and beneficiary demographic and health characteristics organized by National Provider Identifier (NPI).",
+          "publisher": {
+            "@type": "Organization",
+            "name": "Office of Enterprise Data and Analytics (OEDA)",
+            "subOrganizationOf": [
+              {
+                "@type": "Organization",
+                "name": "Centers for Medicare and Medicaid Services (CMS)"
+              }
+            ]
+          },
+          "contactPoint": {
+            "@type": "Kind",
+            "fn": "Medicare Provider Data - OEDA",
+            "hasEmail": "mailto:IPAG_Data_Products@cms.hhs.gov"
+          },
+          "identifier": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data-viewer"
+        }
+      }
+    ],
+    "dataset": [
+      {
+        "@id": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data-viewer",
+        "@type": "Dataset",
+        "title": "Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+        "description": "The Medicare Physician & Other Practitioners by Provider dataset provides information on use, payments, submitted charges and beneficiary demographic and health characteristics organized by National Provider Identifier (NPI).",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Enterprise Data and Analytics (OEDA)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare and Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "contactPoint": {
+          "@type": "Kind",
+          "fn": "Medicare Provider Data - OEDA",
+          "hasEmail": "mailto:IPAG_Data_Products@cms.hhs.gov"
+        },
+        "identifier": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data-viewer",
+        "accessRights": "public",
+        "sourceSite": "data.cms.gov",
+        "sourceCatalog": "https://data.cms.gov/data.json",
+        "modified": "2026-05-21",
+        "language": [
+          "en"
+        ],
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31"
+          }
+        ],
+        "landingPage": {
+          "@type": "Document",
+          "title": "Medicare Physician & Other Practitioners - by Provider",
+          "accessURL": "https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider"
+        },
+        "describedBy": {
+          "@type": "Distribution",
+          "title": "Medicare Physician & Other Practitioners - by Provider : 2024-12-01 data dictionary",
+          "downloadURL": "https://data.cms.gov/resources/medicare-physician-other-practitioners-by-provider-data-dictionary"
+        },
+        "keyword": [
+          "Medicare",
+          "Original Medicare",
+          "Physicians & Practitioners",
+          "Health Care Use & Payments",
+          "Health Equity"
+        ],
+        "theme": [
+          "Medicare"
+        ],
+        "accrualPeriodicity": "annually",
+        "accessLevel": "public",
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "references": [
+          "https://data.cms.gov/resources/medicare-physician-other-practitioners-methodology"
+        ],
+        "distribution": [
+          {
+            "@type": "Distribution",
+            "format": "API",
+            "accessURL": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data",
+            "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/8889d81e-2ee7-448f-8713-f071038289b5",
+            "description": "latest",
+            "title": "Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+            "describedBy": {
+              "@type": "Distribution",
+              "title": "Data dictionary for Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+              "downloadURL": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/dictionary",
+              "mediaType": "application/json"
+            },
+            "modified": "2026-05-21",
+            "temporal": [
+              {
+                "@type": "PeriodOfTime",
+                "startDate": "2024-01-01",
+                "endDate": "2024-12-31"
+              }
+            ],
+            "license": "https://www.usa.gov/government-works"
+          },
+          {
+            "@type": "Distribution",
+            "downloadURL": "https://data.cms.gov/sites/default/files/2026-05/7323ba02-52e7-4a86-b2ce-ad210c25d9aa/MUP_PHY_R26_P05_V10_D24_Prov.csv",
+            "mediaType": "text/csv",
+            "format": "CSV",
+            "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/4d0b2df0-1e99-4db7-a574-a571d99217f1",
+            "title": "Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+            "describedBy": {
+              "@type": "Distribution",
+              "title": "Data dictionary for Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+              "downloadURL": "https://data.cms.gov/data-api/v1/dataset/4d0b2df0-1e99-4db7-a574-a571d99217f1/dictionary",
+              "mediaType": "application/json"
+            },
+            "modified": "2026-05-21",
+            "temporal": [
+              {
+                "@type": "PeriodOfTime",
+                "startDate": "2024-01-01",
+                "endDate": "2024-12-31"
+              }
+            ],
+            "license": "https://www.usa.gov/government-works"
+          },
+          {
+            "@type": "Distribution",
+            "format": "API",
+            "accessURL": "https://data.cms.gov/data-api/v1/dataset/4d0b2df0-1e99-4db7-a574-a571d99217f1/data",
+            "resourcesAPI": "https://data.cms.gov/data-api/v1/dataset-resources/4d0b2df0-1e99-4db7-a574-a571d99217f1",
+            "title": "Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+            "describedBy": {
+              "@type": "Distribution",
+              "title": "Data dictionary for Medicare Physician & Other Practitioners - by Provider : 2024-12-01",
+              "downloadURL": "https://data.cms.gov/data-api/v1/dataset/4d0b2df0-1e99-4db7-a574-a571d99217f1/dictionary",
+              "mediaType": "application/json"
+            },
+            "modified": "2026-05-21",
+            "temporal": [
+              {
+                "@type": "PeriodOfTime",
+                "startDate": "2024-01-01",
+                "endDate": "2024-12-31"
+              }
+            ],
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "inSeries": [
+          {
+            "@id": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data",
+            "@type": "DatasetSeries",
+            "title": "Medicare Physician & Other Practitioners - by Provider",
+            "description": "The Medicare Physician & Other Practitioners by Provider dataset provides information on use, payments, submitted charges and beneficiary demographic and health characteristics organized by National Provider Identifier (NPI).",
+            "publisher": {
+              "@type": "Organization",
+              "name": "Office of Enterprise Data and Analytics (OEDA)",
+              "subOrganizationOf": [
+                {
+                  "@type": "Organization",
+                  "name": "Centers for Medicare and Medicaid Services (CMS)"
+                }
+              ]
+            },
+            "contactPoint": [
+              {
+                "@type": "Kind",
+                "fn": "Medicare Provider Data - OEDA",
+                "hasEmail": "mailto:IPAG_Data_Products@cms.hhs.gov"
+              }
+            ],
+            "identifier": "https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data"
+          }
+        ]
+      }
+    ]
+  },
+  "dictionary": {
+    "identifier": "72f1674e-37d8-46ad-9fae-cafd7fcd6442",
+    "data": {
+      "title": "Medicare Physician & Other Practitioners - by Provider Data Dictionary",
+      "fields": [
+        {
+          "name": "Rndrng_NPI",
+          "label": "National Provider Identifier",
+          "description": "National Provider Identifier (NPI) for the rendering provider on the claim. The provider NPI is the numeric identifier registered in NPPES."
+        },
+        {
+          "name": "Rndrng_Prvdr_Last_Org_Name",
+          "label": "Last Name/Organization Name of the Provider",
+          "description": "When the provider is registered in NPPES as an individual (entity type code=\u2019I\u2019), this is the provider\u2019s last name. When the provider is registered as an organization (entity type code = \u2018O\u2019), this is the organization name."
+        },
+        {
+          "name": "Rndrng_Prvdr_First_Name",
+          "label": "First Name of the Provider",
+          "description": "When the provider is registered in NPPES as an individual (entity type code=\u2019I\u2019), this is the provider\u2019s first name. When the provider is registered as an organization (entity type code = \u2018O\u2019), this will be blank."
+        },
+        {
+          "name": "Rndrng_Prvdr_MI",
+          "label": "Middle Initial of the Provider",
+          "description": "When the provider is registered in NPPES as an individual (entity type code=\u2019I\u2019), this is the provider\u2019s middle initial. When the provider is registered as an organization (entity type code = \u2018O\u2019), this will be blank."
+        },
+        {
+          "name": "Rndrng_Prvdr_Crdntls",
+          "label": "Credentials of the Provider",
+          "description": "When the provider is registered in NPPES as an individual (entity type code=\u2019I\u2019), these are the provider\u2019s credentials. When the provider is registered as an organization (entity type code = \u2018O\u2019), this will be blank."
+        },
+        {
+          "name": "Rndrng_Prvdr_Ent_Cd",
+          "label": "Entity Type of the Provider",
+          "description": "Type of entity reported in NPPES. An entity code of \u2018I\u2019 identifies providers registered as individuals and an entity type code of \u2018O\u2019 identifies providers registered as organizations."
+        },
+        {
+          "name": "Rndrng_Prvdr_St1",
+          "label": "Street Address 1 of the Provider",
+          "description": "The first line of the provider\u2019s street address, as reported in NPPES."
+        },
+        {
+          "name": "Rndrng_Prvdr_St2",
+          "label": "Street Address 2 of the Provider",
+          "description": "The second line of the provider\u2019s street address, as reported in NPPES."
+        },
+        {
+          "name": "Rndrng_Prvdr_City",
+          "label": "City of the Provider",
+          "description": "The city where the provider is located, as reported in NPPES."
+        },
+        {
+          "name": "Rndrng_Prvdr_State_Abrvtn",
+          "label": "State Abbreviation of the Provider",
+          "description": "The state where the provider is located, as reported in NPPES. The fifty U.S. states and the District of Columbia are reported by the state postal abbreviation. The following values are used for all other areas:"
+        },
+        {
+          "name": "Rndrng_Prvdr_State_FIPS",
+          "label": "State FIPS Code of the Provider",
+          "description": "FIPS code for rendering provider's state."
+        },
+        {
+          "name": "Rndrng_Prvdr_Zip5",
+          "label": "Zip Code of the Provider",
+          "description": "The provider\u2019s zip code, as reported in NPPES."
+        },
+        {
+          "name": "Rndrng_Prvdr_RUCA",
+          "label": "RUCA Code of the Provider",
+          "description": "Rural-Urban Commuting Area Codes (RUCAs), are a Census tract-based classification scheme that utilizes the standard Bureau of Census Urbanized Area and Urban Cluster definitions in combination with work commuting information to characterize all of the nation's Census tracts regarding their rural and urban status and relationships. The Referring Provider ZIP code was cross walked to the United States Department of Agriculture (USDA) 2010 Rural-Urban Commuting Area Codes."
+        },
+        {
+          "name": "Rndrng_Prvdr_RUCA_Desc",
+          "label": "RUCA Description",
+          "description": "Description of Rural-Urban Commuting Area (RUCA) Code"
+        },
+        {
+          "name": "Rndrng_Prvdr_Cntry",
+          "label": "Country Code of the Provider",
+          "description": "The country where the provider is located, as reported in NPPES. The country code will be \u2018US\u2019 for any state or U.S. possession. For foreign countries (i.e., state values of \u2018ZZ\u2019), the provider country values include the following:"
+        },
+        {
+          "name": "Rndrng_Prvdr_Type",
+          "label": "Provider Type of the Provider",
+          "description": "Derived from the provider specialty code reported on the claim.  For providers that reported more than one specialty code on their claims, this is the specialty code associated with the largest number of services."
+        },
+        {
+          "name": "Rndrng_Prvdr_Mdcr_Prtcptg_Ind",
+          "label": "Medicare Participation Indicator",
+          "description": "Identifies whether the provider participates in Medicare and/or accepts assignment of Medicare allowed amounts.  The value will be \u2018Y\u2019 for any provider that had at least one claim identifying the provider as participating in Medicare or accepting assignment of Medicare allowed amounts within HCPCS code and place of service.  A non-participating provider may elect to accept Medicare allowed amounts for some services and not accept Medicare allowed amounts for other services."
+        },
+        {
+          "name": "Tot_HCPCS_Cds",
+          "label": "Number of HCPCS",
+          "description": "Total number of unique HCPCS codes."
+        },
+        {
+          "name": "Tot_Benes",
+          "label": "Number of Medicare Beneficiaries",
+          "description": "Total Medicare beneficiaries receiving services from the provider. The beneficiary counts reported in the demographic sub-groups (i.e., age, sex, race and entitlement) may not aggregate to the \u2018Number of Unique Beneficiaries\u2019 due to the suppression of beneficiaries fewer than 11 within the demographic sub-groups.  In addition, a small percentage of beneficiaries are reflected in the \u201cNumber of Unique Beneficiaries\u201d but are not reflected in the beneficiary demographic information due to the lack of demographic information available at the time of reporting."
+        },
+        {
+          "name": "Tot_Srvcs",
+          "label": "Number of Services",
+          "description": "Total provider services."
+        },
+        {
+          "name": "Tot_Sbmtd_Chrg",
+          "label": "Total Submitted Charge Amount",
+          "description": "The total charges that the provider submitted for all services."
+        },
+        {
+          "name": "Tot_Mdcr_Alowd_Amt",
+          "label": "Total Medicare Allowed Amount",
+          "description": "The Medicare allowed amount for all provider services. This figure is the sum of the amount Medicare pays, the deductible and coinsurance amounts that the beneficiary is responsible for paying, and any amounts that a third party is responsible for paying."
+        },
+        {
+          "name": "Tot_Mdcr_Pymt_Amt",
+          "label": "Total Medicare Payment Amount",
+          "description": "Total amount that Medicare paid after deductible and coinsurance amounts have been deducted for all the provider's line item services."
+        },
+        {
+          "name": "Tot_Mdcr_Stdzd_Amt",
+          "label": "Total Medicare Standardized Payment Amount",
+          "description": "Total amount that Medicare paid after deductible and coinsurance amounts have been deducted for the line item service and after standardization of the Medicare payment has been applied. Standardization removes geographic differences in payment rates for individual services, such as those that account for local wages or input prices and makes Medicare payments across geographic areas comparable, so that differences reflect variation in factors such as physicians\u2019 practice patterns and beneficiaries\u2019 ability and willingness to obtain care."
+        },
+        {
+          "name": "Drug_Sprsn_Ind",
+          "label": "Drug Suppress Indicator",
+          "description": "Identifies whether the utilization, cost and payment information associated with HCPCS codes for drug services as listed on the Medicare Part B Drug Average Sales Price (ASP) list have been suppressed.  An '*' identifies that the suppressed information is based on fewer than 11 beneficiaries and a '#' identifies that the information has been counter suppressed  to prevent the re-calculation of  information suppressed due to fewer than 11 beneficiaries.  For example, if the information associated with Drug services has been suppressed because fewer than 11 beneficiaries received these services from a provider, then the information associated with Medical services must also be suppressed so that the information associated with Drug services cannot be recalculated by subtracting the Medical values from the provider's overall values."
+        },
+        {
+          "name": "Drug_Tot_HCPCS_Cds",
+          "label": "Number of HCPCS Associated With Drug Services",
+          "description": "Total number of HCPCS codes for drug services, as defined from the Medicare Part B Drug ASP File."
+        },
+        {
+          "name": "Drug_Tot_Benes",
+          "label": "Number of Medicare Beneficiaries With Drug Services",
+          "description": "Total Medicare beneficiaries receiving drug services, as defined from the Medicare Part B Drug ASP File."
+        },
+        {
+          "name": "Drug_Tot_Srvcs",
+          "label": "Number of Drug Services",
+          "description": "Total drug services, as defined from the Medicare Part B Drug ASP File."
+        },
+        {
+          "name": "Drug_Sbmtd_Chrg",
+          "label": "Total Drug Submitted Charge Amount",
+          "description": "The total charges that the provider submitted for drug services, as defined from the Medicare Part B Drug ASP File."
+        },
+        {
+          "name": "Drug_Mdcr_Alowd_Amt",
+          "label": "Total Drug Medicare Allowed Amount",
+          "description": "The Medicare allowed amount for drug services, as defined from the Medicare Part B Drug ASP File. This figure is the sum of the amount Medicare pays, the deductible and coinsurance amounts that the beneficiary is responsible for paying, and any amounts that a third party is responsible for paying."
+        },
+        {
+          "name": "Drug_Mdcr_Pymt_Amt",
+          "label": "Total Drug Medicare Payment Amount",
+          "description": "Total amount that Medicare paid after deductible and coinsurance amounts have been deducted for all the provider's line item drug services, as defined from the Medicare Part B Drug ASP File."
+        },
+        {
+          "name": "Drug_Mdcr_Stdzd_Amt",
+          "label": "Total Drug Medicare Standardized Payment Amount",
+          "description": "Total amount that Medicare paid after deductible and coinsurance amounts have been deducted for the line item drug service, as defined from the Medicare Part B Drug ASP File and after standardization of the Medicare payment has been applied. Standardization removes geographic differences in payment rates for individual services, such as those that account for local wages or input prices and makes Medicare payments across geographic areas comparable, so that differences reflect variation in factors such as physicians\u2019 practice patterns and beneficiaries\u2019 ability and willingness to obtain care."
+        },
+        {
+          "name": "Med_Sprsn_Ind",
+          "label": "Medical Suppress Indicator",
+          "description": "Identifies whether the utilization, cost and payment information associated with HCPCS codes for Medical (non-ASP) services have been suppressed.  An '*' identifies that the suppressed information is based on fewer than 11 beneficiaries and a '#' identifies that the information has been counter suppressed  to prevent the re-calculation of  information suppressed due to fewer than 11 beneficiaries.  For example, if the information associated with Medical (non-ASP) services has been suppressed because fewer than 11 beneficiaries received these services from a provider, then the information associated with Drug services must also be suppressed so that the information associated with Medical services cannot be recalculated by subtracting the Drug values from the provider's overall values."
+        },
+        {
+          "name": "Med_Tot_HCPCS_Cds",
+          "label": "Number of HCPCS Associated With Medical Services",
+          "description": "Total number of HCPCS codes associated with medical (non-ASP) services."
+        },
+        {
+          "name": "Med_Tot_Benes",
+          "label": "Number of Medicare Beneficiaries With Medical Services",
+          "description": "Total Medicare beneficiaries receiving medical (non-ASP) services."
+        },
+        {
+          "name": "Med_Tot_Srvcs",
+          "label": "Number of Medical Services",
+          "description": "Total medical (non-ASP) services."
+        },
+        {
+          "name": "Med_Sbmtd_Chrg",
+          "label": "Total Medical Submitted Charge Amount",
+          "description": "The total charges that the provider submitted for medical (non-ASP) services."
+        },
+        {
+          "name": "Med_Mdcr_Alowd_Amt",
+          "label": "Total Medical Medicare Allowed Amount",
+          "description": "The Medicare allowed amount for medical (non-ASP) services. This figure is the sum of the amount Medicare pays, the deductible and coinsurance amounts that the beneficiary is responsible for paying, and any amounts that a third party is responsible for paying."
+        },
+        {
+          "name": "Med_Mdcr_Pymt_Amt",
+          "label": "Total Medical Medicare Payment Amount",
+          "description": "Total amount that Medicare paid after deductible and coinsurance amounts have been deducted for all of the provider's line item medical (non-ASP) services."
+        },
+        {
+          "name": "Med_Mdcr_Stdzd_Amt",
+          "label": "Total Medical Medicare Standardized Payment Amount",
+          "description": "Total amount that Medicare paid after deductible and coinsurance amounts have been deducted for the line item medical (non-ASP) service, as defined from the Medicare Part B Drug ASP File and after standardization of the Medicare payment has been applied. Standardization removes geographic differences in payment rates for individual services, such as those that account for local wages or input prices and makes Medicare payments across geographic areas comparable, so that differences reflect variation in factors such as physicians\u2019 practice patterns and beneficiaries\u2019 ability and willingness to obtain care."
+        },
+        {
+          "name": "Bene_Avg_Age",
+          "label": "Average Age of Beneficiaries",
+          "description": "Average age of beneficiaries. Beneficiary age is calculated at the end of the calendar year or at the time of death."
+        },
+        {
+          "name": "Bene_Age_LT_65_Cnt",
+          "label": "Number of Beneficiaries Age Less 65",
+          "description": "Number of beneficiaries under the age of 65. Beneficiary age is calculated at the end of the calendar year or at the time of death."
+        },
+        {
+          "name": "Bene_Age_65_74_Cnt",
+          "label": "Number of Beneficiaries Age 65 to 74",
+          "description": "Number of beneficiaries between the ages of 65 and 74. Beneficiary age is calculated at the end of the calendar year or at the time of death."
+        },
+        {
+          "name": "Bene_Age_75_84_Cnt",
+          "label": "Number of Beneficiaries Age 75 to 84",
+          "description": "Number of beneficiaries between the ages of 75 and 84. Beneficiary age is calculated at the end of the calendar year or at the time of death."
+        },
+        {
+          "name": "Bene_Age_GT_84_Cnt",
+          "label": "Number of Beneficiaries Age Greater 84",
+          "description": "Number of beneficiaries over the age of 84. Beneficiary age is calculated at the end of the calendar year or at the time of death."
+        },
+        {
+          "name": "Bene_Feml_Cnt",
+          "label": "Number of Female Beneficiaries",
+          "description": "Number of female beneficiaries."
+        },
+        {
+          "name": "Bene_Male_Cnt",
+          "label": "Number of Male Beneficiaries",
+          "description": "Number of male beneficiaries."
+        },
+        {
+          "name": "Bene_Race_Wht_Cnt",
+          "label": "Number of Non-Hispanic White Beneficiaries",
+          "description": "Number of non-Hispanic white beneficiaries.  Race/ethnicity information is based on the variable RTI_RACE_CD from the CMS CCW enrollment database. The RTI_RACE_CD variable is based upon a validated algorithm that uses Census surname lists and geography to improve the accuracy of race/ethnicity classification, particularly for those who are Hispanic or Asian/Pacific Islanders."
+        },
+        {
+          "name": "Bene_Race_Black_Cnt",
+          "label": "Number of Black or African American Beneficiaries",
+          "description": "Number of non-Hispanic black or African American beneficiaries. Race/ethnicity information is based on the variable RTI_RACE_CD from the CMS CCW enrollment database. The RTI_RACE_CD variable is based upon a validated algorithm that uses Census surname lists and geography to improve the accuracy of race/ethnicity classification, particularly for those who are Hispanic or Asian/Pacific Islanders."
+        },
+        {
+          "name": "Bene_Race_API_Cnt",
+          "label": "Number of Asian Pacific Islander Beneficiaries",
+          "description": "Number of Asian Pacific Islander beneficiaries. Race/ethnicity information is based on the variable RTI_RACE_CD from the CMS CCW enrollment database. The RTI_RACE_CD variable is based upon a validated algorithm that uses Census surname lists and geography to improve the accuracy of race/ethnicity classification, particularly for those who are Hispanic or Asian/Pacific Islanders."
+        },
+        {
+          "name": "Bene_Race_Hspnc_Cnt",
+          "label": "Number of Hispanic Beneficiaries",
+          "description": "Number of Hispanic beneficiaries. Race/ethnicity information is based on the variable RTI_RACE_CD from the CMS CCW enrollment database. The RTI_RACE_CD variable is based upon a validated algorithm that uses Census surname lists and geography to improve the accuracy of race/ethnicity classification, particularly for those who are Hispanic or Asian/Pacific Islanders."
+        },
+        {
+          "name": "Bene_Race_NatInd_Cnt",
+          "label": "Number of American Indian/Alaska Native Beneficiaries",
+          "description": "Number of American Indian or Alaska Native beneficiaries. Race/ethnicity information is based on the variable RTI_RACE_CD from the CMS CCW enrollment database. The RTI_RACE_CD variable is based upon a validated algorithm that uses Census surname lists and geography to improve the accuracy of race/ethnicity classification, particularly for those who are Hispanic or Asian/Pacific Islanders."
+        },
+        {
+          "name": "Bene_Race_Othr_Cnt",
+          "label": "Number of Beneficiaries With Race Not Elsewhere Classified",
+          "description": "Number of beneficiaries with race not elsewhere classified."
+        },
+        {
+          "name": "Bene_Dual_Cnt",
+          "label": "Number of Beneficiaries With Medicare & Medicaid Entitlement",
+          "description": "Number of Medicare beneficiaries qualified to receive Medicare and Medicaid benefits. Beneficiaries are classified as Medicare and Medicaid entitlement if in any month in the given calendar year they were receiving full or partial Medicaid benefits."
+        },
+        {
+          "name": "Bene_Ndual_Cnt",
+          "label": "Number of Beneficiaries With Medicare Only Entitlement",
+          "description": "Number of Medicare beneficiaries qualified to receive Medicare only benefits. Beneficiaries are classified as Medicare only entitlement if they received zero months of any Medicaid benefits (full or partial) in the given calendar year."
+        },
+        {
+          "name": "Bene_CC_BH_ADHD_OthCD_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With ADHD And Other Conduct Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for ADHD and other conduct disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Alcohol_Drug_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Alcohol And Drug Use Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithms for both alcohol use disorder and/or drug use disorder. Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Tobacco_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Tobacco Use Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for tobacco use disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Alz_NonAlzdem_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Alzheimer's Disease And Non-Alzheimer's Dementia",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithms for both Alzheimer's disease and/or non-Alzheimer's dementia.  In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithms for Alzheimer's disease and non-Alzheimer's dementia. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Anxiety_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Anxiety Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for anxiety disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Bipolar_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Bipolar Disorder",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for bipolar disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Mood_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Depression, Bipolar Or Other Depressive Mood Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for depression and other depressive mood disorders. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for depressive and other depressive mood disorders. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Depress_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Major Depressive Affective Disorder",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for major depressive affective disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_PD_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Personality Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for personality disorders. Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_PTSD_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Post-Traumatic Stress Disorder",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for post-traumatic stress disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_BH_Schizo_OthPsy_V1_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Schizophrenia And Other Psychotic Disorders",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for schizophrenia and other psychotic disorders.  Please note that this condition was not updated as part of the 2020 technical expert panel (TEP) to refine and enhance chronic conditions algorithms, hence the V1 component of the variable name.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-other.  To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Asthma_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Asthma",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithms for asthma. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for asthma. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Afib_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Atrial Fibrillation And Flutter",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for atrial fibrillation/flutter. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for atrial fibrillation/flutter. The V2 portion of the variable name indicates that this variable was updated as part of the TEP. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Cancer6_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Combined Cancer Flag For 6 Cancer Indicators",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithms for six cancer types; includes breast cancer, colorectal cancer, endometrial cancer, lung cancer, prostate cancer and urological cancer. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_CKD_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Chronic Kidney Disease",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithms for chronic kidney disease. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for chronic kidney disease. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_COPD_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Chronic Obstructive Pulmonary Disease",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for COPD. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for COPD. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Diabetes_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Diabetes",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for diabetes. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for diabetes. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_HF_NonIHD_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Heart Failure And Non-Ischemic Heart Disease",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for heart failure/non-ischemic heart disease. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for heart failure/non-ischemic heart disease. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Hyperlipidemia_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Hyperlipidemia",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for hyperlipidemia. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for hyperlipidemia. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Hypertension_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Hypertension",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for hypertension. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for hypertension. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_IschemicHeart_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Ischemic Heart Disease",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for ischemic heart disease. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for ischemic heart disease. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Osteoporosis_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Osteoporosis With Or Without Pathological Fracture",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for osteoporosis. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for osteoporosis. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward.  For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Parkinson_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Parkinson's Disease And Secondary Parkinsonism To",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for Parkinson's disease/secondary parkinsonism. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for Parkinson's disease/secondary parkinsonism. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Arthritis_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Rheumatoid Arthritis / Osteoarthritis",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for rheumatoid arthritis/osteoarthritis. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for rheumatoid arthritis/osteoarthritis. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_CC_PH_Stroke_TIA_V2_Pct",
+          "label": "Percent (%) Of Beneficiaries Identified With Stroke / Transient Ischemic Attack",
+          "description": "Percent of beneficiaries meeting the CCW chronic condition algorithm for stroke/transient ischemic attack. In 2020, CMS contracted an technical expert panel (TEP) to refine and enhance the chronic condition algorithms, including the algorithm for stroke/transient ischemic attack. The V2 portion of the variable name indicates that this variable was updated as part of the TEP.  Chronic condition metrics are only available for file years 2017 forward. For more details on this condition, see https://www2.ccwdata.org/web/guest/condition-categories-chronic. To protect the privacy of Medicare beneficiaries, the number of beneficiaries fewer than 11 have been suppressed and the percent of beneficiaries between 75% and 100% have been top-coded at 75%."
+        },
+        {
+          "name": "Bene_Avg_Risk_Scre",
+          "label": "Average HCC Risk Score of Beneficiaries",
+          "description": "Average Hierarchical Condition Category (HCC) risk score of beneficiaries."
+        }
+      ]
+    }
+  },
+  "rows": [
+    {
+      "Rndrng_NPI": "1003000126",
+      "Rndrng_Prvdr_Last_Org_Name": "Enkeshafi",
+      "Rndrng_Prvdr_First_Name": "Ardalan",
+      "Rndrng_Prvdr_MI": "",
+      "Rndrng_Prvdr_Crdntls": "M.D.",
+      "Rndrng_Prvdr_Ent_Cd": "I",
+      "Rndrng_Prvdr_St1": "6410 Rockledge Dr Ste 304",
+      "Rndrng_Prvdr_St2": "",
+      "Rndrng_Prvdr_City": "Bethesda",
+      "Rndrng_Prvdr_State_Abrvtn": "MD",
+      "Rndrng_Prvdr_State_FIPS": "24",
+      "Rndrng_Prvdr_Zip5": "20817",
+      "Rndrng_Prvdr_RUCA": "1",
+      "Rndrng_Prvdr_RUCA_Desc": "Metropolitan area core: primary flow within an urbanized area of 50,000 and greater",
+      "Rndrng_Prvdr_Cntry": "US",
+      "Rndrng_Prvdr_Type": "Internal Medicine",
+      "Rndrng_Prvdr_Mdcr_Prtcptg_Ind": "Y",
+      "Tot_HCPCS_Cds": "15",
+      "Tot_Benes": "328",
+      "Tot_Srvcs": "399",
+      "Tot_Sbmtd_Chrg": "202783.88",
+      "Tot_Mdcr_Alowd_Amt": "46472.65",
+      "Tot_Mdcr_Pymt_Amt": "35325.46",
+      "Tot_Mdcr_Stdzd_Amt": "34781.01",
+      "Drug_Sprsn_Ind": "",
+      "Drug_Tot_HCPCS_Cds": "0",
+      "Drug_Tot_Benes": "0",
+      "Drug_Tot_Srvcs": "0",
+      "Drug_Sbmtd_Chrg": "0",
+      "Drug_Mdcr_Alowd_Amt": "0",
+      "Drug_Mdcr_Pymt_Amt": "0",
+      "Drug_Mdcr_Stdzd_Amt": "0",
+      "Med_Sprsn_Ind": "",
+      "Med_Tot_HCPCS_Cds": "15",
+      "Med_Tot_Benes": "328",
+      "Med_Tot_Srvcs": "399",
+      "Med_Sbmtd_Chrg": "202783.88",
+      "Med_Mdcr_Alowd_Amt": "46472.65",
+      "Med_Mdcr_Pymt_Amt": "35325.46",
+      "Med_Mdcr_Stdzd_Amt": "34781.01",
+      "Bene_Avg_Age": "76",
+      "Bene_Age_LT_65_Cnt": "37",
+      "Bene_Age_65_74_Cnt": "94",
+      "Bene_Age_75_84_Cnt": "130",
+      "Bene_Age_GT_84_Cnt": "67",
+      "Bene_Feml_Cnt": "171",
+      "Bene_Male_Cnt": "157",
+      "Bene_Race_Wht_Cnt": "281",
+      "Bene_Race_Black_Cnt": "21",
+      "Bene_Race_API_Cnt": "",
+      "Bene_Race_Hspnc_Cnt": "",
+      "Bene_Race_NatInd_Cnt": "",
+      "Bene_Race_Othr_Cnt": "",
+      "Bene_Dual_Cnt": "77",
+      "Bene_Ndual_Cnt": "251",
+      "Bene_CC_BH_ADHD_OthCD_V1_Pct": "",
+      "Bene_CC_BH_Alcohol_Drug_V1_Pct": "15",
+      "Bene_CC_BH_Tobacco_V1_Pct": "19",
+      "Bene_CC_BH_Alz_NonAlzdem_V2_Pct": "27",
+      "Bene_CC_BH_Anxiety_V1_Pct": "46",
+      "Bene_CC_BH_Bipolar_V1_Pct": "9",
+      "Bene_CC_BH_Mood_V2_Pct": "52",
+      "Bene_CC_BH_Depress_V1_Pct": "48",
+      "Bene_CC_BH_PD_V1_Pct": "",
+      "Bene_CC_BH_PTSD_V1_Pct": "",
+      "Bene_CC_BH_Schizo_OthPsy_V1_Pct": "5",
+      "Bene_CC_PH_Asthma_V2_Pct": "17",
+      "Bene_CC_PH_Afib_V2_Pct": "39",
+      "Bene_CC_PH_Cancer6_V2_Pct": "27",
+      "Bene_CC_PH_CKD_V2_Pct": "55",
+      "Bene_CC_PH_COPD_V2_Pct": "38",
+      "Bene_CC_PH_Diabetes_V2_Pct": "48",
+      "Bene_CC_PH_HF_NonIHD_V2_Pct": "48",
+      "Bene_CC_PH_Hyperlipidemia_V2_Pct": "75",
+      "Bene_CC_PH_Hypertension_V2_Pct": "75",
+      "Bene_CC_PH_IschemicHeart_V2_Pct": "51",
+      "Bene_CC_PH_Osteoporosis_V2_Pct": "18",
+      "Bene_CC_PH_Parkinson_V2_Pct": "4",
+      "Bene_CC_PH_Arthritis_V2_Pct": "63",
+      "Bene_CC_PH_Stroke_TIA_V2_Pct": "21",
+      "Bene_Avg_Risk_Scre": "2.566"
+    },
+    {
+      "Rndrng_NPI": "1003000134",
+      "Rndrng_Prvdr_Last_Org_Name": "Cibull",
+      "Rndrng_Prvdr_First_Name": "Thomas",
+      "Rndrng_Prvdr_MI": "L",
+      "Rndrng_Prvdr_Crdntls": "M.D.",
+      "Rndrng_Prvdr_Ent_Cd": "I",
+      "Rndrng_Prvdr_St1": "2650 Ridge Ave",
+      "Rndrng_Prvdr_St2": "Evanston Hospital",
+      "Rndrng_Prvdr_City": "Evanston",
+      "Rndrng_Prvdr_State_Abrvtn": "IL",
+      "Rndrng_Prvdr_State_FIPS": "17",
+      "Rndrng_Prvdr_Zip5": "60201",
+      "Rndrng_Prvdr_RUCA": "1",
+      "Rndrng_Prvdr_RUCA_Desc": "Metropolitan area core: primary flow within an urbanized area of 50,000 and greater",
+      "Rndrng_Prvdr_Cntry": "US",
+      "Rndrng_Prvdr_Type": "Pathology",
+      "Rndrng_Prvdr_Mdcr_Prtcptg_Ind": "Y",
+      "Tot_HCPCS_Cds": "21",
+      "Tot_Benes": "912",
+      "Tot_Srvcs": "2023",
+      "Tot_Sbmtd_Chrg": "302581",
+      "Tot_Mdcr_Alowd_Amt": "69422.59",
+      "Tot_Mdcr_Pymt_Amt": "50178.11",
+      "Tot_Mdcr_Stdzd_Amt": "47710.61",
+      "Drug_Sprsn_Ind": "",
+      "Drug_Tot_HCPCS_Cds": "0",
+      "Drug_Tot_Benes": "0",
+      "Drug_Tot_Srvcs": "0",
+      "Drug_Sbmtd_Chrg": "0",
+      "Drug_Mdcr_Alowd_Amt": "0",
+      "Drug_Mdcr_Pymt_Amt": "0",
+      "Drug_Mdcr_Stdzd_Amt": "0",
+      "Med_Sprsn_Ind": "",
+      "Med_Tot_HCPCS_Cds": "21",
+      "Med_Tot_Benes": "912",
+      "Med_Tot_Srvcs": "2023",
+      "Med_Sbmtd_Chrg": "302581",
+      "Med_Mdcr_Alowd_Amt": "69422.59",
+      "Med_Mdcr_Pymt_Amt": "50178.11",
+      "Med_Mdcr_Stdzd_Amt": "47710.61",
+      "Bene_Avg_Age": "76",
+      "Bene_Age_LT_65_Cnt": "16",
+      "Bene_Age_65_74_Cnt": "419",
+      "Bene_Age_75_84_Cnt": "337",
+      "Bene_Age_GT_84_Cnt": "140",
+      "Bene_Feml_Cnt": "455",
+      "Bene_Male_Cnt": "457",
+      "Bene_Race_Wht_Cnt": "806",
+      "Bene_Race_Black_Cnt": "13",
+      "Bene_Race_API_Cnt": "29",
+      "Bene_Race_Hspnc_Cnt": "23",
+      "Bene_Race_NatInd_Cnt": "0",
+      "Bene_Race_Othr_Cnt": "41",
+      "Bene_Dual_Cnt": "48",
+      "Bene_Ndual_Cnt": "864",
+      "Bene_CC_BH_ADHD_OthCD_V1_Pct": "",
+      "Bene_CC_BH_Alcohol_Drug_V1_Pct": "3",
+      "Bene_CC_BH_Tobacco_V1_Pct": "4",
+      "Bene_CC_BH_Alz_NonAlzdem_V2_Pct": "5",
+      "Bene_CC_BH_Anxiety_V1_Pct": "16",
+      "Bene_CC_BH_Bipolar_V1_Pct": "3",
+      "Bene_CC_BH_Mood_V2_Pct": "20",
+      "Bene_CC_BH_Depress_V1_Pct": "17",
+      "Bene_CC_BH_PD_V1_Pct": "1",
+      "Bene_CC_BH_PTSD_V1_Pct": "",
+      "Bene_CC_BH_Schizo_OthPsy_V1_Pct": "",
+      "Bene_CC_PH_Asthma_V2_Pct": "6",
+      "Bene_CC_PH_Afib_V2_Pct": "17",
+      "Bene_CC_PH_Cancer6_V2_Pct": "17",
+      "Bene_CC_PH_CKD_V2_Pct": "21",
+      "Bene_CC_PH_COPD_V2_Pct": "10",
+      "Bene_CC_PH_Diabetes_V2_Pct": "23",
+      "Bene_CC_PH_HF_NonIHD_V2_Pct": "14",
+      "Bene_CC_PH_Hyperlipidemia_V2_Pct": "75",
+      "Bene_CC_PH_Hypertension_V2_Pct": "64",
+      "Bene_CC_PH_IschemicHeart_V2_Pct": "26",
+      "Bene_CC_PH_Osteoporosis_V2_Pct": "15",
+      "Bene_CC_PH_Parkinson_V2_Pct": "2",
+      "Bene_CC_PH_Arthritis_V2_Pct": "47",
+      "Bene_CC_PH_Stroke_TIA_V2_Pct": "6",
+      "Bene_Avg_Risk_Scre": "1.1958"
+    },
+    {
+      "Rndrng_NPI": "1003000142",
+      "Rndrng_Prvdr_Last_Org_Name": "Khalil",
+      "Rndrng_Prvdr_First_Name": "Rashid",
+      "Rndrng_Prvdr_MI": "",
+      "Rndrng_Prvdr_Crdntls": "M.D.",
+      "Rndrng_Prvdr_Ent_Cd": "I",
+      "Rndrng_Prvdr_St1": "4126 N Holland Sylvania Rd",
+      "Rndrng_Prvdr_St2": "Suite 220",
+      "Rndrng_Prvdr_City": "Toledo",
+      "Rndrng_Prvdr_State_Abrvtn": "OH",
+      "Rndrng_Prvdr_State_FIPS": "39",
+      "Rndrng_Prvdr_Zip5": "43623",
+      "Rndrng_Prvdr_RUCA": "1",
+      "Rndrng_Prvdr_RUCA_Desc": "Metropolitan area core: primary flow within an urbanized area of 50,000 and greater",
+      "Rndrng_Prvdr_Cntry": "US",
+      "Rndrng_Prvdr_Type": "Anesthesiology",
+      "Rndrng_Prvdr_Mdcr_Prtcptg_Ind": "Y",
+      "Tot_HCPCS_Cds": "41",
+      "Tot_Benes": "316",
+      "Tot_Srvcs": "1369",
+      "Tot_Sbmtd_Chrg": "381301",
+      "Tot_Mdcr_Alowd_Amt": "133096.84",
+      "Tot_Mdcr_Pymt_Amt": "101577.94",
+      "Tot_Mdcr_Stdzd_Amt": "103554.75",
+      "Drug_Sprsn_Ind": "",
+      "Drug_Tot_HCPCS_Cds": "2",
+      "Drug_Tot_Benes": "20",
+      "Drug_Tot_Srvcs": "261",
+      "Drug_Sbmtd_Chrg": "4154",
+      "Drug_Mdcr_Alowd_Amt": "29.87",
+      "Drug_Mdcr_Pymt_Amt": "23.8",
+      "Drug_Mdcr_Stdzd_Amt": "23.8",
+      "Med_Sprsn_Ind": "",
+      "Med_Tot_HCPCS_Cds": "39",
+      "Med_Tot_Benes": "316",
+      "Med_Tot_Srvcs": "1108",
+      "Med_Sbmtd_Chrg": "377147",
+      "Med_Mdcr_Alowd_Amt": "133066.97",
+      "Med_Mdcr_Pymt_Amt": "101554.14",
+      "Med_Mdcr_Stdzd_Amt": "103530.95",
+      "Bene_Avg_Age": "70",
+      "Bene_Age_LT_65_Cnt": "84",
+      "Bene_Age_65_74_Cnt": "127",
+      "Bene_Age_75_84_Cnt": "84",
+      "Bene_Age_GT_84_Cnt": "21",
+      "Bene_Feml_Cnt": "192",
+      "Bene_Male_Cnt": "124",
+      "Bene_Race_Wht_Cnt": "199",
+      "Bene_Race_Black_Cnt": "97",
+      "Bene_Race_API_Cnt": "",
+      "Bene_Race_Hspnc_Cnt": "",
+      "Bene_Race_NatInd_Cnt": "0",
+      "Bene_Race_Othr_Cnt": "",
+      "Bene_Dual_Cnt": "112",
+      "Bene_Ndual_Cnt": "204",
+      "Bene_CC_BH_ADHD_OthCD_V1_Pct": "",
+      "Bene_CC_BH_Alcohol_Drug_V1_Pct": "20",
+      "Bene_CC_BH_Tobacco_V1_Pct": "21",
+      "Bene_CC_BH_Alz_NonAlzdem_V2_Pct": "7",
+      "Bene_CC_BH_Anxiety_V1_Pct": "53",
+      "Bene_CC_BH_Bipolar_V1_Pct": "7",
+      "Bene_CC_BH_Mood_V2_Pct": "46",
+      "Bene_CC_BH_Depress_V1_Pct": "44",
+      "Bene_CC_BH_PD_V1_Pct": "",
+      "Bene_CC_BH_PTSD_V1_Pct": "4",
+      "Bene_CC_BH_Schizo_OthPsy_V1_Pct": "5",
+      "Bene_CC_PH_Asthma_V2_Pct": "15",
+      "Bene_CC_PH_Afib_V2_Pct": "17",
+      "Bene_CC_PH_Cancer6_V2_Pct": "12",
+      "Bene_CC_PH_CKD_V2_Pct": "34",
+      "Bene_CC_PH_COPD_V2_Pct": "32",
+      "Bene_CC_PH_Diabetes_V2_Pct": "45",
+      "Bene_CC_PH_HF_NonIHD_V2_Pct": "27",
+      "Bene_CC_PH_Hyperlipidemia_V2_Pct": "75",
+      "Bene_CC_PH_Hypertension_V2_Pct": "75",
+      "Bene_CC_PH_IschemicHeart_V2_Pct": "36",
+      "Bene_CC_PH_Osteoporosis_V2_Pct": "17",
+      "Bene_CC_PH_Parkinson_V2_Pct": "",
+      "Bene_CC_PH_Arthritis_V2_Pct": "75",
+      "Bene_CC_PH_Stroke_TIA_V2_Pct": "11",
+      "Bene_Avg_Risk_Scre": "1.6931"
+    },
+    {
+      "Rndrng_NPI": "1003000423",
+      "Rndrng_Prvdr_Last_Org_Name": "Velotta",
+      "Rndrng_Prvdr_First_Name": "Jennifer",
+      "Rndrng_Prvdr_MI": "A",
+      "Rndrng_Prvdr_Crdntls": "M.D.",
+      "Rndrng_Prvdr_Ent_Cd": "I",
+      "Rndrng_Prvdr_St1": "8300 Tyler Blvd Ste 300",
+      "Rndrng_Prvdr_St2": "",
+      "Rndrng_Prvdr_City": "Mentor",
+      "Rndrng_Prvdr_State_Abrvtn": "OH",
+      "Rndrng_Prvdr_State_FIPS": "39",
+      "Rndrng_Prvdr_Zip5": "44060",
+      "Rndrng_Prvdr_RUCA": "1",
+      "Rndrng_Prvdr_RUCA_Desc": "Metropolitan area core: primary flow within an urbanized area of 50,000 and greater",
+      "Rndrng_Prvdr_Cntry": "US",
+      "Rndrng_Prvdr_Type": "Obstetrics & Gynecology",
+      "Rndrng_Prvdr_Mdcr_Prtcptg_Ind": "Y",
+      "Tot_HCPCS_Cds": "18",
+      "Tot_Benes": "75",
+      "Tot_Srvcs": "140",
+      "Tot_Sbmtd_Chrg": "22015",
+      "Tot_Mdcr_Alowd_Amt": "8708.74",
+      "Tot_Mdcr_Pymt_Amt": "7134.32",
+      "Tot_Mdcr_Stdzd_Amt": "7502.21",
+      "Drug_Sprsn_Ind": "",
+      "Drug_Tot_HCPCS_Cds": "0",
+      "Drug_Tot_Benes": "0",
+      "Drug_Tot_Srvcs": "0",
+      "Drug_Sbmtd_Chrg": "0",
+      "Drug_Mdcr_Alowd_Amt": "0",
+      "Drug_Mdcr_Pymt_Amt": "0",
+      "Drug_Mdcr_Stdzd_Amt": "0",
+      "Med_Sprsn_Ind": "",
+      "Med_Tot_HCPCS_Cds": "18",
+      "Med_Tot_Benes": "75",
+      "Med_Tot_Srvcs": "140",
+      "Med_Sbmtd_Chrg": "22015",
+      "Med_Mdcr_Alowd_Amt": "8708.74",
+      "Med_Mdcr_Pymt_Amt": "7134.32",
+      "Med_Mdcr_Stdzd_Amt": "7502.21",
+      "Bene_Avg_Age": "70",
+      "Bene_Age_LT_65_Cnt": "",
+      "Bene_Age_65_74_Cnt": "50",
+      "Bene_Age_75_84_Cnt": "",
+      "Bene_Age_GT_84_Cnt": "",
+      "Bene_Feml_Cnt": "75",
+      "Bene_Male_Cnt": "0",
+      "Bene_Race_Wht_Cnt": "",
+      "Bene_Race_Black_Cnt": "",
+      "Bene_Race_API_Cnt": "",
+      "Bene_Race_Hspnc_Cnt": "",
+      "Bene_Race_NatInd_Cnt": "",
+      "Bene_Race_Othr_Cnt": "",
+      "Bene_Dual_Cnt": "11",
+      "Bene_Ndual_Cnt": "64",
+      "Bene_CC_BH_ADHD_OthCD_V1_Pct": "",
+      "Bene_CC_BH_Alcohol_Drug_V1_Pct": "",
+      "Bene_CC_BH_Tobacco_V1_Pct": "",
+      "Bene_CC_BH_Alz_NonAlzdem_V2_Pct": "",
+      "Bene_CC_BH_Anxiety_V1_Pct": "35",
+      "Bene_CC_BH_Bipolar_V1_Pct": "",
+      "Bene_CC_BH_Mood_V2_Pct": "29",
+      "Bene_CC_BH_Depress_V1_Pct": "28",
+      "Bene_CC_BH_PD_V1_Pct": "",
+      "Bene_CC_BH_PTSD_V1_Pct": "",
+      "Bene_CC_BH_Schizo_OthPsy_V1_Pct": "",
+      "Bene_CC_PH_Asthma_V2_Pct": "",
+      "Bene_CC_PH_Afib_V2_Pct": "",
+      "Bene_CC_PH_Cancer6_V2_Pct": "20",
+      "Bene_CC_PH_CKD_V2_Pct": "",
+      "Bene_CC_PH_COPD_V2_Pct": "",
+      "Bene_CC_PH_Diabetes_V2_Pct": "17",
+      "Bene_CC_PH_HF_NonIHD_V2_Pct": "",
+      "Bene_CC_PH_Hyperlipidemia_V2_Pct": "73",
+      "Bene_CC_PH_Hypertension_V2_Pct": "71",
+      "Bene_CC_PH_IschemicHeart_V2_Pct": "17",
+      "Bene_CC_PH_Osteoporosis_V2_Pct": "25",
+      "Bene_CC_PH_Parkinson_V2_Pct": "",
+      "Bene_CC_PH_Arthritis_V2_Pct": "45",
+      "Bene_CC_PH_Stroke_TIA_V2_Pct": "",
+      "Bene_Avg_Risk_Scre": "0.7931"
+    },
+    {
+      "Rndrng_NPI": "1003000480",
+      "Rndrng_Prvdr_Last_Org_Name": "Rothchild",
+      "Rndrng_Prvdr_First_Name": "Kevin",
+      "Rndrng_Prvdr_MI": "B",
+      "Rndrng_Prvdr_Crdntls": "MD",
+      "Rndrng_Prvdr_Ent_Cd": "I",
+      "Rndrng_Prvdr_St1": "12605 E 16th Ave",
+      "Rndrng_Prvdr_St2": "",
+      "Rndrng_Prvdr_City": "Aurora",
+      "Rndrng_Prvdr_State_Abrvtn": "CO",
+      "Rndrng_Prvdr_State_FIPS": "08",
+      "Rndrng_Prvdr_Zip5": "80045",
+      "Rndrng_Prvdr_RUCA": "1",
+      "Rndrng_Prvdr_RUCA_Desc": "Metropolitan area core: primary flow within an urbanized area of 50,000 and greater",
+      "Rndrng_Prvdr_Cntry": "US",
+      "Rndrng_Prvdr_Type": "General Surgery",
+      "Rndrng_Prvdr_Mdcr_Prtcptg_Ind": "Y",
+      "Tot_HCPCS_Cds": "28",
+      "Tot_Benes": "101",
+      "Tot_Srvcs": "136",
+      "Tot_Sbmtd_Chrg": "120420",
+      "Tot_Mdcr_Alowd_Amt": "24416.29",
+      "Tot_Mdcr_Pymt_Amt": "18766.8",
+      "Tot_Mdcr_Stdzd_Amt": "18618.81",
+      "Drug_Sprsn_Ind": "",
+      "Drug_Tot_HCPCS_Cds": "0",
+      "Drug_Tot_Benes": "0",
+      "Drug_Tot_Srvcs": "0",
+      "Drug_Sbmtd_Chrg": "0",
+      "Drug_Mdcr_Alowd_Amt": "0",
+      "Drug_Mdcr_Pymt_Amt": "0",
+      "Drug_Mdcr_Stdzd_Amt": "0",
+      "Med_Sprsn_Ind": "",
+      "Med_Tot_HCPCS_Cds": "28",
+      "Med_Tot_Benes": "101",
+      "Med_Tot_Srvcs": "136",
+      "Med_Sbmtd_Chrg": "120420",
+      "Med_Mdcr_Alowd_Amt": "24416.29",
+      "Med_Mdcr_Pymt_Amt": "18766.8",
+      "Med_Mdcr_Stdzd_Amt": "18618.81",
+      "Bene_Avg_Age": "68",
+      "Bene_Age_LT_65_Cnt": "",
+      "Bene_Age_65_74_Cnt": "49",
+      "Bene_Age_75_84_Cnt": "25",
+      "Bene_Age_GT_84_Cnt": "",
+      "Bene_Feml_Cnt": "47",
+      "Bene_Male_Cnt": "54",
+      "Bene_Race_Wht_Cnt": "74",
+      "Bene_Race_Black_Cnt": "",
+      "Bene_Race_API_Cnt": "0",
+      "Bene_Race_Hspnc_Cnt": "11",
+      "Bene_Race_NatInd_Cnt": "0",
+      "Bene_Race_Othr_Cnt": "",
+      "Bene_Dual_Cnt": "34",
+      "Bene_Ndual_Cnt": "67",
+      "Bene_CC_BH_ADHD_OthCD_V1_Pct": "",
+      "Bene_CC_BH_Alcohol_Drug_V1_Pct": "13",
+      "Bene_CC_BH_Tobacco_V1_Pct": "",
+      "Bene_CC_BH_Alz_NonAlzdem_V2_Pct": "",
+      "Bene_CC_BH_Anxiety_V1_Pct": "33",
+      "Bene_CC_BH_Bipolar_V1_Pct": "",
+      "Bene_CC_BH_Mood_V2_Pct": "35",
+      "Bene_CC_BH_Depress_V1_Pct": "30",
+      "Bene_CC_BH_PD_V1_Pct": "",
+      "Bene_CC_BH_PTSD_V1_Pct": "",
+      "Bene_CC_BH_Schizo_OthPsy_V1_Pct": "",
+      "Bene_CC_PH_Asthma_V2_Pct": "16",
+      "Bene_CC_PH_Afib_V2_Pct": "",
+      "Bene_CC_PH_Cancer6_V2_Pct": "16",
+      "Bene_CC_PH_CKD_V2_Pct": "23",
+      "Bene_CC_PH_COPD_V2_Pct": "16",
+      "Bene_CC_PH_Diabetes_V2_Pct": "25",
+      "Bene_CC_PH_HF_NonIHD_V2_Pct": "13",
+      "Bene_CC_PH_Hyperlipidemia_V2_Pct": "56",
+      "Bene_CC_PH_Hypertension_V2_Pct": "55",
+      "Bene_CC_PH_IschemicHeart_V2_Pct": "26",
+      "Bene_CC_PH_Osteoporosis_V2_Pct": "",
+      "Bene_CC_PH_Parkinson_V2_Pct": "",
+      "Bene_CC_PH_Arthritis_V2_Pct": "54",
+      "Bene_CC_PH_Stroke_TIA_V2_Pct": "",
+      "Bene_Avg_Risk_Scre": "1.458"
+    }
+  ],
+  "evidence": [
+    {
+      "role": "dictionary",
+      "url": "https://data.cms.gov/data-api/v1/dataset/4d0b2df0-1e99-4db7-a574-a571d99217f1/dictionary",
+      "sha256": "sha256:815d3774b2e9ab17ba3ea15508cebf4162615fd06788d91c83e1aa37655d9a32",
+      "bytes": 39581,
+      "observed_at": "2026-11-13T11:37:32.550126Z"
+    },
+    {
+      "role": "stats",
+      "url": "https://data.cms.gov/data-api/v1/dataset/4d0b2df0-1e99-4db7-a574-a571d99217f1/data/stats",
+      "sha256": "sha256:20c612a6f2791e4b59d641b3550149df63a4c92d30bb0494878d5b0eb1fadd7c",
+      "bytes": 43,
+      "observed_at": "2026-11-13T11:37:32.599587Z"
+    },
+    {
+      "role": "sample",
+      "url": "https://data.cms.gov/data-api/v1/dataset/4d0b2df0-1e99-4db7-a574-a571d99217f1/data?size=5&offset=0",
+      "sha256": "sha256:73d03ec6c82b49882760178d52e58d088beeb4fcd5b1531b9d0cd264e310c23c",
+      "bytes": 12079,
+      "observed_at": "2026-11-13T11:37:32.906913Z"
+    },
+    {
+      "role": "resources",
+      "url": "https://data.cms.gov/data-api/v1/dataset-resources/4d0b2df0-1e99-4db7-a574-a571d99217f1",
+      "sha256": "sha256:17f1380680d8c758236bdd614e047052bff218e7ec509a0a4760ecd129425ea5",
+      "bytes": 1052,
+      "observed_at": "2026-11-13T11:37:33.461417Z"
+    }
+  ]
+}

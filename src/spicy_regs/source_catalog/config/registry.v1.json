@@ -1568,6 +1568,15 @@
       "tables": []
     },
     {
+      "id": "family:cms-medicare-provider",
+      "title": "CMS Medicare provider payments and utilization",
+      "publisher": "Centers for Medicare & Medicaid Services",
+      "description": "Exact selected by-provider CSV and original catalog, dictionary and count controls. Provider release qualification and public delivery are separately evidenced; no historical completeness is inferred.",
+      "source_names": [],
+      "families": [],
+      "tables": []
+    },
+    {
       "id": "family:cms-part-d",
       "title": "CMS Medicare Part D drug spending",
       "publisher": "Centers for Medicare & Medicaid Services",

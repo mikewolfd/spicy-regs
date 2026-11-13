@@ -445,7 +445,9 @@
       ]
     },
     "foreign-assistance": {
-      "sources": ["foreign-assistance"]
+      "sources": [
+        "foreign-assistance"
+      ]
     },
     "census-acs": {
       "sources": [
@@ -726,6 +728,11 @@
     "sec-edgar": {
       "sources": [
         "sec-edgar"
+      ]
+    },
+    "cms-medicare-provider": {
+      "sources": [
+        "cms"
       ]
     }
   },

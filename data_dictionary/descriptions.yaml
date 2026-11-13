@@ -10539,6 +10539,60 @@ tables:
       last_observed_at: Latest page observation timestamp; does not establish simultaneous publisher state.
       outcome: observed-complete or observed-empty; refusal is retained separately and is never a successful zero.
       captures_json: Ordered exact page descriptors, each with POST request, response SHA-256, byte size and observation timestamp.
+  cms_medicare_provider:
+    label: Medicare provider payments and utilization
+    subject: spending
+    identity_columns: [observation_id]
+    summary: Source-defined Original Medicare fee-for-service provider totals, utilization and drug/medical subsets for one selected calendar-year release.
+    coverage: One complete explicitly pinned by-provider CSV, checked against the selected API population and dictionary. No service detail, geographic aggregate files, Medicare Advantage, practice-wide totals or historical completeness claim. Missing and suppressed cells remain missing. Local versus public delivery is determined by the selected generation.
+    measured_on: '2026-11-13'
+    grain: One selected source release, calendar year and rendering NPI. Provider totals and drug/medical subsets are alternative columns; beneficiaries and HCPCS counts overlap. Do not add releases, rows from service/geographic products, or directory join duplicates. Filter year, source selection, specialty and geography before a comparison; no risk-adjusted quality ranking.
+    columns:
+      observation_id: "Digest of the exact selection, native NPI and benefit year; revisions remain distinct."
+      program: "Original Medicare fee-for-service; Part B non-institutional final-action claims. Medicare Advantage excluded."
+      benefit_year: "Selected calendar year, separate from release modified date and acquisition date."
+      aggregation_level: "provider; one NPI and year per selected release. No service or geography aggregate rows."
+      drug_suppression_indicator: "Literal Drug_Sprsn_Ind. Star means fewer than 11 beneficiaries; hash means counter-suppression."
+      medical_suppression_indicator: "Literal Med_Sprsn_Ind. Star means fewer than 11 beneficiaries; hash means counter-suppression."
+      value_statuses_json: "Per-measure value, null, blank, suppressed_lt11 or counter_suppressed. Missing never becomes zero."
+      source_selection_digest: "Digest of the complete selected source identity and CSV capture; not an admitted source-release pin."
+      source_selection_json: "Exact CMS series, release date, modification, versioned distribution and metadata pins."
+      source_locator_json: "Original CSV URL, SHA-256, observation timestamp, zero-based ordinal, CSV record and physical line end."
+      raw_row_json: "Complete literal CSV row including beneficiary demographics, risk scores, source blanks and unknown fields. CSV does not encode JSON null separately."
+      npi: "Literal Rndrng_NPI from the selected CMS provider row. No external directory match required."
+      last_or_organization_name: "Literal Rndrng_Prvdr_Last_Org_Name from the selected CMS provider row. No external directory match required."
+      first_name: "Literal Rndrng_Prvdr_First_Name from the selected CMS provider row. No external directory match required."
+      entity_type: "Literal Rndrng_Prvdr_Ent_Cd from the selected CMS provider row. No external directory match required."
+      specialty: "Literal Rndrng_Prvdr_Type from the selected CMS provider row. No external directory match required."
+      city: "Literal Rndrng_Prvdr_City from the selected CMS provider row. No external directory match required."
+      state: "Literal Rndrng_Prvdr_State_Abrvtn from the selected CMS provider row. No external directory match required."
+      state_fips: "Literal Rndrng_Prvdr_State_FIPS from the selected CMS provider row. No external directory match required."
+      zip5: "Literal Rndrng_Prvdr_Zip5 from the selected CMS provider row. No external directory match required."
+      country: "Literal Rndrng_Prvdr_Cntry from the selected CMS provider row. No external directory match required."
+      ruca: "Literal Rndrng_Prvdr_RUCA from the selected CMS provider row. No external directory match required."
+      ruca_description: "Literal Rndrng_Prvdr_RUCA_Desc from the selected CMS provider row. No external directory match required."
+      medicare_participating_indicator: "Literal Rndrng_Prvdr_Mdcr_Prtcptg_Ind from the selected CMS provider row. No external directory match required."
+      hcpcs_codes: "Tot_HCPCS_Cds; Distinct HCPCS codes within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      beneficiaries: "Tot_Benes; Unique beneficiaries within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      services: "Tot_Srvcs; Source service units, which vary by HCPCS; not claims, visits or interchangeable clinical procedures. Exact DECIMAL(38,12). Suppressed values remain null."
+      submitted_charges_usd: "Tot_Sbmtd_Chrg; Submitted charges in USD; not Medicare payments. Exact DECIMAL(38,12). Suppressed values remain null."
+      allowed_amount_usd: "Tot_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
+      medicare_payment_usd: "Tot_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
+      standardized_payment_usd: "Tot_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_hcpcs_codes: "Drug_Tot_HCPCS_Cds; Distinct HCPCS codes within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_beneficiaries: "Drug_Tot_Benes; Unique beneficiaries within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_services: "Drug_Tot_Srvcs; Source service units, which vary by HCPCS; not claims, visits or interchangeable clinical procedures. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_submitted_charges_usd: "Drug_Sbmtd_Chrg; Submitted charges in USD; not Medicare payments. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_allowed_amount_usd: "Drug_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_medicare_payment_usd: "Drug_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
+      drug_standardized_payment_usd: "Drug_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_hcpcs_codes: "Med_Tot_HCPCS_Cds; Distinct HCPCS codes within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_beneficiaries: "Med_Tot_Benes; Unique beneficiaries within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_services: "Med_Tot_Srvcs; Source service units, which vary by HCPCS; not claims, visits or interchangeable clinical procedures. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_submitted_charges_usd: "Med_Sbmtd_Chrg; Submitted charges in USD; not Medicare payments. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_allowed_amount_usd: "Med_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_medicare_payment_usd: "Med_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
+      medical_standardized_payment_usd: "Med_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
   grants_opportunity_observations:
     label: Grants.gov opportunity and forecast observations
     subject: spending

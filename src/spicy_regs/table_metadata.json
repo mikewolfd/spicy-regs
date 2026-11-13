@@ -22090,6 +22090,247 @@
       "observation_id"
     ]
   },
+  "cms_medicare_provider": {
+    "table": "cms_medicare_provider",
+    "label": "Medicare provider payments and utilization",
+    "summary": "Source-defined Original Medicare fee-for-service provider totals, utilization and drug/medical subsets for one selected calendar-year release.",
+    "coverage": "One complete explicitly pinned by-provider CSV, checked against the selected API population and dictionary. No service detail, geographic aggregate files, Medicare Advantage, practice-wide totals or historical completeness claim. Missing and suppressed cells remain missing. Local versus public delivery is determined by the selected generation.",
+    "kind": null,
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "Digest of the exact selection, native NPI and benefit year; revisions remain distinct."
+      },
+      {
+        "column_name": "program",
+        "column_type": "VARCHAR",
+        "description": "Original Medicare fee-for-service; Part B non-institutional final-action claims. Medicare Advantage excluded."
+      },
+      {
+        "column_name": "benefit_year",
+        "column_type": "INTEGER",
+        "description": "Selected calendar year, separate from release modified date and acquisition date."
+      },
+      {
+        "column_name": "aggregation_level",
+        "column_type": "VARCHAR",
+        "description": "provider; one NPI and year per selected release. No service or geography aggregate rows."
+      },
+      {
+        "column_name": "npi",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_NPI from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "last_or_organization_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_Last_Org_Name from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "first_name",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_First_Name from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "entity_type",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_Ent_Cd from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "specialty",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_Type from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "city",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_City from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "state",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_State_Abrvtn from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "state_fips",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_State_FIPS from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "zip5",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_Zip5 from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "country",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_Cntry from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "ruca",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_RUCA from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "ruca_description",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_RUCA_Desc from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "medicare_participating_indicator",
+        "column_type": "VARCHAR",
+        "description": "Literal Rndrng_Prvdr_Mdcr_Prtcptg_Ind from the selected CMS provider row. No external directory match required."
+      },
+      {
+        "column_name": "hcpcs_codes",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_HCPCS_Cds; Distinct HCPCS codes within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "beneficiaries",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_Benes; Unique beneficiaries within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "services",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_Srvcs; Source service units, which vary by HCPCS; not claims, visits or interchangeable clinical procedures. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "submitted_charges_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_Sbmtd_Chrg; Submitted charges in USD; not Medicare payments. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "allowed_amount_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medicare_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "standardized_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Tot_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_hcpcs_codes",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Tot_HCPCS_Cds; Distinct HCPCS codes within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_beneficiaries",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Tot_Benes; Unique beneficiaries within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_services",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Tot_Srvcs; Source service units, which vary by HCPCS; not claims, visits or interchangeable clinical procedures. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_submitted_charges_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Sbmtd_Chrg; Submitted charges in USD; not Medicare payments. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_allowed_amount_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_medicare_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_standardized_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Drug_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_hcpcs_codes",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Tot_HCPCS_Cds; Distinct HCPCS codes within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_beneficiaries",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Tot_Benes; Unique beneficiaries within this provider/subset; not additive across providers or subsets. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_services",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Tot_Srvcs; Source service units, which vary by HCPCS; not claims, visits or interchangeable clinical procedures. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_submitted_charges_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Sbmtd_Chrg; Submitted charges in USD; not Medicare payments. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_allowed_amount_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Mdcr_Alowd_Amt; Allowed USD including Medicare payment plus beneficiary deductible/coinsurance and third-party responsibility. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_medicare_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Mdcr_Pymt_Amt; Medicare-paid USD after deductibles and coinsurance; not the allowed amount or provider income. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "medical_standardized_payment_usd",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Med_Mdcr_Stdzd_Amt; Medicare-paid USD after geographic payment standardization; not risk adjustment or a quality score. Exact DECIMAL(38,12). Suppressed values remain null."
+      },
+      {
+        "column_name": "drug_suppression_indicator",
+        "column_type": "VARCHAR",
+        "description": "Literal Drug_Sprsn_Ind. Star means fewer than 11 beneficiaries; hash means counter-suppression."
+      },
+      {
+        "column_name": "medical_suppression_indicator",
+        "column_type": "VARCHAR",
+        "description": "Literal Med_Sprsn_Ind. Star means fewer than 11 beneficiaries; hash means counter-suppression."
+      },
+      {
+        "column_name": "value_statuses_json",
+        "column_type": "VARCHAR",
+        "description": "Per-measure value, null, blank, suppressed_lt11 or counter_suppressed. Missing never becomes zero."
+      },
+      {
+        "column_name": "source_selection_digest",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete selected source identity and CSV capture; not an admitted source-release pin."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Exact CMS series, release date, modification, versioned distribution and metadata pins."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original CSV URL, SHA-256, observation timestamp, zero-based ordinal, CSV record and physical line end."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal CSV row including beneficiary demographics, risk scores, source blanks and unknown fields. CSV does not encode JSON null separately."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One selected source release, calendar year and rendering NPI. Provider totals and drug/medical subsets are alternative columns; beneficiaries and HCPCS counts overlap. Do not add releases, rows from service/geographic products, or directory join duplicates. Filter year, source selection, specialty and geography before a comparison; no risk-adjusted quality ranking.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
   "grants_opportunity_observations": {
     "table": "grants_opportunity_observations",
     "label": "Grants.gov opportunity and forecast observations",
