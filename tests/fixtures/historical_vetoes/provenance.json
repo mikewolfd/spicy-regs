@@ -1,0 +1,8 @@
+{
+  "request_url": "https://www.senate.gov/legislative/vetoes/vetoCounts.htm",
+  "response_sha256": "sha256:e7003b4978358ada0ec80ccb1e6e048e4ed2a74bccf6a18787443e9db4d799f9",
+  "observed_at": "2026-11-13T11:38:03.756571+00:00",
+  "byte_size": 31888,
+  "resolved_url": "https://www.senate.gov/legislative/vetoes/vetoCounts.htm",
+  "media_type": "text/html"
+}

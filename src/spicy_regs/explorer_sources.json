@@ -281,6 +281,13 @@
       "url": "https://sanctionslist.ofac.treas.gov/",
       "kind": "government",
       "note": "Selected enhanced SDN and consolidated exports; literal list observations, not name matching or a legal determination."
+    },
+    "senate-veto-summary": {
+      "id": "senate-veto-summary",
+      "name": "U.S. Senate historical veto summary",
+      "url": "https://www.senate.gov/legislative/vetoes/vetoCounts.htm",
+      "kind": "government",
+      "note": "One dated Summary of Bills Vetoed; administration spans, categories and disputed-veto footnotes remain source-defined."
     }
   },
   "families": {
@@ -668,6 +675,11 @@
     "ofac-sanctions": {
       "sources": [
         "ofac"
+      ]
+    },
+    "historical-vetoes": {
+      "sources": [
+        "senate-veto-summary"
       ]
     }
   },

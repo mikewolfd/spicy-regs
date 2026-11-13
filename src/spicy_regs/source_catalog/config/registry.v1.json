@@ -1586,6 +1586,15 @@
       "tables": []
     },
     {
+      "id": "family:historical-vetoes",
+      "title": "Historical presidential veto summary",
+      "publisher": "U.S. Senate",
+      "description": "One dated Senate Summary of Bills Vetoed capture. Administration spans, literal category cells and disputed-veto footnotes remain source-defined; per-president detail documents and per-term subdivisions are separate scope.",
+      "source_names": ["historical-vetoes"],
+      "families": ["historical-vetoes"],
+      "tables": ["historical_veto_administrations", "historical_veto_snapshots"]
+    },
+    {
       "id": "family:ofac-sanctions",
       "title": "OFAC sanctions source files",
       "publisher": "U.S. Department of the Treasury",

@@ -12054,3 +12054,51 @@ tables:
       page_reading_json: Complete source page reading, including original tables, words or native text and explicit
         unread content.
       issue_codes: Preserved page and row issues. A readable row can retain unresolved context or numeric cells.
+
+  historical_veto_administrations:
+    label: Historical presidential veto totals by administration
+    subject: congress
+    identity_columns: [snapshot_id, president, years_raw]
+    summary: Senate veto counts by publisher-stated administration span, with literal cells, footnotes and source coordinates.
+    coverage: 'Not a range. Complete administration rows within one selected dated Senate summary capture, with all category sums reconciled to its footer. Administration spans may cover multiple terms. Nonconsecutive administrations stay separate. Current-administration counts reflect observation time; no individual veto-event or bill population is inferred. Snapshot and footnote evidence state scope and disputed exclusions.'
+    measured_on: '2026-11-13'
+    grain: One publisher administration span in one selected original snapshot.
+    columns:
+      snapshot_id: SHA-256 of the original HTML bytes; identical bytes share this identity across observations.
+      source_url: Exact Senate summary URL, not the linked per-president document.
+      observed_at: Capture timestamp with timezone, separate from the administration's stated years.
+      president: President label with the parenthesized years and footnote markers separated; no cross-span identity inference.
+      administration_label_raw: Literal first-cell text including whitespace and footnote markers.
+      years_raw: Literal parenthesized source year span, including abbreviated endings or a single year.
+      coinciding_congresses_raw: Literal Congress cell; order, punctuation and whitespace stay as published.
+      regular_vetoes: Explicit regular-veto count from this span's source cell.
+      pocket_vetoes: Explicit pocket-veto count under the retained publisher footnotes.
+      total_vetoes: Publisher total, checked equal to regular plus pocket; overridden vetoes are not added.
+      overridden_vetoes: Regular vetoes overridden by Congress, a subset of regular vetoes.
+      footnotes_json: Referenced footnote definitions with literal text, HTML and original-byte coordinates.
+      source_locator_json: Source row path rooted at the selected table and byte offsets in the full original.
+      raw_row_json: Every source cell with literal text, HTML, attributes, coordinates and footnote references.
+
+  historical_veto_snapshots:
+    label: Historical veto summary snapshots
+    subject: congress
+    identity_columns: [snapshot_id]
+    summary: Publisher category totals, merged headers, scope and footnotes for one selected Senate summary snapshot.
+    coverage: 'Not a range. The complete selected Senate summary table as captured, including its footer and footnotes. Counts follow the publisher scope and disputed exclusions. No linked detail documents, individual bill population or per-term breakdown of a multi-term administration is inferred. A current administration label does not establish completed future coverage.'
+    measured_on: '2026-11-13'
+    grain: One selected original HTML snapshot; each generation replaces the selected observation.
+    columns:
+      snapshot_id: SHA-256 of the original HTML bytes, also carried by every administration row.
+      source_url: Exact selected Senate summary URL.
+      observed_at: Original capture timestamp with timezone; replay does not change it.
+      title: Source page title checked against the supported historical summary.
+      scope: Explicit administration-span scope, category arithmetic and exclusions from inferred populations.
+      administration_rows: Observed administration rows reconciled against this snapshot's footer.
+      regular_vetoes: Publisher regular-veto footer total, checked against all administration rows.
+      pocket_vetoes: Publisher pocket-veto footer total, checked against all administration rows.
+      total_vetoes: Publisher total equal to regular plus pocket, checked against all administration rows.
+      overridden_vetoes: Publisher overridden-veto footer total, a subset of regular vetoes.
+      headers_json: Literal multi-row headers, original HTML, span attributes and source coordinates.
+      footnotes_json: All publisher footnote definitions, including disputed veto exclusions and numbered-veto scope.
+      source_locator_json: Complete native table text and HTML with original-byte offsets and selected-element path.
+      raw_total_json: Literal footer cells, their coordinates and footnote references; blank Congress cell remains blank.

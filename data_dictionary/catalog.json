@@ -7275,6 +7275,56 @@
       ]
     },
     {
+      "table": "historical_veto_administrations",
+      "label": "Historical presidential veto totals by administration",
+      "summary": "Senate veto counts by publisher-stated administration span, with literal cells, footnotes and source coordinates.",
+      "coverage": "Not a range. Complete administration rows within one selected dated Senate summary capture, with all category sums reconciled to its footer. Administration spans may cover multiple terms. Nonconsecutive administrations stay separate. Current-administration counts reflect observation time; no individual veto-event or bill population is inferred. Snapshot and footnote evidence state scope and disputed exclusions.",
+      "kind": "not_a_range",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "source_url",
+        "observed_at",
+        "president",
+        "administration_label_raw",
+        "years_raw",
+        "coinciding_congresses_raw",
+        "regular_vetoes",
+        "pocket_vetoes",
+        "total_vetoes",
+        "overridden_vetoes",
+        "footnotes_json",
+        "source_locator_json",
+        "raw_row_json"
+      ]
+    },
+    {
+      "table": "historical_veto_snapshots",
+      "label": "Historical veto summary snapshots",
+      "summary": "Publisher category totals, merged headers, scope and footnotes for one selected Senate summary snapshot.",
+      "coverage": "Not a range. The complete selected Senate summary table as captured, including its footer and footnotes. Counts follow the publisher scope and disputed exclusions. No linked detail documents, individual bill population or per-term breakdown of a multi-term administration is inferred. A current administration label does not establish completed future coverage.",
+      "kind": "not_a_range",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "snapshot_id",
+        "source_url",
+        "observed_at",
+        "title",
+        "scope",
+        "administration_rows",
+        "regular_vetoes",
+        "pocket_vetoes",
+        "total_vetoes",
+        "overridden_vetoes",
+        "headers_json",
+        "footnotes_json",
+        "source_locator_json",
+        "raw_total_json"
+      ]
+    },
+    {
       "table": "executive_order_observations",
       "label": "Executive order text and publisher history",
       "summary": "Every executive order the Federal Register API serves, with retained text, publisher attribution and literal history notes.",

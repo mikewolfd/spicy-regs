@@ -590,6 +590,8 @@ TABLES: tuple[str, ...] = (
     "grants_status_queries",
     "ofac_entity_observations",
     "ofac_snapshots",
+    "historical_veto_administrations",
+    "historical_veto_snapshots",
     "executive_order_observations",
     "house_disbursements",
     "house_disbursements_summary",
@@ -680,6 +682,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "grants_status_queries",
         "ofac_entity_observations",
         "ofac_snapshots",
+        "historical_veto_administrations",
+        "historical_veto_snapshots",
         "executive_order_observations",
         "house_disbursements",
         "house_disbursements_summary",
@@ -907,6 +911,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
     from spicy_regs.transforms.build_grants_status import SCHEMAS as GRANTS_STATUS_SCHEMAS
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
+    from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
     from spicy_regs.schemas.senate_disbursements import SCHEMAS as SENATE_DISBURSEMENT_SCHEMAS
@@ -1017,6 +1022,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "grants_opportunity_observations": GRANTS_SCHEMA,
         **GRANTS_STATUS_SCHEMAS,
         **OFAC_SCHEMAS,
+        **HISTORICAL_VETO_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         **HOUSE_DISBURSEMENT_SCHEMAS,
         **SENATE_DISBURSEMENT_SCHEMAS,

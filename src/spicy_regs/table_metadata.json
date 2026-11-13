@@ -22630,6 +22630,180 @@
       "snapshot_id"
     ]
   },
+  "historical_veto_administrations": {
+    "table": "historical_veto_administrations",
+    "label": "Historical presidential veto totals by administration",
+    "summary": "Senate veto counts by publisher-stated administration span, with literal cells, footnotes and source coordinates.",
+    "coverage": "Not a range. Complete administration rows within one selected dated Senate summary capture, with all category sums reconciled to its footer. Administration spans may cover multiple terms. Nonconsecutive administrations stay separate. Current-administration counts reflect observation time; no individual veto-event or bill population is inferred. Snapshot and footnote evidence state scope and disputed exclusions.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original HTML bytes; identical bytes share this identity across observations."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact Senate summary URL, not the linked per-president document."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Capture timestamp with timezone, separate from the administration's stated years."
+      },
+      {
+        "column_name": "president",
+        "column_type": "VARCHAR",
+        "description": "President label with the parenthesized years and footnote markers separated; no cross-span identity inference."
+      },
+      {
+        "column_name": "administration_label_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal first-cell text including whitespace and footnote markers."
+      },
+      {
+        "column_name": "years_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal parenthesized source year span, including abbreviated endings or a single year."
+      },
+      {
+        "column_name": "coinciding_congresses_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Congress cell; order, punctuation and whitespace stay as published."
+      },
+      {
+        "column_name": "regular_vetoes",
+        "column_type": "BIGINT",
+        "description": "Explicit regular-veto count from this span's source cell."
+      },
+      {
+        "column_name": "pocket_vetoes",
+        "column_type": "BIGINT",
+        "description": "Explicit pocket-veto count under the retained publisher footnotes."
+      },
+      {
+        "column_name": "total_vetoes",
+        "column_type": "BIGINT",
+        "description": "Publisher total, checked equal to regular plus pocket; overridden vetoes are not added."
+      },
+      {
+        "column_name": "overridden_vetoes",
+        "column_type": "BIGINT",
+        "description": "Regular vetoes overridden by Congress, a subset of regular vetoes."
+      },
+      {
+        "column_name": "footnotes_json",
+        "column_type": "VARCHAR",
+        "description": "Referenced footnote definitions with literal text, HTML and original-byte coordinates."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Source row path rooted at the selected table and byte offsets in the full original."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Every source cell with literal text, HTML, attributes, coordinates and footnote references."
+      }
+    ],
+    "subject": "congress",
+    "grain": "One publisher administration span in one selected original snapshot.",
+    "identity_columns": [
+      "snapshot_id",
+      "president",
+      "years_raw"
+    ]
+  },
+  "historical_veto_snapshots": {
+    "table": "historical_veto_snapshots",
+    "label": "Historical veto summary snapshots",
+    "summary": "Publisher category totals, merged headers, scope and footnotes for one selected Senate summary snapshot.",
+    "coverage": "Not a range. The complete selected Senate summary table as captured, including its footer and footnotes. Counts follow the publisher scope and disputed exclusions. No linked detail documents, individual bill population or per-term breakdown of a multi-term administration is inferred. A current administration label does not establish completed future coverage.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original HTML bytes, also carried by every administration row."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact selected Senate summary URL."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Original capture timestamp with timezone; replay does not change it."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "Source page title checked against the supported historical summary."
+      },
+      {
+        "column_name": "scope",
+        "column_type": "VARCHAR",
+        "description": "Explicit administration-span scope, category arithmetic and exclusions from inferred populations."
+      },
+      {
+        "column_name": "administration_rows",
+        "column_type": "BIGINT",
+        "description": "Observed administration rows reconciled against this snapshot's footer."
+      },
+      {
+        "column_name": "regular_vetoes",
+        "column_type": "BIGINT",
+        "description": "Publisher regular-veto footer total, checked against all administration rows."
+      },
+      {
+        "column_name": "pocket_vetoes",
+        "column_type": "BIGINT",
+        "description": "Publisher pocket-veto footer total, checked against all administration rows."
+      },
+      {
+        "column_name": "total_vetoes",
+        "column_type": "BIGINT",
+        "description": "Publisher total equal to regular plus pocket, checked against all administration rows."
+      },
+      {
+        "column_name": "overridden_vetoes",
+        "column_type": "BIGINT",
+        "description": "Publisher overridden-veto footer total, a subset of regular vetoes."
+      },
+      {
+        "column_name": "headers_json",
+        "column_type": "VARCHAR",
+        "description": "Literal multi-row headers, original HTML, span attributes and source coordinates."
+      },
+      {
+        "column_name": "footnotes_json",
+        "column_type": "VARCHAR",
+        "description": "All publisher footnote definitions, including disputed veto exclusions and numbered-veto scope."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native table text and HTML with original-byte offsets and selected-element path."
+      },
+      {
+        "column_name": "raw_total_json",
+        "column_type": "VARCHAR",
+        "description": "Literal footer cells, their coordinates and footnote references; blank Congress cell remains blank."
+      }
+    ],
+    "subject": "congress",
+    "grain": "One selected original HTML snapshot; each generation replaces the selected observation.",
+    "identity_columns": [
+      "snapshot_id"
+    ]
+  },
   "executive_order_observations": {
     "table": "executive_order_observations",
     "label": "Executive order text and publisher history",

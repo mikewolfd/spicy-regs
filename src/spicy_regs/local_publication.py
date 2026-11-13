@@ -38,6 +38,7 @@ LOCAL_FAMILIES = frozenset({
     "fec-financial-profiles",
     "grants-opportunities",
     "grants-status",
+    "historical-vetoes",
     "house-disbursements",
     "ofac-sanctions",
     "treasury-fiscal",
