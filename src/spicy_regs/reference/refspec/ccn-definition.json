@@ -1,0 +1,23 @@
+{
+  "version": "refspec-ccn-definition/1",
+  "refspec_revision": "1e110da25124fa2e6dd5355500d71f49b398a603",
+  "source_module": "src/refspec/registry/nppes_npi_identifiers.py",
+  "source_module_sha256": "sha256:86e4096408c2e2803def559c56500fd4d6fb427b0f1c43038e50653cc8ab1bd4",
+  "definition": {
+    "pattern": "^\\d{2}[0-9A-Z]{4}$|^\\d{2}[0-9A-Z]{8}$",
+    "regex_engine": "python.re",
+    "flags": 0,
+    "matching": "fullmatch",
+    "normalization": "str.strip",
+    "input_type": "str",
+    "empty_error": "CCN must not be empty",
+    "shape_error": "CCN must be a 2-digit state code followed by a 4- or 8-character uppercase alphanumeric facility-type/sequence suffix",
+    "error_class": "NppesIdentifierError",
+    "error_base": "ValueError"
+  },
+  "authority_references": [
+    "CMS Manual System Pub 100-07 Transmittal 29 (2007-10-12)",
+    "CMS Survey & Certification Letter 16-39 (2016-09-08)"
+  ],
+  "scope": "Identifier shape only; Python Unicode decimal digits remain admitted in the first two positions. No provider existence claim."
+}
