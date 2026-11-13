@@ -976,7 +976,10 @@ def _build_connection_inputs(con, publication):
     cannot be read, or a legacy table that fails other than as absent (HTTP
     404), raises RuntimeError.
     """
+    from spicy_regs.court_text_search import register_court_text_search
     from spicy_regs.sources.publication import COMMENTS_EXPORT_TABLES, parquet_scan, table_descriptor, table_members
+
+    register_court_text_search(con)
 
     if DATA_DIR is None and os.environ.get("SPICY_REGS_DOCSPEC_EXPORTS"):
         raise RuntimeError("DocSpec exports require an explicit SPICY_REGS_DATA_DIR")

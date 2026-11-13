@@ -857,6 +857,15 @@ wheels = [
 ]
 
 [[package]]
+name = "marko"
+version = "2.2.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/6d/671a18bb386adca6311bca6c2fe6bec873947ee501cc5f8f509ec06bdde0/marko-2.2.4.tar.gz", hash = "sha256:c042c66f835425673123d7536b39b4660de3b68e30078c70fd26245b31170683", size = 151013, upload-time = "2026-08-12T03:20:11.772Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/78/751d49c8bdfa0b30147c99235516433af6b63eca367ff28593c7346a0494/marko-2.2.4-py3-none-any.whl", hash = "sha256:d80510506edba096ec49d4720a09645fa0bb78e7b7b88697f20032fc19730aa9", size = 46753, upload-time = "2026-08-12T03:20:10.811Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2216,6 +2225,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "httpx" },
     { name = "loguru" },
+    { name = "marko" },
     { name = "mcp" },
     { name = "pandas" },
     { name = "polars" },
@@ -2277,6 +2287,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "httpx" },
     { name = "loguru" },
+    { name = "marko", specifier = "==2.2.4" },
     { name = "mcp", specifier = ">=2.2,<3" },
     { name = "pandas" },
     { name = "polars" },
