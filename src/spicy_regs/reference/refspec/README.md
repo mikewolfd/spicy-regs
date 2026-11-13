@@ -142,7 +142,8 @@ the bytes are tracked in git:
 `ontology/ccn.py` verifies the artifact SHA-256 `143472e11b719cd424b449704a2c5c40f02330cc0a9df547abde3aba0eb48f87` before applying it.
 RefSpec remains the definition owner under REF-024; this is a local reference
 artifact adoption, not a RefSpec public release. The full RefSpec package pins
-Python below 3.13 and SpicyDocs 0.54.0, incompatible with this receiver.
+SpicyDocs 0.54.0, incompatible with this receiver's adopted provider. The owned
+receiver environment uses Python 3.12, which satisfies RefSpec's Python bound.
 
 The artifact records the exact Python regex, flags, full-match behavior,
 `str.strip` normalization, messages and CMS authority references. Python `\d`
