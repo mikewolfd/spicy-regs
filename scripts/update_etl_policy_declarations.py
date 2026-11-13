@@ -42,6 +42,8 @@ def family_policies(datasets: frozenset[str] | None = None):
     from spicy_regs.sources.table3_history import POLICY as table3_history
     from spicy_regs.sources.uscode_editions import POLICIES as editions
     from spicy_regs.transforms.build_crs_report_files import POLICY as crs_files
+    from spicy_regs.etl_receipts import DatasetPolicy
+    from spicy_regs.pipelines import house_disclosures, white_house
 
     if datasets is not None and not datasets:
         raise ValueError("Selected dataset declarations must be nonempty")
@@ -57,6 +59,17 @@ def family_policies(datasets: frozenset[str] | None = None):
                    *administration.values(), *historical.values(), table3_history,
                    *editions.values(), crs_files):
         add(policy)
+    for name, identity in (
+        (house_disclosures.INDEX, "filing_id"),
+        (house_disclosures.REPORTS, "report_id"),
+        (house_disclosures.PAGES, "page_id"),
+        (house_disclosures.TRANSACTIONS, "transaction_id"),
+        (house_disclosures.LINKS, "link_id"),
+    ):
+        add(DatasetPolicy(name, house_disclosures.SCHEMAS[name], (identity,), (),
+                          policy_version=house_disclosures.VERSION))
+    add(DatasetPolicy(white_house.TABLE, white_house.SCHEMA, ("action_version_id",), (),
+                      policy_version=white_house.POLICY_VERSION))
     for name in INPUT_COLUMNS:
         add(congress_policy(name))
     for name in field_registry():
