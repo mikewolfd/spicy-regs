@@ -27515,6 +27515,260 @@
     "grain": "One selected vintage, county and measure.",
     "identity_columns": []
   },
+  "census_geocoder_lookups": {
+    "table": "census_geocoder_lookups",
+    "label": "Census geography lookup outcomes",
+    "summary": "One explicit address or coordinate lookup with its complete original response and outcome.",
+    "coverage": "Sampled. Explicit single-record Census2020 address and coordinate lookups only. Local qualification covers the retained cohort; public delivery is separate. No national completeness, current district, ACS estimate, batch or ZIP-centroid claim.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "lookup_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 identity of the complete official request URL, including original input and fixed source versions."
+      },
+      {
+        "column_name": "kind",
+        "column_type": "VARCHAR",
+        "description": "Official single-record onelineaddress or coordinates search type."
+      },
+      {
+        "column_name": "benchmark",
+        "column_type": "VARCHAR",
+        "description": "Exact selected address locator benchmark, Public_AR_Census2020."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Exact selected geography vintage, Census2020_Census2020; not acquisition time or an ACS estimate vintage."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Matched, unmatched, ambiguous, refused or conversion_failed; only matched establishes a unique returned candidate."
+      },
+      {
+        "column_name": "reason",
+        "column_type": "VARCHAR",
+        "description": "Explicit source interpretation or refusal reason, otherwise null."
+      },
+      {
+        "column_name": "request_url",
+        "column_type": "VARCHAR",
+        "description": "Exact official GET request with original address or decimal coordinate strings and selected versions."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time when the complete response was captured."
+      },
+      {
+        "column_name": "response_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete retained original response bytes."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs lookup release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact artifact digest of the admitted SpicyDocs lookup release."
+      },
+      {
+        "column_name": "address",
+        "column_type": "VARCHAR",
+        "description": "Original structure address string; null for a coordinate lookup. ZIP-only lookup is unsupported."
+      },
+      {
+        "column_name": "input_x",
+        "column_type": "VARCHAR",
+        "description": "Original longitude decimal string, in degrees; null for an address lookup. Never converted through binary float."
+      },
+      {
+        "column_name": "input_y",
+        "column_type": "VARCHAR",
+        "description": "Original latitude decimal string, in degrees; null for an address lookup. Never converted through binary float."
+      },
+      {
+        "column_name": "candidate_count",
+        "column_type": "INTEGER",
+        "description": "Returned supported candidate count. Refused and conversion-failed results carry no assignments."
+      },
+      {
+        "column_name": "response_json",
+        "column_type": "VARCHAR",
+        "description": "Complete original UTF-8 response, preserving every field, numeric spelling, null, empty string and empty array/object."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One complete selected request.",
+    "identity_columns": [
+      "lookup_id"
+    ]
+  },
+  "census_geocoder_geographies": {
+    "table": "census_geocoder_geographies",
+    "label": "Census returned geography candidates",
+    "summary": "One native returned geography per lookup candidate and layer, with exact identifiers and source locators.",
+    "coverage": "Sampled. Explicit single-record Census2020 address and coordinate lookups only. Local qualification covers the retained cohort; public delivery is separate. No national completeness, current district, ACS estimate, batch or ZIP-centroid claim.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "lookup_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 identity of the complete official request URL, including original input and fixed source versions."
+      },
+      {
+        "column_name": "kind",
+        "column_type": "VARCHAR",
+        "description": "Official single-record onelineaddress or coordinates search type."
+      },
+      {
+        "column_name": "benchmark",
+        "column_type": "VARCHAR",
+        "description": "Exact selected address locator benchmark, Public_AR_Census2020."
+      },
+      {
+        "column_name": "vintage",
+        "column_type": "VARCHAR",
+        "description": "Exact selected geography vintage, Census2020_Census2020; not acquisition time or an ACS estimate vintage."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "Matched, unmatched, ambiguous, refused or conversion_failed; only matched establishes a unique returned candidate."
+      },
+      {
+        "column_name": "reason",
+        "column_type": "VARCHAR",
+        "description": "Explicit source interpretation or refusal reason, otherwise null."
+      },
+      {
+        "column_name": "request_url",
+        "column_type": "VARCHAR",
+        "description": "Exact official GET request with original address or decimal coordinate strings and selected versions."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "UTC time when the complete response was captured."
+      },
+      {
+        "column_name": "response_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the complete retained original response bytes."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted SpicyDocs lookup release."
+      },
+      {
+        "column_name": "source_release_digest",
+        "column_type": "VARCHAR",
+        "description": "Exact artifact digest of the admitted SpicyDocs lookup release."
+      },
+      {
+        "column_name": "candidate_index",
+        "column_type": "INTEGER",
+        "description": "Zero-based candidate index; every ambiguous candidate remains separate."
+      },
+      {
+        "column_name": "unique_assignment",
+        "column_type": "BOOLEAN",
+        "description": "True only when the lookup has one supported matched candidate. Filter this before using an assignment."
+      },
+      {
+        "column_name": "matched_address",
+        "column_type": "VARCHAR",
+        "description": "Literal matchedAddress; null for coordinate lookup."
+      },
+      {
+        "column_name": "x",
+        "column_type": "VARCHAR",
+        "description": "Exact native longitude decimal spelling for an address candidate, or original coordinate input string, in degrees."
+      },
+      {
+        "column_name": "y",
+        "column_type": "VARCHAR",
+        "description": "Exact native latitude decimal spelling for an address candidate, or original coordinate input string, in degrees."
+      },
+      {
+        "column_name": "layer",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher geography layer label; layer vintages do not establish current district boundaries."
+      },
+      {
+        "column_name": "geoid",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher GEOID, preserving leading zeros."
+      },
+      {
+        "column_name": "name",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher NAME, if present; null stays distinct from an empty string."
+      },
+      {
+        "column_name": "state_code",
+        "column_type": "VARCHAR",
+        "description": "Literal two-digit STATE code when present."
+      },
+      {
+        "column_name": "county_code",
+        "column_type": "VARCHAR",
+        "description": "Literal three-digit COUNTY code when present."
+      },
+      {
+        "column_name": "county_geoid",
+        "column_type": "VARCHAR",
+        "description": "STATE plus COUNTY where both are present, using the pinned RefSpec composition; no county inference for other layers."
+      },
+      {
+        "column_name": "tract_code",
+        "column_type": "VARCHAR",
+        "description": "Literal six-digit TRACT code when present."
+      },
+      {
+        "column_name": "block_code",
+        "column_type": "VARCHAR",
+        "description": "Literal four-digit BLOCK code when present."
+      },
+      {
+        "column_name": "json_pointer",
+        "column_type": "VARCHAR",
+        "description": "Exact geography record locator in the retained complete response."
+      },
+      {
+        "column_name": "geography_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native geography object; derived JSON uses exact decimal strings for decimal numbers. Original numeric tokens remain in response_json."
+      },
+      {
+        "column_name": "geography_authority",
+        "column_type": "VARCHAR",
+        "description": "Pinned RefSpec Census identifier guidance defining county GEOID composition; not a geographic entity roster."
+      },
+      {
+        "column_name": "geography_source_sha256",
+        "column_type": "VARCHAR",
+        "description": "Digest of the original Census identifier guidance retained by RefSpec."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One request, candidate, layer and native geography array ordinal.",
+    "identity_columns": [
+      "lookup_id",
+      "candidate_index",
+      "json_pointer"
+    ]
+  },
   "fcc_proceedings": {
     "table": "fcc_proceedings",
     "label": "FCC proceedings",

@@ -618,6 +618,8 @@ TABLES: tuple[str, ...] = (
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
     "census_acs_county_observations",
+    "census_geocoder_lookups",
+    "census_geocoder_geographies",
     "fcc_proceedings",
     "fcc_filings",
     # The hosted tables, minus congress_bills — it predates them and keeps its
@@ -726,6 +728,8 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "treasury_statement_periods",
         "treasury_statement_classification_cells",
         "census_acs_county_observations",
+        "census_geocoder_lookups",
+        "census_geocoder_geographies",
         "fcc_proceedings",
         "fcc_filings",
         "bill_family_archives",
@@ -952,6 +956,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.schemas.disbursement_summaries import SCHEMAS as DISBURSEMENT_SUMMARY_SCHEMAS
     from spicy_regs.transforms.build_fec_financial_profiles import SCHEMA as FEC_PROFILE_SCHEMA
     from spicy_regs.transforms.build_census_acs import SCHEMA as CENSUS_ACS_SCHEMA
+    from spicy_regs.transforms.build_census_geocoder import SCHEMAS as CENSUS_GEOCODER_SCHEMAS
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
     from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
     from spicy_regs.transforms.build_lifecycles import EVENT_SCHEMA, LIFECYCLE_SCHEMA
@@ -1067,6 +1072,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **DISBURSEMENT_SUMMARY_SCHEMAS,
         "fec_financial_profiles": FEC_PROFILE_SCHEMA,
         "census_acs_county_observations": CENSUS_ACS_SCHEMA,
+        **CENSUS_GEOCODER_SCHEMAS,
         "fec_collections": COLLECTION_SCHEMA,
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,
