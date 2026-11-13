@@ -463,10 +463,10 @@ def test_a_night_upserts_its_window_over_each_published_table(tmp_path, monkeypa
         ("c", "https://lda.gov/c/"), ("a", "https://lda.gov/a/"), ("b", "https://lda.gov/b/")]
     activities = pq.read_table(second[1]).to_pylist()
     # b's refetch replaces its rows; a's rows are carried as published; c's are new. A child row the refetch no longer
-    # lists (b's second activity) stays: the upsert replaces keys, it deletes none, as the receipt route's merge did.
+    # lists (b's second activity) is retired: the fetched filing states its complete child set.
     assert [(row["filing_uuid"], row["activity_index"], row["description"]) for row in activities] == [
         ("a", 0, "Quantum computing policy, including S. 3597."), ("a", 1, "Export controls."),
-        ("b", 0, "Updated description"), ("b", 1, "Export controls."),
+        ("b", 0, "Updated description"),
         ("c", 0, "Quantum computing policy, including S. 3597."), ("c", 1, "Export controls.")]
     assert pq.read_table(second[1]).slice(0, 2).equals(before["lobbying_activities"].slice(0, 2))
     (registrant,) = pq.read_table(second[6]).to_pylist()

@@ -27,7 +27,7 @@ TABLES = ("lobbying_filings", "lobbying_activities", "lobbying_activity_lobbyist
 PROMOTED = {"lobbying_filings": "url", "lobbying_registrants": "url", "lobbying_clients": "url"}
 
 
-def night(monkeypatch, tmp_path, index, members, *, receipts_allowed):
+def night(monkeypatch, tmp_path, index, members, *, receipts_allowed, empty_children_for=None):
     """One nightly build on ``index``, its members read from ``members``, the window frozen."""
     import spicy_regs.transforms.build_lobbying_filings  # noqa: F401  (the package re-exports the function)
     import sys
@@ -48,7 +48,13 @@ def night(monkeypatch, tmp_path, index, members, *, receipts_allowed):
         for key, _, _ in (*bld._TABLES, *bld._PROFILES):
             name = f"_{key.removesuffix('.parquet')}_new.parquet"
             shutil.copyfile(FIXTURE / "window" / name, Path(output_dir) / name)
-            paths[key] = Path(output_dir) / name
+            path = Path(output_dir) / name
+            if empty_children_for is not None and key != "lobbying_filings.parquet":
+                import pyarrow.compute as pc
+                table = pq.read_table(path)
+                if "filing_uuid" in table.column_names:
+                    pq.write_table(table.filter(pc.not_equal(table["filing_uuid"], empty_children_for)), path)
+            paths[key] = path
         return paths
 
     monkeypatch.setenv("R2_PUBLIC_URL", "https://fixture.invalid")
@@ -111,3 +117,14 @@ def test_the_second_night_reads_no_receipts_and_carries_the_first(tmp_path, monk
     # The same window applied again changes nothing.
     for table in TABLES:
         assert pq.read_table(second[table]).equals(pq.read_table(first[table])), table
+
+
+def test_refetched_filing_with_empty_children_retires_its_previous_children(tmp_path, monkeypatch):
+    prior_ids = set(pq.read_table(FIXTURE / "prior/lobbying_activities.parquet")["filing_uuid"].to_pylist())
+    fresh_ids = set(pq.read_table(FIXTURE / "window/_lobbying_filings_new.parquet")["filing_uuid"].to_pylist())
+    filing = sorted(prior_ids & fresh_ids)[0]
+    built = night(monkeypatch, tmp_path, json.loads((FIXTURE / "index.json").read_text()),
+                  FIXTURE / "prior", receipts_allowed=True, empty_children_for=filing)
+    assert filing in pq.read_table(built["lobbying_filings"])["filing_uuid"].to_pylist()
+    for dataset in TABLES[1:6]:
+        assert filing not in pq.read_table(built[dataset])["filing_uuid"].to_pylist(), dataset

@@ -490,3 +490,8 @@ CourtListener listing, pins and raw rows use the shared provider directly. Run
 for this receiving change. Before replacing the provider wheel, also run the
 BILLSTATUS, Unified Agenda and PDF reader tests (`test_bill_subjects.py`,
 `test_unified_agenda*.py`, `test_pdf_text*.py`).
+
+The body-text reader owns `DERIVATION_READS_AS`, exported beside its version.
+Adopt a reader change together with its consumer import. The House Record check
+in `house_record_enrichment.py` is a refusal path: replay its held HTML inputs
+whenever the HTML derivation changes, even when PDF equivalence permits reuse.

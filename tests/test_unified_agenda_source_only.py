@@ -101,3 +101,24 @@ def test_source_only_uses_falsey_offline_callable(tmp_path, monkeypatch):
     monkeypatch.setattr(builder, "UnifiedAgendaReader", live_reader)
     out = builder.build_unified_agenda(tmp_path, editions=("202510",), records=OfflineReader(), source_only=True)
     assert pq.read_table(out).to_pylist()[0]["rin"] == "1234-AA00"
+
+
+def test_rollup_source_only_keeps_the_manifest_named_by_published_metadata(tmp_path):
+    import hashlib
+    from spicy_regs.pipelines.rollups.unified_agenda import UnifiedAgendaRollup
+
+    def prior(*_):
+        pytest.fail("source-only rollup requested prior input")
+
+    xml = b"<REGINFO_RIN_DATA><RIN_INFO><RIN>1234-AA00</RIN><PUBLICATION><PUBLICATION_ID>202510</PUBLICATION_ID></PUBLICATION></RIN_INFO></REGINFO_RIN_DATA>"
+    receipts = []
+    out = UnifiedAgendaRollup().build_table(
+        tmp_path, builder.build_unified_agenda, editions=("202510",), source_only=True,
+        records=lambda stem: normalize_retained_edition(xml, edition=stem, on_source=receipts.append),
+        source_receipts=receipts, download_prior=prior,
+    )
+    manifest = tmp_path / "unified_agenda_source_inputs.json"
+    metadata = pq.read_schema(out).metadata
+    assert metadata[b"unified_agenda_source_inputs_sha256"].decode() == hashlib.sha256(manifest.read_bytes()).hexdigest()
+    assert pq.read_table(out).to_pylist()[0]["rin"] == "1234-AA00"
+    assert not (tmp_path / ".unified_agenda-text").exists()

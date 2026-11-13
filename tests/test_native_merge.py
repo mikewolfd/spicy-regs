@@ -222,3 +222,24 @@ def test_sql_only_identities_do_not_reopen_source(tmp_path, monkeypatch, duplica
         else:
             _identities(con, POLICY, "held", path)
             assert con.execute("SELECT count(*) FROM held_ids WHERE _ref").fetchone() == (0,)
+
+
+def test_complete_parent_scope_retires_children_even_when_new_set_is_empty(tmp_path):
+    from spicy_regs.native_merge import upsert_subjects
+    schema = pa.schema([("parent", pa.string()), ("index", pa.int32()), ("value", pa.string())])
+    prior, fresh, parents, out = [tmp_path / name for name in ("prior.parquet", "fresh.parquet", "parents.parquet", "out.parquet")]
+    pq.write_table(pa.Table.from_pylist([
+        {"parent": "a", "index": 0, "value": "old"}, {"parent": "a", "index": 1, "value": "stale"},
+        {"parent": "b", "index": 0, "value": "empty now"}, {"parent": "c", "index": 0, "value": "keep"},
+    ], schema=schema), prior)
+    pq.write_table(pa.Table.from_pylist([{"parent": "a", "index": 0, "value": "new"}], schema=schema), fresh)
+    pq.write_table(pa.table({"parent": ["a", "b"]}), parents)
+    merged = upsert_subjects(schema, identity=("parent", "index"), order_by=("parent", "index"),
+                             prior=prior, fresh=fresh, subjects=out, replace_scope=("parent", parents))
+    assert pq.read_table(out).to_pylist() == [
+        {"parent": "a", "index": 0, "value": "new"}, {"parent": "c", "index": 0, "value": "keep"}]
+    assert (merged.kept, merged.replaced, merged.added) == (1, 3, -2)
+    pq.write_table(pa.table({"parent": [None]}, schema=pa.schema([("parent", pa.string())])), parents)
+    with pytest.raises(ValueError, match="NULL parent"):
+        upsert_subjects(schema, identity=("parent", "index"), order_by=("parent", "index"),
+                        prior=prior, fresh=fresh, subjects=out, replace_scope=("parent", parents))

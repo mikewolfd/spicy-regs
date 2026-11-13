@@ -50,5 +50,10 @@ class RegulationsTableRollup(RollupPipeline):
         text = builder(work, download_prior=prior, **kwargs)
         with phase_log("public-table", dataset=dataset):
             table = mapped_table(dataset, text, output_dir / self.output, row_group_rows=ROW_GROUP_ROWS)
+        # The Parquet metadata pins this exact manifest; retain it alongside the
+        # mapped table before removing the intermediate text files (offline replay).
+        manifest = work / "unified_agenda_source_inputs.json"
+        if manifest.exists():
+            manifest.replace(output_dir / manifest.name)
         shutil.rmtree(work)
         return table
