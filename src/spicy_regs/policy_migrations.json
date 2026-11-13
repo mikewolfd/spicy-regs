@@ -2617,6 +2617,21 @@
   ],
   "installed": "sha256:d19940e95b6ca9f8b2c1d09a03a2ff029b1b0f13281cf7b8f9ee93b2349ecf61"
  },
+ "house_disclosure_amendment_links": {
+  "installed": "sha256:869e8cba5963a77cb3eb9a786cfa3d1c282bc256cc1938cfe663b71ae4593b0c"
+ },
+ "house_disclosure_filings": {
+  "installed": "sha256:2aaf69f6bae84c7882aa8c3b6bd8ffb36f3f10991ff2a2146a5443a2f48f04cf"
+ },
+ "house_disclosure_pages": {
+  "installed": "sha256:e5cbb87044cb903dacee9b7d3987a90ab6d49c99a619b1394b31b44db6edc26f"
+ },
+ "house_disclosure_reports": {
+  "installed": "sha256:2f62fe5500462d016a1bc8c873c4cb8dfa4b429ddc1165bbf5f6d99c0d328d2f"
+ },
+ "house_disclosure_transactions": {
+  "installed": "sha256:1d27ae341e421279a47e2c318b8ed56697674ebdd39086fad2fb0c701a279184"
+ },
  "house_record_enrichment_results": {
   "earlier": [
    {
@@ -3633,5 +3648,8 @@
  },
  "uscode_editions": {
   "installed": "sha256:f1206ba23b27db641df436c7dd4073d2d8a9f3bca42618a66ba035b470a4030f"
+ },
+ "white_house_action_versions": {
+  "installed": "sha256:ac15ce1073832d6ffeacb2fc329cdaa8c8707e7ac8ba9289cd93dccce356125e"
  }
 }
