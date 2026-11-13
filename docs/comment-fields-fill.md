@@ -107,6 +107,58 @@ that every remote file is pruned. Size a production run by its candidate rows
 and their full subject/receipt bytes, plus those remaining scans. A full staged
 population still needs measured admission.
 
+### Bounded attachment groups
+
+A full attachment stage can name millions of candidate rows. Use
+`python -m spicy_regs.pipelines.comment_fields_groups` to produce smaller
+ordinary stages before calling `prepare`:
+
+```sh
+uv run python -m spicy_regs.pipelines.comment_fields_groups plan \
+  --workdir GROUPS --stage FULL_STAGE \
+  --max-rows "$GROUP_ROWS" --max-read-bytes "$GROUP_BYTES"
+uv run python -m spicy_regs.pipelines.comment_fields_groups stage \
+  --workdir GROUPS --group 0 --out GROUP_STAGE
+uv run fill-comment-fields prepare --workdir GROUP_WRITE \
+  --reads GROUP_STAGE/reads.parquet --profile attachments
+```
+
+Choose the identity and source-value byte limits from a bounded measurement
+on the actual execution host. They limit the selected input, not decoded
+subject/receipt memory. Planning uses a narrow native ID/version/file scan,
+a 256 MB DuckDB memory target and a configurable spill limit. It does not
+restore full subjects or receipts. The complete source stage must already
+account for its pinned source gaps and preserve all copies of each identity.
+
+`groups.json` pins the source-stage receipt, the original catalog snapshot
+and group membership. Each group stays within one original native data
+file; an oversized file is split into contiguous identity runs. Every source
+copy and version of one identity stays in the same group. Copies that disagree,
+including null versus nonnull, reach the existing agreement check together.
+The byte grouping reserves half the budget for a boundary; a single identity
+larger than that refuses planning and needs a measured larger bound.
+`excluded.parquet` records identities absent from the catalog, with only other
+versions, or with no stated same-version attachment value. None of those
+outcomes means that the entire source population has no attachments.
+
+Stage and apply groups in order, using a separate `GROUP_WRITE` directory
+and the existing `upload-staged` and hosted fill workflow for each group.
+Every `prepare` reads the current catalog snapshot and current file locations;
+the grouping snapshot guides locality and never authorizes a stale write.
+The normal shared writer exclusion and maintenance controls still apply.
+Keep each group's staging receipt, prepare result, write journal, pre-images
+and post-images. Resume an interrupted group with its existing `write`
+command and journal before advancing. A committed verification failure stops
+the sequence and uses the existing `undo` path; do not bypass it by starting
+another group. A verified completed group need not be prepared again.
+
+The helper adds no execution scheduler or alternate writer. Reconcile every
+planned group, explicit exclusion and source gap before the final mirror.
+The current helper rechecks the complete staged-file digest for each group
+and reads narrow catalog metadata during each prepare. Those costs remain;
+grouping avoids simultaneous wide restoration of the full candidate population
+and avoids spreading each group across every original native file.
+
 Prepare checks the fill columns and refuses if one is missing or if a journal
 holds a batch that committed and failed its check (below). Intermediate key,
 read-copy, agreed-version and candidate files stay under `fill/work/`, outside

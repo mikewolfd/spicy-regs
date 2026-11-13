@@ -466,8 +466,10 @@ def prepare(
         has_value = " OR ".join(f'v."{c}" IS NOT NULL' for c in columns)
         candidates = (f'SELECT c.comment_id FROM {index} c JOIN {versions} v ON {on_version} '
                       f'WHERE {has_value}')
+        candidate_files = f'SELECT DISTINCT _file FROM {index} WHERE comment_id IN ({candidates})'
         from spicy_regs.sources.regulatory_catalog import processing_table
-        processing = processing_table(con, COMMENT, where=f'comment_id IN ({candidates})',
+        processing = processing_table(con, COMMENT,
+                                      where=f'comment_id IN ({candidates}) AND {FILE_COLUMN} IN ({candidate_files})',
                                       include_comment_promotion="attachments_json" in additive)
         try:
             if iceberg._read_snapshot(con, COMMENT) != snapshot:
@@ -683,7 +685,8 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
                     f"WHERE _file IN ({file_list})")
         from spicy_regs.sources import regulatory_catalog as native
         selected_ids = f'SELECT comment_id FROM {table} WHERE {in_files}comment_id IN (SELECT comment_id FROM _batch)'
-        processing = native.processing_table(con, COMMENT, where=f'comment_id IN ({selected_ids})', in_transaction=True)
+        processing = native.processing_table(con, COMMENT, where=f'{in_files}comment_id IN ({selected_ids})',
+                                             in_transaction=True)
         con.execute(f"COPY (SELECT {col_list} FROM {processing}) TO {_sql(preimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
         con.execute(f"DROP TABLE {processing}")
         con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(preimage)})")
