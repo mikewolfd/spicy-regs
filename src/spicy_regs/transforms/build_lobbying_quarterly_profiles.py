@@ -242,7 +242,10 @@ def build_profiles(selection, source: Path, output: Path):
         if selection["registrant_ids"]:
             sql += " AND registrant_id IN (SELECT unnest(?))"
             params.append(selection["registrant_ids"])
-        sql += " AND filing_type NOT IN ('RR','RA') ORDER BY registrant_id,client_id,filing_period,filing_uuid"
+        # A missing type is an unresolved witness, not an excluded registration.
+        # SQL NOT IN alone would silently discard it before interpretation.
+        sql += " AND (filing_type IS NULL OR filing_type NOT IN ('RR','RA'))"
+        sql += " ORDER BY registrant_id,client_id,filing_period,filing_uuid"
         cursor = con.execute(sql, params)
         def records():
             while batch := cursor.fetchmany(2000):

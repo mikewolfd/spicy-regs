@@ -109,6 +109,77 @@ def test_native_ids_quarter_types_schema_and_input_integrity(tmp_path):
     assert output.read_bytes() == prior
 
 
+@pytest.mark.parametrize("unknown_type", [None, "", "UNKNOWN"])
+def test_build_retains_unknown_type_competitors_and_excludes_only_explicit_registrations(tmp_path, unknown_type):
+    source, output = tmp_path / "source.parquet", tmp_path / m.OUTPUT
+    rows = [filing(), filing("unknown-type", filing_type=unknown_type, income="12000.125000",
+                            dt_posted=datetime(2025, 5, 20, tzinfo=UTC)),
+            filing("registration", filing_type="RR"), filing("registration-amendment", filing_type="RA")]
+    pq.write_table(pa.Table.from_pylist(rows), source)
+
+    summary = m.build_profiles(selection(source_table_sha256=m.digest_file(source)), source, output)
+    (result,) = pq.read_table(output).to_pylist()
+
+    assert summary == {"filings": 2, "profiles": 1, "unsupported_quarterly_type": 1}
+    assert result["filing_count"] == 2
+    assert result["selection_status"] == "unresolved"
+    assert result["selection_reason"] == "unsupported_quarterly_type"
+    assert result["selected_filing_uuid"] is None
+    assert result["income"] is None and result["expenses"] is None
+    witnesses = {row["filing_uuid"]: row for row in json.loads(result["witnesses_json"])}
+    assert set(witnesses) == {"original", "unknown-type"}
+    assert witnesses["original"]["income"] == "9000.00"
+    assert witnesses["unknown-type"]["filing_type"] == unknown_type
+    assert witnesses["unknown-type"]["income"] == "12000.125000"
+
+    # The same observed competitor stays visible before its posting cutoff,
+    # while only the eligible original determines that earlier comparison.
+    earlier_output = tmp_path / "before-competitor.parquet"
+    m.build_profiles(selection(source_table_sha256=m.digest_file(source), cutoff="2025-04-30T00:00:00+00:00"),
+                     source, earlier_output)
+    (earlier,) = pq.read_table(earlier_output).to_pylist()
+    assert earlier["selection_status"] == "selected" and earlier["income"] == "9000.00"
+    assert earlier["filing_count"] == 2
+    assert json.loads(earlier["excluded_filing_uuids_json"]) == ["unknown-type"]
+
+
+def test_native_missing_type_competitor_remains_unresolved_in_ordinary_mcp(tmp_path, monkeypatch):
+    from spicy_regs import mcp_server
+    from spicy_regs.transforms.build_lobbying_filings import map_subject, SUBJECT_SCHEMAS
+    from tests.test_mcp_query_results import call
+    from tests.test_mcp_server import _records
+    from starlette.testclient import TestClient
+
+    source = tmp_path / "source.parquet"
+    raw = [filing(), filing("unknown-type", filing_type=None, income="12000.125000")]
+    native = [map_subject("lobbying_filings", row | {"lobbying_activities_json": "null", "government_entities_json": "null"})
+              for row in raw]
+    pq.write_table(pa.Table.from_pylist(native, schema=SUBJECT_SCHEMAS["lobbying_filings"]), source)
+    output_dir = tmp_path / "consumer"
+    output_dir.mkdir()
+    m.build_profiles(selection(source_table_sha256=m.digest_file(source)), source, output_dir / m.OUTPUT)
+
+    monkeypatch.setattr(mcp_server, "DATA_DIR", output_dir)
+    with mcp_server._build_connection() as con:
+        monkeypatch.setattr(mcp_server, "_get_connection", lambda: con)
+        with TestClient(mcp_server.build_app()) as client:
+            result = call(client, "query_sql", {"sql": (
+                "SELECT filing_count, selection_status, selection_reason, income, expenses, witnesses_json "
+                "FROM lobbying_quarterly_profiles"
+            )})
+            assert result["isError"] is False
+            (record,) = _records(result["structuredContent"])
+            assert (record["filing_count"], record["selection_status"], record["selection_reason"]) == (
+                2, "unresolved", "unsupported_quarterly_type")
+            assert record["income"] is None and record["expenses"] is None
+            witnesses = {row["filing_uuid"]: row for row in json.loads(record["witnesses_json"])}
+            assert witnesses["unknown-type"]["filing_type"] is None
+            assert witnesses["unknown-type"]["income"] == "12000.125000"
+            assert call(client, "query_sql", {"sql": "DELETE FROM lobbying_quarterly_profiles"})["isError"] is True
+            recovered = call(client, "query_sql", {"sql": "SELECT sum(filing_count) AS retained_filings FROM lobbying_quarterly_profiles"})
+            assert _records(recovered["structuredContent"]) == [{"retained_filings": 2}]
+
+
 def test_reject_missing_source_fields_and_undeclared_scope(tmp_path):
     path = tmp_path / "old.parquet"
     pq.write_table(pa.Table.from_pylist([{"filing_uuid": "a"}]), path)
