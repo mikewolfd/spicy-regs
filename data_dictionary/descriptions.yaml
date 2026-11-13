@@ -12102,3 +12102,177 @@ tables:
       footnotes_json: All publisher footnote definitions, including disputed veto exclusions and numbered-veto scope.
       source_locator_json: Complete native table text and HTML with original-byte offsets and selected-element path.
       raw_total_json: Literal footer cells, their coordinates and footnote references; blank Congress cell remains blank.
+
+  fara_registrants:
+    label: FARA registrant observations
+    subject: lobbying
+    identity_columns:
+    - source_record_id
+    summary: One registrant record in an explicitly selected production export.
+    coverage: Sampled by design. Every record for the explicitly selected native registration
+      numbers in each pinned production bulk export is retained, including historical
+      filings and terminated relationships. Capture descriptors define the observed
+      snapshot; separate exports are not an atomic publisher release. Principal entity
+      IDs are not supplied. Exact label associations do not establish identity or documentary
+      agreement. Linked documents outside the explicit selection remain unfetched; document
+      review notes preserve differences. This is bounded local qualification, not evidence
+      of public delivery or publisher-wide historical completeness.
+    measured_on: '2026-11-13'
+    grain: One registrant record in an explicitly selected production export.
+    columns:
+      registration_number: Native registration number preserved as text, including leading
+        zeros. Repeated registrations remain separate observations.
+      registrant_name: Literal registrant name; no name normalization or cross-source
+        identity resolution.
+      registration_date: Parsed source registration date; original text and absent/blank/unparsed
+        diagnostics remain available.
+      termination_date: Parsed source termination date; null alone does not establish
+        current activity.
+      registration_status: 'Date-derived status: terminated, no_termination_reported,
+        or unresolved. No termination reported is not independently verified active
+        status.'
+      date_diagnostics_json: 'Per-date parse status: value, absent, blank or unparsed;
+        original fields remain unchanged.'
+      source_record_id: Export kind, exact original digest and row ordinal. Identifies
+        an observation, not an inferred entity.
+      source_release_digest: Exact admitted SpicyDocs source-release digest.
+      source_locator_json: Original URL, digest, capture time, ZIP member digest and
+        original XML XPath or CSV line coordinates. Encoding corrections are explicit.
+      raw_fields_json: Literal native field names and values. Absent XML fields stay
+        absent; empty elements stay empty strings; unknown fields survive.
+  fara_foreign_principals:
+    label: FARA foreign-principal relationships
+    subject: lobbying
+    identity_columns:
+    - source_record_id
+    summary: One disclosed registrant/principal relationship observation, retaining
+      its native label and termination facts.
+    coverage: Sampled by design. Every record for the explicitly selected native registration
+      numbers in each pinned production bulk export is retained, including historical
+      filings and terminated relationships. Capture descriptors define the observed
+      snapshot; separate exports are not an atomic publisher release. Principal entity
+      IDs are not supplied. Exact label associations do not establish identity or documentary
+      agreement. Linked documents outside the explicit selection remain unfetched; document
+      review notes preserve differences. This is bounded local qualification, not evidence
+      of public delivery or publisher-wide historical completeness.
+    measured_on: '2026-11-13'
+    grain: One disclosed registrant/principal relationship observation, retaining its
+      native label and termination facts.
+    columns:
+      registration_number: Native registration number preserved as text, including leading
+        zeros. Repeated registrations remain separate observations.
+      native_principal_id: 'Null: these production exports supply no separate foreign-principal
+        entity identifier. The source_record_id identifies the relationship observation.'
+      principal_name: Literal foreign-principal label supplied by the selected export.
+        Labels do not establish entity equivalence.
+      country: Literal country/location represented; not a nationality, domicile or
+        vocabulary match.
+      registration_date: Parsed source registration date; original text and absent/blank/unparsed
+        diagnostics remain available.
+      termination_date: Parsed source termination date; null alone does not establish
+        current activity.
+      relationship_status: 'Date-derived relationship status: terminated, no_termination_reported,
+        or unresolved; separate from registrant status.'
+      date_diagnostics_json: 'Per-date parse status: value, absent, blank or unparsed;
+        original fields remain unchanged.'
+      source_record_id: Export kind, exact original digest and row ordinal. Identifies
+        an observation, not an inferred entity.
+      source_release_digest: Exact admitted SpicyDocs source-release digest.
+      source_locator_json: Original URL, digest, capture time, ZIP member digest and
+        original XML XPath or CSV line coordinates. Encoding corrections are explicit.
+      raw_fields_json: Literal native field names and values. Absent XML fields stay
+        absent; empty elements stay empty strings; unknown fields survive.
+  fara_filings:
+    label: FARA filing evidence
+    subject: lobbying
+    identity_columns:
+    - source_record_id
+    summary: One historical filing metadata observation, with selected original PDF
+      hashes and explicitly limited principal-label associations.
+    coverage: Sampled by design. Every record for the explicitly selected native registration
+      numbers in each pinned production bulk export is retained, including historical
+      filings and terminated relationships. Capture descriptors define the observed
+      snapshot; separate exports are not an atomic publisher release. Principal entity
+      IDs are not supplied. Exact label associations do not establish identity or documentary
+      agreement. Linked documents outside the explicit selection remain unfetched; document
+      review notes preserve differences. This is bounded local qualification, not evidence
+      of public delivery or publisher-wide historical completeness.
+    measured_on: '2026-11-13'
+    grain: One historical filing metadata observation, with selected original PDF hashes
+      and explicitly limited principal-label associations.
+    columns:
+      registration_number: Native registration number preserved as text, including leading
+        zeros. Repeated registrations remain separate observations.
+      document_id: Publisher PDF filename from the source-stated production URL, retained
+        without rewriting.
+      document_url: Source-stated production PDF URL, validated against its native registration
+        number.
+      document_type: Literal publisher filing type. No document content is extracted
+        into structured activity or financial facts.
+      stamped_date: Parsed publisher Date Stamped; source text remains in raw_fields_json.
+      date_diagnostic: 'Stamped-date parse status: value, absent, blank or unparsed.'
+      date_after_capture: True when the literal stamped date is later than the capture
+        date. The publisher date is retained and flagged, not guessed or corrected.
+      principal_name: Literal foreign-principal label supplied by the selected export.
+        Labels do not establish entity equivalence.
+      principal_country: Literal filing-export principal country; null/empty is distinct
+        from a match.
+      foreign_principal_observation_id: Relationship observation matched only by exact
+        registration number, principal label and country within the selected export.
+        Null for absent, unmatched or ambiguous labels.
+      association_status: export_label_unique, registrant_only, ambiguous_label or unresolved_label.
+        A unique export-label match is not a document-verified entity identity.
+      principal_candidates_json: All exact export-label candidate observation IDs. Duplicate
+        labels remain ambiguous.
+      document_status: retained for a selected hash-checked original, otherwise not_selected.
+        An advertised link does not prove downloaded bytes.
+      document_sha256: SHA-256 of the retained original PDF, null for metadata-only
+        filings.
+      document_bytes: Retained original PDF byte size, null when not selected.
+      document_review_status: 'Bounded human visual finding: supports_registration_and_principal_label,
+        principal_label_differs, unreviewed or not_selected. Read the finding and sample
+        limits before interpreting an association.'
+      document_review_json: Bounded review note, original digest, page and viewed-image
+        digest. A label difference remains explicit without replacing publisher metadata.
+      source_record_id: Export kind, exact original digest and row ordinal. Identifies
+        an observation, not an inferred entity.
+      source_release_digest: Exact admitted SpicyDocs source-release digest.
+      source_locator_json: Original URL, digest, capture time, ZIP member digest and
+        original XML XPath or CSV line coordinates. Encoding corrections are explicit.
+      raw_fields_json: Literal native field names and values. Absent XML fields stay
+        absent; empty elements stay empty strings; unknown fields survive.
+  fara_snapshots:
+    label: FARA selected export accounting
+    subject: lobbying
+    identity_columns:
+    - kind
+    - capture_sha256
+    summary: One exact export and declared registrant cohort, with scanned, selected,
+      omitted and requested-empty populations.
+    coverage: Sampled by design. Every record for the explicitly selected native registration
+      numbers in each pinned production bulk export is retained, including historical
+      filings and terminated relationships. Capture descriptors define the observed
+      snapshot; separate exports are not an atomic publisher release. Principal entity
+      IDs are not supplied. Exact label associations do not establish identity or documentary
+      agreement. Linked documents outside the explicit selection remain unfetched; document
+      review notes preserve differences. This is bounded local qualification, not evidence
+      of public delivery or publisher-wide historical completeness.
+    measured_on: '2026-11-13'
+    grain: One exact export and declared registrant cohort, with scanned, selected,
+      omitted and requested-empty populations.
+    columns:
+      kind: 'Selected production export: Registrants, ForeignPrincipals or RegistrantDocs.'
+      capture_sha256: SHA-256 of the exact retained original ZIP.
+      observed_at: Original capture timestamp with timezone. This is not a publisher
+        release date or an atomic cross-export snapshot.
+      source_release_digest: Exact admitted SpicyDocs source-release digest.
+      scope_json: Exact source capture descriptor, selected native registration numbers
+        and export kind.
+      scanned_rows: Every record visited in the selected original member, including
+        records outside the cohort.
+      selected_rows: Source records retained for the explicit cohort, including repeated
+        observations.
+      omitted_rows: Records outside the explicit cohort; scanned_rows equals selected_rows
+        plus omitted_rows.
+      registrations_without_rows_json: Requested registration numbers with no rows in
+        this export. This is observed-empty, not proof of source absence.

@@ -10997,6 +10997,102 @@
         "member_role",
         "metadata_json"
       ]
+    },
+    {
+      "table": "fara_registrants",
+      "label": "FARA registrant observations",
+      "summary": "One registrant record in an explicitly selected production export.",
+      "coverage": "Sampled by design. Every record for the explicitly selected native registration numbers in each pinned production bulk export is retained, including historical filings and terminated relationships. Capture descriptors define the observed snapshot; separate exports are not an atomic publisher release. Principal entity IDs are not supplied. Exact label associations do not establish identity or documentary agreement. Linked documents outside the explicit selection remain unfetched; document review notes preserve differences. This is bounded local qualification, not evidence of public delivery or publisher-wide historical completeness.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "registration_number",
+        "registrant_name",
+        "registration_date",
+        "termination_date",
+        "registration_status",
+        "date_diagnostics_json",
+        "source_record_id",
+        "source_release_digest",
+        "source_locator_json",
+        "raw_fields_json"
+      ]
+    },
+    {
+      "table": "fara_foreign_principals",
+      "label": "FARA foreign-principal relationships",
+      "summary": "One disclosed registrant/principal relationship observation, retaining its native label and termination facts.",
+      "coverage": "Sampled by design. Every record for the explicitly selected native registration numbers in each pinned production bulk export is retained, including historical filings and terminated relationships. Capture descriptors define the observed snapshot; separate exports are not an atomic publisher release. Principal entity IDs are not supplied. Exact label associations do not establish identity or documentary agreement. Linked documents outside the explicit selection remain unfetched; document review notes preserve differences. This is bounded local qualification, not evidence of public delivery or publisher-wide historical completeness.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "registration_number",
+        "native_principal_id",
+        "principal_name",
+        "country",
+        "registration_date",
+        "termination_date",
+        "relationship_status",
+        "date_diagnostics_json",
+        "source_record_id",
+        "source_release_digest",
+        "source_locator_json",
+        "raw_fields_json"
+      ]
+    },
+    {
+      "table": "fara_filings",
+      "label": "FARA filing evidence",
+      "summary": "One historical filing metadata observation, with selected original PDF hashes and explicitly limited principal-label associations.",
+      "coverage": "Sampled by design. Every record for the explicitly selected native registration numbers in each pinned production bulk export is retained, including historical filings and terminated relationships. Capture descriptors define the observed snapshot; separate exports are not an atomic publisher release. Principal entity IDs are not supplied. Exact label associations do not establish identity or documentary agreement. Linked documents outside the explicit selection remain unfetched; document review notes preserve differences. This is bounded local qualification, not evidence of public delivery or publisher-wide historical completeness.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "registration_number",
+        "document_id",
+        "document_url",
+        "document_type",
+        "stamped_date",
+        "date_diagnostic",
+        "date_after_capture",
+        "principal_name",
+        "principal_country",
+        "foreign_principal_observation_id",
+        "association_status",
+        "principal_candidates_json",
+        "document_status",
+        "document_sha256",
+        "document_bytes",
+        "document_review_status",
+        "document_review_json",
+        "source_record_id",
+        "source_release_digest",
+        "source_locator_json",
+        "raw_fields_json"
+      ]
+    },
+    {
+      "table": "fara_snapshots",
+      "label": "FARA selected export accounting",
+      "summary": "One exact export and declared registrant cohort, with scanned, selected, omitted and requested-empty populations.",
+      "coverage": "Sampled by design. Every record for the explicitly selected native registration numbers in each pinned production bulk export is retained, including historical filings and terminated relationships. Capture descriptors define the observed snapshot; separate exports are not an atomic publisher release. Principal entity IDs are not supplied. Exact label associations do not establish identity or documentary agreement. Linked documents outside the explicit selection remain unfetched; document review notes preserve differences. This is bounded local qualification, not evidence of public delivery or publisher-wide historical completeness.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "kind",
+        "capture_sha256",
+        "observed_at",
+        "source_release_digest",
+        "scope_json",
+        "scanned_rows",
+        "selected_rows",
+        "omitted_rows",
+        "registrations_without_rows_json"
+      ]
     }
   ]
 }
