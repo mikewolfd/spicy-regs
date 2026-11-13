@@ -210,6 +210,7 @@ def build_court_opinion_texts(
     parse_workers: int = 4,
     row_group_text_bytes: int = ROW_GROUP_TEXT_BYTES,
     source_id: str | None = None,
+    spill_compression_level: int = 1,
 ) -> dict:
     """Write ``output_dir/court_opinion_texts/`` and ``output_dir/etl_receipts.parquet``; return the run receipt.
 
@@ -220,7 +221,9 @@ def build_court_opinion_texts(
     A rerun into the same directory after a failure resumes: a complete spill (its ``_complete.json`` written last)
     is not read again, phase 2 restarts at the first block whose receipts were not committed, and a run that stopped
     after the last block re-joins the receipts and writes the run receipt. The rerun must name the same export,
-    converter and bound; it reuses the first run's generation id. A directory holding a run receipt is done.
+    converter, bound and spill compression; it reuses the first run's generation id. A directory holding a run
+    receipt is done. ``spill_compression_level`` can trade CPU for lower temporary storage without changing final
+    body/receipt values. Qualify its full peak allocation before a large run.
     """
     table_dir = output_dir / DATASET
     spill_dir = output_dir / f".{DATASET}-spill"
@@ -228,12 +231,16 @@ def build_court_opinion_texts(
     run_path = output_dir / _RUN
     if run_path.exists():
         raise FileExistsError(f"{run_path} exists; build into an empty directory")
+    if type(spill_compression_level) is not int or not 1 <= spill_compression_level <= 12:
+        raise ValueError("spill_compression_level must be an integer from 1 to 12")
     witness = file_witness(local_file, source_id=source_id)
     identity = opinion_markdown.converter_identity() if convert is None else {"converter_version": "test"}
     marker = spill_dir / _SPILL_COMPLETE
     resumed = marker.exists()
     if resumed:
         spill = json.loads(marker.read_text())
+        if spill.get("spill_compression_level", 1) != spill_compression_level:
+            raise ValueError(f"{spill_dir} was spilled at another compression level; resume with its recorded level")
         expected = {"witness": witness, "converter": identity, "bounded_rows": max_rows, "dump_date": dump_date.isoformat()}
         if {key: spill[key] for key in expected} != json.loads(json.dumps(expected)):
             raise ValueError(f"{spill_dir} was spilled from another export, converter or bound; remove it to rebuild")
@@ -246,7 +253,7 @@ def build_court_opinion_texts(
         output_dir.mkdir(parents=True, exist_ok=True)
         spill = _spill(local_file, spill_dir, generation_id=generation_id or uuid4().hex, witness=witness,
                        identity=identity, dump_date=dump_date, max_rows=max_rows, workers=workers, convert=convert,
-                       parse_workers=parse_workers, work_dir=output_dir)
+                       parse_workers=parse_workers, work_dir=output_dir, spill_compression_level=spill_compression_level)
     phase2 = time.perf_counter()
     diagnostics = _diagnostics(spill)
     routed = _write_members(spill, spill_dir, table_dir, receipt_path, diagnostics, row_group_text_bytes)
@@ -256,6 +263,7 @@ def build_court_opinion_texts(
         "completed_read": spill["completed_read"], **spill["counts"],
         "rows_by_text_source": spill["rows_by_text_source"], "refused_by_text_source": spill["refused_by_text_source"],
         "rows_routed_to_row_function": routed, "spill_bytes": spill["spill_bytes"],
+        "spill_compression_level": spill.get("spill_compression_level", 1),
         "spill_row_groups": spill["spill_row_groups"], "spill_files": spill["spill_files"],
         "resumed": resumed, "phase1_seconds": spill["phase1_seconds"],
         "phase2_seconds": round(time.perf_counter() - phase2, 1),
@@ -275,14 +283,15 @@ def _diagnostics(spill: dict) -> dict:
 
 
 def _spill(local_file: Path, spill_dir: Path, *, generation_id: str, witness: dict, identity: dict, dump_date: date,
-           max_rows: int | None, workers: int, convert: Converter | None, parse_workers: int, work_dir: Path) -> dict:
+           max_rows: int | None, workers: int, convert: Converter | None, parse_workers: int, work_dir: Path,
+           spill_compression_level: int = 1) -> dict:
     """Phase 1: one pass over the export into id buckets, refusals as receipts; ``_complete.json`` is written last."""
     from spicy_docs.sources.courtlistener.local import CourtListenerLocalDump
 
     started = time.perf_counter()
     edition = dump_date.isoformat()
     spill: dict[str, Any] = {"generation_id": generation_id, "witness": witness, "converter": identity, "bounded_rows": max_rows,
-             "dump_date": edition}
+             "dump_date": edition, "spill_compression_level": spill_compression_level}
     dump = CourtListenerLocalDump(local_file, columns=list(SOURCE_COLUMNS), parse_workers=parse_workers,
                                   work_dir=work_dir)
     counts = {"rows_read": 0, "refused": 0, "source_bytes": 0, "convert_cpu_seconds": 0.0}
@@ -324,7 +333,7 @@ def _spill(local_file: Path, spill_dir: Path, *, generation_id: str, witness: di
             yield tally(running.popleft().result())
 
     with ProcessPoolExecutor(workers) if workers else nullcontext() as pool:
-        _write_spill(converted(pool), spill_dir)
+        _write_spill(converted(pool), spill_dir, compression_level=spill_compression_level)
     if max_rows is None and not dump.completed:
         raise RuntimeError(f"{local_file.name} was not read to its end")
     receipts = []
@@ -348,7 +357,7 @@ def _spill(local_file: Path, spill_dir: Path, *, generation_id: str, witness: di
     return spill
 
 
-def _write_spill(batches: Iterator[pa.RecordBatch], spill_dir: Path) -> None:
+def _write_spill(batches: Iterator[pa.RecordBatch], spill_dir: Path, *, compression_level: int = 1) -> None:
     """Route converted rows to ``spill_bucket=<k>.parquet``, each bucket's rows buffered to ``SPILL_GROUP_BYTES``.
 
     Every bucket's writer stays open for the pass (the export is in no id order, so every bucket is written
@@ -364,7 +373,7 @@ def _write_spill(batches: Iterator[pa.RecordBatch], spill_dir: Path) -> None:
         if bucket not in writers:
             _raise_open_files(len(writers) + 256)
             writers[bucket] = pq.ParquetWriter(spill_dir / f"{_BUCKET}={bucket}.parquet", schema,
-                                               compression="zstd", compression_level=1)
+                                               compression="zstd", compression_level=compression_level)
         writers[bucket].write_table(pa.concat_tables(tables))
 
     try:

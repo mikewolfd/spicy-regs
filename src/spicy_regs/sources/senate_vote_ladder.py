@@ -34,23 +34,19 @@ archive keeps beside the captures: route ``internet_archive``, the senate.gov UR
 its age at the fetch in whole seconds (the journal admits no floats), and the fetch time. ``LadderVoteAcquirer.archived``
 holds the same for the run, which ``build_roll_call_votes`` raises as a CI warning (:func:`senate_warnings`): an
 Archive copy of any age passes, so its age must be seen where the run is read.
+Every successful Senate read also emits the shared ``source-serving-rung`` event,
+including direct answers; legacy capture stages and archive events remain intact.
 """
 
 from __future__ import annotations
 
-import json
-import time
-import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final
-from urllib.parse import urlencode, urlsplit
 
-import httpx
 from loguru import logger
-from spicy_docs.sources.congress.committee_rosters import archived_url
 from spicy_docs.sources.congress.votes import (
     MEDIA_TYPES,
     SenateVoteMenuAcquisition,
@@ -65,9 +61,11 @@ from spicy_docs.sources.congress.votes import (
     senate_vote_menu_url,
 )
 from spicy_docs.sources.walled_fetch import Transport
-from spicy_docs.sources.web_archive import payload_sha1
+from spicy_docs.sources.web_archive import ARCHIVE_INTERVAL_SECONDS, WaybackCdxScope, WaybackFallback
+from spicy_docs.transport.http import RetryableHTTPStatusError
 from spicy_docs.transport.source_acquirer import named_challenge
 
+from spicy_regs.sources.senate_evidence import record_serving_rung
 from spicy_regs.sources.senate_roster_ladder import is_senate_xml
 
 if TYPE_CHECKING:
@@ -77,74 +75,8 @@ if TYPE_CHECKING:
 
 #: The route an archive answer is recorded under, beside the ladder's own transports.
 ARCHIVE: Final = "internet_archive"
-CDX_URL: Final = "https://web.archive.org/cdx/search/cdx"
-#: The least time between two requests to web.archive.org; the votes budget's own pacing is twice as fast.
-ARCHIVE_INTERVAL_SECONDS: Final = 1.0
 #: The ``ProxyFetchers`` field of each proxy rung.
 _PROXY_FIELDS: Final = {Transport.ZYTE_HTTP: "zyte", Transport.FIRECRAWL_RAW: "firecrawl"}
-
-
-@dataclass(frozen=True, slots=True)
-class ArchiveCapture:
-    """One CDX row: the capture's 14-digit time, the URL as archived, and the archive's SHA-1 (base32) of its payload."""
-
-    timestamp: str
-    original: str
-    digest: str
-
-    @property
-    def replay_url(self) -> str:
-        return archived_url(self.original, self.timestamp)
-
-    @property
-    def captured_at(self) -> datetime:
-        return datetime.strptime(self.timestamp, "%Y%m%d%H%M%S").replace(tzinfo=UTC)
-
-
-def _url_key(url: str) -> str:
-    """Host and path, scheme and default port dropped: the CDX's ``original`` spellings of one file compare equal."""
-    parts = urlsplit(url)
-    return (parts.hostname or "").lower() + parts.path
-
-
-def newest_captures(body: bytes) -> dict[str, ArchiveCapture]:
-    """The newest capture per file from a CDX ``output=json`` answer of ``timestamp,original,digest`` rows."""
-    try:
-        rows = json.loads(body)
-    except ValueError as error:
-        raise VoteSourceError("Internet Archive CDX answer is not JSON") from error
-    if not isinstance(rows, list) or (rows and rows[0] != ["timestamp", "original", "digest"]):
-        raise VoteSourceError("Internet Archive CDX answer does not have the requested fields")
-    newest: dict[str, ArchiveCapture] = {}
-    for row in rows[1:]:
-        try:
-            if not isinstance(row, list) or not all(isinstance(value, str) for value in row):
-                raise TypeError("a CDX row is a list of strings")
-            capture = ArchiveCapture(*row)
-            capture.captured_at, capture.replay_url  # noqa: B018 -- each refuses a malformed timestamp
-        except (TypeError, ValueError) as error:
-            # One file's refusal, never a crashed run: the run's other chamber must still publish.
-            raise VoteSourceError(f"Internet Archive CDX row is malformed: {row!r}") from error
-        key = _url_key(capture.original)
-        if key not in newest or capture.timestamp > newest[key].timestamp:
-            newest[key] = capture
-    return newest
-
-
-def _archived_body(response: CapturedBodyResponse, capture: ArchiveCapture, limit: int) -> bytes:
-    """The archived file: the served bytes must be the payload the CDX row hashed, then the gzip wrapper is removed."""
-    if payload_sha1(response.body) != capture.digest:
-        raise VoteSourceError(f"Internet Archive replay of {capture.original} does not hash to its CDX digest")
-    if response.content_encoding != "gzip":
-        return response.body
-    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
-    try:
-        body = decoder.decompress(response.body, limit + 1)
-    except zlib.error as error:
-        raise VoteSourceError("Internet Archive gzip body is malformed") from error
-    if len(body) > limit or decoder.unconsumed_tail:
-        raise VoteSourceError("Internet Archive decoded body exceeds its byte bound")
-    return body
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,11 +103,7 @@ class LadderVoteAcquirer(VoteAcquirer):
         self.evidence = evidence
         self.rungs: Counter[str] = Counter()
         self.archived: list[ArchiveServe] = []
-        #: Each CDX scope read this run; ``None`` once its read failed, so it is not repeated.
-        self._archive_indexes: dict[str, dict[str, ArchiveCapture] | None] = {}
-        #: Why the Archive is not asked again this run, once it failed to answer at all.
-        self._archive_down: BaseException | None = None
-        self._archive_last = 0.0
+        self._wayback = WaybackFallback(self, interval_seconds=ARCHIVE_INTERVAL_SECONDS)
 
     def acquire(self, locator: VoteLocator, *, crosswalk: Any = None) -> VoteAcquisition:
         if not isinstance(locator, VoteLocator) or locator.chamber != "senate":
@@ -209,15 +137,14 @@ class LadderVoteAcquirer(VoteAcquirer):
             self._skip_proxies(outcome.transport for outcome in outcomes if outcome.kind != "credential-error")
             if not isinstance(error, VoteRefusedError):
                 raise
-            if self._archive_down is not None:
+            if self._wayback.unavailable:
                 raise
             try:
                 with named_challenge(url, error_type=VoteRefusedError, context_key=self.context_key):
                     archived = self._archived(url, read, operation=operation)
-            except (httpx.HTTPError, ConnectionError, TimeoutError, VoteRefusedError) as down:
+            except (RetryableHTTPStatusError, ConnectionError, TimeoutError, VoteRefusedError) as down:
                 # The archive is a fallback: its outage is this file's refusal, never a crashed run, and it is not
                 # asked again this run, so a hanging archive cannot spend every file's timeouts.
-                self._archive_down = down
                 logger.warning("Roll-call votes: the Internet Archive did not answer, so it is skipped this run: {}", down)
                 raise VoteRefusedError(url) from down
             if archived is None:
@@ -230,6 +157,10 @@ class LadderVoteAcquirer(VoteAcquirer):
         self.rungs[rung] += 1
         if self.evidence is not None and answer.transport is not Transport.DIRECT:
             self.evidence.capture(capture, stage="vote-source", transport=rung, provider_request_id=answer.request_id)
+        record_serving_rung(
+            self.evidence, capture, operation=operation, original_url=url,
+            transport=rung, provider_request_id=answer.request_id,
+        )
         return result, capture
 
     def _skip_proxies(self, transports: Iterable[Transport]) -> None:
@@ -242,52 +173,23 @@ class LadderVoteAcquirer(VoteAcquirer):
             self._proxies = replace(self._proxies, **{field: f"{transport.value} failed a Senate file earlier this run"})
             logger.warning("Roll-call votes: {} failed a Senate file, so it is not asked again this run", transport.value)
 
-    def _archive_request[Result](self, url: str, **kwargs: Any) -> tuple[Result, CapturedBodyResponse]:
-        wait = self._archive_last + ARCHIVE_INTERVAL_SECONDS - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            return self.capture_validated(url, max_bytes=self.budget.max_bytes, unavailable=VoteUnavailableError, **kwargs)
-        finally:
-            self._archive_last = time.monotonic()
-
-    def _archive_index(self, url: str) -> dict[str, ArchiveCapture] | None:
-        """The newest captures of ``url`` (a menu) or of its session directory (a vote file), one CDX read each.
-
-        ``None`` once that read failed: its error was the first file's, and the scope is not read again this run.
-        """
-        menu = "/roll_call_lists/" in url
-        scope = url if menu else url.rsplit("/", 1)[0] + "/"
-        if scope not in self._archive_indexes:
-            query = [("url", scope.split("://", 1)[1]), ("output", "json"), ("fl", "timestamp,original,digest"),
-                     ("filter", "statuscode:200"), ("filter", "mimetype:text/xml")]  # fmt: skip
-            if not menu:
-                query.append(("matchType", "prefix"))
-            index_url = f"{CDX_URL}?{urlencode(query)}"
-            self._archive_indexes[scope] = None
-            self._archive_indexes[scope], _capture = self._archive_request(
-                index_url,
-                media_types=("application/json",),
-                parse=lambda response, _limit: newest_captures(response.body),
-                context={"operation": "senate-archive-index", "chamber": "senate", "url": index_url},
-            )
-        return self._archive_indexes[scope]
-
     def _archived[Result](
         self, url: str, read: Callable[[bytes], Result], *, operation: str
     ) -> tuple[Result, CapturedBodyResponse] | None:
-        """The newest archive capture of ``url`` read and validated, or ``None`` when the Archive holds none."""
-        index = self._archive_index(url)
-        archived = None if index is None else index.get(_url_key(url))
-        if archived is None:
-            return None
-        result, capture = self._archive_request(
-            archived.replay_url,
+        menu = "/roll_call_lists/" in url
+        scope = url if menu else url.rsplit("/", 1)[0] + "/"
+        replay = self._wayback.read(
+            url,
+            scope=WaybackCdxScope(scope, "text/xml", prefix=not menu),
+            read=read,
             media_types=MEDIA_TYPES,
-            allow_gzip=True,
-            parse=lambda response, limit: read(_archived_body(response, archived, limit)),
-            context={"operation": operation, "chamber": "senate", "url": archived.replay_url, "original_url": url},
+            max_bytes=self.budget.max_bytes,
+            unavailable=VoteUnavailableError,
+            context={"operation": operation, "chamber": "senate"},
         )
+        if replay is None:
+            return None
+        result, capture, archived, index_sha256 = replay
         self.rungs[ARCHIVE] += 1
         age_seconds = int((self._clock() - archived.captured_at).total_seconds())
         self.archived.append(ArchiveServe(url, archived.captured_at, age_seconds))
@@ -296,8 +198,11 @@ class LadderVoteAcquirer(VoteAcquirer):
                 "senate-archive-capture", route=ARCHIVE, original_url=url, archive_url=archived.replay_url,
                 archived_at=archived.captured_at.isoformat(), age_seconds=age_seconds,
                 fetched_at=capture.observed_at, sha256=capture.sha256, cdx_digest=archived.digest,
-                content_encoding=capture.content_encoding,
+                content_encoding=capture.content_encoding, index_sha256=index_sha256,
             )  # fmt: skip
+        record_serving_rung(
+            self.evidence, capture, operation=operation, original_url=url, transport=ARCHIVE,
+        )
         return result, capture
 
 
@@ -328,9 +233,7 @@ def senate_warnings(archived: Iterable[ArchiveServe], refused_files: int) -> lis
 __all__ = [
     "ARCHIVE",
     "ARCHIVE_INTERVAL_SECONDS",
-    "ArchiveCapture",
     "ArchiveServe",
     "LadderVoteAcquirer",
-    "newest_captures",
     "senate_warnings",
 ]

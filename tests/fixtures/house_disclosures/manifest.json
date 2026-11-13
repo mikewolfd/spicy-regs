@@ -1,0 +1,33 @@
+{
+  "2025FD.zip": {
+    "sha256": "sha256:d658d2bd76bf102027c46679797952324362e2318a30f5f7c21d142b1579a807",
+    "bytes": 106086,
+    "url": "https://disclosures-clerk.house.gov/public_disc/financial-pdfs/2025FD.zip",
+    "observed_at": "2026-09-20T09:44:07.288430Z",
+    "reuse_evidence": "retained-files.json receipt_context.supporting_original_receipts"
+  },
+  "20030591.pdf": {
+    "doc_id": "20030591",
+    "year": 2025,
+    "sha256": "sha256:2ed80723a6d9db060d22a9b1dcd0cf376f47b3c3096bf8c01abbecbe56017cbb",
+    "bytes": 65731,
+    "url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2025/20030591.pdf",
+    "observed_at": "2026-11-13T11:40:17.498131Z"
+  },
+  "20030594.pdf": {
+    "doc_id": "20030594",
+    "year": 2025,
+    "sha256": "sha256:fb44d41d91bbc12f28a1065bcbab2af5206e410719fe9a857f1b01a721e696d9",
+    "bytes": 65747,
+    "url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2025/20030594.pdf",
+    "observed_at": "2026-11-13T11:40:00.974598Z"
+  },
+  "8220747.pdf": {
+    "doc_id": "8220747",
+    "year": 2025,
+    "sha256": "sha256:abddefd1e463f88e62e9173f6a12e07e8457f56503619e40f85e034645eb7be8",
+    "bytes": 54738,
+    "url": "https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/2025/8220747.pdf",
+    "observed_at": "2026-11-13T11:39:24.278169Z"
+  }
+}

@@ -39,3 +39,8 @@ archive sweep, retrieve linked PDFs, create the PDF-only extraction path
 and resume by WARC coordinates remain separate work. The original source review
 is retained in SpicyDocs at `docs/research/cbo-archive-visual-review-2026-10-30.md`
 (D12).
+
+The [ordinary bill-family path](archived-cbo-estimates.md) now reuses this reader
+and the provider's shared card schema. Its explicit population selection adds
+feed/index accounting and preserves prior cards on an unread archive route.
+The private command remains useful for bounded receipt-only replay.

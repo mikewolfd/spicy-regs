@@ -166,6 +166,24 @@ def test_prepare_leaves_only_its_outputs_where_the_artifact_collects_them(tmp_pa
     assert not (tmp_path / "fill" / "work").exists()
 
 
+def test_prepare_uses_explicit_resource_targets_through_actual_catalog_read(tmp_path, catalog):
+    from spicy_regs.duckdb_settings import ExportResources
+
+    seed(catalog, [row("A"), row("B")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "attachments_json": LISTED},
+                     {"key": "b", "comment_id": "B", "modify_date": "2021-01-01", "attachments_json": LISTED}])
+    with catalog() as con:
+        prepared = cfw.prepare(tmp_path, profile="attachments", con=con,
+                               resources=ExportResources(memory="128MiB", threads=1))
+        memory, threads = con.execute("SELECT current_setting('memory_limit'), current_setting('threads')").fetchall()[0]
+        assert memory == "128.0 MiB"
+        assert threads == 1
+    assert prepared["rows_to_fill"] == 1
+    assert prepared["other_version_only"] == 1
+    assert pl.read_parquet(tmp_path / "fill" / "fill.parquet")["attachments_json"].to_list() == [LISTED]
+    assert all(value["attachments_json"] is None for value in table(catalog).values())
+
+
 def test_a_read_of_another_version_fills_nothing(tmp_path, catalog):
     seed(catalog, [row("A")])
     reads(tmp_path, [{"key": "a", "comment_id": "A", "modify_date": "2021-06-01T00:00:00Z", "subtype": "Read"}])
@@ -186,6 +204,29 @@ def test_copies_that_disagree_on_one_column_block_only_that_column(tmp_path, cat
     assert [(c["comment_id"], c["column"], list(c["keys"])) for c in conflicts] == [("A", "attachments_json",
                                                                                      ["a", "a(1)"])]
     assert prepared["conflicted_versions_by_column"]["attachments_json"] == 1
+
+
+def test_a_read_can_add_metadata_to_an_id_bearing_attachment_without_changing_the_id():
+    previous = {"title": "held", "formats": None, "attachment_id": "a"}
+    held = json.dumps([previous])
+    added = previous | {"agencyNote": "note", "authors": ["A", "A"], "docOrder": 0}
+    assert cfw.only_adds_attachments(json.dumps([added]), held)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"attachment_id": "b"}]), held)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"title": "changed"}]), held)
+
+
+def test_v2_promotion_fill_compares_all_historical_attachment_values():
+    previous = {"title": "café", "formats": None, "attachment_id": None,
+                "restrict_reason": None, "restrict_reason_type": "Copyrighted"}
+    held = json.dumps([previous], ensure_ascii=False, separators=(",", ":"))
+    added = {"title": "café", "formats": None, "restrictReasonType": "Copyrighted",
+             "attachment_id": "a", "authors": ["A", "A"], "docOrder": 0}
+    assert not cfw.only_adds_attachments(json.dumps([added]), held)
+    assert cfw.only_adds_attachments(json.dumps([added]), held, True)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"restrictReasonType": "Other"}]), held, True)
+    assert not cfw.only_adds_attachments(json.dumps([added | {"title": "different"}]), held, True)
+    held_with_id = json.dumps([previous | {"attachment_id": "prior"}], ensure_ascii=False, separators=(",", ":"))
+    assert not cfw.only_adds_attachments(json.dumps([added]), held_with_id, True)
 
 
 def test_a_read_that_only_adds_withheld_attachments_replaces_the_held_list(tmp_path, catalog):
@@ -530,6 +571,63 @@ def test_a_scoped_pilot_writes_one_batch(tmp_path, catalog):
     with catalog() as con:
         assert cfw.write(tmp_path, con=con, by_file=False)["batches"] == 1
     assert (table(catalog)["A"]["subtype"], table(catalog)["B"]["subtype"]) == ("S", None)
+
+
+@pytest.mark.parametrize("scope", [None, {"docket_id": "D-1"}])
+def test_prepare_restores_only_stated_matching_versions_without_losing_scope_counts(tmp_path, catalog, monkeypatch, scope):
+    from spicy_regs.sources import regulatory_catalog as native
+
+    seed(catalog, [row(cid, docket_id="D-1") for cid in ("A", "unread", "old", "null", "conflict")]
+         + [row("outside", docket_id="D-2")])
+    reads(tmp_path, [
+        {"key": "a", "comment_id": "A", "subtype": "S"},
+        {"key": "old", "comment_id": "old", "modify_date": "another version", "subtype": "S"},
+        {"key": "null", "comment_id": "null"},
+        {"key": "conflict1", "comment_id": "conflict", "subtype": "S"},
+        {"key": "conflict2", "comment_id": "conflict", "subtype": "T"},
+        {"key": "outside", "comment_id": "outside", "subtype": "S"},
+    ])
+    # An unrelated broken receipt must not be opened merely to count an unread native key.
+    with catalog() as con:
+        con.execute(f"UPDATE {native.receipts_table()} SET subject_version='unsealed damage' "
+                    "WHERE json_extract_string(identity_json, '$[1][0][1][1][1]')='unread'")
+    original = native.processing_table
+    selected = []
+
+    def restore(con, record_type, **options):
+        assert options.get("where"), "prepare restored the entire catalog before selecting its candidates"
+        selected.extend(row[0] for row in con.execute(
+            f'SELECT comment_id FROM {native.qualified(record_type)} WHERE {options["where"]} ORDER BY 1'
+        ).fetchall())
+        return original(con, record_type, **options)
+
+    monkeypatch.setattr(native, "processing_table", restore)
+    prepared = cfw.prepare(tmp_path, scope=scope)
+    assert selected == (["A"] if scope else ["A", "outside"])
+    assert prepared["catalog_rows"] == (5 if scope else 6)
+    assert (prepared["table_rows"], prepared["unread"], prepared["other_version_only"]) == (6, 1, 1)
+    assert prepared["conflicted_versions_by_column"]["subtype"] == 1
+    assert prepared["rows_to_fill"] == len(selected)
+
+
+@pytest.mark.parametrize("damage", ["digest", "missing", "duplicate"])
+def test_candidate_selection_still_requires_exact_one_to_one_receipts(tmp_path, catalog, damage):
+    from spicy_regs.sources import regulatory_catalog as native
+
+    seed(catalog, [row("A"), row("unread")])
+    reads(tmp_path, [{"key": "a", "comment_id": "A", "subtype": "S"}])
+    with catalog() as con:
+        table = native.receipts_table()
+        selected = "json_extract_string(identity_json, '$[1][0][1][1][1]')='A'"
+        if damage == "digest":
+            con.execute(f"UPDATE {table} SET subject_version='unsealed damage' WHERE {selected}")
+        elif damage == "missing":
+            con.execute(f"DELETE FROM {table} WHERE {selected}")
+        else:
+            con.execute(f"INSERT INTO {table} SELECT * FROM {table} WHERE {selected}")
+    with pytest.raises(ValueError):
+        cfw.prepare(tmp_path)
+    assert not (tmp_path / "fill" / "prepare.json").exists()
 
 
 def test_batches_pack_whole_files_by_bytes():

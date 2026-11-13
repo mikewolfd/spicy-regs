@@ -24,6 +24,11 @@ class TrackedConnection:
             assert self.active == 0, "parent execute overlapped worker execute"
         return self.raw.execute(sql, parameters) if parameters is not None else self.raw.execute(sql)
 
+    def create_function(self, *args, **kwargs):
+        with self.lock:
+            assert self.active == 0, "parent registration overlapped worker execute"
+        return self.raw.create_function(*args, **kwargs)
+
     def cursor(self):
         child = TrackedCursor(self, self.raw.cursor())
         self.children.append(child)
@@ -233,6 +238,7 @@ def test_remote_build_collects_paths_then_relationships_then_security(tmp_path, 
         assert server._build_connection(server._Publication(publication.empty_index(), None)) is con
         assert order == ["relationships", "security"]
         assert con.execute("SELECT * FROM s2").fetchall() == [(2,)]
+        assert con.execute("SELECT court_opinion_search_text('Court *text*')").fetchone() == ('Court text',)
         with pytest.raises(duckdb.Error):
             con.execute("SET enable_external_access=true")
         with pytest.raises(duckdb.Error):

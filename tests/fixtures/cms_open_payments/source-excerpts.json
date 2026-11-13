@@ -1,0 +1,1543 @@
+{
+  "catalog": {
+    "dataset": [
+      {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "National level payment total and averages for all years",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_NTNL_SMRY_P06302026_06032026-joined.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "aaaddc12-a3a7-4cc5-9c12-4a726317aa1c",
+        "title": "National level payment total and averages for all years",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "Payments grouped by reporting entities",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_RPTG_ORG_SMRY_P06302026_06032026.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "d5762bed-26ca-4035-91c9-9d67297dc77c",
+        "title": "Payments grouped by reporting entities",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "Payments grouped by Teaching Hospital",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_TH_SMRY_P06302026_06032026.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "217ad1a7-b659-41f6-8159-c41b73f47de4",
+        "title": "Payments grouped by Teaching Hospital",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "State level payment total and averages for all years",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_STATE_SMRY_P06302026_06032026-joined.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "02157882-0f43-473a-a777-c96eb5b1b623",
+        "title": "State level payment total and averages for all years",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "Payments grouped by physician (distinct) for all years",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_PHYSN_NON_PHYSN_PRCTNR_SMRY_P06302026_06032026.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "895260f5-1ce9-4e7d-9cb2-90564322eed2",
+        "title": "Payments grouped by physician (distinct) for all years",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      }
+    ]
+  },
+  "examples": {
+    "entities": {
+      "dataset": {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "Payments grouped by reporting entities",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_RPTG_ORG_SMRY_P06302026_06032026.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "d5762bed-26ca-4035-91c9-9d67297dc77c",
+        "title": "Payments grouped by reporting entities",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      "page": {
+        "results": [
+          {
+            "record_number": "26",
+            "amgpo_making_payment_id": "100000000053",
+            "amgpo_making_payment_name": "MERCK SHARP & DOHME LLC",
+            "amgpo_making_payment_state": "NJ",
+            "amgpo_making_payment_country": "United States",
+            "total_amount_general": "23231676.39",
+            "total_amount_research": "501967678.74",
+            "total_amount_investment": "0.00",
+            "total_amount_interest": "0.00",
+            "trans_general": "216602",
+            "trans_general_physician": "131057",
+            "trans_general_non_physician_practitioner": "85296",
+            "trans_general_teachinghospital": "249",
+            "trans_research": "6747",
+            "trans_research_physician": "56",
+            "trans_research_non_physician_practitioner": "0",
+            "trans_research_teachinghospital": "2016",
+            "trans_invested": "0",
+            "total_disputed_transactions": "1",
+            "total_undisputed_transactions": "223348",
+            "program_year": "2024"
+          }
+        ],
+        "count": 1925,
+        "schema": {
+          "f06eed8a-d4f3-5687-873e-fc2b597e204e": {
+            "fields": {
+              "record_number": {
+                "type": "serial",
+                "unsigned": true,
+                "not null": true,
+                "mysql_type": "int"
+              },
+              "amgpo_making_payment_id": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "AMGPO_Making_Payment_ID"
+              },
+              "amgpo_making_payment_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "AMGPO_Making_Payment_Name"
+              },
+              "amgpo_making_payment_state": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "AMGPO_Making_Payment_State"
+              },
+              "amgpo_making_payment_country": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "AMGPO_Making_Payment_Country"
+              },
+              "total_amount_general": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Amount_General"
+              },
+              "total_amount_research": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Amount_Research"
+              },
+              "total_amount_investment": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Amount_Investment"
+              },
+              "total_amount_interest": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Amount_Interest"
+              },
+              "trans_general": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_General"
+              },
+              "trans_general_physician": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_General_Physician"
+              },
+              "trans_general_non_physician_practitioner": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_General_Non_Physician_Practitioner"
+              },
+              "trans_general_teachinghospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_General_Teachinghospital"
+              },
+              "trans_research": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_Research"
+              },
+              "trans_research_physician": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_Research_Physician"
+              },
+              "trans_research_non_physician_practitioner": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_Research_Non_Physician_Practitioner"
+              },
+              "trans_research_teachinghospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_Research_Teachinghospital"
+              },
+              "trans_invested": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Trans_Invested"
+              },
+              "total_disputed_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Disputed_Transactions"
+              },
+              "total_undisputed_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Undisputed_Transactions"
+              },
+              "program_year": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Program_Year"
+              }
+            },
+            "primary key": [
+              "record_number"
+            ]
+          }
+        },
+        "query": {
+          "limit": 1,
+          "offset": 0,
+          "count": true,
+          "schema": true,
+          "keys": true,
+          "rowIds": true,
+          "conditions": [
+            {
+              "property": "program_year",
+              "value": "2024",
+              "operator": "="
+            }
+          ],
+          "resources": [
+            {
+              "id": "f06eed8a-d4f3-5687-873e-fc2b597e204e",
+              "alias": "t"
+            }
+          ],
+          "results": true,
+          "format": "json"
+        }
+      }
+    },
+    "recipients": {
+      "dataset": {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "Payments grouped by physician (distinct) for all years",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_PHYSN_NON_PHYSN_PRCTNR_SMRY_P06302026_06032026.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "895260f5-1ce9-4e7d-9cb2-90564322eed2",
+        "title": "Payments grouped by physician (distinct) for all years",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      "page": {
+        "results": [
+          {
+            "record_number": "46",
+            "covered_recipient_profile_id": "3",
+            "program_year": "2024",
+            "covered_recipient_profile_type": "Covered Recipient Physician",
+            "covered_recipient_npi": "1003023359",
+            "covered_recipient_profile_first_name": "JUSTIN",
+            "covered_recipient_profile_middle_name": "H",
+            "covered_recipient_profile_last_name": "RACKLEY",
+            "covered_recipient_profile_suffix": "",
+            "covered_recipient_profile_alternate_first_name": "JUSTIN",
+            "covered_recipient_profile_alternate_middle_name": "HAMWAY",
+            "covered_recipient_profile_alternate_last_name": "RACKLEY",
+            "covered_recipient_profile_alternate_suffix": "",
+            "covered_recipient_profile_address_line_1": "1001 SAM PERRY BLVD",
+            "covered_recipient_profile_address_line_2": "",
+            "covered_recipient_profile_city": "FREDERICKSBURG",
+            "covered_recipient_profile_state": "VA",
+            "covered_recipient_profile_zipcode": "22401-4453",
+            "covered_recipient_profile_country_name": "UNITED STATES",
+            "covered_recipient_profile_province_name": "",
+            "covered_recipient_profile_primary_specialty": "Allopathic & Osteopathic Physicians|Anesthesiology",
+            "covered_recipient_profile_license_state_code_1": "VA",
+            "covered_recipient_profile_license_state_code_2": "OH",
+            "covered_recipient_profile_license_state_code_3": "",
+            "covered_recipient_profile_license_state_code_4": "",
+            "covered_recipient_profile_license_state_code_5": "",
+            "general_total_payment": "121.96",
+            "research_total_payment": "0.0",
+            "invested_total_amount": "0.0",
+            "interest_total_amount": "0.0",
+            "general_total_transactions": "3",
+            "research_total_transactions": "0",
+            "invested_total_transactions": "0",
+            "interest_total_transactions": "0",
+            "total_associated_research_payments": "0.0",
+            "total_associated_research_transactions": "0",
+            "total_disputed_transactions": "0",
+            "total_undisputed_transactions": "3",
+            "has_multiple_ids": "false"
+          }
+        ],
+        "count": 996074,
+        "schema": {
+          "37534022-2506-5073-8f55-4780c1dd3abd": {
+            "fields": {
+              "record_number": {
+                "type": "serial",
+                "unsigned": true,
+                "not null": true,
+                "mysql_type": "int"
+              },
+              "covered_recipient_profile_id": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_ID"
+              },
+              "program_year": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Program_Year"
+              },
+              "covered_recipient_profile_type": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Type"
+              },
+              "covered_recipient_npi": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_NPI"
+              },
+              "covered_recipient_profile_first_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_First_Name"
+              },
+              "covered_recipient_profile_middle_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Middle_Name"
+              },
+              "covered_recipient_profile_last_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Last_Name"
+              },
+              "covered_recipient_profile_suffix": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Suffix"
+              },
+              "covered_recipient_profile_alternate_first_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Alternate_First_Name"
+              },
+              "covered_recipient_profile_alternate_middle_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Alternate_Middle_Name"
+              },
+              "covered_recipient_profile_alternate_last_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Alternate_Last_Name"
+              },
+              "covered_recipient_profile_alternate_suffix": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Alternate_Suffix"
+              },
+              "covered_recipient_profile_address_line_1": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Address_Line_1"
+              },
+              "covered_recipient_profile_address_line_2": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Address_Line_2"
+              },
+              "covered_recipient_profile_city": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_City"
+              },
+              "covered_recipient_profile_state": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_State"
+              },
+              "covered_recipient_profile_zipcode": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Zipcode"
+              },
+              "covered_recipient_profile_country_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Country_Name"
+              },
+              "covered_recipient_profile_province_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Province_Name"
+              },
+              "covered_recipient_profile_primary_specialty": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_Primary_Specialty"
+              },
+              "covered_recipient_profile_license_state_code_1": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_License_State_Code_1"
+              },
+              "covered_recipient_profile_license_state_code_2": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_License_State_Code_2"
+              },
+              "covered_recipient_profile_license_state_code_3": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_License_State_Code_3"
+              },
+              "covered_recipient_profile_license_state_code_4": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_License_State_Code_4"
+              },
+              "covered_recipient_profile_license_state_code_5": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Covered_Recipient_Profile_License_State_Code_5"
+              },
+              "general_total_payment": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "General_Total_Payment"
+              },
+              "research_total_payment": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Research_Total_Payment"
+              },
+              "invested_total_amount": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Invested_Total_Amount"
+              },
+              "interest_total_amount": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Interest_Total_Amount"
+              },
+              "general_total_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "General_Total_Transactions"
+              },
+              "research_total_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Research_Total_Transactions"
+              },
+              "invested_total_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Invested_Total_Transactions"
+              },
+              "interest_total_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Interest_Total_Transactions"
+              },
+              "total_associated_research_payments": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Associated_Research_Payments"
+              },
+              "total_associated_research_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Associated_Research_Transactions"
+              },
+              "total_disputed_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Disputed_Transactions"
+              },
+              "total_undisputed_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Undisputed_Transactions"
+              },
+              "has_multiple_ids": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Has_Multiple_IDs"
+              }
+            },
+            "indexes": {
+              "idx12": [
+                "covered_recipient_profile_id"
+              ],
+              "idx19": [
+                "covered_recipient_profile_id",
+                "covered_recipient_profile_first_name",
+                "covered_recipient_profile_last_name"
+              ],
+              "idx_npi": [
+                "covered_recipient_npi"
+              ]
+            },
+            "primary key": [
+              "record_number"
+            ]
+          }
+        },
+        "query": {
+          "limit": 1,
+          "offset": 0,
+          "count": true,
+          "schema": true,
+          "keys": true,
+          "rowIds": true,
+          "conditions": [
+            {
+              "property": "program_year",
+              "value": "2024",
+              "operator": "="
+            }
+          ],
+          "resources": [
+            {
+              "id": "37534022-2506-5073-8f55-4780c1dd3abd",
+              "alias": "t"
+            }
+          ],
+          "results": true,
+          "format": "json"
+        }
+      }
+    },
+    "hospitals": {
+      "dataset": {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "Payments grouped by Teaching Hospital",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_TH_SMRY_P06302026_06032026.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "217ad1a7-b659-41f6-8159-c41b73f47de4",
+        "title": "Payments grouped by Teaching Hospital",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      "page": {
+        "results": [
+          {
+            "record_number": "21",
+            "teaching_hospital_ccn": "010001",
+            "teaching_hospital_name": "SOUTHEAST HEALTH MEDICAL CENTER",
+            "teaching_hospital_address1": "1108 Ross Clark Circle",
+            "teaching_hospital_address2": "",
+            "teaching_hospital_city": "Dothan",
+            "teaching_hospital_state": "AL",
+            "teaching_hospital_zip_code": "36301",
+            "general_total_payment": "740.15",
+            "research_total_payment": "500.00",
+            "general_total_transactions": "2",
+            "research_total_transactions": "1",
+            "total_disputed_transactions": "0",
+            "total_undisputed_transactions": "3",
+            "program_year": "2024"
+          }
+        ],
+        "count": 1308,
+        "schema": {
+          "119f49fc-ce8e-5f24-8adf-73a22b9498b4": {
+            "fields": {
+              "record_number": {
+                "type": "serial",
+                "unsigned": true,
+                "not null": true,
+                "mysql_type": "int"
+              },
+              "teaching_hospital_ccn": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_CCN"
+              },
+              "teaching_hospital_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_NAME"
+              },
+              "teaching_hospital_address1": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_ADDRESS1"
+              },
+              "teaching_hospital_address2": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_ADDRESS2"
+              },
+              "teaching_hospital_city": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_CITY"
+              },
+              "teaching_hospital_state": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_STATE"
+              },
+              "teaching_hospital_zip_code": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Teaching_Hospital_ZIP_CODE"
+              },
+              "general_total_payment": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "General_Total_Payment"
+              },
+              "research_total_payment": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Research_Total_Payment"
+              },
+              "general_total_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "General_Total_Transactions"
+              },
+              "research_total_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Research_Total_Transactions"
+              },
+              "total_disputed_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Disputed_Transactions"
+              },
+              "total_undisputed_transactions": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Undisputed_Transactions"
+              },
+              "program_year": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Program_Year"
+              }
+            },
+            "primary key": [
+              "record_number"
+            ]
+          }
+        },
+        "query": {
+          "limit": 1,
+          "offset": 0,
+          "count": true,
+          "schema": true,
+          "keys": true,
+          "rowIds": true,
+          "conditions": [
+            {
+              "property": "program_year",
+              "value": "2024",
+              "operator": "="
+            }
+          ],
+          "resources": [
+            {
+              "id": "119f49fc-ce8e-5f24-8adf-73a22b9498b4",
+              "alias": "t"
+            }
+          ],
+          "results": true,
+          "format": "json"
+        }
+      }
+    },
+    "states": {
+      "dataset": {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "State level payment total and averages for all years",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_STATE_SMRY_P06302026_06032026-joined.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "02157882-0f43-473a-a777-c96eb5b1b623",
+        "title": "State level payment total and averages for all years",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      "page": {
+        "results": [
+          {
+            "record_number": "8866",
+            "country_code": "US",
+            "country_name": "United States",
+            "state_code": "AA",
+            "state_name": "Armed Forces Americas",
+            "payment_type": "Research",
+            "recipient_type": "Covered Recipient Physician",
+            "program_year": "2024",
+            "total_number_of_physicians": "0",
+            "total_number_of_non_physician_practitioners": "0",
+            "total_number_of_teaching_hospitals": "0",
+            "total_payment_amount_physician": "0.00",
+            "total_payment_amount_non_physician_practitioner": "0.00",
+            "total_payment_amount_teaching_hospital": "0.00",
+            "mean_total_payment_amount_physician": "0.00",
+            "mean_total_payment_amount_non_physician_practitioner": "0.00",
+            "mean_total_payment_amount_teaching_hospital": "0.00",
+            "median_total_payment_amount_physician": "0.00",
+            "median_total_payment_amount_non_physician_practitioner": "0.00",
+            "median_total_payment_amount_teaching_hospital": "0.00",
+            "total_payment_count_physician": "0",
+            "total_payment_count_non_physician_practitioner": "0",
+            "total_payment_count_teaching_hospital": "0",
+            "mean_total_payment_count_physician": "0",
+            "mean_total_payment_count_non_physician_practitioner": "0",
+            "mean_total_payment_count_teaching_hospital": "0",
+            "median_total_payment_count_physician": "0",
+            "median_total_payment_count_non_physician_practitioner": "0",
+            "median_total_payment_count_teaching_hospital": "0"
+          }
+        ],
+        "count": 412,
+        "schema": {
+          "55795580-0d38-5c21-a405-0539b5c2199c": {
+            "fields": {
+              "record_number": {
+                "type": "serial",
+                "unsigned": true,
+                "not null": true,
+                "mysql_type": "int"
+              },
+              "country_code": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Country_Code"
+              },
+              "country_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Country_Name"
+              },
+              "state_code": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "State_Code"
+              },
+              "state_name": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "State_Name"
+              },
+              "payment_type": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Payment_Type"
+              },
+              "recipient_type": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Recipient_Type"
+              },
+              "program_year": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Program_Year"
+              },
+              "total_number_of_physicians": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Number_of_Physicians"
+              },
+              "total_number_of_non_physician_practitioners": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Number_of_Non_Physician_Practitioners"
+              },
+              "total_number_of_teaching_hospitals": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Number_of_Teaching_Hospitals"
+              },
+              "total_payment_amount_physician": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Total_Payment_Amount_Physician"
+              },
+              "total_payment_amount_non_physician_practitioner": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Total_Payment_Amount_Non_Physician_Practitioner"
+              },
+              "total_payment_amount_teaching_hospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Payment_Amount_Teaching_Hospital"
+              },
+              "mean_total_payment_amount_physician": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Mean_Total_Payment_Amount_Physician"
+              },
+              "mean_total_payment_amount_non_physician_practitioner": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Mean_Total_Payment_Amount_Non_Physician_Practitioner"
+              },
+              "mean_total_payment_amount_teaching_hospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Mean_Total_Payment_Amount_Teaching_Hospital"
+              },
+              "median_total_payment_amount_physician": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Median_Total_Payment_Amount_Physician"
+              },
+              "median_total_payment_amount_non_physician_practitioner": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Median_Total_Payment_Amount_Non_Physician_Practitioner"
+              },
+              "median_total_payment_amount_teaching_hospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Median_Total_Payment_Amount_Teaching_Hospital"
+              },
+              "total_payment_count_physician": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Payment_Count_Physician"
+              },
+              "total_payment_count_non_physician_practitioner": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Payment_Count_Non_Physician_Practitioner"
+              },
+              "total_payment_count_teaching_hospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Total_Payment_Count_Teaching_Hospital"
+              },
+              "mean_total_payment_count_physician": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Mean_Total_Payment_Count_Physician"
+              },
+              "mean_total_payment_count_non_physician_practitioner": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Mean_Total_Payment_Count_Non_Physician_Practitioner"
+              },
+              "mean_total_payment_count_teaching_hospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Mean_Total_Payment_Count_Teaching_Hospital"
+              },
+              "median_total_payment_count_physician": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Median_Total_Payment_Count_Physician"
+              },
+              "median_total_payment_count_non_physician_practitioner": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Median_Total_Payment_Count_Non_Physician_Practitioner"
+              },
+              "median_total_payment_count_teaching_hospital": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Median_Total_Payment_Count_Teaching_Hospital"
+              }
+            },
+            "primary key": [
+              "record_number"
+            ]
+          }
+        },
+        "query": {
+          "limit": 1,
+          "offset": 0,
+          "count": true,
+          "schema": true,
+          "keys": true,
+          "rowIds": true,
+          "conditions": [
+            {
+              "property": "program_year",
+              "value": "2024",
+              "operator": "="
+            }
+          ],
+          "resources": [
+            {
+              "id": "55795580-0d38-5c21-a405-0539b5c2199c",
+              "alias": "t"
+            }
+          ],
+          "results": true,
+          "format": "json"
+        }
+      }
+    },
+    "national": {
+      "dataset": {
+        "bureauCode": [
+          "009:38"
+        ],
+        "programCode": [
+          "009:000"
+        ],
+        "accessLevel": "public",
+        "keyword": [
+          "all years"
+        ],
+        "contactPoint": {
+          "fn": "Open Payments",
+          "hasEmail": "mailto:openpayments@cms.hhs.gov"
+        },
+        "dataQuality": true,
+        "description": "This dataset is pre-filtered based on the most frequent searches of Open Payments data.",
+        "distribution": [
+          {
+            "title": "National level payment total and averages for all years",
+            "mediaType": "text/csv",
+            "format": "csv",
+            "downloadURL": "https://download.cms.gov/openpayments/SMRY_RPTS_P06302026_06032026/PBLCTN_NTNL_SMRY_P06302026_06032026-joined.csv",
+            "@type": "Distribution",
+            "license": "https://www.usa.gov/government-works"
+          }
+        ],
+        "identifier": "aaaddc12-a3a7-4cc5-9c12-4a726317aa1c",
+        "title": "National level payment total and averages for all years",
+        "issued": "2026-06-30",
+        "modified": "2026-06-30",
+        "temporal": [
+          {
+            "@type": "PeriodOfTime",
+            "startDate": "2017-01-01",
+            "endDate": "2023-12-31"
+          }
+        ],
+        "publisher": {
+          "@type": "Organization",
+          "name": "Office of Communications (OC)",
+          "subOrganizationOf": [
+            {
+              "@type": "Organization",
+              "name": "Centers for Medicare & Medicaid Services (CMS)"
+            }
+          ]
+        },
+        "license": "https://www.usa.gov/government-works",
+        "theme": [
+          "Summary"
+        ],
+        "@type": "Dataset",
+        "accessRights": "public"
+      },
+      "page": {
+        "results": [
+          {
+            "record_number": "81",
+            "metric_level": "National",
+            "payment_type": "Research",
+            "recipient_type": "Covered Recipient Physician",
+            "program_year": "2024",
+            "total_number_of_physicians": "5848",
+            "total_number_of_non_physician_practitioners": "0",
+            "total_payment_amount_physician": "105583689.91",
+            "total_payment_amount_non_physician_practitioner": "0.00",
+            "mean_total_payment_amount_physician": "18054.67",
+            "mean_total_payment_amount_non_physician_practitioner": "0.00",
+            "median_total_payment_amount_physician": "3200.00",
+            "median_total_payment_amount_non_physician_practitioner": "0.00",
+            "total_payment_count_physician": "28317",
+            "total_payment_count_non_physician_practitioner": "0",
+            "mean_total_payment_count_physician": "5",
+            "mean_total_payment_count_non_physician_practitioner": "0",
+            "median_total_payment_count_physician": "2",
+            "median_total_payment_count_non_physician_practitioner": "0"
+          }
+        ],
+        "count": 4,
+        "schema": {
+          "1fc6a1d3-a798-5e07-af2f-12f18a91637c": {
+            "fields": {
+              "record_number": {
+                "type": "serial",
+                "unsigned": true,
+                "not null": true,
+                "mysql_type": "int"
+              },
+              "metric_level": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Metric_Level"
+              },
+              "payment_type": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Payment_Type"
+              },
+              "recipient_type": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Recipient_Type"
+              },
+              "program_year": {
+                "type": "text",
+                "mysql_type": "text",
+                "description": "Program_Year"
+              },
+              "total_number_of_physicians": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Number_of_Physicians"
+              },
+              "total_number_of_non_physician_practitioners": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Number_of_Non_Physician_Practitioners"
+              },
+              "total_payment_amount_physician": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Total_Payment_Amount_Physician"
+              },
+              "total_payment_amount_non_physician_practitioner": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Total_Payment_Amount_Non_Physician_Practitioner"
+              },
+              "mean_total_payment_amount_physician": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Mean_Total_Payment_Amount_Physician"
+              },
+              "mean_total_payment_amount_non_physician_practitioner": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Mean_Total_Payment_Amount_Non_Physician_Practitioner"
+              },
+              "median_total_payment_amount_physician": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Median_Total_Payment_Amount_Physician"
+              },
+              "median_total_payment_amount_non_physician_practitioner": {
+                "type": "numeric",
+                "precision": "12",
+                "scale": "2",
+                "mysql_type": "decimal",
+                "description": "Median_Total_Payment_Amount_Non_Physician_Practitioner"
+              },
+              "total_payment_count_physician": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Payment_Count_Physician"
+              },
+              "total_payment_count_non_physician_practitioner": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Total_Payment_Count_Non_Physician_Practitioner"
+              },
+              "mean_total_payment_count_physician": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Mean_Total_Payment_Count_Physician"
+              },
+              "mean_total_payment_count_non_physician_practitioner": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Mean_Total_Payment_Count_Non_Physician_Practitioner"
+              },
+              "median_total_payment_count_physician": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Median_Total_Payment_Count_Physician"
+              },
+              "median_total_payment_count_non_physician_practitioner": {
+                "type": "int",
+                "mysql_type": "int",
+                "description": "Median_Total_Payment_Count_Non_Physician_Practitioner"
+              }
+            },
+            "primary key": [
+              "record_number"
+            ]
+          }
+        },
+        "query": {
+          "limit": 1,
+          "offset": 0,
+          "count": true,
+          "schema": true,
+          "keys": true,
+          "rowIds": true,
+          "conditions": [
+            {
+              "property": "program_year",
+              "value": "2024",
+              "operator": "="
+            }
+          ],
+          "resources": [
+            {
+              "id": "1fc6a1d3-a798-5e07-af2f-12f18a91637c",
+              "alias": "t"
+            }
+          ],
+          "results": true,
+          "format": "json"
+        }
+      }
+    }
+  }
+}

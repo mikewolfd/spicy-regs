@@ -4,9 +4,9 @@
 
 **Bill actions**
 
-One row per entry of the bill's own action list (`actions` in its BILLSTATUS document), in publisher order; actions recorded under the bill's amendments (`amendments/amendment/actions`) are not rows, so a roll call on an amendment can have no action here. Each row also carries the stage the action text implies, with the rule and matcher that fired, which makes `congress_bills.stage` auditable action by action.
+One row per entry of the bill's own action list, in publisher order. Committee, calendar and roll call references appear under the action that states them. Amendment actions have a separate scope. API rows carry the exact page digest, observation time and zero-based page position. Each row also carries the stage the action text implies.
 
-**Coverage.** Sampled: bills the bill family has read from GovInfo BILLSTATUS, Congress by Congress from the 108th on; group by the Congress in bill_id to see which Congresses are filled. *(measured 2026-09-28)*
+**Coverage.** Sampled. GovInfo BILLSTATUS from the 108th Congress onward, with explicitly selected Congress.gov action lists for bills in the 82nd–107th Congresses. *(measured 2026-09-28)*
 
 **Data quality.** One event is often entered by more than one system (`source_system_name`). Library of Congress and House floor rows carry an `action_code`; Senate and House committee rows carry none. The same event can appear once per system in different words, and some events appear in one system only (S. 545's committee report has a Senate row and no Library of Congress row; 119th Congress, checked 2026-10-03). Counting rows counts entries, not events; filtering to one system, or to rows with an `action_code`, drops the events the other systems alone record.
 
@@ -28,3 +28,9 @@ One row per entry of the bill's own action list (`actions` in its BILLSTATUS doc
 | `recorded_vote_count` | `BIGINT` | How many recordedVote entries this action carries. |
 | `is_latest_action` | `BOOLEAN` | True on the one actions[] entry the publisher's separate latestAction element names. |
 | `stage` | `VARCHAR` | The stage this one action's qualified code and text classify as, in the same vocabulary as congress_bills.stage (`introduced`, `committee`, `calendared`, `passed_chamber`, `other_chamber`, `conference`, `cleared`, `presented`, `law`, or the outcomes `failed` and `vetoed`; never `passed_both`, which is a bill's state, not one action's); `introduced` with stage_rule NULL when no rule classifies the action, as for the desk or a floor step in the bill's own chamber. An action reads `cleared` where its own words complete agreement on one text; a chamber's agreement to a conference report reads `conference` here, and the bill reads `cleared` from the second, or from its listed enrolled text, which no action reads. One action's classification, not the bill's state. |
+| `action_committees` | `STRUCT(system_code VARCHAR, "name" VARCHAR, url VARCHAR)[]` | Ordered committee references stated on this action. NULL means the source omitted the group. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `action_calendar_numbers` | `STRUCT(calendar VARCHAR, number VARCHAR)[]` | Calendar references stated on this action, without inheriting bill-level calendars. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `action_recorded_votes` | `STRUCT(chamber VARCHAR, congress VARCHAR, date VARCHAR, full_action_name VARCHAR, roll_number VARCHAR, session_number VARCHAR, url VARCHAR)[]` | Ordered recorded-vote references the publisher attached to this action. Stored as native nested values; list order, repeated values, null and empty collections remain distinct. |
+| `source_page_sha256` | `VARCHAR` | Exact Congress.gov API child-page digest, when the action came from that route. |
+| `source_page_observed_at` | `VARCHAR` | When the child page was captured, independent of the parent observation and action date. |
+| `source_page_row_index` | `BIGINT` | Zero-based position of the action in its retained API page. |

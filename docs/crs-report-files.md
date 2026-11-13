@@ -85,3 +85,12 @@ Join `f.report_id = r.report_id` and
 `CAST(f.metadata_update_date AS TIMESTAMPTZ) = r.update_date` to query the exact
 metadata revision in `crs_reports r`. File capture time and printed cover dates
 have separate meanings and do not replace that revision identity.
+
+For an earlier numbered PDF with no matching historical CRS API detail, use the
+[receipt selection in the source catalog](shared-source-catalog.md#inspect-an-explicit-receipt-selection).
+Keep the exact file, rendition, report number, proved edition and source
+locator. Keep the literal cover date and acquisition or archive dates as
+separate facts. The archive index or copy is a discovery or custody witness;
+it does not supply the CRS API `update_date`. These holdings add queryable file
+editions without manufacturing a `crs_reports` revision or a `crs_report_files`
+association to the current revision.

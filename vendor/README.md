@@ -38,7 +38,49 @@ name, so their digests are recorded here, hashed from the bytes at `000770ea`:
 | `spicy_docs-0.63.0-py3-none-any.whl` | `7e5786e93d2bd8dc9773313b6b4dcc5f8d96513da02de734f9011097b44d82e4` | 2,587,129 |
 | `spicy_docs-0.64.0-py3-none-any.whl` | `fbe34056c040b624c00b38117eb57f8b945e9ce5d188ec59de46454e2141ff0e` | 2,613,712 |
 
-- **Selected provider** `spicy_docs-0.85.0` (ss-mbia, ss-i1gm, ss-348x). `members` appends
+- **Selected local integration provider** `spicy_docs-0.85.0+readers.20261113.5`
+  is built from `5961c4f05d765be9bb6956402ac731075e674eb4`. It adds reviewed historical
+  archive/Senate fallback readers, bill context and older bill child reads, GovInfo
+  preservation/native budget evidence, and comment attachment metadata. Source inputs,
+  intermediate records and actual outputs received bounded direct data reviews recorded
+  on ss-uoid, ss-eskm, ss-zzij, ss-88ii, ss-0x5o, ss-v9y6, ss-flsg and ss-348x.
+  Clean-tree and independent Git-archive builds are byte-identical; package sources,
+  installed files and RECORD hashes match. See [the receipt](spicy_docs-0.85.0+readers.20261113.5.json).
+  This is local adoption. Remaining source coverage, historical fills and hosted acceptance
+  stay with those tickets; public `0.86` remains reserved. Focused installed-wheel checks
+  qualify this receiving change; the full repository gates remain subject to the host's
+  resource reserve. Native uv 0.13.7 emits the existing backend-bound warning for
+  `uv_build<0.12`; this integration leaves that dependency bound unchanged.
+  The superseded `.4` wheel is recoverable from this commit's parent; its receipt remains.
+
+- **Prior combined local integration provider** `spicy_docs-0.85.0+readers.20261113.4`
+  is built from `f83eead7274cc9102de036a15d7d310e809f9d11`. It adds the independently reviewed CBO
+  primary-document link selection and native PDF layout corrections to the prior `.3` provider.
+  Its full SpicyDocs gate passed at that exact source. Clean-worktree and independent
+  Git-archive wheels are byte-identical; source members and RECORD hashes are verified.
+  See [the receipt](spicy_docs-0.85.0+readers.20261113.4.json). This is local package adoption,
+  not public release or acceptance of incomplete source populations. Public `0.86` remains reserved.
+  The superseded `.3` wheel is recoverable from this adoption commit's parent;
+  its receipt, `.3` build evidence and earlier `.2` integration evidence remain.
+
+- **Prior combined local integration provider** `spicy_docs-0.85.0+readers.20261113.3`
+  is built from `4b86983c1a71889c3b659096c84079edfa794e3c`, combining the independently reviewed
+  reader repairs and source lanes. The full SpicyDocs gate passed at that exact source.
+  Clean-worktree and independent Git-archive builds are byte-identical; all package sources
+  and wheel RECORD hashes match. See [the receipt](spicy_docs-0.85.0+readers.20261113.3.json).
+  This is local package adoption, not public release or acceptance of incomplete source populations.
+  The reserved public `0.86` attachment release is untouched. The superseded `.2` wheel remains
+  recoverable from the adoption commit's parent; its receipt and frozen reader integration branch remain.
+
+- **Prior local integration provider** `spicy_docs-0.85.0+readers.20261113.2`
+  is built from `837143fd864e56db24b840dd3b1ba78f015ca96f`. Its reader implementation is the independently reviewed
+  `e247fc9b` candidate plus the independently reviewed `3ccb64d4` CFR spelling fix;
+  the final integration commit changes only version and lock metadata.
+  It adopts the OLRC route, markup normalization and XML evidence fixes and exports
+  source-owned rendition equivalence. The public `0.86` attachment release is not
+  consumed. Built twice from the clean worktree and a Git archive, byte-identical;
+  see [the receipt](spicy_docs-0.85.0+readers.20261113.2.json). No public upload occurred.
+- **Earlier provider** `spicy_docs-0.85.0` (ss-mbia, ss-i1gm, ss-348x). `members` appends
   `name_middle`, `name_suffix` and `name_official_full`, the legislators crosswalk's own name parts;
   `congress_subjects.INPUT_COLUMNS` classifies them and `members` moves to `congress-subjects/2`, whose
   ledger entry carries `/1` rows. On the two pinned roster files all 12,770 rows read, the 22 earlier
@@ -490,3 +532,8 @@ CourtListener listing, pins and raw rows use the shared provider directly. Run
 for this receiving change. Before replacing the provider wheel, also run the
 BILLSTATUS, Unified Agenda and PDF reader tests (`test_bill_subjects.py`,
 `test_unified_agenda*.py`, `test_pdf_text*.py`).
+
+The body-text reader owns `DERIVATION_READS_AS`, exported beside its version.
+Adopt a reader change together with its consumer import. The House Record check
+in `house_record_enrichment.py` is a refusal path: replay its held HTML inputs
+whenever the HTML derivation changes, even when PDF equivalence permits reuse.

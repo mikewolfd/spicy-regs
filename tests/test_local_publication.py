@@ -18,8 +18,8 @@ from tests.generation_fakes import Store
 FAMILY = "treasury-fiscal"
 
 
-def generation(tmp_path, name, tables, *, read=None):
-    """A complete-family generation of ``tables`` (table name to its ids) with evidence citing one raw original.
+def generation(tmp_path, name, tables, *, read=None, family=FAMILY, publication_status="complete-family"):
+    """A generation of ``tables`` (table name to its ids) with evidence citing one raw original.
 
     ``read`` is the published index bytes and prior root bytes a build recorded as what it read.
     """
@@ -29,15 +29,15 @@ def generation(tmp_path, name, tables, *, read=None):
         path.parent.mkdir(exist_ok=True)
         pq.write_table(pa.table({"id": ids}), path)
         files.append(path)
-    evidence = CaptureEvidence(tmp_path / f"{name}-build", FAMILY)
+    evidence = CaptureEvidence(tmp_path / f"{name}-build", family)
     evidence.retain_bytes(f"the original {name} was built from".encode(), stage="fixture-original", raw_source=True)
     directory = tmp_path / name
     index = None
     if read:
         index = publication.parse_index(read[0])
         evidence.inherit_pinned_root(index, read[1])
-    artifact = build_generation(directory, family=FAMILY, files=files, expected_keys=[path.name for path in files],
-                                inputs=evidence.inputs(), read_snapshot=index)
+    artifact = build_generation(directory, family=family, files=files, expected_keys=[path.name for path in files],
+                                inputs=evidence.inputs(), read_snapshot=index, publication_status=publication_status)
     evidence.finish()
     return directory, artifact.pin.artifact_digest.removeprefix("sha256:"), evidence.artifact_dir
 
@@ -46,6 +46,58 @@ def run(tmp_path, name, directory, evidence, *extra, family=FAMILY):
     command.main(["--generation", str(directory), "--family", family, "--output", str(tmp_path / name),
                   *(("--evidence", str(evidence)) if evidence else ()), *extra])
     return tmp_path / name
+
+
+def test_census_acs_cli_registration_keeps_family_and_evidence_guards(tmp_path):
+    family = "census-acs"
+    directory, digest, evidence = generation(
+        tmp_path, "acs", {"census_acs_county_observations": ["001", "003", "005"]}, family=family)
+    live = tmp_path / "private-publication.v2.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    original_index = live.read_bytes()
+    dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
+
+    with pytest.raises(publication.PublicationError, match="is family census-acs, not the expected treasury-fiscal"):
+        run(tmp_path, "accepted-acs", directory, evidence, *dry)
+    with pytest.raises(publication.PublicationError, match="published with the source evidence it pins"):
+        run(tmp_path, "accepted-acs", directory, None, *dry, family=family)
+    assert not (tmp_path / "accepted-acs").exists()
+
+    output = run(tmp_path, "accepted-acs", directory, evidence, *dry, family=family)
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
+    assert receipt["artifactDigest"] == "sha256:" + digest
+    assert receipt["tables"]["census_acs_county_observations.parquet"]["rows"] == 3
+    assert receipt["other_family_changes"] == [] and live.read_bytes() == original_index
+    assert not list(tmp_path.glob(".dry-run-store-*"))
+
+
+def test_usaspending_cli_registration_retains_family_evidence_and_partial_guards(tmp_path):
+    family = "usaspending-awards"
+    directory, digest, evidence = generation(tmp_path, "awards", {"transactions": ["a"]}, family=family)
+    live = tmp_path / "private-prior.json"
+    original_index = json.dumps(publication.empty_index()).encode()
+    live.write_bytes(original_index)
+    dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
+    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+        run(tmp_path, "wrong-family", directory, evidence, *dry)
+    with pytest.raises(publication.PublicationError, match="pass --evidence"):
+        run(tmp_path, "missing-evidence", directory, None, *dry, family=family)
+    _, _, other_evidence = generation(tmp_path, "other", {"transactions": ["other"]})
+    with pytest.raises(publication.PublicationError, match="source evidence is missing or differs"):
+        run(tmp_path, "wrong-evidence", directory, other_evidence, *dry, family=family)
+    partial, _, partial_evidence = generation(
+        tmp_path, "partial-awards", {"transactions": ["a"]}, family=family, publication_status="local-partial")
+    with pytest.raises(publication.PublicationError, match="local partial candidate cannot be published"):
+        run(tmp_path, "partial-refused", partial, partial_evidence, *dry, family=family)
+    assert not any((tmp_path / name).exists() for name in (
+        "wrong-family", "missing-evidence", "wrong-evidence", "partial-refused"))
+    output = run(tmp_path, "registered", directory, evidence, *dry, family=family)
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
+    assert receipt["artifactDigest"] == "sha256:" + digest
+    assert receipt["other_family_changes"] == [] and live.read_bytes() == original_index
+    assert not list(tmp_path.glob(".dry-run-store-*"))
 
 
 def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, monkeypatch):
@@ -215,3 +267,40 @@ def test_only_publisher_originals_must_be_in_the_shared_archive(tmp_path, monkey
     (evidence.directory / ARCHIVE_REFERENCE).write_text(json.dumps({"root": str(shared["root"])}))
     with pytest.raises(publication.PublicationError, match=r"^1 cited original\(s\) are not in the shared raw archive"):
         command._require_shared_raw((evidence.artifact_dir,))
+
+
+
+def test_census_geocoder_uses_the_cli_with_the_existing_family_gates(tmp_path, capsys):
+    """Family admission reaches the real publisher and keeps evidence and prior guards."""
+    family = "census-geocoder"
+    directory, digest, evidence = generation(tmp_path, "geocoder", {
+        "census_geocoder_lookups": ["lookup"], "census_geocoder_geographies": ["06001"],
+    }, family=family)
+    live = tmp_path / "publication.v2.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
+    with pytest.raises(publication.PublicationError, match="source evidence it pins"):
+        run(tmp_path, "accepted", directory, None, *dry, family=family)
+    with pytest.raises(publication.PublicationError, match="not the expected treasury-fiscal"):
+        run(tmp_path, "accepted", directory, evidence, *dry)
+    with pytest.raises(publication.PublicationError, match="Live census-geocoder is absent"):
+        run(tmp_path, "accepted", directory, evidence, *dry, "--expect-prior", "a" * 64, family=family)
+    assert not (tmp_path / "accepted").exists()
+    output = run(tmp_path, "accepted", directory, evidence, *dry, family=family)
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert json.loads(capsys.readouterr().out) == receipt
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
+    assert receipt["artifactDigest"] == "sha256:" + digest
+    assert {key: entry["rows"] for key, entry in receipt["tables"].items()} == {
+        "census_geocoder_lookups.parquet": 1, "census_geocoder_geographies.parquet": 1,
+    }
+    assert receipt["evidence"] and receipt["other_family_changes"] == []
+    assert publication.parse_index(live.read_bytes()) == publication.empty_index()
+    assert not list(tmp_path.glob(".dry-run-store-*"))
+
+
+def test_open_payments_cli_refuses_a_generation_of_another_family(tmp_path):
+    directory, _, evidence = generation(tmp_path, "treasury", {"debt": ["a"]})
+    with pytest.raises(publication.PublicationError, match="not the expected cms-open-payments"):
+        run(tmp_path, "refused", directory, evidence, "--dry-run", family="cms-open-payments")
+    assert not (tmp_path / "refused").exists()

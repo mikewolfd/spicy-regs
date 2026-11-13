@@ -74,6 +74,7 @@ from spicy_docs.sources.congress.bulk_status import (
 )
 from spicy_docs.sources.congress.bulk_bills import BulkBillsAcquirer
 from spicy_docs.sources.govinfo.body_acquisition import GovInfoBodyAcquirer
+from spicy_docs.transport.resume import ResumeError
 from spicy_docs.transport.credentials import CredentialRefusedError, scrub_credential
 
 from spicy_regs.generations import spicy_docs_code
@@ -134,6 +135,7 @@ from spicy_regs.transforms.table_merge import (
 )
 
 if TYPE_CHECKING:
+    from spicy_regs.sources.bill_children import OlderBillChildSource, OlderBillChildren
     from spicy_regs.source_evidence import CaptureEvidence
 
 #: The DeltaTrack commit the vendored wheel was built from. ``installed_engine_stamp``
@@ -349,6 +351,9 @@ BACKFILL_WALK_IDENTITY: tuple[str, ...] = ("congress", "bill_type")
 BACKFILL_UNSUBSTANTIATED: tuple[str, ...] = (
     "schema_version",
     "action_count",
+    "latest_action_code",
+    "latest_action_source_system_code",
+    "latest_action_source_system_name",
     "committee_count",
     "version_count",
     "subject_count",
@@ -399,6 +404,7 @@ FAMILY_TABLES: tuple[tuple[str, str], ...] = (
     ("cbo_cost_estimates", "cbo_cost_estimates"),
     # spicy-docs 0.54.0: every item of each CBO feed read, whether or not it names a bill.
     ("cbo_feed_items", "cbo_feed_items"),
+    ("cbo_estimate_cards", "cbo_estimate_cards"),
 )
 
 #: Contracts stored one file per partition (multi-file design §4.2): ``bill_sections`` by the Congress its
@@ -455,9 +461,12 @@ class CongressListBackfill:
     """
 
     def __init__(
-        self, api_key: str, transport: httpx.BaseTransport | None = None, *, evidence: CaptureEvidence | None = None
+        self, api_key: str, transport: httpx.BaseTransport | None = None, *,
+        evidence: CaptureEvidence | None = None, single_attempt: bool = False,
     ) -> None:
-        self._reader = listing_reader(api_key, transport, evidence=evidence)
+        self._reader = listing_reader(
+            api_key, transport, evidence=evidence, **({"max_requests": 1} if single_attempt else {})
+        )
         self._evidence = evidence
 
     def __enter__(self) -> Self:
@@ -1532,6 +1541,8 @@ def backfill_status(identity: BillIdentity, record: Mapping[str, Any]) -> BillSt
         schema_version="",
         title=title,
         origin_chamber=_detail_str(record.get("originChamber")),
+        origin_chamber_code=_detail_str(record.get("originChamberCode")),
+        constitutional_authority_statement_text=_detail_str(record.get("constitutionalAuthorityStatementText")),
         introduced_date=_detail_str(record.get("introducedDate")),
         update_date=_detail_str(record.get("updateDate")),
         update_date_including_text=_detail_str(record.get("updateDateIncludingText")),
@@ -1578,7 +1589,7 @@ def _sub_route_count(record: Mapping[str, Any], name: str) -> str | None:
     return _detail_str(count) if isinstance(count, int) and not isinstance(count, bool) else None
 
 
-def _backfill_bill_row(row: Any, record: Mapping[str, Any]) -> Any:
+def _backfill_bill_row(row: Any, record: Mapping[str, Any], children: OlderBillChildren | None = None) -> Any:
     """NULL what this row cannot substantiate, then prove it still satisfies the contract.
 
     :data:`BACKFILL_UNSUBSTANTIATED` names the columns. ``cosponsor_count`` is
@@ -1590,7 +1601,12 @@ def _backfill_bill_row(row: Any, record: Mapping[str, Any]) -> Any:
     """
     adjusted: dict[str, Any] = dict(row)
     for column in BACKFILL_UNSUBSTANTIATED:
-        adjusted[column] = None
+        if children is None or children.actions is None or column not in {"action_count", "stage", "signed_date_rule"}:
+            adjusted[column] = None
+    if children is not None:
+        from spicy_docs.schemas.tables import json_column
+
+        adjusted["child_routes_json"] = json_column(children.routes)
     adjusted["cosponsor_count"] = _sub_route_count(record, "cosponsors")
     # The shaper labels any stated url as BILLSTATUS's; this row's came from the detail record.
     adjusted["url_source"] = "congress_api" if adjusted.get("url") else None
@@ -1775,7 +1791,7 @@ class _Backfill:
             raise _CapReached
         self.remaining[0] -= 1
 
-    def attempt(self, identity: BillIdentity, stamp: str) -> bool:
+    def attempt(self, identity: BillIdentity, stamp: str, child_source: OlderBillChildSource | None = None) -> bool:
         """One detail request for one bill: a row on success, a refused state row otherwise.
 
         A ``401``/``403`` propagates and aborts the run. A refusal by the
@@ -1790,17 +1806,31 @@ class _Backfill:
         try:
             detail, detail_at = self.source.detail(identity)
             status = backfill_status(identity, detail)
+            children = None
+            if child_source is not None:
+                from spicy_regs.sources.bill_children import ChildRequestLimit
+
+                def charge_child() -> None:
+                    try:
+                        self.charge()
+                    except _CapReached as error:
+                        raise ChildRequestLimit("Bill child request cap reached") from error
+
+                children = child_source.read(identity, detail, parent_observed_at=detail_at, charge=charge_child)
+                status = replace(status, actions=children.actions or (), summaries=children.summaries or ())
             built = self.build(BillFamilyCapture(status=status, versions=(), observed_at=detail_at))
             if not built.bills:
                 raise ValueError("the shaper produced no bills row")
-            row = _backfill_bill_row(built.bills[0], detail)
-        except CredentialRefusedError:
+            row = _backfill_bill_row(built.bills[0], detail, children)
+        except (CredentialRefusedError, ResumeError):
             raise
         except (PagedJsonSourceError, httpx.HTTPError, ConnectionError, ValueError, TypeError) as error:
             self.refused += 1
             logger.warning(
                 "Bill family backfill: {} {} {} refused: {}", key[0], key[1], key[2], scrub_credential(str(error), "")
             )
+            if child_source is not None:
+                return False
             self.state.filled.pop(key, None)
             self.state.refused[key] = stamp
             self.state.reasons[key] = type(error).__name__
@@ -1809,6 +1839,8 @@ class _Backfill:
             return False
         self.families.append(replace(built, bills=(row,)))
         self.touched.add(bill_key(status.identity))
+        if child_source is not None:
+            return True
         self.readers[bill_key(status.identity)] = self.reader
         self.state.refused.pop(key, None)
         self.state.filled[key] = stamp
@@ -1941,6 +1973,8 @@ def _run_backfill(
     readers: dict[str, str] | None = None,
     reader: str = "",
     law_bills: Mapping[str, str] | None = None,
+    child_ids: Sequence[BillIdentity] = (),
+    child_source: OlderBillChildSource | None = None,
 ) -> _BackfillOutcome:
     """Retry last run's refusals, re-read the bills another reader filled, then walk every unsettled unit.
 
@@ -1974,6 +2008,10 @@ def _run_backfill(
     )
     with list_source:
         try:
+            if child_source is not None:
+                for identity in child_ids:
+                    pass_.attempt(identity, "explicit-child-selection", child_source)
+                congresses = ()
             pass_.retry_refusals(congresses, bill_types)
             pass_.reread_stale(congresses, bill_types)
             for congress in congresses:
@@ -2008,6 +2046,8 @@ def build_bill_family(
     bills_acquirer: BulkBillsSource | None = None,
     list_source: ListBackfillSource | None = None,
     cbo_acquirer: Any = None,
+    cbo_archive_manifest: Path | None = None,
+    cbo_archive_root: Path | None = None,
     max_version_fetches: int = MAX_VERSION_FETCHES,
     download_prior: Callable[[str, Path], bool] = r2.download,
     download_members: Callable[[str, Path], Sequence[Path]] = download_prior_members,
@@ -2015,6 +2055,9 @@ def build_bill_family(
     receipt_build=None,
     publication_package_ids: tuple[str, ...] = (),
     publication_metadata_acquirer: Any = None,
+    child_bill_ids: tuple[str, ...] = (),
+    child_checkpoint_dir: Path | None = None,
+    child_source: OlderBillChildSource | None = None,
 ) -> tuple[Path, ...]:
     """Build bill-family outputs, with a directory for each partitioned table.
 
@@ -2026,8 +2069,15 @@ def build_bill_family(
         })
     if isinstance(max_version_fetches, bool) or not isinstance(max_version_fetches, int) or max_version_fetches < 0:
         raise ValueError("max_version_fetches must be a nonnegative integer; zero disables acquisition")
-    congresses = congresses_from_env()
-    bill_types = bill_types_from_env()
+    selected_children = tuple(BillIdentity.from_bill_id(value) for value in child_bill_ids)
+    if selected_children and (len(set(selected_children)) != len(selected_children) or any(
+        not LIST_ROUTE_FLOOR <= identity.congress < BULK_STATUS_FLOOR for identity in selected_children
+    )):
+        raise ValueError("Bill child selection requires distinct modern bill IDs from Congresses 82–107")
+    if bool(selected_children) != (child_checkpoint_dir is not None or child_source is not None):
+        raise ValueError("Bill child selection requires exact bill IDs and a retained checkpoint directory")
+    congresses = [] if selected_children else congresses_from_env()
+    bill_types = [] if selected_children else bill_types_from_env()
     logger.info("Bill family: Congresses {}, bill types {}", congresses, bill_types)
 
     # One scope input, two routes: BILLSTATUS bulk serves nothing below its
@@ -2046,6 +2096,15 @@ def build_bill_family(
         )
 
     api_key = _resolve_api_key()
+    if selected_children and child_source is None:
+        from spicy_regs.sources.bill_children import OlderBillChildSource
+
+        if not api_key or evidence is None:
+            raise ValueError("Bill child selection requires Congress.gov credentials and source evidence")
+        assert child_checkpoint_dir is not None  # The exact-selection validation above requires it here.
+        child_source = OlderBillChildSource(child_checkpoint_dir, api_key=api_key, evidence=evidence)
+    if selected_children and list_source is None and not api_key:
+        raise ValueError("Bill child selection requires a bill detail reader")
     if evidence is not None:
         evidence.credential = api_key or ""
         evidence.event(
@@ -2053,6 +2112,7 @@ def build_bill_family(
             congresses=list(congresses),
             bill_types=list(bill_types),
             max_version_fetches=max_version_fetches,
+            child_bill_ids=list(child_bill_ids),
         )
     bulk_budget = bulk_status_budget()
     bulk_acquirer = bulk_acquirer or BulkStatusAcquirer(
@@ -2069,7 +2129,7 @@ def build_bill_family(
         if evidence is None
         else evidence.transport(stage="bill-text-bulk", max_bytes=bulk_budget.max_bytes),
     )
-    if body_acquirer is None and max_version_fetches > 0:
+    if not selected_children and body_acquirer is None and max_version_fetches > 0:
         if api_key:
             body_acquirer = GovInfoBodyAcquirer(
                 budget=BODY_BUDGET,
@@ -2092,7 +2152,7 @@ def build_bill_family(
     # credential refusal and a transport failure still abort. A wrapper here
     # could only re-file one of those as the other, which is what the 0.21.3
     # one had to do.
-    gemini_key = resolve_gemini_key()
+    gemini_key = None if selected_children else resolve_gemini_key()
     classify = summarize = summarize_diff_call = None
     if gemini_key:
         from spicy_docs.extraction.gemini import GeminiClient
@@ -2121,10 +2181,11 @@ def build_bill_family(
     index = _prior_index(
         prior_paths, split_priors["bill_sections"], in_scope=lambda bill: _in_scope(bill, congresses, bill_types)
     )
-    if index.invalid_targets:
+    invalid_targets = set() if selected_children else set(index.invalid_targets)
+    if invalid_targets:
         for name in ("financial_changes", "diff_summaries"):
             prior_paths[name] = published_table(output_dir, name, download_prior)
-    invalid_pairs = _incident_pairs(prior_paths, index.invalid_targets)
+    invalid_pairs = _incident_pairs(prior_paths, invalid_targets)
     # The published ``laws`` table names each public law's bill, best-effort, for the CBO titles led by a law.
     law_bills = law_bills_from(published_table(output_dir, "laws", download_prior))
     # Every bill's reader, carried forward, and this run's code for each status it shapes.
@@ -2188,7 +2249,7 @@ def build_bill_family(
     families: list[BillFamilyTables] = []
     touched: set[str] = set()
     # Published printings keyed under another printing's code.
-    retired_versions: set[tuple[str, ...]] = set(index.invalid_targets)
+    retired_versions: set[tuple[str, ...]] = set(invalid_targets)
     archive_rows: list[dict] = []
     vote_rows: list[dict] = []
     # The bills whose status this run read whole: a read status is the complete statement of its actions'
@@ -2296,9 +2357,10 @@ def build_bill_family(
     # 2b. Bodies, sections and comparisons, by each printing's own state:
     # the printings this run listed and every earlier run's still pending.
     fresh_versions = [row for tables in families for row in tables.bill_versions]
-    repairs = _target_repair_rows(index, fresh_versions, stamp)
-    families.append(repairs)
-    fresh_versions.extend(repairs.bill_versions)
+    if not selected_children:
+        repairs = _target_repair_rows(index, fresh_versions, stamp)
+        families.append(repairs)
+        fresh_versions.extend(repairs.bill_versions)
     body = _run_body_pass(
         prior_paths,
         index,
@@ -2322,10 +2384,10 @@ def build_bill_family(
     # publisher serves below the bulk floor, the same per-run cap.
     backfill_state: list[dict[str, Any]] = []
     backfill_walk_state: list[dict[str, Any]] = []
-    if backfill_congresses:
+    if backfill_congresses or selected_children:
         source = list_source
         if source is None and api_key:
-            source = CongressListBackfill(api_key, evidence=evidence)
+            source = CongressListBackfill(api_key, evidence=evidence, single_attempt=bool(selected_children))
         if source is not None:
             outcome = _run_backfill(
                 source,
@@ -2341,6 +2403,8 @@ def build_bill_family(
                 readers=readers,
                 reader=reader,
                 law_bills=law_bills,
+                child_ids=selected_children,
+                child_source=child_source,
             )
             families.extend(outcome.families)
             touched.update(outcome.touched)
@@ -2440,13 +2504,15 @@ def build_bill_family(
     # compared over the bills whose status this run read — the rest cannot
     # have changed. A body the body pass read for another bill is not a
     # version added: the printing was added when its status listed it.
-    prior = _prior_snapshot(prior_paths, touched)
-    current = snapshot_from_rows(
-        bills=folded.bills,
-        bill_versions=[row for row in folded.bill_versions if row["bill_id"] in touched],
-        bill_summaries=[row for row in folded.bill_summaries if row["bill_id"] in touched],
-    )
-    events = activity_events(prior, current, detected_at=_detected_at())
+    events = ()
+    if not selected_children:
+        prior = _prior_snapshot(prior_paths, touched)
+        current = snapshot_from_rows(
+            bills=folded.bills,
+            bill_versions=[row for row in folded.bill_versions if row["bill_id"] in touched],
+            bill_summaries=[row for row in folded.bill_summaries if row["bill_id"] in touched],
+        )
+        events = activity_events(prior, current, detected_at=_detected_at())
     logger.info("Bill family: {:,} activity events", len(events))
 
     # 4. Publish. Every table goes through the one merge helper. Each prior was
@@ -2486,10 +2552,26 @@ def build_bill_family(
         },
         prior=prior_paths.get("cbo_cost_estimates"),
     )
-    folded = replace(folded, cbo_cost_estimates=tuple(estimates), cbo_feed_items=feed.items)
+    from spicy_regs.transforms.cbo_archive_selection import read_selected_cards
+
+    cards = read_selected_cards(
+        cbo_archive_manifest or (Path(raw) if (raw := os.environ.get("BILL_FAMILY_CBO_ARCHIVE_MANIFEST")) else None),
+        archive_root=cbo_archive_root, congresses=bulk_congresses, output_dir=output_dir, evidence=evidence,
+    )
+    folded = replace(folded, cbo_cost_estimates=tuple(estimates), cbo_feed_items=feed.items,
+                     cbo_estimate_cards=tuple(cards))
     # Each scope names parents whose prior child rows this run replaces --
     # emptying them where the run publishes none.
+    complete_actions = {
+        identifier
+        for row in folded.bills
+        if (identifier := row["bill_id"]) is not None and (routes_json := row.get("child_routes_json")) and any(
+            route["route"] == "actions" and route["outcome"] in {"populated", "requested-empty"}
+            for route in json.loads(routes_json)
+        )
+    }
     replaced: dict[str, ReplacementScope] = {
+        "bill_actions": ("bill_id", complete_actions),
         "bill_cosponsors": (
             "bill_id",
             {
@@ -2505,8 +2587,8 @@ def build_bill_family(
         "cbo_feed_items": ("congress", {str(congress) for congress in feed.congresses}),
         "bill_versions": (version_identity, retired_versions | superseded | body.unread),
         "bill_sections": (version_identity, section_scopes | retired_versions | body.unread),
-        "bill_summaries": (version_identity, set(index.invalid_targets)),
-        "section_classifications": (version_identity, set(index.invalid_targets)),
+        "bill_summaries": (version_identity, invalid_targets),
+        "section_classifications": (version_identity, invalid_targets),
         "section_diffs": (pair_identity, retired_pairs),
         "section_diff_items": (pair_identity, item_scopes | retired_pairs),
         "financial_changes": (pair_identity, retired_pairs),
@@ -2514,6 +2596,11 @@ def build_bill_family(
     }
 
     def publish(contract: str, rows: Any) -> Path:
+        if contract == "cbo_estimate_cards":
+            from spicy_regs.transforms.cbo_archive_selection import merge_card_rows
+
+            return merge_card_rows(output_dir, rows, download_prior=download_prior,
+                                   prior_present=(prior_paths.get(contract) is not None) if contract in prior_paths else None)
         if contract in PARTITIONED:
             table = TABLE_CONTRACTS[contract]
             return merge_partitioned_table(
@@ -2546,10 +2633,11 @@ def build_bill_family(
             raise ValueError("Bill publication refresh requires a metadata acquirer")
         refresh_bill_publication(merged["bill_versions"], package_ids=publication_package_ids,
                                  metadata_source=metadata_source, evidence=evidence)
-    restaged = restage_held_rows(merged["congress_bills"], merged["bill_actions"], merged["bill_versions"])
-    logger.info("Bill family: the running stage rule moves {:,} held bill rows and {:,} action rows", *restaged)
-    if evidence is not None:
-        evidence.event("held-rows-restaged", bills=restaged[0], actions=restaged[1])
+    if not selected_children:
+        restaged = restage_held_rows(merged["congress_bills"], merged["bill_actions"], merged["bill_versions"])
+        logger.info("Bill family: the running stage rule moves {:,} held bill rows and {:,} action rows", *restaged)
+        if evidence is not None:
+            evidence.event("held-rows-restaged", bills=restaged[0], actions=restaged[1])
     paths.append(publish("public_activity_events", events))
     # The last two outputs are this repository's own tables, not contracts, so
     # they go through the same merge helper one level down.

@@ -47,12 +47,17 @@ import secrets
 import shutil
 import time
 from contextlib import suppress
+from functools import cache
 from os import getenv
 from pathlib import Path
 
 from spicy_regs.duckdb_settings import ExportResources
 from spicy_regs.schemas import COMMENT
 from spicy_regs.sources import iceberg
+from spicy_regs.transforms.regulations_shape import (
+    COMMENT_ATTACHMENTS, COMMENT_ATTACHMENT_ID, COMMENT_ATTACHMENT_METADATA, COMMENT_ATTACHMENT_RESTRICTIONS,
+    _native, _validate,
+)
 
 #: The catalog's key and version, which :func:`prepare` selects on their own and a fill never writes.
 KEY_COLUMNS = ("comment_id", "agency_code", "docket_id", "modify_date")
@@ -86,11 +91,8 @@ def read_columns(profile: str) -> tuple[str, ...]:
 READ_COLUMNS = read_columns("all")
 
 
-#: The key SpicyDocs 0.85.0 adds to every attachment entry: the attachment's own id, NULL where the record states none.
-_ATTACHMENT_ID = "attachment_id"
-#: The keys later extracts add to an attachment's entry: b19b092 the restriction, only when the record states it;
-#: 0.85.0 :data:`_ATTACHMENT_ID`.
-_ADDED_KEYS = ("restrictReasonType", "restrictReason", _ATTACHMENT_ID)
+_METADATA_KEYS = frozenset(source for source, _, _ in COMMENT_ATTACHMENT_METADATA)
+_ADDED_KEYS = _METADATA_KEYS | {COMMENT_ATTACHMENT_ID, *COMMENT_ATTACHMENT_RESTRICTIONS}
 
 
 def _listed(value: str | None) -> list:
@@ -101,16 +103,8 @@ def _listed(value: str | None) -> list:
     return listed
 
 
-def without_attachment_ids(value: str | None) -> str | None:
-    """``attachments_json`` less each entry's ``attachment_id``: what SpicyDocs 0.54.0 (b19b092) to 0.84.0 wrote for
-    the same record, every attachment the record lists, withheld ones and url-less renditions included.
-
-    Only removals, keys and order kept; None for a value of any other spelling or shape.
-    """
-    try:
-        return json.dumps([{k: v for k, v in entry.items() if k != _ATTACHMENT_ID} for entry in _listed(value)])
-    except (ValueError, TypeError, AttributeError):
-        return None
+def _without_keys(listed: list, keys: set | frozenset) -> str:
+    return json.dumps([{k: v for k, v in entry.items() if k not in keys} for entry in listed])
 
 
 def downloadable_attachments(value: str | None) -> str | None:
@@ -132,15 +126,46 @@ def downloadable_attachments(value: str | None) -> str | None:
     return json.dumps(kept) if kept else None
 
 
-#: How each earlier extract spelled a record's list, newest first: a held list in either spelling is one a read of the
-#: same record only adds to.
-_EARLIER_ATTACHMENT_SPELLINGS = (without_attachment_ids, downloadable_attachments)
+@cache
+def _v2_attachment_type():
+    from spicy_regs.policy_migrations import earlier_policy
+
+    return earlier_policy("comments", "regulations-native-v2").subject_schema.field("attachments").type
 
 
-def only_adds_attachments(read: str | None, held: str | None) -> bool:
-    """Whether ``read`` only adds to ``held``: ``held`` is, byte for byte, the read's list as an earlier extract spelled
-    it, before 0.85.0 added each entry's id or before b19b092 listed withheld attachments and url-less renditions."""
-    return held is not None and any(spelling(read) == held for spelling in _EARLIER_ATTACHMENT_SPELLINGS)
+def _matches_promoted_attachments(held: str, *earlier_spellings: str | None) -> bool:
+    """The v2 promotion encoded the exact native struct in compact JSON with all fields."""
+    v2 = _v2_attachment_type()
+    decoded = json.loads(held)
+    if not isinstance(decoded, list) or any(
+        not isinstance(entry, dict) or list(entry) != v2.value_type.names for entry in decoded
+    ):
+        return False
+    import pyarrow as pa
+
+    for spelling in earlier_spellings:
+        candidate = _native("comments", "attachments_json", spelling)
+        _validate(candidate, COMMENT_ATTACHMENTS, "attachments")
+        normalized = pa.array([candidate], type=v2).to_pylist()[0]
+        if json.dumps(normalized, ensure_ascii=False, separators=(",", ":")) == held:
+            return True
+    return False
+
+
+def only_adds_attachments(read: str | None, held: str | None, promoted_v2: bool = False) -> bool:
+    """Compare the read against the exact JSON written by an earlier extract."""
+    if held is None:
+        return False
+    try:
+        listed = _listed(read)
+        prior = _without_keys(listed, _METADATA_KEYS)
+        before_ids = _without_keys(listed, _METADATA_KEYS | {COMMENT_ATTACHMENT_ID})
+        downloadable = downloadable_attachments(read)
+        return held in (prior, before_ids, downloadable) or (
+            promoted_v2 and _matches_promoted_attachments(held, prior, before_ids, downloadable)
+        )
+    except (ValueError, TypeError, AttributeError):
+        return False
 
 
 #: Fill columns whose held value a read may replace, each with whether a read only adds to the held value. Only
@@ -347,6 +372,7 @@ def _refuse_committed_failures(workdir: Path) -> None:
 # --------------------------------------------------------------------------- #
 def prepare(
     workdir: Path, *, scope: dict[str, str] | None = None, reads: Path | None = None, profile: str = "all", con=None,
+    resources: ExportResources | None = None,
 ) -> dict:
     """Compute the fill at the catalog's current snapshot; return and write the counts-only receipt.
 
@@ -354,7 +380,8 @@ def prepare(
     ``workdir/parts``. ``profile`` names the fill columns considered (:data:`PROFILES`); the receipt keeps them for
     :func:`write`. Refuses a snapshot that lacks a fill column: the columns arrive with the deployed branch's first
     data commit (runbook), never from this tool. Refuses a read that lacks one, and while any batch committed and
-    failed its check. Touches no catalog row and needs no lock.
+    failed its check. Touches no catalog row and needs no lock. ``resources`` overrides the default query targets
+    for a bounded execution; these settings do not enforce a whole-process memory limit.
     """
     columns = fill_columns(profile)
     additive = [c for c in columns if c in ADDITIVE]
@@ -364,20 +391,11 @@ def prepare(
     out = fill_dir(workdir)
     out.mkdir(parents=True, exist_ok=True)
     try:
-        WRITE_RESOURCES.configure(con, out / "spill")
+        (resources or WRITE_RESOURCES).configure(con, out / "spill")
         storage_access(con)
         namespace = iceberg._selected_catalog_namespace(con, COMMENT)
         snapshot = iceberg._read_snapshot(con, COMMENT, namespace=namespace)
         source = iceberg._snapshot_query(COMMENT, snapshot, namespace=namespace)
-        from spicy_regs.sources.regulatory_catalog import processing_table
-        processing = processing_table(con, COMMENT)
-        if iceberg._read_snapshot(con, COMMENT) != snapshot:
-            raise RuntimeError('Catalog changed while preparing field fill; retry')
-        missing = [c for c in columns if c not in con.sql(f'SELECT * FROM {processing}').columns]
-        if missing:
-            raise RuntimeError(f"the comments catalog lacks {missing} at snapshot {snapshot.snapshot_id}: deploy the "
-                               "branch and let one ETL data commit migrate the table before preparing "
-                               "(docs/comment-fields-fill.md)")
         read_from = reads or workdir / "parts" / "*" / "*.parquet"
         parts = f"read_parquet({_sql(read_from)}, hive_partitioning=false)"
         lacking = [c for c in read_columns(profile) if c not in con.sql(f"SELECT * FROM {parts}").columns]
@@ -386,27 +404,25 @@ def prepare(
                                "(docs/comment-fields-fill.md)")
         table_rows = con.execute(f"SELECT count(*) FROM ({source})").fetchone()[0]
         where = " AND ".join(f'"{column}" = {_sql(value)}' for column, value in (scope or {}).items()) or "TRUE"
-        physical = source.replace("SELECT *", f"SELECT comment_id, {FILE_COLUMN} AS _file", 1)
-        with_file = f'SELECT p.*, f._file FROM {processing} p JOIN ({physical}) f USING (comment_id)'
         # Every intermediate is a Parquet file the next step streams, never an in-memory table: three whole-table
         # temp tables (the catalog's 15 fill values, the read copies with their object keys, and every version with
         # its key list) ran the runner out of 6 GB at the fill's COPY (run 37105894011, 2026-10-03). They sit in
         # ``fill/work``, outside the artifact's ``fill/*.parquet``, and go once the receipt is written.
         work = out / "work"
         work.mkdir(exist_ok=True)
+        index_file = work / "catalog-index.parquet"
+        index = f"read_parquet({_sql(index_file)})"
         cat_file, read_file, versions_file, differs_file = (
             work / f"{name}.parquet" for name in ("catalog", "reads", "versions", "differs"))
         catalog, read_rows, versions, differs = (
             f"read_parquet({_sql(path)})" for path in (cat_file, read_file, versions_file, differs_file))
-        # Of a catalog cell the fill reads only whether it is NULL, and the value only where a read may replace it, so
-        # the catalog side is the key, the data file, one flag per fill column and the replaceable values: the one
-        # scan of the remote table, streamed to disk.
-        nulls = ", ".join(f'"{c}" IS NULL AS "null_{c}"' for c in columns)
-        held = "".join(f', "{c}" AS "held_{c}"' for c in additive)
-        con.execute(f"""COPY (SELECT comment_id, modify_date, {nulls}{held}, _file FROM ({with_file}) WHERE {where})
-                        TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
-        con.execute(f"DROP TABLE {processing}")
-        duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {catalog} GROUP BY 1 HAVING count(*) > 1)"
+        # Resolve scope and versions before restoring any wide subject or receipt. The pinned native columns are
+        # selection hints only; the existing strict receipt reader still verifies every possible fill row below.
+        # Keep all scoped keys here so unread/other-version counts and duplicate detection do not shrink to fills.
+        physical = source.replace("SELECT *", f"SELECT comment_id, modify_date, {FILE_COLUMN} AS _file", 1)
+        con.execute(f"""COPY (SELECT comment_id, modify_date, _file FROM ({physical} WHERE {where}))
+                        TO {_sql(index_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        duplicated = con.execute(f"SELECT count(*) FROM (SELECT comment_id FROM {index} GROUP BY 1 HAVING count(*) > 1)"
                                  ).fetchone()[0]
         if duplicated:
             raise RuntimeError(f"{duplicated} comment ids appear more than once in the catalog; run the dedupe first")
@@ -414,7 +430,7 @@ def prepare(
         # The copies of the comments in scope, less their object keys: only a version read more than once can
         # conflict, so only those keys are read again, below.
         con.execute(f"""COPY (SELECT s.comment_id, s.modify_date, {values} FROM {parts} s
-                              SEMI JOIN {catalog} c USING (comment_id))
+                              SEMI JOIN {index} c USING (comment_id))
                         TO {_sql(read_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
         # Per column: how many spellings the copies of one version state (NULL counted as one), and the value. All
         # but 842 of the re-read's 26.6M versions were read once and state one spelling each, so only versions read
@@ -449,15 +465,40 @@ def prepare(
                               AND k.modify_date IS NOT DISTINCT FROM x.modify_date ORDER BY 1, 3)
                         TO {_sql(out / 'conflicts.parquet')} (FORMAT PARQUET)""")
         on_version = "v.comment_id = c.comment_id AND v.modify_date IS NOT DISTINCT FROM c.modify_date"
+        has_value = " OR ".join(f'v."{c}" IS NOT NULL' for c in columns)
+        candidates = (f'SELECT c.comment_id FROM {index} c JOIN {versions} v ON {on_version} '
+                      f'WHERE {has_value}')
+        candidate_files = f'SELECT DISTINCT _file FROM {index} WHERE comment_id IN ({candidates})'
+        from spicy_regs.sources.regulatory_catalog import processing_table
+        processing = processing_table(con, COMMENT,
+                                      where=f'comment_id IN ({candidates}) AND {FILE_COLUMN} IN ({candidate_files})',
+                                      include_comment_promotion="attachments_json" in additive)
+        try:
+            if iceberg._read_snapshot(con, COMMENT) != snapshot:
+                raise RuntimeError('Catalog changed while preparing field fill; retry')
+            missing = [c for c in columns if c not in con.sql(f'SELECT * FROM {processing}').columns]
+            if missing:
+                raise RuntimeError(f"the comments catalog lacks {missing} at snapshot {snapshot.snapshot_id}: deploy the "
+                                   "branch and let one ETL data commit migrate the table before preparing "
+                                   "(docs/comment-fields-fill.md)")
+            nulls = ", ".join(f'p."{c}" IS NULL AS "null_{c}"' for c in columns)
+            held = "".join(f', p."{c}" AS "held_{c}"' for c in additive)
+            if additive:
+                held += ", p._promoted_v2"
+            con.execute(f"""COPY (SELECT p.comment_id, p.modify_date, {nulls}{held}, i._file
+                                  FROM {processing} p JOIN {index} i USING (comment_id))
+                            TO {_sql(cat_file)} (FORMAT PARQUET, COMPRESSION ZSTD)""")
+        finally:
+            con.execute(f"DROP TABLE {processing}")
         # Where a replaceable cell holds a value the version's agreed read differs from: whether the read only adds
         # to it, and the value it would replace. Few rows, so the rule runs in Python on these alone, and the held
         # value travels from here: carried through the whole-table join below it doubled that join's time (a
         # stand-in of the 26.3M-row catalog, 2026-10-03: 6.0 s against 13.2 s).
         for c in additive:
-            con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR", "VARCHAR"], "BOOLEAN",
+            con.create_function(f"_additive_{c}", ADDITIVE[c], ["VARCHAR", "VARCHAR", "BOOLEAN"], "BOOLEAN",
                                 null_handling="special")
         differing = [f"""SELECT c.comment_id, c.modify_date, '{c}' AS "column",
-                                _additive_{c}(v."{c}", c."held_{c}") AS additive,
+                                _additive_{c}(v."{c}", c."held_{c}", c._promoted_v2) AS additive,
                                 c."held_{c}" AS held
                          FROM {catalog} c JOIN {versions} v ON {on_version}
                          WHERE c."held_{c}" IS NOT NULL AND v."{c}" IS NOT NULL AND v."{c}" <> c."held_{c}\""""
@@ -491,7 +532,7 @@ def prepare(
                    count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)),
                    count(*) FILTER (WHERE EXISTS (SELECT 1 FROM {read_rows} r WHERE r.comment_id = c.comment_id)
                                     AND NOT EXISTS (SELECT 1 FROM {versions} v WHERE {on_version}))
-            FROM {catalog} c""").fetchall()[0]
+            FROM {index} c""").fetchall()[0]
         fill_rows = f"read_parquet({_sql(out / 'fill.parquet')})"
         # A fill cell is non-NULL exactly where its rule held, so the fill file counts its own cells: a NULL filled
         # where it carries no replaced value, a replacement where it does.
@@ -646,7 +687,8 @@ def _write_batch(con, workdir, journal, prepared, table, files, expected, by_fil
                     f"WHERE _file IN ({file_list})")
         from spicy_regs.sources import regulatory_catalog as native
         selected_ids = f'SELECT comment_id FROM {table} WHERE {in_files}comment_id IN (SELECT comment_id FROM _batch)'
-        processing = native.processing_table(con, COMMENT, where=f'comment_id IN ({selected_ids})', in_transaction=True)
+        processing = native.processing_table(con, COMMENT, where=f'{in_files}comment_id IN ({selected_ids})',
+                                             in_transaction=True)
         con.execute(f"COPY (SELECT {col_list} FROM {processing}) TO {_sql(preimage)} (FORMAT PARQUET, COMPRESSION ZSTD)")
         con.execute(f"DROP TABLE {processing}")
         con.execute(f"CREATE OR REPLACE TEMP VIEW _prior AS SELECT * FROM read_parquet({_sql(preimage)})")

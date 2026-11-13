@@ -13,6 +13,12 @@ from spicy_regs.congress_subjects import (
 @pytest.mark.parametrize('dataset', INPUT_COLUMNS)
 def test_every_declared_field_has_a_destination_and_unknown_fields_refuse(dataset):
     raw: dict[str, Any] = dict.fromkeys(INPUT_COLUMNS[dataset])
+    if dataset == "cbo_estimate_cards":
+        from spicy_docs.sources.cbo import card_row, parse_cbo_estimate_card
+        from tests.test_bill_family_cbo import CARD
+
+        raw = card_row(parse_cbo_estimate_card(CARD, publication_id="62720",
+                                              archived_url="https://www.cbo.gov/publication/62720"))
     mapped = map_record(dataset, raw)
     assert mapped.source_fields == raw
     if dataset in RECEIPT_ONLY:

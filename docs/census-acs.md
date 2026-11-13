@@ -15,12 +15,10 @@ retained with SHA-256
 Completeness is checked against that set, never inferred from returned rows.
 Other vintages, states, districts and measures are outside this pilot.
 
-Local synthetic source-release, publication and query checks are complete.
-Genuine API data capture and public selection remain pending. A local fixture
-comparison is not evidence that Census data or this table has been published.
-The SpicyDocs source implementation must also be adopted through the repository's
-normal dependency packaging before a release; a development `PYTHONPATH` is only
-integration evidence.
+The selected genuine observations passed source admission, original-response
+review and ordinary local queries using the installed SpicyDocs dependency.
+Shared publication remains pending. Local qualification and a private publication
+rehearsal do not establish that this table has been published.
 
 ## Values and identifiers
 
@@ -70,6 +68,25 @@ source-evidence paths and exact generation identity. The generation can use
 `sources.publication.publish_generation`, supplying its source-evidence directory;
 the build command does not publish it. Source refresh stays in the maintained
 SpicyDocs acquisition and replay workflow.
+
+The maintained `publish-local-generation` command accepts the exact family
+`census-acs`. Pass the generation and source-evidence paths printed by the build.
+For a bounded private rehearsal, supply a saved private index; an empty
+`sources.publication.empty_index()` is sufficient for a first-publication fixture:
+
+```sh
+uv run --frozen publish-local-generation \
+  --family census-acs --generation "$ACS_OUTPUT/generation" \
+  --evidence "$ACS_EVIDENCE" --dry-run --live-index "$ACS_PRIOR_INDEX" \
+  --output "$ACS_DRY_RUN"
+```
+
+The dry run uses a private disk store, retains the shared-archive and exact
+source-evidence checks, and leaves the supplied index unchanged. A wrong family
+or missing/mismatched source evidence refuses. Use a small private index for this
+rehearsal; an empty fixture does not describe the current shared publication.
+The coordinator owns shared publication and verifies its served scope separately.
+See [the maintained publication steps](local-family-refresh.md#the-publish-steps-for-every-family).
 
 Point the existing local SQL consumer's `SPICY_REGS_DATA_DIR` at the resulting
 `generation/` directory. This query shows income comparisons, uncertainty and

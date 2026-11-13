@@ -133,3 +133,23 @@ the bytes are tracked in git:
 | `usc_oracle_subsections` | `usc-section-oracle/usc-oracle-subsections.parquet` | 1,100,246 | 160,209 | `d7502945223eed92bdeb65e6a73cf52240febefe9814180675fc4df512cd08ed` |
 | `usc_oracle_chapters` | `usc-section-oracle/usc-oracle-chapters.parquet` | 11,668 | 2,905 | `031ae7f3435f7ba2969bdf2c94b699170a63fe3183dd289ca23fa0ce45e90cb3` |
 | `usc_act_sections` | `usc-act-index/usc-act-sections.parquet` | 2,213,252 | 302,156 | `9040d4460e90704aef911b4d4f704e9f432cebd7b58717f31f090a3008ca6159` |
+
+## CCN definition for hospital reports
+
+`ccn-definition.json` records RefSpec's unchanged CCN definition from
+`1e110da25124fa2e6dd5355500d71f49b398a603` (`src/refspec/registry/nppes_npi_identifiers.py`, module SHA-256
+`86e4096408c2e2803def559c56500fd4d6fb427b0f1c43038e50653cc8ab1bd4`). The thin adapter
+`ontology/ccn.py` verifies the artifact SHA-256 `143472e11b719cd424b449704a2c5c40f02330cc0a9df547abde3aba0eb48f87` before applying it.
+RefSpec remains the definition owner under REF-024; this is a local reference
+artifact adoption, not a RefSpec public release. The full RefSpec package pins
+SpicyDocs 0.54.0, incompatible with this receiver's adopted provider. The owned
+receiver environment uses Python 3.12, which satisfies RefSpec's Python bound.
+
+The artifact records the exact Python regex, flags, full-match behavior,
+`str.strip` normalization, messages and CMS authority references. Python `\d`
+continues to accept Unicode decimal digits in the first two positions; the
+suffix remains ASCII uppercase alphanumeric. The hospital consumer still
+requires six characters and rejects normalized values that differ from native
+input. Tests retain the old function as an independent oracle, with no declared
+verdict divergences. Retained provider IDs and mutation evidence are recorded
+in the final package handoff.

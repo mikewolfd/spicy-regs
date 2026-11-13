@@ -569,13 +569,13 @@ def _member(url, payload, mime):
     return stream.getvalue()
 
 
-def _archive(pdf=PDF_BYTES):
+def _archive(pdf=PDF_BYTES, *, card=CARD, pdf_url="https://www.cbo.gov/system/files/2026-09/s4429.pdf"):
     """A tiny Common Crawl: one WARC file holding a card page, a notice page and a PDF; its index; its pages."""
     warc, rows = b"", []
     for url, payload, mime in (
-        ("https://www.cbo.gov/publication/62720", CARD, "text/html"),
+        ("https://www.cbo.gov/publication/62720", card, "text/html"),
         ("https://www.cbo.gov/publication/62589", NOTICE, "text/html"),
-        ("https://www.cbo.gov/system/files/2026-09/s4429.pdf", pdf, "application/pdf"),
+        (pdf_url, pdf, "application/pdf"),
     ):
         member = _member(url, payload, mime)
         rows.append({"url": url, "timestamp": "20261017051839", "status": "200", "mime": mime,
@@ -648,6 +648,24 @@ def test_archived_cards_are_gated_and_every_capture_receipt_names_its_archive_co
         assert receipt["publisher_id"] == "cbo-web-archive" and receipt["policy_decision_id"] == "cbo-archive-route-q21/1"
     assert {r["native_id"] for r in records} == {"62720", "62589"}
     assert gzip.decompress(warc).count(b"WARC/1.0") == 3
+
+
+def test_an_indexed_supporting_pdf_does_not_replace_the_missing_primary_estimate(tmp_path):
+    card = CARD + b'<a href="/system/files/2026-09/supporting.pdf">Supporting baseline</a>'
+    warc, rows = _archive(card=card, pdf_url="https://www.cbo.gov/system/files/2026-09/supporting.pdf")
+    calls = []
+    evidence = CaptureEvidence(tmp_path / "run", "bill-family")
+    bound = cbo.cbo_archive_evidence(evidence)
+    item = CboEstimateItem(0, "62720", "S. 4429", "Fri, 11 Sep 2026 17:00:00 -0400",
+                           "https://www.cbo.gov/publication/62720", None, "S. 4429")
+    with WebArchiveAcquirer(max_requests=12, min_request_interval_seconds=0,
+                            transport=_transport(warc, rows, calls)) as acquirer:
+        sweep = cbo.sweep_cbo_archive_index([CRAWL], acquirer=acquirer, evidence=bound, reserve=3)
+        result, = cbo.read_cbo_archive_cards([item],119,sweep,acquirer=acquirer,evidence=bound)
+    evidence.finish()
+    assert result.card is not None and result.outcome == "card"
+    assert result.pdf is None and result.pdf_path is None
+    assert len(calls) == 5  # Index reads and the genuine page; no supporting-PDF request.
 
 
 def test_an_archived_pdf_that_is_not_a_pdf_is_retained_and_refused_and_a_spent_budget_is_named(tmp_path):

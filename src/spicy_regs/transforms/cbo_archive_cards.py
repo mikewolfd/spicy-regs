@@ -26,37 +26,13 @@ WARC_RECORD_ID = re.compile(r"<urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 
 def _schema() -> pa.Schema:
-    from spicy_docs.sources.cbo import CARD_MEASURES, CARD_QUESTIONS
+    from spicy_docs.schemas.cbo_estimate_cards import CBO_ESTIMATE_CARDS
+    from spicy_regs.contract_types import arrow_schema
 
-    windows = [("period", pa.string())]
-    for name in CARD_MEASURES:
-        windows.extend([(name + "_literal", pa.string()), (name + "_millions", pa.int64())])
-    return pa.schema(
-        [
-            *[
-                (name, pa.string())
-                for name in (
-                    "publication_id",
-                    "title",
-                    "subtitle",
-                    "markup",
-                    "card_source",
-                    "source_sha256",
-                    "source_locator",
-                    "archive_timestamp",
-                    "earliest_timestamp",
-                )
-            ],
-            ("captures", pa.int32()),
-            ("windows", pa.list_(pa.struct(windows))),
-            ("answers", pa.struct([(name, pa.string()) for name in CARD_QUESTIONS])),
-            ("footnotes", pa.list_(pa.string())),
-            ("pdf_urls", pa.list_(pa.string())),
-        ]
-    )
+    return arrow_schema(CBO_ESTIMATE_CARDS)
 
 
-def build(manifest_path: Path, archive_root: Path, output_dir: Path, *, max_pages: int = 100) -> Path:
+def read_retained_cards(manifest_path: Path, archive_root: Path, *, max_pages: int = 10000) -> tuple[pa.Table, dict]:
     """Read selected immutable page receipts, then promote one complete private candidate.
 
     Missing or damaged inputs and weak archive identity abort without an output.
@@ -64,25 +40,19 @@ def build(manifest_path: Path, archive_root: Path, output_dir: Path, *, max_page
     The result is bounded retained-input proof, not archive-wide coverage or publication.
     """
     from spicy_docs.sources.cbo import (
-        CARD_MEASURES,
         archived_publication_id,
+        card_row,
         CboCardAbsent,
         CboSourceError,
-        card_millions,
         parse_cbo_estimate_card,
     )
     from spicy_docs.sources.web_archive import cc_record_locator, read_warc_response
     from spicy_docs.storage.raw_archive import CentralRawArchiveStore, iter_acquisition_receipts
 
-    destination = output_dir.resolve()
-    if destination.is_relative_to(archive_root.resolve()):
-        raise ValueError("CBO candidate output must be outside the raw archive")
-    if output_dir.exists() or output_dir.is_symlink():
-        raise FileExistsError(output_dir)
     manifest_bytes = manifest_path.read_bytes()
     keys = json.loads(manifest_bytes)["receipt_keys"]
-    if not 1 <= max_pages <= 100 or not isinstance(keys, list) or not 1 <= len(keys) <= max_pages:
-        raise ValueError("Select between one and max_pages explicit retained page receipts (maximum 100)")
+    if not 1 <= max_pages <= 10000 or not isinstance(keys, list) or not 1 <= len(keys) <= max_pages:
+        raise ValueError("Select between one and max_pages explicit retained page receipts (maximum 10000)")
     store = CentralRawArchiveStore(archive_root, create=False)
     captures = defaultdict(list)
     inputs = []
@@ -188,27 +158,8 @@ def build(manifest_path: Path, archive_root: Path, output_dir: Path, *, max_page
         except CboSourceError as refused:
             outcomes.append({**outcome, "outcome": "refused", "reason": str(refused)})
             continue
-        windows = []
-        for position, period in enumerate(card.periods):
-            window: dict[str, str | int | None] = {"period": period}
-            for name in CARD_MEASURES:
-                literal = card.measures[name][position] if name in card.measures else None
-                window[name + "_literal"] = literal
-                window[name + "_millions"] = card_millions(literal)
-            windows.append(window)
-        rows.append(
-            {
-                **outcome,
-                "title": card.title,
-                "subtitle": card.subtitle,
-                "markup": card.markup,
-                "card_source": "archive-page",
-                "windows": windows,
-                "answers": dict(card.answers),
-                "footnotes": list(card.footnotes),
-                "pdf_urls": ["https://www.cbo.gov" + p for p in card.documents],
-            }
-        )
+        rows.append(card_row(card, **outcome, extraction_method="spicy_docs.sources.cbo.parse_cbo_estimate_card",
+                             identity_rule="publication-canonical-and-warc-target"))
         outcomes.append({**outcome, "outcome": "card", "reason": None})
     table = pa.Table.from_pylist(rows, schema=_schema())
     report = {
@@ -221,6 +172,17 @@ def build(manifest_path: Path, archive_root: Path, output_dir: Path, *, max_page
         "input_bytes": observed_bytes,
         "coverage": "explicit retained receipts only; no acquisition or archive-wide completeness claim",
     }
+    return table, report
+
+
+def build(manifest_path: Path, archive_root: Path, output_dir: Path, *, max_pages: int = 100) -> Path:
+    """Promote one complete retained-input candidate; reuse the ordinary family's reader."""
+    destination = output_dir.resolve()
+    if destination.is_relative_to(archive_root.resolve()):
+        raise ValueError("CBO candidate output must be outside the raw archive")
+    if output_dir.exists() or output_dir.is_symlink():
+        raise FileExistsError(output_dir)
+    table, report = read_retained_cards(manifest_path, archive_root, max_pages=max_pages)
     destination.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix="." + destination.name + "-", dir=destination.parent) as temporary:
         staged = Path(temporary) / "candidate"

@@ -275,7 +275,13 @@ def latest_capture(candidates: Iterable[Any]) -> Any | None:
     A query (``?utm_source=``) does not change the page, so it only breaks a tie at one timestamp.
     """
     usable = [candidate for candidate in candidates if candidate.status == 200]
-    return max(usable, key=lambda c: (c.timestamp, "?" not in c.original_url), default=None)
+    by_timestamp: dict[str, set[str | None]] = {}
+    for candidate in usable:
+        by_timestamp.setdefault(candidate.timestamp, set()).add(candidate.digest)
+    if any(len(digests) > 1 for digests in by_timestamp.values()):
+        raise ValueError("Conflicting CBO archive payloads at one timestamp")
+    return max(usable, key=lambda c: (c.timestamp, "?" not in c.original_url, c.original_url,
+                                      c.filename or "", c.offset or 0), default=None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,7 +377,7 @@ def read_cbo_archive_cards(items: Sequence[Any], congress: int, sweep: ArchiveSw
                            outcome="refused", message=str(refused))
             results.append(replace(seen, outcome="refused", reason=str(refused), page=page))
             continue
-        chosen_pdf = select_estimate_pdf(card.documents, item, bills, pdfs)
+        chosen_pdf = select_estimate_pdf(card.estimate_documents, item, bills, pdfs)
         pdf = None
         if chosen_pdf is not None and fetched_pdfs < max_pdfs:
             fetched_pdfs += 1

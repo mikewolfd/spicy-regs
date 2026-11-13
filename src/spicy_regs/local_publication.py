@@ -32,15 +32,38 @@ from spicy_regs.sources.publication import PublicationError
 #: (docs/court-receipt-archive.md). uscode-editions has none: each edition is added by an explicit decision, after
 #: an independent audit of its original (docs/uscode-editions.md).
 LOCAL_FAMILIES = frozenset({
+    "gsa-iolp",
     "administration-policy",
+    "census-acs",
+    "census-geocoder",
+    "cms-open-payments",
     "court-opinions",
+    "cms-medicare-provider",
     "executive-orders",
+    "executive-disclosures",
     "fec-financial-profiles",
+    "fec-election-results",
+    "fec-research-profiles",
+    "lobbying-quarterly-profiles",
+    "sector-comparisons",
     "grants-opportunities",
+    "fara",
+    "grants-status",
+    "historical-vetoes",
+    "hospital-cost-reports",
     "house-disbursements",
+    "house-disclosures",
     "ofac-sanctions",
+    "fjc-judicial-careers",
+    "irs-form990",
+    "sam-exclusions",
+    "sam-opportunities",
+    "sec-edgar",
     "treasury-fiscal",
+    "foreign-assistance",
+    "usaspending-awards",
     "uscode-editions",
+    "white-house-actions",
 })
 RAW_ROOT_ENV = "SPICYGOV_RAW_ROOT"
 #: Either one loosens the publisher's shrink guard (``r2._assert_upload_safe``).

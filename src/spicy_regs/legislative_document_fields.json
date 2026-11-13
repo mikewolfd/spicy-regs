@@ -339,12 +339,39 @@
       {
         "name": "source_schema_version",
         "source_type": "VARCHAR",
-        "meaning": "The source BILLSTATUS version that gives the two native summary clocks their context.",
+        "meaning": "The BILLSTATUS version or Congress.gov API format giving the native clock its context.",
         "decision": "keep",
         "target": "source_schema_version",
         "target_type": "string",
         "reason": "Keep literal source clocks and their schema context; never infer a first-publication date.",
         "nullable": false
+      },
+      {
+        "name": "source_page_sha256",
+        "source_type": "VARCHAR",
+        "meaning": "Exact Congress.gov API child-page digest, when this summary came from that route.",
+        "decision": "receipt",
+        "target": null,
+        "target_type": null,
+        "reason": "Keep the API page and position in the exact raw row receipt."
+      },
+      {
+        "name": "source_page_observed_at",
+        "source_type": "VARCHAR",
+        "meaning": "When this child page was captured, separate from both source dates.",
+        "decision": "receipt",
+        "target": null,
+        "target_type": null,
+        "reason": "Keep the API page and position in the exact raw row receipt."
+      },
+      {
+        "name": "source_page_row_index",
+        "source_type": "VARCHAR",
+        "meaning": "Zero-based position of the summary in its retained API page.",
+        "decision": "receipt",
+        "target": null,
+        "target_type": null,
+        "reason": "Keep the API page and position in the exact raw row receipt."
       }
     ]
   },

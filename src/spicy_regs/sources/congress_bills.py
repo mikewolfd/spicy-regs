@@ -75,7 +75,11 @@ _MIN_REQUEST_INTERVAL_SECONDS = 0.2
 
 
 def listing_reader(
-    api_key: str, transport: httpx.BaseTransport | None = None, *, evidence: CaptureEvidence | None = None
+    api_key: str,
+    transport: httpx.BaseTransport | None = None,
+    *,
+    evidence: CaptureEvidence | None = None,
+    max_requests: int = _MAX_REQUESTS_PER_PAGE,
 ) -> CongressListingReader:
     """spicy-docs' reader over the Congress.gov list routes, with this repo's page budget and header-only key.
 
@@ -97,7 +101,7 @@ def listing_reader(
             ) from None
         raise
     budget = PagedJsonBudget(
-        max_requests=_MAX_REQUESTS_PER_PAGE,
+        max_requests=max_requests,
         max_page_bytes=_MAX_PAGE_BYTES,
         timeout_seconds=_TIMEOUT_SECONDS,
         min_request_interval_seconds=_MIN_REQUEST_INTERVAL_SECONDS,

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from spicy_regs.subject_catalog import subject_tables, policies as subject_policies
 from spicy_regs.disbursement_summary_tables import TABLES as DISBURSEMENT_SUMMARY_TABLES
+from spicy_regs.fec_research_tables import TABLES as FEC_RESEARCH_TABLES
 
 import argparse
 import hashlib
@@ -417,6 +418,7 @@ CONTRACT_TABLES: tuple[str, ...] = (
     "cbo_cost_estimates",
     # Every item of CBO's per-Congress feeds, a spicy-docs contract from 0.54.0; the bill family writes it.
     "cbo_feed_items",
+    "cbo_estimate_cards",
     # GAO's legal decisions, a spicy-docs contract from 0.54.0 (DRY X1); the gao-reports rollup writes it.
     "gao_decisions",
     # A8/A9 (laws and rosters): the laws and committee-rosters rollups.
@@ -582,25 +584,70 @@ TABLES: tuple[str, ...] = (
     "scorecard_item_links",
     "scorecard_action_comparisons",
     "usaspending_recipients",
+    "usaspending_transactions",
+    "usaspending_awards",
+    "usaspending_archive_members",
     "cms_part_d_drug_spending",
     "cms_medicaid_drug_spending",
     "cms_part_b_drug_spending",
+    "cms_medicare_provider",
+    "cms_open_payments_summaries",
+    "hospital_cost_reports", "hospital_cost_report_cells", "hospital_cost_report_measures",
     "grants_opportunity_observations",
+    "grants_status_observations",
+    "grants_status_queries",
+    "fara_registrants",
+    "fara_foreign_principals",
+    "fara_filings",
+    "fara_snapshots",
+    "sec_issuer_sources", "sec_filings", "sec_reported_facts", "sec_fact_scopes",
+    "gsa_iolp_properties", "gsa_iolp_leases", "gsa_iolp_snapshots",
     "ofac_entity_observations",
     "ofac_snapshots",
+    "historical_veto_administrations",
+    "historical_veto_snapshots",
+    "irs990_filings",
+    "irs990_officers",
+    "irs990_grants",
+    "fjc_judges",
+    "fjc_appointments",
+    "fjc_service_terms",
+    "fjc_courts",
+    "fjc_snapshots",
+    "sam_exclusion_observations",
+    "sam_exclusion_snapshots",
+    "sam_opportunity_observations",
+    "sam_opportunity_snapshots",
     "executive_order_observations",
+    "executive_disclosure_filings",
+    "executive_disclosure_facts",
+    "executive_disclosure_pages",
+    "house_disclosure_filings",
+    "house_disclosure_reports",
+    "house_disclosure_pages",
+    "house_disclosure_transactions",
+    "house_disclosure_amendment_links",
+    "white_house_action_versions",
     "house_disbursements",
     "house_disbursements_summary",
     "house_disbursement_pdf_rows",
     "house_disbursement_pdf_pages",
+    "senate_disclosure_reports",
+    "senate_disclosure_transactions",
     "senate_disbursements",
     "senate_disbursement_pages",
     *DISBURSEMENT_SUMMARY_TABLES,
     "fec_financial_profiles",
+    "lobbying_quarterly_profiles",
+    *FEC_RESEARCH_TABLES,
     "treasury_debt_observations",
     "treasury_statement_periods",
     "treasury_statement_classification_cells",
     "census_acs_county_observations",
+    "census_geocoder_lookups",
+    "census_geocoder_geographies",
+    "foreign_assistance_observations",
+    "foreign_assistance_snapshots",
     "fcc_proceedings",
     "fcc_filings",
     # The hosted tables, minus congress_bills — it predates them and keeps its
@@ -670,25 +717,73 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "court_parentheticals",
         "court_opinions",
         "usaspending_recipients",
+        "usaspending_transactions",
+        "usaspending_awards",
+        "usaspending_archive_members",
         "cms_part_d_drug_spending",
         "cms_medicaid_drug_spending",
         "cms_part_b_drug_spending",
+        "cms_medicare_provider",
+    "cms_open_payments_summaries",
+        "hospital_cost_reports", "hospital_cost_report_cells", "hospital_cost_report_measures",
         "grants_opportunity_observations",
+        "grants_status_observations",
+        "grants_status_queries",
+        "fara_registrants",
+        "fara_foreign_principals",
+        "fara_filings",
+        "fara_snapshots",
+        "gsa_iolp_properties", "gsa_iolp_leases", "gsa_iolp_snapshots",
         "ofac_entity_observations",
+        "sec_issuer_sources",
+        "sec_filings",
+        "sec_reported_facts",
+        "sec_fact_scopes",
         "ofac_snapshots",
+        "historical_veto_administrations",
+        "historical_veto_snapshots",
+        "irs990_filings",
+        "irs990_officers",
+        "irs990_grants",
+        "fjc_judges",
+        "fjc_appointments",
+        "fjc_service_terms",
+        "fjc_courts",
+        "fjc_snapshots",
+        "sam_exclusion_observations",
+        "sam_exclusion_snapshots",
+        "sam_opportunity_observations",
+        "sam_opportunity_snapshots",
         "executive_order_observations",
+        "executive_disclosure_filings",
+        "executive_disclosure_facts",
+        "executive_disclosure_pages",
+        "house_disclosure_filings",
+        "house_disclosure_reports",
+        "house_disclosure_pages",
+        "house_disclosure_transactions",
+        "house_disclosure_amendment_links",
+        "white_house_action_versions",
         "house_disbursements",
         "house_disbursements_summary",
         "house_disbursement_pdf_rows",
         "house_disbursement_pdf_pages",
+        "senate_disclosure_reports",
+        "senate_disclosure_transactions",
         "senate_disbursements",
         "senate_disbursement_pages",
         *DISBURSEMENT_SUMMARY_TABLES,
         "fec_financial_profiles",
+        "lobbying_quarterly_profiles",
+        *FEC_RESEARCH_TABLES,
         "treasury_debt_observations",
         "treasury_statement_periods",
         "treasury_statement_classification_cells",
         "census_acs_county_observations",
+        "census_geocoder_lookups",
+        "census_geocoder_geographies",
+        "foreign_assistance_observations",
+        "foreign_assistance_snapshots",
         "fcc_proceedings",
         "fcc_filings",
         "bill_family_archives",
@@ -899,16 +994,38 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_cms_part_d import SCHEMA as CMS_PART_D_SCHEMA
     from spicy_regs.transforms.build_cms_medicaid import SCHEMA as CMS_MEDICAID_SCHEMA
     from spicy_regs.transforms.build_cms_part_b import SCHEMA as CMS_PART_B_SCHEMA
+    from spicy_regs.transforms.build_cms_provider import SCHEMA as CMS_PROVIDER_SCHEMA
+    from spicy_regs.transforms.build_cms_open_payments import SCHEMA as CMS_OPEN_PAYMENTS_SCHEMA
+    from spicy_regs.transforms.build_hospital_cost_reports import SCHEMAS as HOSPITAL_SCHEMAS
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
+    from spicy_regs.transforms.build_usaspending_awards import SCHEMAS as USASPENDING_AWARD_SCHEMAS
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
+    from spicy_regs.transforms.build_grants_status import SCHEMAS as GRANTS_STATUS_SCHEMAS
+    from spicy_regs.transforms.build_fara import SCHEMAS as FARA_SCHEMAS
+    from spicy_regs.transforms.build_sec_edgar import SCHEMAS as SEC_SCHEMAS
+    from spicy_regs.transforms.build_gsa_iolp import SCHEMAS as GSA_IOLP_SCHEMAS
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
+    from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
+    from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
+    from spicy_regs.transforms.build_fjc import SCHEMAS as FJC_SCHEMAS
+    from spicy_regs.pipelines.house_disclosures import SCHEMAS as HOUSE_DISCLOSURE_SCHEMAS
+    from spicy_regs.pipelines.white_house import TABLE as WHITE_HOUSE_TABLE, SCHEMA as WHITE_HOUSE_SCHEMA
+    from spicy_regs.transforms.build_sam_sources import SCHEMAS as SAM_SOURCE_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
+    from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as EXECUTIVE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.house_disbursements import SCHEMAS as HOUSE_DISBURSEMENT_SCHEMAS
+    from spicy_regs.schemas.senate_disclosures import SCHEMAS as SENATE_DISCLOSURE_SCHEMAS
     from spicy_regs.schemas.senate_disbursements import SCHEMAS as SENATE_DISBURSEMENT_SCHEMAS
     from spicy_regs.schemas.house_disbursement_pages import SCHEMAS as HOUSE_PDF_SCHEMAS
     from spicy_regs.schemas.disbursement_summaries import SCHEMAS as DISBURSEMENT_SUMMARY_SCHEMAS
     from spicy_regs.transforms.build_fec_financial_profiles import SCHEMA as FEC_PROFILE_SCHEMA
+    from spicy_regs.transforms.build_lobbying_quarterly_profiles import SCHEMA as LDA_QUARTERLY_SCHEMA
+    from spicy_regs.pipelines.fec_research_profiles import SCHEMAS as FEC_RESEARCH_SCHEMAS
+    from spicy_regs.transforms.fec_election_results import SCHEMAS as FEC_ELECTION_SCHEMAS
+    from spicy_regs.transforms.sector_comparisons import SCHEMAS as SECTOR_SCHEMAS
     from spicy_regs.transforms.build_census_acs import SCHEMA as CENSUS_ACS_SCHEMA
+    from spicy_regs.transforms.build_census_geocoder import SCHEMAS as CENSUS_GEOCODER_SCHEMAS
+    from spicy_regs.transforms.build_foreign_assistance import SCHEMAS as FOREIGN_ASSISTANCE_SCHEMAS
     from spicy_regs.transforms.build_agency_lifecycle_stats import SCHEMA as AGENCY_LIFECYCLE_STATS_SCHEMA
     from spicy_regs.transforms.build_comment_periods import COLUMNS as COMMENT_PERIOD_COLUMNS
     from spicy_regs.transforms.build_lifecycles import EVENT_SCHEMA, LIFECYCLE_SCHEMA
@@ -1008,16 +1125,38 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "cms_part_d_drug_spending": CMS_PART_D_SCHEMA,
         "cms_medicaid_drug_spending": CMS_MEDICAID_SCHEMA,
         "cms_part_b_drug_spending": CMS_PART_B_SCHEMA,
+        "cms_medicare_provider": CMS_PROVIDER_SCHEMA,
+        "cms_open_payments_summaries": CMS_OPEN_PAYMENTS_SCHEMA,
+        **HOSPITAL_SCHEMAS,
         **TREASURY_SCHEMAS,
+        **USASPENDING_AWARD_SCHEMAS,
         "grants_opportunity_observations": GRANTS_SCHEMA,
+        **GRANTS_STATUS_SCHEMAS,
+        **FARA_SCHEMAS,
+        **GSA_IOLP_SCHEMAS,
         **OFAC_SCHEMAS,
+        **HISTORICAL_VETO_SCHEMAS,
+        **IRS990_SCHEMAS,
+        **SEC_SCHEMAS,
+        **FJC_SCHEMAS,
+        **HOUSE_DISCLOSURE_SCHEMAS,
+        WHITE_HOUSE_TABLE: WHITE_HOUSE_SCHEMA,
+        **SAM_SOURCE_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
+        **EXECUTIVE_DISCLOSURE_SCHEMAS,
         **HOUSE_DISBURSEMENT_SCHEMAS,
+        **SENATE_DISCLOSURE_SCHEMAS,
         **SENATE_DISBURSEMENT_SCHEMAS,
         **HOUSE_PDF_SCHEMAS,
         **DISBURSEMENT_SUMMARY_SCHEMAS,
         "fec_financial_profiles": FEC_PROFILE_SCHEMA,
+        "lobbying_quarterly_profiles": LDA_QUARTERLY_SCHEMA,
+        **FEC_RESEARCH_SCHEMAS,
+        **FEC_ELECTION_SCHEMAS,
+        **SECTOR_SCHEMAS,
         "census_acs_county_observations": CENSUS_ACS_SCHEMA,
+        **CENSUS_GEOCODER_SCHEMAS,
+        **FOREIGN_ASSISTANCE_SCHEMAS,
         "fec_collections": COLLECTION_SCHEMA,
         "rulemaking_lifecycles": LIFECYCLE_SCHEMA,
         "lifecycle_events": EVENT_SCHEMA,

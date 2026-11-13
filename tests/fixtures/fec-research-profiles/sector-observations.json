@@ -1,0 +1,992 @@
+{
+  "fec": [
+    {
+      "profile_id": "sha256:227417b7c4809f2d90c692842b49bd4ef17ca354cdd18af11815b5f47ba2cb83",
+      "entity_kind": "committee",
+      "entity_id": "C00083808",
+      "period_start": "2025-01-01",
+      "period_end": "2025-12-31",
+      "selection_status": "selected",
+      "coverage_status": "reported",
+      "receipts": "0.000000000",
+      "receipts_status": "exact",
+      "disbursements": "4810.530000000",
+      "disbursements_status": "exact"
+    },
+    {
+      "profile_id": "sha256:3253c1cbcd6ce37c1f08a0dd716655dca7ce690a90277e89ba212ae5e9b407f5",
+      "entity_kind": "committee",
+      "entity_id": "C00423871",
+      "period_start": "2025-01-01",
+      "period_end": "2025-12-31",
+      "selection_status": "selected",
+      "coverage_status": "reported",
+      "receipts": "0.000000000",
+      "receipts_status": "exact",
+      "disbursements": "5982.590000000",
+      "disbursements_status": "exact"
+    },
+    {
+      "profile_id": "sha256:c7231dd608adcd545ff73f7b02ababc9f2246d6068657f1448ec89d463ebde98",
+      "entity_kind": "committee",
+      "entity_id": "C00085951",
+      "period_start": "2025-01-01",
+      "period_end": "2025-12-31",
+      "selection_status": "selected",
+      "coverage_status": "reported",
+      "receipts": "0.000000000",
+      "receipts_status": "exact",
+      "disbursements": "5000.000000000",
+      "disbursements_status": "exact"
+    }
+  ],
+  "lda": [
+    {
+      "profile_id": "05562f754cfec6fc8f4f3355c55de56cf26dac107013233f92532e3c944dac06",
+      "registrant_id": "15997",
+      "client_id": "121527",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "selected",
+      "income": null,
+      "income_status": "source_null",
+      "expenses": "1500000.000000",
+      "expenses_status": "reported_estimate",
+      "selected_filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "selected_source_url": "https://lda.gov/filings/public/filing/2810ca32-024b-4746-985e-58ef28ee9a35/print/"
+    },
+    {
+      "profile_id": "45017f383e1752b74862da01cefeed0aa9e3bc0e30c8452d4e2534d7a2ae8256",
+      "registrant_id": "15997",
+      "client_id": "121527",
+      "period_start": "2025-10-01",
+      "period_end": "2025-12-31",
+      "selection_status": "selected",
+      "income": null,
+      "income_status": "source_null",
+      "expenses": "720000.000000",
+      "expenses_status": "reported_estimate",
+      "selected_filing_uuid": "2fc2b362-20fe-41bf-a909-96b80dd11202",
+      "selected_source_url": "https://lda.gov/filings/public/filing/2fc2b362-20fe-41bf-a909-96b80dd11202/print/"
+    },
+    {
+      "profile_id": "ea3d34ea8430c1833b495eb3219640d64d7ecdd2043917fe488bd43b0fa88dd6",
+      "registrant_id": "15997",
+      "client_id": "121527",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "selected",
+      "income": null,
+      "income_status": "source_null",
+      "expenses": "1050000.000000",
+      "expenses_status": "reported_estimate",
+      "selected_filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "selected_source_url": "https://lda.gov/filings/public/filing/80388844-fe58-4a7e-afb7-3df947e707ce/print/"
+    },
+    {
+      "profile_id": "53f68b8afdedf27acf0e80ceb8502f5fbddbd94a47e134a328a146c5335d4fa6",
+      "registrant_id": "15997",
+      "client_id": "121527",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "selected",
+      "income": null,
+      "income_status": "source_null",
+      "expenses": "800000.000000",
+      "expenses_status": "reported_estimate",
+      "selected_filing_uuid": "6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2",
+      "selected_source_url": "https://lda.gov/filings/public/filing/6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2/print/"
+    },
+    {
+      "profile_id": "ff6dfbeb1484f201aad25e81155b0af2e27d0322cdab875db85f5883f4a801ff",
+      "registrant_id": "401106328",
+      "client_id": "55663",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "241c15fe704759c86dbc6e99b92b42c7fdb750e7158ae8a77d24e7e33e40ecf0",
+      "registrant_id": "401106328",
+      "client_id": "55663",
+      "period_start": "2025-10-01",
+      "period_end": "2025-12-31",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "32f291c71e02aa960d7f0451a42c3836f54b68ea766d76d122365a0b4d65df03",
+      "registrant_id": "401106328",
+      "client_id": "55663",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "e9196e6bd55bd30875ef49016b5116b97ce91afc54275f760816f55bc2714e88",
+      "registrant_id": "401106328",
+      "client_id": "55663",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "f592f27785a4ba09b10c10246dc5e7658e6ee9cd4a714fa29e70eda18ae9b73a",
+      "registrant_id": "401106328",
+      "client_id": "57672",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "selected",
+      "income": "10000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "3f7f004d-a850-4d8f-8e33-c8e89906822c",
+      "selected_source_url": "https://lda.gov/filings/public/filing/3f7f004d-a850-4d8f-8e33-c8e89906822c/print/"
+    },
+    {
+      "profile_id": "3a14ea0885489a043cc1f8537a7300fb3719fb4fd471e6705f741bf4d53665c1",
+      "registrant_id": "401106328",
+      "client_id": "57672",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "58065e0176294cf7400313be6eb0d428f94d33b657d69ad74d3bad4dec4f02b8",
+      "registrant_id": "401106328",
+      "client_id": "57672",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "4a442fef1bfbfed5e4152e3448ae0caf802ba0f2db013095ddcc6439ac88ed15",
+      "registrant_id": "401106328",
+      "client_id": "60552",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "f26cc444cc6cbb6ef071e458efa0920a576269f9c60ebdcb361de9eae18f1c37",
+      "registrant_id": "401106328",
+      "client_id": "60552",
+      "period_start": "2025-10-01",
+      "period_end": "2025-12-31",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "1bcba3990152e45b563a9bdf705b0968d941d82e099345d360752efb7813a326",
+      "registrant_id": "401106328",
+      "client_id": "60552",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "73d3c9f57b605b5deddc5f25e70cc7c685ef7b07bc71b5615e23b2434a799082",
+      "registrant_id": "401106328",
+      "client_id": "60552",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "unresolved",
+      "income": null,
+      "income_status": "unresolved_selection",
+      "expenses": null,
+      "expenses_status": "unresolved_selection",
+      "selected_filing_uuid": null,
+      "selected_source_url": null
+    },
+    {
+      "profile_id": "75cbd89f7dc71e278ac91ed8a58f84eca68a4876231c473b47fc7e3e0e9ac75f",
+      "registrant_id": "401106328",
+      "client_id": "64091",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "selected",
+      "income": "17500.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "ad18b640-ae82-435f-80b4-3b8391cffee1",
+      "selected_source_url": "https://lda.gov/filings/public/filing/ad18b640-ae82-435f-80b4-3b8391cffee1/print/"
+    },
+    {
+      "profile_id": "294c5c49fbc39d63092a61eed2685a1e8ee36a6717ab7235f1787895258e6914",
+      "registrant_id": "401106328",
+      "client_id": "64091",
+      "period_start": "2025-10-01",
+      "period_end": "2025-12-31",
+      "selection_status": "selected",
+      "income": "21000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "066a0482-e8df-4043-b27a-39cecad3355e",
+      "selected_source_url": "https://lda.gov/filings/public/filing/066a0482-e8df-4043-b27a-39cecad3355e/print/"
+    },
+    {
+      "profile_id": "6e816800bb3e7a63b7e45f412d614a75697c80fed65142f464a301d27d508d53",
+      "registrant_id": "401106328",
+      "client_id": "64091",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "selected",
+      "income": "21000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "e8fc52c4-2b3b-4ff4-9a5d-623818456457",
+      "selected_source_url": "https://lda.gov/filings/public/filing/e8fc52c4-2b3b-4ff4-9a5d-623818456457/print/"
+    },
+    {
+      "profile_id": "eded4b5b7e417307cdd1e53327294a781253f6c1fe9e11fb1a2802d0d75c0b9f",
+      "registrant_id": "401106328",
+      "client_id": "64091",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "selected",
+      "income": "21000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "f0dc122f-4b92-4d0d-a6b6-14974c100fe6",
+      "selected_source_url": "https://lda.gov/filings/public/filing/f0dc122f-4b92-4d0d-a6b6-14974c100fe6/print/"
+    },
+    {
+      "profile_id": "ffd266cda5ddd303b783db887c6b0a4236e04d78da62bbf7453f0be3e259c599",
+      "registrant_id": "401106328",
+      "client_id": "64160",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "selected",
+      "income": "8000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "58a1d76b-cc9d-4501-ad49-683924da0cd4",
+      "selected_source_url": "https://lda.gov/filings/public/filing/58a1d76b-cc9d-4501-ad49-683924da0cd4/print/"
+    },
+    {
+      "profile_id": "f16bb19a68848b8ec397abc9a9aaf57de75f63e715e39d197a6be9b5ee2fd1ed",
+      "registrant_id": "401106328",
+      "client_id": "64160",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "selected",
+      "income": "12000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "a79255b6-7d76-4005-9370-d0ef43750c9e",
+      "selected_source_url": "https://lda.gov/filings/public/filing/a79255b6-7d76-4005-9370-d0ef43750c9e/print/"
+    },
+    {
+      "profile_id": "9a3407905dedfba27c1a85ef6e5bc5025498bf50d8b5df280c8223ef114ad60b",
+      "registrant_id": "401106328",
+      "client_id": "64160",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "selected",
+      "income": null,
+      "income_status": "source_null",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "89da97e3-8906-431d-ab5f-f89ff9246dee",
+      "selected_source_url": "https://lda.gov/filings/public/filing/89da97e3-8906-431d-ab5f-f89ff9246dee/print/"
+    },
+    {
+      "profile_id": "5634573035fec0a21596d1a7c2a6ded8592f499f4fc97e5923f08d7fb6ab19c4",
+      "registrant_id": "401106328",
+      "client_id": "64430",
+      "period_start": "2025-01-01",
+      "period_end": "2025-03-31",
+      "selection_status": "selected",
+      "income": "8250.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "bc9310b6-5abe-49d9-9bd9-6fae7ea6014e",
+      "selected_source_url": "https://lda.gov/filings/public/filing/bc9310b6-5abe-49d9-9bd9-6fae7ea6014e/print/"
+    },
+    {
+      "profile_id": "4aa9032066340a027fa503383cf8e821cc34ff98e20fc6e639cb85064eaf2559",
+      "registrant_id": "401106328",
+      "client_id": "64430",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "selected",
+      "income": "16500.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "5da5731e-d442-4bf5-874a-ff2c4fa39f3d",
+      "selected_source_url": "https://lda.gov/filings/public/filing/5da5731e-d442-4bf5-874a-ff2c4fa39f3d/print/"
+    },
+    {
+      "profile_id": "c11ba1904dd8257eae95c559568c48248eccfd2cf609a2f449396e9a0a635147",
+      "registrant_id": "401106328",
+      "client_id": "64430",
+      "period_start": "2025-07-01",
+      "period_end": "2025-09-30",
+      "selection_status": "selected",
+      "income": null,
+      "income_status": "source_null",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "d32902a8-9ce4-4b48-a63a-7ebe601f2188",
+      "selected_source_url": "https://lda.gov/filings/public/filing/d32902a8-9ce4-4b48-a63a-7ebe601f2188/print/"
+    },
+    {
+      "profile_id": "e54d72b5a507dc76dc9aeca74631b204c8ec9a9d91274423f6fdfdd49696c6dc",
+      "registrant_id": "401106328",
+      "client_id": "65750",
+      "period_start": "2025-04-01",
+      "period_end": "2025-06-30",
+      "selection_status": "selected",
+      "income": "14000.000000",
+      "income_status": "reported_estimate",
+      "expenses": null,
+      "expenses_status": "source_null",
+      "selected_filing_uuid": "2ffe6d7a-3b87-4af5-8289-97c85ff2ff44",
+      "selected_source_url": "https://lda.gov/filings/public/filing/2ffe6d7a-3b87-4af5-8289-97c85ff2ff44/print/"
+    }
+  ],
+  "activities": [
+    {
+      "filing_uuid": "ae35b290-a13d-4510-baaf-c0557b2efad9",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "f60463fd-b742-432b-94c4-b04c283c71e6",
+      "general_issue_code": "BUD"
+    },
+    {
+      "filing_uuid": "f60463fd-b742-432b-94c4-b04c283c71e6",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "ee9ea074-cb07-4866-8ef6-7529f6d21861",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "0832d078-b03e-484d-9559-35fcb9a29d33",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "ddb684b8-a0ad-4ba8-8448-0049219633cd",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "ddb684b8-a0ad-4ba8-8448-0049219633cd",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "7db13f74-8903-4a01-9094-94469ec97042",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "7db13f74-8903-4a01-9094-94469ec97042",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "ad18b640-ae82-435f-80b4-3b8391cffee1",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "ad18b640-ae82-435f-80b4-3b8391cffee1",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "58a1d76b-cc9d-4501-ad49-683924da0cd4",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "bc9310b6-5abe-49d9-9bd9-6fae7ea6014e",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "49d687fb-d3c5-46b1-b457-050415ad6e38",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "692f117d-2893-42f7-b299-aa2826dbd219",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "6c8d2f18-9d37-42a7-95c4-9a594a42f006",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "6c8d2f18-9d37-42a7-95c4-9a594a42f006",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "88bcee05-ccd2-45eb-8d7a-3cd0e4cd7647",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "88bcee05-ccd2-45eb-8d7a-3cd0e4cd7647",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "e8fc52c4-2b3b-4ff4-9a5d-623818456457",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "e8fc52c4-2b3b-4ff4-9a5d-623818456457",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "a79255b6-7d76-4005-9370-d0ef43750c9e",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "9de94e84-7eba-496b-84dd-065aef26301b",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "2ffe6d7a-3b87-4af5-8289-97c85ff2ff44",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "5da5731e-d442-4bf5-874a-ff2c4fa39f3d",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "d32902a8-9ce4-4b48-a63a-7ebe601f2188",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "89da97e3-8906-431d-ab5f-f89ff9246dee",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "f0dc122f-4b92-4d0d-a6b6-14974c100fe6",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "f0dc122f-4b92-4d0d-a6b6-14974c100fe6",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "ffe7b018-5b91-40e5-8584-7c44487bd003",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "ffe7b018-5b91-40e5-8584-7c44487bd003",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "d2b99a1e-0896-4ec2-b802-215c785e0b9a",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "d2b99a1e-0896-4ec2-b802-215c785e0b9a",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "6135e286-2499-4e9f-be2f-779d9b4fbd5e",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "21f95fe4-17f8-418e-8fe5-652823fbeb23",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "21f95fe4-17f8-418e-8fe5-652823fbeb23",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "066a0482-e8df-4043-b27a-39cecad3355e",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "066a0482-e8df-4043-b27a-39cecad3355e",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "52d85d90-052b-4a7f-8199-9b85dc01f696",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "614df9fa-58ca-4248-ad22-fbe949aefb06",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "614df9fa-58ca-4248-ad22-fbe949aefb06",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "c0f374b3-a1e4-4b60-8c08-e5216372bd98",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "08f6867e-ac4c-4690-a3ca-b52bb379e559",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "1afaeeac-dc14-4ff0-9656-be42abd7e63e",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "1f4ab5ba-0d03-4ff2-91a5-e5ea8e479e37",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "d856d6c8-c4f7-4900-8f3c-8a095bec597c",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "0d21d5ed-0035-4eeb-a7cb-35c4d557c099",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "0d21d5ed-0035-4eeb-a7cb-35c4d557c099",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "ffd9e708-b665-444c-b4bd-44b51f3ff2b3",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "ffd9e708-b665-444c-b4bd-44b51f3ff2b3",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "b5567a00-90c8-47b1-8e84-b5640ab4112f",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "b5567a00-90c8-47b1-8e84-b5640ab4112f",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "29b529a3-7f8b-4e10-834c-b291a15b21c2",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "29b529a3-7f8b-4e10-834c-b291a15b21c2",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "d24bd411-8b2e-45a2-b308-2fe15e142213",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "d24bd411-8b2e-45a2-b308-2fe15e142213",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "1fb420e9-b514-411a-a0e5-19efe6bf1880",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "1fb420e9-b514-411a-a0e5-19efe6bf1880",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "17b467ad-1978-4364-b333-40f65e53e871",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "17b467ad-1978-4364-b333-40f65e53e871",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "e77122f0-7d38-4f9f-b9db-792e7669a0a1",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "f41fbcbb-6078-4236-bd06-3e0ce7a91e23",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "042d0c58-7f60-4e44-a4ad-2f0e387978cd",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "86800ab4-06b7-441f-bd45-7160be745496",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "4747e135-a259-42c5-b288-6a87f83e1190",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "4747e135-a259-42c5-b288-6a87f83e1190",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "a085a033-e5cb-4643-917a-dfffc7a4c438",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "a085a033-e5cb-4643-917a-dfffc7a4c438",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "3f7f004d-a850-4d8f-8e33-c8e89906822c",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "3f7f004d-a850-4d8f-8e33-c8e89906822c",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "93763d2b-7426-446e-ba6a-fd9e4cb7e9b7",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "93763d2b-7426-446e-ba6a-fd9e4cb7e9b7",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "8d2ab40c-ec25-40ce-8483-13a2a41aae33",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "8d2ab40c-ec25-40ce-8483-13a2a41aae33",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "fff9c7dc-3425-4ead-b1ad-bd5df9afaa98",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "fff9c7dc-3425-4ead-b1ad-bd5df9afaa98",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "cd6ac884-8eb8-4218-b933-ba25acb9b7de",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "cd6ac884-8eb8-4218-b933-ba25acb9b7de",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "89508eda-68e1-477a-9eb2-f06b350b700a",
+      "general_issue_code": "REL"
+    },
+    {
+      "filing_uuid": "89508eda-68e1-477a-9eb2-f06b350b700a",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "d82398fe-9f84-4cbb-bf24-8fb82f2e0d96",
+      "general_issue_code": "LAW"
+    },
+    {
+      "filing_uuid": "d82398fe-9f84-4cbb-bf24-8fb82f2e0d96",
+      "general_issue_code": "EDU"
+    },
+    {
+      "filing_uuid": "b713d405-c1b3-4c92-9a6b-5087ae92520a",
+      "general_issue_code": "AVI"
+    },
+    {
+      "filing_uuid": "b713d405-c1b3-4c92-9a6b-5087ae92520a",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "b713d405-c1b3-4c92-9a6b-5087ae92520a",
+      "general_issue_code": "TAX"
+    },
+    {
+      "filing_uuid": "b713d405-c1b3-4c92-9a6b-5087ae92520a",
+      "general_issue_code": "TRD"
+    },
+    {
+      "filing_uuid": "b713d405-c1b3-4c92-9a6b-5087ae92520a",
+      "general_issue_code": "CPT"
+    },
+    {
+      "filing_uuid": "b713d405-c1b3-4c92-9a6b-5087ae92520a",
+      "general_issue_code": "AER"
+    },
+    {
+      "filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "general_issue_code": "AVI"
+    },
+    {
+      "filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "general_issue_code": "TAX"
+    },
+    {
+      "filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "general_issue_code": "TRD"
+    },
+    {
+      "filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "general_issue_code": "CPT"
+    },
+    {
+      "filing_uuid": "80388844-fe58-4a7e-afb7-3df947e707ce",
+      "general_issue_code": "AER"
+    },
+    {
+      "filing_uuid": "6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2",
+      "general_issue_code": "AER"
+    },
+    {
+      "filing_uuid": "6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2",
+      "general_issue_code": "AVI"
+    },
+    {
+      "filing_uuid": "6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2",
+      "general_issue_code": "TAX"
+    },
+    {
+      "filing_uuid": "6cbaac0e-0929-4b0e-b21d-2dd92ae03fe2",
+      "general_issue_code": "TRD"
+    },
+    {
+      "filing_uuid": "2fc2b362-20fe-41bf-a909-96b80dd11202",
+      "general_issue_code": "AER"
+    },
+    {
+      "filing_uuid": "2fc2b362-20fe-41bf-a909-96b80dd11202",
+      "general_issue_code": "AVI"
+    },
+    {
+      "filing_uuid": "2fc2b362-20fe-41bf-a909-96b80dd11202",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "2fc2b362-20fe-41bf-a909-96b80dd11202",
+      "general_issue_code": "TAX"
+    },
+    {
+      "filing_uuid": "2fc2b362-20fe-41bf-a909-96b80dd11202",
+      "general_issue_code": "TRD"
+    },
+    {
+      "filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "general_issue_code": "AVI"
+    },
+    {
+      "filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "general_issue_code": "DEF"
+    },
+    {
+      "filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "general_issue_code": "TAX"
+    },
+    {
+      "filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "general_issue_code": "TRD"
+    },
+    {
+      "filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "general_issue_code": "CPT"
+    },
+    {
+      "filing_uuid": "2810ca32-024b-4746-985e-58ef28ee9a35",
+      "general_issue_code": "AER"
+    }
+  ],
+  "mapping": {
+    "version": "fec-lda-curated-naics2022-context-20261113/2",
+    "scheme": "NAICS-2022",
+    "observed_at": "2026-11-13",
+    "sectors": {
+      "62": "Health Care and Social Assistance",
+      "81": "Other Services (except Public Administration)"
+    },
+    "vocabulary": {
+      "owner": "RefSpec naics_psc_codes.NAICS_CODES_XLSX_SOURCE",
+      "vintage": "2022",
+      "source_url": "https://www.census.gov/naics/2022NAICS/2-6%20digit_2022_Codes.xlsx",
+      "definitions_url": "https://www.census.gov/programs-surveys/economic-census/year/2022/guidance/understanding-naics.html"
+    },
+    "assignments": [
+      {
+        "source_namespace": "fec_committee",
+        "native_entity_id": "C00423871",
+        "sector_codes": [
+          "62"
+        ],
+        "status": "supported_context",
+        "method": "curated_disclosed_organization_and_primary_business_description",
+        "applicable_start": "2025-01-01",
+        "applicable_end": "2025-12-31",
+        "observed_at": "2026-11-13",
+        "evidence": [
+          {
+            "sha256": "sha256:a697662daf240b135b74635a7d55d498035732ad0d9c2a0a2ee1709310437ff4",
+            "url": "https://api.open.fec.gov/v1/committee/C00423871/history/2026/?per_page=100",
+            "locator": "/results/0/affiliated_committee_name"
+          },
+          {
+            "sha256": "sha256:3f5dc3f5b1e793b1a4ba639d4b45a05f72f7eb141317cb8e8bfcea5af247628d",
+            "url": "https://atriumhealth.org/about-us/newsroom/news/2026/07/atrium-health-invests-238-billion-in-community-benefit",
+            "locator": "Organization business description; Atrium article explicitly discusses 2025"
+          }
+        ],
+        "uncertainty": "Broad curator assignment to disclosed organization context, not publisher-assigned NAICS. Filing/retrieval dates do not establish historical affiliation dates or ownership."
+      },
+      {
+        "source_namespace": "fec_committee",
+        "native_entity_id": "C00083808",
+        "sector_codes": [
+          "81"
+        ],
+        "status": "supported_context",
+        "method": "curated_disclosed_organization_and_primary_business_description",
+        "applicable_start": "2025-01-01",
+        "applicable_end": "2025-12-31",
+        "observed_at": "2026-11-13",
+        "evidence": [
+          {
+            "sha256": "sha256:8bb4d34d7a3437d94582560f578085078214d59b8f4da48b4d6e4ef2005c3c8e",
+            "url": "https://api.open.fec.gov/v1/committee/C00083808/history/2026/?per_page=100",
+            "locator": "/results/0/affiliated_committee_name"
+          },
+          {
+            "sha256": "sha256:ecac5968062b64fc7b351ed28cfc035853e226e7238e722bdd2c5c761fe6b42c",
+            "url": "https://www.michiganoilandgas.org/membership.html",
+            "locator": "Membership services and trade-association business description"
+          }
+        ],
+        "uncertainty": "Broad curator assignment to disclosed organization context, not publisher-assigned NAICS. Filing/retrieval dates do not establish historical affiliation dates or ownership."
+      },
+      {
+        "source_namespace": "lda_client",
+        "native_entity_id": "401106328/64160",
+        "sector_codes": [
+          "62"
+        ],
+        "status": "supported_context",
+        "method": "curated_publisher_client_business_description",
+        "applicable_start": "2025-01-01",
+        "applicable_end": "2025-12-31",
+        "observed_at": "2026-11-13",
+        "evidence": [
+          {
+            "table_sha256": "sha256:211c5a6ccf5dfe2d51fac72e258ad3cf30663c1a44730dc2ea00ff1328608ce1",
+            "generation": "sha256:f21b2f859ba510d5c66ff172616d34e8e0d5f29143fa00beebc7a54eb589c42c",
+            "client_id": "64160",
+            "registrant_id": "401106328",
+            "field": "general_description",
+            "reported_business": "services for survivors of trafficking",
+            "url": "https://lda.gov/api/v1/clients/64160/"
+          }
+        ],
+        "uncertainty": "Broad source-reported business context, not an official NAICS assignment; no cross-source organization identity link."
+      },
+      {
+        "source_namespace": "lda_client",
+        "native_entity_id": "401106328/57672",
+        "sector_codes": [
+          "81"
+        ],
+        "status": "supported_context",
+        "method": "curated_publisher_client_business_description",
+        "applicable_start": "2025-01-01",
+        "applicable_end": "2025-12-31",
+        "observed_at": "2026-11-13",
+        "evidence": [
+          {
+            "table_sha256": "sha256:211c5a6ccf5dfe2d51fac72e258ad3cf30663c1a44730dc2ea00ff1328608ce1",
+            "generation": "sha256:f21b2f859ba510d5c66ff172616d34e8e0d5f29143fa00beebc7a54eb589c42c",
+            "client_id": "57672",
+            "registrant_id": "401106328",
+            "field": "general_description",
+            "reported_business": "Oversight and leadership guidance for camp and conference centers throughout the US.",
+            "url": "https://lda.gov/api/v1/clients/57672/"
+          }
+        ],
+        "uncertainty": "Broad source-reported business context, not an official NAICS assignment; no cross-source organization identity link."
+      }
+    ],
+    "uncertain_associations": [
+      {
+        "left_namespace": "fec_committee",
+        "left_id": "C00024869",
+        "right_namespace": "lda_client",
+        "right_id": "15997/121527",
+        "status": "unresolved",
+        "reason": "GE Aerospace PAC and General Electric client labels do not establish a same-organization bridge; this proposed association is not used for money."
+      }
+    ]
+  },
+  "scope": {
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "fec": {
+      "generation": "sha256:847f51c252c26208d2d80b672314ce26c5930ef9cd1c05887e5ec4b0ecca55fb",
+      "table_sha256": "sha256:228f7af2a95c8b2ca4070265ace6cffad0c0b48e9c515eef9db01a74236b4de5",
+      "cutoff": "2026-09-12T14:42:31.578659+00:00",
+      "population": "Every held selected committee profile whose reported start/end are exactly calendar 2025; other periods excluded explicitly."
+    },
+    "lda": {
+      "generation": "sha256:663dcb72176b2373f68c057a013ceda4a94990bac6c4a9d2b00c6555679e8b06",
+      "table_sha256": "sha256:d5e21ae9a9ed8fc66e613e323bee28c44670ffc0be229946bcbb1da869762315",
+      "cutoff": "2026-11-13T00:00:00+00:00",
+      "population": "All observed 2025 quarterly profiles for native registrants 15997 and 401106328; missing or competing quarters remain unresolved."
+    }
+  }
+}

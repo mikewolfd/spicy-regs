@@ -1520,10 +1520,10 @@
       "id": "declared:usaspending-award-downloads",
       "title": "USAspending award download indexes",
       "publisher": "USAspending.gov",
-      "description": "Retained original award download listings and request failures; index files do not establish possession of listed award records.",
+      "description": "Retained original award download listings, explicitly selected full transaction archives and request failures. Inventory items remain advertised only; archive identity and complete selected-row interpretation are qualified separately.",
       "source_names": [],
-      "families": [],
-      "tables": []
+      "families": ["usaspending-awards"],
+      "tables": ["usaspending_transactions", "usaspending_awards", "usaspending_archive_members"]
     },
     {
       "id": "declared:usaspending-gsdm",
@@ -1568,6 +1568,15 @@
       "tables": []
     },
     {
+      "id": "family:cms-medicare-provider",
+      "title": "CMS Medicare provider payments and utilization",
+      "publisher": "Centers for Medicare & Medicaid Services",
+      "description": "Exact selected by-provider CSV and original catalog, dictionary and count controls. Provider release qualification and public delivery are separately evidenced; no historical completeness is inferred.",
+      "source_names": [],
+      "families": [],
+      "tables": []
+    },
+    {
       "id": "family:cms-part-d",
       "title": "CMS Medicare Part D drug spending",
       "publisher": "Centers for Medicare & Medicaid Services",
@@ -1577,6 +1586,21 @@
       "tables": []
     },
     {
+      "id": "family:cms-open-payments",
+      "title": "CMS Open Payments summaries",
+      "publisher": "Centers for Medicare & Medicaid Services",
+      "description": "Retained Open Payments DKAN catalog, literal summary pages and bounded CSV ranges for explicitly selected program years/publications. Source capture, complete local replay and public publication are separate evidence; summary levels and research associations overlap and must remain separate.",
+      "source_names": [
+        "cms-open-payments"
+      ],
+      "families": [
+        "cms-open-payments"
+      ],
+      "tables": [
+        "cms_open_payments_summaries"
+      ]
+    },
+    {
       "id": "family:grants-opportunities",
       "title": "Grants.gov opportunities",
       "publisher": "Grants.gov",
@@ -1584,6 +1608,15 @@
       "source_names": [],
       "families": [],
       "tables": []
+    },
+    {
+      "id": "family:historical-vetoes",
+      "title": "Historical presidential veto summary",
+      "publisher": "U.S. Senate",
+      "description": "One dated Senate Summary of Bills Vetoed capture. Administration spans, literal category cells and disputed-veto footnotes remain source-defined; per-president detail documents and per-term subdivisions are separate scope.",
+      "source_names": ["historical-vetoes"],
+      "families": ["historical-vetoes"],
+      "tables": ["historical_veto_administrations", "historical_veto_snapshots"]
     },
     {
       "id": "family:ofac-sanctions",
@@ -1859,6 +1892,28 @@
       "title": "FEC CSV previews",
       "publisher": "Federal Election Commission",
       "description": "Truncated CSV previews of a retired table (ss-j4vz B10). Captured by the 2026-09-11 FEC research capture; its capture metadata was imported as acquisition receipts (ss-wfop)."
+    },
+    {
+      "id": "family:executive-disclosures",
+      "title": "Selected public Executive disclosure filings",
+      "publisher": "Archived White House; U.S. Office of Government Ethics access guidance",
+      "description": "Explicit public archived Harris annual packages released in 2021 and 2024, native report years 2020 and 2023. Local filing lookup and 2024 Part 6 qualification only; amended 2021 package remains lookup-only. No complete executive coverage or public publication established. Refused locator probes and guidance responses remain separate from available filings.",
+      "source_names": [
+        "executive-disclosures"
+      ],
+      "families": [
+        "executive-disclosures"
+      ],
+      "tables": [
+        "executive_disclosure_filings",
+        "executive_disclosure_facts",
+        "executive_disclosure_pages"
+      ],
+      "source_urls": [
+        "https://bidenwhitehouse.archives.gov/wp-content/uploads/2024/05/Harris-Kamala-D.-2024-Annual-278.pdf",
+        "https://bidenwhitehouse.archives.gov/wp-content/uploads/2021/05/Harris-Kamala-D.-2021-Annual-278.pdf",
+        "https://www.oge.gov/web/OGE.nsf/publicresources_disclosure-faq"
+      ]
     }
   ],
   "routes": [

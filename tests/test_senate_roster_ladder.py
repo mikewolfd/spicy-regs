@@ -58,8 +58,8 @@ class Evidence:
     def __init__(self):
         self.captures, self.events = [], []
 
-    def capture(self, capture, *, stage):
-        self.captures.append((stage, capture))
+    def capture(self, capture, *, stage, **fields):
+        self.captures.append((stage, capture, fields))
 
     def event(self, name, **fields):
         self.events.append((name, fields))
@@ -82,8 +82,9 @@ def test_zyte_serves_the_file_and_the_rung_is_recorded():
     zyte, firecrawl, evidence = Fetcher(XML), Fetcher(XML), Evidence()
     got = acquirer(zyte, firecrawl, evidence).acquire_senate()
     assert got.roster.senators and got.capture.body == XML and (zyte.calls, firecrawl.calls) == (1, 0)
-    assert [stage for stage, _ in evidence.captures] == ["senate-cvc:zyte_http"]
-    assert evidence.events == [("senate-roster-rung", {"rung": "zyte_http", "provider_request_id": "req-1",
+    assert evidence.captures == [("senate-cvc:zyte_http", got.capture,
+                                  {"transport": "zyte_http", "provider_request_id": "req-1"})]
+    assert evidence.events[:1] == [("senate-roster-rung", {"rung": "zyte_http", "provider_request_id": "req-1",
                                                        "sha256": got.capture.sha256, "bytes": len(XML)})]  # fmt: skip
 
 
@@ -91,7 +92,7 @@ def test_firecrawl_serves_when_zyte_fails():
     zyte, firecrawl, evidence = Fetcher(error=ZyteTransportError("Zyte acquisition failed")), Fetcher(XML), Evidence()
     acquirer(zyte, firecrawl, evidence).acquire_senate()
     assert (zyte.calls, firecrawl.calls) == (1, 1)
-    assert [stage for stage, _ in evidence.captures] == ["senate-cvc:firecrawl_raw"]
+    assert [stage for stage, _, _ in evidence.captures] == ["senate-cvc:firecrawl_raw"]
 
 
 def test_every_rung_failing_stops_the_run_with_each_rungs_outcome():
@@ -116,7 +117,7 @@ def test_the_session_rung_serves_when_the_other_three_fail():
     )
     got = acquirer(zyte, firecrawl, evidence).acquire_senate()
     assert got.capture.body == XML and (zyte.calls, firecrawl.calls, session.calls) == (1, 1, 1)
-    assert [stage for stage, _ in evidence.captures] == ["senate-cvc:zyte_session"]
+    assert [stage for stage, _, _ in evidence.captures] == ["senate-cvc:zyte_session"]
     assert evidence.events[0][1]["rung"] == "zyte_session"
 
 
@@ -139,7 +140,7 @@ def test_an_html_page_escalates_to_the_next_rung(content_type):
     zyte, firecrawl, evidence = Fetcher(HTML, content_type=content_type), Fetcher(XML), Evidence()
     got = acquirer(zyte, firecrawl, evidence).acquire_senate()
     assert got.capture.body == XML and (zyte.calls, firecrawl.calls) == (1, 1)
-    assert [stage for stage, _ in evidence.captures] == ["senate-cvc:firecrawl_raw"]
+    assert [stage for stage, _, _ in evidence.captures] == ["senate-cvc:firecrawl_raw"]
 
 
 def test_error_pages_on_every_rung_stop_the_run_unread():

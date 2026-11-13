@@ -662,12 +662,13 @@ def test_fresh_batch_refusal_commits_no_partial_subjects(con, monkeypatch):
 
 
 def test_an_initialization_marker_written_under_an_earlier_policy_version_still_qualifies(con):
-    """The live comments catalog was initialized under regulations-native-v1; the policy has been v2 since 2026-10-06."""
+    """The original v1 initialization marker remains valid under later declared policy versions."""
     from spicy_regs.etl_receipts import ReceiptContext, observation_receipt, receipt_policies
     from spicy_regs.transforms.regulations_receipts import policy
 
     native.ensure_native(con, COMMENT)
-    current, earlier = receipt_policies(policy('comments'))[:2]
+    current = policy('comments')
+    earlier = next(p for p in receipt_policies(current) if p.policy_version == 'regulations-native-v1')
     assert earlier.policy_version == 'regulations-native-v1' != current.policy_version
     old = con.execute(f"SELECT generation_id, attempt_id, processor, witnesses FROM {native.receipts_table()}").fetchone()
     context = ReceiptContext(old[0], old[1], old[2], old[3])
@@ -712,7 +713,8 @@ def _rewrite_accepted_receipts(con, processor):
 
 _RESTRICTED = '[{"title":"t","formats":[{"url":"u","format":"pdf","size":4}],"restrictReason":"r"}]'
 _CANONICAL = ('[{"title":"t","formats":[{"url":"u","format":"pdf","size":4}],"attachment_id":null,'
-              '"restrict_reason":"r","restrict_reason_type":null}]')
+              '"restrict_reason":"r","restrict_reason_type":null,"agency_note":null,"authors":null,'
+              '"description":null,"doc_abstract":null,"doc_order":null,"modify_date":null,"publication":null}]')
 
 
 @pytest.mark.parametrize('route', ['batch', 'row'])

@@ -168,6 +168,7 @@ def upsert_subjects(
     prior: Path,
     order_by: Sequence[str],
     subjects: Path,
+    replace_scope: tuple[str, Path] | None = None,
 ) -> Upserted:
     """:func:`native_merge`'s subjects for a table whose receipts are retired (ss-vse3): no receipt is read or written.
 
@@ -175,6 +176,8 @@ def upsert_subjects(
     then prior first: the same rows in the same order :func:`native_merge` writes, for identities with no NULL part.
     Identity columns are compared as values, where NULL matches nothing; the receipt route compares their digests,
     where two NULLs match. So a NULL in any identity column, on either side, is refused rather than merged otherwise.
+    ``replace_scope`` names complete fetched parents, including those with zero fresh children; all their old
+    children retire. ``added`` is the net row change, which can be negative for shrinking child sets.
     Only the narrow keys are sorted; wide rows are gathered by ordinal, as there.
     """
     names = schema.names
@@ -197,9 +200,18 @@ def upsert_subjects(
             if con.execute(f"SELECT count(*) - count(DISTINCT row({keys})) FROM {view}").fetchone()[0]:
                 raise ValueError(f"{view.removesuffix('_s')} subjects repeat an identity")
         prior_rows, fresh_rows = (pq.ParquetFile(path).metadata.num_rows for path in (prior, fresh))
-        con.execute(f"CREATE TABLE replaced AS SELECT _o FROM prior_s SEMI JOIN fresh_s USING ({keys})")
+        replacement = f"SELECT _o FROM prior_s SEMI JOIN fresh_s USING ({keys})"
+        if replace_scope is not None:
+            column, parents = replace_scope
+            if column not in identity:
+                raise ValueError("replacement scope must name an identity column")
+            scope = f"read_parquet({lit(str(parents))})"
+            if con.execute(f"SELECT count(*) FROM {scope} WHERE {_q(column)} IS NULL").fetchone()[0]:
+                raise ValueError("replacement scope has a NULL parent identity")
+            replacement += f" UNION SELECT _o FROM prior_s SEMI JOIN {scope} USING ({_q(column)})"
+        con.execute(f"CREATE TABLE replaced AS {replacement}")
         replaced = con.execute("SELECT count(*) FROM replaced").fetchone()[0]
-        merged = (f"SELECT _so FROM (SELECT 0 AS _src, _o AS _so, {columns} FROM prior_s ANTI JOIN fresh_s USING ({keys}) "
+        merged = (f"SELECT _so FROM (SELECT 0 AS _src, _o AS _so, {columns} FROM prior_s ANTI JOIN replaced USING (_o) "
                   f"UNION ALL SELECT 1, {prior_rows} + _o, {columns} FROM fresh_s) ORDER BY {_order(order_by)}, _src, _so")
         try:
             with pq.ParquetWriter(subjects, schema, compression="zstd") as out:

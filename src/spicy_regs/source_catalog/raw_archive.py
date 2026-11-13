@@ -12,6 +12,7 @@ import json
 import re
 import stat
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlsplit
@@ -364,7 +365,7 @@ def classify_retained_objects(db, root: Path, sha256s, *, max_bytes: int = 1024 
 
 
 class RawImporter(Importer):
-    def run(self) -> None:
+    def run(self, *, receipt_keys: Sequence[str] | None = None) -> None:
         import spicy_docs.storage.raw_archive as archive_reader
         from spicy_docs.storage.raw_archive import iter_base_records
 
@@ -374,7 +375,8 @@ class RawImporter(Importer):
         self.prepare_metadata()
         # Build secondary file indexes once after loading the immutable manifests.
         self.db.executescript("DROP INDEX files_collection; DROP INDEX files_sha; DROP INDEX files_holdings;")
-        snapshot = self.inputs.json(self.root / "snapshot.json") if (self.root / "snapshot.json").is_file() else {}
+        snapshot_path = self.root / "snapshot.json"
+        snapshot = self.inputs.json(snapshot_path) if receipt_keys is None and snapshot_path.is_file() else {}
         self.generated_at = snapshot.get("recorded_at", self.generated_at)
         for name, expected in snapshot.get("indexes", {}).items():
             path = contained_file(self.root, name)
@@ -399,14 +401,14 @@ class RawImporter(Importer):
                 self.raw_file(row, f"receipts.jsonl.gz:{position + 1}", receipt_only=True)
             for position, row in enumerate(iter_base_records(self.root, "unavailable-receipts.jsonl.gz")):
                 self.evidence(None, "unavailable-source", dict(row, manifest_position=position + 1))
-        content_reviews = self.import_receipts()
+        content_reviews = self.import_receipts(receipt_keys=receipt_keys)
         self.db.executescript("""
             CREATE INDEX files_collection ON files(collection_id,id);
             CREATE INDEX files_sha ON files(sha256);
             CREATE INDEX files_holdings ON files(collection_id,status,sha256,id);
             CREATE INDEX raw_periods_label ON raw_periods(kind,label);
         """)
-        self.finish_reviews(content_reviews)
+        self.finish_reviews(content_reviews, complete_inventory=receipt_keys is None)
 
     def prepare_metadata(self) -> None:
         self.mapper = SourceMapper(self.config)
@@ -486,17 +488,18 @@ class RawImporter(Importer):
             raise ValueError('Indexed acquisition receipt metadata is incomplete')
         return reviews
 
-    def import_receipts(self, skip=None, *, receipt_snapshot=None):
+    def import_receipts(self, skip=None, *, receipt_snapshot=None, receipt_keys: Sequence[str] | None = None):
         from spicy_docs.storage.raw_archive import iter_acquisition_receipts
 
         skip = skip or {}
+        if receipt_keys is not None and (skip or receipt_snapshot is not None):
+            raise ValueError("Selected acquisition receipts cannot inherit another inventory")
         if skip and receipt_snapshot is None:
             reused = self.reuse_receipts(skip)
             if reused is not None:
                 return reused
         visited = set()
         content_reviews = []
-        receipt_keys = None
         if receipt_snapshot is not None:
             frozen = receipt_snapshot['receipts']
             inherited = {str(Path(path).relative_to(self.root)) for path in skip}
@@ -555,11 +558,11 @@ class RawImporter(Importer):
                     "manifest": str(path.relative_to(self.root)), "sha256": receipt_pin,
                 }))
         self.acquisition_paths = tuple(sorted(visited))
-        if receipt_snapshot is None and self.receipt_paths() != self.acquisition_paths:
+        if receipt_keys is None and self.receipt_paths() != self.acquisition_paths:
             raise RuntimeError("Acquisition receipts changed during catalog rebuild; retry")
         return sorted(content_reviews, key=lambda item: item[1]['manifest'])
 
-    def finish_reviews(self, content_reviews) -> None:
+    def finish_reviews(self, content_reviews, *, complete_inventory: bool = True) -> None:
         # The transport can retain bytes before parsing. A later explicit source
         # refusal applies to the same bytes in that run, without erasing custody
         # or invalidating an independent accepted capture.
@@ -580,13 +583,17 @@ class RawImporter(Importer):
         )
         for review, receipt_ref in content_reviews:
             apply_content_review(self.db, review, receipt_ref=receipt_ref)
+        snapshot = self.root / "snapshot.json"
         self.evidence(
             None,
             "raw-archive",
             {
-                "snapshot_sha256": digest(self.root / "snapshot.json") if (self.root / "snapshot.json").is_file() else None,
+                "snapshot_sha256": digest(snapshot) if complete_inventory and snapshot.is_file() else None,
                 "new_acquisition_receipts": len(self.acquisition_paths),
-                "scope": "Raw originals and receipts; dataset assignments do not establish completeness",
+                "scope": (
+                    "Raw originals and receipts; dataset assignments do not establish completeness"
+                    if complete_inventory else "Explicit acquisition receipts only; archive inventory was not read"
+                ),
             },
         )
 
@@ -833,8 +840,8 @@ class RawImporter(Importer):
         body = read_original(self.root, sha, obj)
         return extract_metadata(dataset, body)
 
-    def summary(self) -> dict:
-        if self.receipt_paths() != self.acquisition_paths:
+    def summary(self, *, complete_inventory: bool = True) -> dict:
+        if complete_inventory and self.receipt_paths() != self.acquisition_paths:
             raise RuntimeError("Acquisition receipts changed during catalog rebuild; retry")
         result = holdings(self.db)
         result["metadata_extraction"] = dict(sorted(self.metadata_counts.items()))

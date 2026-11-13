@@ -392,3 +392,14 @@ Schedules to add once the rehearsals pass, each beside `workflow_dispatch`:
   schedule:
     - cron: '13 23 * * *'
 ```
+
+## hospital-cost-reports
+
+The [hospital cost-report workflow](hospital-cost-reports.md) retains one explicit
+CMS form and fiscal-year-start cohort. Its admitted generation and source evidence
+use the same maintained local publication CLI above. Rehearse a first publication
+with a bounded private empty index; reuse the genuine candidate and budget its
+private staged tables, source evidence and multipart temporary data. The declared
+cohort can be complete while other forms, years and superseded submissions absent
+from CMS remain outside its scope. A partial candidate or missing pinned evidence
+still refuses.

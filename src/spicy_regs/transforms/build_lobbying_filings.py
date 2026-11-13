@@ -565,8 +565,7 @@ def _deduplicated(output_dir: Path, fresh: dict[str, Path], *, memory_limit: str
 def _public(text: Path, destination: Path, dataset: str) -> Path:
     """``text``'s rows mapped to the public columns (``map_subject``), a batch at a time; a refused row fails the run.
 
-    Python per row, over the window only: thousands of rows a night, about 0.9M for the largest filing year
-    (2025's 108,999 filings at the archive's 1.85 activities and 5.2 lobbyists a filing).
+    The nightly route maps its fetched window; retained rebuilds map the complete selected history.
     """
     schema = SUBJECT_SCHEMAS[dataset]
     with pq.ParquetWriter(destination, schema, compression="zstd") as writer:
@@ -639,6 +638,10 @@ def _upserted(output_dir: Path, window: dict[str, Path], session: SelectedInputs
     work = output_dir / ".lobbying-priors"
     work.mkdir(exist_ok=True)
     staged, counts = {}, {}
+    # Pin the complete fetched parent set before its intermediate table is removed.
+    # A parent reporting no children must still retire its old children.
+    parents = work / "refetched-filings.parquet"
+    pq.write_table(pq.read_table(window["lobbying_filings.parquet"], columns=["filing_uuid"]), parents)
     for key, text in window.items():
         dataset = key.removesuffix(".parquet")
         fresh = _public(text, output_dir / f"_{dataset}_fresh.parquet", dataset)
@@ -652,7 +655,10 @@ def _upserted(output_dir: Path, window: dict[str, Path], session: SelectedInputs
                 raise LobbyingFilingsError(f"{dataset}: its prior must be one published file")
             prior = _with_promoted(dataset, selected.subjects[0], session, work)
             merged = upsert_subjects(SUBJECT_SCHEMAS[dataset], identity=IDENTITY_FIELDS[dataset], fresh=fresh,
-                                     prior=prior, order_by=NATIVE_ORDERS[dataset], subjects=out)
+                                     prior=prior, order_by=NATIVE_ORDERS[dataset], subjects=out,
+                                     replace_scope=(("filing_uuid", parents)
+                                                    if dataset != "lobbying_filings" and "filing_uuid" in IDENTITY_FIELDS[dataset]
+                                                    else None))
             fresh.unlink()
             counts[dataset] = {"prior_rows": merged.kept + merged.replaced, "read_rows": merged.replaced + merged.added,
                                "new_rows": merged.added}

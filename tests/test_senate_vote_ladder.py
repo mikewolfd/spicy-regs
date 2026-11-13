@@ -209,11 +209,12 @@ def test_the_archive_serves_the_newest_capture_when_every_rung_refuses_and_says_
     assert got.vote.roll_number == 1 and len(got.vote.member_votes) == 99
     assert got.capture.requested_url == replay(new, original) and got.capture.body == gz, "retained as served"
     assert source.rungs == {"internet_archive": 1}
-    [(name, fields)] = evidence.events
+    [(name, fields)] = [event for event in evidence.events if event[0] == "senate-archive-capture"]
     assert name == "senate-archive-capture"
     assert fields["route"] == "internet_archive" and fields["original_url"] == original
     assert fields["archive_url"] == replay(new, original) and fields["archived_at"] == "2026-07-19T01:04:44+00:00"
     assert fields["cdx_digest"] == digest(gz) and fields["fetched_at"] == got.capture.observed_at
+    assert fields["index_sha256"].startswith("sha256:")
     assert isinstance(fields["age_seconds"], int) and fields["age_seconds"] > 0, "the journal admits no floats"
     assert all(not isinstance(value, float) for value in fields.values())
     [serve] = source.archived
@@ -285,13 +286,30 @@ def test_an_unreachable_archive_is_asked_once_per_run_not_once_per_file(monkeypa
     with pytest.raises(VoteRefusedError):
         source.acquire(SENATE_1)
     first = len(archive_requests)
-    assert first >= 1
+    assert first == 1
     for roll in (2, 3):
         with pytest.raises(VoteRefusedError):
             source.acquire(VoteLocator("senate", 119, 1, roll))
     with pytest.raises(VoteRefusedError):
         source.list_senate_votes(119, 1)
     assert len(archive_requests) == first, "no file after the first asks the Archive again"
+
+
+def test_an_archive_503_retires_the_rung_for_other_scopes():
+    requests = []
+
+    def unavailable(request):
+        if request.url.host != "web.archive.org":
+            return refusing(request)
+        requests.append(request)
+        return httpx.Response(503)
+
+    source = no_proxies(unavailable)
+    with pytest.raises(VoteRefusedError):
+        source.acquire(SENATE_1)
+    with pytest.raises(VoteRefusedError):
+        source.list_senate_votes(119, 1)
+    assert len(requests) == 1
 
 
 def test_a_failed_cdx_read_is_not_repeated_for_its_session():

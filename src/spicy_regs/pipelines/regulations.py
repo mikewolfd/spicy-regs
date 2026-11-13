@@ -118,6 +118,15 @@ def _annotate_error(title: str, error: Exception) -> None:
     print(f"::error title={title}::{message}", flush=True)
 
 
+def _comment_payload_validator(exclusions: ExcludeReviewedComments):
+    def validate(payload: dict) -> None:
+        # A changed reviewed exclusion must still reach its existing batch guard.
+        if payload["data"]["id"] not in exclusions.decisions:
+            RECORD_TYPES["comments"].extract(payload)
+
+    return validate
+
+
 class RegulationsPipeline(Pipeline):
     """Mirrulations S3 → Parquet ETL, composed from Readers, Writers, and transforms."""
 
@@ -178,6 +187,7 @@ class RegulationsPipeline(Pipeline):
         self._publication_index = None
         self._selected_inputs = None
         self._run_originals: MirrulationsOriginals | None = None
+        self._validate_comment_payload = _comment_payload_validator(ExcludeReviewedComments())
 
     def _refuse_comments_without_catalog(self) -> None:
         """Comments merge only into the catalog (decision 40), so refuse before any manifest is read."""
@@ -439,6 +449,7 @@ class RegulationsPipeline(Pipeline):
             since_year=self.since_year,
             verbose=self.verbose,
             resource_factory=resource,
+            validators={"comments": self._validate_comment_payload},
         )
 
         def reader(agency: str, rt: RecordType):
@@ -450,6 +461,7 @@ class RegulationsPipeline(Pipeline):
                 originals.resource(mirrulations.s3_resource()), mirrulations.BUCKET, mirrulations.PREFIX, agency,
                 source_types[rt.name], processed_keys=manifest, since_year=self.since_year, verbose=self.verbose,
                 key_lister=lambda: keys, unresolved_keys=unresolved.for_reader(agency, source_types[rt.name]),
+                validate_payload=self._validate_comment_payload,
             )
 
         result = stage_agencies(
@@ -591,6 +603,7 @@ class RegulationsPipeline(Pipeline):
                 source_record_type(comment_rt),
                 key_lister=lambda: chunk,
                 unresolved_keys=[item for item in previous if item.key in chunk],
+                validate_payload=self._validate_comment_payload,
             )
             records = list(transform.apply(reader.iter_records()))
             self._originals().commit(reader.last_keys)

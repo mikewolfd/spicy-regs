@@ -1,0 +1,38 @@
+{
+  "source_url": "https://www.fjc.gov/sites/default/files/history/judges.csv",
+  "source_sha256": "sha256:46093d0d1b376301bcc4a50d50873784808128796f1dc35e80c532a82f9f4a44",
+  "observed_at": "2026-11-13T11:37:19.689335+00:00",
+  "source_byte_size": 5456258,
+  "samples": [
+    {
+      "nid": "1376996",
+      "csv_record_number": 9,
+      "byte_offset": 13895,
+      "byte_length": 1646,
+      "record_sha256": "7014ea10f8be589f4f6878db30489f81d0df597252f41544553990e400cb457e"
+    },
+    {
+      "nid": "1390306",
+      "csv_record_number": 81,
+      "byte_offset": 111853,
+      "byte_length": 1852,
+      "record_sha256": "7e08c4b661277849eeafc43118b80eec2ddf146a7b14c73b8455332125751297"
+    },
+    {
+      "nid": "1381271",
+      "csv_record_number": 1342,
+      "byte_offset": 1786398,
+      "byte_length": 1825,
+      "record_sha256": "f24d4c34d7ae58ab518f93087566f3dc5cdb1c864698154654b26610ca9f76fd"
+    },
+    {
+      "nid": "1386831",
+      "csv_record_number": 3044,
+      "byte_offset": 4070483,
+      "byte_length": 1620,
+      "record_sha256": "33b94f300b5334415edbaf836006f30d1650ea1c7d0af4ed5a6f92c909d543c4"
+    }
+  ],
+  "excerpt_sha256": "e274461529963e7b3e10f2eeef843e64e87914ecce2d89929ba586c590427ba9",
+  "scope": "Verbatim header and selected original CSV records; not a complete FJC export."
+}

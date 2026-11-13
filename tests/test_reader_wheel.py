@@ -19,8 +19,9 @@ def test_pinned_reader_wheel_matches_its_receipt():
     project = tomllib.loads((root / "pyproject.toml").read_text())
     wheel = root / project["tool"]["uv"]["sources"]["spicy-docs"]["path"]
     version = wheel.name.removeprefix("spicy_docs-").removesuffix("-py3-none-any.whl")
-    # A numbered release only: a local build such as 0.86.0+foo.1 is not pinned without changing this line.
-    assert re.fullmatch(r"\d+\.\d+\.\d+", version), version
+    # Numbered releases or the explicitly delegated reader integration build family;
+    # arbitrary local versions still require a reviewed gate change.
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:\+readers\.\d{8}\.\d+)?", version), version
     receipt = json.loads((root / f"vendor/spicy_docs-{version}.json").read_text())
     assert receipt["filename"] == wheel.name and receipt["version"] == version
     assert receipt["byte_size"] == wheel.stat().st_size

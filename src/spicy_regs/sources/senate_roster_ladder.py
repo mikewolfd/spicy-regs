@@ -19,8 +19,8 @@ the reader's own validation. A 2xx error or interstitial page (spicy-docs' one c
 ladder's ``rung_outcomes`` and the run stops, as a direct refusal always has. The House file, and any archived
 capture (``archived_at``), are read exactly as before.
 
-The serving rung is retained: the capture is kept with stage ``senate-cvc:<rung>`` and journaled as
-``senate-roster-rung`` with the provider's request id.
+The serving rung uses the shared ``source-serving-rung`` event. The capture stage
+``senate-cvc:<rung>`` and ``senate-roster-rung`` event remain for existing readers.
 """
 
 from __future__ import annotations
@@ -38,6 +38,8 @@ from spicy_docs.sources.congress.committee_rosters import (
 )
 from spicy_docs.reading.error_pages import sniff
 from spicy_docs.transport.source_acquirer import narrow_byte_limit
+
+from spicy_regs.sources.senate_evidence import record_serving_rung
 
 
 def is_senate_xml(body: bytes) -> bool:
@@ -60,7 +62,12 @@ class LadderCommitteeRosterAcquirer(CommitteeRosterAcquirer):
         self, *, max_bytes: int | None = None, archived_at: str | None = None
     ) -> SenateRosterAcquisition:
         if archived_at is not None:
-            return super().acquire_senate(max_bytes=max_bytes, archived_at=archived_at)
+            acquired = super().acquire_senate(max_bytes=max_bytes, archived_at=archived_at)
+            record_serving_rung(
+                self.evidence, acquired.capture, operation="senate-cvc",
+                original_url=SENATE_CVC_URL, transport="internet_archive",
+            )
+            return acquired
 
         def parse(response, _limit):
             if not is_senate_xml(response.body):
@@ -82,7 +89,13 @@ class LadderCommitteeRosterAcquirer(CommitteeRosterAcquirer):
         )
         rung = answer.transport.value
         if self.evidence is not None:
-            self.evidence.capture(capture, stage=f"senate-cvc:{rung}")
+            self.evidence.capture(
+                capture, stage=f"senate-cvc:{rung}", transport=rung, provider_request_id=answer.request_id
+            )
             self.evidence.event("senate-roster-rung", rung=rung, provider_request_id=answer.request_id,
                                 sha256=capture.sha256, bytes=capture.byte_size)  # fmt: skip
+        record_serving_rung(
+            self.evidence, capture, operation="senate-cvc", original_url=SENATE_CVC_URL,
+            transport=rung, provider_request_id=answer.request_id,
+        )
         return SenateRosterAcquisition(roster, capture, self.request_count, self.budget)

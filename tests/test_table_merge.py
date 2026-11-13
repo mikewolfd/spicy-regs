@@ -98,6 +98,7 @@ def test_crs_summary_merge_preserves_revisions_and_deduplicates_rereads(tmp_path
         action_desc="Public Law", update_date="2025-07-07T12:00:00Z",
         summary_html="<p>Original summary.</p>", summary_chars="24",
         last_summary_update_date=None, source_schema_version="3.0.0",
+        source_page_sha256=None, source_page_observed_at=None, source_page_row_index=None,
     )
     revision = {**original, "update_date": "2025-07-09T12:00:00Z", "summary_html": "<p>Revised summary.</p>",
                 "summary_chars": "23"}

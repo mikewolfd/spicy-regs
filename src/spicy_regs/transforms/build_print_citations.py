@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Protocol
 
 import httpx
 from loguru import logger
-from spicy_docs.extraction import BODY_TEXT_DERIVATION_VERSION
+from spicy_docs.extraction import BODY_TEXT_DERIVATION_VERSION, DERIVATION_READS_AS
 from spicy_docs.extraction.body_text import BodyText, body_text
 from spicy_docs.interpretation.bill_actions import (
     PRINT_ACTION_RULE_SET_VERSION,
@@ -272,20 +272,7 @@ def _held_packages(prior_file: Path | None) -> dict[str, _Held]:
     }
 
 
-#: Where a body-text derivation derives the same text and record as the one before it, by rendition:
-#: ``{version: (the earlier version, the renditions it reads the same)}``. A print read under the earlier version
-#: from one of those renditions is not read again for the move. ``004`` (spicy-docs 0.84.0) changed only the
-#: ``htm`` branch: script, CSS, ``<noscript>`` and ``<template>`` content is left out and a block element breaks
-#: the line. The ``pdf``, ``xml``, ``uslm`` and ``txt`` branches consult neither rule, so they read as ``003`` by
-#: construction (spicy-docs ``docs/decisions.md``, "An HTML body's script, CSS, ``<noscript>`` and ``<template>``
-#: content is not body text"; its 354 such bodies, read again with the two vendored wheels, 0 changed:
-#: ``vendor/spicy_docs-0.84.0.json``). ``htm`` is absent on purpose: it reads the same only for a body that is
-#: one ``<pre>`` with nothing in those four elements, which is a fact of each body, not of the rendition, and
-#: telling needs the body a re-read would fetch. On 2026-11-10 all 71 held prints were ``pdf``, so the move
-#: re-reads none; a print read from ``htm`` is read once more.
-DERIVATION_READS_AS: Mapping[str, tuple[str, frozenset[str]]] = {
-    "004": ("003", frozenset({"pdf", "xml", "uslm", "txt"})),
-}
+
 
 
 def _derivation_read_as(rendition: str | None) -> str:

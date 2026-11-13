@@ -186,6 +186,12 @@ def _unlisted_rins(x_pattern: int, well_formed: int, placeholder: int, detail: s
 
 
 JOINS: tuple[Join, ...] = (
+    _join("irs990_officers", ("filing_id", "ein"), "irs990_filings", ("filing_id", "ein"), 0, 0,
+          "unmeasured", "Source-native selected filing membership; local cohort checked separately, public baseline pending.",
+          expected_cardinality="one"),
+    _join("irs990_grants", ("filing_id", "ein"), "irs990_filings", ("filing_id", "ein"), 0, 0,
+          "unmeasured", "Schedule I recipient entries belong to their source filing, not an inferred organization match.",
+          expected_cardinality="one"),
     # The bill family and the tables that name its bills.
     _join("bill_actions", "bill_id", _BILL, "bill_id", 38_559, 0),
     _join("bill_cosponsors", "bill_id", _BILL, "bill_id", 0, 0, "empty",
@@ -1028,6 +1034,20 @@ JOINS += (
     _join('comments_index', ('agency_code',), 'agency_stats', ('agency_code',),
           180, 0, 'complete', 'Receiving agency of the counted comments. Full selected keys and unique parent keys checked on 2026-10-06; CI checks resolution and parent uniqueness.',
           expected_cardinality='one'),
+)
+
+JOINS += tuple(
+    _join(child, child_key, parent, parent_key, 0, 0, "unmeasured",
+          "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; "
+          "the shared publication has no measured House disclosure baseline.", expected_cardinality="one")
+    for child, child_key, parent, parent_key in (
+        ("house_disclosure_reports", "filing_id", "house_disclosure_filings", "filing_id"),
+        ("house_disclosure_pages", "report_id", "house_disclosure_reports", "report_id"),
+        ("house_disclosure_transactions", "report_id", "house_disclosure_reports", "report_id"),
+        ("house_disclosure_transactions", "filing_id", "house_disclosure_filings", "filing_id"),
+        ("house_disclosure_amendment_links", "original_report_id", "house_disclosure_reports", "report_id"),
+        ("house_disclosure_amendment_links", "amended_report_id", "house_disclosure_reports", "report_id"),
+    )
 )
 
 # New full-key/attribute baselines include raw-row cardinality and immutable input

@@ -209,6 +209,10 @@ def select(candidate: Path, reconciliation: Path, staged_public: Path, cache: Pa
 
 def _select(candidate, reconciliation, staged_public, cache, public, raw_root, expected_generation,
             allow_inventory_change, receipt_snapshot=None, receipt_snapshot_sha256=None):
+    candidate_identity, report_identity = identity(candidate), identity(reconciliation)
+    report, candidate_metadata = read(reconciliation), metadata(candidate)
+    require(candidate_metadata.get("reconciliation", {}).get("scope") != "selected-acquisition-receipts",
+            "A selected receipt slice cannot replace the shared catalog")
     selected_index = cache / "index.sqlite"
     targets = [selected_index, cache / "index.sqlite.reconciliation.json", cache / "reconciliation.json",
                cache / "selection.json", public / "manifest.json", cache / "current.json"]
@@ -252,8 +256,6 @@ def _select(candidate, reconciliation, staged_public, cache, public, raw_root, e
         require(index_inventory(db, raw_root)[0] == previous_raw, "Selected index raw inventory differs from controls")
     require(allow_inventory_change or previous_raw == raw,
             "Raw inventory changed; review the candidate and use --allow-inventory-change")
-    candidate_identity, report_identity = identity(candidate), identity(reconciliation)
-    report, candidate_metadata = read(reconciliation), metadata(candidate)
     with sqlite3.connect(candidate.as_uri() + "?mode=ro", uri=True) as db:
         candidate_raw, snapshot_bytes = index_inventory(db, raw_root)
         require(candidate_raw["raw_snapshot_sha256"] == raw["raw_snapshot_sha256"]

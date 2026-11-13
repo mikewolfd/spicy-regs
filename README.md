@@ -553,4 +553,13 @@ The source reader preserves nomination partitions, independent meeting reference
 
 After changing source fields, run the focused navigation, Congress receipt and government shape checks, the dictionary check and generators, then full CI. Refresh only the affected rollup families. Metadata publication requires successful CI for the exact main revision and does not rescan unchanged comments or FEC records.
 
+CI reports a newly declared, unmeasured join as `NOT_PUBLISHED` when no selected
+generation names its child and the legacy child URL returns 404. This is pending
+live qualification, with no measured row counts or baseline. The exception applies
+only to new declarations through `check_table_joins.py --changed-since ...
+--allow-unpublished-new`; ordinary live checks remain strict. Previously declared
+or selected missing tables, transport failures, and published rows without a
+baseline still fail. A local source can therefore land before its first public
+selection without claiming that its live joins have passed.
+
 Scorecard acquisition, publication and recovery: [production operations](docs/scorecards-production.md).

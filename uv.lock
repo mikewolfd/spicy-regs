@@ -857,6 +857,15 @@ wheels = [
 ]
 
 [[package]]
+name = "marko"
+version = "2.2.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/6d/671a18bb386adca6311bca6c2fe6bec873947ee501cc5f8f509ec06bdde0/marko-2.2.4.tar.gz", hash = "sha256:c042c66f835425673123d7536b39b4660de3b68e30078c70fd26245b31170683", size = 151013, upload-time = "2026-08-12T03:20:11.772Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/78/751d49c8bdfa0b30147c99235516433af6b63eca367ff28593c7346a0494/marko-2.2.4-py3-none-any.whl", hash = "sha256:d80510506edba096ec49d4720a09645fa0bb78e7b7b88697f20032fc19730aa9", size = 46753, upload-time = "2026-08-12T03:20:10.811Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2131,14 +2140,14 @@ wheels = [
 
 [[package]]
 name = "spicy-docs"
-version = "0.85.0"
-source = { path = "vendor/spicy_docs-0.85.0-py3-none-any.whl" }
+version = "0.85.0+readers.20261113.5"
+source = { path = "vendor/spicy_docs-0.85.0+readers.20261113.5-py3-none-any.whl" }
 dependencies = [
     { name = "jsonschema" },
     { name = "rulespec-artifacts" },
 ]
 wheels = [
-    { filename = "spicy_docs-0.85.0-py3-none-any.whl", hash = "sha256:d7fe6b185440f0f70330fcce7c5d236f94009d267c05af3619ad0a05c1b08e1f" },
+    { filename = "spicy_docs-0.85.0+readers.20261113.5-py3-none-any.whl", hash = "sha256:758e6f6e3bd0c9ca67f31b0b628f64961f61b66fb2dbde37dc3c9bfdfba02a27" },
 ]
 
 [package.optional-dependencies]
@@ -2207,7 +2216,7 @@ provides-extras = ["acquisition", "bill-diff", "courtlistener-local", "html", "p
 
 [[package]]
 name = "spicy-regs"
-version = "0.1.6+reconcile.21"
+version = "0.1.6+reconcile.22"
 source = { editable = "." }
 default-groups = ["dev", "source-readers"]
 dependencies = [
@@ -2216,6 +2225,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "httpx" },
     { name = "loguru" },
+    { name = "marko" },
     { name = "mcp" },
     { name = "pandas" },
     { name = "polars" },
@@ -2277,6 +2287,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "httpx" },
     { name = "loguru" },
+    { name = "marko", specifier = "==2.2.4" },
     { name = "mcp", specifier = ">=2.2,<3" },
     { name = "pandas" },
     { name = "polars" },
@@ -2290,7 +2301,7 @@ requires-dist = [
     { name = "rulespec-artifacts", marker = "extra == 'source-readers'", path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" },
     { name = "sentence-transformers", marker = "extra == 'embed'" },
     { name = "smart-open", extras = ["s3"], marker = "extra == 'source-readers'", specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.85.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], marker = "extra == 'source-readers'", path = "vendor/spicy_docs-0.85.0+readers.20261113.5-py3-none-any.whl" },
     { name = "torch", marker = "extra == 'embed'" },
     { name = "tqdm" },
 ]
@@ -2315,7 +2326,7 @@ source-readers = [
     { name = "pypdf", specifier = "==6.14.2" },
     { name = "rulespec-artifacts", path = "vendor/rulespec_artifacts-1.1.2-py3-none-any.whl" },
     { name = "smart-open", extras = ["s3"], specifier = "==8.0.1" },
-    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], path = "vendor/spicy_docs-0.85.0-py3-none-any.whl" },
+    { name = "spicy-docs", extras = ["acquisition", "html", "pdf", "pdf-pypdf", "bill-diff", "courtlistener-local", "yaml"], path = "vendor/spicy_docs-0.85.0+readers.20261113.5-py3-none-any.whl" },
 ]
 
 [[package]]

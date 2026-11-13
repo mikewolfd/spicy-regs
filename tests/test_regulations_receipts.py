@@ -333,6 +333,7 @@ def test_comment_period_anchor_is_a_subject_column_and_its_receipt_keeps_the_bui
 
 
 def test_raw_source_staging_keeps_empty_lists_restrictions_and_failed_count(tmp_path):
+    from spicy_regs.schemas import COMMENT
     from spicy_regs.transforms.regulations_receipts import write_source_records
 
     payload = {
@@ -341,15 +342,28 @@ def test_raw_source_staging_keeps_empty_lists_restrictions_and_failed_count(tmp_
             {
                 "id": "a",
                 "type": "attachments",
-                "attributes": {"title": "restricted", "fileFormats": None, "restrictReasonType": "Confidential"},
+                "attributes": {"title": "restricted", "fileFormats": None, "restrictReasonType": "Confidential",
+                               "docOrder": 0, "authors": ["A", "A"], "description": "stated",
+                               "agencyNote": "note", "docAbstract": "abstract", "modifyDate": "2026-01-01",
+                               "publication": "publication"},
             },
-            {"id": "b", "type": "attachments", "attributes": {"title": "empty", "fileFormats": []}},
+            {"id": 7, "type": "attachments", "attributes": {"title": "empty", "fileFormats": []}},
         ],
     }
     subject, receipts = write_source_records("comments", [(payload, context())], tmp_path / "source")
     [row] = pq.read_table(subject).to_pylist()
     assert [v["formats"] for v in row["attachments"]] == [None, []]
-    assert row["attachments"][0]["restrict_reason_type"] == "Confidential"
+    assert row["attachments"] == [
+        {"title": "restricted", "formats": None, "attachment_id": "a", "restrict_reason": None,
+         "restrict_reason_type": "Confidential", "agency_note": "note", "authors": ["A", "A"],
+         "description": "stated", "doc_abstract": "abstract", "doc_order": 0, "modify_date": "2026-01-01",
+         "publication": "publication"},
+        {"title": "empty", "formats": [], "attachment_id": None, "restrict_reason": None,
+         "restrict_reason_type": None, "agency_note": None, "authors": None, "description": None,
+         "doc_abstract": None, "doc_order": None, "modify_date": None, "publication": None},
+    ]
+    [restored] = read_internal(ReceiptInput("comments", (subject,), receipts, "g1"))
+    assert restored["attachments_json"] == COMMENT.extract(payload)["attachments_json"]
     assert row["duplicate_comments"] == 0
     assert "raw_source_record" in pq.read_table(receipts).to_pylist()[0]["processing_json"]
     invalid = {"data": {"id": "bad", "attributes": {"duplicateComments": True}}}

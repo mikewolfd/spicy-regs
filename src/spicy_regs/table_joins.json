@@ -21,6 +21,46 @@
   ],
   "joins": [
     {
+      "child": "irs990_officers",
+      "child_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "parent": "irs990_filings",
+      "parent_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "kind": "unmeasured",
+      "reason": "Source-native selected filing membership; local cohort checked separately, public baseline pending.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "irs990_grants",
+      "child_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "parent": "irs990_filings",
+      "parent_columns": [
+        "filing_id",
+        "ein"
+      ],
+      "kind": "unmeasured",
+      "reason": "Schedule I recipient entries belong to their source filing, not an inferred organization match.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
       "child": "bill_actions",
       "child_columns": [
         "bill_id"
@@ -5247,6 +5287,114 @@
           }
         }
       }
+    },
+    {
+      "child": "house_disclosure_reports",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "house_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "house_disclosure_pages",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "house_disclosure_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "house_disclosure_transactions",
+      "child_columns": [
+        "report_id"
+      ],
+      "parent": "house_disclosure_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "house_disclosure_transactions",
+      "child_columns": [
+        "filing_id"
+      ],
+      "parent": "house_disclosure_filings",
+      "parent_columns": [
+        "filing_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "house_disclosure_amendment_links",
+      "child_columns": [
+        "original_report_id"
+      ],
+      "parent": "house_disclosure_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
+    },
+    {
+      "child": "house_disclosure_amendment_links",
+      "child_columns": [
+        "amended_report_id"
+      ],
+      "parent": "house_disclosure_reports",
+      "parent_columns": [
+        "report_id"
+      ],
+      "kind": "unmeasured",
+      "reason": "Version-bound House source identities. Local pilot resolution is checked by its consumer probe; the shared publication has no measured House disclosure baseline.",
+      "measured_via": null,
+      "baseline_keys": 0,
+      "baseline_missing": 0,
+      "floor_pct": null,
+      "expected_cardinality": "one",
+      "measurement": null
     }
   ],
   "processing_joins": [
@@ -8744,6 +8892,32 @@
     }
   ],
   "references": {
+    "irs990_officers": [
+      {
+        "child_columns": [
+          "filing_id",
+          "ein"
+        ],
+        "parent_table": "irs990_filings",
+        "parent_columns": [
+          "filing_id",
+          "ein"
+        ]
+      }
+    ],
+    "irs990_grants": [
+      {
+        "child_columns": [
+          "filing_id",
+          "ein"
+        ],
+        "parent_table": "irs990_filings",
+        "parent_columns": [
+          "filing_id",
+          "ein"
+        ]
+      }
+    ],
     "bill_actions": [
       {
         "child_columns": [
@@ -10403,6 +10577,68 @@
         "parent_table": "agency_stats",
         "parent_columns": [
           "agency_code"
+        ]
+      }
+    ],
+    "house_disclosure_reports": [
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "house_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
+        ]
+      }
+    ],
+    "house_disclosure_pages": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "house_disclosure_reports",
+        "parent_columns": [
+          "report_id"
+        ]
+      }
+    ],
+    "house_disclosure_transactions": [
+      {
+        "child_columns": [
+          "report_id"
+        ],
+        "parent_table": "house_disclosure_reports",
+        "parent_columns": [
+          "report_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "filing_id"
+        ],
+        "parent_table": "house_disclosure_filings",
+        "parent_columns": [
+          "filing_id"
+        ]
+      }
+    ],
+    "house_disclosure_amendment_links": [
+      {
+        "child_columns": [
+          "original_report_id"
+        ],
+        "parent_table": "house_disclosure_reports",
+        "parent_columns": [
+          "report_id"
+        ]
+      },
+      {
+        "child_columns": [
+          "amended_report_id"
+        ],
+        "parent_table": "house_disclosure_reports",
+        "parent_columns": [
+          "report_id"
         ]
       }
     ]

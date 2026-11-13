@@ -22,10 +22,27 @@ STRINGS = pa.list_(S)
 FORMAT = pa.struct([("url", S), ("format", S), ("size", pa.int64())])
 FORMATS = pa.list_(FORMAT)
 DISPLAY = pa.list_(pa.struct([("name", S), ("label", S), ("tooltip", S)]))
+# Publisher key, native column and Arrow type, in append order for existing subjects.
+COMMENT_ATTACHMENT_METADATA = (
+    ("agencyNote", "agency_note", S),
+    ("authors", "authors", STRINGS),
+    ("description", "description", S),
+    ("docAbstract", "doc_abstract", S),
+    ("docOrder", "doc_order", pa.int64()),
+    ("modifyDate", "modify_date", S),
+    ("publication", "publication", S),
+)
+COMMENT_ATTACHMENT_ID = "attachment_id"
+COMMENT_ATTACHMENT_RESTRICTIONS = {"restrictReason": "restrict_reason", "restrictReasonType": "restrict_reason_type"}
+COMMENT_ATTACHMENT_ALIASES = COMMENT_ATTACHMENT_RESTRICTIONS | {
+    source: name for source, name, _ in COMMENT_ATTACHMENT_METADATA if source != name
+}
 COMMENT_ATTACHMENTS = pa.list_(
-    pa.struct(
-        [("title", S), ("formats", FORMATS), ("attachment_id", S), ("restrict_reason", S), ("restrict_reason_type", S)]
-    )
+    pa.struct([
+        ("title", S), ("formats", FORMATS), (COMMENT_ATTACHMENT_ID, S),
+        *((name, S) for name in COMMENT_ATTACHMENT_RESTRICTIONS.values()),
+        *((name, dtype) for _, name, dtype in COMMENT_ATTACHMENT_METADATA),
+    ])
 )
 ATTACHMENT_RECORDS = pa.list_(
     pa.struct(
@@ -261,6 +278,27 @@ def _formats(value, field, *, source_names=False):
     return result
 
 
+def _comment_formats(value, field):
+    """A publisher may spell rendition bytes as decimal text; keep it in the receipt."""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise RegulationsShapeError(f"{field}: expected rendition list")
+    result = []
+    for rendition in value:
+        if rendition is None:
+            result.append(None)
+            continue
+        rendition = dict(_object(rendition, FORMAT.names, field))
+        size = rendition.get("size")
+        if isinstance(size, str) and size.isdecimal() and len(size.lstrip("0")) <= 19:
+            size = int(size.lstrip("0") or "0")
+        if "size" in rendition:
+            rendition["size"] = size
+        result.append(rendition)
+    return result
+
+
 def _native(dataset, field, value):
     if field == "agency_slugs":
         if value is None or isinstance(value, list):
@@ -295,10 +333,11 @@ def _native(dataset, field, value):
                 "document_id": item.get("evidence_id")
             }
         elif dataset == "comments" and field == "attachments_json":
-            _object(item, ("title", "formats", "attachment_id", "restrictReason", "restrictReasonType",
-                           "restrict_reason", "restrict_reason_type"), field)
+            _object(item, (*COMMENT_ATTACHMENTS.value_type.names, *COMMENT_ATTACHMENT_ALIASES), field)
             item = dict(item)
-            for source, target in (("restrictReason", "restrict_reason"), ("restrictReasonType", "restrict_reason_type")):
+            if "formats" in item:
+                item["formats"] = _comment_formats(item["formats"], field)
+            for source, target in COMMENT_ATTACHMENT_ALIASES.items():
                 if source in item:
                     if target in item and item[target] != item[source]:
                         raise RegulationsShapeError(f"{field}: conflicting {source} observations")

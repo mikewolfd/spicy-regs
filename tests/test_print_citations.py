@@ -1318,18 +1318,10 @@ def test_a_derivation_move_rereads_only_a_print_held_from_a_rendition_it_changed
         assert acquirer.asked == asked
 
 
-def test_the_installed_derivation_states_which_renditions_it_reads_as_before():
-    """Fails when spicy-docs moves the version: record what its decision record says it left alone, or nothing.
-
-    Without an entry every held print is outstanding, 40 a run, for a move that may not touch a PDF's text.
-    """
-    from spicy_docs.extraction.body_text import RENDITION_DERIVATIONS
-
+def test_equivalence_is_owned_by_the_source_reader():
+    from spicy_docs.extraction import DERIVATION_READS_AS
     from spicy_regs.transforms import build_print_citations as module
-
-    earlier, same = module.DERIVATION_READS_AS[module.BODY_TEXT_DERIVATION_VERSION]
-    assert earlier < module.BODY_TEXT_DERIVATION_VERSION and same <= set(RENDITION_DERIVATIONS)
-    assert module.DERIVATION_READS_AS["004"] == ("003", frozenset({"pdf", "xml", "uslm", "txt"}))
+    assert module.DERIVATION_READS_AS is DERIVATION_READS_AS
 
 
 @pytest.mark.parametrize(("package_id", "collection", "table_index", "pages"), [

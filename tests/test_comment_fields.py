@@ -1,14 +1,19 @@
 """The comment-field fill: a resumable read that holds no lock, and a catalog write that fills only what is unread."""
 
 import json
+from hashlib import sha256
 from glob import glob
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import duckdb
 import polars as pl
 import pytest
+from botocore.exceptions import ClientError
 
 from spicy_regs.pipelines import comment_fields as cf
+from spicy_regs.pipelines.comment_fields_evidence import checkpoint_path
 from spicy_regs.schemas import COMMENT
 from tests.test_regulations_pipeline import _FakeS3Resource, _FlakyResource
 
@@ -50,11 +55,152 @@ def test_plan_chunks_comment_keys_per_agency_and_a_newer_manifest_adds_only_new_
     assert cf.status(tmp_path)["planned_keys"] == len(keys)
 
 
-@pytest.mark.parametrize("earlier", ["s2", "s3"])
+@pytest.mark.parametrize("http_status,expected", [(None, "read"), (404, "source-missing"), (412, "source-changed"),
+                                                  (503, "transport")])
+def test_pinned_chunk_commits_verified_body_evidence_or_retains_failure(tmp_path, http_status, expected):
+    key, body = next(iter(_store().items()))
+    etag = '"source-etag"'
+    pins = tmp_path / "pins.parquet"
+    pl.DataFrame({"key": [key], "etag": [etag], "size": [len(body)], "version_id": ["source-version"]}).write_parquet(pins)
+    plan = cf.plan(tmp_path, _manifest(tmp_path, [key]), source_pins=pins)
+    agency = key.split("/")[1]
+    part = cf.part_path(tmp_path, plan.stem, agency, 0)
+    requests = []
+
+    def get(**options):
+        requests.append(options)
+        if http_status is not None:
+            raise ClientError({"ResponseMetadata": {"HTTPStatusCode": http_status}}, "GetObject")
+        return {"ETag": etag, "ContentLength": len(body), "VersionId": "source-version", "Body": BytesIO(body)}
+
+    resource = SimpleNamespace(Object=lambda bucket, key: SimpleNamespace(get=get))
+    first = cf.read(tmp_path, workers=1, resource=resource)
+    assert requests == [{"IfMatch": etag, "VersionId": "source-version"}] * (2 if http_status == 503 else 1)
+    [evidence] = (part.parent / "source-evidence").glob("*.parquet")
+    [observed] = pl.read_parquet(evidence).to_dicts()
+    assert observed["status"] == expected
+    assert observed["sha256"] == (sha256(body).digest() if expected == "read" else None)
+    if expected == "read":
+        assert first["rows"] == 1
+        assert cf.stage(tmp_path, tmp_path / "stage", profile="attachments")["rows"] == 1
+        assert cf.read(tmp_path, workers=1, resource=resource)["chunks"] == 0
+        assert len(requests) == 1
+        checkpoint_path(part).unlink()
+        assert cf.read(tmp_path, workers=1, resource=resource)["rows"] == 1
+        assert len(requests) == 2
+        selected = json.loads(checkpoint_path(part).read_text())
+        (part.parent / selected["evidence_file"]).write_bytes(b"tampered")
+        with pytest.raises(ValueError, match="checkpoint differs"):
+            cf.read(tmp_path, workers=1, resource=resource)
+    else:
+        assert first["rows"] == 0
+        assert checkpoint_path(part).is_file() == (expected != "transport")
+        with pytest.raises(ValueError, match="resolved checkpoint"):
+            cf.stage(tmp_path, tmp_path / "stage", profile="attachments")
+
+
+def test_pinned_chunk_uses_verified_central_original_without_fetching(tmp_path):
+    from spicy_docs.storage.raw_archive import CentralRawArchiveStore
+
+    key, body = next(iter(_store().items()))
+    digest = sha256(body).hexdigest()
+    raw = tmp_path / "raw"
+    CentralRawArchiveStore(raw).put_blob(f"sha256:{digest}", len(body), [body])
+    pins = tmp_path / "pins.parquet"
+    pl.DataFrame({
+        "key": [key], "etag": ['"retained-etag"'], "size": [len(body)], "version_id": [None], "raw_sha256": [digest],
+    }).write_parquet(pins)
+    cf.plan(tmp_path, _manifest(tmp_path, [key]), source_pins=pins)
+    resource = SimpleNamespace(Object=lambda *_: pytest.fail("Retained source must not issue GET"))
+    with pytest.raises(ValueError, match="raw-root"):
+        cf.read(tmp_path, workers=1, resource=resource)
+    assert cf.read(tmp_path, workers=1, resource=resource, raw_root=raw)["rows"] == 1
+    [evidence] = list((tmp_path / "parts").glob("*/source-evidence/*.parquet"))
+    [observation] = pl.read_parquet(evidence).to_dicts()
+    assert (observation["custody"], observation["sha256"]) == ("central-raw-archive", bytes.fromhex(digest))
+
+
+def test_frozen_key_plan_can_capture_the_version_from_a_single_get(tmp_path):
+    key, body = next(iter(_store().items()))
+    plan = cf.plan(tmp_path, _manifest(tmp_path, [key]), observe_source=True)
+    requests = []
+
+    def get(**options):
+        requests.append(options)
+        return {"ETag": '"observed"', "ContentLength": len(body), "VersionId": "v1", "Body": BytesIO(body)}
+
+    resource = SimpleNamespace(Object=lambda bucket, key: SimpleNamespace(get=get))
+    assert cf.read(tmp_path, workers=1, resource=resource)["rows"] == 1
+    assert cf.read(tmp_path, workers=1, resource=resource)["chunks"] == 0
+    assert requests == [{}]
+    part = cf.part_path(tmp_path, plan.stem, key.split("/")[1], 0)
+    checkpoint = json.loads(checkpoint_path(part).read_text())
+    [observed] = pl.read_parquet(part.parent / checkpoint["evidence_file"]).to_dicts()
+    assert (observed["expected_etag"], observed["etag"], observed["version_id"], observed["sha256"]) == (
+        None, '"observed"', "v1", sha256(body).digest(),
+    )
+
+
+def test_attachment_profile_reuses_r2_original_and_refuses_all_fields(tmp_path):
+    from contextlib import contextmanager
+
+    key, body = next(iter(_store().items()))
+    digest = sha256(body).hexdigest()
+    pins = tmp_path / "pins.parquet"
+    pl.DataFrame({
+        "key": [key], "etag": ['"retained-etag"'], "size": [len(body)], "version_id": [None],
+        "raw_sha256": [digest], "raw_custody": ["r2"],
+    }).write_parquet(pins)
+    plan = cf.plan(tmp_path, _manifest(tmp_path, [key]), source_pins=pins, profile="attachments")
+
+    @contextmanager
+    def open_original(object_key):
+        assert object_key == "blobs/sha256/" + digest
+        yield BytesIO(body)
+
+    resource = SimpleNamespace(Object=lambda *_: pytest.fail("R2-held source must not issue publisher GET"))
+    assert cf.read(tmp_path, workers=1, resource=resource, evidence_store=SimpleNamespace(open=open_original))["rows"] == 1
+    part = cf.part_path(tmp_path, plan.stem, key.split("/")[1], 0)
+    assert pl.read_parquet(part).columns == list(cf.read_columns("attachments"))
+    checkpoint = json.loads(checkpoint_path(part).read_text())
+    assert checkpoint["profile"] == "attachments"
+    [observation] = pl.read_parquet(part.parent / checkpoint["evidence_file"]).to_dicts()
+    assert (observation["custody"], observation["sha256"]) == ("r2-source-evidence", bytes.fromhex(digest))
+    with pytest.raises(ValueError, match="all-fields"):
+        cf.stage(tmp_path, tmp_path / "stage")
+    with pytest.raises(ValueError, match="seed comment attributes"):
+        cf.build_attributes(tmp_path)
+    assert cf.stage(tmp_path, tmp_path / "stage", profile="attachments")["rows"] == 1
+
+
+def test_staging_source_gaps_quarantines_every_copy_of_the_comment(tmp_path):
+    store = _store()
+    key, body = next(iter(store.items()))
+    refetch = key.removesuffix(".json") + "(1)(2).json"
+    cf.plan(tmp_path, _manifest(tmp_path, [*store, refetch]), chunk_keys=1, observe_source=True)
+
+    def get(object_key):
+        if object_key == refetch:
+            raise ClientError({"ResponseMetadata": {"HTTPStatusCode": 404}}, "GetObject")
+        content = store[object_key]
+        return {"ETag": '"observed"', "ContentLength": len(content), "Body": BytesIO(content)}
+
+    resource = SimpleNamespace(Object=lambda _, object_key: SimpleNamespace(get=lambda: get(object_key)))
+    assert cf.read(tmp_path, workers=1, resource=resource)["rows"] == len(store)
+    assert cf.status(tmp_path)["unresolved_keys"] == 1
+    with pytest.raises(ValueError, match="resolved checkpoint"):
+        cf.stage(tmp_path, tmp_path / "stage", profile="attachments")
+    staged = cf.stage(tmp_path, tmp_path / "stage", profile="attachments", allow_source_gaps=True)
+    assert staged["rows"] == len(store) - 1
+    assert staged["source_gaps"]["unresolved_keys"] == staged["source_gaps"]["withheld_comment_ids"] == 1
+    assert key not in pl.read_parquet(tmp_path / "stage/reads.parquet")["key"].to_list()
+
+
+@pytest.mark.parametrize("earlier", ["s2", "s3", "s4"])
 def test_a_new_record_shape_reads_every_key_again_beside_an_earlier_shapes_parts(tmp_path, monkeypatch, earlier):
     """A re-read on an earlier shape's workdir (s2: 2026-09-28; s3: 2026-10-03) plans and reads every key again."""
     store, shape = _store(), cf.RECORD_SHAPE
-    assert shape not in {"s2", "s3"}
+    assert shape not in {"s2", "s3", "s4"}
     monkeypatch.setattr(cf, "RECORD_SHAPE", earlier)
     cf.plan(tmp_path, _manifest(tmp_path, store), chunk_keys=10)
     assert cf.read(tmp_path, workers=2, resource=_FakeS3Resource(store))["keys"] == len(store)
@@ -72,7 +218,12 @@ def test_planning_or_reading_the_shape_needs_an_extract_that_keeps_withheld_atta
         cf.require_record_shape(dropped)
     with pytest.raises(RuntimeError, match="0.85.0"):
         cf.require_record_shape(unidentified)
-    cf.require_record_shape()  # the installed extract keeps both
+    def old_id_only(record):
+        return {"attachments_json": json.dumps([{"attachment_id": record["included"][0]["id"]}])}
+
+    with pytest.raises(RuntimeError, match="attachment metadata"):
+        cf.require_record_shape(old_id_only)
+    cf.require_record_shape()
 
     def refuse(extract=None):
         raise RuntimeError("refused")
@@ -211,12 +362,15 @@ def test_the_fill_workflow_is_manual_holds_the_writers_lock_and_always_restores_
     steps = workflow["jobs"]["fill"]["steps"]
     names = [step["name"] for step in steps]
     order = [next(i for i, n in enumerate(names) if n.startswith(prefix)) for prefix in (
-        "Download and verify", "Earlier runs' journals", "Disable R2 compaction", "Prepare", "Write", "Keep the journals",
-        "Keep the journal, receipts", "Re-enable R2 compaction")]
+        "Download and verify", "Earlier runs' journals", "Save and suspend maintenance", "Prepare", "Write",
+        "Restore exact prior maintenance", "Keep the journals", "Keep the journal, receipts")]
     assert order == sorted(order)
     for step in steps[order[-3]:]:
         assert step["if"].startswith("always()"), step["name"]
     assert "--sha256" in steps[order[0]]["run"] and "fetch" in steps[order[0]]["run"]
+    assert 'comments_maintenance suspend --state "$WORKDIR/maintenance-state.json"' in steps[order[2]]["run"]
+    assert 'comments_maintenance verify --state "$WORKDIR/maintenance-state.json"' in steps[order[4]]["run"]
+    assert 'comments_maintenance restore --state "$WORKDIR/maintenance-state.json"' in steps[order[5]]["run"]
     from spicy_regs.pipelines.comment_fields_write import PROFILES
 
     profile = workflow[True]["workflow_dispatch"]["inputs"]["profile"]
