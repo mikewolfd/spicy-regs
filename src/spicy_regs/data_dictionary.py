@@ -622,6 +622,12 @@ TABLES: tuple[str, ...] = (
     "executive_disclosure_filings",
     "executive_disclosure_facts",
     "executive_disclosure_pages",
+    "house_disclosure_filings",
+    "house_disclosure_reports",
+    "house_disclosure_pages",
+    "house_disclosure_transactions",
+    "house_disclosure_amendment_links",
+    "white_house_action_versions",
     "house_disbursements",
     "house_disbursements_summary",
     "house_disbursement_pdf_rows",
@@ -752,6 +758,12 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "executive_disclosure_filings",
         "executive_disclosure_facts",
         "executive_disclosure_pages",
+        "house_disclosure_filings",
+        "house_disclosure_reports",
+        "house_disclosure_pages",
+        "house_disclosure_transactions",
+        "house_disclosure_amendment_links",
+        "white_house_action_versions",
         "house_disbursements",
         "house_disbursements_summary",
         "house_disbursement_pdf_rows",
@@ -996,6 +1008,8 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
     from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
     from spicy_regs.transforms.build_fjc import SCHEMAS as FJC_SCHEMAS
+    from spicy_regs.pipelines.house_disclosures import SCHEMAS as HOUSE_DISCLOSURE_SCHEMAS
+    from spicy_regs.pipelines.white_house import TABLE as WHITE_HOUSE_TABLE, SCHEMA as WHITE_HOUSE_SCHEMA
     from spicy_regs.transforms.build_sam_sources import SCHEMAS as SAM_SOURCE_SCHEMAS
     from spicy_regs.transforms.build_executive_orders import SCHEMA as EXECUTIVE_ORDER_SCHEMA
     from spicy_regs.transforms.build_executive_disclosures import SCHEMAS as EXECUTIVE_DISCLOSURE_SCHEMAS
@@ -1125,6 +1139,8 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **IRS990_SCHEMAS,
         **SEC_SCHEMAS,
         **FJC_SCHEMAS,
+        **HOUSE_DISCLOSURE_SCHEMAS,
+        WHITE_HOUSE_TABLE: WHITE_HOUSE_SCHEMA,
         **SAM_SOURCE_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         **EXECUTIVE_DISCLOSURE_SCHEMAS,

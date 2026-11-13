@@ -12,6 +12,8 @@ from spicy_docs.transport.credentials import CredentialRefusedError
 from spicy_regs import mcp_server
 from spicy_regs.generations import verify_generation
 from spicy_regs.etl_policy_registry import installed_policies
+from spicy_regs.data_dictionary import expected_schemas
+from spicy_regs.contract_types import described_schema
 from spicy_regs.pipelines import white_house as pipeline
 from spicy_regs.source_evidence import verify_evidence
 from tests.test_mcp_server import _records, _tool_data
@@ -81,7 +83,8 @@ def test_real_delivery_path_builds_evidenced_generation_and_answers_query(tmp_pa
         selected, tmp_path / "build", archive_root=tmp_path / "raw"
     )
     assert built["rows"] == 2
-    assert installed_policies()[pipeline.TABLE].subject_schema == pipeline.SCHEMA
+    assert pipeline.TABLE not in installed_policies()
+    assert expected_schemas()[pipeline.TABLE] == described_schema(pipeline.SCHEMA)
     assert verify_generation(tmp_path / "build" / "generation").pin == artifact.pin
     verify_evidence(evidence, archive_root=tmp_path / "raw")
     monkeypatch.setattr(mcp_server, "DATA_DIR", tmp_path / "build" / "generation")

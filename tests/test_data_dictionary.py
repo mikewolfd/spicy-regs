@@ -954,3 +954,25 @@ def test_retained_fec_historical_definitions_keep_native_and_strict_drift():
         assert dd.check_schema_drift({table: selected[table] for table in current}, current)
     prose, selected = dd.selected_dictionary_definitions({"families": {}}, live, dd.DEFAULT_DESCRIPTIONS)
     assert selected == native_schemas and prose == native_prose
+
+
+@pytest.mark.parametrize("native", [True, False])
+def test_fresh_disclosure_and_white_house_tables_are_native_without_receipt_retirement(native):
+    from spicy_regs.contract_types import described_schema
+    from spicy_regs.pipelines.house_disclosures import SCHEMAS
+    from spicy_regs.pipelines.white_house import TABLE, SCHEMA
+    from spicy_regs.subject_catalog import descriptors, retired_receipt_datasets
+    from spicy_regs import mcp_server
+
+    schemas = {**SCHEMAS, TABLE: SCHEMA}
+    expected = dd.expected_schemas(native=native)
+    prose = dd.load_descriptions(native=native)
+    assert not (schemas.keys() & descriptors().keys())
+    assert not (schemas.keys() & retired_receipt_datasets())
+    for name, schema in schemas.items():
+        assert expected[name] == described_schema(schema)
+        assert set(prose[name]["columns"]) == set(schema.names)
+        assert prose[name]["identity_columns"]
+        assert name in mcp_server.TABLES
+        broken = {name: {**prose[name], "columns": {}}}
+        assert dd.check_descriptions({name: expected[name]}, broken)

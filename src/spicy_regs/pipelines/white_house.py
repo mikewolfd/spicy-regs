@@ -35,8 +35,6 @@ from spicy_regs.source_evidence import CaptureEvidence
 
 FAMILY = "white-house-actions"
 TABLE = "white_house_action_versions"
-# Table policy identity is independent of the source parser's revision.
-POLICY_VERSION = "white-house-html-v1"
 SCHEMA = pa.schema(
     [
         (name, pa.string())

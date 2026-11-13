@@ -79,11 +79,10 @@ Use `listing_url`, `listing_sha256` and `listing_record_index` to locate the
 retained listing occurrence. `body_selector` locates the article body in the
 original HTML; `body_html` is parser serialization rather than exact source bytes.
 
-The table policy `white-house-html-v1` identifies the unchanged columns, native
-`action_version_id` key, and field/receipt meanings. It is separate from the
-source parser revision: `white-house-html-v2` corrects markup-to-visible-text
-normalization and is retained in each row's `parser_version`. This correction
-preserves the intended meaning of `body_text`; it does not change the table's
-grain or classification. Prior candidate rows and their parser provenance are
-retained. A schema, identity, or field-classification change must receive a new
-table policy version and the maintained migration record.
+This fresh native table has no published per-row receipt history. Its schema
+and native `action_version_id` identity are registered directly in the data
+dictionary. Source parser revision `white-house-html-v2` remains in each row's
+`parser_version`; it corrects visible-text normalization without changing the
+table's grain. Raw-original and source-evidence admission still apply. Earlier
+local policy declarations and candidate provenance remain in Git and review
+evidence; they do not establish a retired receipt archive.

@@ -26976,6 +26976,667 @@
       "page"
     ]
   },
+  "house_disclosure_filings": {
+    "table": "house_disclosure_filings",
+    "label": "House filing lookup",
+    "summary": "One retained House index line, preserving every filing category and repeated DocID occurrence.",
+    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
+    "columns": [
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one original index line in one retained index snapshot; repeated DocIDs remain separate observations."
+      },
+      {
+        "column_name": "doc_id",
+        "column_type": "VARCHAR",
+        "description": "Literal House filing DocID; distinct from a native transaction ID."
+      },
+      {
+        "column_name": "filing_type",
+        "column_type": "VARCHAR",
+        "description": "Literal filing-category code. P selects periodic transaction reports and does not represent all filings."
+      },
+      {
+        "column_name": "prefix",
+        "column_type": "VARCHAR",
+        "description": "Literal index name prefix, including blank."
+      },
+      {
+        "column_name": "first",
+        "column_type": "VARCHAR",
+        "description": "Literal index first name."
+      },
+      {
+        "column_name": "last",
+        "column_type": "VARCHAR",
+        "description": "Literal index last name."
+      },
+      {
+        "column_name": "suffix",
+        "column_type": "VARCHAR",
+        "description": "Literal index name suffix, including blank."
+      },
+      {
+        "column_name": "state_district",
+        "column_type": "VARCHAR",
+        "description": "Literal index StateDst code; no person identifier is inferred."
+      },
+      {
+        "column_name": "year_raw",
+        "column_type": "VARCHAR",
+        "description": "Original Year cell; index year is separate from filing and transaction dates."
+      },
+      {
+        "column_name": "filing_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Original index FilingDate cell."
+      },
+      {
+        "column_name": "filing_date_status",
+        "column_type": "VARCHAR",
+        "description": "parsed, blank or unparsed; original cell remains available."
+      },
+      {
+        "column_name": "report_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher file route constructed from category, index year and DocID. It does not establish possession or availability."
+      },
+      {
+        "column_name": "report_url_basis",
+        "column_type": "VARCHAR",
+        "description": "How the file locator was constructed and its availability limit."
+      },
+      {
+        "column_name": "index_uri",
+        "column_type": "VARCHAR",
+        "description": "Official URL of the retained index ZIP."
+      },
+      {
+        "column_name": "index_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact original index ZIP."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded source capture instant; null when no supported capture time is known."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered original header/value pairs, including blank and unfamiliar fields."
+      },
+      {
+        "column_name": "index_year",
+        "column_type": "BIGINT",
+        "description": "Selected publisher index year, distinct from the date range of transaction activity."
+      },
+      {
+        "column_name": "source_line",
+        "column_type": "BIGINT",
+        "description": "One-based physical line in the original yearFD.txt ZIP member."
+      },
+      {
+        "column_name": "filing_date",
+        "column_type": "DATE",
+        "description": "Parsed index filing date; null with explicit status when blank or unreadable."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "filing_id"
+    ]
+  },
+  "house_disclosure_reports": {
+    "table": "house_disclosure_reports",
+    "label": "House disclosure report readings",
+    "summary": "One explicitly selected P filing PDF reading, including refusals and the exact source/backend version.",
+    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
+    "columns": [
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Identity binding a selected index observation to one exact original PDF version."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one original index line in one retained index snapshot; repeated DocIDs remain separate observations."
+      },
+      {
+        "column_name": "doc_id",
+        "column_type": "VARCHAR",
+        "description": "Literal House filing DocID; distinct from a native transaction ID."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Official URL of the selected original PDF."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact original PDF, separate from index and derived output hashes."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Recorded source capture instant; null when no supported capture time is known."
+      },
+      {
+        "column_name": "extraction_status",
+        "column_type": "VARCHAR",
+        "description": "native_layout for the declared native-cell reading, or refused with a reason; refused is not an empty filing."
+      },
+      {
+        "column_name": "refusal_reason",
+        "column_type": "VARCHAR",
+        "description": "Explicit unread, identity, layout or page-budget reason; null on a qualified native reading."
+      },
+      {
+        "column_name": "parser_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the source-owned deterministic native-grid reader."
+      },
+      {
+        "column_name": "backend",
+        "column_type": "VARCHAR",
+        "description": "Native PDF backend used by the reader."
+      },
+      {
+        "column_name": "backend_version",
+        "column_type": "VARCHAR",
+        "description": "Installed native PDF backend version recorded for replay."
+      },
+      {
+        "column_name": "model",
+        "column_type": "VARCHAR",
+        "description": "Null: this path makes no model or OCR calls."
+      },
+      {
+        "column_name": "filer_name_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal labeled native filer name, when readable. Qualified header and signature names must agree and match the selected index name after whitespace-only comparison; missing or contradictory identity refuses transactions."
+      },
+      {
+        "column_name": "state_district_raw",
+        "column_type": "VARCHAR",
+        "description": "State/district stated by the native PDF, checked against the selected index for qualified native reports."
+      },
+      {
+        "column_name": "signed_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Date printed beside the native digital-signature statement; this is not signature authentication."
+      },
+      {
+        "column_name": "index_year",
+        "column_type": "BIGINT",
+        "description": "Selected publisher index year, distinct from the date range of transaction activity."
+      },
+      {
+        "column_name": "source_bytes",
+        "column_type": "BIGINT",
+        "description": "Original PDF byte size."
+      },
+      {
+        "column_name": "page_count",
+        "column_type": "BIGINT",
+        "description": "Selected original PDF page count, including unread pages."
+      },
+      {
+        "column_name": "transaction_count",
+        "column_type": "BIGINT",
+        "description": "Qualified native transaction observations emitted for this selected report; zero with refusal does not establish no transactions."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "report_id"
+    ]
+  },
+  "house_disclosure_pages": {
+    "table": "house_disclosure_pages",
+    "label": "House disclosure source pages",
+    "summary": "One visited original PDF page, preserving native text and explicit image/layout failures.",
+    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
+    "columns": [
+      {
+        "column_name": "page_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of a page within one exact selected report version."
+      },
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Identity binding a selected index observation to one exact original PDF version."
+      },
+      {
+        "column_name": "doc_id",
+        "column_type": "VARCHAR",
+        "description": "Literal House filing DocID; distinct from a native transaction ID."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Official URL of the selected original PDF."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact original PDF, separate from index and derived output hashes."
+      },
+      {
+        "column_name": "page_status",
+        "column_type": "VARCHAR",
+        "description": "Native grid, native supplement or an explicit unread/unsupported page status."
+      },
+      {
+        "column_name": "native_text",
+        "column_type": "VARCHAR",
+        "description": "Exact backend-native page text, including source glyph limitations; empty text on an image page is not source emptiness."
+      },
+      {
+        "column_name": "page_locator",
+        "column_type": "VARCHAR",
+        "description": "Official PDF URL with the one-based source page fragment."
+      },
+      {
+        "column_name": "page_number",
+        "column_type": "BIGINT",
+        "description": "One-based page number in the original PDF."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "page_id"
+    ]
+  },
+  "house_disclosure_transactions": {
+    "table": "house_disclosure_transactions",
+    "label": "House reported transaction observations",
+    "summary": "One qualified native PTR row with reported brackets, native blanks and every source-page fragment.",
+    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
+    "columns": [
+      {
+        "column_name": "transaction_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of a row occurrence within one exact selected report version; not a net trade identity."
+      },
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Identity binding a selected index observation to one exact original PDF version."
+      },
+      {
+        "column_name": "filing_id",
+        "column_type": "VARCHAR",
+        "description": "Identity of one original index line in one retained index snapshot; repeated DocIDs remain separate observations."
+      },
+      {
+        "column_name": "doc_id",
+        "column_type": "VARCHAR",
+        "description": "Literal House filing DocID; distinct from a native transaction ID."
+      },
+      {
+        "column_name": "owner_raw",
+        "column_type": "VARCHAR",
+        "description": "Printed ownership cell. Native blank remains an empty string and is never defaulted to Self."
+      },
+      {
+        "column_name": "asset_raw",
+        "column_type": "VARCHAR",
+        "description": "Complete multiline printed asset cell. Existing ticker-like text stays literal; no security identity is invented."
+      },
+      {
+        "column_name": "action_raw",
+        "column_type": "VARCHAR",
+        "description": "Printed purchase, sale, partial/full sale or exchange code; original spelling and line breaks remain."
+      },
+      {
+        "column_name": "native_transaction_id",
+        "column_type": "VARCHAR",
+        "description": "Printed transaction ID, including a native blank on a new row. It is not the filing DocID."
+      },
+      {
+        "column_name": "transaction_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Printed transaction date, retained even when an amended report later states a different date."
+      },
+      {
+        "column_name": "transaction_date_status",
+        "column_type": "VARCHAR",
+        "description": "parsed, blank or unparsed for the transaction-date cell."
+      },
+      {
+        "column_name": "notification_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Printed notification date, separate from transaction, filing and source capture dates."
+      },
+      {
+        "column_name": "notification_date_status",
+        "column_type": "VARCHAR",
+        "description": "parsed, blank or unparsed for the notification-date cell."
+      },
+      {
+        "column_name": "amount_raw",
+        "column_type": "VARCHAR",
+        "description": "Complete multiline reported amount bracket; not an exact cash amount."
+      },
+      {
+        "column_name": "amount_status",
+        "column_type": "VARCHAR",
+        "description": "reported_range, reported_exclusive_lower_bound, blank or unparsed. An exclusive lower bound remains exclusive."
+      },
+      {
+        "column_name": "currency",
+        "column_type": "VARCHAR",
+        "description": "USD only when an explicit dollar bracket was interpreted; null otherwise."
+      },
+      {
+        "column_name": "filing_status_raw",
+        "column_type": "VARCHAR",
+        "description": "Printed New or Amended transaction status; reports and rows are never automatically replaced or deduplicated."
+      },
+      {
+        "column_name": "details_raw",
+        "column_type": "VARCHAR",
+        "description": "Complete printed row details, including continuations across pages; native font glyphs remain visible."
+      },
+      {
+        "column_name": "capital_gains_read_status",
+        "column_type": "VARCHAR",
+        "description": "checkbox_not_qualified: the original page region retains the mark, but this reader does not interpret checkboxes."
+      },
+      {
+        "column_name": "source_uri",
+        "column_type": "VARCHAR",
+        "description": "Official URL of the selected original PDF."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact original PDF, separate from index and derived output hashes."
+      },
+      {
+        "column_name": "page_locator",
+        "column_type": "VARCHAR",
+        "description": "Official PDF URL with the one-based source page fragment."
+      },
+      {
+        "column_name": "fragments_json",
+        "column_type": "VARCHAR",
+        "description": "Every row page fragment with its source page, PDF-point bounds, original native word indices, text and word bounds."
+      },
+      {
+        "column_name": "row_number",
+        "column_type": "BIGINT",
+        "description": "One-based transaction occurrence in reading order within this exact PDF."
+      },
+      {
+        "column_name": "page_number",
+        "column_type": "BIGINT",
+        "description": "One-based page number in the original PDF."
+      },
+      {
+        "column_name": "page_end",
+        "column_type": "BIGINT",
+        "description": "Last original page containing this transaction row or its continued details."
+      },
+      {
+        "column_name": "amount_lower_usd",
+        "column_type": "BIGINT",
+        "description": "Reported bracket lower bound in US dollars; consult amount_status for exclusive bounds. Never an exact amount."
+      },
+      {
+        "column_name": "amount_upper_usd",
+        "column_type": "BIGINT",
+        "description": "Reported bracket upper bound in US dollars; null for open-ended, blank or unreadable brackets."
+      },
+      {
+        "column_name": "transaction_date",
+        "column_type": "DATE",
+        "description": "Parsed printed transaction date; does not rewrite a prior report when amended."
+      },
+      {
+        "column_name": "notification_date",
+        "column_type": "DATE",
+        "description": "Parsed printed notification date."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "transaction_id"
+    ]
+  },
+  "house_disclosure_amendment_links": {
+    "table": "house_disclosure_amendment_links",
+    "label": "House reviewed amendment references",
+    "summary": "One original-image-reviewed prior-filing-date reference in a retained amendment letter, bound to both PDF versions.",
+    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
+    "columns": [
+      {
+        "column_name": "link_id",
+        "column_type": "VARCHAR",
+        "description": "Identity binding an explicit reviewed date-reference link to both original versions and its review."
+      },
+      {
+        "column_name": "original_report_id",
+        "column_type": "VARCHAR",
+        "description": "Selected earlier report identity referenced by the reviewed letter."
+      },
+      {
+        "column_name": "amended_report_id",
+        "column_type": "VARCHAR",
+        "description": "Selected later amendment-letter report identity; this does not imply full replacement."
+      },
+      {
+        "column_name": "original_doc_id",
+        "column_type": "VARCHAR",
+        "description": "DocID of the uniquely indexed same-filer P report on the letter-stated earlier filing date."
+      },
+      {
+        "column_name": "amended_doc_id",
+        "column_type": "VARCHAR",
+        "description": "DocID of the retained amendment-letter bundle."
+      },
+      {
+        "column_name": "original_source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact earlier PDF version."
+      },
+      {
+        "column_name": "amended_source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact later amendment-letter PDF version."
+      },
+      {
+        "column_name": "original_page_locator",
+        "column_type": "VARCHAR",
+        "description": "Official earlier report URL and source page."
+      },
+      {
+        "column_name": "amended_page_locator",
+        "column_type": "VARCHAR",
+        "description": "Official amendment-letter URL and the page containing its stated prior date."
+      },
+      {
+        "column_name": "link_status",
+        "column_type": "VARCHAR",
+        "description": "reviewed_date_reference: original-image review and a unique same-filer index-date match, separate from native transaction extraction."
+      },
+      {
+        "column_name": "source_statement",
+        "column_type": "VARCHAR",
+        "description": "Original-image-reviewed statement naming the earlier filing date."
+      },
+      {
+        "column_name": "basis",
+        "column_type": "VARCHAR",
+        "description": "Evidence and method used to resolve the reviewed reference."
+      },
+      {
+        "column_name": "uncertainty",
+        "column_type": "VARCHAR",
+        "description": "Limits on the relationship; additions, supersession, extraction and net-amount claims remain separate."
+      },
+      {
+        "column_name": "review_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original-image review used to qualify this link."
+      },
+      {
+        "column_name": "original_page_number",
+        "column_type": "BIGINT",
+        "description": "One-based reviewed page in the earlier PDF."
+      },
+      {
+        "column_name": "amended_page_number",
+        "column_type": "BIGINT",
+        "description": "One-based reviewed page in the later PDF."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "link_id"
+    ]
+  },
+  "white_house_action_versions": {
+    "table": "white_house_action_versions",
+    "label": "White House action source versions",
+    "summary": "One exact retained White House action-page version with source text, native category and literal dates. Related official-document facts may overlap; equivalence remains unresolved.",
+    "coverage": "Window. Explicitly selected nominations and appointments category pages and article HTML within a declared publication-date window. Changed HTML remains a separate version. This does not establish historical completeness or current legal effect.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": "Exact URL and HTML-digest matches reuse existing official routes. Similar titles and names never establish document identity. WordPress post IDs identify publisher posts, not nominations or people.",
+    "columns": [
+      {
+        "column_name": "action_version_id",
+        "column_type": "VARCHAR",
+        "description": "Deterministic identity of one exact White House URL and original HTML digest; not a legal-action identifier."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact publisher article URL validated against its canonical link."
+      },
+      {
+        "column_name": "native_post_id",
+        "column_type": "VARCHAR",
+        "description": "WordPress post identifier explicitly stated by the selected category listing."
+      },
+      {
+        "column_name": "title",
+        "column_type": "VARCHAR",
+        "description": "White House headline, decoded from its original HTML."
+      },
+      {
+        "column_name": "document_type",
+        "column_type": "VARCHAR",
+        "description": "Literal White House article subcategory; not inferred from its title."
+      },
+      {
+        "column_name": "categories_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered category labels from the retained category listing; article type remains separate."
+      },
+      {
+        "column_name": "listing_url",
+        "column_type": "VARCHAR",
+        "description": "Exact retained category-page URL supporting the selected URL cohort and post identity."
+      },
+      {
+        "column_name": "listing_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained category-page HTML supporting this selection."
+      },
+      {
+        "column_name": "listing_record_index",
+        "column_type": "VARCHAR",
+        "description": "Zero-based article occurrence within the selected retained category page."
+      },
+      {
+        "column_name": "published_time",
+        "column_type": "VARCHAR",
+        "description": "Literal article:published_time value, including its source offset."
+      },
+      {
+        "column_name": "display_time",
+        "column_type": "VARCHAR",
+        "description": "Literal visible time datetime value; its instant must agree with published_time."
+      },
+      {
+        "column_name": "modified_time",
+        "column_type": "VARCHAR",
+        "description": "Literal article:modified_time value; NULL means absent and an empty string remains empty."
+      },
+      {
+        "column_name": "modified_time_status",
+        "column_type": "VARCHAR",
+        "description": "missing, empty or stated, according to the original modification-time field."
+      },
+      {
+        "column_name": "body_text",
+        "column_type": "VARCHAR",
+        "description": "Searchable text read from the article body without the title block or scripts; repeated source text remains repeated."
+      },
+      {
+        "column_name": "body_html",
+        "column_type": "VARCHAR",
+        "description": "Parser-serialized article body HTML, not byte-exact source HTML; source_sha256 identifies the exact original."
+      },
+      {
+        "column_name": "body_selector",
+        "column_type": "VARCHAR",
+        "description": "Selector and exclusions used to read body text from the retained original."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the complete retained original HTML response."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Observation time of this selected original response; unchanged refreshes keep the prior observation."
+      },
+      {
+        "column_name": "parser_version",
+        "column_type": "VARCHAR",
+        "description": "Version of the White House HTML reading rule."
+      },
+      {
+        "column_name": "official_match_status",
+        "column_type": "VARCHAR",
+        "description": "Always unresolved on every emitted row: related official facts may exist; no equivalent legal identity is asserted. Exact proven representation matches reuse the existing route instead of emitting a row."
+      }
+    ],
+    "subject": "congress",
+    "grain": null,
+    "identity_columns": [
+      "action_version_id"
+    ]
+  },
   "house_disbursements": {
     "table": "house_disbursements",
     "label": "House Statement of Disbursements detail ledger",
@@ -43558,551 +44219,6 @@
       "communication_key_reason"
     ]
   },
-  "house_disclosure_amendment_links": {
-    "table": "house_disclosure_amendment_links",
-    "label": "House reviewed amendment references",
-    "summary": "One original-image-reviewed prior-filing-date reference in a retained amendment letter, bound to both PDF versions.",
-    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
-    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
-    "columns": [
-      {
-        "column_name": "link_id",
-        "column_type": "VARCHAR",
-        "description": "Identity binding an explicit reviewed date-reference link to both original versions and its review."
-      },
-      {
-        "column_name": "original_report_id",
-        "column_type": "VARCHAR",
-        "description": "Selected earlier report identity referenced by the reviewed letter."
-      },
-      {
-        "column_name": "amended_report_id",
-        "column_type": "VARCHAR",
-        "description": "Selected later amendment-letter report identity; this does not imply full replacement."
-      },
-      {
-        "column_name": "original_doc_id",
-        "column_type": "VARCHAR",
-        "description": "DocID of the uniquely indexed same-filer P report on the letter-stated earlier filing date."
-      },
-      {
-        "column_name": "amended_doc_id",
-        "column_type": "VARCHAR",
-        "description": "DocID of the retained amendment-letter bundle."
-      },
-      {
-        "column_name": "original_source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the exact earlier PDF version."
-      },
-      {
-        "column_name": "amended_source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the exact later amendment-letter PDF version."
-      },
-      {
-        "column_name": "original_page_locator",
-        "column_type": "VARCHAR",
-        "description": "Official earlier report URL and source page."
-      },
-      {
-        "column_name": "amended_page_locator",
-        "column_type": "VARCHAR",
-        "description": "Official amendment-letter URL and the page containing its stated prior date."
-      },
-      {
-        "column_name": "link_status",
-        "column_type": "VARCHAR",
-        "description": "reviewed_date_reference: original-image review and a unique same-filer index-date match, separate from native transaction extraction."
-      },
-      {
-        "column_name": "source_statement",
-        "column_type": "VARCHAR",
-        "description": "Original-image-reviewed statement naming the earlier filing date."
-      },
-      {
-        "column_name": "basis",
-        "column_type": "VARCHAR",
-        "description": "Evidence and method used to resolve the reviewed reference."
-      },
-      {
-        "column_name": "uncertainty",
-        "column_type": "VARCHAR",
-        "description": "Limits on the relationship; additions, supersession, extraction and net-amount claims remain separate."
-      },
-      {
-        "column_name": "review_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the retained original-image review used to qualify this link."
-      },
-      {
-        "column_name": "original_page_number",
-        "column_type": "BIGINT",
-        "description": "One-based reviewed page in the earlier PDF."
-      },
-      {
-        "column_name": "amended_page_number",
-        "column_type": "BIGINT",
-        "description": "One-based reviewed page in the later PDF."
-      }
-    ],
-    "subject": "congress",
-    "grain": null,
-    "identity_columns": [
-      "link_id"
-    ]
-  },
-  "house_disclosure_filings": {
-    "table": "house_disclosure_filings",
-    "label": "House filing lookup",
-    "summary": "One retained House index line, preserving every filing category and repeated DocID occurrence.",
-    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
-    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
-    "columns": [
-      {
-        "column_name": "filing_id",
-        "column_type": "VARCHAR",
-        "description": "Identity of one original index line in one retained index snapshot; repeated DocIDs remain separate observations."
-      },
-      {
-        "column_name": "doc_id",
-        "column_type": "VARCHAR",
-        "description": "Literal House filing DocID; distinct from a native transaction ID."
-      },
-      {
-        "column_name": "filing_type",
-        "column_type": "VARCHAR",
-        "description": "Literal filing-category code. P selects periodic transaction reports and does not represent all filings."
-      },
-      {
-        "column_name": "prefix",
-        "column_type": "VARCHAR",
-        "description": "Literal index name prefix, including blank."
-      },
-      {
-        "column_name": "first",
-        "column_type": "VARCHAR",
-        "description": "Literal index first name."
-      },
-      {
-        "column_name": "last",
-        "column_type": "VARCHAR",
-        "description": "Literal index last name."
-      },
-      {
-        "column_name": "suffix",
-        "column_type": "VARCHAR",
-        "description": "Literal index name suffix, including blank."
-      },
-      {
-        "column_name": "state_district",
-        "column_type": "VARCHAR",
-        "description": "Literal index StateDst code; no person identifier is inferred."
-      },
-      {
-        "column_name": "year_raw",
-        "column_type": "VARCHAR",
-        "description": "Original Year cell; index year is separate from filing and transaction dates."
-      },
-      {
-        "column_name": "filing_date_raw",
-        "column_type": "VARCHAR",
-        "description": "Original index FilingDate cell."
-      },
-      {
-        "column_name": "filing_date_status",
-        "column_type": "VARCHAR",
-        "description": "parsed, blank or unparsed; original cell remains available."
-      },
-      {
-        "column_name": "report_url",
-        "column_type": "VARCHAR",
-        "description": "Publisher file route constructed from category, index year and DocID. It does not establish possession or availability."
-      },
-      {
-        "column_name": "report_url_basis",
-        "column_type": "VARCHAR",
-        "description": "How the file locator was constructed and its availability limit."
-      },
-      {
-        "column_name": "index_uri",
-        "column_type": "VARCHAR",
-        "description": "Official URL of the retained index ZIP."
-      },
-      {
-        "column_name": "index_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the exact original index ZIP."
-      },
-      {
-        "column_name": "observed_at",
-        "column_type": "VARCHAR",
-        "description": "Recorded source capture instant; null when no supported capture time is known."
-      },
-      {
-        "column_name": "raw_cells_json",
-        "column_type": "VARCHAR",
-        "description": "Ordered original header/value pairs, including blank and unfamiliar fields."
-      },
-      {
-        "column_name": "index_year",
-        "column_type": "BIGINT",
-        "description": "Selected publisher index year, distinct from the date range of transaction activity."
-      },
-      {
-        "column_name": "source_line",
-        "column_type": "BIGINT",
-        "description": "One-based physical line in the original yearFD.txt ZIP member."
-      },
-      {
-        "column_name": "filing_date",
-        "column_type": "DATE",
-        "description": "Parsed index filing date; null with explicit status when blank or unreadable."
-      }
-    ],
-    "subject": "congress",
-    "grain": null,
-    "identity_columns": [
-      "filing_id"
-    ]
-  },
-  "house_disclosure_pages": {
-    "table": "house_disclosure_pages",
-    "label": "House disclosure source pages",
-    "summary": "One visited original PDF page, preserving native text and explicit image/layout failures.",
-    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
-    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
-    "columns": [
-      {
-        "column_name": "page_id",
-        "column_type": "VARCHAR",
-        "description": "Identity of a page within one exact selected report version."
-      },
-      {
-        "column_name": "report_id",
-        "column_type": "VARCHAR",
-        "description": "Identity binding a selected index observation to one exact original PDF version."
-      },
-      {
-        "column_name": "doc_id",
-        "column_type": "VARCHAR",
-        "description": "Literal House filing DocID; distinct from a native transaction ID."
-      },
-      {
-        "column_name": "source_uri",
-        "column_type": "VARCHAR",
-        "description": "Official URL of the selected original PDF."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the exact original PDF, separate from index and derived output hashes."
-      },
-      {
-        "column_name": "page_status",
-        "column_type": "VARCHAR",
-        "description": "Native grid, native supplement or an explicit unread/unsupported page status."
-      },
-      {
-        "column_name": "native_text",
-        "column_type": "VARCHAR",
-        "description": "Exact backend-native page text, including source glyph limitations; empty text on an image page is not source emptiness."
-      },
-      {
-        "column_name": "page_locator",
-        "column_type": "VARCHAR",
-        "description": "Official PDF URL with the one-based source page fragment."
-      },
-      {
-        "column_name": "page_number",
-        "column_type": "BIGINT",
-        "description": "One-based page number in the original PDF."
-      }
-    ],
-    "subject": "congress",
-    "grain": null,
-    "identity_columns": [
-      "page_id"
-    ]
-  },
-  "house_disclosure_reports": {
-    "table": "house_disclosure_reports",
-    "label": "House disclosure report readings",
-    "summary": "One explicitly selected P filing PDF reading, including refusals and the exact source/backend version.",
-    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
-    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
-    "columns": [
-      {
-        "column_name": "report_id",
-        "column_type": "VARCHAR",
-        "description": "Identity binding a selected index observation to one exact original PDF version."
-      },
-      {
-        "column_name": "filing_id",
-        "column_type": "VARCHAR",
-        "description": "Identity of one original index line in one retained index snapshot; repeated DocIDs remain separate observations."
-      },
-      {
-        "column_name": "doc_id",
-        "column_type": "VARCHAR",
-        "description": "Literal House filing DocID; distinct from a native transaction ID."
-      },
-      {
-        "column_name": "source_uri",
-        "column_type": "VARCHAR",
-        "description": "Official URL of the selected original PDF."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the exact original PDF, separate from index and derived output hashes."
-      },
-      {
-        "column_name": "observed_at",
-        "column_type": "VARCHAR",
-        "description": "Recorded source capture instant; null when no supported capture time is known."
-      },
-      {
-        "column_name": "extraction_status",
-        "column_type": "VARCHAR",
-        "description": "native_layout for the declared native-cell reading, or refused with a reason; refused is not an empty filing."
-      },
-      {
-        "column_name": "refusal_reason",
-        "column_type": "VARCHAR",
-        "description": "Explicit unread, identity, layout or page-budget reason; null on a qualified native reading."
-      },
-      {
-        "column_name": "parser_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the source-owned deterministic native-grid reader."
-      },
-      {
-        "column_name": "backend",
-        "column_type": "VARCHAR",
-        "description": "Native PDF backend used by the reader."
-      },
-      {
-        "column_name": "backend_version",
-        "column_type": "VARCHAR",
-        "description": "Installed native PDF backend version recorded for replay."
-      },
-      {
-        "column_name": "model",
-        "column_type": "VARCHAR",
-        "description": "Null: this path makes no model or OCR calls."
-      },
-      {
-        "column_name": "filer_name_raw",
-        "column_type": "VARCHAR",
-        "description": "Literal labeled native filer name, when readable. Qualified header and signature names must agree and match the selected index name after whitespace-only comparison; missing or contradictory identity refuses transactions."
-      },
-      {
-        "column_name": "state_district_raw",
-        "column_type": "VARCHAR",
-        "description": "State/district stated by the native PDF, checked against the selected index for qualified native reports."
-      },
-      {
-        "column_name": "signed_date_raw",
-        "column_type": "VARCHAR",
-        "description": "Date printed beside the native digital-signature statement; this is not signature authentication."
-      },
-      {
-        "column_name": "index_year",
-        "column_type": "BIGINT",
-        "description": "Selected publisher index year, distinct from the date range of transaction activity."
-      },
-      {
-        "column_name": "source_bytes",
-        "column_type": "BIGINT",
-        "description": "Original PDF byte size."
-      },
-      {
-        "column_name": "page_count",
-        "column_type": "BIGINT",
-        "description": "Selected original PDF page count, including unread pages."
-      },
-      {
-        "column_name": "transaction_count",
-        "column_type": "BIGINT",
-        "description": "Qualified native transaction observations emitted for this selected report; zero with refusal does not establish no transactions."
-      }
-    ],
-    "subject": "congress",
-    "grain": null,
-    "identity_columns": [
-      "report_id"
-    ]
-  },
-  "house_disclosure_transactions": {
-    "table": "house_disclosure_transactions",
-    "label": "House reported transaction observations",
-    "summary": "One qualified native PTR row with reported brackets, native blanks and every source-page fragment.",
-    "coverage": "Sampled. One declared retained index snapshot and explicitly selected periodic transaction report originals. Other categories are discovery only; image-form extraction and source-wide completeness remain unqualified.",
-    "kind": "sampled",
-    "measured_on": "2026-11-13",
-    "data_quality": "Native blanks, ranges, repeated index entries and original/amended observations remain separate. Refused reading is not a valid empty report. Page regions retain unqualified checkboxes; annual sections and scanned transactions are outside this pilot.",
-    "columns": [
-      {
-        "column_name": "transaction_id",
-        "column_type": "VARCHAR",
-        "description": "Identity of a row occurrence within one exact selected report version; not a net trade identity."
-      },
-      {
-        "column_name": "report_id",
-        "column_type": "VARCHAR",
-        "description": "Identity binding a selected index observation to one exact original PDF version."
-      },
-      {
-        "column_name": "filing_id",
-        "column_type": "VARCHAR",
-        "description": "Identity of one original index line in one retained index snapshot; repeated DocIDs remain separate observations."
-      },
-      {
-        "column_name": "doc_id",
-        "column_type": "VARCHAR",
-        "description": "Literal House filing DocID; distinct from a native transaction ID."
-      },
-      {
-        "column_name": "owner_raw",
-        "column_type": "VARCHAR",
-        "description": "Printed ownership cell. Native blank remains an empty string and is never defaulted to Self."
-      },
-      {
-        "column_name": "asset_raw",
-        "column_type": "VARCHAR",
-        "description": "Complete multiline printed asset cell. Existing ticker-like text stays literal; no security identity is invented."
-      },
-      {
-        "column_name": "action_raw",
-        "column_type": "VARCHAR",
-        "description": "Printed purchase, sale, partial/full sale or exchange code; original spelling and line breaks remain."
-      },
-      {
-        "column_name": "native_transaction_id",
-        "column_type": "VARCHAR",
-        "description": "Printed transaction ID, including a native blank on a new row. It is not the filing DocID."
-      },
-      {
-        "column_name": "transaction_date_raw",
-        "column_type": "VARCHAR",
-        "description": "Printed transaction date, retained even when an amended report later states a different date."
-      },
-      {
-        "column_name": "transaction_date_status",
-        "column_type": "VARCHAR",
-        "description": "parsed, blank or unparsed for the transaction-date cell."
-      },
-      {
-        "column_name": "notification_date_raw",
-        "column_type": "VARCHAR",
-        "description": "Printed notification date, separate from transaction, filing and source capture dates."
-      },
-      {
-        "column_name": "notification_date_status",
-        "column_type": "VARCHAR",
-        "description": "parsed, blank or unparsed for the notification-date cell."
-      },
-      {
-        "column_name": "amount_raw",
-        "column_type": "VARCHAR",
-        "description": "Complete multiline reported amount bracket; not an exact cash amount."
-      },
-      {
-        "column_name": "amount_status",
-        "column_type": "VARCHAR",
-        "description": "reported_range, reported_exclusive_lower_bound, blank or unparsed. An exclusive lower bound remains exclusive."
-      },
-      {
-        "column_name": "currency",
-        "column_type": "VARCHAR",
-        "description": "USD only when an explicit dollar bracket was interpreted; null otherwise."
-      },
-      {
-        "column_name": "filing_status_raw",
-        "column_type": "VARCHAR",
-        "description": "Printed New or Amended transaction status; reports and rows are never automatically replaced or deduplicated."
-      },
-      {
-        "column_name": "details_raw",
-        "column_type": "VARCHAR",
-        "description": "Complete printed row details, including continuations across pages; native font glyphs remain visible."
-      },
-      {
-        "column_name": "capital_gains_read_status",
-        "column_type": "VARCHAR",
-        "description": "checkbox_not_qualified: the original page region retains the mark, but this reader does not interpret checkboxes."
-      },
-      {
-        "column_name": "source_uri",
-        "column_type": "VARCHAR",
-        "description": "Official URL of the selected original PDF."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the exact original PDF, separate from index and derived output hashes."
-      },
-      {
-        "column_name": "page_locator",
-        "column_type": "VARCHAR",
-        "description": "Official PDF URL with the one-based source page fragment."
-      },
-      {
-        "column_name": "fragments_json",
-        "column_type": "VARCHAR",
-        "description": "Every row page fragment with its source page, PDF-point bounds, original native word indices, text and word bounds."
-      },
-      {
-        "column_name": "row_number",
-        "column_type": "BIGINT",
-        "description": "One-based transaction occurrence in reading order within this exact PDF."
-      },
-      {
-        "column_name": "page_number",
-        "column_type": "BIGINT",
-        "description": "One-based page number in the original PDF."
-      },
-      {
-        "column_name": "page_end",
-        "column_type": "BIGINT",
-        "description": "Last original page containing this transaction row or its continued details."
-      },
-      {
-        "column_name": "amount_lower_usd",
-        "column_type": "BIGINT",
-        "description": "Reported bracket lower bound in US dollars; consult amount_status for exclusive bounds. Never an exact amount."
-      },
-      {
-        "column_name": "amount_upper_usd",
-        "column_type": "BIGINT",
-        "description": "Reported bracket upper bound in US dollars; null for open-ended, blank or unreadable brackets."
-      },
-      {
-        "column_name": "transaction_date",
-        "column_type": "DATE",
-        "description": "Parsed printed transaction date; does not rewrite a prior report when amended."
-      },
-      {
-        "column_name": "notification_date",
-        "column_type": "DATE",
-        "description": "Parsed printed notification date."
-      }
-    ],
-    "subject": "congress",
-    "grain": null,
-    "identity_columns": [
-      "transaction_id"
-    ]
-  },
   "house_record_enrichment_results": {
     "table": "house_record_enrichment_results",
     "label": "House communication Record matches",
@@ -45042,122 +45158,6 @@
     "grain": "One native annual or release-point archive member observed in its edition. Requested year, native publication year, carried-forward state and appendices remain separate.",
     "identity_columns": [
       "edition_id"
-    ]
-  },
-  "white_house_action_versions": {
-    "table": "white_house_action_versions",
-    "label": "White House action source versions",
-    "summary": "One exact retained White House action-page version with source text, native category and literal dates. Related official-document facts may overlap; equivalence remains unresolved.",
-    "coverage": "Window. Explicitly selected nominations and appointments category pages and article HTML within a declared publication-date window. Changed HTML remains a separate version. This does not establish historical completeness or current legal effect.",
-    "kind": "window",
-    "measured_on": "2026-11-13",
-    "data_quality": "Exact URL and HTML-digest matches reuse existing official routes. Similar titles and names never establish document identity. WordPress post IDs identify publisher posts, not nominations or people.",
-    "columns": [
-      {
-        "column_name": "action_version_id",
-        "column_type": "VARCHAR",
-        "description": "Deterministic identity of one exact White House URL and original HTML digest; not a legal-action identifier."
-      },
-      {
-        "column_name": "source_url",
-        "column_type": "VARCHAR",
-        "description": "Exact publisher article URL validated against its canonical link."
-      },
-      {
-        "column_name": "native_post_id",
-        "column_type": "VARCHAR",
-        "description": "WordPress post identifier explicitly stated by the selected category listing."
-      },
-      {
-        "column_name": "title",
-        "column_type": "VARCHAR",
-        "description": "White House headline, decoded from its original HTML."
-      },
-      {
-        "column_name": "document_type",
-        "column_type": "VARCHAR",
-        "description": "Literal White House article subcategory; not inferred from its title."
-      },
-      {
-        "column_name": "categories_json",
-        "column_type": "VARCHAR",
-        "description": "Ordered category labels from the retained category listing; article type remains separate."
-      },
-      {
-        "column_name": "listing_url",
-        "column_type": "VARCHAR",
-        "description": "Exact retained category-page URL supporting the selected URL cohort and post identity."
-      },
-      {
-        "column_name": "listing_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the retained category-page HTML supporting this selection."
-      },
-      {
-        "column_name": "listing_record_index",
-        "column_type": "VARCHAR",
-        "description": "Zero-based article occurrence within the selected retained category page."
-      },
-      {
-        "column_name": "published_time",
-        "column_type": "VARCHAR",
-        "description": "Literal article:published_time value, including its source offset."
-      },
-      {
-        "column_name": "display_time",
-        "column_type": "VARCHAR",
-        "description": "Literal visible time datetime value; its instant must agree with published_time."
-      },
-      {
-        "column_name": "modified_time",
-        "column_type": "VARCHAR",
-        "description": "Literal article:modified_time value; NULL means absent and an empty string remains empty."
-      },
-      {
-        "column_name": "modified_time_status",
-        "column_type": "VARCHAR",
-        "description": "missing, empty or stated, according to the original modification-time field."
-      },
-      {
-        "column_name": "body_text",
-        "column_type": "VARCHAR",
-        "description": "Searchable text read from the article body without the title block or scripts; repeated source text remains repeated."
-      },
-      {
-        "column_name": "body_html",
-        "column_type": "VARCHAR",
-        "description": "Parser-serialized article body HTML, not byte-exact source HTML; source_sha256 identifies the exact original."
-      },
-      {
-        "column_name": "body_selector",
-        "column_type": "VARCHAR",
-        "description": "Selector and exclusions used to read body text from the retained original."
-      },
-      {
-        "column_name": "source_sha256",
-        "column_type": "VARCHAR",
-        "description": "SHA-256 of the complete retained original HTML response."
-      },
-      {
-        "column_name": "observed_at",
-        "column_type": "VARCHAR",
-        "description": "Observation time of this selected original response; unchanged refreshes keep the prior observation."
-      },
-      {
-        "column_name": "parser_version",
-        "column_type": "VARCHAR",
-        "description": "Version of the White House HTML reading rule."
-      },
-      {
-        "column_name": "official_match_status",
-        "column_type": "VARCHAR",
-        "description": "Always unresolved on every emitted row: related official facts may exist; no equivalent legal identity is asserted. Exact proven representation matches reuse the existing route instead of emitting a row."
-      }
-    ],
-    "subject": "congress",
-    "grain": null,
-    "identity_columns": [
-      "action_version_id"
     ]
   },
   "fec_filing_report_measures": {

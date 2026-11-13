@@ -5027,29 +5027,5 @@
       "letter_date": "The date the letter's CBO letterhead prints (`Washington, DC, June 16, 1997.`), as YYYY-MM-DD.  NULL where the letter prints no dateline, which every 118th-Congress letter is: their date is cbo_cost_estimates' publication date, not repeated here.",
       "last_modified": "The parent report's last_modified, carried so this table versions with the package it came from."
     }
-  },
-  "white_house_action_versions": {
-    "columns": {
-      "action_version_id": "Deterministic identity of one exact White House URL and original HTML digest; not a legal-action identifier.",
-      "source_url": "Exact publisher article URL validated against its canonical link.",
-      "native_post_id": "WordPress post identifier explicitly stated by the selected category listing.",
-      "title": "White House headline, decoded from its original HTML.",
-      "document_type": "Literal White House article subcategory; not inferred from its title.",
-      "categories_json": "Ordered category labels from the retained category listing; article type remains separate.",
-      "published_time": "Literal article:published_time value, including its source offset.",
-      "display_time": "Literal visible time datetime value; its instant must agree with published_time.",
-      "modified_time": "Literal article:modified_time value; NULL means absent and an empty string remains empty.",
-      "modified_time_status": "missing, empty or stated, according to the original modification-time field.",
-      "body_text": "Searchable text read from the article body without the title block or scripts; repeated source text remains repeated.",
-      "body_html": "Parser-serialized article body HTML, not byte-exact source HTML; source_sha256 identifies the exact original.",
-      "body_selector": "Selector and exclusions used to read body text from the retained original.",
-      "source_sha256": "SHA-256 of the complete retained original HTML response.",
-      "observed_at": "Observation time of this selected original response; unchanged refreshes keep the prior observation.",
-      "parser_version": "Version of the White House HTML reading rule.",
-      "official_match_status": "Always unresolved on every emitted row: related official facts may exist; no equivalent legal identity is asserted. Exact proven representation matches reuse the existing route instead of emitting a row.",
-      "listing_url": "Exact retained category-page URL supporting the selected URL cohort and post identity.",
-      "listing_sha256": "SHA-256 of the retained category-page HTML supporting this selection.",
-      "listing_record_index": "Zero-based article occurrence within the selected retained category page."
-    }
   }
 }
