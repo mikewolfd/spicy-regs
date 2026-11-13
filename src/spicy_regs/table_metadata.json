@@ -41905,5 +41905,496 @@
       "taxonomy",
       "concept"
     ]
+  },
+  "fjc_judges": {
+    "table": "fjc_judges",
+    "label": "FJC Article III judges",
+    "summary": "FJC Article III judges with exact retained FJC source evidence.",
+    "coverage": "Not a range. Each selected complete FJC Article III flat export retains its native judge population and repeated service groups, including listed historical courts and recess appointees. Acquisition time identifies an observation, not a frozen publisher revision. Other federal judges and vacancy histories are outside this export. Earlier observations survive only when selected together or retained in prior generations. Missing later rows do not prove deletion; cross-source identities remain unresolved.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release digest; include it in every join to keep observations separate."
+      },
+      {
+        "column_name": "nid",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Node ID, the native judge identifier; distinct from legacy jid and external judge IDs."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Positional source-record identity in the admitted release."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original URL, response SHA-256, byte size, acquisition time, CSV record number and exact byte span. Byte offsets are zero based; CSV record numbers include the header."
+      },
+      {
+        "column_name": "jid_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal legacy FJC Judge Identification Number; preserve blank or publisher-supplied values without substituting nid."
+      },
+      {
+        "column_name": "last_name",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Last Name, without name matching."
+      },
+      {
+        "column_name": "first_name",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC First Name."
+      },
+      {
+        "column_name": "middle_name_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Middle Name, including whitespace."
+      },
+      {
+        "column_name": "suffix_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal Suffix, including whitespace."
+      },
+      {
+        "column_name": "gender_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher Gender; no analytical recoding."
+      },
+      {
+        "column_name": "race_or_ethnicity_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher Race or Ethnicity; subjective historical and self-reported categories remain unchanged."
+      },
+      {
+        "column_name": "birth_month_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Birth Month; preserve blanks and source precision without constructing a complete date."
+      },
+      {
+        "column_name": "birth_day_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Birth Day; preserve blanks and source precision without constructing a complete date."
+      },
+      {
+        "column_name": "birth_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Birth Year; preserve blanks and source precision without constructing a complete date."
+      },
+      {
+        "column_name": "death_month_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Death Month; preserve blanks and source precision without constructing a complete date."
+      },
+      {
+        "column_name": "death_day_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Death Day; preserve blanks and source precision without constructing a complete date."
+      },
+      {
+        "column_name": "death_year_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Death Year; preserve blanks and source precision without constructing a complete date."
+      },
+      {
+        "column_name": "biography_url",
+        "column_type": "VARCHAR",
+        "description": "FJC biography link formed from the publisher-documented nid route."
+      },
+      {
+        "column_name": "external_judge_id",
+        "column_type": "VARCHAR",
+        "description": "NULL until separately evidenced cross-source identity resolution."
+      },
+      {
+        "column_name": "external_identity_status",
+        "column_type": "VARCHAR",
+        "description": "unresolved; this build performs no cross-source person or court matching."
+      },
+      {
+        "column_name": "raw_fields_json",
+        "column_type": "VARCHAR",
+        "description": "Every literal source column, including demographics, all service groups, education, professional career, other service, unsuccessful nominations and unknown extensions. Empty strings and whitespace survive."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One FJC snapshot and native nid.",
+    "identity_columns": [
+      "snapshot_id",
+      "nid"
+    ]
+  },
+  "fjc_appointments": {
+    "table": "fjc_appointments",
+    "label": "FJC appointment and reassignment observations",
+    "summary": "FJC appointment and reassignment observations with exact retained FJC source evidence.",
+    "coverage": "Not a range. Each selected complete FJC Article III flat export retains its native judge population and repeated service groups, including listed historical courts and recess appointees. Acquisition time identifies an observation, not a frozen publisher revision. Other federal judges and vacancy histories are outside this export. Earlier observations survive only when selected together or retained in prior generations. Missing later rows do not prove deletion; cross-source identities remain unresolved.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release digest; include it in every join to keep observations separate."
+      },
+      {
+        "column_name": "nid",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Node ID, the native judge identifier; distinct from legacy jid and external judge IDs."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Positional source-record identity in the admitted release."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original URL, response SHA-256, byte size, acquisition time, CSV record number and exact byte span. Byte offsets are zero based; CSV record numbers include the header."
+      },
+      {
+        "column_name": "service_ordinal",
+        "column_type": "INTEGER",
+        "description": "Source service-group suffix; repeated terms and multiple commissions remain separate, including on the same court."
+      },
+      {
+        "column_name": "appointment_id",
+        "column_type": "VARCHAR",
+        "description": "FJC nid and source service-group suffix, scoped by snapshot_id. Identifies an observation of appointment or reassignment, not an independently proven cross-snapshot commission identity."
+      },
+      {
+        "column_name": "appointment_kind",
+        "column_type": "VARCHAR",
+        "description": "presidential-appointment, reassignment, assignment or unresolved, from the literal Appointing President. Reassignment never inherits a president from another group."
+      },
+      {
+        "column_name": "court_label_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 key of the exact FJC court-type and court-name pair. A label key, not a proven cross-source court identity; join with snapshot_id."
+      },
+      {
+        "column_name": "seat_id_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Seat ID identifying court, seat and succession order; not a vacancy identifier."
+      },
+      {
+        "column_name": "appointment_title_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Appointment Title; empty strings and whitespace remain."
+      },
+      {
+        "column_name": "appointing_president_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Appointing President; empty strings and whitespace remain."
+      },
+      {
+        "column_name": "appointing_president_party_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Party of Appointing President; empty strings and whitespace remain. This is the president's party, not the judge's affiliation."
+      },
+      {
+        "column_name": "reappointing_president_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Reappointing President; empty strings and whitespace remain."
+      },
+      {
+        "column_name": "reappointing_president_party_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Party of Reappointing President; empty strings and whitespace remain. This is the reappointing president's party, not the judge's affiliation."
+      },
+      {
+        "column_name": "aba_rating_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC ABA Rating; empty strings and whitespace remain."
+      },
+      {
+        "column_name": "new_seat_statute_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Statute Authorizing New Seat; empty strings and whitespace remain."
+      },
+      {
+        "column_name": "committee_action_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Judiciary Committee Action; empty strings and whitespace remain."
+      },
+      {
+        "column_name": "senate_vote_type_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Senate Vote Type; empty strings and whitespace remain. Voice votes are never assigned numeric shares."
+      },
+      {
+        "column_name": "ayes_nays_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Ayes/Nays; empty strings and whitespace remain. No vote share is inferred; blank voice-vote counts remain blank."
+      },
+      {
+        "column_name": "recess_appointment_date",
+        "column_type": "DATE",
+        "description": "Full native Recess Appointment Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "nomination_date",
+        "column_type": "DATE",
+        "description": "Full native Nomination Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "committee_referral_date",
+        "column_type": "DATE",
+        "description": "Full native Committee Referral Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "hearing_date",
+        "column_type": "DATE",
+        "description": "Full native Hearing Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "committee_action_date",
+        "column_type": "DATE",
+        "description": "Full native Committee Action Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "confirmation_date",
+        "column_type": "DATE",
+        "description": "Full native Confirmation Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "commission_date",
+        "column_type": "DATE",
+        "description": "Full native Commission Date, if parseable as YYYY-MM-DD or MM/DD/YYYY; otherwise NULL with explicit date status and original string retained."
+      },
+      {
+        "column_name": "date_status_json",
+        "column_type": "VARCHAR",
+        "description": "Status of each typed date: full-date, empty, whitespace or unresolved-literal. Invalid and partial dates remain verbatim in the raw JSON."
+      },
+      {
+        "column_name": "raw_appointment_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal service group, preserving all original dates, vote text, party fields, blanks and unknown values."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One FJC snapshot, native nid and occupied source service group.",
+    "identity_columns": [
+      "snapshot_id",
+      "nid",
+      "service_ordinal"
+    ]
+  },
+  "fjc_service_terms": {
+    "table": "fjc_service_terms",
+    "label": "FJC judicial service terms",
+    "summary": "FJC judicial service terms with exact retained FJC source evidence.",
+    "coverage": "Not a range. Each selected complete FJC Article III flat export retains its native judge population and repeated service groups, including listed historical courts and recess appointees. Acquisition time identifies an observation, not a frozen publisher revision. Other federal judges and vacancy histories are outside this export. Earlier observations survive only when selected together or retained in prior generations. Missing later rows do not prove deletion; cross-source identities remain unresolved.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release digest; include it in every join to keep observations separate."
+      },
+      {
+        "column_name": "nid",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Node ID, the native judge identifier; distinct from legacy jid and external judge IDs."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Positional source-record identity in the admitted release."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original URL, response SHA-256, byte size, acquisition time, CSV record number and exact byte span. Byte offsets are zero based; CSV record numbers include the header."
+      },
+      {
+        "column_name": "service_ordinal",
+        "column_type": "INTEGER",
+        "description": "Source service-group suffix; repeated terms and multiple commissions remain separate, including on the same court."
+      },
+      {
+        "column_name": "appointment_id",
+        "column_type": "VARCHAR",
+        "description": "FJC nid and source service-group suffix, scoped by snapshot_id. Identifies an observation of appointment or reassignment, not an independently proven cross-snapshot commission identity."
+      },
+      {
+        "column_name": "court_label_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 key of the exact FJC court-type and court-name pair. A label key, not a proven cross-source court identity; join with snapshot_id."
+      },
+      {
+        "column_name": "seat_id_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Seat ID identifying court, seat and succession order; not a vacancy identifier."
+      },
+      {
+        "column_name": "senior_status_date",
+        "column_type": "DATE",
+        "description": "Full native Senior Status Date, if parseable. Senior service can continue after this date; it is not termination or a complete vacancy history."
+      },
+      {
+        "column_name": "termination_date",
+        "column_type": "DATE",
+        "description": "Full native Termination Date, if parseable. Keep distinct from commission, senior status and vacancy dates; a new commission may precede prior termination."
+      },
+      {
+        "column_name": "termination_reason_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC Termination, including Reassignment, Appointment to Another Judicial Position, Recess Appointment-Not Confirmed, Death and blanks."
+      },
+      {
+        "column_name": "vacancy_date",
+        "column_type": "DATE",
+        "description": "NULL: the selected biography export does not supply vacancy dates. Never filled from commission, senior status or termination."
+      },
+      {
+        "column_name": "vacancy_date_status",
+        "column_type": "VARCHAR",
+        "description": "not-provided-in-export; distinguishes a missing source field from an empty recorded date."
+      },
+      {
+        "column_name": "chief_judge_periods_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered first and second temporary chief-judge terms, with literal begin and end years. No month or day is imputed."
+      },
+      {
+        "column_name": "date_status_json",
+        "column_type": "VARCHAR",
+        "description": "Status of each typed date: full-date, empty, whitespace or unresolved-literal. Invalid and partial dates remain verbatim in the raw JSON."
+      },
+      {
+        "column_name": "raw_service_json",
+        "column_type": "VARCHAR",
+        "description": "Complete literal service group beside typed service dates; original strings, blanks and whitespace remain."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One FJC snapshot, native nid and occupied source service group.",
+    "identity_columns": [
+      "snapshot_id",
+      "nid",
+      "service_ordinal"
+    ]
+  },
+  "fjc_courts": {
+    "table": "fjc_courts",
+    "label": "FJC native court labels",
+    "summary": "FJC native court labels with exact retained FJC source evidence.",
+    "coverage": "Not a range. Each selected complete FJC Article III flat export retains its native judge population and repeated service groups, including listed historical courts and recess appointees. Acquisition time identifies an observation, not a frozen publisher revision. Other federal judges and vacancy histories are outside this export. Earlier observations survive only when selected together or retained in prior generations. Missing later rows do not prove deletion; cross-source identities remain unresolved.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release digest; include it in every join to keep observations separate."
+      },
+      {
+        "column_name": "court_label_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 key of the exact FJC court-type and court-name pair. A label key, not a proven cross-source court identity; join with snapshot_id."
+      },
+      {
+        "column_name": "court_type_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC court type, including historical categories and Other."
+      },
+      {
+        "column_name": "court_name_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal FJC court name; exact-label equality supports the in-source relationship only."
+      },
+      {
+        "column_name": "external_court_id",
+        "column_type": "VARCHAR",
+        "description": "NULL until a separately evidenced cross-source court mapping is supplied."
+      },
+      {
+        "column_name": "external_identity_status",
+        "column_type": "VARCHAR",
+        "description": "unresolved; this build performs no cross-source person or court matching."
+      },
+      {
+        "column_name": "source_record_id",
+        "column_type": "VARCHAR",
+        "description": "Positional source-record identity in the admitted release."
+      },
+      {
+        "column_name": "source_locator_json",
+        "column_type": "VARCHAR",
+        "description": "Original URL, response SHA-256, byte size, acquisition time, CSV record number and exact byte span. Byte offsets are zero based; CSV record numbers include the header."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One FJC snapshot and exact court-type/name pair.",
+    "identity_columns": [
+      "snapshot_id",
+      "court_label_id"
+    ]
+  },
+  "fjc_snapshots": {
+    "table": "fjc_snapshots",
+    "label": "FJC Article III export snapshots",
+    "summary": "FJC Article III export snapshots with exact retained FJC source evidence.",
+    "coverage": "Not a range. Each selected complete FJC Article III flat export retains its native judge population and repeated service groups, including listed historical courts and recess appointees. Acquisition time identifies an observation, not a frozen publisher revision. Other federal judges and vacancy histories are outside this export. Earlier observations survive only when selected together or retained in prior generations. Missing later rows do not prove deletion; cross-source identities remain unresolved.",
+    "kind": "not_a_range",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "snapshot_id",
+        "column_type": "VARCHAR",
+        "description": "Exact admitted source-release digest; include it in every join to keep observations separate."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Acquisition timestamp with timezone, separate from any publisher revision date."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the exact original CSV bytes."
+      },
+      {
+        "column_name": "source_byte_size",
+        "column_type": "BIGINT",
+        "description": "Exact original CSV size in bytes."
+      },
+      {
+        "column_name": "judge_count",
+        "column_type": "BIGINT",
+        "description": "Observed native judge rows in the completely read selected file; not a publisher-wide completeness assertion."
+      },
+      {
+        "column_name": "service_count",
+        "column_type": "BIGINT",
+        "description": "Occupied native service groups in the completely read selected file, before any cross-source matching."
+      },
+      {
+        "column_name": "source_release_logical_id",
+        "column_type": "VARCHAR",
+        "description": "Logical identity of the admitted source release."
+      },
+      {
+        "column_name": "source_selection_json",
+        "column_type": "VARCHAR",
+        "description": "Exact declared Article III flat-file capture, including URL, SHA-256, size and acquisition time."
+      }
+    ],
+    "subject": "courts",
+    "grain": "One admitted selected FJC flat export.",
+    "identity_columns": [
+      "snapshot_id"
+    ]
   }
 }

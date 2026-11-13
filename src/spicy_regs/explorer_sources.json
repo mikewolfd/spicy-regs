@@ -275,6 +275,13 @@
       "kind": "government",
       "note": "Selected historical issue metadata and retained renditions; issue metadata is distinct from document/granule text."
     },
+    "fjc": {
+      "id": "fjc",
+      "name": "Federal Judicial Center Article III Biographical Directory",
+      "url": "https://www.fjc.gov/history/judges",
+      "kind": "government",
+      "note": "One selected complete flat export. Native court labels and judge IDs remain distinct from unresolved cross-source identities. Service termination, senior status and vacancies are separate facts."
+    },
     "ofac": {
       "id": "ofac",
       "name": "Treasury Office of Foreign Assets Control",
@@ -684,6 +691,11 @@
     "table3-history": {
       "sources": [
         "uscode"
+      ]
+    },
+    "fjc-judicial-careers": {
+      "sources": [
+        "fjc"
       ]
     },
     "ofac-sanctions": {
