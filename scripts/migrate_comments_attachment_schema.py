@@ -7,6 +7,7 @@ import argparse
 import json
 from contextlib import closing
 from os import environ, getenv
+from pathlib import Path
 
 import pyarrow as pa
 
@@ -94,14 +95,21 @@ def main() -> None:
     parser.add_argument("--table-uuid")
     parser.add_argument("--snapshot-id", type=int)
     parser.add_argument("--schema-id", type=int)
+    parser.add_argument("--maintenance-state", type=Path, help="Saved, verified guard for both native tables")
     args = parser.parse_args()
     if not iceberg.is_configured():
         parser.error("Configure the R2 Data Catalog first")
     pins = (args.table_uuid, args.snapshot_id, args.schema_id)
-    if args.apply and (None in pins or not getenv(iceberg.CATALOG_LOCK_ENV)):
-        parser.error("Apply requires the preview's table UUID, snapshot ID, schema ID, and the comments catalog lock")
+    if args.apply and (None in pins or not getenv(iceberg.CATALOG_LOCK_ENV) or args.maintenance_state is None):
+        parser.error("Apply requires the preview pins, comments catalog lock, and --maintenance-state")
     if any(value is not None for value in pins) and None in pins:
         parser.error("Provide all three catalog pins together")
+
+    guard = None
+    if args.apply:
+        from spicy_regs.comments_maintenance import run
+
+        guard = run("verify", args.maintenance_state)
 
     catalog = RestCatalog(
         "comments",
@@ -117,6 +125,11 @@ def main() -> None:
     pin = (expected.table_uuid, expected.snapshot_id, expected.schema_id)
     if None not in pins and pins != pin:
         raise ValueError("Comments catalog differs from the supplied preview pin")
+    if guard is not None and (
+        guard["namespace"] != regulatory_catalog.namespace()
+        or guard["tables"]["comments"]["pin"]["table-uuid"] != pin[0]
+    ):
+        raise ValueError("Maintenance guard differs from the selected comments table")
     print(json.dumps(migrate(table, expected=pin, apply=args.apply)))
 
 

@@ -300,12 +300,16 @@ run:
 1. fetches the staged read and checks its sha256;
 2. pulls every earlier run's journal from the staging prefix's `journals/`,
    so a committed failure from any run stops this one;
-3. disables R2's compaction for the table and confirms it at table level
-   (the catalog-level setting alone does not show a table override);
+3. saves the exact maintenance configuration and UUID of both selected native
+   tables (`default_native.comments` and `default_native.etl_receipts` under the
+   default namespace), then disables and verifies their compaction and snapshot
+   expiration; the base namespace and catalog defaults are not those tables;
 4. runs `prepare`, then `write` (or `undo`);
-5. always pushes the journals back, uploads the journal, receipts and
-   pre-images as the run's artifact `comment-fields-fill`, and re-enables
-   compaction.
+5. always restores each table's saved writable settings, including an originally
+   disabled operation and its original target size/retention policy, then pushes
+   journals and uploads the recovery state, receipts and pre-images. Restoration
+   continues for the other table if one fails; the job fails until recovery is
+   verified, and `maintenance-state.json` records which table needs retry.
 
 The staged read for this fill (2026-09-29, receipt
 `comments-full-reread-2026-09-28/staging/staging.json`): key
@@ -357,8 +361,9 @@ Cautions:
   dispatch cancels the pending one. Check `gh run list` first and dispatch
   one step at a time, clear of the 06:25Z sweep (about 3 hours; it checks out
   `main` at start) and the 18:25Z retry.
-- An ETL commit between batches stops the fill: prepare again. The workflow
-  re-enables compaction at the end; confirm it did.
+- An ETL or in-flight maintenance commit between batches stops the fill: prepare
+  again. The workflow restores the original maintenance settings at the end;
+  confirm `maintenance-state.json` reports `restored: true`.
 
 ## Preconditions
 
@@ -380,20 +385,31 @@ concurrency group, so it excludes the other writers by hand:
    `fill-comment-fields.yml`). Confirm none has a run queued or in progress
    (`gh run list --workflow <file> --status in_progress`, then `--status
    queued`).
-2. Disable compaction for the table
-   (`npx wrangler r2 bucket catalog compaction disable spicy-regs default comments`)
-   and confirm it at table level, read-only:
-   `curl -H "Authorization: Bearer $(npx wrangler auth token)" https://api.cloudflare.com/client/v4/accounts/<account>/r2-catalog/spicy-regs/namespaces/default/tables/comments/maintenance-configs`
-   must show `result.maintenance_config.compaction.state` `disabled`
-   (2026-09-29: `enabled`, hourly, 128 MB; at catalog level snapshot expiry
-   is disabled, leave it so).
-3. `export SPICY_REGS_CATALOG_LOCK=local-fill-<UTC time>`. `write` and `undo`
-   refuse without it.
-4. Prepare, pilot and fill as on the runner. Every batch also refuses if the
-   snapshot moved, which catches a writer the steps above missed.
-5. Re-enable compaction
-   (`npx wrangler r2 bucket catalog compaction enable spicy-regs default comments --target-size 128`),
-   then the workflows.
+2. Set `SPICY_REGS_CATALOG_LOCK=local-fill-<UTC time>` only after those writers
+   are excluded. `write`, `undo`, schema apply and the maintenance helper refuse
+   without the lock marker.
+3. Choose a new recovery path and run
+   `uv run python -m spicy_regs.comments_maintenance suspend --state W/maintenance-state.json`.
+   The helper resolves the initialized native namespace and both exact table
+   UUIDs. It saves both prior responses before changing either table. It rolls
+   back both if suspension partly fails; keep the state file for retries.
+4. Before write or undo, run
+   `uv run python -m spicy_regs.comments_maintenance verify --state W/maintenance-state.json`.
+   Prepare, pilot and fill as on the runner. Existing version, schema, UUID and
+   snapshot guards remain mandatory; disabling maintenance cannot cancel a
+   commit already in flight.
+5. In cleanup, including after failure, run
+   `uv run python -m spicy_regs.comments_maintenance restore --state W/maintenance-state.json`.
+   Keep the original file and retry this command if restoration fails. It will
+   not apply old settings to a replaced table UUID. Verify `restored: true`, then
+   restore the workflows' prior enabled/disabled states.
+
+The helper uses Cloudflare's [table maintenance API](https://developers.cloudflare.com/api/resources/r2_data_catalog/subresources/namespaces/subresources/tables/subresources/maintenance_configs/methods/update/).
+It saves full observations and restores exactly the writable fields. Scheduler
+timestamps/reasons are read-only; the scheduling interval is left unchanged and
+checked, rather than invented or posted back. Unknown/absent operation states
+refuse before any change. This guard only covers the Comments subject and its
+shared native receipt table; it does not change catalog-wide settings.
 
 ## Seeding `comment_attributes`
 
@@ -432,7 +448,8 @@ reads both old and new rows and that a normal comments merge and receipt-free
 mirror export succeed. For the selected catalog, hold the existing
 `comments-catalog-write` lock and preview the change with
 `uv run --frozen --extra comments-reader python scripts/migrate_comments_attachment_schema.py`.
-Apply with `--apply --table-uuid UUID --snapshot-id ID --schema-id ID` using the
+Suspend both tables with the helper above before applying. Apply with
+`--apply --table-uuid UUID --snapshot-id ID --schema-id ID --maintenance-state W/maintenance-state.json` using the
 values from the preview. The command checks the initialization receipt and
 requires the exact v2 schema and pinned snapshot at commit. It changes schema
 metadata and keeps the existing data snapshot.

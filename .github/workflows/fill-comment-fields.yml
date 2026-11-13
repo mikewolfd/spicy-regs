@@ -127,19 +127,10 @@ jobs:
           : "${STAGING_KEY:?staging_key is required: the journals live beside it}"
           uv run fill-comment-fields journals --workdir "$WORKDIR" --prefix "$(dirname "$STAGING_KEY")/journals"
 
-      - name: Disable R2 compaction for the table and confirm it
+      - name: Save and suspend maintenance on both selected native tables
         if: inputs.operation != 'prepare'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
         run: |
-          # The catalog URI is https://catalog.cloudflarestorage.com/<account>/<bucket>.
-          export CLOUDFLARE_ACCOUNT_ID=$(echo "$R2_CATALOG_URI" | cut -d/ -f4)
-          npx --yes wrangler@4 r2 bucket catalog compaction disable spicy-regs "$R2_CATALOG_NAMESPACE" comments
-          state=$(curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2-catalog/spicy-regs/namespaces/$R2_CATALOG_NAMESPACE/tables/comments/maintenance-configs" \
-            | jq -r '.result.maintenance_config.compaction.state')
-          echo "table-level compaction: $state"
-          if [ "$state" != "disabled" ]; then echo "::error::compaction is '$state', not disabled"; exit 1; fi
+          uv run python -m spicy_regs.comments_maintenance suspend --state "$WORKDIR/maintenance-state.json"
 
       - name: Prepare (reads the catalog at one snapshot; writes nothing)
         if: inputs.operation != 'undo'
@@ -157,6 +148,7 @@ jobs:
         env:
           OPERATION: ${{ inputs.operation }}
         run: |
+          uv run python -m spicy_regs.comments_maintenance verify --state "$WORKDIR/maintenance-state.json"
           BY_FILE=""
           if [ "$OPERATION" = "pilot" ]; then BY_FILE="--no-by-file"; fi
           uv run fill-comment-fields write --workdir "$WORKDIR" $BY_FILE
@@ -168,7 +160,13 @@ jobs:
           EXPECTED_SNAPSHOT: ${{ inputs.expected_snapshot }}
         run: |
           : "${UNDO_BATCH:?undo_batch is required}" "${EXPECTED_SNAPSHOT:?expected_snapshot is required}"
+          uv run python -m spicy_regs.comments_maintenance verify --state "$WORKDIR/maintenance-state.json"
           uv run fill-comment-fields undo --workdir "$WORKDIR" --batch "$UNDO_BATCH" --expected-snapshot "$EXPECTED_SNAPSHOT"
+
+      - name: Restore exact prior maintenance on both native tables
+        if: always() && inputs.operation != 'prepare'
+        run: |
+          uv run python -m spicy_regs.comments_maintenance restore --state "$WORKDIR/maintenance-state.json"
 
       - name: Keep the journals beside the staged read
         if: always()
@@ -182,6 +180,7 @@ jobs:
         with:
           name: comment-fields-fill${{ inputs.operation == 'undo' && '-undo' || '' }}
           path: |
+            ${{ env.WORKDIR }}/maintenance-state.json
             ${{ env.WORKDIR }}/fill/*.json
             ${{ env.WORKDIR }}/fill/*.jsonl
             ${{ env.WORKDIR }}/fill/*.parquet
@@ -189,14 +188,3 @@ jobs:
           if-no-files-found: warn
           compression-level: 0
           retention-days: 30
-
-      - name: Re-enable R2 compaction for the table
-        if: always() && inputs.operation != 'prepare'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
-        run: |
-          export CLOUDFLARE_ACCOUNT_ID=$(echo "$R2_CATALOG_URI" | cut -d/ -f4)
-          npx --yes wrangler@4 r2 bucket catalog compaction enable spicy-regs "$R2_CATALOG_NAMESPACE" comments --target-size 128
-          curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2-catalog/spicy-regs/namespaces/$R2_CATALOG_NAMESPACE/tables/comments/maintenance-configs" \
-            | jq -c '.result.maintenance_config'
