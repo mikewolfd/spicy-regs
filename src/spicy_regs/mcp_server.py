@@ -219,6 +219,9 @@ TABLES = (
     "court_parentheticals",
     "court_opinions",
     "usaspending_recipients",
+    "usaspending_transactions",
+    "usaspending_awards",
+    "usaspending_archive_members",
     "fcc_proceedings",
     "fcc_filings",
     # The BillTrax-derived tables hosted from spicy-docs' table contracts.
@@ -1031,6 +1034,7 @@ def _build_connection_inputs(con, publication):
     # These newly declared subjects enter serving only through a managed
     # generation or explicit local/rulemaking selection, never a bare legacy key.
     managed_only = {
+        "usaspending_transactions", "usaspending_awards", "usaspending_archive_members",
         "cms_part_d_drug_spending",
         "cms_medicaid_drug_spending",
         "cms_part_b_drug_spending",

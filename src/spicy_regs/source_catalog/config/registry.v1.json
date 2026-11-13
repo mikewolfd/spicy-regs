@@ -1520,10 +1520,10 @@
       "id": "declared:usaspending-award-downloads",
       "title": "USAspending award download indexes",
       "publisher": "USAspending.gov",
-      "description": "Retained original award download listings and request failures; index files do not establish possession of listed award records.",
+      "description": "Retained original award download listings, explicitly selected full transaction archives and request failures. Inventory items remain advertised only; archive identity and complete selected-row interpretation are qualified separately.",
       "source_names": [],
-      "families": [],
-      "tables": []
+      "families": ["usaspending-awards"],
+      "tables": ["usaspending_transactions", "usaspending_awards", "usaspending_archive_members"]
     },
     {
       "id": "declared:usaspending-gsdm",

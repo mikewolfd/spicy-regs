@@ -21702,6 +21702,317 @@
       "recipient_id"
     ]
   },
+  "usaspending_transactions": {
+    "table": "usaspending_transactions",
+    "label": "USAspending award transactions",
+    "summary": "Native transactions for one declared agency, fiscal year and award family, retaining exact obligations and original row coordinates.",
+    "coverage": "Sampled. Explicit selected full agency/year/family snapshots only. Local qualification and publication are separate. Never combine full snapshots or append an all-year delta. Contracts, funding rows, subawards and unselected agencies/years are outside the first qualified Denali FY2025 assistance cohort. See docs/usaspending-awards.md.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "archive_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original ZIP; join and filter on this snapshot identity before comparing revisions."
+      },
+      {
+        "column_name": "archive_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher-advertised URL for the exact retained archive. A live URL alone does not establish unchanged bytes."
+      },
+      {
+        "column_name": "archive_version",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher updated_date from the retained monthly inventory; separate from member spelling and capture time."
+      },
+      {
+        "column_name": "award_family",
+        "column_type": "VARCHAR",
+        "description": "Explicitly selected assistance or contracts; these families remain separate."
+      },
+      {
+        "column_name": "fiscal_year",
+        "column_type": "INTEGER",
+        "description": "Selected action-date fiscal year, beginning October 1 of the preceding calendar year."
+      },
+      {
+        "column_name": "awarding_agency_code",
+        "column_type": "VARCHAR",
+        "description": "Native Treasury agency code, checked on every transaction; differs from the inventory database ID."
+      },
+      {
+        "column_name": "transaction_key",
+        "column_type": "VARCHAR",
+        "description": "Native transaction unique key, unique within this selected archive. Duplicate revisions refuse."
+      },
+      {
+        "column_name": "award_key",
+        "column_type": "VARCHAR",
+        "description": "Native award unique key; one award can have several transactions."
+      },
+      {
+        "column_name": "action_date",
+        "column_type": "DATE",
+        "description": "Publisher action date, checked against the declared fiscal year."
+      },
+      {
+        "column_name": "federal_action_obligation",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Exact signed federal obligation for this transaction, in USD. Add only within one selected snapshot. Negative adjustments remain negative."
+      },
+      {
+        "column_name": "publisher_overall_award_obligated_amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Publisher overall-award obligation, in exact USD, spanning the award lifetime. Repeated on transaction rows; sum only once per archive and award in usaspending_awards. Blank is unknown."
+      },
+      {
+        "column_name": "publisher_overall_award_outlayed_amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Publisher overall-award outlay, in exact USD, spanning the award lifetime. Repeated on transaction rows; sum only once per archive and award in usaspending_awards. It is not a fiscal-year or transaction outlay. Blank is unknown."
+      },
+      {
+        "column_name": "recipient_uei",
+        "column_type": "VARCHAR",
+        "description": "Literal recipient Unique Entity Identifier; blank remains blank. A join requires checking the other table scope and key uniqueness."
+      },
+      {
+        "column_name": "recipient_name",
+        "column_type": "VARCHAR",
+        "description": "Literal recipient name at this transaction; names are not identity keys."
+      },
+      {
+        "column_name": "recipient_state_code",
+        "column_type": "VARCHAR",
+        "description": "Recipient location, separate from the place where the work occurs."
+      },
+      {
+        "column_name": "place_of_performance_state_name",
+        "column_type": "VARCHAR",
+        "description": "Literal project/place-of-performance state; never substituted for recipient location."
+      },
+      {
+        "column_name": "funding_agency_code",
+        "column_type": "VARCHAR",
+        "description": "Native funding agency code, separate from awarding agency; no allocation of obligations across funding lists."
+      },
+      {
+        "column_name": "award_type_code",
+        "column_type": "VARCHAR",
+        "description": "Native assistance or contract type code, validated against the selected family."
+      },
+      {
+        "column_name": "modification_number",
+        "column_type": "VARCHAR",
+        "description": "Literal transaction modification number, preserving leading zeroes."
+      },
+      {
+        "column_name": "last_modified_date",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher revision timestamp; never used to silently choose among duplicate keys."
+      },
+      {
+        "column_name": "correction_delete_indicator_code",
+        "column_type": "VARCHAR",
+        "description": "Literal correction/delete code. Deleted rows refuse financial use; no code is inferred for blanks."
+      },
+      {
+        "column_name": "source_member",
+        "column_type": "VARCHAR",
+        "description": "Exact original ZIP member name, independent of archive filename and updated_date."
+      },
+      {
+        "column_name": "source_member_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original decoded CSV member."
+      },
+      {
+        "column_name": "record_number",
+        "column_type": "BIGINT",
+        "description": "One-based data record number, excluding the CSV header."
+      },
+      {
+        "column_name": "line_start",
+        "column_type": "BIGINT",
+        "description": "One-based starting physical line in the original CSV, including its header."
+      },
+      {
+        "column_name": "line_end",
+        "column_type": "BIGINT",
+        "description": "One-based ending physical line; quoted multiline records can span several lines."
+      },
+      {
+        "column_name": "raw_cells_json",
+        "column_type": "VARCHAR",
+        "description": "All literal source cells keyed by native headers. Empty strings stay empty; unknown fields survive. An absent column remains absent."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One archive and native transaction key.",
+    "identity_columns": [
+      "archive_sha256",
+      "transaction_key"
+    ]
+  },
+  "usaspending_awards": {
+    "table": "usaspending_awards",
+    "label": "USAspending selected awards",
+    "summary": "One selected archive and native award, with selected-year transaction obligations and separately stated lifetime award totals.",
+    "coverage": "Sampled. Explicit selected full agency/year/family snapshots only. Local qualification and publication are separate. Never combine full snapshots or append an all-year delta. Contracts, funding rows, subawards and unselected agencies/years are outside the first qualified Denali FY2025 assistance cohort. See docs/usaspending-awards.md.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "archive_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original ZIP; join and filter on this snapshot identity before comparing revisions."
+      },
+      {
+        "column_name": "archive_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher-advertised URL for the exact retained archive. A live URL alone does not establish unchanged bytes."
+      },
+      {
+        "column_name": "archive_version",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher updated_date from the retained monthly inventory; separate from member spelling and capture time."
+      },
+      {
+        "column_name": "award_family",
+        "column_type": "VARCHAR",
+        "description": "Explicitly selected assistance or contracts; these families remain separate."
+      },
+      {
+        "column_name": "fiscal_year",
+        "column_type": "INTEGER",
+        "description": "Selected action-date fiscal year, beginning October 1 of the preceding calendar year."
+      },
+      {
+        "column_name": "awarding_agency_code",
+        "column_type": "VARCHAR",
+        "description": "Native Treasury agency code, checked on every transaction; differs from the inventory database ID."
+      },
+      {
+        "column_name": "award_key",
+        "column_type": "VARCHAR",
+        "description": "Native award unique key; one award can have several transactions."
+      },
+      {
+        "column_name": "selected_transaction_count",
+        "column_type": "BIGINT",
+        "description": "Transactions belonging to this award in the selected fiscal-year archive; not the lifetime transaction count."
+      },
+      {
+        "column_name": "selected_fy_obligations",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Sum of contributing selected transaction obligations in exact USD. Includes signed adjustments; separate from lifetime award totals and outlays."
+      },
+      {
+        "column_name": "publisher_overall_award_obligated_amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Publisher overall-award obligation, in exact USD, spanning the award lifetime. Repeated on transaction rows; sum only once per archive and award in usaspending_awards. Blank is unknown."
+      },
+      {
+        "column_name": "publisher_overall_award_outlayed_amount",
+        "column_type": "DECIMAL(38,2)",
+        "description": "Publisher overall-award outlay, in exact USD, spanning the award lifetime. Repeated on transaction rows; sum only once per archive and award in usaspending_awards. It is not a fiscal-year or transaction outlay. Blank is unknown."
+      },
+      {
+        "column_name": "first_selected_action_date",
+        "column_type": "DATE",
+        "description": "Earliest contributing selected transaction action date; not necessarily award inception."
+      },
+      {
+        "column_name": "last_selected_action_date",
+        "column_type": "DATE",
+        "description": "Latest contributing selected transaction action date; not necessarily the lifetime latest action."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One archive and native award key.",
+    "identity_columns": [
+      "archive_sha256",
+      "award_key"
+    ]
+  },
+  "usaspending_archive_members": {
+    "table": "usaspending_archive_members",
+    "label": "USAspending original archive members",
+    "summary": "Original CSV member identities, literal headers, drift and observed transaction counts.",
+    "coverage": "Sampled. Explicit selected full agency/year/family snapshots only. Local qualification and publication are separate. Never combine full snapshots or append an all-year delta. Contracts, funding rows, subawards and unselected agencies/years are outside the first qualified Denali FY2025 assistance cohort. See docs/usaspending-awards.md.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "archive_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original ZIP; join and filter on this snapshot identity before comparing revisions."
+      },
+      {
+        "column_name": "archive_url",
+        "column_type": "VARCHAR",
+        "description": "Publisher-advertised URL for the exact retained archive. A live URL alone does not establish unchanged bytes."
+      },
+      {
+        "column_name": "archive_version",
+        "column_type": "VARCHAR",
+        "description": "Literal publisher updated_date from the retained monthly inventory; separate from member spelling and capture time."
+      },
+      {
+        "column_name": "award_family",
+        "column_type": "VARCHAR",
+        "description": "Explicitly selected assistance or contracts; these families remain separate."
+      },
+      {
+        "column_name": "fiscal_year",
+        "column_type": "INTEGER",
+        "description": "Selected action-date fiscal year, beginning October 1 of the preceding calendar year."
+      },
+      {
+        "column_name": "awarding_agency_code",
+        "column_type": "VARCHAR",
+        "description": "Native Treasury agency code, checked on every transaction; differs from the inventory database ID."
+      },
+      {
+        "column_name": "source_member",
+        "column_type": "VARCHAR",
+        "description": "Exact original ZIP member name, independent of archive filename and updated_date."
+      },
+      {
+        "column_name": "source_member_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the original decoded CSV member."
+      },
+      {
+        "column_name": "row_count",
+        "column_type": "BIGINT",
+        "description": "Data records in this CSV member, excluding its header. Not awards or archive inventory items."
+      },
+      {
+        "column_name": "header_json",
+        "column_type": "VARCHAR",
+        "description": "Ordered literal header cells. Header changes remain explicit."
+      },
+      {
+        "column_name": "added_columns_json",
+        "column_type": "VARCHAR",
+        "description": "Columns not in the adopted pinned publisher mapping; their values survive in raw_cells_json."
+      },
+      {
+        "column_name": "missing_columns_json",
+        "column_type": "VARCHAR",
+        "description": "Pinned mapping fields absent from this member. Required source or financial fields refuse the build."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One archive and native CSV member.",
+    "identity_columns": [
+      "archive_sha256",
+      "source_member"
+    ]
+  },
   "cms_part_d_drug_spending": {
     "table": "cms_part_d_drug_spending",
     "label": "Medicare Part D drug spending",

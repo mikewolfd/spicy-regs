@@ -13963,3 +13963,127 @@ tables:
       source_record_number: One-based source CSV occurrence; duplicate raw cells remain distinct occurrences.
       source_byte_offset: Zero-based original byte offset in the decoded member, before CP1252/CSV decoding.
       source_byte_length: Exact original record byte length including source line endings.
+
+  usaspending_transactions:
+    label: USAspending award transactions
+    summary: Native transactions for one declared agency, fiscal year and award family, retaining exact obligations
+      and original row coordinates.
+    coverage: Sampled. Explicit selected full agency/year/family snapshots only. Local qualification and publication
+      are separate. Never combine full snapshots or append an all-year delta. Contracts, funding rows, subawards and
+      unselected agencies/years are outside the first qualified Denali FY2025 assistance cohort. See docs/usaspending-awards.md.
+    measured_on: '2026-11-13'
+    subject: spending
+    grain: One archive and native transaction key.
+    identity_columns:
+    - archive_sha256
+    - transaction_key
+    columns:
+      archive_sha256: SHA-256 of the retained original ZIP; join and filter on this snapshot identity before comparing
+        revisions.
+      archive_url: Publisher-advertised URL for the exact retained archive. A live URL alone does not establish unchanged
+        bytes.
+      archive_version: Literal publisher updated_date from the retained monthly inventory; separate from member spelling
+        and capture time.
+      award_family: Explicitly selected assistance or contracts; these families remain separate.
+      fiscal_year: Selected action-date fiscal year, beginning October 1 of the preceding calendar year.
+      awarding_agency_code: Native Treasury agency code, checked on every transaction; differs from the inventory
+        database ID.
+      transaction_key: Native transaction unique key, unique within this selected archive. Duplicate revisions refuse.
+      award_key: Native award unique key; one award can have several transactions.
+      action_date: Publisher action date, checked against the declared fiscal year.
+      federal_action_obligation: Exact signed federal obligation for this transaction, in USD. Add only within one
+        selected snapshot. Negative adjustments remain negative.
+      publisher_overall_award_obligated_amount: Publisher overall-award obligation, in exact USD, spanning the award
+        lifetime. Repeated on transaction rows; sum only once per archive and award in usaspending_awards. Blank is
+        unknown.
+      publisher_overall_award_outlayed_amount: Publisher overall-award outlay, in exact USD, spanning the award lifetime.
+        Repeated on transaction rows; sum only once per archive and award in usaspending_awards. It is not a fiscal-year
+        or transaction outlay. Blank is unknown.
+      recipient_uei: Literal recipient Unique Entity Identifier; blank remains blank. A join requires checking the
+        other table scope and key uniqueness.
+      recipient_name: Literal recipient name at this transaction; names are not identity keys.
+      recipient_state_code: Recipient location, separate from the place where the work occurs.
+      place_of_performance_state_name: Literal project/place-of-performance state; never substituted for recipient
+        location.
+      funding_agency_code: Native funding agency code, separate from awarding agency; no allocation of obligations
+        across funding lists.
+      award_type_code: Native assistance or contract type code, validated against the selected family.
+      modification_number: Literal transaction modification number, preserving leading zeroes.
+      last_modified_date: Literal publisher revision timestamp; never used to silently choose among duplicate keys.
+      correction_delete_indicator_code: Literal correction/delete code. Deleted rows refuse financial use; no code
+        is inferred for blanks.
+      source_member: Exact original ZIP member name, independent of archive filename and updated_date.
+      source_member_sha256: SHA-256 of the original decoded CSV member.
+      record_number: One-based data record number, excluding the CSV header.
+      line_start: One-based starting physical line in the original CSV, including its header.
+      line_end: One-based ending physical line; quoted multiline records can span several lines.
+      raw_cells_json: All literal source cells keyed by native headers. Empty strings stay empty; unknown fields survive.
+        An absent column remains absent.
+  usaspending_awards:
+    label: USAspending selected awards
+    summary: One selected archive and native award, with selected-year transaction obligations and separately stated
+      lifetime award totals.
+    coverage: Sampled. Explicit selected full agency/year/family snapshots only. Local qualification and publication
+      are separate. Never combine full snapshots or append an all-year delta. Contracts, funding rows, subawards and
+      unselected agencies/years are outside the first qualified Denali FY2025 assistance cohort. See docs/usaspending-awards.md.
+    measured_on: '2026-11-13'
+    subject: spending
+    grain: One archive and native award key.
+    identity_columns:
+    - archive_sha256
+    - award_key
+    columns:
+      archive_sha256: SHA-256 of the retained original ZIP; join and filter on this snapshot identity before comparing
+        revisions.
+      archive_url: Publisher-advertised URL for the exact retained archive. A live URL alone does not establish unchanged
+        bytes.
+      archive_version: Literal publisher updated_date from the retained monthly inventory; separate from member spelling
+        and capture time.
+      award_family: Explicitly selected assistance or contracts; these families remain separate.
+      fiscal_year: Selected action-date fiscal year, beginning October 1 of the preceding calendar year.
+      awarding_agency_code: Native Treasury agency code, checked on every transaction; differs from the inventory
+        database ID.
+      award_key: Native award unique key; one award can have several transactions.
+      selected_transaction_count: Transactions belonging to this award in the selected fiscal-year archive; not the
+        lifetime transaction count.
+      selected_fy_obligations: Sum of contributing selected transaction obligations in exact USD. Includes signed
+        adjustments; separate from lifetime award totals and outlays.
+      publisher_overall_award_obligated_amount: Publisher overall-award obligation, in exact USD, spanning the award
+        lifetime. Repeated on transaction rows; sum only once per archive and award in usaspending_awards. Blank is
+        unknown.
+      publisher_overall_award_outlayed_amount: Publisher overall-award outlay, in exact USD, spanning the award lifetime.
+        Repeated on transaction rows; sum only once per archive and award in usaspending_awards. It is not a fiscal-year
+        or transaction outlay. Blank is unknown.
+      first_selected_action_date: Earliest contributing selected transaction action date; not necessarily award inception.
+      last_selected_action_date: Latest contributing selected transaction action date; not necessarily the lifetime
+        latest action.
+  usaspending_archive_members:
+    label: USAspending original archive members
+    summary: Original CSV member identities, literal headers, drift and observed transaction counts.
+    coverage: Sampled. Explicit selected full agency/year/family snapshots only. Local qualification and publication
+      are separate. Never combine full snapshots or append an all-year delta. Contracts, funding rows, subawards and
+      unselected agencies/years are outside the first qualified Denali FY2025 assistance cohort. See docs/usaspending-awards.md.
+    measured_on: '2026-11-13'
+    subject: spending
+    grain: One archive and native CSV member.
+    identity_columns:
+    - archive_sha256
+    - source_member
+    columns:
+      archive_sha256: SHA-256 of the retained original ZIP; join and filter on this snapshot identity before comparing
+        revisions.
+      archive_url: Publisher-advertised URL for the exact retained archive. A live URL alone does not establish unchanged
+        bytes.
+      archive_version: Literal publisher updated_date from the retained monthly inventory; separate from member spelling
+        and capture time.
+      award_family: Explicitly selected assistance or contracts; these families remain separate.
+      fiscal_year: Selected action-date fiscal year, beginning October 1 of the preceding calendar year.
+      awarding_agency_code: Native Treasury agency code, checked on every transaction; differs from the inventory
+        database ID.
+      source_member: Exact original ZIP member name, independent of archive filename and updated_date.
+      source_member_sha256: SHA-256 of the original decoded CSV member.
+      row_count: Data records in this CSV member, excluding its header. Not awards or archive inventory items.
+      header_json: Ordered literal header cells. Header changes remain explicit.
+      added_columns_json: Columns not in the adopted pinned publisher mapping; their values survive in raw_cells_json.
+      missing_columns_json: Pinned mapping fields absent from this member. Required source or financial fields refuse
+        the build.
