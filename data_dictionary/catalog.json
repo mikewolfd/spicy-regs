@@ -12183,6 +12183,89 @@
         "source_locator_json",
         "raw_row_json"
       ]
+    },
+    {
+      "table": "hospital_cost_reports",
+      "label": "Hospital cost reports",
+      "summary": "Native CMS-2552-10 report identities, versions and fiscal periods.",
+      "coverage": "Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes the highest status available for a facility/period; superseded submissions absent from its extract are unavailable. Every available filing and cell survives. No public delivery or wider historical coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not a selected measure.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "report_id",
+        "ccn",
+        "form",
+        "cohort_year",
+        "report_status_raw",
+        "transmittal_raw",
+        "fiscal_begin",
+        "fiscal_end",
+        "period_days",
+        "period_status",
+        "cohort_status",
+        "selected_report_policy",
+        "raw_report_json",
+        "source_archive_sha256",
+        "source_member",
+        "source_member_sha256",
+        "source_record_number",
+        "source_byte_offset",
+        "source_byte_length"
+      ]
+    },
+    {
+      "table": "hospital_cost_report_cells",
+      "label": "Hospital cost report worksheet cells",
+      "summary": "All numeric and alphanumeric worksheet observations from one pinned annual CMS extract.",
+      "coverage": "Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes the highest status available for a facility/period; superseded submissions absent from its extract are unavailable. Every available filing and cell survives. No public delivery or wider historical coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not a selected measure.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "report_id",
+        "cell_kind",
+        "worksheet",
+        "line",
+        "column",
+        "value_raw",
+        "source_archive_sha256",
+        "source_member",
+        "source_member_sha256",
+        "source_record_number",
+        "source_byte_offset",
+        "source_byte_length"
+      ]
+    },
+    {
+      "table": "hospital_cost_report_measures",
+      "label": "Selected hospital cost report measures",
+      "summary": "Explicit beds, costs, charges and net patient revenue at their original worksheet locations.",
+      "coverage": "Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes the highest status available for a facility/period; superseded submissions absent from its extract are unavailable. Every available filing and cell survives. No public delivery or wider historical coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not a selected measure.",
+      "kind": "sampled",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "report_id",
+        "ccn",
+        "fiscal_begin",
+        "fiscal_end",
+        "measure",
+        "unit",
+        "provider_scope",
+        "worksheet",
+        "line",
+        "column",
+        "value_raw",
+        "value",
+        "value_status",
+        "source_archive_sha256",
+        "source_member",
+        "source_member_sha256",
+        "source_record_number",
+        "source_byte_offset",
+        "source_byte_length"
+      ]
     }
   ]
 }

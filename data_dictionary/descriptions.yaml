@@ -13852,3 +13852,114 @@ tables:
         pointer or CSV byte range/source_format.
       raw_row_json: All literal source fields, including unknown columns, raw amount spelling, aliases, multiple-ID
         flags, means, medians and original values. No correction is inferred.
+
+  hospital_cost_reports:
+    label: Hospital cost reports
+    summary: Native CMS-2552-10 report identities, versions and fiscal periods.
+    coverage: Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes
+      the highest status available for a facility/period; superseded submissions absent from its extract
+      are unavailable. Every available filing and cell survives. No public delivery or wider historical
+      coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not
+      a selected measure.
+    measured_on: '2026-11-13'
+    subject: spending
+    grain: One pinned original and HCRIS report record number.
+    identity_columns:
+    - source_archive_sha256
+    - report_id
+    columns:
+      report_id: Literal HCRIS RPT_REC_NUM; join only within the same pinned original.
+      ccn: Six-character CMS Certification Number validated through RefSpec; not a hospital system identifier.
+      form: Explicit CMS-2552-10 form; other forms refuse.
+      cohort_year: Fiscal-year-start file selected from CMS, separate from ending year and capture date.
+      report_status_raw: 'CMS report status: 1 submitted, 2 settled without audit, 3 settled with audit,
+        4 reopened, 5 amended.'
+      transmittal_raw: Literal TRNSMTL_NUM report version; not the archive capture or release version.
+      fiscal_begin: Reported fiscal start date; original spelling remains in raw_report_json.
+      fiscal_end: Reported fiscal end date; original spelling remains in raw_report_json.
+      period_days: Inclusive days between reported dates; no annualization.
+      period_status: unknown, short, annual or long according to the reported duration; annual includes
+        365 and 366 days.
+      cohort_status: in_cohort, unknown_begin or outside_declared_year. A source-year discrepancy remains
+        visible.
+      selected_report_policy: Every filing in the pinned CMS highest-status extract; no additional revision
+        ranking.
+      raw_report_json: All native report columns as literal strings, including blank dates and original
+        flags.
+      source_archive_sha256: Exact selected ZIP SHA-256; report identities and coordinates are scoped to
+        this original.
+      source_member: Original ZIP member name; absent measurement cells have no member locator.
+      source_member_sha256: SHA-256 of the complete decoded CSV member, independently checked before use.
+      source_record_number: One-based source CSV occurrence; duplicate raw cells remain distinct occurrences.
+      source_byte_offset: Zero-based original byte offset in the decoded member, before CP1252/CSV decoding.
+      source_byte_length: Exact original record byte length including source line endings.
+  hospital_cost_report_cells:
+    label: Hospital cost report worksheet cells
+    summary: All numeric and alphanumeric worksheet observations from one pinned annual CMS extract.
+    coverage: Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes
+      the highest status available for a facility/period; superseded submissions absent from its extract
+      are unavailable. Every available filing and cell survives. No public delivery or wider historical
+      coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not
+      a selected measure.
+    measured_on: '2026-11-13'
+    subject: spending
+    grain: One pinned original, member and source CSV occurrence.
+    identity_columns:
+    - source_archive_sha256
+    - source_member
+    - source_record_number
+    columns:
+      report_id: Literal HCRIS RPT_REC_NUM; join only within the same pinned original.
+      cell_kind: nmrc or alphnmrc; numeric and text observations remain separate.
+      worksheet: Literal seven-character WKSHT_CD; unknown worksheets remain native facts.
+      line: Literal five-character LINE_NUM including the subline suffix.
+      column: Literal five-character CLMN_NUM including the subcolumn suffix.
+      value_raw: Literal original cell text. Empty string differs from numeric zero; NULL in measurements
+        means an absent source cell.
+      source_archive_sha256: Exact selected ZIP SHA-256; report identities and coordinates are scoped to
+        this original.
+      source_member: Original ZIP member name; absent measurement cells have no member locator.
+      source_member_sha256: SHA-256 of the complete decoded CSV member, independently checked before use.
+      source_record_number: One-based source CSV occurrence; duplicate raw cells remain distinct occurrences.
+      source_byte_offset: Zero-based original byte offset in the decoded member, before CP1252/CSV decoding.
+      source_byte_length: Exact original record byte length including source line endings.
+  hospital_cost_report_measures:
+    label: Selected hospital cost report measures
+    summary: Explicit beds, costs, charges and net patient revenue at their original worksheet locations.
+    coverage: Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes
+      the highest status available for a facility/period; superseded submissions absent from its extract
+      are unavailable. Every available filing and cell survives. No public delivery or wider historical
+      coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not
+      a selected measure.
+    measured_on: '2026-11-13'
+    subject: spending
+    grain: One pinned original, report record number and explicitly selected measure.
+    identity_columns:
+    - source_archive_sha256
+    - report_id
+    - measure
+    columns:
+      report_id: Literal HCRIS RPT_REC_NUM; join only within the same pinned original.
+      ccn: Six-character CMS Certification Number validated through RefSpec; not a hospital system identifier.
+      fiscal_begin: Reported fiscal start date; original spelling remains in raw_report_json.
+      fiscal_end: Reported fiscal end date; original spelling remains in raw_report_json.
+      measure: Explicit supported measure; no inferred rollups or substitutions.
+      unit: beds or USD for the selected worksheet measure; other raw cells carry no inferred units.
+      provider_scope: Hospital for S-3 beds, worksheet C Part I total for costs/charges, or financial statement
+        reporting entity for G-3 revenue. These scopes are not interchangeable.
+      worksheet: Literal seven-character WKSHT_CD; unknown worksheets remain native facts.
+      line: Literal five-character LINE_NUM including the subline suffix.
+      column: Literal five-character CLMN_NUM including the subcolumn suffix.
+      value_raw: Literal original cell text. Empty string differs from numeric zero; NULL in measurements
+        means an absent source cell.
+      value: Exact DECIMAL(38,12) from the reported value; unavailable or unrepresentable values remain
+        NULL.
+      value_status: value, absent_cell, blank, non_numeric, unrepresentable or invalid_bed_count. Unknown
+        markers retain original spelling.
+      source_archive_sha256: Exact selected ZIP SHA-256; report identities and coordinates are scoped to
+        this original.
+      source_member: Original ZIP member name; absent measurement cells have no member locator.
+      source_member_sha256: SHA-256 of the complete decoded CSV member, independently checked before use.
+      source_record_number: One-based source CSV occurrence; duplicate raw cells remain distinct occurrences.
+      source_byte_offset: Zero-based original byte offset in the decoded member, before CP1252/CSV decoding.
+      source_byte_length: Exact original record byte length including source line endings.

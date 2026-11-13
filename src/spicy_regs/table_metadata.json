@@ -45323,5 +45323,308 @@
     "identity_columns": [
       "observation_id"
     ]
+  },
+  "hospital_cost_reports": {
+    "table": "hospital_cost_reports",
+    "label": "Hospital cost reports",
+    "summary": "Native CMS-2552-10 report identities, versions and fiscal periods.",
+    "coverage": "Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes the highest status available for a facility/period; superseded submissions absent from its extract are unavailable. Every available filing and cell survives. No public delivery or wider historical coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not a selected measure.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Literal HCRIS RPT_REC_NUM; join only within the same pinned original."
+      },
+      {
+        "column_name": "ccn",
+        "column_type": "VARCHAR",
+        "description": "Six-character CMS Certification Number validated through RefSpec; not a hospital system identifier."
+      },
+      {
+        "column_name": "form",
+        "column_type": "VARCHAR",
+        "description": "Explicit CMS-2552-10 form; other forms refuse."
+      },
+      {
+        "column_name": "cohort_year",
+        "column_type": "INTEGER",
+        "description": "Fiscal-year-start file selected from CMS, separate from ending year and capture date."
+      },
+      {
+        "column_name": "report_status_raw",
+        "column_type": "VARCHAR",
+        "description": "CMS report status: 1 submitted, 2 settled without audit, 3 settled with audit, 4 reopened, 5 amended."
+      },
+      {
+        "column_name": "transmittal_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal TRNSMTL_NUM report version; not the archive capture or release version."
+      },
+      {
+        "column_name": "fiscal_begin",
+        "column_type": "DATE",
+        "description": "Reported fiscal start date; original spelling remains in raw_report_json."
+      },
+      {
+        "column_name": "fiscal_end",
+        "column_type": "DATE",
+        "description": "Reported fiscal end date; original spelling remains in raw_report_json."
+      },
+      {
+        "column_name": "period_days",
+        "column_type": "INTEGER",
+        "description": "Inclusive days between reported dates; no annualization."
+      },
+      {
+        "column_name": "period_status",
+        "column_type": "VARCHAR",
+        "description": "unknown, short, annual or long according to the reported duration; annual includes 365 and 366 days."
+      },
+      {
+        "column_name": "cohort_status",
+        "column_type": "VARCHAR",
+        "description": "in_cohort, unknown_begin or outside_declared_year. A source-year discrepancy remains visible."
+      },
+      {
+        "column_name": "selected_report_policy",
+        "column_type": "VARCHAR",
+        "description": "Every filing in the pinned CMS highest-status extract; no additional revision ranking."
+      },
+      {
+        "column_name": "raw_report_json",
+        "column_type": "VARCHAR",
+        "description": "All native report columns as literal strings, including blank dates and original flags."
+      },
+      {
+        "column_name": "source_archive_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact selected ZIP SHA-256; report identities and coordinates are scoped to this original."
+      },
+      {
+        "column_name": "source_member",
+        "column_type": "VARCHAR",
+        "description": "Original ZIP member name; absent measurement cells have no member locator."
+      },
+      {
+        "column_name": "source_member_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the complete decoded CSV member, independently checked before use."
+      },
+      {
+        "column_name": "source_record_number",
+        "column_type": "BIGINT",
+        "description": "One-based source CSV occurrence; duplicate raw cells remain distinct occurrences."
+      },
+      {
+        "column_name": "source_byte_offset",
+        "column_type": "BIGINT",
+        "description": "Zero-based original byte offset in the decoded member, before CP1252/CSV decoding."
+      },
+      {
+        "column_name": "source_byte_length",
+        "column_type": "BIGINT",
+        "description": "Exact original record byte length including source line endings."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One pinned original and HCRIS report record number.",
+    "identity_columns": [
+      "source_archive_sha256",
+      "report_id"
+    ]
+  },
+  "hospital_cost_report_cells": {
+    "table": "hospital_cost_report_cells",
+    "label": "Hospital cost report worksheet cells",
+    "summary": "All numeric and alphanumeric worksheet observations from one pinned annual CMS extract.",
+    "coverage": "Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes the highest status available for a facility/period; superseded submissions absent from its extract are unavailable. Every available filing and cell survives. No public delivery or wider historical coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not a selected measure.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Literal HCRIS RPT_REC_NUM; join only within the same pinned original."
+      },
+      {
+        "column_name": "cell_kind",
+        "column_type": "VARCHAR",
+        "description": "nmrc or alphnmrc; numeric and text observations remain separate."
+      },
+      {
+        "column_name": "worksheet",
+        "column_type": "VARCHAR",
+        "description": "Literal seven-character WKSHT_CD; unknown worksheets remain native facts."
+      },
+      {
+        "column_name": "line",
+        "column_type": "VARCHAR",
+        "description": "Literal five-character LINE_NUM including the subline suffix."
+      },
+      {
+        "column_name": "column",
+        "column_type": "VARCHAR",
+        "description": "Literal five-character CLMN_NUM including the subcolumn suffix."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal original cell text. Empty string differs from numeric zero; NULL in measurements means an absent source cell."
+      },
+      {
+        "column_name": "source_archive_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact selected ZIP SHA-256; report identities and coordinates are scoped to this original."
+      },
+      {
+        "column_name": "source_member",
+        "column_type": "VARCHAR",
+        "description": "Original ZIP member name; absent measurement cells have no member locator."
+      },
+      {
+        "column_name": "source_member_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the complete decoded CSV member, independently checked before use."
+      },
+      {
+        "column_name": "source_record_number",
+        "column_type": "BIGINT",
+        "description": "One-based source CSV occurrence; duplicate raw cells remain distinct occurrences."
+      },
+      {
+        "column_name": "source_byte_offset",
+        "column_type": "BIGINT",
+        "description": "Zero-based original byte offset in the decoded member, before CP1252/CSV decoding."
+      },
+      {
+        "column_name": "source_byte_length",
+        "column_type": "BIGINT",
+        "description": "Exact original record byte length including source line endings."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One pinned original, member and source CSV occurrence.",
+    "identity_columns": [
+      "source_archive_sha256",
+      "source_member",
+      "source_record_number"
+    ]
+  },
+  "hospital_cost_report_measures": {
+    "table": "hospital_cost_report_measures",
+    "label": "Selected hospital cost report measures",
+    "summary": "Explicit beds, costs, charges and net patient revenue at their original worksheet locations.",
+    "coverage": "Sampled by design. Local candidate scope is CMS-2552-10 fiscal-year-start 2010. CMS publishes the highest status available for a facility/period; superseded submissions absent from its extract are unavailable. Every available filing and cell survives. No public delivery or wider historical coverage is implied. Costs, charges, revenue and Medicare settlement are distinct; settlement is not a selected measure.",
+    "kind": "sampled",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "report_id",
+        "column_type": "VARCHAR",
+        "description": "Literal HCRIS RPT_REC_NUM; join only within the same pinned original."
+      },
+      {
+        "column_name": "ccn",
+        "column_type": "VARCHAR",
+        "description": "Six-character CMS Certification Number validated through RefSpec; not a hospital system identifier."
+      },
+      {
+        "column_name": "fiscal_begin",
+        "column_type": "DATE",
+        "description": "Reported fiscal start date; original spelling remains in raw_report_json."
+      },
+      {
+        "column_name": "fiscal_end",
+        "column_type": "DATE",
+        "description": "Reported fiscal end date; original spelling remains in raw_report_json."
+      },
+      {
+        "column_name": "measure",
+        "column_type": "VARCHAR",
+        "description": "Explicit supported measure; no inferred rollups or substitutions."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "beds or USD for the selected worksheet measure; other raw cells carry no inferred units."
+      },
+      {
+        "column_name": "provider_scope",
+        "column_type": "VARCHAR",
+        "description": "Hospital for S-3 beds, worksheet C Part I total for costs/charges, or financial statement reporting entity for G-3 revenue. These scopes are not interchangeable."
+      },
+      {
+        "column_name": "worksheet",
+        "column_type": "VARCHAR",
+        "description": "Literal seven-character WKSHT_CD; unknown worksheets remain native facts."
+      },
+      {
+        "column_name": "line",
+        "column_type": "VARCHAR",
+        "description": "Literal five-character LINE_NUM including the subline suffix."
+      },
+      {
+        "column_name": "column",
+        "column_type": "VARCHAR",
+        "description": "Literal five-character CLMN_NUM including the subcolumn suffix."
+      },
+      {
+        "column_name": "value_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal original cell text. Empty string differs from numeric zero; NULL in measurements means an absent source cell."
+      },
+      {
+        "column_name": "value",
+        "column_type": "DECIMAL(38,12)",
+        "description": "Exact DECIMAL(38,12) from the reported value; unavailable or unrepresentable values remain NULL."
+      },
+      {
+        "column_name": "value_status",
+        "column_type": "VARCHAR",
+        "description": "value, absent_cell, blank, non_numeric, unrepresentable or invalid_bed_count. Unknown markers retain original spelling."
+      },
+      {
+        "column_name": "source_archive_sha256",
+        "column_type": "VARCHAR",
+        "description": "Exact selected ZIP SHA-256; report identities and coordinates are scoped to this original."
+      },
+      {
+        "column_name": "source_member",
+        "column_type": "VARCHAR",
+        "description": "Original ZIP member name; absent measurement cells have no member locator."
+      },
+      {
+        "column_name": "source_member_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the complete decoded CSV member, independently checked before use."
+      },
+      {
+        "column_name": "source_record_number",
+        "column_type": "BIGINT",
+        "description": "One-based source CSV occurrence; duplicate raw cells remain distinct occurrences."
+      },
+      {
+        "column_name": "source_byte_offset",
+        "column_type": "BIGINT",
+        "description": "Zero-based original byte offset in the decoded member, before CP1252/CSV decoding."
+      },
+      {
+        "column_name": "source_byte_length",
+        "column_type": "BIGINT",
+        "description": "Exact original record byte length including source line endings."
+      }
+    ],
+    "subject": "spending",
+    "grain": "One pinned original, report record number and explicitly selected measure.",
+    "identity_columns": [
+      "source_archive_sha256",
+      "report_id",
+      "measure"
+    ]
   }
 }
