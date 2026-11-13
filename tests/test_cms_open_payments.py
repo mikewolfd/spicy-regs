@@ -144,15 +144,21 @@ def test_supported_csv_suffix_and_resume_avoid_repeated_data_requests(tmp_path, 
 
     monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw"))
     requested = []
+    interrupted = False
+    monkeypatch.setattr("spicy_regs.pipelines.cms_open_payments.CSV_ROWS", 1)
     levels = {item["dataset"]["identifier"]: level for level, item in DATA["examples"].items()}
 
     def answer(request):
+        nonlocal interrupted
         requested.append(str(request.url))
         if request.url.path == "/data.json":
             return httpx.Response(200, json=DATA["catalog"])
         if request.url.path.endswith("/download"):
             raw = copy.deepcopy(DATA["examples"]["recipients"]["page"]["results"][0])
-            raw["record_number"] = "501"
+            if request.url.params.get("offset") == "501" and not interrupted:
+                interrupted = True
+                raise KeyboardInterrupt("bounded interruption after the first retained CSV range")
+            raw["record_number"] = str(int(request.url.params["offset"]) + 1)
             text = io.StringIO(newline="")
             writer = csv.writer(text)
             writer.writerow(raw)
@@ -161,7 +167,7 @@ def test_supported_csv_suffix_and_resume_avoid_repeated_data_requests(tmp_path, 
             return httpx.Response(200, content=text.getvalue().encode(), headers={"content-type": "text/csv"})
         level = levels[request.url.path.split("/")[-2]]
         data = copy.deepcopy(DATA["examples"][level]["page"])
-        data["count"] = 501 if level == "recipients" else 1
+        data["count"] = 502 if level == "recipients" else 1
         if request.url.params.get("results") == "false":
             data["results"] = []
         elif level == "recipients":
@@ -169,16 +175,20 @@ def test_supported_csv_suffix_and_resume_avoid_repeated_data_requests(tmp_path, 
         return httpx.Response(200, json=data)
 
     transport = httpx.MockTransport(answer)
+    with pytest.raises(KeyboardInterrupt):
+        capture(tmp_path / "capture", year=2024, transport=transport)
+    before_resume = len(requested)
     manifest = capture(tmp_path / "capture", year=2024, transport=transport)
+    assert not any("/download" in url and "offset=500&" in url for url in requested[before_resume:])
     saved = json.loads(manifest.read_text())
-    assert saved["families"]["recipients"]["count"] == 501
+    assert saved["families"]["recipients"]["count"] == 502
     assert len(saved["families"]["recipients"]["pages"]) == 1
-    assert "csv_tail" in saved["families"]["recipients"]
+    assert len(saved["families"]["recipients"]["csv_chunks"]) == 2
     artifact, _ = build(manifest, tmp_path / "candidate")
     table = pq.read_table(tmp_path / "candidate/generation" / f"{TABLE}.parquet")
-    assert table.num_rows == 505
+    assert table.num_rows == 506
     data = [row for row in table.to_pylist() if row["aggregation_level"] == "recipients"]
-    assert len(data) == 501 and len({row["native_id"] for row in data}) == 1
+    assert len(data) == 502 and len({row["native_id"] for row in data}) == 1
     assert json.loads(data[-1]["source_locator_json"])["source_format"] == "csv"
     before = len(requested)
     capture(tmp_path / "capture", year=2024, transport=transport)

@@ -68,3 +68,8 @@ original. The source reader checks byte coordinates, ordering, schema and exact
 count. CSV empty cells remain literal empty cells, with no inferred database-null
 meaning. `source_locator_json.source_format` identifies CSV rows and supplies
 byte offsets/lengths; retained JSON rows keep their JSON pointers.
+
+CSV ranges are bounded individually and checkpointed in native occurrence order.
+An interrupted range leaves earlier complete originals reusable. Source transfer
+termination is retained as incomplete evidence and never as an empty or complete
+population. The same source checks validate each range and the final cohort.
