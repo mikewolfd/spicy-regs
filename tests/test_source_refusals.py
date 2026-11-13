@@ -145,7 +145,7 @@ def test_a_refused_classification_read_fails_the_nightly_check(tmp_path, monkeyp
     assert check.main(["--base-url", BASE]) == 1
     out = capsys.readouterr().out
     assert "laws: classification-refused at" in out and f'"reason": "{reason}"' in out
-    assert '"url": "https://uscode.house.gov/classification/tables.shtml"' in out
+    assert '"url": "https://uscode.house.gov/classification/tables.html"' in out
 
 
 def test_a_transport_failure_is_retried_next_run_not_alerted(tmp_path, monkeypatch, capsys):
