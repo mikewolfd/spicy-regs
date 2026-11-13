@@ -85,8 +85,12 @@ def inputs(request, runner, tmp_path, monkeypatch):
     prefix = f"comment-attachment-stage-{digest}-"
 
     def gh_output(command, **_):
-        if command[:3] == ["gh", "run", "view"]:
-            return json.dumps({"workflowName": runner.RUNNER_WORKFLOW, "status": "completed"})
+        if command[:3] == ["gh", "api", "repos/x/y/actions/runs/123"]:
+            return json.dumps({"path": runner.RUNNER_WORKFLOW_PATH, "status": "completed",
+                               "event": "workflow_dispatch", "name": runner.RUNNER_WORKFLOW_PATH})
+        if command[:3] == ["gh", "api", "repos/x/y/actions/runs/456"]:
+            return json.dumps({"path": runner.RUNNER_WORKFLOW_PATH, "status": "completed",
+                               "event": "workflow_dispatch"})
         assert command[:2] == ["gh", "api"]
         return "\n".join(f"{prefix}{name}\t1000\tfalse" for name in runner_groups)
 
@@ -137,5 +141,28 @@ def test_aggregate_runner_refuses_repeated_group(runner, inputs):
     args, downloads, _ = inputs
     args.source_runs = ["123", "456"]
     with pytest.raises(ValueError, match="repeated"):
+        runner.execute(args)
+    assert not any(key.endswith(("/reads.parquet", "/manifest.parquet")) for key in downloads)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("path", ".github/workflows/unrelated.yml"),
+    ("event", "pull_request"),
+    ("status", "in_progress"),
+])
+def test_aggregate_runner_refuses_wrong_or_unfinished_source_run(runner, inputs, monkeypatch, field, value):
+    args, downloads, _ = inputs
+    original = runner.subprocess.check_output
+
+    def gh_output(command, **kwargs):
+        result = original(command, **kwargs)
+        if command[:3] == ["gh", "api", "repos/x/y/actions/runs/123"]:
+            info = json.loads(result)
+            info[field] = value
+            return json.dumps(info)
+        return result
+
+    monkeypatch.setattr(runner.subprocess, "check_output", gh_output)
+    with pytest.raises(ValueError, match="differs or is still running"):
         runner.execute(args)
     assert not any(key.endswith(("/reads.parquet", "/manifest.parquet")) for key in downloads)

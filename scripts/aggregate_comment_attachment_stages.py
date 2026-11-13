@@ -21,7 +21,7 @@ LIMITS = {"wall_seconds": 120 * 60, "interval_seconds": .2, "rss_bytes": 2 * 2**
 SPILL_BYTES = 512 * MIB
 CONTROL_LIMIT = 4 * MIB
 MEMBER_LIMIT = 64 * MIB
-RUNNER_WORKFLOW = "Read comment attachment source groups"
+RUNNER_WORKFLOW_PATH = ".github/workflows/read-comment-attachments.yml"
 PLAN = r"pinned-[a-z0-9-]+\.json"
 
 
@@ -71,8 +71,11 @@ def github_controls(run_ids, repository, master_sha256, work, reads, expected):
     for run in run_ids:
         gh = ["gh", "run"]
         info = json.loads(subprocess.check_output(
-            [*gh, "view", run, "--repo", repository, "--json", "workflowName,status"], text=True))
-        require(info == {"workflowName": RUNNER_WORKFLOW, "status": "completed"}, f"Source run {run} differs or is still running")
+            ["gh", "api", f"repos/{repository}/actions/runs/{run}"], text=True))
+        # GitHub can retain the file path as a workflow's display name after an
+        # initial registration error. The run's path identifies the actual file.
+        require(info.get("path") == RUNNER_WORKFLOW_PATH and info.get("event") == "workflow_dispatch"
+                and info.get("status") == "completed", f"Source run {run} differs or is still running")
         records = subprocess.check_output([
             "gh", "api", "--paginate", f"repos/{repository}/actions/runs/{run}/artifacts?per_page=100",
             "--jq", ".artifacts[] | [.name, .size_in_bytes, .expired] | @tsv",
