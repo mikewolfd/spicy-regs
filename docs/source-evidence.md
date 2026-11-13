@@ -14,6 +14,22 @@ journal time and never replaces the source's `observed_at`. A capture may
 appear first at acquisition and again when used; these stages are not a
 request count. Identical bodies share one local blob.
 
+Senate roster and vote readers record the successful serving rung with one
+`source-serving-rung` event, retained in both the run journal and the central
+receipt archive. Its `transport` is the serving rung (`direct`, `zyte_http`,
+`firecrawl_raw`, `zyte_session` where enabled, or `internet_archive`), and
+`provider_request_id` is null when the rung has no provider request identifier.
+`operation` and `original_url` identify the requested publisher file;
+`requested_url`, `resolved_url`, `observed_at` and `sha256` identify the exact
+successful capture. Archive reads therefore retain both the publisher URL and
+the replay URL. The event is emitted after source validation, never for a
+refused or malformed answer. It does not write another copy of the body.
+This also covers caller-selected archived Senate rosters; it does not enable
+automatic roster archive selection. Existing capture stages,
+`senate-roster-rung` and `senate-archive-capture` remain unchanged for earlier
+readers. Older artifacts may have only those legacy records; their absence of
+the new event does not establish that a read was direct.
+
 Members retain both roster responses, including a successfully parsed current
 roster that later fails its required LIS identifier check. Reports retain
 used collection listings, package summaries, MODS metadata, bodies and hearing

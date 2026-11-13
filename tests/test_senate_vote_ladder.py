@@ -209,7 +209,7 @@ def test_the_archive_serves_the_newest_capture_when_every_rung_refuses_and_says_
     assert got.vote.roll_number == 1 and len(got.vote.member_votes) == 99
     assert got.capture.requested_url == replay(new, original) and got.capture.body == gz, "retained as served"
     assert source.rungs == {"internet_archive": 1}
-    [(name, fields)] = evidence.events
+    [(name, fields)] = [event for event in evidence.events if event[0] == "senate-archive-capture"]
     assert name == "senate-archive-capture"
     assert fields["route"] == "internet_archive" and fields["original_url"] == original
     assert fields["archive_url"] == replay(new, original) and fields["archived_at"] == "2026-07-19T01:04:44+00:00"
