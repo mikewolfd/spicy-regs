@@ -12,7 +12,6 @@ from __future__ import annotations
 import html
 
 import marko
-import pyarrow as pa
 
 SQL_NAME = "court_opinion_search_text"
 
@@ -48,7 +47,16 @@ def court_opinion_search_text(value: str | None) -> str | None:
 
 def register_court_text_search(connection) -> None:
     """Expose the same function in ordinary query_sql connections and local DuckDB."""
-    def batch(values: pa.Array | pa.ChunkedArray) -> pa.Array:
+    try:
+        import pyarrow as pa
+    except ImportError:
+        # Minimal serving installs omit ETL dependencies. Keep the same visible
+        # text function available there through DuckDB's native scalar API.
+        connection.create_function(SQL_NAME, court_opinion_search_text, ["VARCHAR"], "VARCHAR",
+                                   null_handling="special", side_effects=False)
+        return
+
+    def batch(values):
         # Each call owns its parser: Marko maintains per-document parser state.
         parser = marko.Markdown(extensions=["gfm", "footnote"])
         return pa.array([None if value is None else " ".join(_visible(parser.parse(value)).split())

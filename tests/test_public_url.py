@@ -143,6 +143,9 @@ assert parse_index(json.dumps(empty_index()).encode()) == empty_index()
 assert table_members(empty_index(), 'dockets.parquet') == (Member('dockets.parquet', None, None, None),)
 con = mcp_server._build_connection()
 assert con.execute('SELECT docket_id FROM dockets').fetchall() == [('fork-docket',)]
+assert con.execute("SELECT court_opinion_search_text('plain *emphasis* [link](https://example.test)'), "
+                   "court_opinion_search_text(NULL), court_opinion_search_text('')").fetchone() == (
+                       'plain emphasis link', None, '')
 con.close()
 print('MINIMAL_READER_OK')
 """
