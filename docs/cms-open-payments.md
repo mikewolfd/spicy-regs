@@ -60,3 +60,11 @@ reconciliation and remaining acceptance gaps.
 The SpicyDocs source guide records the reuse/license decision and the later
 payment-level expansion requirements: Record_ID plus release/category,
 deletions, and repeated product/investigator associations.
+
+Large practitioner cohorts use the documented filtered CSV download after any
+retained JSON prefix. This avoids repeating the API's full count/sort for each
+small page. Resume exports only the missing suffix and then reuses the exact CSV
+original. The source reader checks byte coordinates, ordering, schema and exact
+count. CSV empty cells remain literal empty cells, with no inferred database-null
+meaning. `source_locator_json.source_format` identifies CSV rows and supplies
+byte offsets/lengths; retained JSON rows keep their JSON pointers.

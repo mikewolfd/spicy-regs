@@ -23,6 +23,8 @@ SCHEMA = pa.schema(
         ("recipient_type", pa.string()),
         ("npi", pa.string()),
         ("state", pa.string()),
+        ("country_code", pa.string()),
+        ("country_name", pa.string()),
         ("state_basis", pa.string()),
         ("payment_category", pa.string()),
         *(
@@ -106,6 +108,7 @@ def observation(item):
             native_id=raw["amgpo_making_payment_id"],
             name=raw["amgpo_making_payment_name"],
             state=raw["amgpo_making_payment_state"],
+            country_name=raw["amgpo_making_payment_country"],
             state_basis="reporting_entity_address",
         )
         values = {
@@ -129,6 +132,7 @@ def observation(item):
                 recipient_type=raw["covered_recipient_profile_type"],
                 npi=raw["covered_recipient_npi"],
                 state=raw["covered_recipient_profile_state"],
+                country_name=raw["covered_recipient_profile_country_name"],
                 state_basis="recipient_profile_address",
             )
             values = {
@@ -171,6 +175,8 @@ def observation(item):
             name=raw.get("state_name", raw.get("metric_level")),
             recipient_type=recipient_type,
             state=raw.get("state_code"),
+            country_code=raw.get("country_code"),
+            country_name=raw.get("country_name"),
             state_basis="publisher_recipient_state" if level == "states" else None,
             payment_category=raw["payment_type"],
         )

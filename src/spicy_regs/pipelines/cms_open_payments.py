@@ -60,6 +60,7 @@ def capture(
         SummaryWalk,
         page_url,
         select_summary,
+        read_page,
         validate_url,
     )
     from spicy_docs.transport.captured import CapturedBodyResponse
@@ -69,7 +70,7 @@ def capture(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "capture-manifest.json"
-    manifest = (
+    manifest: dict = (
         json.loads(path.read_text()) if path.exists() else {"program_year": year, "families": {}, "complete": False}
     )
     if manifest["program_year"] != year:
@@ -96,7 +97,11 @@ def capture(
                 catalog = acquire(client, CATALOG_URL, "open-payments-catalog")
                 manifest["catalog"] = _descriptor(catalog)
                 _save(path, manifest)
-            total_bytes = sum(p["byte_size"] for f in manifest["families"].values() for p in f["pages"])
+            total_bytes = sum(
+                p["byte_size"]
+                for f in manifest["families"].values()
+                for p in [*f["pages"], *([f["csv_tail"]] if "csv_tail" in f else [])]
+            )
             for level in TITLES:
                 selection = select_summary(catalog, aggregation_level=level, program_year=year)
                 selected = manifest["families"].setdefault(level, {"selection": selection.as_dict(), "pages": []})
@@ -107,18 +112,80 @@ def capture(
                     for _ in walk.add(load_capture(store, descriptor)):
                         pass
                 while walk.count is None or walk.observed < walk.count:
+                    if level == "recipients" and walk.count is not None:
+                        from spicy_docs.sources.cms_open_payments import csv_url
+                        from spicy_regs.pipelines.raw_releases import download_original, raw_original
+                        from spicy_docs.sources.cms_open_payments import iter_csv_summary
+
+                        if "csv_tail" not in selected:
+                            if walk.schema is None:
+                                raise ValueError("Open Payments CSV suffix lacks its source schema")
+                            resource_id = next(iter(walk.schema))
+                            url = csv_url(
+                                selection,
+                                resource_id=resource_id,
+                                offset=walk.observed,
+                                count=walk.count - walk.observed,
+                            )
+                            remaining_bytes = min(512 * 1024**2, max_bytes - total_bytes)
+                            result = download_original(
+                                evidence,
+                                lambda acquirer, store: acquirer.download(url, store=store, max_bytes=remaining_bytes),
+                                stage="open-payments-csv-suffix",
+                                max_bytes=remaining_bytes,
+                                validate_url=validate_url,
+                                transport=transport,
+                            )
+                            selected["csv_tail"] = {
+                                "request_url": result["request_url"],
+                                "sha256": result["response_sha256"],
+                                "byte_size": result["byte_size"],
+                                "observed_at": result["observed_at"],
+                            }
+                            total_bytes += result["byte_size"]
+                            _save(path, manifest)
+                        tail = selected["csv_tail"]
+                        original = raw_original(store, tail["sha256"], tail["byte_size"])
+                        with original.open("rb") as stream:
+                            for _ in iter_csv_summary(
+                                stream,
+                                selection,
+                                tail,
+                                schema=walk.schema,
+                                total_count=walk.count,
+                                offset=walk.observed,
+                                previous_number=walk.previous,
+                            ):
+                                pass
+                        # Both formats have been exhausted against the same count
+                        # and strict occurrence ordering; no rows are inferred.
+                        break
                     if total_bytes + MAX_PAGE_BYTES > max_bytes:
                         raise ValueError("Open Payments acquisition byte budget exhausted")
                     c = acquire(client, page_url(selection, offset=walk.observed), "open-payments-summary-page")
                     for _ in walk.add(c):
                         pass
-                    if walk.count > 1_500_000:
+                    if walk.count is None or walk.count > 1_500_000:
                         raise ValueError("Open Payments population exceeds its admitted row bound")
                     selected["pages"].append(_descriptor(c))
                     total_bytes += c.byte_size
                     _save(path, manifest)
-                walk.finish()
+                if "csv_tail" not in selected:
+                    walk.finish()
                 selected["count"] = walk.count
+            for level, family in manifest["families"].items():
+                if "csv_tail" in family:
+                    selection = select_summary(catalog, aggregation_level=level, program_year=year)
+                    control = acquire(
+                        client, page_url(selection, size=1) + "&results=false", "open-payments-count-recheck"
+                    )
+                    from spicy_docs.sources.cms_open_payments import decode
+
+                    observed = decode(control.body)
+                    first = read_page(load_capture(store, family["pages"][0]), selection)
+                    if observed.get("count") != family["count"] or observed.get("schema") != first["schema"]:
+                        raise ValueError("Open Payments final count/schema changed")
+                    family["final_count_control"] = _descriptor(control)
             final_catalog = acquire(client, CATALOG_URL, "open-payments-release-recheck")
             if any(
                 select_summary(final_catalog, aggregation_level=level, program_year=year)
@@ -137,7 +204,7 @@ def capture(
 
 def build(manifest_path: Path, output_dir: Path):
     """Replay the exact full selection through maintained table/generation writers; fetch nothing."""
-    from spicy_docs.sources.cms_open_payments import TITLES, iter_summary, select_summary
+    from spicy_docs.sources.cms_open_payments import TITLES, select_summary
     from spicy_regs.pipelines.raw_releases import open_raw
 
     manifest, output_dir = json.loads(Path(manifest_path).read_text()), Path(output_dir)
@@ -173,10 +240,48 @@ def build(manifest_path: Path, output_dir: Path):
                         evidence.capture(c, stage="open-payments-replayed-page", aggregation_level=level)
                         yield c
 
-                count = 0
-                for item in iter_summary(selected, pages()):
-                    count += 1
-                    yield item
+                from spicy_docs.sources.cms_open_payments import SummaryWalk, iter_csv_summary, decode, page_url
+                from spicy_regs.pipelines.raw_releases import raw_original
+
+                walk, count = SummaryWalk(selected), 0
+                for c in pages():
+                    for item in walk.add(c):
+                        count += 1
+                        yield item
+                if "csv_tail" in family:
+                    tail = family["csv_tail"]
+                    original = raw_original(store, tail["sha256"], tail["byte_size"])
+                    retained = evidence.retain_file(
+                        original,
+                        stage="open-payments-csv-suffix",
+                        raw_source=True,
+                        source_url=tail["request_url"],
+                        original_location=tail["request_url"],
+                        observed_at=tail["observed_at"],
+                    )
+                    if retained["sha256"] != tail["sha256"]:
+                        raise ValueError("Open Payments CSV original changed")
+                    with original.open("rb") as stream:
+                        for item in iter_csv_summary(
+                            stream,
+                            selected,
+                            tail,
+                            schema=walk.schema,
+                            total_count=walk.count,
+                            offset=walk.observed,
+                            previous_number=walk.previous,
+                        ):
+                            count += 1
+                            yield item
+                    control = load_capture(store, family["final_count_control"])
+                    if control.requested_url != page_url(selected, size=1) + "&results=false":
+                        raise ValueError("Open Payments count control request differs")
+                    evidence.capture(control, stage="open-payments-count-recheck")
+                    observed = decode(control.body)
+                    if observed.get("count") != walk.count or observed.get("schema") != walk.schema:
+                        raise ValueError("Open Payments final count/schema differs")
+                else:
+                    walk.finish()
                 if count != family["count"]:
                     raise ValueError("Open Payments tested population differs from its manifest")
                 evidence.event(

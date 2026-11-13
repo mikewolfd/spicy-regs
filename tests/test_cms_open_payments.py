@@ -134,3 +134,54 @@ def test_ordinary_generation_and_consumer_refuse_mismatched_scope(tmp_path, monk
     path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="all declared complete"):
         build(path, tmp_path / "refused")
+
+
+def test_supported_csv_suffix_and_resume_avoid_repeated_data_requests(tmp_path, monkeypatch):
+    import csv
+    import io
+    import httpx
+    from spicy_regs.pipelines.cms_open_payments import capture
+
+    monkeypatch.setenv("SPICYGOV_RAW_ROOT", str(tmp_path / "raw"))
+    requested = []
+    levels = {item["dataset"]["identifier"]: level for level, item in DATA["examples"].items()}
+
+    def answer(request):
+        requested.append(str(request.url))
+        if request.url.path == "/data.json":
+            return httpx.Response(200, json=DATA["catalog"])
+        if request.url.path.endswith("/download"):
+            raw = copy.deepcopy(DATA["examples"]["recipients"]["page"]["results"][0])
+            raw["record_number"] = "501"
+            text = io.StringIO(newline="")
+            writer = csv.writer(text)
+            writer.writerow(raw)
+            writer.writerow(raw.values())
+            writer.writerow([])
+            return httpx.Response(200, content=text.getvalue().encode(), headers={"content-type": "text/csv"})
+        level = levels[request.url.path.split("/")[-2]]
+        data = copy.deepcopy(DATA["examples"][level]["page"])
+        data["count"] = 501 if level == "recipients" else 1
+        if request.url.params.get("results") == "false":
+            data["results"] = []
+        elif level == "recipients":
+            data["results"] = [{**data["results"][0], "record_number": str(i + 1)} for i in range(500)]
+        return httpx.Response(200, json=data)
+
+    transport = httpx.MockTransport(answer)
+    manifest = capture(tmp_path / "capture", year=2024, transport=transport)
+    saved = json.loads(manifest.read_text())
+    assert saved["families"]["recipients"]["count"] == 501
+    assert len(saved["families"]["recipients"]["pages"]) == 1
+    assert "csv_tail" in saved["families"]["recipients"]
+    artifact, _ = build(manifest, tmp_path / "candidate")
+    table = pq.read_table(tmp_path / "candidate/generation" / f"{TABLE}.parquet")
+    assert table.num_rows == 505
+    data = [row for row in table.to_pylist() if row["aggregation_level"] == "recipients"]
+    assert len(data) == 501 and len({row["native_id"] for row in data}) == 1
+    assert json.loads(data[-1]["source_locator_json"])["source_format"] == "csv"
+    before = len(requested)
+    capture(tmp_path / "capture", year=2024, transport=transport)
+    repeated = requested[before:]
+    assert len(repeated) == 2
+    assert all("/data.json" in url or "results=false" in url for url in repeated)
