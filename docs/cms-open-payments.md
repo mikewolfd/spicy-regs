@@ -81,3 +81,18 @@ payment-recipient type in the state/national summaries. Reconcile all profile
 types together against the matching national payment categories; compare
 individual profile types only at their native profile grain. Shared NPIs and
 multiple-profile-ID flags remain source observations, not permission to merge.
+
+
+The maintained `publish-local-generation` CLI accepts the exact family
+`cms-open-payments`. A private rehearsal uses the genuine complete generation,
+its pinned source evidence and an explicitly saved empty prior index:
+
+```sh
+uv run --frozen --extra source-readers publish-local-generation --family cms-open-payments \
+  --generation "$GENERATION" --evidence "$EVIDENCE" --dry-run \
+  --live-index "$PRIVATE_EMPTY_INDEX" --output "$PRIVATE_RECEIPT"
+```
+
+An absent or different evidence artifact refuses. The publisher still requires
+`complete-family`; family registration does not admit a partial candidate.
+A private dry run does not select shared publication or catalog state.

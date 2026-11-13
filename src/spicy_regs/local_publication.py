@@ -36,6 +36,7 @@ LOCAL_FAMILIES = frozenset({
     "administration-policy",
     "census-acs",
     "census-geocoder",
+    "cms-open-payments",
     "court-opinions",
     "cms-medicare-provider",
     "executive-orders",

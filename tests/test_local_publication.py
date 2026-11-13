@@ -269,3 +269,10 @@ def test_census_geocoder_uses_the_cli_with_the_existing_family_gates(tmp_path, c
     assert receipt["evidence"] and receipt["other_family_changes"] == []
     assert publication.parse_index(live.read_bytes()) == publication.empty_index()
     assert not list(tmp_path.glob(".dry-run-store-*"))
+
+
+def test_open_payments_cli_refuses_a_generation_of_another_family(tmp_path):
+    directory, _, evidence = generation(tmp_path, "treasury", {"debt": ["a"]})
+    with pytest.raises(publication.PublicationError, match="not the expected cms-open-payments"):
+        run(tmp_path, "refused", directory, evidence, "--dry-run", family="cms-open-payments")
+    assert not (tmp_path / "refused").exists()
