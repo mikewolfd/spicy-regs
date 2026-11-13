@@ -587,6 +587,7 @@ TABLES: tuple[str, ...] = (
     "cms_medicaid_drug_spending",
     "cms_part_b_drug_spending",
     "cms_medicare_provider",
+    "cms_open_payments_summaries",
     "grants_opportunity_observations",
     "grants_status_observations",
     "grants_status_queries",
@@ -707,6 +708,7 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "cms_medicaid_drug_spending",
         "cms_part_b_drug_spending",
         "cms_medicare_provider",
+    "cms_open_payments_summaries",
         "grants_opportunity_observations",
         "grants_status_observations",
         "grants_status_queries",
@@ -968,6 +970,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_cms_medicaid import SCHEMA as CMS_MEDICAID_SCHEMA
     from spicy_regs.transforms.build_cms_part_b import SCHEMA as CMS_PART_B_SCHEMA
     from spicy_regs.transforms.build_cms_provider import SCHEMA as CMS_PROVIDER_SCHEMA
+    from spicy_regs.transforms.build_cms_open_payments import SCHEMA as CMS_OPEN_PAYMENTS_SCHEMA
     from spicy_regs.transforms.build_treasury_fiscal import SCHEMAS as TREASURY_SCHEMAS
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
     from spicy_regs.transforms.build_grants_status import SCHEMAS as GRANTS_STATUS_SCHEMAS
@@ -1090,6 +1093,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         "cms_medicaid_drug_spending": CMS_MEDICAID_SCHEMA,
         "cms_part_b_drug_spending": CMS_PART_B_SCHEMA,
         "cms_medicare_provider": CMS_PROVIDER_SCHEMA,
+        "cms_open_payments_summaries": CMS_OPEN_PAYMENTS_SCHEMA,
         **TREASURY_SCHEMAS,
         "grants_opportunity_observations": GRANTS_SCHEMA,
         **GRANTS_STATUS_SCHEMAS,
