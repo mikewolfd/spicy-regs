@@ -151,3 +151,50 @@ def test_search_truncation_retains_failed_evidence(tmp_path):
 )
 def test_amounts_are_ranges_or_qualified_unknowns(raw, expected):
     assert amount_range(raw) == expected
+
+
+def test_retained_original_size_pin_is_enforced(tmp_path):
+    requests = []
+    r = reader(requests)
+    try:
+        captures = capture_year(tmp_path / "capture", year=2025, reader=r, archive_root=tmp_path / "raw")
+    finally:
+        r.close()
+    selected = json.loads(captures.read_text())
+    selected["reports"][IDS[0]]["bytes"] += 1
+    captures.write_text(json.dumps(selected))
+    with pytest.raises(SenateDisclosureError, match="checksum/size"):
+        build(captures, tmp_path / "bad-original", archive_root=tmp_path / "raw")
+
+
+def test_duplicate_originals_keep_ambiguous_amendment_candidates(tmp_path):
+    extra_id = "10000000-0000-0000-0000-000000000004"
+    listing = rows()
+    listing.append([*listing[0][:3], listing[0][3].replace(IDS[0], extra_id), listing[0][4]])
+
+    def respond(request):
+        body = (
+            json.dumps({"result": "ok", "recordsTotal": 4, "recordsFiltered": 4, "data": listing}).encode()
+            if request.url.path == "/search/report/data/"
+            else report(IDS[1] in str(request.url))
+        )
+        return httpx.Response(
+            200,
+            stream=httpx.ByteStream(body),
+            headers={"Content-Type": "application/json" if request.url.path == "/search/report/data/" else "text/html"},
+        )
+
+    r = SenateEfdReader(
+        cookie="sessionid=private", csrf="csrf-private", transport=httpx.MockTransport(respond), interval=0
+    )
+    try:
+        captures = capture_year(tmp_path / "capture", year=2025, reader=r, archive_root=tmp_path / "raw")
+    finally:
+        r.close()
+    build(captures, tmp_path / "built", archive_root=tmp_path / "raw")
+    with duckdb.connect() as con:
+        result = con.execute(
+            "SELECT original_candidate_ids,amendment_link_status FROM read_parquet(?) WHERE amendment_status='numbered'",
+            [str(tmp_path / "built/generation/senate_disclosure_reports.parquet")],
+        ).fetchone()
+    assert result == ([IDS[0], extra_id], "ambiguous")
