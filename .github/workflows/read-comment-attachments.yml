@@ -42,7 +42,8 @@ jobs:
       cancel-in-progress: false
       queue: max
     env:
-      WORKDIR: ${{ runner.temp }}/comment-attachment-group
+      # Job-level env does not support the runner context; every job has a fresh Ubuntu VM.
+      WORKDIR: /tmp/comment-attachment-group
       OMP_NUM_THREADS: '2'
       OPENBLAS_NUM_THREADS: '2'
       POLARS_MAX_THREADS: '2'
@@ -83,6 +84,20 @@ jobs:
           uv run --no-sync python scripts/read_comment_attachment_group.py \
             --runtime-ref "$RUNTIME_REF" --groups-key "$GROUPS_KEY" --groups-sha256 "$GROUPS_SHA256" \
             --group "$SOURCE_GROUP" --workdir "$WORKDIR" --workers 64
+      - name: Retain compact aggregation controls
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-attachment-stage-${{ inputs.groups_sha256 }}-${{ matrix.group }}
+          path: |
+            ${{ env.WORKDIR }}/result.json
+            ${{ env.WORKDIR }}/read/plan/*.json
+            ${{ env.WORKDIR }}/stage/staging.json
+            ${{ env.WORKDIR }}/stage/reads.parquet.sha256
+            ${{ env.WORKDIR }}/stage/source-gaps.parquet
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
       - name: Retain compact checkpoints and resource evidence
         if: always()
         uses: actions/upload-artifact@v4

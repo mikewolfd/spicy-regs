@@ -81,6 +81,18 @@ def test_real_retained_group_executes_and_resumes_without_source_reads(tmp_path,
     run.execute(args)
     result = json.loads((args.workdir / "result.json").read_text())
     assert result["status"] == "complete" and result["keys"] == 1
+    # The artifact's common root is WORKDIR; keep the actual read/plan/stage layout.
+    import glob
+    import yaml
+
+    workflow = yaml.safe_load((Path(__file__).parents[1] / ".github/workflows/read-comment-attachments.yml").read_text())
+    controls = next(step for step in workflow["jobs"]["read"]["steps"] if step.get("name") == "Retain compact aggregation controls")
+    assert controls["if"] == "success()"
+    selected = {str(Path(path).relative_to(args.workdir)) for pattern in controls["with"]["path"].splitlines()
+                for path in glob.glob(pattern.replace("${{ env.WORKDIR }}", str(args.workdir)))}
+    plan = next((args.workdir / "read/plan").glob("*.json"))
+    assert selected == {"result.json", "stage/staging.json", "stage/reads.parquet.sha256", str(plan.relative_to(args.workdir))}
+    assert not any("parts/" in path or path.endswith("reads.parquet") for path in selected)
     assert sum(client.gets.count(original_key) for client in clients) == 1
     assert json.loads((args.workdir / "source-usage.json").read_text())["attempts"] == 1
     run.execute(args)
@@ -206,6 +218,7 @@ def test_workflow_has_only_storage_credentials_and_always_keeps_compact_checkpoi
     workflow = yaml.safe_load(text)
     assert list(workflow[True]) == ["workflow_dispatch"]
     job = workflow["jobs"]["read"]
+    assert job["env"]["WORKDIR"] == "/tmp/comment-attachment-group"
     assert job["strategy"]["max-parallel"] == 4 and job["timeout-minutes"] == 105
     assert "R2_CATALOG" not in text and "comments-catalog-write" not in text and "CLOUDFLARE" not in text
     assert job["steps"][-1]["if"] == "always()"
