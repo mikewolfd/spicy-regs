@@ -34,6 +34,7 @@ from spicy_regs.sources.publication import PublicationError
 LOCAL_FAMILIES = frozenset({
     "gsa-iolp",
     "administration-policy",
+    "census-acs",
     "census-geocoder",
     "court-opinions",
     "cms-medicare-provider",

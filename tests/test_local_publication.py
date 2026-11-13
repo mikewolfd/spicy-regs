@@ -48,6 +48,30 @@ def run(tmp_path, name, directory, evidence, *extra, family=FAMILY):
     return tmp_path / name
 
 
+def test_census_acs_cli_registration_keeps_family_and_evidence_guards(tmp_path):
+    family = "census-acs"
+    directory, digest, evidence = generation(
+        tmp_path, "acs", {"census_acs_county_observations": ["001", "003", "005"]}, family=family)
+    live = tmp_path / "private-publication.v2.json"
+    live.write_text(json.dumps(publication.empty_index()))
+    original_index = live.read_bytes()
+    dry = ("--dry-run", "--scratch-raw", "--live-index", str(live))
+
+    with pytest.raises(publication.PublicationError, match="is family census-acs, not the expected treasury-fiscal"):
+        run(tmp_path, "accepted-acs", directory, evidence, *dry)
+    with pytest.raises(publication.PublicationError, match="published with the source evidence it pins"):
+        run(tmp_path, "accepted-acs", directory, None, *dry, family=family)
+    assert not (tmp_path / "accepted-acs").exists()
+
+    output = run(tmp_path, "accepted-acs", directory, evidence, *dry, family=family)
+    receipt = json.loads((output / "dry-run.json").read_text())
+    assert receipt["status"] == "dry_run_accepted" and receipt["family"] == family
+    assert receipt["artifactDigest"] == "sha256:" + digest
+    assert receipt["tables"]["census_acs_county_observations.parquet"]["rows"] == 3
+    assert receipt["other_family_changes"] == [] and live.read_bytes() == original_index
+    assert not list(tmp_path.glob(".dry-run-store-*"))
+
+
 def test_dry_run_runs_the_publication_guards_on_a_disk_store(tmp_path, capsys, monkeypatch):
     first, first_digest, first_evidence = generation(tmp_path, "first", {"debt": ["a", "b"], "periods": ["p"]})
     store = DiskStore(tmp_path / "live", bucket="live")
