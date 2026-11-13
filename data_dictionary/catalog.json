@@ -11186,6 +11186,109 @@
         "cash_usd",
         "noncash_usd"
       ]
+    },
+    {
+      "table": "sec_issuer_sources",
+      "label": "SEC issuer source captures",
+      "summary": "Pinned official SEC JSON captures and literal issuer metadata.",
+      "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "cik",
+        "kind",
+        "continuation",
+        "source_bytes",
+        "metadata_json",
+        "source_sha256",
+        "source_url",
+        "observed_at",
+        "source_pointer"
+      ]
+    },
+    {
+      "table": "sec_filings",
+      "label": "SEC issuer filings",
+      "summary": "Filing history for explicit CIKs and filing dates, with separate amendment accessions.",
+      "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "cik",
+        "accession",
+        "form",
+        "is_amendment",
+        "filing_date",
+        "report_date_raw",
+        "acceptance_datetime_raw",
+        "filing_url",
+        "primary_document_url",
+        "raw_row_json",
+        "source_sha256",
+        "source_url",
+        "observed_at",
+        "source_pointer"
+      ]
+    },
+    {
+      "table": "sec_reported_facts",
+      "label": "SEC reported financial observations",
+      "summary": "Every selected companyfacts observation, preserving units, periods, fiscal context and accessions.",
+      "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "cik",
+        "taxonomy",
+        "concept",
+        "unit",
+        "value_text",
+        "value_status",
+        "period_kind",
+        "period_start",
+        "period_end",
+        "accession",
+        "form",
+        "is_amendment",
+        "filed_date",
+        "fiscal_year",
+        "fiscal_period",
+        "frame",
+        "label",
+        "description",
+        "context_json",
+        "observation_id",
+        "filing_url",
+        "source_sha256",
+        "source_url",
+        "observed_at",
+        "source_pointer"
+      ]
+    },
+    {
+      "table": "sec_fact_scopes",
+      "label": "SEC selected fact outcomes",
+      "summary": "Explicit acquired-source outcomes for selected CIKs, concepts and fact-end dates.",
+      "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+      "kind": "window",
+      "measured_on": "2026-11-13",
+      "data_quality": null,
+      "columns": [
+        "cik",
+        "taxonomy",
+        "concept",
+        "end_from",
+        "end_through",
+        "outcome",
+        "observation_count",
+        "source_sha256",
+        "source_url",
+        "observed_at",
+        "source_pointer"
+      ]
     }
   ]
 }

@@ -295,6 +295,13 @@
       "url": "https://www.irs.gov/charities-non-profits/form-990-series-downloads",
       "kind": "government",
       "note": "Explicit annual-index and XML filing slice. Selected Form 990 finances, Part VII entries and Schedule I domestic organization grants; not complete donor coverage."
+    },
+    "sec-edgar": {
+      "id": "sec-edgar",
+      "url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+      "description": "Official issuer submissions and standard-taxonomy whole-entity companyfacts; exact observations remain separate.",
+      "name": "SEC EDGAR public data APIs",
+      "kind": "government"
     }
   },
   "families": {
@@ -692,6 +699,11 @@
     "irs-form990": {
       "sources": [
         "irs-form990"
+      ]
+    },
+    "sec-edgar": {
+      "sources": [
+        "sec-edgar"
       ]
     }
   },

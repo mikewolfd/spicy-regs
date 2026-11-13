@@ -12441,3 +12441,131 @@ tables:
         decimal(38,0); no scaling, currency conversion or invented zero.
       noncash_usd: Schedule I Part II noncash assistance in reported whole US dollars
         as exact decimal(38,0); no scaling, currency conversion or invented zero.
+
+  sec_issuer_sources:
+    label: SEC issuer source captures
+    subject: reference
+    identity_columns:
+    - cik
+    - kind
+    - continuation
+    summary: Pinned official SEC JSON captures and literal issuer metadata.
+    coverage: Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked
+      for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original
+      XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain
+      separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.
+    measured_on: '2026-11-13'
+    grain: One selected CIK, API route and continuation capture.
+    columns:
+      cik: SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata.
+      kind: 'Official API route: submissions or companyfacts.'
+      continuation: Advertised history filename; NULL identifies the root route.
+      source_bytes: Exact original response byte size.
+      metadata_json: Complete native issuer metadata and advertised continuation inventory; parsed decimal numbers
+        use exact text.
+      source_sha256: SHA-256 of the retained original response. A capture identity, not a publisher release date.
+      source_url: Exact official SEC JSON locator.
+      observed_at: Original capture instant; not the filing date or financial period.
+      source_pointer: JSON Pointer into the retained original. A filing pointer identifies its accession in compact
+        arrays; matching indexes locate other columns.
+  sec_filings:
+    label: SEC issuer filings
+    subject: reference
+    identity_columns:
+    - cik
+    - accession
+    summary: Filing history for explicit CIKs and filing dates, with separate amendment accessions.
+    coverage: Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked
+      for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original
+      XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain
+      separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.
+    measured_on: '2026-11-13'
+    grain: One CIK and accession in the selected filing-date window.
+    columns:
+      cik: SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata.
+      accession: Literal filing accession, kept separate for originals and amendments.
+      form: Source form code, including /A amendments.
+      is_amendment: Whether the source form ends in /A. Does not infer which accession is replaced.
+      filing_date: Publisher filing date, retained as YYYY-MM-DD.
+      report_date_raw: Literal report date; empty string and JSON null remain distinct.
+      acceptance_datetime_raw: Literal submissions acceptanceDateTime, without inferring or correcting time zone.
+      filing_url: Official accession index locator. Link retention does not establish downloaded filing-body content.
+      primary_document_url: Official primary-document locator, including publisher stylesheet directories; missing/blank
+        source names have no link.
+      raw_row_json: Complete submission row, including unknown compact columns and explicit blanks/nulls.
+      source_sha256: SHA-256 of the retained original response. A capture identity, not a publisher release date.
+      source_url: Exact official SEC JSON locator.
+      observed_at: Original capture instant; not the filing date or financial period.
+      source_pointer: JSON Pointer into the retained original. A filing pointer identifies its accession in compact
+        arrays; matching indexes locate other columns.
+  sec_reported_facts:
+    label: SEC reported financial observations
+    subject: reference
+    identity_columns:
+    - observation_id
+    summary: Every selected companyfacts observation, preserving units, periods, fiscal context and accessions.
+    coverage: Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked
+      for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original
+      XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain
+      separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.
+    measured_on: '2026-11-13'
+    grain: One original companyfacts JSON observation position.
+    columns:
+      cik: SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata.
+      taxonomy: Source taxonomy name; no cross-taxonomy equivalence is inferred.
+      concept: Native XBRL concept tag; interpreted only within taxonomy and unit.
+      unit: Literal source unit key, including ratios such as USD/shares. Never silently converted or combined.
+      value_text: Exact numeric value as decimal text; original bytes preserve number spelling. NULL requires value_status.
+      value_status: reported or json_null; a missing fact is a separate query/scope outcome.
+      period_kind: instant when start is absent, duration when start is a date, unknown when start is explicit null.
+      period_start: Reported duration start. NULL covers instant or unknown; consult period_kind and context_json.
+      period_end: Reported end/instant date. Selection uses this date, not fiscal-year labels.
+      accession: Literal filing accession, kept separate for originals and amendments.
+      form: Source form code, including /A amendments.
+      is_amendment: Whether the source form ends in /A. Does not infer which accession is replaced.
+      filed_date: Date of the filing that reports this observation; later comparative observations remain separate.
+      fiscal_year: Publisher fiscal year (fy), describing filing context rather than substituting for period dates.
+      fiscal_period: Publisher fiscal period (fp); separate from actual duration dates.
+      frame: Optional publisher calendar frame. Missing/null remain visible in context_json; frames do not define
+        equal periods.
+      label: Publisher concept label, when supplied.
+      description: Publisher concept description, when supplied.
+      context_json: Complete API observation, including unknown fields; decimal values are exact text. Original XBRL
+        contextRef/dimensions are not supplied by companyfacts.
+      observation_id: SHA-256 of original response digest plus JSON Pointer. Competing and duplicate native positions
+        remain distinct.
+      filing_url: Official accession index locator. Link retention does not establish downloaded filing-body content.
+      source_sha256: SHA-256 of the retained original response. A capture identity, not a publisher release date.
+      source_url: Exact official SEC JSON locator.
+      observed_at: Original capture instant; not the filing date or financial period.
+      source_pointer: JSON Pointer into the retained original. A filing pointer identifies its accession in compact
+        arrays; matching indexes locate other columns.
+  sec_fact_scopes:
+    label: SEC selected fact outcomes
+    subject: reference
+    identity_columns:
+    - cik
+    - taxonomy
+    - concept
+    summary: Explicit acquired-source outcomes for selected CIKs, concepts and fact-end dates.
+    coverage: Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked
+      for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original
+      XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain
+      separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.
+    measured_on: '2026-11-13'
+    grain: One CIK and taxonomy/concept in the selected fact-end window.
+    columns:
+      cik: SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata.
+      taxonomy: Source taxonomy name; no cross-taxonomy equivalence is inferred.
+      concept: Native XBRL concept tag; interpreted only within taxonomy and unit.
+      end_from: Inclusive selected lower bound for fact end dates.
+      end_through: Inclusive selected upper bound for fact end dates.
+      outcome: observed, concept_not_reported, or no_observations_in_period for this acquired source selection. Refusal
+        produces no generation.
+      observation_count: Selected native observation count, including comparatives and amendments; not a count of
+        distinct economic periods.
+      source_sha256: SHA-256 of the retained original response. A capture identity, not a publisher release date.
+      source_url: Exact official SEC JSON locator.
+      observed_at: Original capture instant; not the filing date or financial period.
+      source_pointer: JSON Pointer into the retained original. A filing pointer identifies its accession in compact
+        arrays; matching indexes locate other columns.

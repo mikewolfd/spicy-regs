@@ -41541,5 +41541,369 @@
       "filing_id",
       "entry_ordinal"
     ]
+  },
+  "sec_issuer_sources": {
+    "table": "sec_issuer_sources",
+    "label": "SEC issuer source captures",
+    "summary": "Pinned official SEC JSON captures and literal issuer metadata.",
+    "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cik",
+        "column_type": "VARCHAR",
+        "description": "SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata."
+      },
+      {
+        "column_name": "kind",
+        "column_type": "VARCHAR",
+        "description": "Official API route: submissions or companyfacts."
+      },
+      {
+        "column_name": "continuation",
+        "column_type": "VARCHAR",
+        "description": "Advertised history filename; NULL identifies the root route."
+      },
+      {
+        "column_name": "source_bytes",
+        "column_type": "BIGINT",
+        "description": "Exact original response byte size."
+      },
+      {
+        "column_name": "metadata_json",
+        "column_type": "VARCHAR",
+        "description": "Complete native issuer metadata and advertised continuation inventory; parsed decimal numbers use exact text."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original response. A capture identity, not a publisher release date."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact official SEC JSON locator."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Original capture instant; not the filing date or financial period."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "JSON Pointer into the retained original. A filing pointer identifies its accession in compact arrays; matching indexes locate other columns."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One selected CIK, API route and continuation capture.",
+    "identity_columns": [
+      "cik",
+      "kind",
+      "continuation"
+    ]
+  },
+  "sec_filings": {
+    "table": "sec_filings",
+    "label": "SEC issuer filings",
+    "summary": "Filing history for explicit CIKs and filing dates, with separate amendment accessions.",
+    "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cik",
+        "column_type": "VARCHAR",
+        "description": "SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata."
+      },
+      {
+        "column_name": "accession",
+        "column_type": "VARCHAR",
+        "description": "Literal filing accession, kept separate for originals and amendments."
+      },
+      {
+        "column_name": "form",
+        "column_type": "VARCHAR",
+        "description": "Source form code, including /A amendments."
+      },
+      {
+        "column_name": "is_amendment",
+        "column_type": "BOOLEAN",
+        "description": "Whether the source form ends in /A. Does not infer which accession is replaced."
+      },
+      {
+        "column_name": "filing_date",
+        "column_type": "VARCHAR",
+        "description": "Publisher filing date, retained as YYYY-MM-DD."
+      },
+      {
+        "column_name": "report_date_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal report date; empty string and JSON null remain distinct."
+      },
+      {
+        "column_name": "acceptance_datetime_raw",
+        "column_type": "VARCHAR",
+        "description": "Literal submissions acceptanceDateTime, without inferring or correcting time zone."
+      },
+      {
+        "column_name": "filing_url",
+        "column_type": "VARCHAR",
+        "description": "Official accession index locator. Link retention does not establish downloaded filing-body content."
+      },
+      {
+        "column_name": "primary_document_url",
+        "column_type": "VARCHAR",
+        "description": "Official primary-document locator, including publisher stylesheet directories; missing/blank source names have no link."
+      },
+      {
+        "column_name": "raw_row_json",
+        "column_type": "VARCHAR",
+        "description": "Complete submission row, including unknown compact columns and explicit blanks/nulls."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original response. A capture identity, not a publisher release date."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact official SEC JSON locator."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Original capture instant; not the filing date or financial period."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "JSON Pointer into the retained original. A filing pointer identifies its accession in compact arrays; matching indexes locate other columns."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One CIK and accession in the selected filing-date window.",
+    "identity_columns": [
+      "cik",
+      "accession"
+    ]
+  },
+  "sec_reported_facts": {
+    "table": "sec_reported_facts",
+    "label": "SEC reported financial observations",
+    "summary": "Every selected companyfacts observation, preserving units, periods, fiscal context and accessions.",
+    "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cik",
+        "column_type": "VARCHAR",
+        "description": "SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata."
+      },
+      {
+        "column_name": "taxonomy",
+        "column_type": "VARCHAR",
+        "description": "Source taxonomy name; no cross-taxonomy equivalence is inferred."
+      },
+      {
+        "column_name": "concept",
+        "column_type": "VARCHAR",
+        "description": "Native XBRL concept tag; interpreted only within taxonomy and unit."
+      },
+      {
+        "column_name": "unit",
+        "column_type": "VARCHAR",
+        "description": "Literal source unit key, including ratios such as USD/shares. Never silently converted or combined."
+      },
+      {
+        "column_name": "value_text",
+        "column_type": "VARCHAR",
+        "description": "Exact numeric value as decimal text; original bytes preserve number spelling. NULL requires value_status."
+      },
+      {
+        "column_name": "value_status",
+        "column_type": "VARCHAR",
+        "description": "reported or json_null; a missing fact is a separate query/scope outcome."
+      },
+      {
+        "column_name": "period_kind",
+        "column_type": "VARCHAR",
+        "description": "instant when start is absent, duration when start is a date, unknown when start is explicit null."
+      },
+      {
+        "column_name": "period_start",
+        "column_type": "VARCHAR",
+        "description": "Reported duration start. NULL covers instant or unknown; consult period_kind and context_json."
+      },
+      {
+        "column_name": "period_end",
+        "column_type": "VARCHAR",
+        "description": "Reported end/instant date. Selection uses this date, not fiscal-year labels."
+      },
+      {
+        "column_name": "accession",
+        "column_type": "VARCHAR",
+        "description": "Literal filing accession, kept separate for originals and amendments."
+      },
+      {
+        "column_name": "form",
+        "column_type": "VARCHAR",
+        "description": "Source form code, including /A amendments."
+      },
+      {
+        "column_name": "is_amendment",
+        "column_type": "BOOLEAN",
+        "description": "Whether the source form ends in /A. Does not infer which accession is replaced."
+      },
+      {
+        "column_name": "filed_date",
+        "column_type": "VARCHAR",
+        "description": "Date of the filing that reports this observation; later comparative observations remain separate."
+      },
+      {
+        "column_name": "fiscal_year",
+        "column_type": "INTEGER",
+        "description": "Publisher fiscal year (fy), describing filing context rather than substituting for period dates."
+      },
+      {
+        "column_name": "fiscal_period",
+        "column_type": "VARCHAR",
+        "description": "Publisher fiscal period (fp); separate from actual duration dates."
+      },
+      {
+        "column_name": "frame",
+        "column_type": "VARCHAR",
+        "description": "Optional publisher calendar frame. Missing/null remain visible in context_json; frames do not define equal periods."
+      },
+      {
+        "column_name": "label",
+        "column_type": "VARCHAR",
+        "description": "Publisher concept label, when supplied."
+      },
+      {
+        "column_name": "description",
+        "column_type": "VARCHAR",
+        "description": "Publisher concept description, when supplied."
+      },
+      {
+        "column_name": "context_json",
+        "column_type": "VARCHAR",
+        "description": "Complete API observation, including unknown fields; decimal values are exact text. Original XBRL contextRef/dimensions are not supplied by companyfacts."
+      },
+      {
+        "column_name": "observation_id",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of original response digest plus JSON Pointer. Competing and duplicate native positions remain distinct."
+      },
+      {
+        "column_name": "filing_url",
+        "column_type": "VARCHAR",
+        "description": "Official accession index locator. Link retention does not establish downloaded filing-body content."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original response. A capture identity, not a publisher release date."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact official SEC JSON locator."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Original capture instant; not the filing date or financial period."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "JSON Pointer into the retained original. A filing pointer identifies its accession in compact arrays; matching indexes locate other columns."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One original companyfacts JSON observation position.",
+    "identity_columns": [
+      "observation_id"
+    ]
+  },
+  "sec_fact_scopes": {
+    "table": "sec_fact_scopes",
+    "label": "SEC selected fact outcomes",
+    "summary": "Explicit acquired-source outcomes for selected CIKs, concepts and fact-end dates.",
+    "coverage": "Window. Explicit CIK cohort and date/concept selection only. SEC submissions continuation inventories are checked for the filing-date window. Companyfacts covers standard-taxonomy whole-entity facts; custom taxonomies, original XBRL contextRef and dimensional detail are outside this API scope. Comparative reports and amendments remain separate observations. The generation evidence records the selection; no publisher-wide completeness is inferred.",
+    "kind": "window",
+    "measured_on": "2026-11-13",
+    "data_quality": null,
+    "columns": [
+      {
+        "column_name": "cik",
+        "column_type": "VARCHAR",
+        "description": "SEC Central Index Key, zero-padded to ten digits. Stable issuer identity; tickers are descriptive metadata."
+      },
+      {
+        "column_name": "taxonomy",
+        "column_type": "VARCHAR",
+        "description": "Source taxonomy name; no cross-taxonomy equivalence is inferred."
+      },
+      {
+        "column_name": "concept",
+        "column_type": "VARCHAR",
+        "description": "Native XBRL concept tag; interpreted only within taxonomy and unit."
+      },
+      {
+        "column_name": "end_from",
+        "column_type": "VARCHAR",
+        "description": "Inclusive selected lower bound for fact end dates."
+      },
+      {
+        "column_name": "end_through",
+        "column_type": "VARCHAR",
+        "description": "Inclusive selected upper bound for fact end dates."
+      },
+      {
+        "column_name": "outcome",
+        "column_type": "VARCHAR",
+        "description": "observed, concept_not_reported, or no_observations_in_period for this acquired source selection. Refusal produces no generation."
+      },
+      {
+        "column_name": "observation_count",
+        "column_type": "BIGINT",
+        "description": "Selected native observation count, including comparatives and amendments; not a count of distinct economic periods."
+      },
+      {
+        "column_name": "source_sha256",
+        "column_type": "VARCHAR",
+        "description": "SHA-256 of the retained original response. A capture identity, not a publisher release date."
+      },
+      {
+        "column_name": "source_url",
+        "column_type": "VARCHAR",
+        "description": "Exact official SEC JSON locator."
+      },
+      {
+        "column_name": "observed_at",
+        "column_type": "VARCHAR",
+        "description": "Original capture instant; not the filing date or financial period."
+      },
+      {
+        "column_name": "source_pointer",
+        "column_type": "VARCHAR",
+        "description": "JSON Pointer into the retained original. A filing pointer identifies its accession in compact arrays; matching indexes locate other columns."
+      }
+    ],
+    "subject": "reference",
+    "grain": "One CIK and taxonomy/concept in the selected fact-end window.",
+    "identity_columns": [
+      "cik",
+      "taxonomy",
+      "concept"
+    ]
   }
 }

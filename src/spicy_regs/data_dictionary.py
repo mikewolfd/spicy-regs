@@ -592,6 +592,7 @@ TABLES: tuple[str, ...] = (
     "fara_foreign_principals",
     "fara_filings",
     "fara_snapshots",
+    "sec_issuer_sources", "sec_filings", "sec_reported_facts", "sec_fact_scopes",
     "ofac_entity_observations",
     "ofac_snapshots",
     "historical_veto_administrations",
@@ -692,6 +693,10 @@ MCP_QUERYABLE: frozenset[str] = frozenset(
         "fara_filings",
         "fara_snapshots",
         "ofac_entity_observations",
+        "sec_issuer_sources",
+        "sec_filings",
+        "sec_reported_facts",
+        "sec_fact_scopes",
         "ofac_snapshots",
         "historical_veto_administrations",
         "historical_veto_snapshots",
@@ -925,6 +930,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
     from spicy_regs.transforms.build_grants_opportunities import SCHEMA as GRANTS_SCHEMA
     from spicy_regs.transforms.build_grants_status import SCHEMAS as GRANTS_STATUS_SCHEMAS
     from spicy_regs.transforms.build_fara import SCHEMAS as FARA_SCHEMAS
+    from spicy_regs.transforms.build_sec_edgar import SCHEMAS as SEC_SCHEMAS
     from spicy_regs.transforms.build_ofac import SCHEMAS as OFAC_SCHEMAS
     from spicy_regs.transforms.build_historical_vetoes import SCHEMAS as HISTORICAL_VETO_SCHEMAS
     from spicy_regs.transforms.build_irs_form990 import SCHEMAS as IRS990_SCHEMAS
@@ -1041,6 +1047,7 @@ def expected_schemas(*, native: bool = True) -> dict[str, list[tuple[str, str]]]
         **OFAC_SCHEMAS,
         **HISTORICAL_VETO_SCHEMAS,
         **IRS990_SCHEMAS,
+        **SEC_SCHEMAS,
         "executive_order_observations": EXECUTIVE_ORDER_SCHEMA,
         **HOUSE_DISBURSEMENT_SCHEMAS,
         **SENATE_DISBURSEMENT_SCHEMAS,
